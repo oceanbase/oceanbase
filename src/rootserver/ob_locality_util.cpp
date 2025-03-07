@@ -12,19 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include <algorithm>
 #include "ob_locality_util.h"
-#include "lib/string/ob_string.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_replica_info.h"
-#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {

@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_roaringbitmap.h"
-#include "lib/string/ob_string.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase {
 namespace common {

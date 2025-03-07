@@ -11,7 +11,6 @@
  */
 
 #include "ob_log_miner_mode.h"
-#include <cstring>
 
 namespace oceanbase
 {

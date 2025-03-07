@@ -12,11 +12,8 @@
  */
 
 #include "ob_expr_xml_sequence.h"
-#include "ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "lib/utility/utility.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #define USING_LOG_PREFIX SQL_ENG
 

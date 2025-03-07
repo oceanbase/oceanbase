@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_restore_struct.h"
 #include "storage/restore/ob_ls_restore_args.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 namespace oceanbase
@@ -320,6 +317,28 @@ int ObTabletRestoreAction::trans_restore_action_to_restore_status(
     LOG_WARN("can not trans restore action to restore status", K(ret), K(action), K(status));
   }
   return ret;
+}
+
+bool ObTabletRestoreAction::is_restore_status_match(
+      const ACTION &action, const ObTabletRestoreStatus::STATUS &status)
+{
+  bool b_ret = false;
+  if (!is_valid(action) || !ObTabletRestoreStatus::is_valid(status)) {
+    b_ret = false;
+  } else if (is_restore_all(action)) {
+    b_ret = status == ObTabletRestoreStatus::EMPTY;
+  } else if (is_restore_minor(action)) {
+    b_ret = status == ObTabletRestoreStatus::EMPTY;
+  } else if (is_restore_major(action)) {
+    b_ret = status == ObTabletRestoreStatus::MINOR_AND_MAJOR_META;
+  } else if (is_restore_tablet_meta(action)) {
+    b_ret =  status == ObTabletRestoreStatus::PENDING;
+  } else if (is_restore_remote_sstable(action)) {
+    b_ret = status == ObTabletRestoreStatus::EMPTY;
+  } else if (is_restore_replace_remote_sstable(action)) {
+    b_ret = status == ObTabletRestoreStatus::REMOTE;
+  }
+  return b_ret;
 }
 
 bool ObTabletRestoreAction::need_restore_mds_sstable(const ACTION &action)
@@ -1015,6 +1034,9 @@ int ObRestoreMacroBlockIdMgr::get_macro_block_index_list_from_iter_(
       logic_id = data_macro_block_meta.get_logic_id();
       if (OB_FAIL(macro_id.set(data_macro_block_meta.get_macro_id()))) {
         LOG_WARN("failed to set macro id", K(ret), K(data_macro_block_meta.get_macro_id()));
+      } else if (macro_id.block_type_ != backup::ObBackupDeviceMacroBlockId::DATA_BLOCK) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, invalid block type", K(ret), K(data_macro_block_meta), K(macro_id));
       } else if (OB_FAIL(restore_macro_id.set(logic_id, macro_id))) {
         LOG_WARN("failed to set restore macro id", K(ret), K(logic_id), K(macro_id));
       } else if (OB_FAIL(macro_id_list.push_back(restore_macro_id))) {

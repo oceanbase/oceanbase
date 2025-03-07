@@ -15,8 +15,6 @@
 #include "rootserver/mview/ob_mlog_maintenance_task.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_errno.h"
 #include "share/schema/ob_mlog_info.h"
 
 namespace oceanbase

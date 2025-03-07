@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "observer/omt/ob_tenant_node_balancer.h"
-#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {

@@ -11,7 +11,6 @@
  */
 #define USING_LOG_PREFIX BALANCE
 
-#include "lib/ob_define.h"              // OB_FLOAT_EPSINON
 
 #include "ob_ls_balance_group_info.h"
 

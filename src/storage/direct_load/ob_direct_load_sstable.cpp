@@ -11,9 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
+#include "ob_direct_load_sstable.h"
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
-#include "storage/direct_load/ob_direct_load_sstable.h"
-#include "observer/table_load/ob_table_load_stat.h"
 
 namespace oceanbase
 {
@@ -112,6 +111,7 @@ ObDirectLoadSSTable::ObDirectLoadSSTable()
 {
   allocator_.set_tenant_id(MTL_ID());
   fragments_.set_tenant_id(MTL_ID());
+  table_type_ = ObDirectLoadTableType::SSTABLE;
 }
 
 ObDirectLoadSSTable::~ObDirectLoadSSTable() {}
@@ -158,11 +158,6 @@ int ObDirectLoadSSTable::init(ObDirectLoadSSTableCreateParam &param)
     }
   }
   return ret;
-}
-
-void ObDirectLoadSSTable::release_data()
-{
-  fragments_.reset();
 }
 
 int ObDirectLoadSSTable::copy(const ObDirectLoadSSTable &other)

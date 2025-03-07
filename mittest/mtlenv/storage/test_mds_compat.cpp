@@ -18,18 +18,9 @@
 #define protected public
 #define private public
 
-#include "lib/ob_errno.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/oblog/ob_log.h"
-#include "common/ob_tablet_id.h"
-#include "share/ob_ls_id.h"
-#include "share/scn.h"
-#include "share/rc/ob_tenant_base.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "mtlenv/storage/medium_info_helper.h"
 #include "unittest/storage/test_tablet_helper.h"
 #include "unittest/storage/test_dml_common.h"
-#include "storage/tablet/ob_mds_row_iterator.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 
 

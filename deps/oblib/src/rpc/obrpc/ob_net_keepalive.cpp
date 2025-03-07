@@ -11,28 +11,13 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBRPC
-#include "rpc/obrpc/ob_net_keepalive.h"
-#include <errno.h>
-#include <string.h>
-#include <stdlib.h>
-#include <fcntl.h>
+#include "ob_net_keepalive.h"
 #include <sys/ioctl.h>
 #include <sys/epoll.h>
 #include <sys/poll.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_defer.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/serialization.h"
 #include "lib/utility/utility.h"
 #include "rpc/frame/ob_net_easy.h"
-#include "rpc/frame/ob_req_transport.h"
 #include "io/easy_negotiation.h"
 #include "lib/ash/ob_active_session_guard.h"
 

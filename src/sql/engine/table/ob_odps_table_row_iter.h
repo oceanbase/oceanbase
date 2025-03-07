@@ -157,10 +157,14 @@ public:
                                 const int32_t ob_type_length,
                                 const int32_t ob_type_precision,
                                 const int32_t ob_type_scale);
+  int pull_column();
+  int pull_all_columns();
+
+  inline ObSEArray<OdpsColumn, 8>& get_column_list() { return column_list_; }
+  inline common::ObIArray<ObString>& get_part_col_names() { return part_col_names_; }
 private:
   int inner_get_next_row(bool &need_retry);
   int prepare_expr();
-  int pull_column();
   int next_task();
   int print_type_map_user_info(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
                                 const ObExpr *ob_type_expr);
@@ -191,6 +195,7 @@ private:
   apsara::odps::sdk::IODPSTablePtr table_handle_;
   ObSEArray<OdpsPartition, 8> partition_list_;
   ObSEArray<OdpsColumn, 8> column_list_;
+  ObSEArray<ObString, 4> part_col_names_;
   ObSEArray<int64_t, 8> target_column_id_list_;
   std::vector<std::string> column_names_;
   StateValues state_;

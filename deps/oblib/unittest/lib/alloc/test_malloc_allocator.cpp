@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase::lib;

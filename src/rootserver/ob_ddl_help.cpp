@@ -10,18 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ddl_help.h"
-#include "rootserver/ob_ddl_operator.h"
 #include "rootserver/ob_ddl_service.h"
-#include "rootserver/ob_zone_manager.h"
-#include "share/ob_primary_zone_util.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/ob_rpc_struct.h"
-#include "lib/string/ob_sql_string.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 namespace oceanbase
 {
@@ -96,12 +87,16 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("sys table's tablegroup should be oceanbase", KR(ret), K(arg), KPC(table_schema));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set the tablegroup of system table besides oceanbase");
-      } else if (table_schema->required_by_mview_refresh()) {
+      } else if (table_schema->has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("alter tablegroup of table required by materialized view refresh is not supported",
+        LOG_WARN("alter tablegroup of table with materialized view log is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of table with materialized view log is");
+      } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("alter tablegroup of table required by materialized view is not supported",
                  KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "alter tablegroup of table required by materialized view refresh is");
+                       "alter tablegroup of table required by materialized view is");
       } else if (table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("alter tablegroup of materialized view log is not supported", KR(ret));

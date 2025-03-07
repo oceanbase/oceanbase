@@ -19,6 +19,7 @@
 #include "lib/udt/ob_array_utils.h"
 #include "sql/engine/expr/ob_expr.h" // for ObExpr
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_array_map.h"
 
 namespace oceanbase
 {
@@ -72,6 +73,14 @@ public:
       SQL_ENG_LOG(WARN, "failed to lseek res.", K(ret), K(str_result), K(res_size));
     } else {
       str_result.set_result();
+      if (!is_uniform_format(res_vec->get_format())) {
+        ObString array_data(res_buf_len, res_buf);
+        if (OB_FAIL(arr_obj->init(array_data))) {
+          SQL_ENG_LOG(WARN, "failed to init array", K(ret));
+        } else if (OB_FAIL(dispatch_array_attrs_rows(ctx, arr_obj, batch_idx, expr.attrs_, expr.attrs_cnt_, true))) {
+          SQL_ENG_LOG(WARN, "failed to dispatch array attrs rows", K(ret));
+        }
+      }
     }
     return ret;
   }
@@ -105,6 +114,17 @@ public:
   static int get_child_subschema_id(ObExecContext *exec_ctx, uint16_t subid, uint16_t &child_subid);
   static int get_collection_payload(ObIAllocator &allocator, ObEvalCtx &ctx, const ObExpr &expr,
                                     const int64_t row_idx, const char *&res_data, int32_t &data_len);
+  template <typename T1, typename T>
+  static int calc_array_sum_by_type(uint32_t data_len, uint32_t len, const char *data_ptr,
+                                    uint8_t *null_bitmaps, T &sum);
+  template <typename T>
+  static int calc_array_sum(uint32_t len, uint8_t *nullbitmaps, const char *data_ptr,
+                            uint32_t data_len, ObCollectionArrayType *arr_type, T &sum);
+  static int get_array_data(ObString &data_str, ObCollectionArrayType *arr_type, uint32_t &len,
+                            uint8_t *&null_bitmaps, const char *&data, uint32_t &data_len);
+  static int get_array_data(ObIVector *len_vec, ObIVector *nullbitmap_vec, ObIVector *data_vec,
+                            int64_t idx, ObCollectionArrayType *arr_type, uint32_t &len,
+                            uint8_t *&null_bitmaps, const char *&data, uint32_t &data_len);
 
   // for vector
   static int get_type_vector(const ObExpr &expr,
@@ -124,7 +144,15 @@ public:
 
   // update inplace
   static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res = nullptr, bool negative = false);
-  static int get_basic_elem_obj(ObIArrayType *src, ObCollectionTypeBase *elem_type, uint32_t idx, ObObj &elem_obj, bool &is_null);
+  static int get_basic_elem(ObIArrayType *src, uint32_t idx, ObObj &elem_obj, bool &is_null);
+  static int set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj);
+
+  // check
+  template<typename T>
+  static int raw_check_add(const T &res, const T &l, const T &r);
+
+  template<typename T>
+  static int raw_check_minus(const T &res, const T &l, const T &r);
 
 private:
   static const char* DEFAULT_CAST_TYPE_NAME;
@@ -148,7 +176,7 @@ struct ObVectorVectorArithFunc : public ObVectorArithFunc
   int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const;
 };
 
-struct ObVectorFloatArithFunc : public ObVectorArithFunc
+struct ObVectorElemArithFunc : public ObVectorArithFunc
 {
   int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const;
 };

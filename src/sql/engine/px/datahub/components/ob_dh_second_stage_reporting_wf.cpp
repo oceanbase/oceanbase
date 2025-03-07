@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/px/datahub/components/ob_dh_barrier.h"
-#include "sql/engine/px/datahub/ob_dh_msg_ctx.h"
-#include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
-#include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

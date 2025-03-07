@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include <mysql.h>
-#include "lib/string/ob_string.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_prepared_param.h"
-#include "lib/mysqlclient/ob_mysql_prepared_result.h"
 #include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 #include "share/schema/ob_routine_info.h"
-#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #include "pl/ob_pl_user_type.h"
 
 namespace oceanbase
@@ -1717,7 +1711,19 @@ int ObMySQLProcStatement::get_current_obj(pl::ObPLComposite *composite,
     pl::ObPLCollection *coll = static_cast<pl::ObPLCollection *>(composite);
     CK (OB_NOT_NULL(coll));
     CK (current_idx < coll->get_count());
-    OX (element = coll->get_data()[current_idx]);
+    if (OB_FAIL(ret)) {
+    } else if (!coll->is_associative_array()) {
+      OX (element = coll->get_data()[current_idx]);
+    } else {
+      pl::ObPLAssocArray *assoc = static_cast<pl::ObPLAssocArray *>(coll);
+      CK (OB_NOT_NULL(assoc));
+      if (OB_FAIL(ret)) {
+      } else if (NULL == assoc->get_sort()) {
+        OX (element = coll->get_data()[current_idx]);
+      } else {
+        element = coll->get_data()[assoc->get_sort(current_idx)];
+      }
+    }
     if (OB_FAIL(ret)) {
     } else if (pl::PL_OBJ_TYPE == coll->get_element_desc().get_pl_type()) {
       CK (!element.is_ext());
@@ -1927,20 +1933,25 @@ int ObMySQLProcStatement::build_array_buffer(int64_t position,
   return ret;
 }
 
-int ObMySQLProcStatement::check_assoc_array(const pl::ObPLCollection *coll)
+int ObMySQLProcStatement::check_assoc_array(pl::ObPLCollection *coll)
 {
   int ret = OB_SUCCESS;
   if (NULL != coll && coll->is_associative_array()) {
-    const pl::ObPLAssocArray *assoc = static_cast<const pl::ObPLAssocArray *>(coll);
-    for (int64_t i = 0; OB_SUCC(ret) && NULL != assoc->get_key() && i < assoc->get_count(); i++) {
-      const ObObj *key = assoc->get_key(i);
-      CK (OB_NOT_NULL(key));
-      CK (key->is_int32());
-      if (OB_SUCC(ret) && (int64_t)key->get_int32() != i + 1) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("key must be consecutive positive integers starting from one", K(ret), K(i), KPC(key));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+    pl::ObPLAssocArray *assoc = static_cast<pl::ObPLAssocArray *>(coll);
+    ObObj *keys = NULL;
+    CK (OB_NOT_NULL(assoc));
+    if (OB_SUCC(ret)
+        && assoc->get_count() > 0
+        && NULL != (keys = assoc->get_key())
+        && NULL != assoc->get_sort()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < assoc->get_count(); i++) {
+        ObObj &key = keys[assoc->get_sort(i)];
+        if ((int64_t)key.get_int32() != i + 1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("key must be consecutive positive integers starting from one", K(ret), K(i), K(key));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
           "index table key must be consecutive positive integers starting from one, other cases");
+        }
       }
     }
   }
@@ -2437,7 +2448,7 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
           OZ (process_array_element(i, *local_allocator, pl_array->buffer, *current_obj, tz_info));
         }
         if (OB_SUCC(ret)) {
-          coll->set_data(new_data);
+          coll->set_data(new_data, array_size);
           coll->set_count(array_size);
           coll->set_first(1);
           coll->set_last(array_size);
@@ -2527,7 +2538,7 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
             }
           } // end for array_size
           if (OB_SUCC(ret)) {
-            coll->set_data(new_data);
+            coll->set_data(new_data, array_size);
             coll->set_count(array_size);
             coll->set_first(1);
             coll->set_last(array_size);

@@ -13,18 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_minus.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -73,21 +65,13 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
     if (type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
       ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
       ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
-      if (type1.get_subschema_id() != type2.get_subschema_id()) {
-        ObExprResType coll_calc_type = type;
-        if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
-          LOG_WARN("failed to check array compatibilty", K(ret));
-        } else {
-          type1.set_calc_meta(coll_calc_type);
-          type2.set_calc_meta(coll_calc_type);
-          type.set_collection(coll_calc_type.get_subschema_id());
-        }
+      ObExprResType coll_calc_type = type;
+      if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+        LOG_WARN("failed to check array compatibilty", K(ret));
       } else {
-        // subschem id in calc_meta is set to uint16_max in ObArithExprOperator::calc_result_type2
-        // set real subschema id to calc_meta from meta
-        type1.set_calc_meta(type1);
-        type2.set_calc_meta(type2);
-        type.set_collection(type1.get_subschema_id());
+        type1.set_calc_meta(coll_calc_type);
+        type2.set_calc_meta(coll_calc_type);
+        type.set_collection(coll_calc_type.get_subschema_id());
       }
     } else {
       // only support vector/array/varchar - vector/array/varchar now // array and varchar need cast to array(float)
@@ -1928,8 +1912,11 @@ struct ObArrayMinusFunc : public ObNestedArithOpBaseFunc
       } else {
         T *left_data = reinterpret_cast<T *>(l.get_data());
         T *right_data = reinterpret_cast<T *>(r.get_data());
-        for (int64_t i = 0; i < l.size(); ++i) {
+        for (int64_t i = 0; i < l.size() && OB_SUCC(ret); ++i) {
           res_data[i] = left_data[i] - right_data[i];
+          if (OB_FAIL(ObArrayExprUtils::raw_check_minus(res_data[i], left_data[i], right_data[i]))) {
+            LOG_WARN("array minus check failed", K(ret));
+          }
         }
       }
     }

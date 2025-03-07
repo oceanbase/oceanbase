@@ -13,8 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_icolumn_cs_decoder.h"
-#include "ob_cs_micro_block_transformer.h"
 #include "ob_cs_encoding_util.h"
+#include "storage/access/ob_aggregate_base.h"
 
 namespace oceanbase
 {

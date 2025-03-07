@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_virtual_ash.h"
-#include "common/ob_smart_call.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "observer/ob_server.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

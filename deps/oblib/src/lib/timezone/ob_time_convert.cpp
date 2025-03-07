@@ -12,20 +12,10 @@
 
 #define USING_LOG_PREFIX  LIB_TIME
 
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/timezone/ob_timezone_info.h"
+#include "ob_time_convert.h"
 #include "lib/timezone/ob_oracle_format_models.h"
-#include <ctype.h>
-#include <math.h>
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/utility.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_bit_set.h"
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "common/object/ob_object.h"
-//#include "lib/timezone/ob_timezone_util.h"
 #include "lib/locale/ob_locale_type.h"
 
 #define STRING_WITH_LEN(X) (X), ((sizeof(X) - 1))
@@ -1037,7 +1027,7 @@ int ObTimeConverter::datetime_to_double(int64_t value, const ObTimeZoneInfo *tz_
   if (OB_FAIL(datetime_to_ob_time(value, tz_info, ob_time))) {
     LOG_WARN("failed to convert seconds to ob time", K(ret));
   } else {
-    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_MYSQL_DATETIME))
+    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_DATETIME))
           + ob_time.parts_[DT_USEC] / static_cast<double>(USECS_PER_SEC);
   }
   return ret;
@@ -1050,7 +1040,7 @@ int ObTimeConverter::mdatetime_to_double(ObMySQLDateTime value, double &dbl)
   if (OB_FAIL(mdatetime_to_ob_time(value, ob_time))) {
     LOG_WARN("failed to convert seconds to ob time", K(ret));
   } else {
-    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_DATETIME))
+    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_MYSQL_DATETIME))
           + ob_time.parts_[DT_USEC] / static_cast<double>(USECS_PER_SEC);
   }
   return ret;
@@ -1369,7 +1359,6 @@ int ObTimeConverter::mdatetime_to_datetime(ObMySQLDateTime mdt_value, int64_t &d
   } else if (OB_FAIL(mdatetime_to_ob_time(mdt_value, ob_time))) {
     LOG_WARN("failed to convert mysql_datetime to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
-    ret = OB_SUCCESS;
     dt_value = ZERO_DATETIME;
   } else {
     ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
@@ -1626,7 +1615,6 @@ int ObTimeConverter::mdatetime_to_date(ObMySQLDateTime mdt_value, int32_t &d_val
   } else if (OB_FAIL(mdatetime_to_ob_time(mdt_value, ob_time))) {
     LOG_WARN("failed to convert mysql_datetime to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
-    ret = OB_SUCCESS;
     d_value = ZERO_DATE;
   } else {
     d_value = ob_time_to_date(ob_time);
@@ -1694,6 +1682,8 @@ int ObTimeConverter::mdatetime_to_year(ObMySQLDateTime mdt_value, uint8_t &y_val
   int ret = OB_SUCCESS;
   if (ZERO_YEAR == mdt_value.year()) {
     y_value = ZERO_YEAR;
+  } else if (OB_FAIL(validate_year(mdt_value.year()))) {
+    LOG_WARN("year integer is invalid or out of range", K(ret));
   } else {
     y_value = static_cast<uint8_t>(mdt_value.year() - YEAR_BASE_YEAR);
   }
@@ -1729,7 +1719,8 @@ int ObTimeConverter::date_to_mdatetime(int32_t d_value, ObMySQLDateTime &mdt_val
 }
 
 int ObTimeConverter::mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvertCtx &cvrt_ctx,
-                                            int64_t &dt_value, const ObDateSqlMode date_sql_mode)
+                                       int64_t &dt_value, const ObDateSqlMode date_sql_mode,
+                                       bool gen_query_range)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
@@ -1744,8 +1735,8 @@ int ObTimeConverter::mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvert
   } else if (OB_FAIL(mdate_to_ob_time(md_value, ob_time))) {
     LOG_WARN("failed to convert date to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, temp_sql_mode))) {
-    ret = OB_SUCCESS;
-    if (cvrt_ctx.is_timestamp_) {
+    if (cvrt_ctx.is_timestamp_ && gen_query_range) {
+      ret = OB_SUCCESS;
       if (ob_time.parts_[DT_MON] == 0) {
         ob_time.parts_[DT_MON] = 1;
         ob_time.parts_[DT_MDAY] = 1;
@@ -1792,7 +1783,6 @@ int ObTimeConverter::mdate_to_date(ObMySQLDate md_value, int32_t &d_value,
   } else if (OB_FAIL(mdate_to_ob_time(md_value, ob_time))) {
     LOG_WARN("failed to convert mysql_date to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
-    ret = OB_SUCCESS;
     d_value = ZERO_DATE;
   } else {
     d_value = ob_time_to_date(ob_time);
@@ -3245,28 +3235,12 @@ int ObTimeConverter::date_to_ob_time(int32_t value, ObTime &ob_time)
     memset(parts, 0, sizeof(*parts) * DATETIME_PART_CNT);
     parts[DT_DATE] = ZERO_DATE;
   } else {
-    int32_t days = value;
-    int32_t leap_year = 0;
-    int32_t year = EPOCH_YEAR4;
+    int8_t month = 0;
     parts[DT_DATE] = value;
-    // year.
-    while (days < 0 || days >= DAYS_PER_YEAR[leap_year = IS_LEAP_YEAR(year)]) {
-      int32_t new_year = year + days / DAYS_PER_NYEAR;
-      new_year -= (days < 0);
-      days -= (new_year - year) * DAYS_PER_NYEAR + LEAP_YEAR_COUNT(new_year - 1) - LEAP_YEAR_COUNT(year - 1);
-      year = new_year;
-    }
-    parts[DT_YEAR] = year;
-    parts[DT_YDAY] = days + 1;
     parts[DT_WDAY] = WDAY_OFFSET[value % DAYS_PER_WEEK][EPOCH_WDAY];
-    // month.
-    const int32_t *cur_days_until_mon = DAYS_UNTIL_MON[leap_year];
-    int32_t month = 1;
-    for (; month < MONS_PER_YEAR && days >= cur_days_until_mon[month]; ++month) {}
+    days_to_year_ydays(parts[DT_DATE], parts[DT_YEAR], parts[DT_YDAY]);
+    ydays_to_month_mdays(parts[DT_YEAR], parts[DT_YDAY], month, parts[DT_MDAY]);
     parts[DT_MON] = month;
-    days -= cur_days_until_mon[month - 1];
-    // day.
-    parts[DT_MDAY] = days + 1;
   }
   return ret;
 }
@@ -4874,7 +4848,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
       || OB_UNLIKELY(scale > MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len), K(ob_time), K(scale));
-  } else if (!valid_oracle_year(ob_time)) {
+  } else if (lib::is_oracle_mode() && !valid_oracle_year(ob_time)) {
     ret = OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
     LOG_WARN("invalid oracle timestamp", K(ret), K(ob_time));
   } else {
@@ -4989,13 +4963,16 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             break;
           }
           case ObDFMFlag::FF: {
-            if (OB_UNLIKELY(!HAS_TYPE_ORACLE(ob_time.mode_))) {
-              ret = OB_INVALID_DATE_FORMAT;
-            } else if (0 == scale) {
-              //print nothing
+            if (0 == scale) {
+              // print nothing
             } else {
+              //  scn_to_str will use ob_time with TYPE_ORACLE in mysql mode
+              int adjusted_scale_factor = ((lib::is_oracle_mode() || HAS_TYPE_ORACLE(ob_time.mode_))
+                       ? MAX_SCALE_FOR_ORACLE_TEMPORAL : MAX_SCALE_FOR_TEMPORAL) - scale;
               ret = data_fmt_nd(buf, buf_len, pos, scale,
-                                ob_time.parts_[DT_USEC] / power_of_10[MAX_SCALE_FOR_ORACLE_TEMPORAL - scale], fm_flag);
+                                ob_time.parts_[DT_USEC] /
+                                    power_of_10[adjusted_scale_factor],
+                                fm_flag);
             }
             break;
           }
@@ -5009,11 +4986,18 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
           case ObDFMFlag::FF8:
           case ObDFMFlag::FF9: {
             int64_t scale = elem.elem_flag_ - ObDFMFlag::FF1 + 1;
-            if (OB_UNLIKELY(!HAS_TYPE_ORACLE(ob_time.mode_))) {
+            if ((lib::is_mysql_mode() && !(HAS_TYPE_ORACLE(ob_time.mode_))) &&
+                elem.elem_flag_ > ObDFMFlag::FF6) {
               ret = OB_INVALID_DATE_FORMAT;
+              LOG_WARN("max scale of timestamp in mysql mode is 6", K(elem.elem_flag_));
             } else {
+              int adjust_max_scale =
+                  (lib::is_oracle_mode() || HAS_TYPE_ORACLE(ob_time.mode_))
+                      ? MAX_SCALE_FOR_ORACLE_TEMPORAL
+                      : MAX_SCALE_FOR_TEMPORAL;
               ret = data_fmt_nd(buf, buf_len, pos, scale,
-                                ob_time.parts_[DT_USEC] / power_of_10[MAX_SCALE_FOR_ORACLE_TEMPORAL - scale]);
+                                ob_time.parts_[DT_USEC] /
+                                    power_of_10[adjust_max_scale - scale]);
             }
             break;
           }

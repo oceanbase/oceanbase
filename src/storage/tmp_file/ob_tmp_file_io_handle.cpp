@@ -66,8 +66,9 @@ int ObTmpFileIOHandle::init_write(const uint64_t tenant_id, const ObTmpFileIOInf
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(io_info), K(tenant_id));
-  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, false /*is_read*/, io_info.io_desc_,
-                               io_info.io_timeout_ms_, io_info.disable_page_cache_, io_info.disable_block_cache_))) {
+  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, false /*is_read*/,
+                               io_info.io_desc_, io_info.io_timeout_ms_, io_info.disable_page_cache_,
+                               io_info.disable_block_cache_, false /*prefetch*/))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.prepare_write(io_info.buf_, io_info.size_))) {
     LOG_WARN("fail to prepare write context", KR(ret), KPC(this));
@@ -98,8 +99,9 @@ int ObTmpFileIOHandle::init_pread(const uint64_t tenant_id, const ObTmpFileIOInf
   } else if (OB_UNLIKELY(read_offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(read_offset));
-  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/, io_info.io_desc_,
-                               io_info.io_timeout_ms_, io_info.disable_page_cache_, io_info.disable_block_cache_))) {
+  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/,
+                               io_info.io_desc_, io_info.io_timeout_ms_, io_info.disable_page_cache_,
+                               io_info.disable_block_cache_, io_info.prefetch_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.prepare_read(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE), read_offset))) {
     LOG_WARN("fail to prepare read context", KR(ret), KPC(this), K(read_offset));
@@ -128,8 +130,9 @@ int ObTmpFileIOHandle::init_read(const uint64_t tenant_id, const ObTmpFileIOInfo
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(io_info), K(tenant_id));
-  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/, io_info.io_desc_,
-                               io_info.io_timeout_ms_, io_info.disable_page_cache_, io_info.disable_block_cache_))) {
+  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/,
+                               io_info.io_desc_, io_info.io_timeout_ms_, io_info.disable_page_cache_,
+                               io_info.disable_block_cache_, io_info.prefetch_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.prepare_read(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE)))) {
     LOG_WARN("fail to prepare read context", KR(ret), KPC(this));

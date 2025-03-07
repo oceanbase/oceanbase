@@ -258,6 +258,10 @@ protected:
       const share::SCN &snapshot,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
+  static int check_mlog_safe_(
+      const ObTablet &tablet,
+      const ObTableScanParam &scan_param);
+
   static OB_INLINE int64_t get_lock_wait_timeout_(const int64_t abs_lock_timeout, const int64_t stmt_timeout)
   {
     return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));

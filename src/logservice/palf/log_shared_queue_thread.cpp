@@ -12,9 +12,6 @@
 
 #include "log_shared_queue_thread.h"
 #include "log_shared_task.h"
-#include "share/ob_errno.h"                   // errno...
-#include "share/ob_thread_define.h"           // TGDefIDs
-#include "share/ob_thread_mgr.h"              // TG_START
 #include "palf_env_impl.h"                    // PalfEnvImpl
 
 namespace oceanbase

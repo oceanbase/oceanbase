@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_compaction_schedule_util.h"
+#include "ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"

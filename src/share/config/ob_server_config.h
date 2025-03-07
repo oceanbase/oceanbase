@@ -72,6 +72,7 @@ const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percenta
 const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
 const char* const OB_VECTOR_MEMORY_LIMIT_PERCENTAGE = "ob_vector_memory_limit_percentage";
 const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet_count_threshold";
+const char* const DEFAULT_TABLE_ORAGNIZATION = "default_table_organization";
 
 class ObServerMemoryConfig;
 
@@ -134,8 +135,6 @@ public:
   bool is_valid() const { return  system_config_!= NULL; };
   int64_t get_current_version() { return system_config_->get_version(); }
 
-  // 兼容性需求，兼容老的SPFILE格式
-  int deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos);
   OB_UNIS_VERSION(1);
 
 public:

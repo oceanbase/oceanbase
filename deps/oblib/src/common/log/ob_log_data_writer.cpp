@@ -11,11 +11,8 @@
  */
 
 #include "common/log/ob_log_data_writer.h"
-#include <sys/vfs.h>
 #include "lib/file/ob_file.h"
 #include "common/log/ob_log_dir_scanner.h"
-#include "common/log/ob_log_constants.h"
-#include "common/log/ob_log_cursor.h"
 #include "common/log/ob_log_generator.h"
 
 namespace oceanbase

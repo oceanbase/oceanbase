@@ -12,29 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_raw_expr_resolver_impl.h"
-#include "common/ob_smart_call.h"
-#include "common/ob_common_utility.h"
-#include "ob_raw_expr_info_extractor.h"
-#include "sql/parser/sql_parser_base.h"
-#include "sql/resolver/ob_column_ref.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "sql/engine/expr/ob_expr_case.h"
 #include "lib/json/ob_json_print_utils.h"
-#include "lib/string/ob_sql_string.h"
-#include "pl/ob_pl_type.h"
 #include "pl/ob_pl_resolver.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_udt_info.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
-#include "sql/resolver/ob_stmt.h"
-#include "sql/resolver/dml/ob_del_upd_stmt.h"
-#include "deps/oblib/src/lib/json_type/ob_json_path.h"
-#include "share/resource_manager/ob_resource_manager.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 
 namespace oceanbase
@@ -1310,6 +1293,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         OZ (process_vector_func_node(node, expr));
         break;
       }
+      case T_FUNC_SYS_ARRAY_FIRST:
+      case T_FUNC_SYS_ARRAY_SORTBY:
+      case T_FUNC_SYS_ARRAY_FILTER:
       case T_FUNC_SYS_ARRAY_MAP: {
         OZ (process_array_map_func_node(node, expr));
         break;
@@ -2389,34 +2375,11 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
   if (NULL == ctx_.secondary_namespace_) {
     // do nothing ...
   } else {
-
-class ObPLDependencyGuard
-{
-public:
-  ObPLDependencyGuard(pl::ObPLDependencyTable *dependency_table)
-    : dependency_table_(dependency_table), count_(0) {
-    if (OB_NOT_NULL(dependency_table_)) {
-      count_ = dependency_table_->count();
-    }
-  }
-  ~ObPLDependencyGuard() {
-    if (OB_NOT_NULL(dependency_table_)) {
-      while (dependency_table_->count() > count_) {
-        dependency_table_->pop_back();
-      }
-    }
-  }
-private:
-  pl::ObPLDependencyTable *dependency_table_;
-  int64_t count_;
-};
-
     SET_LOG_CHECK_MODE();
     CK(OB_NOT_NULL(ctx_.secondary_namespace_->get_external_ns()));
     if (OB_SUCC(ret)) {
       ObArray<ObQualifiedName> fake_columns;
       ObArray<ObRawExpr*> fake_exprs;
-      ObPLDependencyGuard dep_guard(ctx_.secondary_namespace_->get_external_ns()->get_dependency_table());
       if (OB_FAIL(ObResolverUtils::resolve_external_symbol(allocator,
                                                            expr_factory,
                                                            ctx_.secondary_namespace_->get_external_ns()->get_resolve_ctx().session_info_,
@@ -2429,6 +2392,7 @@ private:
                                                            fake_exprs,
                                                            var,
                                                            &ctx_.secondary_namespace_->get_external_ns()->get_resolve_ctx().package_guard_,
+                                                           ctx_.param_list_,
                                                            false,/*is_prepare_protocol*/
                                                            true,/*is_check_mode*/
                                                            ctx_.current_scope_ != T_PL_SCOPE /*is_sql_scope*/))) {
@@ -2466,6 +2430,7 @@ int ObRawExprResolverImpl::check_sys_func(ObQualifiedName &q_name, bool &is_sys_
   is_sys_func = 1 == q_name.access_idents_.count()
       && (IS_FUN_SYS_TYPE(ObExprOperatorFactory::get_type_by_name(q_name.access_idents_.at(0).access_name_))
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("sqlerrm")
+          || 0 == q_name.access_idents_.at(0).access_name_.case_compare("sqlcode")
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("xmlagg"))
       && q_name.access_idents_.at(0).access_name_.case_compare("nextval") != 0
       && q_name.access_idents_.at(0).access_name_.case_compare("currval") != 0;
@@ -2651,6 +2616,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           ObRawExpr *func_expr = NULL;
           if (0 == q_name.access_idents_.at(0).access_name_.case_compare("SQLERRM")) {
             OZ (process_sqlerrm_node(&func_node, func_expr));
+          } else if (0 == q_name.access_idents_.at(0).access_name_.case_compare("SQLCODE")) {
+            OZ (process_sqlcode_node(&func_node, func_expr));
           } else if (0 == q_name.access_idents_.at(0).access_name_.case_compare("json_equal")) {
             ret = OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE;
             LOG_WARN("JSON_EQUAL used outside predicate", K(ret));
@@ -3115,7 +3082,6 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              enable_decimal_int, // FIXME: enable decimal int
                                              compat_type,
                                              enable_mysql_compatible_dates,
-                                             session_info->get_local_ob_enable_plan_cache(),
                                              nullptr != ctx_.secondary_namespace_,
                                              ctx_.formalize_const_int_prec_))) {
     LOG_WARN("failed to resolve const", K(ret));
@@ -3210,10 +3176,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             OX (c_expr = static_cast<ObConstRawExpr*>(original_expr));
           }
         } else if (val.get_unknown() >= ctx_.param_list_->count()) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
           LOG_WARN("question mark index out of param list count",
                    "index", val.get_unknown(), "param_count", ctx_.param_list_->count());
-        } else { //execute stmt阶段，注：这里没有设置c_expr的accuracy会不会有问题
+        } else { //带参数prepare or execute stmt阶段，注：这里没有设置c_expr的accuracy会不会有问题
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
@@ -3587,7 +3553,7 @@ int ObRawExprResolverImpl::extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawE
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP && i == 0) {
+      if (IS_ARRAY_MAP_OP(expr->get_expr_type())&& i == 0) {
       } else if (OB_FAIL(SMART_CALL(extract_var_exprs(expr->get_param_expr(i), var_exprs)))) {
         LOG_WARN("Failed to extract var exprs", K(ret));
       }
@@ -3629,7 +3595,7 @@ int ObRawExprResolverImpl::check_replace_lambda_params_node(const ParseNode *par
     } else {
       for (uint32_t i = 0; OB_SUCC(ret) && i < curr_node->num_child_; ++i) {
         if (curr_node->children_[i] == NULL) {
-        } else if (curr_node->type_ == T_FUNC_SYS_ARRAY_MAP && i == 0) {
+        } else if (IS_ARRAY_MAP_OP(curr_node->type_) && i == 0) {
         } else if (OB_FAIL(check_replace_lambda_params_node(params_node, const_cast<ParseNode *>(curr_node->children_[i])))) {
           LOG_WARN("fail to replace lambda params", K(ret));
         }
@@ -3687,10 +3653,16 @@ int ObRawExprResolverImpl::process_lambda_func_node(const ParseNode *node, ObRaw
       LOG_WARN("fail to replace lambda params", K(ret));
     } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr1)))) {
       LOG_WARN("resolve function child failed", K(ret));
-    } else if (sub_expr1->is_query_ref_expr()) {
+    } else if (!sub_expr1->is_const_raw_expr()
+               && !sub_expr1->is_const_or_param_expr()
+               && !sub_expr1->is_column_ref_expr()
+               && !sub_expr1->is_sys_func_expr()
+               && !sub_expr1->is_op_expr()
+               && !sub_expr1->is_var_expr()
+               && !sub_expr1->is_case_op_expr()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("query expr isn't supported in lambda function", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "query expr in lambda function");
+      LOG_WARN("expr isn't supported in lambda function", K(ret), K(sub_expr1->get_expr_class()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expr in lambda function");
     } else if (OB_FAIL(func_expr->add_param_expr(sub_expr1))) {
       LOG_WARN("fail to add param expr to expr", K(ret));
     }
@@ -5504,7 +5476,34 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
 
     if (OB_SUCC(ret)) {
       //解析order by
-      if (NULL != node->children_[2]) {
+      if (is_mysql_mode() && T_FUN_GROUP_PERCENTILE_CONT == node->type_) {
+        const ParseNode *column_node = node->children_[2];
+        if (OB_ISNULL(column_node)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("column_node is null or invalid", KP(column_node), K(column_node->type_));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "percentile_cont");
+        } else if (OB_UNLIKELY(column_node->type_ != T_COLUMN_REF)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("percentile_cont only support column", K(ret), K(node));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "percentile_cont");
+        } else {
+          OrderItem order_item;
+          order_item.order_type_ = NULLS_FIRST_ASC;
+          if (OB_FAIL(SMART_CALL(recursive_resolve(column_node->children_[2], order_item.expr_)))) {
+            LOG_WARN("fail to recursive resolve order item expr", K(ret));
+          }
+          OZ(not_row_check(order_item.expr_));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(agg_expr->add_order_item(order_item))) {
+            LOG_WARN("fail to add order item to agg expr", K(ret));
+          } else {
+            if (T_FUN_GROUP_PERCENTILE_CONT == node->type_
+                 && OB_FAIL(reset_aggr_sort_nulls_first(agg_expr->get_order_items_for_update()))) {
+              LOG_WARN("failed to reset median aggr sort direction", K(ret), K(node));
+            }
+          }
+        }
+      } else if (NULL != node->children_[2]) {
         const ParseNode *order_by_node = node->children_[2];
         if (OB_ISNULL(order_by_node)
             || OB_UNLIKELY(order_by_node->type_ != T_ORDER_BY)
@@ -6204,6 +6203,28 @@ int ObRawExprResolverImpl::process_sqlerrm_node(const ParseNode *node, ObRawExpr
     CK (OB_NOT_NULL(param_expr));
     OZ (func_expr->add_param_expr(param_expr));
   }
+  OX (expr = func_expr);
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sqlcode_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObPLSQLCodeSQLErrmRawExpr *func_expr = NULL;
+  ObString name, func_name;
+  CK (OB_NOT_NULL(node));
+  OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_PL_SQLCODE_SQLERRM, func_expr));
+  CK (OB_NOT_NULL(func_expr));
+  OX (name = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_));
+  CK (OB_LIKELY(0 == name.case_compare("SQLCODE")));
+  OZ (ob_write_string(ctx_.expr_factory_.get_allocator(), N_PL_GET_SQLCODE_SQLERRM, func_name));
+  OX (func_expr->set_func_name(func_name));
+  OX (func_expr->set_is_sqlcode(true));
+  if (OB_SUCC(ret) && 1 != node->num_child_) {
+    ret = OB_INVALID_ARGUMENT_NUM;
+    LOG_WARN("invalid argument number for SQLCODE", K(node->num_child_));
+  }
+
   OX (expr = func_expr);
   return ret;
 }
@@ -7749,9 +7770,10 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
       LOG_WARN("search query is not const expr", K(ret));
-    } else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
+    }  else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_) &&
+                ObMatchAgainstMode::BOOLEAN_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE or BOOLEAN_MODE");
       LOG_WARN("unsupported match against mode", K(ret), K(node->value_));
     } else {
       match_against->set_search_key(search_keywords);

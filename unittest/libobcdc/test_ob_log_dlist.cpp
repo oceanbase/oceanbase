@@ -19,7 +19,6 @@
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include <gtest/gtest.h>
-#include "share/ob_define.h"
 #define private public
 #include "logservice/libobcdc/src/ob_log_dlist.h"
 #include "ob_log_utils.h"

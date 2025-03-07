@@ -13,14 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_ls_log_restore_status.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "rootserver/standby/ob_recovery_ls_service.h" //ObLSRecoveryService
 

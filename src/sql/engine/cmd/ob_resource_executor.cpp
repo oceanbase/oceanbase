@@ -13,7 +13,6 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_resource_executor.h"
 #include "sql/resolver/cmd/ob_resource_stmt.h"
-#include "share/ob_common_rpc_proxy.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

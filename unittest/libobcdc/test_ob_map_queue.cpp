@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include <gtest/gtest.h>
-#include "share/ob_define.h"
-#include "logservice/libobcdc/src/ob_map_queue.h"
 #include "ob_log_utils.h"
 
 using namespace oceanbase;

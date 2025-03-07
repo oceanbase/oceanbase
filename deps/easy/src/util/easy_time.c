@@ -1,4 +1,5 @@
-#include "util/easy_time.h"
+#include "easy_time.h"
+#include "include/easy_define.h"
 #include <sys/time.h>
 #if defined(__x86_64__)
 #include <cpuid.h>

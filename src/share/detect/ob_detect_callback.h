@@ -67,6 +67,8 @@ enum class DetectCallBackType
   TEMP_TABLE_DETECT_CB = 4,
   P2P_DATAHUB_DETECT_CB = 5,
   DAS_REMOTE_TASK_DETECT_CB = 6,
+  REMOTE_SQL_EXECUTION_DETECT_CB = 7,
+  PX_BATCH_RESCAN_DETECT_CB = 8,
 };
 
 // detectable id with activate time, used for delay detect
@@ -185,6 +187,20 @@ class ObP2PDataHubDetectCB : public ObIDetectCallback
   int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::P2P_DATAHUB_DETECT_CB; }
 private:
   sql::ObP2PDhKey key_;
+};
+
+
+class ObDASRemoteTaskDetectCB : public ObIDetectCallback
+{
+  public:
+  ObDASRemoteTaskDetectCB(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states, sql::DASTCBInfo key, const ObInterruptibleTaskID &tid)
+      : ObIDetectCallback(tenant_id, peer_states), key_(key), tid_(tid) {}
+
+  int do_callback() override;
+  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::DAS_REMOTE_TASK_DETECT_CB; }
+private:
+  sql::DASTCBInfo key_;
+  ObInterruptibleTaskID tid_;
 };
 
 } // end namespace common

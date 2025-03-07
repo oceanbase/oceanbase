@@ -12,17 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
 
-#include "share/schema/ob_table_schema.h"
-#include "share/tablet/ob_tablet_to_ls_operator.h"
+#include "ob_tablet_split_mds_helper.h"
 #include "storage/tablet/ob_tablet_split_replay_executor.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/multi_data_source/mds_ctx.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::obrpc;

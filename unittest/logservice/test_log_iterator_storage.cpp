@@ -10,18 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <vector>
-#include <thread>
 #include "unittest/logservice/test_shared_log_common.h"
 #define private public
-#include "logservice/palf/log_reader.h"
-#include "logservice/palf/palf_iterator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "log/ob_log_iterator_storage.h"
 #endif
 #undef private
-#include "share/ob_device_manager.h"
-#include <gtest/gtest.h>
 
 namespace oceanbase
 {

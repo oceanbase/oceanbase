@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log.h"
-#include "lib/alloc/alloc_func.h"
+#include "ob_tenant_freezer_common.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/ob_force_print_log.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tx_storage/ob_tenant_freezer_common.h"
 
 namespace oceanbase
 {

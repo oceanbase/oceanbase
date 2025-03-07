@@ -162,6 +162,11 @@ struct ObDASIndexProjLookupCtDef;
 struct ObDASIndexProjLookupRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_INDEX_PROJ_LOOKUP, ObDASIndexProjLookupCtDef, ObDASIndexProjLookupRtDef);
 
+struct ObDASDomainIdMergeCtDef;
+struct ObDASDomainIdMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_DOMAIN_ID_MERGE, ObDASDomainIdMergeCtDef, ObDASDomainIdMergeRtDef);
+
+
 #undef REGISTER_DAS_ATTACH_OP
 }  // namespace sql
 }  // namespace oceanbase

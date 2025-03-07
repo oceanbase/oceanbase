@@ -12,18 +12,10 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/ob_pl_package_manager.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_dbms_user_define_rule.h"
+#include "src/pl/ob_pl.h"
 #include "sql/udr/ob_udr_analyzer.h"
 #include "sql/udr/ob_udr_mgr.h"
-#include "observer/ob_server_struct.h"
-#include "pl/sys_package/ob_dbms_user_define_rule.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase

@@ -11,28 +11,16 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/session/ob_sql_session_mgr.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_resource_limit.h"
-#include "io/easy_io.h"
-#include "rpc/ob_rpc_define.h"
-#include "sql/ob_sql_trans_control.h"
-#include "observer/mysql/obsm_handler.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/ob_server_struct.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
+#include "ob_sql_session_mgr.h"
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
-#include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -782,6 +770,7 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   ObSQLSessionInfo::LockGuard query_lock_guard(session.get_query_lock());
   ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock());
   bool need_disconnect = false;
+  (void) TriggerHandle::calc_system_trigger_logoff(session);
   session.set_query_start_time(ObTimeUtility::current_time());
   // 调用这个函数之前会在ObSMHandler::on_disconnect中调session.set_session_state(SESSION_KILLED)，
   if (session.is_in_transaction()) {
@@ -796,12 +785,14 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   return ret;
 }
 
-int ObSQLSessionMgr::kill_tenant(const uint64_t tenant_id)
+int ObSQLSessionMgr::kill_tenant(const uint64_t tenant_id, bool force_kill)
 {
   int ret = OB_SUCCESS;
-  KillTenant kt_func(this, tenant_id);
+  KillTenant kt_func(this, tenant_id, force_kill);
   OZ (for_each_session(kt_func));
+  OX (ret = kt_func.get_ret_code());
   OZ (sessinfo_map_.clean_tenant(tenant_id));
+  LOG_INFO("kill tenant", K(tenant_id), K(force_kill));
   return ret;
 }
 
@@ -913,20 +904,32 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
     int64_t cur_time = common::ObTimeUtility::current_time();
     int64_t query_timeout = 0;
     ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
-    if (sess_info->get_ddl_info().is_ddl() || sess_info->is_real_inner_session()) {
-      //do nothing
+    if ((sess_info->get_stmt_type() != stmt::T_SELECT &&
+         sess_info->get_stmt_type() != stmt::T_UPDATE &&
+         sess_info->get_stmt_type() != stmt::T_INSERT &&
+         sess_info->get_stmt_type() != stmt::T_DELETE &&
+         sess_info->get_stmt_type() != stmt::T_MERGE &&
+         sess_info->get_stmt_type() != stmt::T_REPLACE &&
+         sess_info->get_stmt_type() != stmt::T_EXPLAIN) ||
+        sess_info->get_ddl_info().is_ddl() ||
+        OB_NOT_NULL(sess_info->get_pl_context()) ||
+        !sess_info->is_user_session() ||
+        sess_info->is_remote_session() ||
+        sess_info->get_current_trace_id().is_invalid()) {
+      //filter out DDL, PL and physical restore tenant statements, because they are not subject to query timeout control.
     } else if (OB_FAIL(sess_info->get_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout))) {
       LOG_WARN("failed to get sesion variable", K(ret));
     } else if (sess_info->get_query_start_time() > 0 &&
-               cur_time - sess_info->get_query_start_time() > timeout_multiplier * query_timeout) {
+               cur_time - sess_info->get_query_start_time() > timeout_multiplier * query_timeout + 1000000) {
       LOG_ERROR("detect sql hung!!!", K(sess_info->get_current_trace_id()),
                                       K(sess_info->get_cur_sql_id()),
                                       K(sess_info->get_thread_id()),
                                       K(cur_time - sess_info->get_query_start_time()),
                                       K(query_timeout), K(timeout_multiplier),
-                                      K(sess_info->is_user_session()),
                                       "session_state", ObString::make_string(sess_info->get_session_state_str()),
                                       K(sess_info->get_current_query_string()));
+      //dump stack of all threads of observer
+      IGNORE_RETURN faststack();
     }
   }
   return OB_SUCCESS == ret;
@@ -945,7 +948,18 @@ bool ObSQLSessionMgr::KillTenant::operator() (
   } else {
     if (sess_info->get_priv_tenant_id() == tenant_id_ ||
       sess_info->get_effective_tenant_id() == tenant_id_) {
-      ret = mgr_->kill_session(*sess_info);
+      bool need_kill = true;
+      if (force_kill_) {
+        ret = mgr_->kill_session(*sess_info);
+      } else if (OB_FAIL(sess_info->can_kill_session_immediately(need_kill))) {
+        LOG_WARN("failed to check can gc immediately");
+      } else if (!need_kill) {
+        ret_ = OB_EAGAIN;
+        LOG_TRACE("unit gc needs to wait", K(ret_));
+      } else if (need_kill) {
+        LOG_INFO("force kill session", K(sess_info->get_sessid()));
+        ret = mgr_->kill_session(*sess_info);
+      }
     }
   }
   return OB_SUCCESS == ret;

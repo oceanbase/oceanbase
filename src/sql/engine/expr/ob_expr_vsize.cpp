@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_vsize.h"
 #include "sql/engine/expr/ob_expr_util.h"
-#include "objit/common/ob_item_type.h"
-#include "share/object/ob_obj_cast.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

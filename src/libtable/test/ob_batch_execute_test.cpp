@@ -11,20 +11,10 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
 #define private public
 #define protected public
 #include "libobtable.h"
-#include "lib/utility/ob_test_util.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/lds/ob_lds_constructor.hpp"
-#include "share/table/ob_table_rpc_struct.h"
-#include "common/row/ob_row.h"
-#include "observer/table/ob_htable_utils.h"
 #include "observer/table/ob_htable_filter_operator.h"
-#include "observer/table/ob_table_service.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include <thread>
 #undef private
 #undef protected
 using namespace oceanbase::common;
@@ -227,37 +217,6 @@ TEST_F(TestBatchExecute, entity_factory)
             entity_factory.get_total_mem(), entity_factory.get_used_mem());
   }
 }
-
-TEST_F(TestBatchExecute, serialize_batch_result)
-{
-  ObTableBatchOperationResult result;
-  ObTableEntity result_entity;
-  ObTableOperationResult single_op_result;
-  single_op_result.set_entity(result_entity);
-  single_op_result.set_errno(1234);
-  single_op_result.set_type(ObTableOperationType::INSERT_OR_UPDATE);
-  single_op_result.set_affected_rows(4321);
-  ASSERT_EQ(OB_SUCCESS, result.push_back(single_op_result));
-  int64_t expected_len = result.get_serialize_size();
-  char buf[1024];
-  int64_t pos = 0;
-  ASSERT_EQ(OB_SUCCESS, result.serialize(buf, 1024, pos));
-  ASSERT_EQ(expected_len, pos);
-
-  ObTableBatchOperationResult result2;
-  ObTableEntityFactory<ObTableEntity> entity_factory;
-  result2.set_entity_factory(&entity_factory);
-  int64_t data_len = pos;
-  //fprintf(stderr, "yzfdebug datalen=%ld expectedlen=%ld\n", data_len, expected_len);
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, result2.deserialize(buf, data_len, pos));
-  ASSERT_EQ(1, result2.count());
-  ASSERT_EQ(1234, result2.at(0).get_errno());
-  ASSERT_EQ(4321, result2.at(0).get_affected_rows());
-  ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, result2.at(0).type());
-}
-
-
 
 TEST_F(TestBatchExecute, all_single_operation)
 {
@@ -842,7 +801,7 @@ TEST_F(TestBatchExecute, column_type_check)
     value.set_collation_type(CS_TYPE_BINARY);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(ObString::make_string("cblob"), value));
 
-    int64_t now = ObTimeUtility::current_time();
+    int64_t now = ObTimeUtility::fast_current_time();
     ObTimeConverter::round_datetime(0, now);
     value.set_timestamp(now);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(ObString::make_string("ctimestamp"), value));
@@ -12342,6 +12301,60 @@ TEST_F(TestBatchExecute, htable_check_and_put_put)
   ASSERT_EQ(str, put_val_str);
   ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
   ////////////////////////////////////////////////////////////////
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
+
+// create table if not exists obkv_datetime_test (C1 bigint, C2 datetime(6), primary key(C1), KEY idx_c2 (C2));
+TEST_F(TestBatchExecute, datetime_index_scan)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("obkv_datetime_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  ObITableEntity *entity = NULL;
+  int64_t now = ObTimeUtility::fast_current_time();
+  ObTimeConverter::round_datetime(0, now);
+  for (int64_t i = 0; i < 10; ++i) {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ObObj key;
+    key.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ObObj value;
+    value.set_datetime(now);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, batch_operation.insert(*entity));
+  }
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(10, result.count());
+
+  // query
+  ObTableQuery query;
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+  ObObj pk_objs_start[1];
+  pk_objs_start[0].set_datetime(now);
+  ObObj pk_objs_end[1];
+  pk_objs_end[0].set_datetime(now);
+  ObNewRange range;
+  range.start_key_.assign(pk_objs_start, 1);
+  range.end_key_.assign(pk_objs_end, 1);
+  range.border_flag_.set_inclusive_start();
+  range.border_flag_.set_inclusive_end();
+
+  ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+  query.set_scan_index(ObString::make_string("idx_c2"));
+  ObTableEntityIterator *iter = nullptr;
+  ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+  const ObITableEntity *result_entity = NULL;
+  ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
+  ASSERT_EQ(2, result_entity->get_properties_count());
   // teardown
   service_client_->free_table(the_table);
   the_table = NULL;

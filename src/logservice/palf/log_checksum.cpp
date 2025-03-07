@@ -11,7 +11,6 @@
  */
 
 #include "log_checksum.h"
-#include "lib/checksum/ob_crc64.h"
 #include "log_define.h"
 
 namespace oceanbase

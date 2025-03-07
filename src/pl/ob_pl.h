@@ -243,6 +243,8 @@ public:
 
   inline bool get_can_cached() { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
+  inline bool has_incomplete_rt_dep_error() { return has_incomplete_rt_dep_error_; }
+  inline void set_has_incomplete_rt_dep_error(bool has_incomplete_rt_dep_error) { has_incomplete_rt_dep_error_ = has_incomplete_rt_dep_error; }
   inline const ObIArray<ObPLFunction*> &get_routine_table() const { return routine_table_; }
   inline ObIArray<ObPLFunction*> &get_routine_table() { return routine_table_; }
   inline int set_routine_table(ObIArray<ObPLFunction*> &table)
@@ -286,6 +288,7 @@ protected:
   jit::ObLLVMDIHelper di_helper_;
 
   bool can_cached_;
+  bool has_incomplete_rt_dep_error_;
   sql::ObExecEnv exec_env_;
 
   std::pair<uint64_t, ObProcType> profiler_unit_info_;
@@ -903,6 +906,8 @@ public:
     trace_id_.reset();
     old_user_priv_set_ = OB_PRIV_SET_EMPTY;
     old_db_priv_set_ = OB_PRIV_SET_EMPTY;
+    is_inner_mock_ = false;
+    is_system_trigger_ = false;
   }
 
   int is_inited() { return session_info_ != NULL; }
@@ -998,6 +1003,8 @@ public:
   inline ObString get_database_name() const { return database_name_.string(); }
   inline uint64_t get_database_id() const { return database_id_; }
   inline bool is_function_or_trigger() const { return is_function_or_trigger_; }
+  inline bool is_system_trigger() const { return is_system_trigger_; }
+  inline void set_is_system_trigger(bool v) { is_system_trigger_ = v; }
   bool is_autonomous() const { return is_autonomous_; }
   void clear_autonomous() { is_autonomous_ = false; }
   bool in_autonomous() const;
@@ -1008,6 +1015,8 @@ public:
   pl::ObPLContext *get_top_stack_ctx() { return top_stack_ctx_; }
   sql::ObExecContext *get_my_exec_ctx() { return my_exec_ctx_; }
   ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
+  void set_is_inner_mock(bool is_inner_mock) { is_inner_mock_ = is_inner_mock; }
+  bool get_is_inner_mock() const { return is_inner_mock_; }
 
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *get_call_stack_trace();
@@ -1073,6 +1082,8 @@ private:
   bool is_function_or_trigger_;
   uint64_t last_insert_id_;
   ObCurTraceId::TraceId trace_id_;
+  bool is_inner_mock_;
+  bool is_system_trigger_;
 };
 
 struct PlTransformTreeCtx
@@ -1233,7 +1244,7 @@ public:
 
   static int simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv);
 
-  static int check_trigger_arg(ParamStore &params, const ObPLFunction &func);
+  static int check_trigger_arg(ParamStore &params, const ObPLFunction &func, ObPLContext &pl_ctx, ObExecContext &ctx);
 
   std::pair<common::ObBucketLock, common::ObBucketLock>& get_jit_lock() { return jit_lock_; }
 

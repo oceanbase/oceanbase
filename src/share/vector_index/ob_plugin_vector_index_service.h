@@ -20,7 +20,8 @@
 #include "share/vector_index/ob_plugin_vector_index_scheduler.h"
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
-
+#include "share/vector_type/ob_vector_common_util.h"
+#include "ob_vector_kmeans_ctx.h"
 
 namespace oceanbase
 {
@@ -67,6 +68,7 @@ public:
   ObPluginVectorIndexAdapterGuard sn_adatper_guard_;
 };
 
+typedef common::hash::ObHashMap<common::ObTabletID, ObIvfBuildHelper*> IvfVectorIndexHelperMap;
 // Manage all vector index adapter in a ls
 class ObPluginVectorIndexMgr
 {
@@ -77,6 +79,7 @@ public:
       ls_id_(),
       complete_index_adpt_map_(),
       partial_index_adpt_map_(),
+      ivf_index_helper_map_(),
       adapter_map_rwlock_(),
       ls_tablet_task_ctx_(),
       tenant_id_(tenant_id),
@@ -94,6 +97,8 @@ public:
   ObPluginVectorIndexLSTaskCtx& get_ls_task_ctx() { return ls_tablet_task_ctx_; }
   VectorIndexAdaptorMap& get_partial_adapter_map() { return partial_index_adpt_map_; }
   VectorIndexAdaptorMap& get_complete_adapter_map() { return complete_index_adpt_map_; }
+  IvfVectorIndexHelperMap& get_ivf_helper_map() { return ivf_index_helper_map_; }
+
 
   // thread save interface
   void destroy();
@@ -101,6 +106,7 @@ public:
   void release_all_adapters();
 
   int get_adapter_inst_guard(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
+  int get_build_helper_inst_guard(ObTabletID tablet_id, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
                              ObIndexType type,
@@ -108,6 +114,7 @@ public:
                              int64_t index_table_id,
                              ObString *vec_index_param = nullptr,
                              int64_t dim = 0);
+  int create_ivf_build_helper(ObTabletID idx_tablet_id, ObIndexType type, ObString &vec_index_param, ObIAllocator &allocator);
   int replace_with_complete_adapter(ObVectorIndexAdapterCandiate *candidate,
                                     ObVecIdxSharedTableInfoMap &info_map,
                                     ObIAllocator &allocator);
@@ -143,6 +150,7 @@ public:
   int check_need_mem_data_sync_task(bool &need_sync);
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
+  int erase_ivf_build_helper(ObTabletID tablet_id);
   ObVectorIndexMemSyncInfo &get_mem_sync_info() { return mem_sync_info_; }
   // for debug
   void dump_all_inst();
@@ -158,6 +166,7 @@ private:
 
   int set_partial_adapter_(ObTabletID tablet_id, ObPluginVectorIndexAdaptor *adapter_inst, int overwrite = 0);
   int erase_partial_adapter_(ObTabletID tablet_id);
+  int set_ivf_build_helper_(ObTabletID tablet_id, ObIvfBuildHelper *helper_inst);
   // thread save inner functions
   int get_or_create_partial_adapter_(ObTabletID tablet_id,
                                      ObIndexType type,
@@ -165,6 +174,8 @@ private:
                                      ObString *vec_index_param,
                                      int64_t dim,
                                      ObIAllocator &allocator);
+
+  int get_build_helper_inst_(ObTabletID tablet_id, ObIvfBuildHelper *&helper_inst);
 private:
   static const int64_t DEFAULT_ADAPTER_HASH_SIZE = 1000;
   static const int64_t DEFAULT_CANDIDATE_ADAPTER_HASH_SIZE = 1000;
@@ -178,6 +189,7 @@ private:
   share::ObLSID ls_id_;
   VectorIndexAdaptorMap complete_index_adpt_map_; // map of complete index adapters with full info
   VectorIndexAdaptorMap partial_index_adpt_map_; // map of passive created index adapters
+  IvfVectorIndexHelperMap ivf_index_helper_map_; // map of ivf inder build helper
   RWLock adapter_map_rwlock_; // lock for adapter maps
   ObPluginVectorIndexLSTaskCtx ls_tablet_task_ctx_; // task ctx of ls level
   uint64_t tenant_id_;
@@ -235,6 +247,7 @@ public:
     is_ls_or_tablet_changed_(false),
     schema_service_(NULL),
     ls_service_(NULL),
+    sql_proxy_(NULL),
     memory_context_(NULL),
     all_vsag_use_mem_(0)
 
@@ -254,6 +267,7 @@ public:
   // feature interfaces
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
   int get_adapter_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adapter_guard);
+  int get_build_helper_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObLSID ls_id,
                              ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
@@ -261,6 +275,11 @@ public:
                              int64_t index_table_id,
                              ObString *vec_index_param = nullptr,
                              int64_t dim = 0);
+  int create_ivf_build_helper(ObLSID ls_id,
+                              ObTabletID idx_tablet_id,
+                              ObIndexType type,
+                              ObString &vec_index_param);
+  int erase_ivf_build_helper(ObLSID ls_id, ObTabletID idx_tablet_id);
   int check_and_merge_adapter(ObLSID ls_id, ObVecIdxSharedTableInfoMap &info_map);
   int acquire_vector_index_mgr(ObLSID ls_id, ObPluginVectorIndexMgr *&mgr);
 
@@ -276,14 +295,34 @@ public:
                             ObPluginVectorIndexAdapterGuard &adapter_guard,
                             ObString *vec_index_param = nullptr,
                             int64_t dim = 0);
+  int acquire_ivf_build_helper_guard(ObLSID ls_id,
+                                     ObTabletID tablet_id,
+                                     ObIndexType type,
+                                     ObIvfBuildHelperGuard &helper_guard,
+                                     ObString &vec_index_param);
 
   // for debug
   int dump_all_inst();
   // for virtual table
   int get_snapshot_ids(ObIArray<obrpc::ObLSTabletPair> &complete_tablet_ids,  ObIArray<obrpc::ObLSTabletPair> &partial_tablet_ids);
+  // for ivf
+  // ivfflat index needs center ids
+  // ivfsq index needs sq metas and center ids
+  // ivfpq index needs center ids and pq center ids
+  int get_ivf_aux_info(
+      const uint64_t table_id,
+      const ObTabletID tablet_id,
+      ObIAllocator &allocator,
+      ObIArray<float*> &aux_info);
 
   TO_STRING_KV(K_(is_inited), K_(has_start), K_(tenant_id),
                K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));
+private:
+  // for ivf
+  int generate_get_aux_info_sql(
+      const uint64_t table_id,
+      const ObTabletID tablet_id,
+      ObSqlString &sql_string);
 private:
   static const int64_t BASIC_TIMER_INTERVAL = 30 * 1000 * 1000; // 30s
   static const int64_t VEC_INDEX_LOAD_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s
@@ -296,6 +335,7 @@ private:
 
   share::schema::ObMultiVersionSchemaService *schema_service_;
   storage::ObLSService *ls_service_;
+  common::ObMySQLProxy *sql_proxy_;
   ObFIFOAllocator allocator_;
   common::ObArenaAllocator alloc_;
   lib::MemoryContext memory_context_;

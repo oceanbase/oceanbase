@@ -15,18 +15,13 @@
  * Author:
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <thread>
 
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
 
-#include "storage/compaction/ob_compaction_memory_pool.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/blocksstable/ob_data_buffer.h"
-#include "storage/compaction/ob_compaction_memory_context.h"
 
 
 namespace oceanbase

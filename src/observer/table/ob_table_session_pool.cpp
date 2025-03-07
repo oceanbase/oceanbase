@@ -13,16 +13,107 @@
 
 #include "ob_table_session_pool.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "observer/omt/ob_tenant.h"
+#include "share/table/ob_ttl_util.h" // for ObTTLUtil::TTL_THREAD_MAX_SCORE
 
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
+using namespace oceanbase::sql;
+using namespace oceanbase::omt;
 
 namespace oceanbase
 {
 namespace table
 {
+
+int ObTableRelatedSysVars::init()
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!is_inited_) { // double check
+      if (OB_FAIL(update_sys_vars(false/*only_update_dynamic_vars*/))) {
+        LOG_WARN("fail to init sys vars", K(ret));
+      } else {
+        is_inited_ = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableRelatedSysVars::update_sys_vars(bool only_update_dynamic_vars)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_ && only_update_dynamic_vars) {
+    // do nothing
+  } else {
+    int64_t tenant_id = MTL_ID();
+    SMART_VAR(ObSQLSessionInfo, sess_info) {
+      ObSchemaGetterGuard schema_guard;
+      const ObTenantSchema *tenant_schema = nullptr;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("tenant schema is null", K(ret));
+      } else if (OB_FAIL(ObTableApiSessUtil::init_sess_info(tenant_id,
+                                                            tenant_schema->get_tenant_name_str(),
+                                                            schema_guard,
+                                                            sess_info))) {
+        LOG_WARN("fail to init sess info", K(ret), K(tenant_id));
+      } else {
+        // static vars
+        if (!only_update_dynamic_vars) {
+          int64_t sess_mode_val = 0;
+          if (OB_FAIL(sess_info.get_sys_variable(SYS_VAR_OB_KV_MODE, sess_mode_val))) {
+            LOG_WARN("fail to get ob_kv_mode variable", K(ret));
+          } else {
+            static_vars_.set_kv_mode(static_cast<ObKvModeType>(sess_mode_val));
+          }
+        }
+
+        // dynamic vars
+        if (OB_SUCC(ret)) {
+          int64_t binlog_row_image = -1;
+          int64_t query_record_size_limit = sess_info.get_tenant_query_record_size_limit();
+          bool enable_query_response_time_stats = sess_info.enable_query_response_time_stats();
+          if (OB_FAIL(sess_info.get_sys_variable(SYS_VAR_BINLOG_ROW_IMAGE, binlog_row_image))) {
+            LOG_WARN("fail to get binlog_row_image variable", K(ret));
+          } else {
+            dynamic_vars_.set_binlog_row_image(binlog_row_image);
+            dynamic_vars_.set_query_record_size_limit(query_record_size_limit);
+            dynamic_vars_.set_enable_query_response_time_stats(enable_query_response_time_stats);
+            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+            if (tenant_config.is_valid()) {
+              int64_t batch_size = tenant_config->kv_group_commit_batch_size;
+              dynamic_vars_.set_kv_group_commit_batch_size(batch_size);
+              ObString rw_mode = tenant_config->kv_group_commit_rw_mode.get_value_string();
+              if (batch_size > 1) {
+                if (rw_mode.case_compare("all") == 0) { // 'ALL'
+                  dynamic_vars_.set_group_rw_mode(ObTableGroupRwMode::ALL);
+                } else if (rw_mode.case_compare("read") == 0) {
+                  dynamic_vars_.set_group_rw_mode(ObTableGroupRwMode::READ);
+                } else if (rw_mode.case_compare("write") == 0) {
+                  dynamic_vars_.set_group_rw_mode(ObTableGroupRwMode::WRITE);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
 
 /*
   init session pool manager when create tenant
@@ -50,8 +141,14 @@ int ObTableApiSessPoolMgr::start()
                                  ELIMINATE_SESSION_DELAY/* 5s */,
                                  true/* repeat */))) {
     LOG_WARN("failed to schedule tableapi retired session task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
+                                 sys_var_update_task_,
+                                 SYS_VAR_REFRESH_DELAY/* 5s */,
+                                 true/* repeat */))) {
+    LOG_WARN("failed to schedule tableapi update sys var task", K(ret));
   } else {
     elimination_task_.is_inited_ = true;
+    sys_var_update_task_.is_inited_ = true;
   }
 
   return ret;
@@ -63,6 +160,9 @@ void ObTableApiSessPoolMgr::stop()
   if (OB_LIKELY(elimination_task_.is_inited_)) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), elimination_task_);
   }
+  if (OB_LIKELY(sys_var_update_task_.is_inited_)) {
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
+  }
 }
 
 // tableapi retired session task wait
@@ -70,6 +170,9 @@ void ObTableApiSessPoolMgr::wait()
 {
   if (OB_LIKELY(elimination_task_.is_inited_)) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), elimination_task_);
+  }
+  if (OB_LIKELY(sys_var_update_task_.is_inited_)) {
+    TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
   }
 }
 
@@ -93,6 +196,16 @@ void ObTableApiSessPoolMgr::destroy()
         }
       }
     }
+    if (sys_var_update_task_.is_inited_) {
+      bool is_exist = true;
+      if (OB_SUCC(TG_TASK_EXIST(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_, is_exist))) {
+        if (is_exist) {
+          TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
+          TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
+          sys_var_update_task_.is_inited_ = false;
+        }
+      }
+    }
 
     // 2. destroy session pool
     if (OB_NOT_NULL(pool_)) {
@@ -112,6 +225,7 @@ int ObTableApiSessPoolMgr::init()
 
   if (!is_inited_) {
     elimination_task_.sess_pool_mgr_ = this;
+    sys_var_update_task_.sess_pool_mgr_ = this;
     is_inited_ = true;
   }
 
@@ -123,7 +237,8 @@ int ObTableApiSessPoolMgr::init()
   - 1. the user should access the current tenant, so we check tenant id.
   - 2. ObTableApiSessGuard holds the reference count of session.
   - 3. pool_ have been created when login normally,
-    but some inner operation did not login, such as ttl operation, so we create a new pool for ttl.
+    But some inner operation did not login, such as ttl operation, so we create a new pool for ttl.
+    In the upgrade scenario, the odp does not login again. so we init system vars.
 */
 int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTableApiSessGuard &guard)
 {
@@ -140,6 +255,8 @@ int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTab
     LOG_WARN("session pool is null", K(ret), K(credential));
   } else if (OB_FAIL(pool_->get_sess_info(credential, guard))) {
     LOG_WARN("fail to get session info", K(ret), K(credential));
+  } else if (!sys_vars_.is_inited_ && OB_FAIL(sys_vars_.init())) {
+    LOG_WARN("fail to init sys vars", K(ret));
   }
 
   return ret;
@@ -203,11 +320,12 @@ int ObTableApiSessPoolMgr::update_sess(ObTableApiCredential &credential)
     LOG_WARN("fail to create session pool", K(ret), K(credential));
   } else if (OB_FAIL(pool_->update_sess(credential))) {
     LOG_WARN("fail to update sess pool", K(ret), K(credential));
+  } else if (!sys_vars_.is_inited_ && OB_FAIL(sys_vars_.init())) {
+    LOG_WARN("fail to init sys vars", K(ret));
   }
 
   return ret;
 }
-
 
 /*
   The background timer tasks to delete session node.
@@ -222,6 +340,15 @@ void ObTableApiSessPoolMgr::ObTableApiSessEliminationTask::runTimerTask()
     LOG_WARN("fail to run retire sess task", K(ret));
   } else if (OB_FAIL(run_recycle_retired_sess_task())) {
     LOG_WARN("fail to run recycle retired sess task", K(ret));
+  }
+}
+
+void ObTableApiSessPoolMgr::ObTableApiSessSysVarUpdateTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(run_update_sys_var_task())) {
+    LOG_WARN("fail to run update sys var task", K(ret));
   }
 }
 
@@ -255,6 +382,20 @@ int ObTableApiSessPoolMgr::ObTableApiSessEliminationTask::run_recycle_retired_se
     LOG_WARN("sess_pool_mgr_ is null", K(ret));
   } else if (OB_NOT_NULL(sess_pool_mgr_->pool_) && OB_FAIL(sess_pool_mgr_->pool_->evict_retired_sess())) {
     LOG_WARN("fail to evict retired sess", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTableApiSessPoolMgr::ObTableApiSessSysVarUpdateTask::run_update_sys_var_task()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(sess_pool_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sess_pool_mgr_ is null", K(ret));
+  } else if (OB_FAIL(sess_pool_mgr_->update_sys_vars(true/*only_update_dynamic_vars*/))) {
+    LOG_WARN("fail to update sys var", K(ret));
   }
 
   return ret;
@@ -490,26 +631,8 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
   } else if (OB_UNLIKELY(OB_ISNULL(sess_node))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
-  } else {
-    ObTableApiSessNodeVal *sess_val = nullptr;
-    if (OB_FAIL(sess_node->get_sess_node_val(sess_val))) {
-      LOG_WARN("fail to get sess node value", K(ret), K(*sess_node));
-    } else if (OB_ISNULL(sess_val)) {
-      need_extend = true;
-    } else {
-      guard.sess_node_val_ = sess_val;
-    }
-  }
-
-  if (need_extend) {
-    if (OB_FAIL(sess_node->extend_and_get_sess_val(guard))) {
-      LOG_WARN("fail to extend and get sess val", K(ret), K(*sess_node), K(credential));
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(sess_node)) {
-    int64_t cur_time = ObTimeUtility::fast_current_time();
-    ATOMIC_STORE(&sess_node->last_active_ts_, cur_time);
+  } else if (OB_FAIL(sess_node->get_sess_node_val(guard))) {
+    LOG_WARN("fail to get sess node value", K(ret), K(*sess_node));
   }
 
   return ret;
@@ -653,23 +776,16 @@ int ObTableApiSessNodeVal::init_sess_info()
 }
 
 /*
-  move node val to free list from used list.
-  - remove from used list.
-  - add to free list.
+  push session back to queue
 */
-void ObTableApiSessNodeVal::give_back_to_free_list()
+int ObTableApiSessNodeVal::push_back_to_queue()
 {
-  if (OB_NOT_NULL(owner_node_)) {
-    ObDList<ObTableApiSessNodeVal> &free_list = owner_node_->sess_lists_.free_list_;
-    ObDList<ObTableApiSessNodeVal> &used_list = owner_node_->sess_lists_.used_list_;
-    ObLockGuard<ObSpinLock> guard(owner_node_->sess_lists_.lock_);
-    ObTableApiSessNodeVal *rm_sess = nullptr;
-    if (OB_ISNULL(rm_sess = (used_list.remove(this)))) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to remove sess from used list", K(*rm_sess));
-    } else if (false == (free_list.add_last(rm_sess))) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to add sess val to free list", K(*rm_sess));
-    }
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(owner_node_) && OB_FAIL(owner_node_->push_back_sess_to_queue(this))) {
+    LOG_WARN("fail to push back session to queue", K(ret), K(owner_node_->sess_queue_.capacity()),
+      K(owner_node_->sess_queue_.get_curr_total()), K(owner_node_->sess_ref_cnt_));
   }
+  return ret;
 }
 
 int ObTableApiSessNode::init()
@@ -723,8 +839,20 @@ int ObTableApiSessNode::init()
         } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), db_info->get_database_name(), db_name_))) {
           LOG_WARN("fail to deep copy database name", K(ret));
         } else {
-          last_active_ts_ = ObTimeUtility::fast_current_time();
-          is_inited_ = true;
+          int64_t max_sess_num = 0; // async query processor need 2 session and TTL task need TTL_THREAD_MAX_SCORE at most
+          ObMemAttr attr(tenant_id, "TbSessQueue");
+          ObTenantBase *tenant_base = MTL_CTX();
+          ObTenant *tenant = static_cast<ObTenant *>(tenant_base);
+          if (OB_ISNULL(tenant_base)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get tenant is null", K(ret));
+          } else if (FALSE_IT(max_sess_num = tenant->max_worker_cnt() * 2 + ObTTLUtil::TTL_THREAD_MAX_SCORE)) {
+          } else if (OB_FAIL(sess_queue_.init(max_sess_num, &queue_allocator_, attr))) {
+            LOG_WARN("fail to init queues", K(ret), K(max_sess_num));
+          } else {
+            last_active_ts_ = ObTimeUtility::fast_current_time();
+            is_inited_ = true;
+          }
         }
       }
     }
@@ -742,31 +870,25 @@ int ObTableApiSessNode::init()
 void ObTableApiSessNode::destroy()
 {
   int ret = OB_SUCCESS;
-  ObDList<ObTableApiSessNodeVal> &free_list = sess_lists_.free_list_;
-  ObDList<ObTableApiSessNodeVal> &used_list = sess_lists_.used_list_;
+  ObTableApiSessNodeVal *sess = nullptr;
 
-  DLIST_FOREACH_REMOVESAFE(sess, free_list) {
-    ObTableApiSessNodeVal *rm_sess = free_list.remove(sess);
-    if (OB_NOT_NULL(rm_sess)) {
-      rm_sess->destroy();
+  while (OB_SUCC(sess_queue_.pop(sess))) {
+    if (OB_NOT_NULL(sess)) {
+      sess->destroy();
       if (OB_NOT_NULL(mem_ctx_)) {
-        mem_ctx_->free(rm_sess);
+        mem_ctx_->free(sess);
       }
     }
   }
-  DLIST_FOREACH_REMOVESAFE(sess, used_list) {
-    ObTableApiSessNodeVal *rm_sess = used_list.remove(sess);
-    if (OB_NOT_NULL(rm_sess)) {
-      rm_sess->destroy();
-      if (OB_NOT_NULL(mem_ctx_)) {
-        mem_ctx_->free(rm_sess);
-      }
-    }
-  }
+
+  sess_queue_.destroy();
+  queue_allocator_.reset();
+
   if (OB_NOT_NULL(mem_ctx_)) {
     DESTROY_CONTEXT(mem_ctx_);
     mem_ctx_ = nullptr;
   }
+  sess_ref_cnt_ = 0;
 }
 
 int ObTableApiSessNode::remove_unused_sess()
@@ -777,20 +899,19 @@ int ObTableApiSessNode::remove_unused_sess()
     ret = OB_NOT_INIT;
     LOG_WARN("session node is not inited", K(ret));
   } else {
-    ObDList<ObTableApiSessNodeVal> &free_list = sess_lists_.free_list_;
-    if (free_list.is_empty()) {
-      // do nothing
-    } else {
-      ObLockGuard<ObSpinLock> guard(sess_lists_.lock_);
-      DLIST_FOREACH_REMOVESAFE(sess, free_list) {
-        ObTableApiSessNodeVal *rm_sess = free_list.remove(sess);
-        if (OB_NOT_NULL(rm_sess) && OB_NOT_NULL(mem_ctx_)) {
-          rm_sess->~ObTableApiSessNodeVal();
-          mem_ctx_->free(rm_sess);
-          rm_sess = nullptr;
+    ObTableApiSessNodeVal *sess = nullptr;
+    while (OB_SUCC(sess_queue_.pop(sess))) {
+      if (OB_NOT_NULL(sess)) {
+        sess->destroy();
+        if (OB_NOT_NULL(mem_ctx_)) {
+          mem_ctx_->free(sess);
         }
       }
     }
+  }
+
+  if (ret == OB_ENTRY_NOT_EXIST) {
+    ret = OB_SUCCESS;
   }
 
   return ret;
@@ -798,33 +919,42 @@ int ObTableApiSessNode::remove_unused_sess()
 
 /*
   get session node val
-  - remove and get from free list.
-  - add to used list.
+  - add ref cnt first to avoid cleaning up by background tasks
+  - pop session
+  - dec ref cnt if failed
 */
-int ObTableApiSessNode::get_sess_node_val(ObTableApiSessNodeVal *&val)
+int ObTableApiSessNode::get_sess_node_val(ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
+  ObTableApiSessNodeVal *tmp_val = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("session node is not inited", K(ret));
   } else {
-    ObTableApiSessNodeVal *tmp_val = nullptr;
-    ObDList<ObTableApiSessNodeVal> &free_list = sess_lists_.free_list_;
-    ObDList<ObTableApiSessNodeVal> &used_list = sess_lists_.used_list_;
-
-    ObLockGuard<ObSpinLock> guard(sess_lists_.lock_);
-    if (!free_list.is_empty()) {
-      tmp_val = free_list.remove_first();
-      // move to used list
-      if (false == (used_list.add_last(tmp_val))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to add sess val to used list", K(ret), K(*tmp_val));
+    ATOMIC_INC(&sess_ref_cnt_); // add ref cnt first
+    if (OB_FAIL(sess_queue_.pop(tmp_val))) {
+      if (ret != OB_ENTRY_NOT_EXIST) {
+        LOG_WARN("fail to pop session from queue", K(ret), K(sess_queue_.get_total()));
       } else {
-        val = tmp_val;
+        ret = OB_SUCCESS;
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(tmp_val)) { // has no session in sess_queue_, need extend
+        if (OB_FAIL(extend_and_get_sess_val(guard))) {
+          LOG_WARN("fail to extend and get sess val", K(ret));
+        }
+      } else {
+        guard.sess_node_val_ = tmp_val;
+      }
+    } else {
+      ATOMIC_DEC(&sess_ref_cnt_); // dec ref cnt if failed
+    }
   }
+
+  ATOMIC_STORE(&last_active_ts_, ObTimeUtility::fast_current_time()); // update last_active_ts_
 
   return ret;
 }
@@ -857,13 +987,7 @@ int ObTableApiSessNode::extend_and_get_sess_val(ObTableApiSessGuard &guard)
       if (OB_FAIL(val->init_sess_info())) {
         LOG_WARN("fail to init sess info", K(ret), K(*val));
       } else {
-        ObLockGuard<ObSpinLock> lock_guard(sess_lists_.lock_);
-        if (false == (sess_lists_.used_list_.add_last(val))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to add sess val to list", K(ret), K(*val));
-        } else {
-          guard.sess_node_val_ = val;
-        }
+        guard.sess_node_val_ = val;
       }
     }
 

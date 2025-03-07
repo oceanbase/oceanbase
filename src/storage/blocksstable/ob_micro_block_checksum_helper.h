@@ -60,13 +60,22 @@ public:
   }
   int cal_rows_checksum(const common::ObArray<ObColDatums *> &all_col_datums,
                         const int64_t row_count);
-
-  int cal_column_checksum(const common::ObArray<ObColDatums *> &all_col_datums,
+  int cal_column_checksum(const common::ObIArray<ObIVector *> &vectors,
+                          const int64_t start,
                           const int64_t row_count,
                           int64_t *curr_micro_column_checksum);
 
   TO_STRING_KV(KPC_(col_descs), KP_(integer_col_idx), KP_(integer_col_buf),
       K_(integer_col_cnt), K_(micro_block_row_checksum));
+private:
+  int cal_column_checksum_normal(const ObIArray<ObIVector *> &vectors,
+                                 const int64_t start,
+                                 const int64_t row_count,
+                                 int64_t *curr_micro_column_checksum);
+  int cal_column_checksum_sse42(const ObIArray<ObIVector *> &vectors,
+                                const int64_t start,
+                                const int64_t row_count,
+                                int64_t *curr_micro_column_checksum);
 
 private:
   static const int64_t MAGIC_NOP_NUMBER = 0xa1b;

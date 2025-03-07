@@ -11,37 +11,79 @@
  */
 #pragma once
 
-#include "lib/allocator/ob_allocator.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/schema/ob_table_param.h"
 #include "share/table/ob_table_load_define.h"
+#include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
-#include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_trans_param.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_i_merge_task.h"
 
 namespace oceanbase
 {
-namespace common {
+namespace common
+{
 class ObOptOSGColumnStat;
 class ObOptTableStat;
 } // namespace common
+namespace observer
+{
+class ObTableLoadTableCtx;
+} // namespace observer
 namespace storage
 {
 class ObDirectLoadInsertTableContext;
-class ObDirectLoadPartitionMergeTask;
-class ObDirectLoadPartitionRescanTask;
-class ObDirectLoadPartitionDelLobTask;
+class ObDirectLoadInsertTabletContext;
 class ObDirectLoadTabletMergeCtx;
-class ObIDirectLoadPartitionTable;
-class ObDirectLoadSSTable;
-class ObDirectLoadMultipleSSTable;
-class ObDirectLoadMultipleHeapTable;
 class ObDirectLoadMultipleMergeRangeSplitter;
 class ObDirectLoadDMLRowHandler;
 class ObIDirectLoadPartitionTableBuilder;
 class ObDirectLoadTmpFileManager;
+class ObDirectLoadTableStore;
+
+// NORMAL : 将导入数据直接构造成sstable
+// MERGE_WITH_ORIGIN_DATA : 将导入数据与已有数据合并, 场景: full+normal写数据表
+// MERGE_WITH_CONFLICT_CHECK : 将导入数据与已有数据进行冲突检测, 场景:
+// incremental或inc_replace但是表上有lob或索引 MERGE_WITH_ORIGIN_QUERY_FOR_LOB : 目前是给del_lob用的,
+// 根据lob_id去原表查询
+struct ObDirectLoadMergeMode
+{
+#define OB_DIRECT_LOAD_MERGE_MODE_DEF(DEF)    \
+  DEF(INVALID_MERGE_MODE, = 0)                \
+  DEF(NORMAL, )                               \
+  DEF(MERGE_WITH_ORIGIN_DATA, )               \
+  DEF(MERGE_WITH_CONFLICT_CHECK, )            \
+  DEF(MERGE_WITH_ORIGIN_QUERY_FOR_LOB, )              \
+  DEF(MERGE_WITH_ORIGIN_QUERY_FOR_DATA, )     \
+  DEF(MAX_MERGE_MODE, )
+
+  DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_MERGE_MODE_DEF, static);
+
+  static bool is_type_valid(const Type type)
+  {
+    return type > INVALID_MERGE_MODE && type < MAX_MERGE_MODE;
+  }
+  static bool is_normal(const Type type) { return type == NORMAL; }
+  static bool is_merge_with_origin_data(const Type type) { return type == MERGE_WITH_ORIGIN_DATA; }
+  static bool is_merge_with_conflict_check(const Type type)
+  {
+    return type == MERGE_WITH_CONFLICT_CHECK;
+  }
+  static bool is_merge_with_origin_query_for_lob(const Type type)
+  {
+    return type == MERGE_WITH_ORIGIN_QUERY_FOR_LOB;
+  }
+  static bool is_merge_with_origin_query_for_data(const Type type)
+  {
+    return MERGE_WITH_ORIGIN_QUERY_FOR_DATA == type;
+  }
+  static bool merge_need_origin_table(const Type type)
+  {
+    return is_merge_with_origin_data(type) || is_merge_with_conflict_check(type) ||
+           is_merge_with_origin_query_for_lob(type) || is_merge_with_origin_query_for_data(type);
+  }
+};
 
 struct ObDirectLoadMergeParam
 {
@@ -49,175 +91,164 @@ public:
   ObDirectLoadMergeParam();
   ~ObDirectLoadMergeParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id),
-               K_(lob_meta_table_id),
-               K_(target_table_id),
-               K_(rowkey_column_num),
-               K_(store_column_count),
-               K_(fill_cg_thread_cnt),
-               KP_(lob_column_idxs),
-               K_(table_data_desc),
-               KP_(datum_utils),
-               KP_(lob_column_idxs),
-               KP_(col_descs),
-               K_(lob_id_table_data_desc),
-               KP_(lob_meta_datum_utils),
-               KP_(lob_meta_col_descs),
-               K_(is_heap_table),
-               K_(is_fast_heap_table),
-               K_(is_incremental),
-               "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_),
-               KP_(insert_table_ctx),
-               KP_(dml_row_handler),
-               KP_(file_mgr),
-               K_(trans_param),
-               K_(merge_with_conflict_check));
+  TO_STRING_KV(K_(table_id), K_(rowkey_column_num), K_(column_count), KP_(col_descs),
+               KP_(datum_utils), KP_(lob_column_idxs), "merge_mode",
+               ObDirectLoadMergeMode::get_type_string(merge_mode_), K_(use_batch_mode),
+               KP_(dml_row_handler), KP_(insert_table_ctx), K_(trans_param), KP_(file_mgr),
+               KP_(ctx));
+
 public:
-  uint64_t table_id_;
-  uint64_t lob_meta_table_id_;
-  uint64_t target_table_id_;
+  // 本次合并要写入的表的属性, 可能是数据表、索引表、lob表
+  uint64_t table_id_; // origin table id
   int64_t rowkey_column_num_;
-  int64_t store_column_count_;
-  int64_t lob_column_cnt_;
-  int64_t fill_cg_thread_cnt_;
-  const common::ObArray<int64_t> *lob_column_idxs_;
-  storage::ObDirectLoadTableDataDesc table_data_desc_;
-  const blocksstable::ObStorageDatumUtils *datum_utils_;
+  int64_t column_count_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
-  storage::ObDirectLoadTableDataDesc lob_id_table_data_desc_;
-  const blocksstable::ObStorageDatumUtils *lob_meta_datum_utils_;
-  const common::ObIArray<share::schema::ObColDesc> *lob_meta_col_descs_;
-  bool is_heap_table_;
-  bool is_fast_heap_table_;
-  bool is_incremental_;
-  ObDirectLoadInsertMode::Type insert_mode_;
+  const blocksstable::ObStorageDatumUtils *datum_utils_;
+  const common::ObArray<int64_t> *lob_column_idxs_;
+  // 合并模式
+  ObDirectLoadMergeMode::Type merge_mode_;
+  bool use_batch_mode_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_; // rescan时为nullptr
   ObDirectLoadInsertTableContext *insert_table_ctx_;
-  ObDirectLoadDMLRowHandler *dml_row_handler_;
-  ObDirectLoadTmpFileManager *file_mgr_;
+  // 任务级参数
   ObDirectLoadTransParam trans_param_;
-  bool merge_with_conflict_check_;
+  ObDirectLoadTmpFileManager *file_mgr_;
+  // TODO 更新进度信息
+  observer::ObTableLoadTableCtx *ctx_;
 };
 
 class ObDirectLoadMergeCtx
 {
-private:
-  typedef common::hash::ObHashMap<int64_t, ObIDirectLoadPartitionTableBuilder *> TABLE_BUILDER_MAP;
+  friend class ObDirectLoadTabletMergeCtx;
+  friend class ObDirectLoadMergeTaskIterator;
+
 public:
   ObDirectLoadMergeCtx();
   ~ObDirectLoadMergeCtx();
-  int init(observer::ObTableLoadTableCtx *ctx,
-           const ObDirectLoadMergeParam &param,
+  void reset();
+  int init(const ObDirectLoadMergeParam &param,
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids);
-  int get_table_builder(ObIDirectLoadPartitionTableBuilder *&table_builder);
-  int close_table_builder();
-  TABLE_BUILDER_MAP& get_table_builder_map() { return table_builder_map_; }
+  int build_merge_task(ObDirectLoadTableStore &table_store, int64_t thread_cnt);
+  int build_del_lob_task(ObDirectLoadTableStore &table_store, int64_t thread_cnt);
+  int build_rescan_task(int64_t thread_cnt);
   const common::ObIArray<ObDirectLoadTabletMergeCtx *> &get_tablet_merge_ctxs() const
   {
     return tablet_merge_ctx_array_;
   }
+
 private:
-  int create_all_tablet_ctxs(const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids);
+  int create_all_tablet_ctxs(
+    const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids);
+
 private:
   common::ObArenaAllocator allocator_;
-  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMergeParam param_;
   common::ObArray<ObDirectLoadTabletMergeCtx *> tablet_merge_ctx_array_;
-  TABLE_BUILDER_MAP table_builder_map_;
-  lib::ObMutex mutex_;
   bool is_inited_;
 };
 
 class ObDirectLoadTabletMergeCtx
 {
+  friend class ObDirectLoadMergeTaskIterator;
+
 public:
   ObDirectLoadTabletMergeCtx();
   ~ObDirectLoadTabletMergeCtx();
+  void reset();
   int init(ObDirectLoadMergeCtx *merge_ctx,
-           observer::ObTableLoadTableCtx *ctx,
-           const ObDirectLoadMergeParam &param,
            const table::ObTableLoadLSIdAndPartitionId &ls_partition_id);
-  int build_merge_task(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                       const common::ObIArray<share::schema::ObColDesc> &col_descs,
-                       int64_t max_parallel_degree, bool is_multiple_mode);
-  int build_merge_task_for_multiple_pk_table(
-    const common::ObIArray<ObDirectLoadMultipleSSTable *> &multiple_sstable_array,
-    ObDirectLoadMultipleMergeRangeSplitter &range_splitter,
-    int64_t max_parallel_degree);
-  int build_aggregate_merge_task_for_multiple_heap_table(
-    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
-  int build_rescan_task(int64_t thread_count);
-  int build_del_lob_task(
-    const common::ObIArray<ObDirectLoadMultipleSSTable *> &multiple_sstable_array,
-    ObDirectLoadMultipleMergeRangeSplitter &range_splitter,
-    const int64_t max_parallel_degree,
-    const ObLobId &min_insert_lob_id);
-  int inc_finish_count(bool &is_ready);
-  int inc_rescan_finish_count(bool &is_ready);
-  int inc_del_lob_finish_count(bool &is_ready);
-  int get_table_builder(ObIDirectLoadPartitionTableBuilder *&table_builder);
-  bool merge_with_origin_data()
-  {
-    return !param_.is_incremental_ && param_.insert_mode_ == ObDirectLoadInsertMode::NORMAL;
-  }
-  bool merge_with_conflict_check()
-  {
-    return param_.merge_with_conflict_check_;
-  }
 
-  const ObDirectLoadMergeParam &get_param() const { return param_; }
-  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-  const common::ObIArray<ObDirectLoadPartitionMergeTask *> &get_tasks() const
-  {
-    return task_array_;
-  }
-  const common::ObIArray<ObDirectLoadPartitionRescanTask *> &get_rescan_tasks() const
-  {
-    return rescan_task_array_;
-  }
-  const common::ObIArray<ObDirectLoadPartitionDelLobTask *> &get_del_lob_tasks() const
-  {
-    return del_lob_task_array_;
-  }
-  TO_STRING_KV(K_(param), K_(tablet_id));
-private:
-  int init_sstable_array(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
-  int init_multiple_sstable_array(
-    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
-  int init_multiple_heap_table_array(
-    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
-  int build_empty_merge_task();
-  int build_empty_data_merge_task(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+  // 无导入数据合并任务
+  int build_empty_data_merge_task(const ObDirectLoadTableDataDesc &table_data_desc,
                                   int64_t max_parallel_degree);
-  int build_pk_table_merge_task(
-    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-    const common::ObIArray<share::schema::ObColDesc> &col_descs,
-    int64_t max_parallel_degree);
-  int build_heap_table_multiple_merge_task(
-    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-    const common::ObIArray<share::schema::ObColDesc> &col_descs,
-    int64_t max_parallel_degree);
+  // 有主键数据合并任务, 按分区排序
+  int build_merge_task_for_sstable(const ObDirectLoadTableDataDesc &table_data_desc,
+                                   const ObDirectLoadTableHandleArray &sstable_array,
+                                   int64_t max_parallel_degree);
+  // 有主键数据合并任务, 分区混合排序
+  int build_merge_task_for_multiple_sstable(
+    const ObDirectLoadTableDataDesc &table_data_desc,
+    const ObDirectLoadTableHandleArray &multiple_sstable_array,
+    ObDirectLoadMultipleMergeRangeSplitter &range_splitter, int64_t max_parallel_degree);
+  // 无主键数据排序合并任务
+  int build_merge_task_for_multiple_heap_table(
+    const ObDirectLoadTableDataDesc &table_data_desc,
+    const ObDirectLoadTableHandleArray &multiple_heap_table_array, int64_t max_parallel_degree);
+  // 无主键数据聚合合并任务, 用于分区比较多的场景, 以分区为粒度进行并行合并
+  int build_aggregate_merge_task_for_multiple_heap_table(
+    const ObDirectLoadTableDataDesc &table_data_desc,
+    const ObDirectLoadTableHandleArray &multiple_heap_table_array);
+
+  // del lob task
+  int build_del_lob_task(const ObDirectLoadTableDataDesc &table_data_desc,
+                         const ObDirectLoadTableHandleArray &multiple_sstable_array,
+                         ObDirectLoadMultipleMergeRangeSplitter &range_splitter,
+                         const int64_t max_parallel_degree);
+
+  // rescan task
+  int build_rescan_task(int64_t thread_count);
+
+  int inc_finish_count(int ret_code, bool &is_ready);
+
+  bool merge_with_origin_data() const
+  {
+    return (nullptr != param_ &&
+            ObDirectLoadMergeMode::is_merge_with_origin_data(param_->merge_mode_));
+  }
+  bool merge_with_conflict_check() const
+  {
+    return (nullptr != param_ &&
+            ObDirectLoadMergeMode::is_merge_with_conflict_check(param_->merge_mode_));
+  }
+  bool merge_with_origin_query_for_data() const
+  {
+    return (nullptr != param_ &&
+            ObDirectLoadMergeMode::is_merge_with_origin_query_for_data(param_->merge_mode_));
+  }
+  bool is_valid() const { return is_inited_; }
+  const ObDirectLoadMergeParam *get_param() const { return param_; }
+  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  ObDirectLoadInsertTabletContext *get_insert_tablet_ctx() const { return insert_tablet_ctx_; }
+  TO_STRING_KV(KP_(merge_ctx), KPC_(param), K_(tablet_id), KP_(insert_tablet_ctx), K_(range_array),
+               K_(merge_task_array), K_(parallel_idx), K_(task_finish_cnt));
+
+private:
+  int build_empty_merge_task();
+  int build_origin_data_merge_task(const ObDirectLoadTableDataDesc &table_data_desc,
+                                   const int64_t max_parallel_degree);
+  int build_origin_data_unrescan_merge_task(const ObDirectLoadTableDataDesc &table_data_desc,
+                                            int64_t max_parallel_degree);
   int get_autoincrement_value(uint64_t count, share::ObTabletCacheInterval &interval);
 
 private:
   common::ObArenaAllocator allocator_;
   ObDirectLoadMergeCtx *merge_ctx_;
-  observer::ObTableLoadTableCtx *ctx_;
-  ObDirectLoadMergeParam param_;
+  ObDirectLoadMergeParam *param_;
   common::ObTabletID tablet_id_;
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
   ObDirectLoadOriginTable origin_table_;
-  ObDirectLoadOriginTable lob_meta_origin_table_;
-  common::ObArray<ObDirectLoadSSTable *> sstable_array_;
-  common::ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array_;
-  common::ObArray<ObDirectLoadMultipleHeapTable *> multiple_heap_table_array_;
-  common::ObArray<ObDirectLoadMultipleSSTable *> del_lob_multiple_sstable_array_;
   common::ObArray<blocksstable::ObDatumRange> range_array_;
-  common::ObArray<blocksstable::ObDatumRange> del_lob_range_array_;
-  common::ObArray<ObDirectLoadPartitionMergeTask *> task_array_;
-  common::ObArray<ObDirectLoadPartitionRescanTask *> rescan_task_array_;
-  common::ObArray<ObDirectLoadPartitionDelLobTask *> del_lob_task_array_;
-  int64_t task_finish_count_ CACHE_ALIGNED;
-  int64_t rescan_task_finish_count_ CACHE_ALIGNED;
-  int64_t del_lob_task_finish_count_ CACHE_ALIGNED;
+  common::ObArray<ObDirectLoadIMergeTask *> merge_task_array_;
+  int64_t parallel_idx_;
+  mutable lib::ObMutex mutex_;
+  int64_t task_finish_cnt_ CACHE_ALIGNED;
+  int task_ret_code_;
+  bool is_inited_;
+};
+
+class ObDirectLoadMergeTaskIterator
+{
+public:
+  ObDirectLoadMergeTaskIterator();
+  ~ObDirectLoadMergeTaskIterator();
+  int init(ObDirectLoadMergeCtx *merge_ctx);
+  int get_next_task(ObDirectLoadIMergeTask *&task);
+
+private:
+  ObDirectLoadMergeCtx *merge_ctx_;
+  ObDirectLoadTabletMergeCtx *tablet_merge_ctx_;
+  int64_t tablet_pos_;
+  int64_t task_pos_;
   bool is_inited_;
 };
 

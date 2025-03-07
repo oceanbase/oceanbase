@@ -15,27 +15,12 @@
 
 #ifndef DEBUG_FOR_MDS
 #define DEBUG_FOR_MDS
-#include "lib/ob_errno.h"
-#include "storage/multi_data_source/test/common_define.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "storage/tablet/ob_tablet_status.h"
-#include <chrono>
-#include <thread>
 #define TEST_MDS_TRANSACTION
-#include <gtest/gtest.h>
 #define USING_LOG_PREFIX SERVER
 #define protected public
 #define private public
-#include "ob_tablet_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "lib/utility/serialization.h"
-#include "share/cache/ob_kv_storecache.h"
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/multi_data_source/test/example_user_helper_define.cpp"
 
 namespace oceanbase

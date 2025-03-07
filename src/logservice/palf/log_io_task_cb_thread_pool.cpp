@@ -11,10 +11,6 @@
  */
 
 #include "log_io_task_cb_thread_pool.h"
-#include "share/ob_errno.h"                   // errno...
-#include "share/ob_thread_define.h"           // TGDefIDs
-#include "share/ob_thread_mgr.h"              // TG_START
-#include "logservice/palf/log_io_task.h"      // LogIOTask
 #include "palf_env_impl.h"                    // PalfEnvImpl
 
 namespace oceanbase

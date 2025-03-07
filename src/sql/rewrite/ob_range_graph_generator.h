@@ -141,13 +141,17 @@ private:
   int get_max_precise_pos(ObRangeNode *range_node, int64_t &max_precise_pos, int64_t start_pos = 0) const;
   int inner_get_max_precise_pos(const ObRangeNode *range_node, bool* equals, int64_t &max_offset, int64_t start_pos) const;
   int remove_useless_range_node(ObRangeNode *range_node, int64_t start_pos = 0) const;
-  int is_strict_equal_graph(const ObRangeNode *range_node, bool &is_strict_equal, bool &is_get) const;
+  int is_strict_equal_graph(ObRangeNode *range_node, bool &is_strict_equal, bool &is_get) const;
   int inner_is_strict_equal_graph(const ObRangeNode *range_node,
                                   bool* equals,
                                   int64_t &max_offset,
                                   int64_t &max_node_offset,
                                   bool &is_strict_equal) const;
   int get_new_equal_idx(const ObRangeNode *range_node, bool* equals, ObIArray<int64_t> &new_idx) const;
+
+  int check_and_set_get_for_unique_index(ObRangeNode *range_node, bool &is_get) const;
+  int check_unique_index_range_valid(const ObRangeNode *range_node, bool &is_valid) const;
+  int transform_unique_index_graph(ObRangeNode *range_node) const;
   bool is_strict_equal_node(const ObRangeNode *range_node) const;
   bool is_equal_node(const ObRangeNode *range_node) const;
 

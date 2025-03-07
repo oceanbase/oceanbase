@@ -11,13 +11,8 @@
  */
 
 #include "ob_index_sstable_estimator.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/tablet/ob_tablet.h"
-#include "share/schema/ob_column_schema.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -325,10 +320,10 @@ int ObIndexBlockScanEstimator::estimate_excluded_border_result(const bool is_mul
 
           if (OB_ITER_END == ret && idx > 0) {
             int64_t ratio = 0;
-            if (0 == border_micro_index_info.get_row_count()) {
+            if (OB_ISNULL(border_micro_index_info.row_header_) || 0 == border_micro_index_info.get_row_count()) {
               ret = common::OB_INVALID_ARGUMENT;
               STORAGE_LOG(WARN, "Border micro index row count should not be 0", K(ret));
-            } else if (is_major) {
+            } else if (!is_left && is_major) {
               ratio = (result.total_row_count_ - result.excluded_row_count_) / border_micro_index_info.get_row_count();
             }
             if (OB_ITER_END == ret && ratio < RANGE_ROWS_IN_AND_BORDER_RATIO_THRESHOLD) {

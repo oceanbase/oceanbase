@@ -14,12 +14,8 @@
 
 #include "ob_data_dict_service.h"
 
-#include "lib/thread/thread_mgr.h"
-#include "share/ob_thread_define.h"
-#include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
 #include "storage/tx_storage/ob_ls_service.h"                 // ObLSService
 #include "storage/tx/ob_ts_mgr.h"                             // OB_TS_MGR
-#include "logservice/ob_log_base_type.h"
 
 #define IF_SERVICE_RUNNING \
     if (IS_NOT_INIT) { \

@@ -11,14 +11,7 @@
  */
 
 #include "mds_node.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "mds_table_base.h"
 #include "mds_ctx.h"
-#include "storage/multi_data_source/runtime_utility/mds_lock.h"
 
 namespace oceanbase
 {

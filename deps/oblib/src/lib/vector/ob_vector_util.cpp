@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_vector_util.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
-#include <random>
 
 
 namespace oceanbase {
@@ -142,9 +139,29 @@ int get_index_number(obvectorlib::VectorIndexPtr index_handler, int64_t &size)
 #endif
 }
 
+int get_index_type(obvectorlib::VectorIndexPtr index_handler)
+{
+    INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+    return obvectorlib::get_index_type(index_handler);
+#endif
+}
+
+int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler, const float* vector, const int64_t* ids, int64_t count, const float *&distances)
+{
+    INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+    return obvectorlib::cal_distance_by_id(index_handler, vector, ids, count, distances);
+#endif
+}
+
 int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
                const float*& result_dist, const int64_t*& result_ids, int64_t &result_size, int ef_search,
-               void* invalid)
+               void* invalid, bool reverse_filter, float valid_ratio)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -152,7 +169,7 @@ int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,in
 #else
   return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
                                  result_dist, result_ids, result_size,
-                                 ef_search, invalid);
+                                 ef_search, invalid, reverse_filter, valid_ratio);
 #endif
 }
 

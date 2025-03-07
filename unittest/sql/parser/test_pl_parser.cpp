@@ -11,14 +11,7 @@
  */
 
 #include "pl/parser/ob_pl_parser.h"
-#include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "../test_sql_utils.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/json/ob_json_print_utils.h"  // for SJ
-//#include "sql/plan_cache/ob_sql_parameterization.cpp"
-#include <fstream>
-#include <iterator>
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::pl;

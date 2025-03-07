@@ -13,24 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_multiple_merge.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "common/object/ob_obj_compare.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/ob_storage_util.h"
-#include "ob_vector_store.h"
 #include "ob_aggregated_store.h"
 #include "ob_aggregated_store_vec.h"
-#include "ob_dml_param.h"
-#include "lib/worker.h"
-#include "sql/engine/ob_operator.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
@@ -434,7 +419,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
           } else if (OB_ITER_END != ret) {
             STORAGE_LOG(WARN, "Fail to inner get next row, ", K(ret), KP(this));
           }
-        } else if (need_read_lob_columns(unprojected_row_)) {
+        } else if (need_handle_lob_columns(unprojected_row_)) {
           if (OB_FAIL(handle_lob_before_fuse_row())) {
             LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
           }
@@ -589,7 +574,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
           } else if (OB_ITER_END != ret) {
             LOG_WARN("Fail to inner get next row, ", K(ret), K(tables_), KP(this));
           }
-        } else if (need_read_lob_columns(unprojected_row_)) {
+        } else if (need_handle_lob_columns(unprojected_row_)) {
           if (OB_FAIL(handle_lob_before_fuse_row())) {
             LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
           }
@@ -717,7 +702,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
           } else if (OB_ITER_END != ret) {
             LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
           }
-        } else if (need_read_lob_columns(unprojected_row_)) {
+        } else if (need_handle_lob_columns(unprojected_row_)) {
           if (OB_FAIL(handle_lob_before_fuse_row())) {
             LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
           }
@@ -754,7 +739,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     // first time: aggregated row, ret = OB_SUCCESS
     if (OB_ITER_END == ret && !batch_row_store->is_end()) {
       ObAggStoreBase *agg_store_base = nullptr;
-      if (batch_row_store->is_vec2()) {
+      if (access_param_->iter_param_.use_new_format()) {
         agg_store_base = static_cast<ObAggregatedStoreVec *>(batch_row_store);
       } else {
         agg_store_base = static_cast<ObAggregatedStore *>(batch_row_store);
@@ -819,6 +804,7 @@ int ObMultipleMerge::update_and_report_tablet_stat()
     access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
+    LOG_DEBUG("[ROW_CACHE_ADJUST] update tablet stat", K(access_ctx_->table_store_stat_), KPC(access_ctx_->table_scan_stat_));
   }
   const compaction::ObBasicMergeScheduler *scheduler = nullptr;
   if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {
@@ -1070,7 +1056,7 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state, group by can not pushdown in reverse scan", K(ret));
   } else if (param.iter_param_.enable_pd_aggregate()) {
-    if (param.iter_param_.use_new_format() && can_use_vec2()) {
+    if (param.iter_param_.use_new_format()) {
       if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObAggregatedStoreVec)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc aggregated store vec", K(ret));
@@ -1275,7 +1261,6 @@ int ObMultipleMerge::fill_virtual_columns(ObDatumRow &row)
 
 int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor());
   if (nullptr != sample_executor && OB_FAIL(sample_executor->check_filtered_after_fuse(filtered))) {
@@ -1283,6 +1268,7 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
   } else if (!filtered && NULL != access_param_->op_filters_ && !access_param_->op_filters_->empty()) {
     // Execute filter in sql static typing engine.
     // %row is already projected to output expressions for main table scan.
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
     if (OB_FAIL(access_param_->get_op()->filter_row_outside(*access_param_->op_filters_, *skip_bit_, filtered))) {
       LOG_WARN("filter row failed", K(ret));
     }
@@ -1628,11 +1614,26 @@ int ObMultipleMerge::read_lob_columns_full_data(blocksstable::ObDatumRow &row)
   return ret;
 }
 
-bool ObMultipleMerge::need_read_lob_columns(const blocksstable::ObDatumRow &row)
+OB_INLINE bool ObMultipleMerge::need_handle_lob_columns(const blocksstable::ObDatumRow &row)
 {
-  return (!access_ctx_->query_flag_.is_skip_read_lob() &&
-          access_param_->iter_param_.has_lob_column_out_ &&
-          row.row_flag_.is_exist());
+  bool bret = !access_ctx_->query_flag_.is_skip_read_lob() &&
+              access_param_->iter_param_.has_lob_column_out_ &&
+              row.row_flag_.is_exist();
+  if (bret && lib::is_mysql_mode() &&
+      OB_NOT_NULL(access_ctx_->lob_locator_helper_) &&
+      access_ctx_->lob_locator_helper_->enable_lob_locator_v2() &&
+      !is_sys_table(access_param_->iter_param_.table_id_)) {
+    bret = false;
+    for (int64_t i = access_param_->iter_param_.get_schema_rowkey_count(); !bret && i < row.count_; ++i) {
+      blocksstable::ObStorageDatum &datum = row.storage_datums_[i];
+      ObObjMeta datum_meta = access_param_->iter_param_.get_col_params()->at(i)->get_meta_type();
+      if (datum_meta.is_lob_storage() && !datum.is_null() && !datum.is_nop()) {
+        const ObLobCommon *lob_common = reinterpret_cast<const ObLobCommon *>(datum.ptr_);
+        bret |= (!lob_common->in_row_);
+      }
+    }
+  }
+  return bret;
 }
 
 // handle lobs before process_fuse_row
@@ -1675,7 +1676,8 @@ int ObMultipleMerge::fuse_lob_default(ObObj &def_cell, const uint64_t col_id)
       STORAGE_LOG(WARN, "Failed to fuse lob header for nop val", K(ret));
     }
   } else if (OB_NOT_NULL(lob_locator_helper)) {
-    if (nullptr == access_param_->output_exprs_) {
+    if (nullptr == access_param_->output_exprs_
+        || (!is_sys_table(access_param_->iter_param_.table_id_) && lib::is_mysql_mode())) {
       if (OB_FAIL(lob_reader_.fuse_disk_lob_header(def_cell))) { // fuse disk locator
         STORAGE_LOG(WARN, "Failed to fuse lob header for nop val", K(ret));
       }

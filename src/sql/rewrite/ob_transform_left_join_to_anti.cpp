@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_left_join_to_anti.h"
-#include "common/ob_common_utility.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 
 namespace oceanbase
 {
@@ -352,9 +348,9 @@ int ObTransformLeftJoinToAnti::clear_for_update(TableItem *table) {
     if (table->is_basic_table()) {
       table->for_update_ = false;
     } else if (table->is_joined_table()) {
-      if (OB_FAIL(clear_for_update(static_cast<JoinedTable*>(table)->left_table_))) {
+      if (OB_FAIL(SMART_CALL(clear_for_update(static_cast<JoinedTable*>(table)->left_table_)))) {
         LOG_WARN("fail to clear for update", K(ret));
-      } else if (OB_FAIL(clear_for_update(static_cast<JoinedTable*>(table)->right_table_))) {
+      } else if (OB_FAIL(SMART_CALL(clear_for_update(static_cast<JoinedTable*>(table)->right_table_)))) {
         LOG_WARN("fail to clear for update", K(ret));
       }
     }

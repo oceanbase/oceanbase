@@ -14,6 +14,7 @@
 #define _OB_HTABLE_FILTERS_H 1
 #include "ob_htable_utils.h"
 #include "share/table/ob_table_rpc_struct.h"
+#include "deps/oblib/src/lib/container/ob_heap.h"
 namespace oceanbase
 {
 namespace table

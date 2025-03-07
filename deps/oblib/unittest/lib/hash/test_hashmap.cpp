@@ -10,17 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include "lib/hash/ob_hashmap.h"
-#include "lib/hash/ob_hashutils.h"
-#include "lib/allocator/ob_malloc.h"
-
 #include "gtest/gtest.h"
+#define private public
+#include "lib/hash/ob_hashmap.h"
+#undef private
 
 using namespace oceanbase;
 using namespace common;
@@ -424,6 +417,96 @@ TEST(TestObHashMap, buckect_iterator)
     bucket_it++;
   }
   EXPECT_EQ(0, hm2.size());
+}
+
+class MockObMalloc: public ObIAllocator
+{
+public:
+  MockObMalloc(const oceanbase::lib::ObLabel &label = ObModIds::TEST,
+      int64_t tenant_id = OB_SERVER_TENANT_ID) : alloc_count_(0)
+  {
+    UNUSED(label);
+    UNUSED(tenant_id);
+  }
+  MockObMalloc(ObIAllocator &allocator)
+  {
+    UNUSED(allocator);
+  }
+  void *alloc(const int64_t sz)
+  {
+    void *ptr = nullptr;
+    // only the first memory allocation can succeed
+    if (0 == alloc_count_) {
+      ptr = ob_malloc(sz, "MockAlloc");
+      alloc_count_++;
+    }
+    return ptr;
+  }
+  void *alloc(const int64_t sz, const ObMemAttr &attr)
+  {
+    UNUSEDx(sz, attr);
+    return nullptr;
+  }
+  void free(void *p) { ob_free(p); }
+
+  int64_t alloc_count_;
+};
+
+TEST(TestObHashMap, extend_bucket_alloc_memory_failed)
+{
+  const int64_t extend_ratio = 2;
+  ObHashMap<HashKey,
+            HashValue,
+            NoPthreadDefendMode,
+            hash_func<HashKey>,
+            equal_to<HashKey>,
+            SimpleAllocer<HashMapTypes<HashKey, HashValue>::AllocType>,
+            NormalPointer,
+            MockObMalloc,
+            extend_ratio> hm;
+
+  int bucket_num = PRIME_LIST[0];
+  hm.create(bucket_num, ObModIds::OB_HASH_BUCKET);
+  void *bucket_ptr = hm.ht_.buckets_;
+
+  int i = 0;
+  for (; i < bucket_num; i++) {
+    EXPECT_EQ(OB_SUCCESS, hm.set_refactored(i, i, 0));
+  }
+
+  // when the size of hashmap is larger than bucket num, new buckets will be created
+  EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, hm.set_refactored(i, i, 0));
+
+  // when memory allocation failed, the original bucket should be accessible
+  EXPECT_EQ(bucket_ptr, hm.ht_.buckets_);
+  EXPECT_EQ(bucket_num, hm.bucket_count());
+}
+
+TEST(TestObHashMap, extend_bucket)
+{
+  const int64_t extend_ratio = 2;
+  ObHashMap<HashKey,
+            HashValue,
+            NoPthreadDefendMode,
+            hash_func<HashKey>,
+            equal_to<HashKey>,
+            SimpleAllocer<HashMapTypes<HashKey, HashValue>::AllocType>,
+            NormalPointer,
+            ObMalloc,
+            extend_ratio> hm;
+
+  int bucket_num = PRIME_LIST[0];
+  hm.create(bucket_num, ObModIds::OB_HASH_BUCKET);
+
+  int i = 0;
+  for (; i < bucket_num; i++) {
+    EXPECT_EQ(OB_SUCCESS, hm.set_refactored(i, i, 0));
+  }
+
+  // when the size of hashmap is larger than bucket num, new buckets will be created
+  EXPECT_EQ(bucket_num, hm.bucket_count());
+  EXPECT_EQ(OB_SUCCESS, hm.set_refactored(i, i, 0));
+  EXPECT_EQ(bucket_num * extend_ratio, hm.bucket_count());
 }
 
 int main(int argc, char **argv)

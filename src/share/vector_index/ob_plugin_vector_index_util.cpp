@@ -14,14 +14,146 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_plugin_vector_index_util.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "share/ob_unit_getter.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/das/iter/ob_das_iter.h"
+
+using namespace oceanbase::sql;
 
 namespace oceanbase
 {
 namespace share
 {
+int ObVectorQueryRowkeyIterator::init(int64_t total, ObIArray<common::ObRowkey> *rowkeys)
+{
+  INIT_SUCC(ret);
+
+  if (OB_ISNULL(rowkeys) || total != rowkeys->count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get rowkeys", K(ret), K(rowkeys), K(total));
+  } else {
+    rowkeys_ = rowkeys;
+    total_ = total;
+    cur_pos_ = 0;
+    is_init_ = true;
+  }
+
+  return ret;
+}
+
+int ObVectorQueryRowkeyIterator::init(sql::ObDASIter *rowkey_scan_iter)
+{
+  INIT_SUCC(ret);
+
+  if (OB_ISNULL(rowkey_scan_iter)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null ", K(ret), K(rowkey_scan_iter));
+  } else if (!rowkey_scan_iter->is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("res expr idx is invalid", K(ret), K(rowkey_scan_iter));
+  } else {
+    scan_iter_ = rowkey_scan_iter;
+    is_init_ = true;
+  }
+
+  return ret;
+}
+
+int ObVectorQueryRowkeyIterator::get_next_row()
+{
+  int ret = OB_SUCCESS;
+  if (!is_init_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iter is not initialized.", K(ret));
+  } else if (OB_ISNULL(scan_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkey scan iter is null", K(ret), K(scan_iter_));
+  } else if (!scan_iter_->is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("rowkey scan iter is not inited", K(ret), K(scan_iter_));
+  } else if (OB_FALSE_IT(scan_iter_->clear_evaluated_flag())) {
+  } else if (OB_FAIL(scan_iter_->get_next_row())) {
+    if (ret != OB_ITER_END) {
+      LOG_WARN("failed to get next row", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObVectorQueryRowkeyIterator::get_next_rows(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iter is not initialized.", K(ret));
+  } else if (batch_size_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch_size_ is not init", K(ret), K_(batch_size));
+  } else if (OB_ISNULL(scan_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkey scan iter is null", K(ret), K(scan_iter_));
+  } else if (!scan_iter_->is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("rowkey scan iter is not inited", K(ret), K(scan_iter_));
+  } else if (OB_FALSE_IT(scan_iter_->clear_evaluated_flag())) {
+  } else if (OB_FAIL(scan_iter_->get_next_rows(count, batch_size_))) {
+    if (ret != OB_ITER_END) {
+      LOG_WARN("failed to get next rows", K(ret), K(count), K(batch_size_));
+    }
+  }
+  return ret;
+}
+
+int ObVectorQueryRowkeyIterator::get_next_row(ObRowkey &rowkey)
+{
+  INIT_SUCC(ret);
+  if (!is_init_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iter is not initialized.", K(ret));
+  } else if (cur_pos_ < total_) {
+    rowkey = rowkeys_->at(cur_pos_++);
+  } else {
+    ret = OB_ITER_END;
+  }
+  return ret;
+}
+
+int ObVectorQueryRowkeyIterator::get_next_rows(ObIArray<common::ObRowkey>& rowkeys, int64_t &row_count)
+{
+  INIT_SUCC(ret);
+  row_count = 0;
+  if (!is_init_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iter is not initialized.", K(ret));
+  } else if (cur_pos_ < total_) {
+    ObObj *obj = nullptr;
+    if (batch_size_ > 0) {
+      if (OB_FAIL(rowkeys.reserve(batch_size_))) {
+        LOG_WARN("failed reserve rowkeys", K(ret));
+      } else {
+        int64_t index = 0;
+        for (; index < batch_size_ && cur_pos_ < total_; ++index) {
+          rowkeys.push_back(rowkeys_->at(cur_pos_++));
+        }
+        row_count = index;
+      }
+    }
+  } else {
+    ret = OB_ITER_END;
+  }
+
+  return ret;
+}
+
+void ObVectorQueryRowkeyIterator::reset()
+{
+  is_init_ = false;
+  total_ = 0;
+  cur_pos_ = 0;
+  rowkeys_ = nullptr;
+  scan_iter_ = nullptr;
+}
 
 int ObVectorQueryVidIterator::init()
 {
@@ -29,7 +161,7 @@ int ObVectorQueryVidIterator::init()
   if (OB_ISNULL(row_ = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj))))) {
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * 2)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
   } else {
@@ -38,7 +170,7 @@ int ObVectorQueryVidIterator::init()
   return ret;
 }
 
-int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, ObIAllocator *allocator)
+int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distances, ObIAllocator *allocator)
 {
   INIT_SUCC(ret);
   if ((OB_ISNULL(vids) && total != 0) || OB_ISNULL(allocator)) {
@@ -47,15 +179,18 @@ int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, ObIAllocator *a
   } else if (OB_ISNULL(row_ =  OB_NEWx(ObNewRow, allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = OB_NEWx(ObObj, allocator))) {
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj*>(allocator->alloc(sizeof(ObObj) * 2)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
   } else {
+    obj_[0].reset();
+    obj_[1].reset();
     is_init_ = true;
     total_ = total;
     cur_pos_ = 0;
     vids_ = vids;
     allocator_ = allocator;
+    distance_ = distances;
   }
   return ret;
 }
@@ -67,12 +202,15 @@ int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row)
     ret = OB_NOT_INIT;
     LOG_WARN("iter is not initialized.", K(ret));
   } else if (cur_pos_ < total_) {
-    obj_->reset();
+    obj_[0].reset();
+    obj_[1].reset();
     row_->reset();
 
-    obj_->set_int(vids_[cur_pos_++]);
+    obj_[0].set_int(vids_[cur_pos_]);
+    obj_[1].set_float(distance_[cur_pos_++]);
+
     row_->cells_ = obj_;
-    row_->count_ = 1;
+    row_->count_ = 2;
     row_->projector_ = NULL;
     row_->projector_size_ = 0;
 
@@ -97,16 +235,18 @@ int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size)
       if (OB_ISNULL(row = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator NewRow.", K(ret));
-      } else if (OB_ISNULL(obj = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * batch_size_)))) {
+      } else if (OB_ISNULL(obj = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * 2 * batch_size_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator NewRow.", K(ret));
       } else {
         int64_t index = 0;
         for (; index < batch_size_ && cur_pos_ < total_; ++index) {
-          obj[index].set_int(vids_[cur_pos_++]);
+          obj[index * 2].set_int(vids_[cur_pos_]);
+          obj[index * 2 + 1].set_float(distance_[cur_pos_]);
+          cur_pos_++;
         }
         row->cells_ = obj;
-        row->count_ = index;
+        row->count_ = index * 2;
         row->projector_ = NULL;
         row->projector_size_ = 0;
         size = index;
@@ -130,7 +270,8 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
                                                          const ObVsagQueryResult &second,
                                                          const int64_t total,
                                                          int64_t &actual_cnt,
-                                                         int64_t *&vids_result)
+                                                         int64_t *&vids_result,
+                                                         float *&float_result)
 {
   INIT_SUCC(ret);
   actual_cnt = 0;
@@ -138,12 +279,14 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
   if (first.total_ == 0) {
     while (res_num < total && res_num < second.total_) {
       vids_result[res_num] = second.vids_[res_num];
+      float_result[res_num] = second.distances_[res_num];
       res_num++;
     }
     actual_cnt = res_num;
   } else if (second.total_ == 0) {
     while (res_num < total && res_num < first.total_) {
       vids_result[res_num] = first.vids_[res_num];
+      float_result[res_num] = first.distances_[res_num];
       res_num++;
     }
     actual_cnt = res_num;
@@ -154,17 +297,21 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
     int64_t i = 0, j = 0;
     while (res_num < total && i < first.total_ && j < second.total_) {
       if (first.distances_[i] <= second.distances_[j]) {
+        float_result[res_num] = first.distances_[i];
         vids_result[res_num++] = first.vids_[i++];
       } else {
+        float_result[res_num] = second.distances_[j];
         vids_result[res_num++] = second.vids_[j++];
       }
     }
 
     while (res_num < total && i < first.total_) {
+      float_result[res_num] = first.distances_[i];
       vids_result[res_num++] = first.vids_[i++];
     }
 
     while (res_num < total && j < second.total_) {
+      float_result[res_num] = second.distances_[j];
       vids_result[res_num++] = second.vids_[j++];
     }
 

@@ -14,19 +14,9 @@
 
 #include "ob_expr_ols_funcs.h"
 
-#include "sql/engine/expr/ob_expr_res_type.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_table_executor.h"
-#include "sql/parser/ob_parser.h"
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_label_security.h"
-#include "observer/ob_server_struct.h"
 #include "sql/ob_spi.h"
 
 using namespace oceanbase::common;

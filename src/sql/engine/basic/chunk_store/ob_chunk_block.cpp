@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/basic/chunk_store/ob_chunk_block.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "sql/engine/basic/ob_temp_block_store.h"
+#include "ob_chunk_block.h"
 #include "src/storage/ddl/ob_direct_load_struct.h"
 
 namespace oceanbase

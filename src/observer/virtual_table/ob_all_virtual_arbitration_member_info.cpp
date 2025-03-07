@@ -11,16 +11,7 @@
  */
 
 #include "ob_all_virtual_arbitration_member_info.h"
-#include "common/row/ob_row.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/palf/palf_handle.h"
-#include "share/ls/ob_ls_info.h" //MemberList, SimpleMember
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "common/ob_member.h" //ObMember
 
 namespace oceanbase
 {

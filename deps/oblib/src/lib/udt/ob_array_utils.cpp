@@ -16,13 +16,22 @@
 namespace oceanbase {
 namespace common {
 
-int ObArrayUtil::get_type_name(const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth)
+int ObArrayUtil::get_type_name(ObNestedType coll_type, const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   for (uint32_t i = 0; OB_SUCC(ret) && i < depth; i++) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ARRAY("))) {
-      LOG_WARN("failed to convert len to string", K(ret));
+    if (coll_type == ObNestedType::OB_ARRAY_TYPE) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ARRAY("))) {
+        LOG_WARN("failed to convert len to string", K(ret));
+      }
+    } else if (coll_type == ObNestedType::OB_VECTOR_TYPE) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "VECTOR("))) {
+        LOG_WARN("failed to convert len to string", K(ret));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid collection type", K(ret), K(coll_type));
     }
   }
   if (OB_FAIL(ret)) {
@@ -133,7 +142,7 @@ int ObArrayUtil::convert_collection_bin_to_string(const ObString &collection_bin
         ObString raw_binary = collection_bin;
         if (OB_FAIL(arr_obj->init(raw_binary))) {
           LOG_WARN("failed to init array", K(ret));
-        } else if (OB_FAIL(arr_obj->print(arr_type->element_type_, buf))) {
+        } else if (OB_FAIL(arr_obj->print(buf))) {
           LOG_WARN("failed to format array", K(ret));
         } else {
           res_str.assign_ptr(buf.ptr(), buf.length());
@@ -252,23 +261,6 @@ int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const Ob
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("unsupported element type", K(ret), K(elem_type));
     }
-  }
-  return ret;
-}
-
-int ObArrayUtil::append_array(ObIArrayType &array, ObIArrayType &elem_arr, bool is_null)
-{
-  int ret = OB_SUCCESS;
-  ObArrayNested *array_obj = dynamic_cast<ObArrayNested *>(&array);
-  if (OB_ISNULL(array_obj)) {
-    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-    LOG_WARN("invalid array type", K(ret), K(array.get_format()));
-  } else if (is_null) {
-    if (OB_FAIL(array_obj->push_null())) {
-      LOG_WARN("failed to push null", K(ret));
-    }
-  } else if (OB_FAIL(array_obj->push_back(elem_arr))) {
-    LOG_WARN("failed to push back value", K(ret));
   }
   return ret;
 }

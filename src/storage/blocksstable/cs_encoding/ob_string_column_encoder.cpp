@@ -14,9 +14,6 @@
 
 #include "ob_string_column_encoder.h"
 #include "ob_dict_encoding_hash_table.h"
-#include "ob_column_datum_iter.h"
-#include "ob_cs_encoding_util.h"
-#include "lib/codec/ob_codecs.h"
 
 namespace oceanbase
 {

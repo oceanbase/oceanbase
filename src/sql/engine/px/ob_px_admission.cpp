@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_px_admission.h"
-#include "share/config/ob_server_config.h"
-#include "observer/mysql/obmp_query.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/omt/ob_th_worker.h"
 #include "observer/omt/ob_tenant.h"
 #include "ob_px_target_mgr.h"
-#include "ob_px_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -240,7 +235,7 @@ void ObPxSubAdmission::acquire(int64_t max, int64_t min, int64_t &acquired_cnt)
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "get tenant config failed, use default cpu_quota_concurrency");
       upper_bound = tenant->unit_min_cpu() * 4;
     } else {
-      upper_bound = tenant->unit_min_cpu() * tenant_config->px_workers_per_cpu_quota;
+      upper_bound = tenant->unit_min_cpu() * tenant_config->_max_px_workers_per_cpu;
     }
   }
   acquired_cnt = std::min(max, upper_bound);

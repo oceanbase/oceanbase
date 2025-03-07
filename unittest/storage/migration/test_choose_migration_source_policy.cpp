@@ -10,18 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #define protected public
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_meta_package.h"
 #include "test_migration.h"
-#include "rpc/mock_ob_common_rpc_proxy.h"
-#include "storage/ob_locality_manager.h"
-#include "lib/ob_errno.h"
-#include "logservice/palf/palf_handle_impl.h"
 
 namespace oceanbase
 {

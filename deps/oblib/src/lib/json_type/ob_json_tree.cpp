@@ -14,11 +14,6 @@
 #define USING_LOG_PREFIX SQL
 #include "ob_json_tree.h"
 #include "ob_json_bin.h"
-#include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
-#include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
-#include "lib/charset/ob_dtoa.h" // ob_gcvt_opt
-#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "lib/charset/ob_charset.h" // for strntod
 
 namespace oceanbase {
 namespace common {

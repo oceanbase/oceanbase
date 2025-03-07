@@ -12,7 +12,6 @@
 #ifdef ENABLE_QPL_COMPRESSION
 
 #include <string.h>
-#include <memory>
 #include "codec_deflate_qpl.h"
 
 namespace oceanbase

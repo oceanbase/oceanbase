@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_extract_cert_expired_time.h"
-#include "lib/utility/utility.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
 #include "src/sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::share;

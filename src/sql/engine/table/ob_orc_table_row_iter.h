@@ -152,6 +152,8 @@ private:
     int load_double();
     int load_dec128_vec();
     int load_dec64_vec();
+    int load_int64_to_number_vec();
+    int to_numeric(const int64_t idx, const int64_t int_value);
 
     bool is_orc_read_utc(const orc::Type *type);
     bool is_ob_type_store_utc(const ObDatumMeta &meta);

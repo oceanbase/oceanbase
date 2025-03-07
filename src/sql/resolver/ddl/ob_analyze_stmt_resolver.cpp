@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/ddl/ob_analyze_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_analyze_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 
 using namespace oceanbase::common;

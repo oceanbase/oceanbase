@@ -15,6 +15,7 @@
 
 #include "lib/charset/ob_charset.h"
 #include "lib/hash/ob_hashmap.h"
+#include "plugin/interface/ob_plugin_ftparser_intf.h"
 
 namespace oceanbase
 {
@@ -91,8 +92,9 @@ private:
 public:
   ObAddWordFlag() : flag_(AWF_NONE) {}
   ~ObAddWordFlag() = default;
-private:
+public:
   void set_flag(const uint64_t flag) { flag_ |= flag; }
+private:
   void clear_flag(const uint64_t flag) { flag_ &= ~flag; }
   bool has_flag(const uint64 flag) const { return (flag_ & flag) == flag; }
 public:

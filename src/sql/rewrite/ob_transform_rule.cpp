@@ -11,23 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/rewrite/ob_transform_rule.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_transform_rule.h"
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "observer/ob_server_struct.h"
-#include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
 {

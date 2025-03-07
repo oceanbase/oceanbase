@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_LOCATION
 
-#include "share/location_cache/ob_location_update_task.h"
+#include "ob_location_update_task.h"
 #include "share/location_cache/ob_ls_location_service.h"
 #include "share/location_cache/ob_tablet_ls_service.h"
 

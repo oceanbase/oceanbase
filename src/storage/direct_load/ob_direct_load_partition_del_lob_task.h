@@ -12,29 +12,30 @@
 
 #pragma once
 
-#include "lib/list/ob_dlist.h"
+#include "storage/direct_load/ob_direct_load_i_merge_task.h"
 #include "storage/direct_load/ob_direct_load_lob_meta_row_iter.h"
-#include "storage/direct_load/ob_direct_load_merge_ctx.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObDirectLoadInsertTabletContext;
+class ObDirectLoadTabletMergeCtx;
+class ObDirectLoadOriginTable;
 
-class ObDirectLoadPartitionDelLobTask : public common::ObDLinkBase<ObDirectLoadPartitionDelLobTask>
+class ObDirectLoadPartitionDelLobTask : public ObDirectLoadIMergeTask
 {
 public:
   ObDirectLoadPartitionDelLobTask();
   ~ObDirectLoadPartitionDelLobTask();
-  int init(const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
-           ObDirectLoadOriginTable *origin_table,
-           const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
-           const blocksstable::ObDatumRange &range, const bool insert_front,
+  int init(ObDirectLoadTabletMergeCtx *merge_ctx, ObDirectLoadOriginTable &origin_table,
+           const ObDirectLoadTableDataDesc &table_data_desc,
+           const ObDirectLoadTableHandleArray &sstable_array,
+           const blocksstable::ObDatumRange &range, const blocksstable::ObMacroDataSeq &data_seq,
            const int64_t parallel_idx);
-  int process();
-  void stop();
-  TO_STRING_KV(K_(parallel_idx), K_(is_stop));
+  int process() override;
+  void stop() override;
+  ObDirectLoadTabletMergeCtx *get_merge_ctx() override { return merge_ctx_; }
+  TO_STRING_KV(KP_(merge_ctx), K_(sstable_array), KPC_(range), K_(data_seq), K_(parallel_idx));
 
 private:
   class RowIterator : public ObIStoreRowIterator
@@ -42,11 +43,10 @@ private:
   public:
     RowIterator();
     virtual ~RowIterator();
-    int init(const ObDirectLoadMergeParam &merge_param, const ObDirectLoadTabletMergeCtx *merge_ctx,
-             ObDirectLoadOriginTable *origin_table,
-             const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
-             const blocksstable::ObDatumRange &range, int64_t parallel_idx,
-             ObDirectLoadInsertTabletContext *insert_tablet_ctx);
+    int init(ObDirectLoadTabletMergeCtx *merge_ctx, ObDirectLoadOriginTable &origin_table,
+             const ObDirectLoadTableDataDesc &table_data_desc,
+             const ObDirectLoadTableHandleArray &sstable_array,
+             const blocksstable::ObDatumRange &range, int64_t parallel_idx);
     int get_next_row(const blocksstable::ObDatumRow *&result_row) override;
 
   private:
@@ -56,30 +56,13 @@ private:
   };
 
 private:
-  const ObDirectLoadMergeParam *merge_param_;
   ObDirectLoadTabletMergeCtx *merge_ctx_;
   ObDirectLoadOriginTable *origin_table_;
-  const ObIArray<ObDirectLoadMultipleSSTable *> *sstable_array_;
+  ObDirectLoadTableDataDesc table_data_desc_;
+  ObDirectLoadTableHandleArray sstable_array_;
   const blocksstable::ObDatumRange *range_;
-  bool insert_front_;
+  blocksstable::ObMacroDataSeq data_seq_;
   int64_t parallel_idx_;
-  bool is_stop_;
-  bool is_inited_;
-};
-
-class ObDirectLoadDelLobTaskIterator
-{
-public:
-  ObDirectLoadDelLobTaskIterator();
-  ~ObDirectLoadDelLobTaskIterator();
-  int init(storage::ObDirectLoadMergeCtx *merge_ctx);
-  int get_next_task(ObDirectLoadPartitionDelLobTask *&task);
-
-private:
-  storage::ObDirectLoadMergeCtx *merge_ctx_;
-  storage::ObDirectLoadTabletMergeCtx *tablet_merge_ctx_;
-  int64_t tablet_pos_;
-  int64_t task_pos_;
   bool is_inited_;
 };
 

@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;

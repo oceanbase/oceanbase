@@ -12,9 +12,8 @@
 
 #include "observer/virtual_table/ob_all_disk_stat.h"
 
-#include "storage/blocksstable/ob_object_manager.h"
-#include "observer/ob_server.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "share/io/ob_io_manager.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::common;

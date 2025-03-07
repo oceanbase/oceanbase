@@ -264,6 +264,11 @@ private:
       ObTableStoreIterator &iterator,
       const bool allow_no_ready_read,
       const bool skip_major) const;
+  int calculate_ddl_read_tables(
+      const int64_t snapshot_version,
+      const ObTablet &tablet,
+      ObTableStoreIterator &iterator,
+      const ObSSTable *&base_table) const;
   int calculate_read_memtables(const ObTablet &tablet, ObTableStoreIterator &iterator) const;
   bool check_read_tables(
       const ObTablet &tablet,
@@ -431,6 +436,7 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const blocksstable::ObSSTable *new_sstable,
+      const common::ObIArray<const blocksstable::ObSSTable *> &slice_sstables,
       const bool keep_old_ddl_sstable,
       const ObTabletTableStore &old_store);
   bool is_major_sstable_empty(const share::SCN &ddl_commit_scn) const;
@@ -473,6 +479,11 @@ private:
   int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   template<typename ...Args>
   int init_minor_sstable_array_with_check(ObSSTableArray &minor_sstable_array, Args&& ...args);
+  int only_replace_major_(
+      common::ObArenaAllocator &allocator,
+      const ObTabletTableStore &old_store,
+      const ObIArray<ObITable *> &tables_array,
+      int64_t &inc_base_snapshot_version);
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;

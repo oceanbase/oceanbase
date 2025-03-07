@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/ls/ob_ls_role_handler.h"
-
+#include "ob_ls_role_handler.h"
 namespace oceanbase
 {
 namespace storage

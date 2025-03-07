@@ -11,15 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_log_del_upd.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
-#include "sql/optimizer/ob_log_del_upd.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_exchange.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "common/ob_smart_call.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_join.h"
 
 using namespace oceanbase;
@@ -1379,8 +1374,8 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
     for (int64_t i = 0; OB_SUCC(ret) && i < fk_infos->count(); i++) {
       const ObForeignKeyInfo &fk_info = fk_infos->at(i);
       ObRawExpr* fk_scan_part_expr = nullptr;
-      if (fk_info.table_id_ != fk_info.child_table_id_ || fk_info.is_parent_table_mock_) {
-        // update parent table, check child table, don't use das task to perform foreign key check
+      if (fk_info.table_id_ != fk_info.child_table_id_ || fk_info.is_parent_table_mock_ || !fk_info.is_ref_unique_index()) {
+        // update parent table, check child table, referencing non-unique index, don't use das task to perform foreign key check
         ret = index_dml_info.fk_lookup_part_id_expr_.push_back(fk_scan_part_expr);
       } else {
         const uint64_t parent_table_id = fk_info.parent_table_id_;
@@ -1667,7 +1662,9 @@ int ObLogDelUpd::replace_dml_info_exprs(
       ObRawExpr *&expr = index_dml_info->column_old_values_exprs_.at(i);
       if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column()) {
         // just skip, nothing to do.
-      } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_vid_column()) {
+      } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()) {
+        // just skip, nothing to do.
+      } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()) {
         // just skip, nothing to do.
       } else if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
         LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));

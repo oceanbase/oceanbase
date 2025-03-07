@@ -16,12 +16,9 @@
 
 #include "obcdc_main.h"
 #include "ob_log_instance.h"    // ObLogInstance
-#include "share/ob_time_zone_info_manager.h"              // FETCH_TZ_INFO_SQL
 #include "ob_log_trans_ctx.h"
 
-#include <stdio.h>        // fprintf
 #include <getopt.h>       // getopt_long
-#include <stdlib.h>       // strtoull
 
 #define LOG_STD(str, ...) \
   do { \

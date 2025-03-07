@@ -233,40 +233,61 @@ struct ObColumnEncodingIdentifier
 
 struct ObPreviousColumnEncoding
 {
-  ObPreviousColumnEncoding() { memset(this, 0, sizeof(*this)); }
+  ObPreviousColumnEncoding()
+    : identifier_(),
+      column_idx_(0),
+      cur_block_count_(0),
+      column_redetect_cycle_(0),
+      column_need_redetect_(false),
+      stream_redetect_cycle_(0),
+      is_stream_encoding_type_valid_(false),
+      stream_need_redetect_(false),
+      force_no_redetect_(false)
+  {
+  }
 
-  TO_STRING_KV(K_(identifier),
-               "stream0_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[0]),
-               "stream1_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[1]),
-               "stream2_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[2]),
-               "stream3_encoding_type",  ObIntegerStream::get_encoding_type_name(stream_encoding_types_[3]),
-               K_(redetect_cycle), K_(is_valid), K_(need_redetect),
-               K_(cur_block_count), K_(force_no_redetect));
+  TO_STRING_KV(K_(identifier), K_(column_idx), K_(cur_block_count),
+               K_(column_redetect_cycle), K_(column_need_redetect),
+               K_(stream_redetect_cycle), K_(is_stream_encoding_type_valid),
+               K_(stream_need_redetect), K_(force_no_redetect));
+
+  bool is_column_encoding_type_valid() const
+  {
+    return ObCSColumnHeader::MAX_TYPE != identifier_.column_encoding_type_;
+  }
 
   ObColumnEncodingIdentifier identifier_;
-  ObIntegerStream::EncodingType stream_encoding_types_[ObCSColumnHeader::MAX_INT_STREAM_COUNT_OF_COLUMN];
-  int32_t redetect_cycle_;
+  int32_t column_idx_;
   int64_t cur_block_count_;
-  bool is_valid_;
-  bool need_redetect_;
+  // for column encoding type
+  int32_t column_redetect_cycle_;
+  bool column_need_redetect_;
+
+  // for stream encoding type
+  ObIntegerStream::EncodingType stream_encoding_types_[ObCSColumnHeader::MAX_INT_STREAM_COUNT_OF_COLUMN];
+  int32_t stream_redetect_cycle_;
+  bool is_stream_encoding_type_valid_;
+  bool stream_need_redetect_;
+
   bool force_no_redetect_; // just for test to specify the stream encoding type
 };
 
 class ObPreviousCSEncoding
 {
 public:
-  static const int32_t MAX_REDETECT_CYCLE;
   ObPreviousCSEncoding() :
     is_inited_(false),
     previous_encoding_of_columns_() {}
   int init(const int32_t col_count);
-  int check_and_set_state(const int32_t column_idx,
-                          const ObColumnEncodingIdentifier identifier,
-                          const int64_t cur_block_count);
-  int update_column_encoding_types(const int32_t column_idx,
-                                   const ObColumnEncodingIdentifier identifier,
-                                   const ObIntegerStream::EncodingType *stream_types,
-                                   bool force_no_redetect = false);
+  int update_column_detect_info(const int32_t column_idx,
+                             const ObColumnEncodingIdentifier identifier,
+                             const int64_t cur_block_count,
+                             const int64_t major_working_cluster_version);
+  int update_stream_detect_info(const int32_t column_idx,
+                                     const ObColumnEncodingIdentifier identifier,
+                                     const ObIntegerStream::EncodingType *stream_types,
+                                     const int64_t major_working_cluster_version,
+                                     bool force_no_redetect = false);
   ObPreviousColumnEncoding *get_column_encoding(const int32_t column_idx)
   {
     return &previous_encoding_of_columns_.at(column_idx);
@@ -290,9 +311,6 @@ struct ObCSEncodingOpt
       case CS_ENCODING_ROW_STORE:
         encodings_ = STREAM_ENCODINGS_DEFAULT;
         break;
-      //case SELECTIVE_CS_ENCODING_ROW_STORE:
-      //  encodings_ = STREAM_ENCODINGS_FOR_PERFORMANCE;
-      //  break;
       default:
         encodings_ = STREAM_ENCODINGS_NONE;
         break;
@@ -327,10 +345,22 @@ struct ObColumnCSEncodingCtx
   uint64_t integer_min_;
   uint64_t integer_max_;
 
-  ObColumnCSEncodingCtx() { reset(); }
-  void reset() { memset(this, 0, sizeof(*this)); }
-
-  void try_set_need_sort(const ObCSColumnHeader::Type type, const int64_t column_index, const bool micro_block_has_lob_out_row);
+  ObColumnCSEncodingCtx()
+    : allocator_(nullptr),
+      null_cnt_(0), nope_cnt_(0),
+      var_data_size_(0), dict_var_data_size_(0),
+      fix_data_size_(0), max_string_size_(0),
+      col_datums_(nullptr), ht_(nullptr),
+      encoding_ctx_(nullptr), all_string_buf_writer_(nullptr),
+      need_sort_(false), force_raw_encoding_(false),
+      has_zero_length_datum_(false), is_wide_int_(0),
+      integer_min_(0), integer_max_(0)
+  {
+  }
+  void try_set_need_sort(const ObCSColumnHeader::Type type,
+                         const int64_t column_index,
+                         const bool micro_block_has_lob_out_row,
+                         const int64_t major_working_cluster_version);
 
   TO_STRING_KV(K_(null_cnt), K_(nope_cnt), K_(var_data_size),
                K_(dict_var_data_size), K_(fix_data_size),
@@ -453,12 +483,23 @@ struct ObColumnCSDecoderCtx
     ObIntegerColumnDecoderCtx integer_ctx_;
     ObStringColumnDecoderCtx string_ctx_;
     ObDictColumnDecoderCtx dict_ctx_;
+    ObBaseColumnDecoderCtx new_col_ctx_;
   };
+  bool is_padding_mode_;
   void reset() { MEMSET(this, 0, sizeof(ObColumnCSDecoderCtx));}
   OB_INLINE bool is_integer_type() const { return ObCSColumnHeader::INTEGER == type_; }
   OB_INLINE bool is_string_type() const { return ObCSColumnHeader::STRING == type_; }
   OB_INLINE bool is_int_dict_type() const { return ObCSColumnHeader::INT_DICT == type_; }
   OB_INLINE bool is_string_dict_type() const { return ObCSColumnHeader::STR_DICT == type_; }
+  // just for new added column
+  OB_INLINE void fill_for_new_column(const share::schema::ObColumnParam *col_param, common::ObIAllocator *allocator)
+  {
+    reset();
+    new_col_ctx_.col_param_ = col_param;
+    new_col_ctx_.allocator_ = allocator;
+  }
+  OB_INLINE const share::schema::ObColumnParam* get_col_param() const { return new_col_ctx_.col_param_; }
+  OB_INLINE common::ObIAllocator* get_allocator() const { return new_col_ctx_.allocator_; }
 
   ObBaseColumnDecoderCtx& get_base_ctx()
   {
@@ -473,7 +514,7 @@ struct ObColumnCSDecoderCtx
     return *base_ctx;
   }
 
-  TO_STRING_KV(K_(type));
+  TO_STRING_KV(K_(type), K_(is_padding_mode));
 };
 
 }  // namespace blocksstable

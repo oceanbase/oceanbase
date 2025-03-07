@@ -11,23 +11,13 @@
  */
 
 #include "observer/virtual_table/ob_gv_sql.h"
-#include "observer/ob_req_time_service.h"
 
-#include "common/object/ob_object.h"
 
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_callback.h"
-#include "sql/plan_cache/ob_plan_cache_value.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
+#include "src/sql/plan_cache/ob_pcv_set.h"
 
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_package.h"
+#include "src/pl/ob_pl_allocator.h"
 
-#include "lib/thread_local/ob_tsi_factory.h"
 
 using namespace oceanbase;
 using namespace sql;

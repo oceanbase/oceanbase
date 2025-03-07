@@ -164,6 +164,16 @@ public:
                                      double &cost,
                                      const ObOptimizerContext &opt_ctx);
 
+  static int cost_index_back(const ObCostTableScanInfo &est_cost_info,
+                             double row_count,
+                             double limit_count,
+                             double &index_back_cost,
+                             const ObOptimizerContext &opt_ctx);
+
+  static int get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types,
+                               double &cmp_cost,
+                               const ObOptimizerContext &opt_ctx);
+
   static double cost_late_materialization_table_get(int64_t column_cnt,
                                                     const ObOptimizerContext &opt_ctx);
 

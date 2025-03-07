@@ -11,33 +11,13 @@
  */
 
 #include "ob_lua_api.h"
-#include "ob_lua_handler.h"
 
-#include <algorithm>
-#include <bitset>
-#include <functional>
-#include <vector>
 
 #include "lib/alloc/memory_dump.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_di_cache.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/virtual_table/ob_all_virtual_sys_stat.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx/ob_trans_ctx_mgr_v4.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_tx_stat.h"
 #include "observer/ob_server.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "rpc/obrpc/ob_rpc_stat.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 
 #include <lua.hpp>

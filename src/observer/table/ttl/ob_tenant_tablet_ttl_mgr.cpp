@@ -12,15 +12,11 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_tenant_tablet_ttl_mgr.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/table/ob_htable_filter_operator.h"
-#include "observer/table/ob_htable_utils.h"
-#include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
 #include "observer/table/ob_table_service.h"
 #include "share/table/ob_table_config_util.h"
+#include "src/share/table/redis/ob_redis_util.h"
 
 namespace oceanbase
 {
@@ -66,8 +62,6 @@ int ObTabletTTLScheduler::init(const uint64_t tenant_id)
     LOG_WARN("schema service is null", KR(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantTabletTTLMgr, tg_id_))) {
     LOG_WARN("fail to init timer", KR(ret));
-  } else if (OB_FAIL(TG_START(tg_id_))) {
-    LOG_WARN("fail to create ObTenantTabletTTLMgr thread", K(ret), K_(tg_id));
   } else if (OB_FAIL(alloc_tenant_info(tenant_id))) {
     LOG_WARN("fail to alloc tenant info", KR(ret), K(MTL_ID()));
   } else {
@@ -138,10 +132,12 @@ void ObTabletTTLScheduler::inner_switch_to_follower()
 int ObTabletTTLScheduler::start()
 {
   int ret = OB_SUCCESS;
-  FLOG_INFO("tenant_tablet_ttl_mgr: begin to start", KPC_(ls), K_(tenant_id));
-  if (IS_NOT_INIT || tg_id_ == 0) {
+  FLOG_INFO("ObTabletTTLScheduler: begin to start", KPC_(ls), K_(tenant_id));
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("tablet ttl mgr not init", KR(ret), K(tg_id_));
+    LOG_WARN("tablet ttl mgr not init", KR(ret));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    LOG_WARN("fail to create ObTabletTTLScheduler thread", K(ret), K_(tg_id));
   } else if (OB_FAIL(TG_SCHEDULE(tg_id_, periodic_task_, periodic_delay_, true))) {
     LOG_WARN("fail to schedule periodic task", KR(ret), K_(tg_id));
   } else {
@@ -444,10 +440,7 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("ObTabletTTLScheduler::check_and_generate_tablet_tasks", TTL_NORMAL_TIME_THRESHOLD);
-  bool can_ttl = false;
   ObTabletHandle tablet_handle;
-  ObSEArray<const schema::ObTableSchema *, 64> table_schema_arr;
-  const schema::ObTableSchema *table_schema = nullptr;
   ObSEArray<uint64_t, DEFAULT_TABLE_ARRAY_SIZE> table_id_array;
   hash::ObHashMap<uint64_t, table::ObTTLTaskParam> param_map; // table_id, task param
   ObMemAttr bucket_attr(tenant_id_, "TTLTaskParBuck");
@@ -766,20 +759,36 @@ int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *
                                                    ObTTLTaskParam &param)
 {
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is null", KR(ret));
   } else if (!table_schema->get_kv_attributes().empty()) {
-    if (OB_FAIL(ObHTableUtils::check_htable_schema(*table_schema))) {
-      LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
-    } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), param.max_version_, param.ttl_))) {
+    if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), attr))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), K(table_schema->get_kv_attributes()));
-    } else if (param.max_version_ != INT32_MIN && param.ttl_ != INT32_MIN) {
-      param.is_htable_ = true;
+    } else if (attr.type_ == ObKVAttr::ObTTLTableType::HBASE) {
+      if (!ObHTableUtils::is_htable_schema(*table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
+      }
+    } else if (attr.type_ == ObKVAttr::ObTTLTableType::REDIS) {
+      if (OB_FAIL(ObRedisHelper::check_redis_ttl_schema(*table_schema, attr.redis_model_))) {
+        LOG_WARN("fail to check redis schema", KR(ret), K(table_schema->get_table_name()));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid ObKVAttr type", K(ret), K(attr));
+    }
+
+    if (OB_SUCC(ret)) {
+      param.max_version_ = attr.max_version_;
+      param.ttl_ = attr.ttl_;
+      param.is_htable_ = (attr.type_ == ObKVAttr::ObTTLTableType::HBASE);
+      param.is_redis_table_ = (attr.type_ == ObKVAttr::ObTTLTableType::REDIS);
+      param.is_redis_ttl_ = attr.is_redis_ttl_;
+      param.redis_model_ = attr.redis_model_;
       LOG_DEBUG("success to find a hbase ttl partition", KR(ret), K(param));
     }
-  } else if (!table_schema->get_ttl_definition().empty()) {
-    LOG_DEBUG("success to find a table ttl partition", KR(ret), K(param));
   }
 
   if (OB_SUCC(ret)) {
@@ -1523,10 +1532,6 @@ int ObTenantTabletTTLMgr::safe_to_destroy(bool &is_safe_destroy)
       } else if (OB_FAIL(ttl_scheduler->safe_to_destroy(is_safe_destroy))) {
         LOG_WARN("fail to safe to destory", K(ret), KPC(ttl_scheduler));
       }
-    }
-
-    if (is_safe_destroy && OB_SUCC(ret) && OB_FAIL(vector_idx_scheduler_.safe_to_destroy(is_safe_destroy))) {
-      LOG_WARN("fail to check vector index scheduler safe to destroy", KR(ret), K(is_safe_destroy));
     }
   }
   return ret;

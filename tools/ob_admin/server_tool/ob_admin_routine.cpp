@@ -14,22 +14,11 @@
 #include "ob_admin_utils.h"
 #include "../ob_admin_common_utils.h"
 
-#include <cstring>
-#include <cstdlib>
-#include <iostream>
-#include <iomanip>
-#include <unistd.h>
-#include "share/ob_rpc_struct.h"
 #include "share/ob_io_device_helper.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
-#include "logservice/palf/log_define.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
-#include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
 #endif
 using namespace std;
 
-#include "lib/time/ob_time_utility.h"           // ObTimeUtility
 #define ADMIN_WARN(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 #define DEF_COMMAND(t, cmd, v...)                       \
   namespace oceanbase {                                 \
@@ -170,6 +159,7 @@ DEF_COMMAND(TRANS, force_set_server_list, 1, "replica_num ip:port ip:port ... #f
   ObAddr server;
   string server_str;
   obrpc::ObForceSetServerListArg arg;
+  obrpc::ObForceSetServerListResult result;
 
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
@@ -209,10 +199,49 @@ DEF_COMMAND(TRANS, force_set_server_list, 1, "replica_num ip:port ip:port ... #f
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(client_->force_set_server_list(arg))) {
+    if (OB_FAIL(client_->force_set_server_list(arg, result))) {
       COMMON_LOG(ERROR, "force_set_server_list failed", K(ret));
     }
   }
+
+  fprintf(stdout, "-----------------------{force_set_server_list result}-----------------------\n");
+  fprintf(stdout, "{\"ob_admin_execute_ret_code\":%d, \"observer_execute_ret_code\":%d, \"result_list\":[", ret, result.ret_);
+  ARRAY_FOREACH(result.result_list_, idx) {
+    obrpc::ObForceSetServerListResult::ResultInfo result_info = result.result_list_.at(idx);
+    fprintf(stdout, "{"); // single result_info start
+    fprintf(stdout, "\"tenant_id\":%lu, ", result_info.tenant_id_);
+    fprintf(stdout, "\"successful_ls_id\":[");
+    if (0 < result_info.successful_ls_.size()) {
+      ARRAY_FOREACH(result_info.successful_ls_, idx) {
+        share::ObLSID ls = result_info.successful_ls_.at(idx);
+        if (idx == result_info.successful_ls_.size() - 1) {
+          fprintf(stdout, "%ld", ls.id());
+        } else {
+          fprintf(stdout, "%ld,", ls.id());
+        }
+      }
+    }
+    fprintf(stdout, "], \"failed_ls_info\":[");
+    // print failed ls info
+    if (0 < result_info.failed_ls_info_.size()) {
+      ARRAY_FOREACH(result_info.failed_ls_info_, idx) {
+        fprintf(stdout, "{");
+        obrpc::ObForceSetServerListResult::LSFailedInfo failed_info = result_info.failed_ls_info_.at(idx);
+        fprintf(stdout, "\"ls_id\":%ld, \"failed_ret_code\":%d, \"failed_reason\":\"%s\"", failed_info.ls_id_.id(), failed_info.failed_ret_code_, ob_error_name(failed_info.failed_ret_code_));
+        if (idx == result_info.failed_ls_info_.size() - 1) {
+          fprintf(stdout, "}");
+        } else {
+          fprintf(stdout, "}, ");
+        }
+      }
+    }
+    fprintf(stdout, "]");  // failed_ls_info end
+    fprintf(stdout, "}");  // single result_info end
+    if (idx != result.result_list_.size() - 1) {
+      fprintf(stdout, ", ");
+    }
+  }
+  fprintf(stdout, "]}\n");
 
   COMMON_LOG(INFO, "force_set_server_list", K(ret), "replica_num", arg.replica_num_, "server_list", arg.server_list_);
 

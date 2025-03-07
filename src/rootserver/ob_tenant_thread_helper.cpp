@@ -12,25 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_tenant_thread_helper.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/thread/thread_mgr.h"//TG
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
-#include "share/schema/ob_schema_service.h"//ObMultiSchemaService
-#include "share/schema/ob_schema_getter_guard.h"//ObSchemaGetterGuard
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 #include "share/restore/ob_physical_restore_table_operator.h"//restore_job
 #include "share/restore/ob_tenant_clone_table_operator.h" // clone_job
-#include "share/restore/ob_physical_restore_info.h"//restore_info
 #include "share/ob_primary_zone_util.h"//get_ls_primary_zone_priority
-#include "observer/ob_server_struct.h"//GCTX
-#include "share/ls/ob_ls_recovery_stat_operator.h" //ObLSRecoveryStatOperator
-#include "logservice/ob_log_service.h"//get_palf_role
-#include "src/logservice/palf_handle_guard.h"//palf_handle
-#include "share/scn.h"//SCN
-
-#include "ob_tenant_info_loader.h"  // ObTenantInfoLoader
+#include "src/logservice/applyservice/ob_log_apply_service.h"
 #include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
@@ -199,18 +184,16 @@ int ObTenantThreadHelper::wait_tenant_data_version_ready_(
   return ret;
 }
 
-int ObTenantThreadHelper::wait_tenant_schema_and_version_ready_(
-    const uint64_t tenant_id, const uint64_t &data_version)
+int ObTenantThreadHelper::wait_tenant_schema_ready_(
+    const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema ptr is null", KR(ret), KP(GCTX.schema_service_));
-  } else if (OB_FAIL(wait_tenant_data_version_ready_(tenant_id, data_version))) {
-    LOG_WARN("failed to wait tenant data version", KR(ret), K(tenant_id), K(data_version));
+  bool is_ready = false;
+  share::schema::ObTenantSchema tenant_schema;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
-    bool is_ready = false;
-    share::schema::ObTenantSchema tenant_schema;
     while (!is_ready && !has_set_stop()) {
       ret = OB_SUCCESS;
       if (OB_FAIL(get_tenant_schema(tenant_id, tenant_schema))) {
@@ -221,16 +204,29 @@ int ObTenantThreadHelper::wait_tenant_schema_and_version_ready_(
       } else {
         is_ready = true;
       }
-
       if (!is_ready) {
-        idle(10 * 1000 *1000);
+        idle(10 * 1000 * 1000);
       }
     }
-
     if (has_set_stop()) {
       LOG_WARN("thread has been stopped", K(is_ready), K(tenant_id));
       ret = OB_IN_STOP_STATE;
     }
+  }
+  return ret;
+}
+
+int ObTenantThreadHelper::wait_tenant_schema_and_version_ready_(
+    const uint64_t tenant_id, const uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(wait_tenant_data_version_ready_(tenant_id, data_version))) {
+    LOG_WARN("failed to wait tenant data version", KR(ret), K(tenant_id), K(data_version));
+  } else if (OB_FAIL(wait_tenant_schema_ready_(tenant_id))) {
+    LOG_WARN("failed to wait tenant schema ready", KR(ret), K(tenant_id));
   }
   return ret;
 }

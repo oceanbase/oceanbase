@@ -11,8 +11,6 @@
  */
 
 #include "lib/thread/thread_mgr.h"
-#include "lib/alloc/memory_dump.h"
-#include "lib/lock/ob_latch.h"
 
 namespace oceanbase {
 using namespace common;

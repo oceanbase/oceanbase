@@ -68,7 +68,7 @@ ObDiagnosticInfoCollector::~ObDiagnosticInfoCollector()
     }
     ob_free(di_info_bundle_);
     di_info_bundle_ = nullptr;
-    LOG_INFO("destoy current di collector", KPC(this));
+    LOG_INFO("destroy current di collector", KPC(this));
   }
 }
 
@@ -187,8 +187,20 @@ int ObBaseDiagnosticInfoSummary::add_diagnostic_info(ObDiagnosticInfo &di)
 
 int ObBaseDiagnosticInfoSummary::init(int64_t cpu_cnt)
 {
-  cpu_cnt_ = cpu_cnt;
-  return collectors_.init();
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_ERROR("di summary init twice", K(cpu_cnt), KPC(this));
+  } else {
+    if (OB_FAIL(collectors_.init())) {
+      LOG_WARN("failed to init di summary collector", K(ret), K(cpu_cnt));
+    } else {
+      cpu_cnt_ = cpu_cnt;
+      is_inited_ = true;
+      LOG_INFO("init di base summary finished", K(cpu_cnt), KPC(this));
+    }
+  }
+  return ret;
 }
 
 int ObBaseDiagnosticInfoSummary::get_tenant_event(int64_t tenant_id, ObWaitEventStatArray &arr)
@@ -332,7 +344,7 @@ int ObBaseDiagnosticInfoSummary::get_di_collector(
 }
 
 int ObBaseDiagnosticInfoSummary::for_each_group(
-    std::function<void(int64_t, const ObDiagnoseTenantInfo &)> fn)
+    int64_t tenant_id, std::function<void(int64_t, const ObDiagnoseTenantInfo &)> fn)
 {
   int ret = OB_SUCCESS;
   ObDiagnosticInfoCollector *cur = nullptr;
@@ -342,18 +354,21 @@ int ObBaseDiagnosticInfoSummary::for_each_group(
   HEAP_VAR(ObDiagnoseTenantInfo, tmp, alloc)
   {
     while (OB_SUCC(ret) && OB_NOT_NULL(iter.next(cur))) {
-      cur->get_all_events(tmp.get_event_stats());
-      cur->get_all_add_stats(tmp.get_add_stat_stats());
-      fn(cur->get_group_id(), tmp);
-      tmp.get_event_stats().reset();
-      tmp.get_add_stat_stats().reset();
+      if (cur->get_tenant_id() == tenant_id) {
+        cur->get_all_events(tmp.get_event_stats());
+        cur->get_all_add_stats(tmp.get_add_stat_stats());
+        fn(cur->get_group_id(), tmp);
+        tmp.get_event_stats().reset();
+        tmp.get_add_stat_stats().reset();
+      }
       iter.revert(cur);
     }
   }
   return ret;
 }
 
-int ObBaseDiagnosticInfoSummary::remove_if(std::function<bool(const ObDiagnosticKey&, ObDiagnosticInfoCollector*)> fn)
+int ObBaseDiagnosticInfoSummary::remove_if(
+    std::function<bool(const ObDiagnosticKey &, ObDiagnosticInfoCollector *)> fn)
 {
   return collectors_.remove_if(fn);
 }

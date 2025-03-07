@@ -14,12 +14,9 @@
 
 #include "sql/engine/expr/ob_expr_space.h"
 
-#include "lib/utility/ob_macro_utils.h"
 
 #include "sql/engine/expr/ob_expr_repeat.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "ob_expr_util.h"
 
 namespace oceanbase
 {

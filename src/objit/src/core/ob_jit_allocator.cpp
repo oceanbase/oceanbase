@@ -14,7 +14,6 @@
 
 #include "core/ob_jit_allocator.h"
 #include "common/ob_clock_generator.h"
-#include <unistd.h>
 
 using namespace oceanbase::common;
 

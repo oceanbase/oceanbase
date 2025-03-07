@@ -14,24 +14,9 @@
 
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_force_print_log.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "share/ob_force_print_log.h"
-#include "storage/blocksstable/ob_imicro_block_writer.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/ls/ob_ls.h"
-#include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -588,7 +573,14 @@ int ObSharedMacroBlockMgr::update_tablet(
       const int64_t data_block_count = meta_handle.get_sstable_meta().get_data_macro_block_count();
       ObMacroIdIterator id_iterator;
       MacroBlockId macro_id;
-      if (OB_UNLIKELY(1 != data_block_count)) {
+      ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
+      ObStorageSchema *storage_schema = nullptr;
+      if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
+        LOG_WARN("fail to get storage schema");
+      } else if (storage_schema->is_column_info_simplified()) {
+        // column info simplified, cannot calculate column checksum, defragment later until has full storage schema
+        ret = OB_EAGAIN;
+      } else if (OB_UNLIKELY(1 != data_block_count)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this sstable is not small", K(ret), K(data_block_count));
       } else if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_data_block_iter(id_iterator))) {
@@ -705,7 +697,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to prepare data desc", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(), ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("fail to init sstable index builder", K(ret), K(data_desc));
-  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.is_ddl_merge_sstable()))) {
+  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.get_key()))) {
     LOG_WARN("fail to init index block rebuilder", K(ret));
   } else if (OB_FAIL(read_sstable_block(old_sstable, block_handle, read_allocator))) {
     LOG_WARN("fail to read old_sstable's block", K(ret), K(old_sstable));

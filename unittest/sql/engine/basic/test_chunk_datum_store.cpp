@@ -12,19 +12,9 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include <gtest/gtest.h>
 #include "mtlenv/mock_tenant_module_env.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/allocator/ob_malloc.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
-#include "sql/engine/basic/ob_ra_row_store.h"
-#include "common/row/ob_row_store.h"
-#include "share/config/ob_server_config.h"
 #include "sql/ob_sql_init.h"
-#include "share/datum/ob_datum.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "share/ob_simple_mem_limit_getter.h"
 
 namespace oceanbase
 {

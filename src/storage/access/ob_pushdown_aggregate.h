@@ -64,6 +64,10 @@ struct ObAggCellBasicInfo
   {
     return col_offset_ >= 0 && nullptr != agg_expr_ && batch_size_ >= 0;
   }
+  OB_INLINE bool is_padding_mode() const
+  {
+    return is_padding_mode_;
+  }
   OB_INLINE bool need_padding() const
   {
     return is_padding_mode_ && nullptr != col_param_ && col_param_->get_meta_type().is_fixed_len_char_type();
@@ -126,6 +130,8 @@ public:
   OB_INLINE ObObjType get_obj_type() const { return basic_info_.agg_expr_->obj_meta_.get_type(); }
   OB_INLINE common::ObObjDatumMapType get_datum_map_type() const { return basic_info_.agg_expr_->obj_datum_map_; }
   OB_INLINE void set_group_by_result_cnt(const int64_t group_by_result_cnt) { group_by_result_cnt_ = group_by_result_cnt; }
+  OB_INLINE bool is_padding_mode() const { return basic_info_.is_padding_mode(); }
+  OB_INLINE bool need_padding() const { return basic_info_.need_padding(); }
   INHERIT_TO_STRING_KV("ObAggCellBase", ObAggCellBase, K_(basic_info), K_(def_datum), K_(is_lob_col), K_(aggregated), KP_(agg_datum_buf));
 protected:
   static const int64_t DEFAULT_DATUM_OFFSET = -1;

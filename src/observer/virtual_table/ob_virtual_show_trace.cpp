@@ -14,13 +14,8 @@
  * ---------------------------------------------------------------------------------------
  */
 #define USING_LOG_PREFIX SERVER
-#include "observer/virtual_table/ob_virtual_span_info.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/trace/ob_trace.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "observer/ob_server_struct.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;

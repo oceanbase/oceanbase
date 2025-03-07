@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_inner_row_cmp_val.h"
-#include "lib/oblog/ob_log.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {

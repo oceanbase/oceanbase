@@ -21,20 +21,10 @@
 #define private public
 
 #include "lib/alloc/memory_dump.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/meta_mem/ob_tablet_leak_checker.h"
-#include "storage/ls/ob_ls.h"
 #include "storage/schema_utils.h"
 #include "storage/mock_ob_log_handler.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tablet/ob_tablet_table_store_flag.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_status.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 
 namespace oceanbase
 {

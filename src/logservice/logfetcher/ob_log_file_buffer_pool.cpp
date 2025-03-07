@@ -15,7 +15,6 @@
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_file_buffer_pool.h"
-#include "logservice/cdcservice/ob_cdc_raw_log_req.h"
 
 namespace oceanbase
 {

@@ -50,6 +50,7 @@ install(PROGRAMS
   tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
   ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+  ${CMAKE_BINARY_DIR}/close_modules/oracle_pl/pl/wrap/wrap
   tools/ob_admin/io_bench/bench_io.sh
   ${CMAKE_BINARY_DIR}/src/observer/observer
   DESTINATION bin
@@ -70,8 +71,9 @@ install(FILES
   DESTINATION etc
   COMPONENT server)
 
+message(STATUS "system package release directory: " ${SYS_PACK_RELEASE_DIR})
 install(
-  DIRECTORY src/share/inner_table/sys_package/
+  DIRECTORY ${SYS_PACK_RELEASE_DIR}/
   DESTINATION admin
   COMPONENT server)
 

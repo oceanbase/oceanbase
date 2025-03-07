@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX  SQL_ENG
-#include <string.h>
-#include <stdlib.h>
 #include <sys/ioctl.h>
-#include <netinet/in.h>
 #include <net/if.h>
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/ob_exec_context.h"

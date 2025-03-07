@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/alloc/alloc_func.h"
-#include "lib/resource/achunk_mgr.h"
+#include "alloc_func.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "common/errsim_module/ob_errsim_module_interface.h"

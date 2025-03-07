@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
-#include "storage/ob_super_block_struct.h"
 
 namespace oceanbase
 {

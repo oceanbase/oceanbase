@@ -11,18 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tx/ob_trans_service.h"
 #include "observer/ob_server.h"
 #define private public
 #include "mock_ob_server.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/net/ob_net_util.h"
-#include "rpc/obrpc/ob_rpc_proxy.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "share/ob_device_manager.h"
 

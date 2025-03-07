@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_window_function.h"
-#include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_log_exchange.h"
 
 #define PRINT_BOUND(bound_name, bound)                 \
   if (OB_SUCC(ret)) {                                 \

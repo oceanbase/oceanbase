@@ -13,10 +13,7 @@
 #include "ob_cg_scanner.h"
 #include "ob_cg_tile_scanner.h"
 #include "ob_co_sstable_rows_filter.h"
-#include "ob_column_oriented_sstable.h"
 #include "storage/access/ob_where_optimizer.h"
-#include "storage/access/ob_block_row_store.h"
-#include "storage/access/ob_table_access_context.h"
 #include "common/ob_smart_call.h"
 
 namespace oceanbase

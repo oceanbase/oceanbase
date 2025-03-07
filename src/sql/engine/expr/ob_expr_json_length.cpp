@@ -12,13 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "deps/oblib/src/lib/json_type/ob_json_path.h"
-#include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_length.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;

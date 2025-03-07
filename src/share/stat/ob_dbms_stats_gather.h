@@ -28,6 +28,7 @@ public:
 
   static int gather_stats(ObExecContext &ctx,
                           const ObOptStatGatherParam &param,
+                          ObOptStatGatherAudit &audit,
                           ObIArray<ObOptStat> &opt_stats);
 
   static int gather_index_stats(ObExecContext &ctx,

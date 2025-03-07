@@ -223,6 +223,10 @@ public:
       const storage::ObTablet &tablet,
       const ObMergeType merge_type,
       ObCSReplicaTabletStatus &cs_replica_status);
+  static int get_co_merge_type_for_compaction(
+      const int64_t merge_version,
+      const storage::ObTablet &tablet,
+      ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type);
   static int schedule_merge_dag(
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,

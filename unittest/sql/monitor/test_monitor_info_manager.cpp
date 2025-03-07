@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_MONITOR
 #include <gtest/gtest.h>
-#include "share/ob_thread_pool.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "sql/engine/ob_physical_plan.h"
 using namespace std;
 using namespace oceanbase;
 using namespace oceanbase::common;

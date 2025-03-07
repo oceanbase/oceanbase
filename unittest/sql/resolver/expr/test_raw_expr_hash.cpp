@@ -13,12 +13,7 @@
 
 
 #include <gtest/gtest.h>
-#include "lib/json/ob_json.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/oblog/ob_log.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_operator.h"
 #define private public
 #include "observer/ob_server.h"
 #undef private

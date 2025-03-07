@@ -12,14 +12,11 @@
 #ifndef USING_LOG_PREFIX
 #define USING_LOG_PREFIX STORAGETEST
 #endif
-#include "gtest/gtest.h"
 
 #define private public
 #define protected public
-#include "lib/ob_errno.h"
 #include "test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 

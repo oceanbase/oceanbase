@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_temp_table_insert_op.h"
-#include "sql/engine/ob_operator_reg.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/detect/ob_detect_manager_utils.h"
 namespace oceanbase

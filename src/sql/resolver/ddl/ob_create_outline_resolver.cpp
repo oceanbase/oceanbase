@@ -14,9 +14,7 @@
 #include "sql/resolver/ddl/ob_create_outline_resolver.h"
 
 #include "share/ob_version.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/resolver/ddl/ob_create_outline_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "share/schema/ob_outline_sql_service.h"
 
 namespace oceanbase

@@ -816,6 +816,20 @@ private:
   // function members
 };
 
+class ObLoadDataURLImpl : public ObLoadDataBase
+{
+public:
+  ObLoadDataURLImpl() {}
+  ~ObLoadDataURLImpl() {}
+  int construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql);
+  int execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt);
+
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObLoadDataURLImpl);
+  // function members
+};
+
 /*
 class ObLoadDataImpl : public ObLoadDataBase
 {

@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <tuple>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_string.h"

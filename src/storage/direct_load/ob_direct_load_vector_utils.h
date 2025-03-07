@@ -31,7 +31,6 @@ class ObTabletCacheInterval;
 namespace blocksstable
 {
 class ObStorageDatum;
-class ObDatumRow;
 } // namespace blocksstable
 namespace sql
 {

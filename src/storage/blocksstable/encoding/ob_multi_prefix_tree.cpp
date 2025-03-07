@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_multi_prefix_tree.h"
-#include "lib/container/ob_array_iterator.h"
-#include "storage/blocksstable/ob_data_buffer.h"
 
 namespace oceanbase
 {

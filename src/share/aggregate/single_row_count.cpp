@@ -11,8 +11,7 @@
  */
 #define USING_LOG_PREFIX SQL
 
-#include "single_row.h"
-#include "single_row_init.h"
+#include "single_row_count.h"
 
 namespace oceanbase
 {

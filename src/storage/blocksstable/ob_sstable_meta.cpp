@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_sstable_meta.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/blocksstable/ob_micro_block_reader.h"
-#include "storage/blocksstable/ob_macro_block_reader.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
 

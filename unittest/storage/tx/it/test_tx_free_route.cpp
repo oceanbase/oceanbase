@@ -11,19 +11,11 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <sys/resource.h>
-#include <functional>
 #define private public
 #define protected public
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
-#include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 namespace oceanbase
 {
 using namespace ::testing;

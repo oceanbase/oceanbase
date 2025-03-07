@@ -330,7 +330,7 @@ public:
     BUILD_COLUMN_STORE_MERGE = 1,
     BUILD_ROW_STORE_MERGE = 2,
     USE_RS_BUILD_SCHEMA_MATCH_MERGE = 3,
-    BUILD_REDUNDANT_ROW_STORE_MERGE = 4,
+    BUILD_REDUNDANT_ROW_STORE_MERGE = 4, // only for cs replica now
     MAX_CO_MAJOR_MERGE_TYPE = 5
   };
   static const char *co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type);

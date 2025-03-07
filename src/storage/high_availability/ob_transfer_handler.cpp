@@ -13,25 +13,15 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_transfer_handler.h"
 #include "ob_transfer_service.h"
-#include "logservice/ob_log_service.h"
-#include "ob_storage_ha_reader.h"
 #include "ob_finish_transfer.h"
-#include "storage/tx/ob_multi_data_source.h"
 #include "common/ob_version_def.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "ob_transfer_lock_info_operator.h"
 #include "ob_transfer_lock_utils.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "observer/report/ob_tablet_table_updater.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "ob_rebuild_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "share/ob_storage_ha_diagnose_struct.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
-#include "storage/tx/wrs/ob_weak_read_util.h"
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
 #include "storage/high_availability/ob_transfer_parallel_build_tablet_info.h"
 #include "share/schema/ob_tenant_schema_service.h"
@@ -66,6 +56,7 @@ ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_START_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_ABORT_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_BACKFILL_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSFER_ASYNC_RPC_FAILED);
+ERRSIM_POINT_DEF(EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED);
 ObTransferHandler::ObTransferHandler()
   : is_inited_(false),
     ls_(nullptr),
@@ -475,7 +466,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (OB_FAIL(enable_new_transfer(new_transfer))) {
+  } else if (OB_FAIL(enable_new_transfer(task_info.src_ls_id_, task_info.dest_ls_id_, new_transfer))) {
     LOG_WARN("fail to fetch new transfer", K(ret));
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1443,7 +1434,7 @@ int ObTransferHandler::get_abort_trans_timeout_(
 {
   int ret = OB_SUCCESS;
   //TODO(muwei.ym) using tenant config to set abort trans timeout
-  stmt_timeout = 10_s;
+  stmt_timeout = 20_s;
   return ret;
 }
 
@@ -2880,8 +2871,9 @@ int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
   return ret;
 }
 
-// TODO(handora.qc): remove it under 4.3.x later
-int enable_new_transfer(bool &enable)
+int enable_new_transfer(const share::ObLSID src_ls_id,
+                        const share::ObLSID dst_ls_id,
+                        bool &enable)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
@@ -2896,6 +2888,24 @@ int enable_new_transfer(bool &enable)
   } else {
     enable = true;
   }
+
+
+  // TODO(handora.qc): remove later
+  if (OB_SUCC(ret) && enable) {
+    share::ObLSStatusOperator op;
+    bool contain = false;
+    if (OB_FAIL(op.check_transfer_contain_duplicate_ls(MTL_ID(),
+                                                       *GCTX.sql_proxy_,
+                                                       src_ls_id,
+                                                       dst_ls_id,
+                                                       contain))) {
+      LOG_WARN("[TRANSFER] check contain failed", K(ret));
+    } else if (contain) {
+      enable = false;
+      LOG_INFO("[TRANSFER] contain duplicate ls for transfer");
+    }
+  }
+
 
   return ret;
 }
@@ -3219,7 +3229,7 @@ int ObTransferHandler::update_transfer_meta_info_(
   const int64_t rpc_timeout = timeout_ctx.get_timeout();
   const uint64_t group_id = share::OBCG_TRANSFER;
   ObArray<ObAddr> member_addr_list;
-  ObUpdateTransferMetaInfoArg arg;
+  SMART_VAR(ObUpdateTransferMetaInfoArg, arg) {
   ObHAAsyncRpcArg async_rpc_arg;
   ObArray<obrpc::Int64> responses;
   if (!is_inited_) {
@@ -3256,6 +3266,7 @@ int ObTransferHandler::update_transfer_meta_info_(
   }
 #endif
   }
+  } // smart var
   return ret;
 }
 
@@ -3605,7 +3616,7 @@ int ObTransferHandler::inner_do_with_abort_status_(
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
   const int64_t tmp_round = round_;
-  int64_t stmt_timeout = 10_s;
+  int64_t stmt_timeout = 20_s;
   const int32_t group_id = share::OBCG_STORAGE;
   ObMemberList member_list;
   const SCN scn = task_info.start_scn_;
@@ -3621,29 +3632,39 @@ int ObTransferHandler::inner_do_with_abort_status_(
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get ls leader get invalid argument", K(ret), K(task_info));
+  } else if (OB_FAIL(get_abort_trans_timeout_(stmt_timeout))) {
+    LOG_WARN("failed to get abort trans timeout", K(ret), K(task_info));
   } else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
     diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_ABORT;
     LOG_WARN("failed to unlock src and dest ls member list", K(ret), K(task_info));
-  } else if (OB_FAIL(get_local_ls_member_list_(member_list))) {
-    LOG_WARN("failed to get ls member list", K(ret), K(task_info));
-  } else if (OB_FAIL(inner_lock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
-    LOG_WARN("failed to lock ls member list", K(ret), K(task_info));
-  } else if (OB_FAIL(wait_transfer_in_tablet_abort_(task_info, member_list))) {
-    LOG_WARN("failed to wait transfer int tablet abort", K(ret), K(task_info));
-  } else if (OB_FAIL(get_abort_trans_timeout_(stmt_timeout))) {
-    LOG_WARN("failed to get abort trans timeout", K(ret), K(task_info));
   } else if (OB_FAIL(start_trans_(stmt_timeout, group_id, timeout_ctx, trans))) {
     LOG_WARN("failed to start trans", K(ret), K(task_info));
   } else {
+    // lock transfer task first to avoid failing to unlock member list during re-entrant situation
+    // only one tx can lock the transfer task and then lock member list
     if (OB_FAIL(lock_transfer_task_(task_info, trans))) {
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+    } else if (OB_FAIL(get_local_ls_member_list_(member_list))) {
+      LOG_WARN("failed to get ls member list", K(ret), K(task_info));
+    } else if (OB_FAIL(inner_lock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
+      LOG_WARN("failed to lock ls member list", K(ret), K(task_info));
+    } else if (OB_FAIL(wait_transfer_in_tablet_abort_(task_info, member_list))) {
+      LOG_WARN("failed to wait transfer int tablet abort", K(ret), K(task_info));
     } else if (OB_FAIL(do_trans_transfer_aborted_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer aborted", K(ret), K(task_info));
+#ifdef ERRSIM
+    } else if (OB_SUCCESS != EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED) {
+      ret = EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED;
+      STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
+#endif
     } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
       LOG_WARN("failed to unlock ls member list", K(ret), K(task_info));
     } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
       LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
     } else {
+#ifdef ERRSIM
+      DEBUG_SYNC(AFTER_TRANSFER_ABORT_UPDATE_STATUS);
+#endif
       process_perf_diagnose_info_(ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_ABORT,
       ObStorageHADiagTaskType::TRANSFER_ABORT, start_ts, round_, false/*is_report*/);
     }
@@ -3664,7 +3685,15 @@ int ObTransferHandler::inner_do_with_abort_status_(
   }
 
   if (OB_FAIL(ret)) {
-    if (OB_SUCCESS != (tmp_ret = inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
+    bool need_unlock = true;
+#ifdef ERRSIM
+    if (OB_SUCCESS != EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED) {
+      need_unlock = false;
+      ret = EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED;
+      STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
+    }
+#endif
+    if (need_unlock && OB_SUCCESS != (tmp_ret = inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
       LOG_WARN("failed to unlock dest ls member list", K(tmp_ret), K(task_info));
     }
 

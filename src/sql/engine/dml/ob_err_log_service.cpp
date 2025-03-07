@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_err_log_service.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "lib/mysqlclient/ob_isql_connection.h"
-#include "lib/rc/ob_rc.h"
 #include "src/sql/engine/ob_exec_context.h"
 namespace oceanbase
 {

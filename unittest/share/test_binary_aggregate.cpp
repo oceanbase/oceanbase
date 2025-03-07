@@ -14,21 +14,11 @@
 #include <gtest/gtest.h>
 
 #define private public
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_parse.h"
-#include "lib/xml/ob_multi_mode_bin.h"
-#include "lib/xml/ob_xml_bin.h"
-#include "lib/xml/ob_tree_base.h"
-#include "lib/xml/ob_mul_mode_reader.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_binary_aggregate.h"
 #undef private
 
-#include <sys/time.h>
 #include <chrono>
 using namespace std;
 

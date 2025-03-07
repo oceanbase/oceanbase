@@ -34,7 +34,7 @@ class ObLocationService;
 namespace backup {
 
 static const int64_t OB_DEFAULT_BACKUP_CONCURRENCY = 2;
-static const int64_t OB_MAX_BACKUP_CONCURRENCY = 8;
+static const int64_t OB_MAX_BACKUP_CONCURRENCY = 128;
 static const int64_t OB_MAX_BACKUP_MEM_BUF_LEN = 8 * 1024 * 1024;  // 8MB
 static const int64_t OB_MAX_BACKUP_INDEX_BUF_SIZE = 16 * 1024;     // 16KB;
 static const int64_t OB_MAX_BACKUP_FILE_SIZE = 4 * 1024 * 1024;
@@ -268,8 +268,8 @@ public:
     int64_t third_id_;
     struct {
       uint64_t backup_set_id_ : BACKUP_SET_ID_BIT;
-      uint64_t aligned_offset_ : BACKUP_OFFSET_BIT;
-      uint64_t aligned_length_ : BACKUP_LENGTH_BIT;
+      uint64_t aligned_offset_ : BACKUP_OFFSET_BIT; // FARM COMPAT WHITELIST
+      uint64_t aligned_length_ : BACKUP_LENGTH_BIT; // FARM COMPAT WHITELIST
     };
   };
 };

@@ -15,25 +15,11 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
-#include "storage/ob_common_id_utils.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_string.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "share/ob_time_utility2.h"
 #include "share/ob_global_stat_proxy.h"
-#include "common/object/ob_object.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mlog_info.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase
 {
@@ -149,25 +135,102 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.powner_ = lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString(DATE_EXPRESSION_JOB_CLASS);
-      job_info.what_ = job_action;
+      job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
-      job_info.interval_ = job_info.repeat_interval_;
       job_info.repeat_interval_ = repeat_interval;
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
-      job_info.interval_ts_ = 0;
-      job_info.scheduler_flags_ = ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS;
       job_info.exec_env_ = exec_env;
       job_info.max_failures_ = 16;
+      job_info.scheduler_flags_ = dbms_scheduler::ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS; // for compat old version
+      job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::MVIEW_JOB;
 
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
           sql_client, tenant_id, job_id, job_info))) {
         LOG_WARN("failed to create dbms scheduler job", KR(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObMViewSchedJobUtils::create_mview_scheduler_job(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t mview_id,
+    const common::ObString &db_name,
+    const common::ObString &table_name,
+    const common::ObObj &start_date,
+    const common::ObString &repeat_interval,
+    const common::ObString &exec_env,
+    ObArenaAllocator &allocator,
+    common::ObString &job_name)
+{
+  int ret = OB_SUCCESS;
+  ObString refresh_job;
+  ObString job_prefix(ObMViewInfo::MVIEW_REFRESH_JOB_PREFIX);
+  int64_t job_id = OB_INVALID_ID;
+  job_name.reset();
+
+  // job_name is generated as "job_prefix+job_id"
+  if (OB_FAIL(ObMViewSchedJobUtils::generate_job_id(tenant_id, job_id))) {
+    LOG_WARN("failed to generate mview job id", KR(ret));
+  } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_name(allocator, job_id, job_prefix,
+                                                             refresh_job))) {
+    LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_id), K(job_prefix));
+  } else {
+    ObSqlString job_action;
+    if (OB_FAIL(job_action.assign_fmt("DBMS_MVIEW.refresh('%.*s.%.*s')",
+                                      static_cast<int>(db_name.length()), db_name.ptr(),
+                                      static_cast<int>(table_name.length()), table_name.ptr()))) {
+      LOG_WARN("fail to assign job action", KR(ret), K(db_name), K(table_name));
+    } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
+                   sql_client, tenant_id, job_id, refresh_job, job_action.string(), start_date,
+                   repeat_interval, exec_env))) {
+      LOG_WARN("failed to add mview scheduler job", KR(ret), K(refresh_job), K(job_action),
+               "start with", start_date, "next", repeat_interval);
+    } else {
+      job_name = refresh_job;
+      LOG_INFO("succeed to add refresh mview scheduler job", K(refresh_job), K(job_action),
+               "start with", start_date, "next", repeat_interval);
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewSchedJobUtils::create_mlog_scheduler_job(
+    common::ObISQLClient &trans,
+    const uint64_t tenant_id,
+    const uint64_t mview_id,
+    const common::ObString &db_name,
+    const common::ObString &table_name,
+    const common::ObObj &start_date,
+    const common::ObString &repeat_interval,
+    const common::ObString &exec_env,
+    ObArenaAllocator &allocator,
+    common::ObString &job_name)
+{
+  int ret = OB_SUCCESS;
+  const ObString mlog_purge_func("DBMS_MVIEW.purge_log");
+  ObString job_prefix(ObMLogInfo::MLOG_PURGE_JOB_PREFIX);
+  int64_t job_id = OB_INVALID_ID;
+  ObString job_action;
+  ObString purge_job;
+  if (OB_FAIL(generate_job_id(tenant_id, job_id))) {
+    LOG_WARN("failed to generate mview job id", KR(ret));
+  } else if (OB_FAIL(generate_job_name(allocator, job_id, job_prefix, purge_job))) {
+    LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_prefix));
+  } else if (OB_FAIL(generate_job_action(allocator, mlog_purge_func, db_name, table_name, job_action))) {
+    LOG_WARN("failed to generate mview job action", KR(ret));
+  } else if (OB_FAIL(add_scheduler_job(trans, tenant_id, job_id, purge_job, job_action, start_date,
+                                       repeat_interval, exec_env))) {
+    LOG_WARN("failed to add mview scheduler job", KR(ret), K(purge_job), K(job_action),
+             K(start_date), K(repeat_interval));
+  } else {
+    job_name = purge_job;
   }
   return ret;
 }
@@ -209,44 +272,11 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
   }
 
   if (OB_SUCC(ret) &&
-     (!refresh_info->start_time_.is_null() || !refresh_info->next_time_expr_.empty())) {
-    ObString job_prefix(ObMViewInfo::MVIEW_REFRESH_JOB_PREFIX);
-    int64_t job_id = OB_INVALID_ID;
-
-    // job_name is generated as "job_prefix+job_id"
-    if (OB_FAIL(ObMViewSchedJobUtils::generate_job_id(tenant_id, job_id))) {
-      LOG_WARN("failed to generate mview job id", KR(ret));
-    } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_name(allocator,
-                                                               job_id,
-                                                               job_prefix,
-                                                               refresh_job))) {
-      LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_id), K(job_prefix));
-    } else {
-      ObSqlString job_action;
-      if (OB_FAIL(job_action.assign_fmt("DBMS_MVIEW.refresh('%.*s.%.*s', refresh_parallel => %ld)",
-                                        static_cast<int>(db_name.length()), db_name.ptr(),
-                                        static_cast<int>(table_name.length()), table_name.ptr(),
-                                        refresh_info->parallel_))) {
-        LOG_WARN("fail to assign job action", KR(ret), K(db_name), K(table_name),
-                 K(refresh_info->parallel_));
-      } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
-          sql_client,
-          tenant_id,
-          job_id,
-          refresh_job,
-          job_action.string(),
-          refresh_info->start_time_,
-          refresh_info->next_time_expr_,
-          refresh_info->exec_env_))) {
-        LOG_WARN("failed to add mview scheduler job", KR(ret), K(refresh_job), K(job_action),
-                 "start with", refresh_info->start_time_,
-                 "next", refresh_info->next_time_expr_);
-      } else {
-        LOG_INFO("succeed to add refresh mview scheduler job", K(refresh_job), K(job_action),
-                 "start with", refresh_info->start_time_,
-                 "next", refresh_info->next_time_expr_);
-      }
-    }
+      (!refresh_info->start_time_.is_null() || !refresh_info->next_time_expr_.empty()) &&
+      OB_FAIL(create_mview_scheduler_job(sql_client, tenant_id, mview_id, db_name, table_name,
+                                         refresh_info->start_time_, refresh_info->next_time_expr_,
+                                         refresh_info->exec_env_, allocator, refresh_job))) {
+    LOG_WARN("failed to create scheduler job", KR(ret));
   }
 
   if (OB_SUCC(ret)) {
@@ -267,6 +297,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     mview_info.set_refresh_mode(refresh_info->refresh_mode_);
     mview_info.set_refresh_method(refresh_info->refresh_method_);
     mview_info.set_refresh_job(refresh_job);
+    mview_info.set_refresh_dop(refresh_info->refresh_dop_);
     // TODO: we should set last_refresh_scn to 0 for all kind of mview, and fix the mlog recycle
     // problem later.
     if (ObMVRefreshMode::MAJOR_COMPACTION == refresh_info->refresh_mode_) {
@@ -387,10 +418,10 @@ int ObMViewSchedJobUtils::calc_date_expression(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = job_info.get_tenant_id();
-  if (!job_info.is_date_expression_job_class()) {
+  if (!job_info.is_mview_job()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job is not date expression job class",
-        KR(ret), K(job_info.is_date_expression_job_class()));
+        KR(ret), K(job_info.is_mview_job()));
   } else {
     ContextParam ctx_param;
     ctx_param.set_mem_attr(common::OB_SERVER_TENANT_ID, "MVSchedTmp");
@@ -539,6 +570,66 @@ int ObMViewSchedJobUtils::acquire_major_refresh_mv_merge_scn_(common::ObISQLClie
     if (OB_FAIL(stat_proxy.get_major_refresh_mv_merge_scn(true /*select for update*/,
                                                           major_refresh_mv_merge_scn))) {
       LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id));
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewSchedJobUtils::replace_mview_refresh_job(common::ObISQLClient &sql_client,
+                                                    share::schema::ObMViewInfo &mview_info,
+                                                    const common::ObString &db_name,
+                                                    const common::ObString &table_name,
+                                                    const common::ObString &exec_env)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = mview_info.get_tenant_id();
+  if (!mview_info.get_refresh_job().empty() &&
+      OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(sql_client, tenant_id, mview_info.get_refresh_job(), true /*if_exists*/))) {
+    LOG_WARN("failed to remove dbms sched job", KR(ret), K(tenant_id),
+             K(mview_info.get_refresh_job()));
+  } else {
+    common::ObObj start_date;
+    ObString refresh_job;
+    ObArenaAllocator allocator("CreateMVTmp");
+    start_date.set_timestamp(mview_info.get_refresh_start());
+    if (OB_FAIL(create_mview_scheduler_job(
+            sql_client, tenant_id, mview_info.get_mview_id(), db_name, table_name, start_date,
+            mview_info.get_refresh_next(), exec_env, allocator, refresh_job))) {
+      LOG_WARN("failed to create scheduler job", KR(ret));
+    } else {
+      mview_info.set_refresh_job(refresh_job);
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewSchedJobUtils::replace_mlog_purge_job(common::ObISQLClient &sql_client,
+                                                 share::schema::ObMLogInfo &mlog_info,
+                                                 const common::ObString &db_name,
+                                                 const common::ObString &table_name,
+                                                 const common::ObString &exec_env)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t tenant_id = mlog_info.get_tenant_id();
+  if (!mlog_info.get_purge_job().empty() &&
+      OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
+          sql_client, tenant_id, mlog_info.get_purge_job(), true /*if_exists*/))) {
+    LOG_WARN("failed to remove dbms sched job", KR(ret), K(tenant_id),
+             K(mlog_info.get_purge_job()));
+  } else {
+    common::ObObj start_date;
+    ObString purge_job;
+    ObArenaAllocator allocator("CreateMLogTmp");
+    start_date.set_timestamp(mlog_info.get_purge_start());
+    if (OB_FAIL(create_mlog_scheduler_job(sql_client, tenant_id, mlog_info.get_mlog_id(), db_name,
+                                          table_name, start_date, mlog_info.get_purge_next(),
+                                          exec_env, allocator, purge_job))) {
+      LOG_WARN("failed to create scheduler job", KR(ret));
+    } else {
+      mlog_info.set_purge_job(purge_job);
     }
   }
 

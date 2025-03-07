@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/printer/ob_select_stmt_printer.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "lib/allocator/page_arena.h"
 namespace oceanbase
 {
 using namespace common;
@@ -663,7 +659,7 @@ int ObSelectStmtPrinter::print_group_by()
       }
       // print rollup
       if (OB_SUCC(ret)) {
-        if (lib::is_mysql_mode() && rollup_exprs_size > 0) {
+        if (lib::is_mysql_mode() && !select_stmt->is_oracle_compat_groupby() && rollup_exprs_size > 0) {
           for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs_size; ++i) {
             if (OB_FAIL(print_expr_except_const_number(rollup_exprs.at(i), T_GROUP_SCOPE))) {
               LOG_WARN("fail to print group expr", K(ret));
@@ -674,7 +670,7 @@ int ObSelectStmtPrinter::print_group_by()
             --*pos_;
           }
           DATA_PRINTF(" with rollup ");
-        } else if (lib::is_oracle_mode() && (rollup_size > 0 || rollup_exprs_size > 0)) {
+        } else if (rollup_size > 0 || rollup_exprs_size > 0) {
           if (OB_FAIL(print_rollup_items(rollup_items))) {
             LOG_WARN("failed to print rollup items", K(ret));
           } else if (rollup_exprs_size > 0) {

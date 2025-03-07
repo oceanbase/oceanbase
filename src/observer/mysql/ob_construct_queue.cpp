@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "ob_eliminate_task.h"
-#include "ob_mysql_request_manager.h"
 #include "ob_construct_queue.h"
+#include "ob_mysql_request_manager.h"
 
 using namespace oceanbase::obmysql;
 

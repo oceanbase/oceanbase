@@ -11,24 +11,10 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/time/ob_time_utility.h"
-#include "logservice/palf_handle_guard.h"
-#include "ob_restore_log_function.h"
 #include "ob_log_restore_net_driver.h"
-#include "share/ob_ls_id.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tx_storage/ob_ls_service.h"    // ObLSService
 #include "logservice/ob_log_service.h"      // ObLogService
-#include "share/restore/ob_log_restore_source.h"   // ObLogRestoreSourceType
 #include "logservice/logfetcher/ob_log_fetcher.h"  // ObLogFetcher
-#include "observer/omt/ob_tenant_config_mgr.h"  // tenant_config
 
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/string/ob_sql_string.h"    // ObSqlString
 
 namespace oceanbase
 {

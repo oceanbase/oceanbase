@@ -9,67 +9,55 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef _OB_TABLE_LOAD_MEM_CHUNK_MANAGER_H_
-#define _OB_TABLE_LOAD_MEM_CHUNK_MANAGER_H_
 
-#include "storage/direct_load/ob_direct_load_external_block_writer.h"
-#include "storage/direct_load/ob_direct_load_external_multi_partition_row.h"
-#include "storage/direct_load/ob_direct_load_i_table.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
-#include "observer/table_load/ob_table_load_struct.h"
-#include "deps/oblib/src/lib/lock/ob_thread_cond.h"
-#include "src/storage/direct_load/ob_direct_load_mem_define.h"
+#pragma once
+
+#include "storage/direct_load/ob_direct_load_mem_context.h"
 
 namespace oceanbase
 {
-namespace storage
-{
-  class ObDirectLoadMemContext;
-}
 namespace observer
 {
-struct ObTableLoadChunkNode {
+class ObTableLoadStoreCtx;
+
+struct ObTableLoadChunkNode
+{
+public:
   using ChunkType = storage::ObDirectLoadExternalMultiPartitionRowChunk;
   ObTableLoadChunkNode();
   ~ObTableLoadChunkNode();
+  bool is_used() const { return ATOMIC_LOAD(&is_used_); }
+  bool set_used() { return (false == ATOMIC_VCAS(&is_used_, false, true)); }
+  bool set_unused() { return (true == ATOMIC_VCAS(&is_used_, true, false)); }
+  TO_STRING_KV(KP_(chunk), K_(is_used));
+public:
   ChunkType *chunk_;
-  lib::ObMutex chunk_node_mutex_;
   bool is_used_;
-  TO_STRING_KV(K_(is_used));
 };
-class ObTableLoadMemChunkManager {
+
+class ObTableLoadMemChunkManager
+{
   using ChunkType = storage::ObDirectLoadExternalMultiPartitionRowChunk;
   using CompareType = storage::ObDirectLoadExternalMultiPartitionRowCompare;
 public:
   ObTableLoadMemChunkManager();
   ~ObTableLoadMemChunkManager();
   int init(ObTableLoadStoreCtx *store_ctx, storage::ObDirectLoadMemContext *mem_ctx);
-  int alloc_chunk(ChunkType *&chunk);
-  int get_chunk_node_id(int64_t &chunk_node_id);
   int get_chunk(int64_t &chunk_node_id, ChunkType *&chunk);
+  // for close all
+  int get_unclosed_chunks(ObIArray<int64_t> &chunk_node_ids);
   int push_chunk(int64_t chunk_node_id);
-  int close_all_chunk();
   int close_chunk(int64_t chunk_node_id);
-  int handle_close_task_finished();
 private:
-  class CloseChunkTaskProcessor;
-  class CloseChunkTaskCallback;
-public:
-  observer::ObTableLoadStoreCtx *store_ctx_;
+  int acquire_chunk(ChunkType *&chunk);
+private:
+  ObTableLoadStoreCtx *store_ctx_;
   storage::ObDirectLoadMemContext *mem_ctx_;
-  int64_t chunks_count_;
-  int64_t max_chunks_count_;
-  int64_t mem_chunk_size_;
-  observer::ObTableLoadExeMode exe_mode_;
-private:
-  ObArray<ObTableLoadChunkNode *> chunk_nodes_;
-  int64_t close_task_count_;
-  int64_t finished_close_task_count_;
+  ObArray<ObTableLoadChunkNode> chunk_nodes_;
   bool is_inited_;
+
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadMemChunkManager);
 };
 
 } // namespace observer
 } // namespace oceanbase
-#endif /*_OB_TABLE_LOAD_MEM_CHUNK_MANAGER_H_*/

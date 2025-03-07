@@ -110,10 +110,12 @@ public:
   ~ObMviewCompactionValidation() = default;
   void refresh(const int64_t new_version);
   bool need_do_validation();
+  void set_force_do_validation() { force_validated_ = true; }
 private:
   static const int64_t RANDOM_SELECT_BASE = 10;
   bool first_validated_;
   bool second_validated_;
+  bool force_validated_;
   int64_t merge_version_;
 };
 

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_table_impl.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/data_buffer.h"
 #include "share/ob_dml_sql_splicer.h"
 using namespace oceanbase;
 using namespace oceanbase::common;

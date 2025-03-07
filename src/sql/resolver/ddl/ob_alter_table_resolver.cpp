@@ -13,24 +13,13 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
-#include "share/ob_define.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/time/ob_time_utility.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "share/ob_index_builder_util.h"
 #include "share/ob_fts_index_builder_util.h"
-#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#include "share/table/ob_ttl_util.h"
-#include "share/vector_index/ob_plugin_vector_index_util.h"
+#include "sql/resolver/mv/ob_alter_mview_utils.h"
 
 namespace oceanbase
 {
@@ -244,6 +233,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(set_table_options())) {
         SQL_RESV_LOG(WARN, "failed to set table options.", K(ret));
       } else if ((table_schema_->required_by_mview_refresh() || table_schema_->is_mlog_table())
+          && !alter_table_stmt->get_alter_table_arg().is_alter_mlog_attributes_
           && OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
               alter_table_stmt->get_tenant_id(),
               alter_table_stmt->get_alter_table_arg(),
@@ -867,13 +857,15 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         }
       }
     }
-    HEAP_VARS_2((ObColumnNameSet, add_column_names_set),
-                (ObReducedVisibleColSet, reduced_visible_col_set)) {
+    HEAP_VARS_3((ObColumnNameSet, add_column_names_set),
+                (ObReducedVisibleColSet, reduced_visible_col_set),
+                (ObReducedVisibleColSet, drop_column_names_set)) {
     // only use in oracle mode
     bool is_modify_column_visibility = false;
     int64_t alter_column_times = 0;
     int64_t alter_column_visibility_times = 0;
     bool has_alter_column_option = false;
+    bool has_add_column = false;
     bool has_drop_column = false;
     //in mysql mode, resolve add index after resolve column actions
     ObSEArray<int64_t, 4> add_index_action_idxs;
@@ -893,6 +885,9 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                                                            static_cast<int64_t>(action_node->type_))) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter external table option is");
+      } else if (OB_FAIL(ObAlterMviewUtils::check_action_node_for_mlog_master(
+                     *table_schema_, action_node->type_))) {
+        LOG_WARN("mlog master is not supported", KR(ret));
       } else {
         switch (action_node->type_) {
         //deal with alter table option
@@ -924,20 +919,27 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         case T_ALTER_COLUMN_OPTION: {
             alter_table_stmt->set_alter_table_column();
             bool temp_is_modify_column_visibility = false;
-            bool is_drop_column = false;
+            bool is_mysql_drop_column = false;
             has_alter_column_option = true;
+            bool tmp_has_add_column = false;
             bool tmp_has_drop_column = false;
             if (OB_FAIL(resolve_column_options(*action_node, temp_is_modify_column_visibility,
-                                               is_drop_column, add_column_names_set,
-                                               reduced_visible_col_set, tmp_has_drop_column))) {
+                                              is_mysql_drop_column, add_column_names_set,
+                                              reduced_visible_col_set, drop_column_names_set,
+                                              tmp_has_add_column, tmp_has_drop_column))) {
               SQL_RESV_LOG(WARN, "Resolve column option failed!", K(ret));
             } else {
               if (temp_is_modify_column_visibility) {
                 is_modify_column_visibility = temp_is_modify_column_visibility;
                 ++alter_column_visibility_times;
               }
-              if (is_drop_column) {
-                drop_col_act_position_list.push_back(i);
+              if (is_mysql_drop_column) {
+                if (OB_FAIL(drop_col_act_position_list.push_back(i))) {
+                  LOG_WARN("fail to push back drop_col_act_position_list", KR(ret));
+                }
+              }
+              if (!has_add_column) {
+                has_add_column = tmp_has_add_column;
               }
               if (!has_drop_column) {
                 has_drop_column = tmp_has_drop_column;
@@ -1195,6 +1197,25 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
           OZ (resolve_external_partition_options(*action_node));
           break;
         }
+        case T_MV_OPTIONS: {
+          alter_table_stmt->set_alter_mview_attributes();
+          if (OB_FAIL(ObAlterMviewUtils::resolve_mv_options(*action_node, session_info_,
+                                                            alter_table_stmt, table_schema_,
+                                                            schema_checker_->get_schema_guard(),
+                                                            allocator_,
+                                                            params_))) {
+            LOG_WARN("failed to resolve mv options", KR(ret));
+          }
+          break;
+        }
+        case T_ALTER_MLOG_OPTIONS: {
+          alter_table_stmt->set_alter_mlog_attributes();
+          if (OB_FAIL(ObAlterMviewUtils::resolve_mlog_options(
+                  *action_node, session_info_, alter_table_stmt, allocator_, params_))) {
+            LOG_WARN("failed to resolve mv options", KR(ret));
+          }
+          break;
+        }
         default: {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "Unknown alter table action %d", K_(action_node->type), K(ret));
@@ -1213,7 +1234,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     //deal with drop column affer drop constraint (mysql mode)
     if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
       for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
-        if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
+        if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set, drop_column_names_set))) {
           SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
         }
       }
@@ -1243,6 +1264,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else {
         bool has_visible_col = false;
+        bool has_invisible_col = false;
         bool has_hidden_gencol = false;
         ObColumnIterByPrevNextID iter(*table_schema_);
         const ObColumnSchemaV2 *column_schema = NULL;
@@ -1255,6 +1277,16 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             continue;
           } else if (column_schema->is_invisible_column()) {
             // skip invisible column
+            if (!has_invisible_col) {
+              // Check if the invisible_col been dropped.
+              ObColumnNameHashWrapper col_key(column_schema->get_column_name_str());
+              if (OB_HASH_NOT_EXIST == reduced_visible_col_set.exist_refactored(col_key)) {
+                has_invisible_col = true;
+                ret = OB_SUCCESS; // change ret from OB_HASH_NOT_EXIST to OB_SUCCESS
+              } else {            // OB_HASH_EXIST
+                ret = OB_SUCCESS; // change ret from OB_HASH_EXIST to OB_SUCCESS
+              }
+            }
             continue;
           } else if (column_schema->is_hidden()) {
             // skip hidden column
@@ -1279,13 +1311,54 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         } else {
           ret = OB_SUCCESS;
         }
-        if (OB_SUCC(ret)) {
-          if (lib::is_oracle_mode() && alter_column_visibility_times > reduced_visible_col_set.count()) {
-            // 走到这里说明存在 alter table modify column visible，则至少有一个 visible column，不应该报错
-          } else if (!has_visible_col && (is_oracle_mode() || has_hidden_gencol)) {
-            //If there's no hidden generated columns, OB will check if all fields are dropped on rootserver
-            ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
-            SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible", K(ret));
+        if (OB_SUCC(ret) && !has_visible_col) {
+          if (is_oracle_mode()) {
+            if (alter_column_visibility_times > reduced_visible_col_set.count()) {
+              // 走到这里说明存在 alter table modify column visible，则至少有一个 visible
+              // column，不应该报错
+            } else {
+              // If there's no hidden generated columns, OB will check if all fields are dropped on
+              // rootserver
+              ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
+              SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible",
+                           K(ret));
+            }
+          } else {
+            share::schema::AlterTableSchema &alter_table_schema =
+              alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+            bool has_add_visible_col = false;
+            bool has_add_invisible_col = false;
+
+            for (ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
+                 OB_SUCC(ret) && it < alter_table_schema.column_end()
+                 && (!has_add_visible_col || !has_add_invisible_col);
+                 it++) {
+              const AlterColumnSchema *alter_column_schema = nullptr;
+              if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("*it_begin is NULL", K(ret));
+              } else {
+                if (alter_column_schema->alter_type_ != OB_DDL_ADD_COLUMN) {
+                  continue;
+                } else if (alter_column_schema->is_invisible_column()) {
+                  has_add_invisible_col = true;
+                } else {
+                  has_add_visible_col = true;
+                }
+              }
+            }
+            if (!has_add_visible_col) {
+              has_invisible_col |= has_add_invisible_col;
+              if (has_invisible_col || has_hidden_gencol) {
+                // If there has invisible column after alter, use this error code.
+                ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
+                SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible",
+                             K(ret));
+              } else {
+                // RootServer will handle the case there is no visible column or invisible column,
+                // it will use OB_CANT_REMOVE_ALL_FIELDS.
+              }
+            }
           }
         }
       }
@@ -1398,8 +1471,11 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
       // to keep the corrent of alter algorithm
       } else if (lib::is_mysql_mode()
                  && has_drop_column
-                 && ((tenant_data_version >= MOCK_DATA_VERSION_4_2_5_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
-                      || tenant_data_version >= DATA_VERSION_4_3_5_0)) {
+                 && can_add_column_instant(tenant_data_version)) {
+        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
+      } else if (lib::is_oracle_mode()
+                  && has_add_column
+                  && can_drop_column_instant(tenant_data_version)) {
         alter_table_stmt->get_alter_table_arg().alter_algorithm_ = obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
       }
     }
@@ -1410,26 +1486,36 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
 
 int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
                                                  bool &is_modify_column_visibility,
-                                                 bool &is_drop_column,
+                                                 bool &is_mysql_drop_column,
                                                  ObColumnNameSet &add_column_names_set,
                                                  ObReducedVisibleColSet &reduced_visible_col_set,
+                                                 ObReducedVisibleColSet &drop_column_names_set,
+                                                 bool &has_add_column,
                                                  bool &has_drop_column)
 {
   int ret = OB_SUCCESS;
+  has_add_column = false;
   has_drop_column = false;
   if (T_ALTER_COLUMN_OPTION != node.type_ || OB_ISNULL(node.children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
   } else {
     for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *column_node = node.children_[i];
       if (OB_ISNULL(column_node)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
+      } else if (OB_FAIL(ObAlterMviewUtils::check_column_option_for_mlog_master(
+                     *table_schema_, column_node->type_))) {
+        LOG_WARN("mlog master is not supported", KR(ret));
       } else {
         switch(column_node->type_) {
         //add column
         case T_COLUMN_ADD: {
+            has_add_column = true;
             if (OB_FAIL(resolve_add_column(*column_node, add_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve add column error!", K(ret));
             }
@@ -1468,13 +1554,14 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
         case T_COLUMN_DROP: {
           has_drop_column = true;
           if (lib::is_mysql_mode()) {
-              is_drop_column = true;
-            } else if (OB_FAIL(resolve_drop_column(*column_node, reduced_visible_col_set))) {
+              is_mysql_drop_column = true;
+            } else if (OB_FAIL(resolve_drop_column(*column_node, reduced_visible_col_set, drop_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
             }
             break;
           }
         case T_COLUMN_ADD_WITH_LOB_PARAMS: {
+            has_add_column = true;
             if (OB_FAIL(resolve_add_column(*column_node->children_[0], add_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve column option error!", K(ret));
             } else if (OB_FAIL(resolve_lob_storage_parameters(column_node->children_[1]))) {
@@ -1482,6 +1569,15 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             }
             break;
           }
+        case T_ALTER_TABLE_FORCE: { // alter table force.
+          if (OB_UNLIKELY(1 != node.num_child_ || lib::is_mysql_mode())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", KR(ret), K(node.num_child_), K(lib::is_mysql_mode()));
+          } else if (OB_FAIL(resolve_alter_table_force(*column_node))) {
+            LOG_WARN("resolver alter table force failed", KR(ret));
+          }
+          break;
+        }
         default:{
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "Unknown column option type!",
@@ -1495,7 +1591,10 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
   return ret;
 }
 
-int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& node, ObReducedVisibleColSet &reduced_visible_col_set)
+int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(
+    const ParseNode& node,
+    ObReducedVisibleColSet &reduced_visible_col_set,
+    ObReducedVisibleColSet &drop_column_names_set)
 {
   int ret = OB_SUCCESS;
   if (T_ALTER_COLUMN_OPTION != node.type_ || OB_ISNULL(node.children_)) {
@@ -1508,10 +1607,59 @@ int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& n
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
       } else if (column_node->type_ == T_COLUMN_DROP &&
-                OB_FAIL(resolve_drop_column(*column_node, reduced_visible_col_set))) {
+                OB_FAIL(resolve_drop_column(*column_node, reduced_visible_col_set, drop_column_names_set))) {
         SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_alter_table_force(const ParseNode& node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resolve_drop_unused_columns(node))) {
+    LOG_WARN("resolve drop unused columns failed", KR(ret));
+  }
+  return ret;
+}
+
+bool ObAlterTableResolver::can_add_column_instant(const uint64_t tenant_data_version)
+{
+  return ((tenant_data_version >= MOCK_DATA_VERSION_4_2_5_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
+        || tenant_data_version >= DATA_VERSION_4_3_5_0);
+}
+
+bool ObAlterTableResolver::can_drop_column_instant(const uint64_t tenant_data_version)
+{
+  return ((tenant_data_version >= MOCK_DATA_VERSION_4_2_5_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
+        || tenant_data_version >= DATA_VERSION_4_3_5_1);
+}
+
+int ObAlterTableResolver::resolve_drop_unused_columns(const ParseNode& node)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  if (OB_ISNULL(alter_table_stmt)
+      || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null value", KR(ret), KP(alter_table_stmt), KP(session_info_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", KR(ret));
+  } else if (!can_drop_column_instant(tenant_data_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported to alter table force under this tenant_data_version", KR(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is illegal, alter table force");
+  } else if (lib::is_mysql_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported to alter table force under Mysql mode", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "To alter table force under mysql mode is");
+  }
+
+  if (OB_SUCC(ret)) {
+    obrpc::ObAlterTableArg &alter_table_arg = alter_table_stmt->get_alter_table_arg();
+    alter_table_arg.ddl_task_type_          = share::ObDDLTaskType::DELETE_COLUMN_FROM_SCHEMA;
   }
   return ret;
 }
@@ -1966,7 +2114,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
               } else if (share::schema::is_fts_index(create_index_arg->index_type_)
-                  && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(*create_index_arg, allocator_))) {
+                  && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name_and_property(*table_schema_, *create_index_arg, allocator_))) {
                 LOG_WARN("failed to generate fts parser name", K(ret));
               } else {
                 create_index_arg->index_schema_.set_table_type(USER_INDEX);
@@ -2031,7 +2179,10 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 }
                 if (OB_SUCC(ret)) {
                   create_index_arg->index_key_ = static_cast<int64_t>(index_keyname_);
-                  if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+                  if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(table_schema_, create_index_arg))) {
+                    LOG_WARN("fail to check supportability for building index",
+                        K(ret), KPC(table_schema_), KPC(create_index_arg));
+                  } else if (OB_FAIL(resolve_results.push_back(resolve_result))) {
                     LOG_WARN("fail to push back index_stmt_list", K(ret),
                         K(resolve_result));
                   } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
@@ -2510,6 +2661,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.comment_ = comment_;
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_option_.parser_name_ = parser_name_;
+    index_arg.index_option_.parser_properties_ = parser_properties_;
     if (OB_SUCC(ret)) {
       ObIndexType type = INDEX_TYPE_IS_NOT;
       if (OB_NOT_NULL(table_schema_) && table_schema_->is_oracle_tmp_table()) {
@@ -2576,7 +2728,9 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_GLOBAL;
           } else if (index_keyname_ == FTS_KEY) {
-            type = INDEX_TYPE_FTS_INDEX_GLOBAL;
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global fulltext index is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
           } else if (index_keyname_ == MULTI_KEY) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("global multivalue index not supported", K(ret));
@@ -3568,7 +3722,7 @@ int ObAlterTableResolver::resolve_alter_primary(const ParseNode &action_node_lis
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
-  } else if (table_schema_->is_heap_table()) {
+  } else if (table_schema_->is_table_without_pk()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));
@@ -3642,7 +3796,7 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
-  } else if (!table_schema_->is_heap_table()) {
+  } else if (table_schema_->is_table_with_pk()) {
     ret = OB_ERR_MULTIPLE_PRI_KEY;
     SQL_RESV_LOG(WARN, "multiple primary key defined", K(ret));
   } else {
@@ -3797,13 +3951,21 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
   bool is_drop_primary_key = false;
   ObAlterPrimaryArg *drop_pk_arg = nullptr;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t tenant_data_version = 0;
   if (OB_ISNULL(alter_table_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alter table stmt should not be null", K(ret));
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is null", K(ret));
-  } else if (table_schema_->is_heap_table()) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version >= DATA_VERSION_4_3_5_1 && table_schema_->is_heap_organized_table()) {
+    const ObString pk_name = "PRIMAY";
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can't DROP 'PRIMARY', feature is not supported in the heap organized table", K(ret), KPC(table_schema_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't DROP 'PRIMARY', DROP 'PRIMARY' in the heap organized table");
+  } else if (table_schema_->is_table_without_pk()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));
@@ -5603,9 +5765,7 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
       alter_column_schema.reset();
       alter_column_schema.alter_type_ = OB_DDL_ADD_COLUMN;
       alter_table_stmt->get_alter_table_arg().alter_algorithm_ = lib::is_mysql_mode()
-                                                                 && ((tenant_data_version >= MOCK_DATA_VERSION_4_2_5_0
-                                                                        && tenant_data_version < DATA_VERSION_4_3_0_0)
-                                                                      || tenant_data_version >= DATA_VERSION_4_3_5_0)
+                                                                 && can_add_column_instant(tenant_data_version)
                                                                  ? obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT : obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
       if (OB_ISNULL(node.children_[i])) {
         ret = OB_ERR_UNEXPECTED;
@@ -5990,7 +6150,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
       const ObString &part_func_str = part_option.get_part_func_expr_str();
       bool is_partition_key = false;
       bool is_subpartition_key = false;
-      if (part_func_str.empty()/*empty means no part key or system-defined part key*/) {
+      if (part_option.is_range_part() && part_func_str.empty()/*if true then we got system-defined part key*/) {
         //do nothing
       } else if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, because the column does not exist in the schema.
@@ -6463,6 +6623,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
           //所以需要清空掉自己以前拷贝的generated column flag
           alter_column_schema.set_column_flags(origin_col_schema->get_column_flags());
           alter_column_schema.erase_generated_column_flags();
+          alter_column_schema.erase_string_lob_flag();
           if (!is_oracle_mode()) {
             alter_column_schema.drop_not_null_cst();
           }
@@ -6671,13 +6832,23 @@ int ObAlterTableResolver::resolve_column_index(const ObString &column_name)
   return ret;
 }
 
-int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVisibleColSet &reduced_visible_col_set)
+int ObAlterTableResolver::resolve_drop_column(
+    const ParseNode &node,
+    ObReducedVisibleColSet &reduced_visible_col_set,
+    ObReducedVisibleColSet &drop_column_names_set)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
   if (T_COLUMN_DROP != node.type_ ||
       OB_ISNULL(node.children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
+  } else if (OB_UNLIKELY(nullptr == alter_table_stmt || nullptr == table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "unexpected null", KR(ret), KP(alter_table_stmt), KP(table_schema_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", KR(ret), KPC(table_schema_));
   } else {
     AlterColumnSchema alter_column_schema;
     for (int i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
@@ -6688,8 +6859,12 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
       } else if (OB_FAIL(resolve_column_definition_ref(alter_column_schema,
                                                         node.children_[i], true))) {
         LOG_WARN("check column definition ref node failed", K(ret));
+      } else if (OB_FAIL(alter_column_schema.set_column_name(alter_column_schema.get_origin_column_name()))) {
       } else {
         alter_column_schema.alter_type_ = OB_DDL_DROP_COLUMN;
+        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = lib::is_oracle_mode()
+                                                                   && can_drop_column_instant(tenant_data_version)
+                                                                     ? obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT : obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
       }
       if (OB_SUCC(ret)) {
         ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
@@ -6711,11 +6886,6 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
         } else if (OB_FAIL(check_drop_column_is_partition_key(*table_schema_,
                                                               alter_column_schema.get_origin_column_name()))) {
           SQL_RESV_LOG(WARN, "failed to check column in parition key", K(ret));
-        } else if (OB_FAIL(check_column_in_check_constraint(
-                           *table_schema_,
-                           alter_column_schema.get_origin_column_name(),
-                           alter_table_stmt))) {
-          SQL_RESV_LOG(WARN, "failed to check column in foreign key for oracle mode", K(ret));
         } else if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))){
           SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
         }
@@ -6723,7 +6893,23 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
       if (OB_SUCC(ret)) {
         const ObString &column_name = alter_column_schema.get_origin_column_name();
         ObColumnSchemaHashWrapper col_key(column_name);
-        if (OB_FAIL(reduced_visible_col_set.set_refactored(col_key))) {
+        if (OB_FAIL(drop_column_names_set.set_refactored(col_key))) {
+          if (OB_HASH_EXIST == ret) {
+            if (is_mysql_mode()) {
+              //In mysql mode, OB will check whether a column is dropped twice on rootserver
+              //So don't return error here
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_ERR_COLUMN_DUPLICATE;
+              LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
+              LOG_WARN("duplicate column name", KR(ret), K(column_name));
+            }
+          } else {
+            LOG_WARN("set refactored failed", KR(ret), K(column_name));
+          }
+        }
+
+        if (FAILEDx(reduced_visible_col_set.set_refactored(col_key))) {
           if (OB_HASH_EXIST == ret) {
             if (is_mysql_mode()) {
               //In mysql mode, OB will check whether a column is dropped twice on rootserver
@@ -6739,6 +6925,9 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
           }
         }
       }
+    }
+    if (FAILEDx(check_column_in_check_constraint(*table_schema_, drop_column_names_set, alter_table_stmt))) {
+      SQL_RESV_LOG(WARN, "check column in check constraint failed", KR(ret));
     }
   }
   return ret;
@@ -7215,6 +7404,7 @@ int ObAlterTableResolver::add_new_indexkey_for_oracle_temp_table(obrpc::ObCreate
   }
   return ret;
 }
+
 
 } //namespace common
 } //namespace oceanbase

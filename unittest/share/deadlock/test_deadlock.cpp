@@ -11,30 +11,13 @@
  */
 
 #define UNITTEST_DEBUG
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #define protected public
 #include "observer/ob_srv_network_frame.h"
-#include "lib/net/ob_addr.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "share/deadlock/ob_lcl_scheme/ob_lcl_parameters.h"
 #include "share/deadlock/ob_lcl_scheme/ob_lcl_node.h"
-#include "share/deadlock/ob_lcl_scheme/ob_lcl_message.h"
-#include "lib/function/ob_function.h"
-#include "common/ob_clock_generator.h"
 #include "share/deadlock/test/test_key.h"
-#include <string>
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <algorithm>
-#include <cstdlib>
-#include <numeric>
-#include "storage/tx/ob_trans_define.h"
-#include "share/deadlock/ob_deadlock_detector_rpc.h"
 #include "share/deadlock/mock_deadlock_rpc.h"
-#include "storage/memtable/ob_memtable_context.h"
 
 using namespace oceanbase::obrpc;
 using namespace std;

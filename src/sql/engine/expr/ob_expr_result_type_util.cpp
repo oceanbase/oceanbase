@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_expr_res_type_map.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "src/sql/engine/ob_exec_context.h"
 
@@ -965,7 +961,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
   if (coll_calc_type == ObMaxType) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid subschema type", K(ret), K(type1), K(type2));
-  } else if (OB_FAIL(ObArrayUtil::get_type_name(elem_data, type_name, MAX_LEN, depth))) {
+  } else if (OB_FAIL(ObArrayUtil::get_type_name(ObNestedType::OB_ARRAY_TYPE, elem_data, type_name, MAX_LEN, depth))) {
     LOG_WARN("failed to convert len to string", K(ret));
   } else if (FALSE_IT(type_info.assign_ptr(type_name, strlen(type_name)))) {
   } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_info, subschema_id))) {

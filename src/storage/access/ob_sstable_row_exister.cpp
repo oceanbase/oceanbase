@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_exister.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase {
 using namespace blocksstable;
@@ -126,11 +124,13 @@ int ObSSTableRowExister::exist_block_row(ObSSTableReadHandle &read_handle, ObDat
         store_row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
         if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->query_flag_.is_use_bloomfilter_cache()
             && !sstable_->is_small_sstable()) {
-          (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
-              MTL_ID(),
-              iter_param_->table_id_,
-              read_handle.micro_handle_->macro_block_id_,
-              read_handle.rowkey_->get_datum_cnt());
+          (void)OB_STORE_CACHE.get_bf_cache().inc_empty_read(MTL_ID(),
+                                                             iter_param_->table_id_,
+                                                             iter_param_->ls_id_,
+                                                             sstable_->get_key(),
+                                                             read_handle.micro_handle_->macro_block_id_,
+                                                             read_handle.rowkey_->get_datum_cnt(),
+                                                             &read_handle);
         }
         ++access_ctx_->table_store_stat_.empty_read_cnt_;
         EVENT_INC(ObStatEventIds::EXIST_ROW_EMPTY_READ);

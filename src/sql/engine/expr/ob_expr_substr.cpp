@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/vector/ob_vector_define.h"
 #include "sql/engine/expr/ob_expr_substr.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "storage/ob_storage_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
@@ -187,6 +181,7 @@ int ObExprSubstr::calc_result_length_oracle(const ObExprResType *types_array,
           if (result_type.is_varchar_or_char() && LS_BYTE == result_type.get_length_semantics()) {
             res_len *= mbmaxlen;
           }
+          res_len = MIN(res_len, INT32_MAX);
         }
       }
     }

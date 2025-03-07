@@ -11,18 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "ob_storage_schema_recorder.h"
 
-#include "lib/utility/ob_tracepoint.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_base_type.h"
-#include "logservice/ob_log_handler.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_table_schema.h"
+#include "ob_storage_schema_recorder.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "share/scn.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase

@@ -19,7 +19,6 @@
 #include "ob_log_formatter.h"           // IObLogFormatter
 #include "ob_log_instance.h"            // IObLogErrHandler
 #include "ob_log_part_trans_parser.h"   // IObLogPartTransParser
-#include "ob_ms_queue_thread.h"         // BitSet
 #include "ob_log_resource_collector.h"  // IObLogResourceCollector
 #include "ob_log_trace_id.h"
 #include "ob_cdc_auto_config_mgr.h"     // CDC_CFG_MGR

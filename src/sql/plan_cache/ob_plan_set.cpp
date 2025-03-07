@@ -11,30 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_plan_set.h"
 
-#include "lib/trace/ob_trace_event.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/ob_role.h"
-#include "observer/ob_server_struct.h"
-#include "sql/ob_phy_table_location.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/ob_sql_context.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_pcv_set.h"
-#include "sql/plan_cache/ob_plan_cache_value.h"
-#include "sql/plan_cache/ob_cache_object.h"
-#include "sql/plan_cache/ob_dist_plans.h"
-#include "sql/privilege_check/ob_ora_priv_check.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "pl/ob_pl.h"
 #include "ob_plan_set.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "sql/plan_cache/ob_adaptive_auto_dop.h"
+#include "sql/plan_cache/ob_pcv_set.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
 
 using namespace oceanbase;
 using namespace common;

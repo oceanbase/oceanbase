@@ -11,22 +11,15 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/ob_pl_type.h"
+#include "ob_pl_type.h"
 #include "observer/mysql/obsm_utils.h"
-#include "pl/ob_pl.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/ob_spi.h"
-#include "sql/engine/ob_exec_context.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 #include "ob_pl_code_generator.h"
-#include "share/schema/ob_routine_info.h"
 #include "observer/mysql/obmp_stmt_execute.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "common/ob_smart_call.h"
-#include "sql/resolver/expr/ob_raw_expr_copier.h"
-#include "pl/ob_pl_user_type.h"
-#include "dblink/ob_pl_dblink_guard.h"
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "observer/mysql/ob_query_driver.h"
+#include "pl/ob_pl_dependency_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -79,7 +72,7 @@ int ObPLDataType::get_udt_type_by_name(uint64_t tenant_id,
     uint64_t object_owner_id = owner_id;
     ObString object_name = udt;
     bool exist = false;
-    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    OZ (ObPLDependencyUtil::get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
     if (OB_SUCC(ret) && exist) {
       OZ (schema_guard.get_udt_info(tenant_id, object_owner_id, OB_INVALID_ID, object_name, udt_info));
     }
@@ -136,7 +129,7 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
     uint64_t object_owner_id = owner_id;
     ObString object_name = pkg;
     bool exist = false;
-    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    OZ (ObPLDependencyUtil::get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
     if (OB_SUCC(ret) && exist) {
       OZ (schema_guard.get_package_info(tenant_id, object_owner_id, object_name, share::schema::PACKAGE_TYPE,
                                         compatible_mode, package_info));
@@ -217,54 +210,6 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
 }
 #endif
 
-int ObPLDataType::collect_synonym_deps(uint64_t tenant_id,
-                                       ObSynonymChecker &synonym_checker,
-                                       share::schema::ObSchemaGetterGuard &schema_guard,
-                                       ObIArray<ObSchemaObjVersion> *deps)
-{
-  int ret = OB_SUCCESS;
-  if (synonym_checker.has_synonym() && OB_NOT_NULL(deps)) {
-    const ObIArray<uint64_t> &synonym_ids = synonym_checker.get_synonym_ids();
-    for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
-      int64_t schema_version = OB_INVALID_VERSION;
-      ObSchemaObjVersion obj_version;
-      if (OB_FAIL(schema_guard.get_schema_version(SYNONYM_SCHEMA, tenant_id, synonym_ids.at(i), schema_version))) {
-        LOG_WARN("failed to get schema version", K(ret), K(tenant_id), K(synonym_ids.at(i)));
-      } else if (OB_UNLIKELY(OB_INVALID_VERSION == schema_version)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema version is invalid", K(ret), K(tenant_id), K(synonym_ids.at(i)));
-      } else {
-        obj_version.object_id_ = synonym_ids.at(i);
-        obj_version.object_type_ = DEPENDENCY_SYNONYM;
-        obj_version.version_ = schema_version;
-        if (OB_FAIL(deps->push_back(obj_version))) {
-          LOG_WARN("failed to push back obj version to array", K(ret), KPC(deps), K(obj_version));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObPLDataType::get_synonym_object(uint64_t tenant_id,
-                                     uint64_t &owner_id,
-                                     ObString &object_name,
-                                     bool &exist,
-                                     sql::ObSQLSessionInfo &session_info,
-                                     share::schema::ObSchemaGetterGuard &schema_guard,
-                                     ObIArray<ObSchemaObjVersion> *deps)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaChecker schema_checker;
-  ObSynonymChecker synonym_checker;
-  OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
-  OZ (ObResolverUtils::resolve_synonym_object_recursively(
-    schema_checker, synonym_checker,
-    tenant_id, owner_id, object_name, owner_id, object_name, exist));
-  OZ (collect_synonym_deps(tenant_id, synonym_checker, schema_guard, deps));
-  return ret;
-}
-
 int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          uint64_t owner_id,
                                          const ObString &table,
@@ -278,12 +223,15 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_info = NULL;
+  ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
+  ObMySQLProxy dummy_proxy;
+  ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
     uint64_t object_owner_id = owner_id;
     ObString object_name = table;
     bool exist = false;
-    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    OZ (ObPLDependencyUtil::get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
     if (OB_SUCC(ret) && exist) {
       OZ (schema_guard.get_table_schema(tenant_id, object_owner_id, object_name, false, table_info));
     }
@@ -298,9 +246,6 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     OX (pl_type.set_user_type_id(PL_RECORD_TYPE, table_info->get_table_id()));
     OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
   } else {
-    ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
-    ObMySQLProxy dummy_proxy;
-    ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
     ObRecordType *record_type = NULL;
     const ObPLDataType *member_type = NULL;
     CK (!type.empty());
@@ -312,8 +257,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
       CK (OB_NOT_NULL(record_name));
       if (OB_SUCC(ret) && 0 == record_name->case_compare(type)) {
         CK (OB_NOT_NULL(member_type = record_type->get_record_member_type(i)));
-        CK (OB_NOT_NULL(member_type->get_data_type()));
-        OX (pl_type.set_data_type(*(member_type->get_data_type())));
+        OX (pl_type = *member_type);
         OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
         break;
       }
@@ -324,12 +268,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
-    bool is_view = table_info->is_view_table() && !table_info->is_materialized_view();
-    ObSchemaObjVersion obj_version;
-    new(&obj_version)ObSchemaObjVersion(table_info->get_table_id(),
-                                        table_info->get_schema_version(),
-                                        is_view ? DEPENDENCY_VIEW : DEPENDENCY_TABLE);
-    OZ (deps->push_back(obj_version));
+    OZ (ObPLResolver::collect_dep_info_by_schema(ctx, table_info, *deps));
   }
   return ret;
 }
@@ -716,20 +655,22 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
   ObSEArray<jit::ObLLVMValue, 4> args;
   jit::ObLLVMValue llvm_value;
   jit::ObLLVMValue dest_type;
+  ObPLCGBufferGuard buffer_guard(generator);
 
   OZ (args.push_back(generator.get_vars()[generator.CTX_IDX]));
   OZ (args.push_back(allocator));
   OZ (args.push_back(src));
   OZ (args.push_back(dest));
+  OZ (buffer_guard.get_data_type_buffer(dest_type));
   if (is_composite_type()) {
     ObDataType obj_type;
     ObObjMeta meta;
     meta.set_ext();
     obj_type.set_meta_type(meta);
     obj_type.set_udt_id(user_type_id_);
-    OZ (generator.generate_data_type(obj_type, dest_type));
+    OZ (generator.store_data_type(obj_type, dest_type));
   } else {
-    OZ (generator.generate_data_type(obj_type_, dest_type));
+    OZ (generator.store_data_type(obj_type_, dest_type));
   }
   OZ (args.push_back(dest_type));
   OZ (generator.get_helper().get_int64(package_id, llvm_value));
@@ -740,7 +681,9 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
       LOG_WARN("failed to create call", K(ret));
     } else if (OB_FAIL(generator.check_success(ret_err, location, in_notfound, in_warning))) {
       LOG_WARN("failed to check success", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      dest_type.reset();
+    }
   }
   return ret;
 }
@@ -755,7 +698,7 @@ int ObPLDataType::generate_construct(ObPLCodeGenerator &generator,
   int ret = OB_SUCCESS;
   if (is_obj_type()) {
     ObObj obj(get_obj_type());
-    OZ (generator.generate_obj(obj, value));
+    OZ (generator.store_obj(obj, value));
   } else {
     ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
@@ -937,6 +880,15 @@ int ObPLDataType::deserialize(
   }
   OZ (deserialize(
     resolve_ctx, allocator, src, src_len, src_pos, dst));
+
+#ifdef OB_BUILD_ORACLE_PL
+  if (OB_SUCC(ret) && is_user_type() && (version < MOCK_CLUSTER_VERSION_4_2_5_1 ||
+      (version >= CLUSTER_VERSION_4_3_0_0 && version < CLUSTER_VERSION_4_3_5_1))) {
+    CK (result.is_ext());
+    OZ (ObPLAssocArray::rebuild_sort(result));
+  }
+#endif // OB_BUILD_ORACLE_PL
+
   LOG_DEBUG("deserialize pl package variable obj", K(ret), K(result));
   return ret;
 }
@@ -1042,6 +994,7 @@ int ObPLDataType::deserialize(
 // -------------------- End for Package Session Variable Serialize/DeSerialize ------
 
 int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                            const sql::ObSQLSessionInfo &session,
                             const ObTimeZoneInfo *tz_info,
                             MYSQL_PROTOCOL_TYPE type,
                             char *&src,
@@ -1071,7 +1024,19 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to serialize pl data type, data type inconsistent with pl type",
                  K(get_obj_type()), K(obj.get_type()), K(obj), K(*this), K(ret));
-      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, NULL))) {
+      } else if (obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry()) {
+        ObArenaAllocator local_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        if (OB_FAIL(ObQueryDriver::process_lob_locator_results(obj,
+                                                               session.is_client_use_lob_locator(),
+                                                               session.is_client_support_lob_locatorv2(),
+                                                               &local_allocator,
+                                                               &session,
+                                                               NULL))) {
+          LOG_WARN("failed to process lob locator_results", K(ret), K(obj), K(session.is_client_use_lob_locator()), K(session.is_client_support_lob_locatorv2()));
+        } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
+          LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
+        }
+      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
         LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
       } else {
         LOG_DEBUG("success serialize pl data type", K(*this), K(obj),
@@ -1092,12 +1057,12 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(udt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("udt info is null", K(ret), K(get_user_type_id()));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, user_type))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
       LOG_WARN("failed to transform to pl type", K(ret), KPC(udt_info));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user type is null", K(ret), K(user_type));
-    } else if (OB_FAIL(user_type->serialize(schema_guard, tz_info, type, src, dst, dst_len, dst_pos))) {
+    } else if (OB_FAIL(user_type->serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos))) {
       LOG_WARN("failed to deserialize user type", K(ret));
     }
   }
@@ -1159,7 +1124,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(udt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("udt info is null", K(ret));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, user_type))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
       LOG_WARN("failed to transform to pl type", K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2200,6 +2165,23 @@ int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapsho
   return ret;
 }
 
+ObString ObPLCursorInfo::get_non_session_sql_text()
+{
+  ObString sql_text;
+  ObSPIResultSet *spi_result = NULL;
+  if (is_streaming()) {
+    spi_result = get_cursor_handler();
+    if (NULL == spi_result) {  // spi_result does not init
+      sql_text = ObString::make_empty_string();
+    } else {
+      sql_text = spi_result->get_sql_ctx().cur_sql_;
+    }
+  } else {
+    sql_text = sql_text_;
+  }
+  return sql_text;
+}
+
 int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -2235,6 +2217,8 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
       is_need_check_snapshot_ = src.is_need_check_snapshot_;
       last_execute_time_ = src.last_execute_time_;
       sql_trace_id_ = src.sql_trace_id_;
+      OZ (ob_write_string(*copy_allocator, src.sql_text_, sql_text_));
+      OX (MEMCPY(sql_id_, src.sql_id_, OB_MAX_SQL_ID_LENGTH + 1));
       //these should not be copied ..
       //    lib::MemoryContext entity_;
       //    ObIAllocator *allocator_;
@@ -2322,6 +2306,9 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
   int ret = OB_SUCCESS;
   LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_sessid()));
   if (isopen()) { //如果游标已经打开，需要释放资源
+    if (!is_server_cursor()) {
+      session.del_non_session_cursor(this);  // delete cursor from cursor map first, then release resource
+    }
     if (is_streaming()) {
       ObSPIResultSet *spi_result = get_cursor_handler();
       if (OB_NOT_NULL(spi_result)) {

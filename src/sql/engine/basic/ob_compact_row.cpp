@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/basic/ob_compact_row.h"
-#include "share/vector/ob_continuous_vector.h"
-#include "share/vector/ob_uniform_vector.h"
-#include "share/vector/ob_discrete_vector.h"
-#include "share/vector/ob_fixed_length_vector.h"
+#include "ob_compact_row.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
@@ -182,7 +178,7 @@ int64_t ObCompactRow::calc_max_row_size(const ObExprPtrIArray &exprs, int32_t ex
   } else {
     res += tmp_meta.fix_data_off_;
     for (int64_t i = 0; i < exprs.count(); ++i) {
-      if (T_REF_COLUMN == exprs.at(i)->type_) {
+      if (T_REF_COLUMN == exprs.at(i)->type_ && exprs.at(i)->max_length_ > 0) {
         res += exprs.at(i)->max_length_;
       } else {
         res += INT32_MAX;

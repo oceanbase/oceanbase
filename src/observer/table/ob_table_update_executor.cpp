@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_update_executor.h"
 #include "ob_table_cg_service.h"
-#include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::sql;
 

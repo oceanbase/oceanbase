@@ -13,7 +13,6 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_ddl_kv_info.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

@@ -11,7 +11,6 @@
  */
 
 #include "ob_row_data.h"
-#include "lib/utility/serialization.h"
 
 namespace oceanbase
 {

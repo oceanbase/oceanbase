@@ -14,11 +14,6 @@
 
 #include "lib/encrypt/ob_encrypted_helper.h"
 
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

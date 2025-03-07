@@ -12,21 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 
+#include "ob_cgroup_ctrl.h"
 #include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
 #include "share/io/ob_io_manager.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 #include "share/resource_manager/ob_resource_manager.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_multi_tenant.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -540,7 +531,8 @@ int ObCgroupCtrl::get_group_info_by_group_id(
 {
   int ret = OB_SUCCESS;
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-  if (OB_FAIL(rule_mgr.get_group_name_by_id(tenant_id, group_id, group_name))) {
+  if (OB_FAIL(rule_mgr.get_group_name_by_id(
+          is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id, group_id, group_name))) {
     if (REACH_TIME_INTERVAL(3600 * 1000 * 1000L)) {
       LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
     }

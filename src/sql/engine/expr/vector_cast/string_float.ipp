@@ -45,7 +45,7 @@ struct StringFloatCastImpl
         ObString in_str(input_vector->get_length(i), input_vector->get_payload(i));
         if (std::is_same<OUT_TYPE, float>::value) {
           float out_f = 0.0;
-          if (OB_FAIL(common_string_float_wrap(expr, in_str, out_f))) {
+          if (OB_FAIL(ObDataTypeCastUtil::common_string_float_wrap(expr, in_str, out_f))) {
             SQL_LOG(WARN, "common_string_float_fastfloat failed", K(ret));
           } else {
             output_vector->set_float(i, out_f);

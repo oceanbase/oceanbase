@@ -32,40 +32,33 @@ public:
     : ObDASIterParam(DAS_ITER_INDEX_MERGE),
       merge_type_(INDEX_MERGE_INVALID),
       rowkey_exprs_(nullptr),
-      left_iter_(nullptr),
-      left_output_(nullptr),
-      right_iter_(nullptr),
-      right_output_(nullptr),
       ctdef_(nullptr),
       rtdef_(nullptr),
+      child_iters_(nullptr),
+      child_scan_rtdefs_(),
       tx_desc_(nullptr),
       snapshot_(nullptr),
-      is_reverse_(false),
-      is_left_child_leaf_node_(false)
+      is_reverse_(false)
   {}
 
   ObIndexMergeType merge_type_;
   const ExprFixedArray *rowkey_exprs_;
-  ObDASIter *left_iter_;
-  const common::ObIArray<ObExpr*> *left_output_;
-  ObDASIter *right_iter_;
-  const common::ObIArray<ObExpr*> *right_output_;
   const ObDASIndexMergeCtDef *ctdef_;
   ObDASIndexMergeRtDef *rtdef_;
+  const common::ObIArray<ObDASIter*> *child_iters_;
+  const common::ObIArray<ObDASScanRtDef*> *child_scan_rtdefs_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   bool is_reverse_;
-  bool is_left_child_leaf_node_;
 
   virtual bool is_valid() const
   {
     return rowkey_exprs_ != nullptr &&
-           left_iter_ != nullptr &&
-           left_output_ != nullptr &&
-           right_iter_ != nullptr &&
-           right_output_ != nullptr &&
            ctdef_ != nullptr &&
            rtdef_ != nullptr &&
+           child_iters_ != nullptr &&
+           child_scan_rtdefs_ != nullptr &&
+           child_iters_->count() == child_scan_rtdefs_->count() &&
            merge_type_ != INDEX_MERGE_INVALID &&
            ObDASIterParam::is_valid();
   }
@@ -75,39 +68,46 @@ class ObDASIndexMergeIter : public ObDASIter
 {
 
 public:
-  struct RowStore
+  /* used to store and merge child rows */
+  struct IndexMergeRowStore
   {
   public:
-    RowStore()
+    IndexMergeRowStore()
       : exprs_(nullptr),
         eval_ctx_(nullptr),
         max_size_(1),
         saved_size_(0),
         cur_idx_(OB_INVALID_INDEX),
-        store_rows_(nullptr)
+        store_rows_(nullptr),
+        iter_end_(false)
     {}
-    RowStore(const common::ObIArray<ObExpr*> *exprs,
-             ObEvalCtx *eval_ctx,
-             int64_t max_size)
+    IndexMergeRowStore(const common::ObIArray<ObExpr*> *exprs,
+                       ObEvalCtx *eval_ctx,
+                       int64_t max_size)
       : exprs_(exprs),
         eval_ctx_(eval_ctx),
         max_size_(max_size),
         saved_size_(0),
         cur_idx_(OB_INVALID_INDEX),
-        store_rows_(nullptr)
+        store_rows_(nullptr),
+        iter_end_(false)
     {}
 
-    int init(common::ObIAllocator &allocator);
+    int init(common::ObIAllocator &allocator,
+             const common::ObIArray<ObExpr*> *exprs,
+             ObEvalCtx *eval_ctx,
+             int64_t max_size);
     int save(bool is_vectorized, int64_t size);
-    int to_expr(bool is_vectorized, int64_t size);
-    bool have_data() const { return cur_idx_ != OB_INVALID_INDEX && cur_idx_ < saved_size_; }
+    int to_expr();
+    inline bool have_data() const { return cur_idx_ != OB_INVALID_INDEX && cur_idx_ < saved_size_; }
     int64_t rows_cnt() const { return have_data() ? saved_size_ - cur_idx_ : 0; }
     const ObDatum *cur_datums();
     void reuse();
     void reset();
     TO_STRING_KV(K_(exprs),
                  K_(saved_size),
-                 K_(cur_idx));
+                 K_(cur_idx),
+                 K_(iter_end));
 
   public:
     typedef ObChunkDatumStore::LastStoredRow LastDASStoreRow;
@@ -117,40 +117,59 @@ public:
     int64_t saved_size_;
     int64_t cur_idx_;
     LastDASStoreRow *store_rows_;
+    bool iter_end_;
+  };
+
+  /* shared exprs may cause the results on the frame to be overwritten by get_next_rows() of child iters,
+   * thus we use a result buffer to temporarily store a batch of result rows and @to_expr() at the end of
+   * each iteration.
+   */
+  struct MergeResultBuffer
+  {
+  public:
+    MergeResultBuffer()
+      : exprs_(nullptr),
+        eval_ctx_(nullptr),
+        max_size_(1),
+        result_store_("DASIndexMerge"),
+        result_store_iter_()
+    {}
+    int init(int64_t max_size, ObEvalCtx *eval_ctx, const common::ObIArray<ObExpr*> *exprs, common::ObIAllocator &alloc);
+    int add_row();
+    int to_expr(int64_t size);
+    void reuse();
+    void reset();
+
+  public:
+    const common::ObIArray<ObExpr*> *exprs_;
+    ObEvalCtx *eval_ctx_;
+    int64_t max_size_;
+
+    ObChunkDatumStore result_store_;
+    ObChunkDatumStore::Iterator result_store_iter_;
   };
 
 public:
   ObDASIndexMergeIter()
     : ObDASIter(ObDASIterType::DAS_ITER_INDEX_MERGE),
       merge_type_(INDEX_MERGE_INVALID),
-      state_(FILL_LEFT_ROW),
-      left_iter_(nullptr),
-      right_iter_(nullptr),
-      left_row_store_(nullptr),
-      right_row_store_(nullptr),
-      left_scan_param_(),
-      right_scan_param_(),
-      left_iter_end_(false),
-      right_iter_end_(false),
+      child_iters_(),
+      child_stores_(),
+      child_scan_rtdefs_(),
+      child_scan_params_(),
+      child_tablet_ids_(),
       rowkey_exprs_(nullptr),
-      left_output_(nullptr),
-      right_output_(nullptr),
       mem_ctx_(),
       get_next_row_(nullptr),
       get_next_rows_(nullptr),
       ls_id_(),
-      left_tablet_id_(),
-      right_tablet_id_(),
       merge_ctdef_(nullptr),
       merge_rtdef_(nullptr),
-      left_scan_ctdef_(nullptr),
-      left_scan_rtdef_(nullptr),
-      right_scan_ctdef_(nullptr),
-      right_scan_rtdef_(nullptr),
       tx_desc_(nullptr),
       snapshot_(nullptr),
       is_reverse_(false),
-      is_left_child_leaf_node_(false)
+      child_match_against_exprs_(),
+      result_buffer_()
   {}
 
   virtual ~ObDASIndexMergeIter() {}
@@ -160,8 +179,7 @@ public:
   virtual int rescan() override;
   virtual void clear_evaluated_flag() override;
   int set_ls_tablet_ids(const ObLSID &ls_id, const ObDASRelatedTabletID &related_tablet_ids);
-  ObTableScanParam &get_left_param() { return left_scan_param_; }
-  ObTableScanParam &get_right_param() { return right_scan_param_; }
+  ObTableScanParam *get_child_scan_param(int64_t idx) { return child_scan_params_.at(idx); }
 
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
@@ -171,7 +189,7 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
 private:
-  int compare(int &cmp_ret);
+  int compare(int64_t cur_idx, int64_t &output_idx, int &cmp_ret);
   int intersect_get_next_row();
   int intersect_get_next_rows(int64_t &count, int64_t capacity);
   int union_get_next_row();
@@ -183,46 +201,35 @@ private:
                       ObTableScanParam &scan_param);
   int prepare_scan_ranges(ObTableScanParam &scan_param, const ObDASScanRtDef *rtdef);
   void reset_datum_ptr(const common::ObIArray<ObExpr*> *exprs, int64_t size);
+  int extract_match_against_exprs(const common::ObIArray<ObExpr*> &exprs, common::ObIArray<ObExpr*> &match_against_exprs);
+  int fill_default_values_for_union(const common::ObIArray<ObExpr*> &exprs);
+  int save_row_to_result_buffer();
 
 private:
-  enum MergeState : uint32_t
-  {
-    FILL_LEFT_ROW,
-    FILL_RIGHT_ROW,
-    MERGE_AND_OUTPUT,
-    FINISHED
-  };
-
   ObIndexMergeType merge_type_;
-  MergeState state_;
-  ObDASIter *left_iter_;
-  ObDASIter *right_iter_;
-  RowStore *left_row_store_;
-  RowStore *right_row_store_;
-  ObTableScanParam left_scan_param_;
-  ObTableScanParam right_scan_param_;
-  bool left_iter_end_;
-  bool right_iter_end_;
+  common::ObFixedArray<ObDASIter*, common::ObIAllocator> child_iters_;
+  common::ObFixedArray<IndexMergeRowStore, common::ObIAllocator> child_stores_;
+  // now child_scan_rtdefs.count() == child_iters.count(), and so do child_scan_params and
+  // child_tablet_ids
+  // TODO: eliminate those we actually don't need, include index merge child and fts child.
+
+  common::ObFixedArray<ObDASScanRtDef*, common::ObIAllocator> child_scan_rtdefs_;
+  common::ObFixedArray<ObTableScanParam*, common::ObIAllocator> child_scan_params_;
+  common::ObFixedArray<ObTabletID, common::ObIAllocator> child_tablet_ids_;
   const ExprFixedArray *rowkey_exprs_;
-  const common::ObIArray<ObExpr*> *left_output_;
-  const common::ObIArray<ObExpr*> *right_output_;
   lib::MemoryContext mem_ctx_;
   int (ObDASIndexMergeIter::*get_next_row_)();
   int (ObDASIndexMergeIter::*get_next_rows_)(int64_t&, int64_t);
   ObLSID ls_id_;
-  ObTabletID left_tablet_id_;
-  ObTabletID right_tablet_id_;
   const ObDASIndexMergeCtDef *merge_ctdef_;
   ObDASIndexMergeRtDef *merge_rtdef_;
-  // nullptr if left child is not a leaf node
-  const ObDASScanCtDef *left_scan_ctdef_;
-  ObDASScanRtDef *left_scan_rtdef_;
-  const ObDASScanCtDef *right_scan_ctdef_;
-  ObDASScanRtDef *right_scan_rtdef_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   bool is_reverse_;
-  bool is_left_child_leaf_node_;
+  // need to fill default value for columns that do not have corresponding output when union merge,
+  // only relevance score in fulltext search for now.
+  common::ObFixedArray<ExprFixedArray, common::ObIAllocator> child_match_against_exprs_;
+  MergeResultBuffer result_buffer_;
 };
 
 }  // namespace sql

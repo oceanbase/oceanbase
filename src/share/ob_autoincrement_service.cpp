@@ -13,23 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_autoincrement_service.h"
-#include <algorithm>
-#include <stdint.h>
-#include "lib/worker.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/ash/ob_active_session_guard.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/partition_table/ob_partition_location.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_schema_status_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/wait_event/ob_inner_sql_wait_type.h"

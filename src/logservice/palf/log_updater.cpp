@@ -11,10 +11,6 @@
  */
 
 #include "log_updater.h"
-#include "lib/ob_errno.h"                     // ERRNO
-#include "lib/time/ob_time_utility.h"         // ObTimeUtility
-#include "share/ob_thread_define.h"           // TGDefIDs
-#include "share/ob_thread_mgr.h"              // TG_CREATE
 #include "palf_env_impl.h"                    // IPalfEnvImpl
 namespace oceanbase
 {

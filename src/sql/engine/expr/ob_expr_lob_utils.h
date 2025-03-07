@@ -401,6 +401,21 @@ public:
     return ret;
   }
 
+  OB_INLINE static int get_char_len(ObEvalCtx &ctx, ObString str, const ObDatumMeta &meta,
+                          const bool has_lob_header, int64_t &char_len)
+  {
+    int ret = OB_SUCCESS;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
+    if (OB_FAIL(str_iter.init(0, NULL, &temp_allocator))) {
+      COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
+    } else if (OB_FAIL(str_iter.get_char_len(char_len))) {
+      COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
+    }
+    return ret;
+  };
+
   static int get_char_len(ObEvalCtx &ctx, const ObDatum & datum, const ObDatumMeta &meta,
                           const bool has_lob_header, int64_t &char_len)
   {
@@ -408,15 +423,7 @@ public:
     if (datum.is_null()) {
       char_len = 0;
     } else {
-      ObString str = datum.get_string();
-      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-      ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
-      if (OB_FAIL(str_iter.init(0, NULL, &temp_allocator))) {
-        COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
-      } else if (OB_FAIL(str_iter.get_char_len(char_len))) {
-        COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
-      }
+      ret = get_char_len(ctx, datum.get_string(), meta, has_lob_header, char_len);
     }
     return ret;
   };
@@ -457,6 +464,52 @@ public:
       const sql::ObBasicSessionInfo *session = NULL,
       ObIAllocator *res_allocator = NULL,
       ObIAllocator *tmp_allocator = NULL);
+
+
+  template <typename Allocator>
+  static int pack_to_disk_inrow_lob(Allocator &allocator, const ObString data, ObDatum &res_datum)
+  {
+    int ret = OB_SUCCESS;
+    ObString result;
+    if (OB_FAIL(pack_to_disk_inrow_lob(allocator, data, result))) {
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(data));
+    } else {
+      res_datum.set_string(result.ptr(), result.length());
+    }
+    return ret;
+  }
+
+  template <typename Allocator>
+  static int pack_to_disk_inrow_lob(Allocator &allocator, const ObString data, const ObObjType type, ObObj &res_obj)
+  {
+    int ret = OB_SUCCESS;
+    ObString result;
+    if (OB_FAIL(pack_to_disk_inrow_lob(allocator, data, result))) {
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(data));
+    } else {
+      res_obj.set_lob_value(type, result.ptr(), result.length());
+      res_obj.set_has_lob_header();
+    }
+    return ret;
+  }
+
+  template <typename Allocator>
+  static int pack_to_disk_inrow_lob(Allocator &allocator, const ObString data, ObString &result)
+  {
+    int ret = OB_SUCCESS;
+    int64_t total_len = data.length() + sizeof(ObLobCommon);
+    char* buf = nullptr;
+    if (OB_ISNULL(buf = (char*)allocator.alloc(total_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(total_len));
+    } else {
+      // default is inrow
+      ObLobCommon *lob_data = new(buf)ObLobCommon();
+      MEMCPY(lob_data->buffer_, data.ptr(), data.length());
+      result.assign_ptr(buf, total_len);
+    }
+    return ret;
+  }
 
 };
 

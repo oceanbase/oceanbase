@@ -11,24 +11,13 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/oblog/ob_log.h"
-#include <string.h>
-#include <sys/uio.h>
+#include "ob_log.h"
 #include <dirent.h>
 #include <libgen.h>
-#include <sys/prctl.h>
-#include <linux/prctl.h>
 #include <regex.h>
 #include "lib/oblog/ob_warning_buffer.h"
-#include "lib/ob_errno.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/ob_define.h"
 #include "lib/list/ob_list.h"
-#include "lib/utility/utility.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/ob_rate_limiter.h"
-#include "lib/container/ob_vector.h"
-#include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "common/ob_smart_var.h"

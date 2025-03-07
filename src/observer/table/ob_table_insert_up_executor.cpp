@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_insert_up_executor.h"
 #include "ob_table_cg_service.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/das/ob_das_insert_op.h"
-#include "sql/engine/dml/ob_dml_service.h"
-#include "ob_htable_utils.h"
 using namespace oceanbase::sql;
 
 namespace oceanbase
@@ -115,7 +111,7 @@ int ObTableApiInsertUpExecutor::open()
     // init update das_ref
     const ObSQLSessionInfo &session = tb_ctx_.get_session_info();
     ObMemAttr mem_attr;
-    bool use_dist_das = tb_ctx_.has_global_index();
+    bool use_dist_das = tb_ctx_.need_dist_das();
     mem_attr.tenant_id_ = session.get_effective_tenant_id();
     mem_attr.label_ = "TableApiInsUpd";
     upd_rtctx_.das_ref_.set_expr_frame_info(insert_up_spec_.get_expr_frame_info());
@@ -303,6 +299,7 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
     upd_rtdef.found_rows_++;
     const ObChunkDatumStore::StoredRow *upd_new_row = insert_row_;
     const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
+    old_row_ = upd_old_row;
     if (OB_ISNULL(upd_old_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("upd_old_row is NULL", K(ret));
@@ -552,6 +549,36 @@ int ObTableApiInsertUpExecutor::close()
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;
+}
+
+int ObTableApiInsertUpExecutor::get_old_row(const ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t column_nums = conflict_checker_.checker_ctdef_.table_column_exprs_.count();
+  ObNewRow *tmp_row = nullptr;
+  char *row_buf = nullptr;
+  ObObj *cells = nullptr;
+  if (OB_ISNULL(old_row_) || OB_ISNULL(old_row_->cells()) || old_row_->cnt_ != column_nums) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old_row_ is null", K(ret), KPC(old_row_));
+  } else if (OB_ISNULL(row_buf = static_cast<char *>(tb_ctx_.get_allocator().alloc(sizeof(ObNewRow))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc ObNewRow buffer", K(ret));
+  } else if (OB_ISNULL(cells = static_cast<ObObj *>(tb_ctx_.get_allocator().alloc(sizeof(ObObj) * column_nums)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc cells buffer", K(ret), K(column_nums));
+  } else {
+    tmp_row = new (row_buf) ObNewRow(cells, column_nums);
+    for (int64_t i = 0; i < column_nums; ++i) {
+      old_row_->cells()[i].to_obj(cells[i], conflict_checker_.checker_ctdef_.table_column_exprs_[i]->obj_meta_);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    row = tmp_row;
+  }
+
+  return ret;
 }
 
 }  // namespace table

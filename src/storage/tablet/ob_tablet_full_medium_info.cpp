@@ -11,8 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_full_medium_info.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
 
 #define USING_LOG_PREFIX STORAGE
 

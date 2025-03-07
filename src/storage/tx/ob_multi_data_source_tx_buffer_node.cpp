@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_multi_data_source_tx_buffer_node.h"
-#include "lib/utility/utility.h"
+#include "ob_multi_data_source_tx_buffer_node.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "storage/tx/ob_multi_data_source.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

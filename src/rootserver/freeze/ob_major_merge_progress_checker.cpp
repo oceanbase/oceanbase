@@ -13,22 +13,7 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
-#include "rootserver/freeze/ob_zone_merge_manager.h"
-#include "rootserver/freeze/ob_major_freeze_util.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/tablet/ob_tablet_table_operator.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
-#include "share/ob_global_stat_proxy.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_tablet_meta_table_compaction_operator.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ob_freeze_info_proxy.h"
-#include "share/scn.h"
-#include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/compaction/ob_table_ckm_items.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 
 namespace oceanbase

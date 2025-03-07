@@ -11,16 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/object_storage/ob_object_storage_struct.h"
-#include "common/ob_record_header.h"
-#include "lib/restore/ob_storage_oss_base.h"
+#include "ob_object_storage_struct.h"
 #include "rootserver/ob_root_service.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_rpc_struct.h"
 #include "share/object_storage/ob_zone_storage_table_operation.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/object_storage/ob_device_config_mgr.h"
-#include "share/object_storage/ob_device_connectivity.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_format_util.h"
 #endif

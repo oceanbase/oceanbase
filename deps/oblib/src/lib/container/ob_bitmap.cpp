@@ -14,7 +14,6 @@
 #include "common/ob_target_specific.h"
 
 #if OB_USE_MULTITARGET_CODE
-#include <emmintrin.h>
 #include <immintrin.h>
 #endif
 

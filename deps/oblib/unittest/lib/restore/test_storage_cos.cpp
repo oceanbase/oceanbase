@@ -11,10 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_cos_base.h"
-#include "lib/allocator/page_arena.h"
 #include "test_storage_cos.h"
 
 using namespace oceanbase::common;

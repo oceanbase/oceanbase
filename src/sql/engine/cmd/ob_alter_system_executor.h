@@ -150,9 +150,9 @@ DEF_SIMPLE_EXECUTOR(ObResetConfig);
 
 DEF_SIMPLE_EXECUTOR(ObCancelClone);
 
-
 DEF_SIMPLE_EXECUTOR(ObTransferPartition);
 DEF_SIMPLE_EXECUTOR(ObServiceName);
+DEF_SIMPLE_EXECUTOR(ObRebuildTablet);
 class ObCancelTaskExecutor
 {
 public:
@@ -241,6 +241,8 @@ private:
       obrpc::ObServerList &svr_list);
   DISALLOW_COPY_AND_ASSIGN(ObAdminZoneExecutor);
 };
+
+DEF_SIMPLE_EXECUTOR(ObModuleData);
 
 #undef DEF_SIMPLE_EXECUTOR
 

@@ -16,10 +16,8 @@
 #define protected public
 
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_struct.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_reader.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 
 namespace oceanbase
 {

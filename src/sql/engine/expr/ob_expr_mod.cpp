@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include <math.h>
 #include "sql/engine/expr/ob_expr_mod.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 

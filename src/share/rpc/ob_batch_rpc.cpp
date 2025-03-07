@@ -12,8 +12,6 @@
 
 #include "ob_batch_rpc.h"
 #include "lib/thread_local/thread_buffer.h"
-#include "share/ob_cluster_version.h"
-#include "lib/utility/serialization.h"
 #include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase

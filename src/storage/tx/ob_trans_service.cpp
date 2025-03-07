@@ -10,32 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <functional>
-#include "ob_trans_service.h"
 
-#include "lib/profile/ob_perf_event.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/ob_name_id_def.h"
-#include "lib/ob_running_mode.h"
-#include "ob_trans_ctx.h"
-#include "ob_trans_factory.h"
+#include "ob_trans_service.h"
 #include "ob_trans_functor.h"
-#include "ob_trans_part_ctx.h"
-#include "ob_trans_result.h"
-#include "ob_tx_retain_ctx_mgr.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "storage/ob_i_store.h"
 #include "wrs/ob_i_weak_read_service.h"           // ObIWeakReadService
-#include "sql/session/ob_basic_session_info.h"
-#include "wrs/ob_weak_read_util.h"               // ObWeakReadUtil
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/memtable/ob_memtable.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "common/storage/ob_sequence.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase
 {
@@ -112,7 +92,7 @@ int ObTransService::init(const ObAddr &self,
                          ObIDupTableRpc *dup_table_rpc,
                          ObILocationAdapter *location_adapter,
                          ObIGtiSource *gti_source,
-                         ObITsMgr *ts_mgr,
+                         ObTsMgr *ts_mgr,
                          obrpc::ObSrvRpcProxy *rpc_proxy,
                          share::schema::ObMultiVersionSchemaService *schema_service,
                          share::ObAliveServerTracer *server_tracer)

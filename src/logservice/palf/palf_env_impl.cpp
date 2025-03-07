@@ -12,25 +12,7 @@
 
 #define USING_LOG_PREFIX PALF
 #include "palf_env_impl.h"
-#include <string.h>
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_errno.h"
-#include "share/ob_occam_thread_pool.h"
-#include "log_define.h"
-#include "palf_handle_impl_guard.h"             // IPalfHandleImplGuard
 #include "palf_handle.h"
-#include "log_loop_thread.h"
-#include "log_rpc.h"
-#include "log_block_pool_interface.h"
-#include "log_io_utils.h"
 #include "share/ob_local_device.h"                            // ObLocalDevice
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 #include "share/io/ob_io_manager.h"                           // ObIOManager

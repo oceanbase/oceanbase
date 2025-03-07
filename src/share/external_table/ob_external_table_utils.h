@@ -101,7 +101,8 @@ class ObExternalTableUtils {
                                        common::ObIArray<common::ObNewRange *> &ranges,
                                        common::ObIAllocator &range_allocator,
                                        common::ObIArray<common::ObNewRange *> &new_range,
-                                       bool is_file_on_disk);
+                                       bool is_file_on_disk,
+                                       ObExecContext &ctx);
 
   static int calc_assigned_files_to_sqcs(
     const common::ObIArray<ObExternalFileInfo> &files,

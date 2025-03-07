@@ -11,20 +11,14 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "gtest/gtest.h"
 #define private public
 #define protected public
 
 #include "lib/utility/ob_test_util.h"
 
 #include "storage/backup/test_backup.h"
-#include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#include "storage/backup/ob_backup_linked_item.h"
 #include "storage/backup/ob_backup_linked_block_writer.h"
-#include "storage/backup/ob_backup_linked_block_reader.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/backup/ob_backup_file_writer_ctx.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 
 using namespace oceanbase::share;

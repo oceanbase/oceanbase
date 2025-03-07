@@ -13,14 +13,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/ob_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/expr/ob_expr_version.h"
-#include "common/ob_smart_call.h"
 namespace oceanbase
 {
 using namespace common;

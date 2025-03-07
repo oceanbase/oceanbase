@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "gtest/gtest.h"
 #include "lib/coro/testing.h"
 

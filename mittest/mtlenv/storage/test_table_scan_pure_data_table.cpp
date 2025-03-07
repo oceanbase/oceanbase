@@ -19,8 +19,6 @@
 #define private public
 #define protected public
 #include "storage/test_dml_common.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "storage/access/ob_table_scan_iterator.h"
 #include "storage/test_tablet_helper.h"
 
 namespace oceanbase

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "storage/backup/ob_backup_fuse_tablet_dag.h"
 #include "storage/backup/ob_backup_fuse_tablet_task.h"
-#include "share/backup/ob_backup_path.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/backup/ob_backup_operator.h"
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"

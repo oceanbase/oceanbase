@@ -14,9 +14,6 @@
 
 #include "ob_string_prefix_decoder.h"
 
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
 #include "ob_raw_decoder.h"
 
 namespace oceanbase

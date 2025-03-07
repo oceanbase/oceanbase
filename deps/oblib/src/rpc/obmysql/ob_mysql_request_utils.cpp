@@ -11,13 +11,9 @@
  */
 
 #include "ob_mysql_request_utils.h"
-#include "lib/allocator/ob_malloc.h"
 #include "lib/compress/zlib/ob_zlib_compressor.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_packet_record.h"
 #include "rpc/obmysql/obsm_struct.h"
 
 using namespace oceanbase::common;

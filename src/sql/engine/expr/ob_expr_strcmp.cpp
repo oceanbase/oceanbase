@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_strcmp.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/object/ob_obj_cast.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

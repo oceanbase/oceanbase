@@ -205,27 +205,6 @@ public:
   static constexpr int64_t DELAY_IN_PRI_QUEUE_THREASHOLD = 1L * 1000L * 1000L; // 1s
 };
 
-#define NEW_AND_SET_TIMER_SERVICE(id)                                                             \
-do {                                                                                              \
-  uint64_t tid = (uint64_t) id;                                                                   \
-  int tmp_ret = OB_SUCCESS;                                                                       \
-  ObTimerService *timer_service = MTL(ObTimerService *);                                          \
-  if (nullptr == timer_service) {                                                                 \
-    ObTenantBase *tenant_base = MTL_CTX();                                                        \
-    if (nullptr == tenant_base) {                                                                 \
-      tmp_ret = OB_ERR_NULL_VALUE;                                                                \
-      LOG_WARN("tenant_base is NULL", K(tid), K(tmp_ret));                                        \
-    } else if (nullptr == (timer_service = OB_NEW(ObTimerService, "timer_service", tid))) {       \
-      tmp_ret = OB_ALLOCATE_MEMORY_FAILED;                                                        \
-      LOG_WARN("failed to new timer service", K(tid), K(tmp_ret));                                \
-    } else if (OB_SUCCESS != (tmp_ret = timer_service->start())) {                                \
-      LOG_WARN("failed to start timer service", K(tid), K(tmp_ret));                              \
-    } else {                                                                                      \
-      tenant_base->set(timer_service);                                                            \
-    }                                                                                             \
-  }                                                                                               \
-} while (0)
-
 } /* common */
 } /* oceanbase */
 

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include<stdint.h>
 #include "lib/hash/fnv_hash.h"
 #include "gtest/gtest.h"
 

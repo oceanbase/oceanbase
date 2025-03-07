@@ -11,23 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_del_upd_log_plan.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
 #include "ob_log_insert.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "sql/ob_phy_table_location.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_exchange.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/optimizer/ob_log_sort.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_insert_log_plan.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -294,45 +279,49 @@ int ObLogInsert::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
 int ObLogInsert::inner_est_cost(double child_card, double &op_cost)
 {
   int ret = OB_SUCCESS;
-  ObDelUpCostInfo cost_info(0,0,0);
-  cost_info.affect_rows_ = child_card;
-  cost_info.index_count_ = get_index_dml_infos().count();
-  if (0 == cost_info.index_count_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected index count", K(ret), K(get_index_dml_infos()));
-  } else {
-  const IndexDMLInfo *insert_dml_info = get_index_dml_infos().at(0);
-  if (OB_ISNULL(insert_dml_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (get_insert_up()) {
-    if (get_insert_up_index_dml_infos().empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("insert_up_index_dml_infos is empty", K(ret));
-    } else {
-      const IndexDMLInfo *upd_pri_dml_info = get_insert_up_index_dml_infos().at(0);
-      if (OB_ISNULL(upd_pri_dml_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ins_pri_dml_info or upd_pri_dml_info is null", K(ret));
-      } else {
-        cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count()
-                                      + upd_pri_dml_info->ck_cst_exprs_.count();
-      }
-    }
-  } else {
-    cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count();
-  }
-  }
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(get_insert_up() && get_insert_up_index_dml_infos().empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert_up_index_dml_infos is empty", K(ret));
+  } else if (OB_FAIL(inner_est_cost(get_plan()->get_optimizer_context(),
+                                    get_index_dml_infos(),
+                                    get_insert_up_index_dml_infos(),
+                                    child_card,
+                                    op_cost))) {
+    LOG_WARN("failed to get insert cost", K(ret));
+  }
+  return ret;
+}
+
+int ObLogInsert::inner_est_cost(const ObOptimizerContext &opt_ctx,
+                                const ObIArray<IndexDMLInfo*> &index_infos,
+                                const ObIArray<IndexDMLInfo*> &insert_up_index_infos,
+                                const double child_card,
+                                double &op_cost)
+{
+  int ret = OB_SUCCESS;
+  ObDelUpCostInfo cost_info(0,0,0);
+  cost_info.affect_rows_ = child_card;
+  cost_info.index_count_ = index_infos.count();
+  const IndexDMLInfo *insert_dml_info = NULL;
+  const IndexDMLInfo *upd_pri_dml_info = NULL;
+  if (OB_UNLIKELY(0 == cost_info.index_count_) || OB_ISNULL(insert_dml_info = index_infos.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(index_infos));
+  } else if (insert_up_index_infos.empty()) {
+    cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count();
+  } else if (OB_ISNULL(upd_pri_dml_info = insert_up_index_infos.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ins_pri_dml_info or upd_pri_dml_info is null", K(ret));
   } else {
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    if (OB_FAIL(ObOptEstCost::cost_insert(cost_info, 
-                                          op_cost, 
-                                          opt_ctx))) {
-      LOG_WARN("failed to get insert cost", K(ret));
-    }
+    cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count()
+                                  + upd_pri_dml_info->ck_cst_exprs_.count();
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObOptEstCost::cost_insert(cost_info, op_cost, opt_ctx))) {
+    LOG_WARN("failed to get insert cost", K(ret));
   }
   return ret;
 }
@@ -467,7 +456,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(index_info->ref_table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
-      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_table_without_pk())) {
         // do nothing.
       } else {
         // When lookup_part_id_expr is a virtual generated column,
@@ -512,7 +501,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(dml_info->ref_table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
-      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_table_without_pk())) {
         // do nothing.
       } else {
         // When lookup_part_id_expr is a virtual generated column,

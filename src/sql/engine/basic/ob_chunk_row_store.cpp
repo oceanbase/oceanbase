@@ -16,9 +16,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/basic/ob_chunk_row_store.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/config/ob_server_config.h"
 
 
 namespace oceanbase

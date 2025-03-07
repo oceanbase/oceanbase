@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_create_package_resolver.h"
 #include "ob_create_package_stmt.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
-#include "lib/charset/ob_charset.h"
 
 namespace oceanbase
 {
@@ -194,6 +190,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
                                                     create_package_arg.dependency_infos_,
                                                     ObObjectType::PACKAGE,
                                                     0, dep_attr, dep_attr));
+            OZ (ob_add_ddl_dependency(package_ast.get_dependency_table(), create_package_arg));
           }
           if (OB_SUCC(ret)) {
             ObErrorInfo &error_info = create_package_arg.error_info_;
@@ -707,6 +704,7 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
                                                 stmt->get_create_package_arg().dependency_infos_,
                                                 ObObjectType::PACKAGE_BODY,
                                                 0, dep_attr, dep_attr));
+            OZ (ob_add_ddl_dependency(package_body_ast.get_dependency_table(), stmt->get_create_package_arg()));
           }
         }
       } // end of WIHT_CONTEXT

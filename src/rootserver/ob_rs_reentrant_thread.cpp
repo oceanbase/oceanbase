@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_rs_reentrant_thread.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

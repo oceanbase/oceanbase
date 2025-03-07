@@ -46,6 +46,7 @@ namespace common
 {
 
 struct ObCompareCtx;
+class ObSqlCollectionInfo;
 enum ObCmpNullPos
 {
   NULL_LAST = 1,
@@ -448,7 +449,7 @@ public:
     cs_level_ = (cs_level_ & 0xF) | ((cs_type & 0xF00) >> 4);
   }
   OB_INLINE ObCollationType get_collation_type() {
-    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY:
+    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY:
               static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4));
   }
 
@@ -457,8 +458,9 @@ public:
     return static_cast<ObCollationLevel>(cs_level_ & 0x0F);
   }
   OB_INLINE ObCollationType get_collation_type() const {
-    // ObUserDefinedSQLType reused cs_type as part of sub schema id, therefore always return CS_TYPE_BINARY
-    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY :
+    // ObUserDefinedSQLType reused cs_type as part of sub schema id,
+    // ObDecimalIntType reuse cs_level as precision, therefore always return CS_TYPE_BINARY.
+    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
                 static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
   }
   OB_INLINE ObCharsetType get_charset_type() const {
@@ -1259,6 +1261,49 @@ public:
   uint64_t seq_id_;
 };
 
+class ObCenterId final
+{
+public:
+  ObCenterId();
+  ObCenterId(const uint64_t tablet_id, const uint64_t center_id);
+  ~ObCenterId() = default;
+
+  void reset();
+  bool is_valid() const;
+
+  bool operator ==(const ObCenterId &other) const;
+  bool operator !=(const ObCenterId &other) const;
+  bool operator <(const ObCenterId &other) const;
+  bool operator >(const ObCenterId &other) const;
+
+  TO_STRING_KV(K_(tablet_id), K_(center_id));
+public:
+  uint64_t tablet_id_;
+  uint64_t center_id_;
+};
+
+class ObPqCenterId final
+{
+public:
+  ObPqCenterId();
+  ObPqCenterId(const uint64_t tablet_id, const uint32_t m_id, const uint32_t center_id);
+  ~ObPqCenterId() = default;
+
+  void reset();
+  bool is_valid() const;
+
+  bool operator ==(const ObPqCenterId &other) const;
+  bool operator !=(const ObPqCenterId &other) const;
+  bool operator <(const ObPqCenterId &other) const;
+  bool operator >(const ObPqCenterId &other) const;
+
+  TO_STRING_KV(K_(tablet_id), K_(center_id), K_(m_id));
+public:
+  uint64_t tablet_id_;
+  uint32_t m_id_;
+  uint32_t center_id_;
+};
+
 struct ObObjPrintParams
 {
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):
@@ -1267,7 +1312,8 @@ struct ObObjPrintParams
     accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    coll_meta_(NULL)
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
@@ -1275,7 +1321,8 @@ struct ObObjPrintParams
     accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    coll_meta_(NULL)
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
@@ -1283,7 +1330,8 @@ struct ObObjPrintParams
     accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    coll_meta_(NULL)
   {}
   TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
@@ -1304,7 +1352,8 @@ struct ObObjPrintParams
       uint32_t print_null_string_value_:1;
       uint32_t refine_range_max_value_:1;
       uint32_t character_hex_safe_represent_:1;
-      uint32_t reserved_:20;
+      uint32_t binary_string_print_base64_:1;
+      uint32_t reserved_:19;
     };
   };
 
@@ -1318,6 +1367,7 @@ struct ObObjPrintParams
   */
   sql::ObExecContext *exec_ctx_;
   ObObjType ob_obj_type_;
+  common::ObSqlCollectionInfo *coll_meta_;
 };
 
 // sizeof(ObObjValue)=8

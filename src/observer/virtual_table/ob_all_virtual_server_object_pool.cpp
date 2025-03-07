@@ -12,8 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_server_object_pool.h"
 #include <observer/ob_server_utils.h>
-#include <lib/objectpool/ob_server_object_pool.h>
-#include <storage/tx/ob_trans_part_ctx.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::observer;

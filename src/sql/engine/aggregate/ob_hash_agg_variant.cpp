@@ -27,7 +27,7 @@ namespace sql
    int ret = OB_SUCCESS;
    const int64_t inline_size = 0; // FIXME: change to 64
    int err_sim = OB_E(EventTable::EN_DISK_ERROR) 0;
-   if (item_size <= inline_size && 0 == err_sim) {
+   if (item_size <= inline_size && 0 != err_sim) {
      inline_ht *hash_table = nullptr;
      if (OB_ISNULL(hash_table = static_cast<inline_ht *>(alloc.alloc(sizeof(inline_ht))))) {
        ret = OB_ALLOCATE_MEMORY_FAILED;

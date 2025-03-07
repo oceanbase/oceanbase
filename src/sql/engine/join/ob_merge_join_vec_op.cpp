@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/ob_merge_join_vec_op.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
 using namespace common;
@@ -664,11 +663,23 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::eval_all_exprs()
 int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_valid_batch() {
   int ret = OB_SUCCESS;
   do {
-    if (OB_FAIL(get_next_batch_from_source())) {
+    if (OB_FAIL(get_next_batch_from_source(max_batch_size_))) {
       LOG_WARN("get next batch from source failed", K(ret));
       break;
+    } else {
+      store_brs_.size_ = cur_brs_->size_;
+      store_brs_.all_rows_active_ = false;
+      store_brs_.end_ = false;
+      store_brs_.skip_->set_all(cur_brs_->size_);
+      cur_batch_idx_ = 0;
+      while (cur_batch_idx_ < cur_brs_->size_ && cur_brs_->skip_->at(cur_batch_idx_)) {
+        ++cur_batch_idx_;
+      }
     }
   } while (!reach_end_ && cur_batch_idx_ == cur_brs_->size_);
+  if (OB_NOT_NULL(col_equal_group_boundary_)) {
+    MEMSET(col_equal_group_boundary_, 0, sizeof(int64_t) * equal_key_exprs_arry_ptr_->count());
+  }
   if (OB_SUCC(ret) && cur_batch_idx_ > cur_brs_->size_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("batch idx greater than batch size", K(ret), K(cur_batch_idx_), K(cur_brs_));
@@ -734,7 +745,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::find_small_group(
   return ret;
 }
 
-int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source()
+int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source(int64_t batch_size)
 {
   int ret = OB_SUCCESS;
   const ObBatchRows *brs = nullptr;
@@ -742,7 +753,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source()
   } else if (OB_NOT_NULL(cur_brs_) && cur_brs_->end_) {
     reach_end_ = true;
   } else if (OB_FALSE_IT(mj_op_.clear_evaluated_flag())) {
-  } else if (OB_FAIL(source_->get_next_batch(max_batch_size_, brs))) {
+  } else if (OB_FAIL(source_->get_next_batch(batch_size, brs))) {
     if (ret == OB_ITER_END) {
       reach_end_ = true;
       ret = OB_SUCCESS;
@@ -750,22 +761,11 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source()
       LOG_WARN("get next batch from source failed", K(ret));
     }
   } else if (OB_FALSE_IT(cur_brs_ = const_cast<ObBatchRows *>(brs))) {
-  } else if (OB_FALSE_IT(store_brs_.size_ = cur_brs_->size_)) {
-  } else if (OB_FALSE_IT(store_brs_.all_rows_active_ = false)) {
-  } else if (OB_FALSE_IT(store_brs_.end_ = false)) {
-  } else if (OB_FALSE_IT(store_brs_.skip_->set_all(cur_brs_->size_))) {
   } else if (cur_brs_->end_) {
     reach_end_ = true;
   } else if (OB_FAIL(eval_all_exprs())) {
     LOG_WARN("eval all exprs failed", K(ret), K(*all_exprs_));
   } else {
-    cur_batch_idx_ = 0;
-    while (cur_batch_idx_ < cur_brs_->size_ && cur_brs_->skip_->at(cur_batch_idx_)) {
-      ++cur_batch_idx_;
-    }
-    if (OB_NOT_NULL(col_equal_group_boundary_)) {
-      MEMSET(col_equal_group_boundary_, 0, sizeof(int64_t) * equal_key_exprs_arry_ptr_->count());
-    }
     saved_ = false;
     restored_ = true;
   }
@@ -1493,53 +1493,36 @@ int ObMergeJoinVecOp::output_one_side_until_end(
     ObMergeJoinCursor &cursor, ObMergeJoinCursor &blank_cursor)
 {
   int ret = OB_SUCCESS;
-  left_match_cursor_ = &cursor;
-  right_match_cursor_ = &blank_cursor;
-  if (OB_FAIL(cursor.restore_cur_batch())) {
-    LOG_WARN("cursor restore current batch failed", K(ret));
-  } else if (OB_FAIL(blank_cursor.restore_cur_batch())) {
-    LOG_WARN("blank_cursor restore current batch failed", K(ret));
-  } else if (cursor.cur_batch_idx_ == cursor.cur_brs_->size_ &&
-             output_cache_.count() == 0 &&
-             OB_FAIL(cursor.get_next_valid_batch())) {
-    LOG_WARN("get next batch from source failed", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    while (OB_SUCC(ret) && cursor.cur_batch_idx_ < cursor.cur_brs_->size_) {
-      if (!cursor.cur_brs_->skip_->at(cursor.cur_batch_idx_) &&
-          OB_FAIL(output_cache_.push_back(RowPair(cursor.next_stored_row_id_++, -1)))) {
-        LOG_WARN("push back group row to output_cache_ failed", K(ret));
+  brs_.size_ = 0;
+  if (cursor.cur_batch_idx_ < cursor.cur_brs_->size_) {
+    // Process the unconsumed rows in the current batch.
+    int64_t output_row_cnt = std::min(max_output_cnt_, cursor.cur_brs_->size_ - cursor.cur_batch_idx_);
+    if (OB_FAIL(brs_.copy(cursor.cur_brs_))) {
+      LOG_WARN("copy ObBatchRows failed", K(ret));
+    } else {
+      for (int64_t i = cursor.cur_batch_idx_ + output_row_cnt; i < brs_.size_; ++i) {
+        brs_.set_skip(i);
       }
-      cursor.cur_batch_idx_++;
-    }
-    if (OB_SUCC(ret)) {
-      int64_t stored_rows_cnt = 0;
-      cursor.store_brs_.copy(cursor.cur_brs_);
-      if (OB_FAIL(cursor.store_rows_of_cur_batch(stored_rows_cnt))) {
-        LOG_WARN("right_cursor_ store rows of cur batch failed", K(ret));
-      } else {
-        cursor.cur_brs_->skip_->set_all(cursor.cur_brs_->size_);
-        cursor.row_store_finish_add();
-        blank_cursor.row_store_finish_add();
+      for (int64_t i = 0; i <  output_row_cnt; ++i) {
+        cursor.cur_brs_->set_skip(i + cursor.cur_batch_idx_);
       }
     }
+    cursor.cur_batch_idx_ += output_row_cnt;
+  } else {
+    if (OB_FAIL(cursor.get_next_batch_from_source(max_output_cnt_))) {
+      LOG_WARN("get next batch from source failed", K(ret));
+    } else if (OB_FAIL(brs_.copy(cursor.cur_brs_))) {
+      LOG_WARN("copy ObBatchRows failed", K(ret));
+    } else {
+      cursor.cur_batch_idx_ = cursor.cur_brs_->size_;
+    }
   }
-  JoinState join_state = join_state_;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(cursor.save_cur_batch())) {
-    LOG_WARN("cursor save cur batch failed", K(ret));
-  } else if (OB_FAIL(blank_cursor.save_cur_batch())) {
-    LOG_WARN("blank_cursor save cur batch failed", K(ret));
-  } else if (OB_FAIL(output_cached_rows())) {
-    LOG_WARN("output cached rows failed", K(ret));
-  } else if (output_cache_.count() == 0) {
-    cursor.clean_row_store();
-    blank_cursor.clean_row_store();
-    if (!cursor.has_next_row()) {
-      join_state = JOIN_END;
-    }
+  } else if (brs_.size_ > 0 && OB_FAIL(blank_row_batch(*blank_cursor.all_exprs_, brs_.size_))) {
+    LOG_WARN("blank row batch failed!", K(ret), K(brs_.size_));
+  } else if (!cursor.has_next_row()) {
+    join_state_ = JOIN_END;
   }
-  join_state_ = join_state;
   return ret;
 }
 

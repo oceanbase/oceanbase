@@ -10,48 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "io/easy_connection.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "logservice/leader_coordinator/failure_event.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_table_access_helper.h"
-#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX RS
 
-#include "ob_system_admin_util.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/config/ob_server_config.h"
-#include "share/config/ob_config_manager.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/ob_share_util.h" // ObShareUtil
-#include "storage/ob_file_system_router.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/omt/ob_multi_tenant.h"
+#include "ob_system_admin_util.h"
 #include "observer/ob_srv_network_frame.h"
-#include "ob_server_manager.h"
-#include "ob_ddl_operator.h"
-#include "ob_zone_manager.h"
-#include "ob_ddl_service.h"
-#include "ob_unit_manager.h"
-#include "ob_root_inspection.h"
 #include "ob_root_service.h"
-#include "storage/ob_file_system_router.h"
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
-#include "observer/ob_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -805,6 +772,8 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
       LOG_WARN("empty config name", "item", *item, KR(ret));
     } else {
       ObConfigItem *ci = nullptr;
+      ObString config_name(item->name_.size(), item->name_.ptr());
+      bool is_default_table_organization_config = (0 == config_name.case_compare(DEFAULT_TABLE_ORAGNIZATION));
       if (OB_SYS_TENANT_ID != item->exec_tenant_id_ || item->tenant_name_.size() > 0) {
         // tenants(user or sys tenants) modify tenant level configuration
         item->want_to_set_tenant_config_ = true;
@@ -861,9 +830,16 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
                   }
                 }
                 if (OB_SUCC(ret) && (nullptr != condition_func)) {
+                  const ObTenantSchema *tenant_schema = nullptr;
                   for (const uint64_t tenant_id: tenant_ids) {
-                    if (condition_func(tenant_id) &&
-                        OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
+                    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+                      LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+                    } else if (OB_ISNULL(tenant_schema)) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("tenant_schema is null", KR(ret), K(tenant_id));
+                    } else if (condition_func(tenant_id) &&
+                              (is_default_table_organization_config ? !tenant_schema->is_oracle_tenant() : true) &&
+                              OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
                       LOG_WARN("add tenant_id failed", K(tenant_id), KR(ret));
                       break;
                     }
@@ -879,6 +855,7 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
               }
             } else {
               uint64_t tenant_id = OB_INVALID_TENANT_ID;
+              const ObTenantSchema *tenant_schema = nullptr;
               if (OB_SYS_TENANT_ID != item->exec_tenant_id_) {
                 tenant_id = item->exec_tenant_id_;
               } else {
@@ -889,7 +866,15 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
                   LOG_WARN("get_tenant_id failed", KR(ret), "tenant", item->tenant_name_);
                 }
               }
-              if (OB_SUCC(ret) && OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+                LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+              } else if (OB_ISNULL(tenant_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("tenant_schema is null", KR(ret), K(tenant_id));
+              } else if ((is_default_table_organization_config ?
+                          !tenant_schema->is_oracle_tenant() && OB_SYS_TENANT_ID != tenant_id
+                          : true) && OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
                 LOG_WARN("add tenant_id failed", K(tenant_id), KR(ret));
               }
             } // else
@@ -928,7 +913,9 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
           } else if (OB_NOT_NULL(tenant_ci_ptr)) {
             ci = *tenant_ci_ptr;
             item->want_to_set_tenant_config_ = true;
-            if (OB_FAIL(item->tenant_ids_.push_back(OB_SYS_TENANT_ID))) {
+            if (is_default_table_organization_config) {
+              // sys tenant try to modify default_table_organization
+            } else if (OB_FAIL(item->tenant_ids_.push_back(OB_SYS_TENANT_ID))) {
               LOG_WARN("add tenant_id failed", KR(ret));
             }
           } else {
@@ -1353,76 +1340,6 @@ int ObAdminMigrateUnit::execute(const ObAdminMigrateUnitArg &arg)
       ctx_.root_balancer_->wakeup();
     }
   }
-  return ret;
-}
-
-int ObAdminAlterLSReplica::execute(const obrpc::ObAdminAlterLSReplicaArg &arg)
-{
-  FLOG_INFO("execute alter ls replica request", K(arg));
-  int ret = OB_SUCCESS;
-  int64_t start_time = ObTimeUtility::current_time();
-  if (OB_UNLIKELY(!ctx_.is_inited())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(ctx_.root_balancer_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root_balancer_ is null", KR(ret), K(arg), KP(ctx_.root_balancer_));
-  } else if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(arg));
-  } else {
-    switch (arg.get_alter_task_type().get_type()) {
-      case ObAlterLSReplicaTaskType::AddLSReplicaTask: {
-        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
-                        .do_add_ls_replica_task(arg))) {
-          LOG_WARN("add ls replica task failed", KR(ret), K(arg));
-        }
-        break;
-      }
-      case ObAlterLSReplicaTaskType::RemoveLSReplicaTask: {
-        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
-                        .do_remove_ls_replica_task(arg))) {
-          LOG_WARN("remove ls replica task failed", KR(ret), K(arg));
-        }
-        break;
-      }
-      case ObAlterLSReplicaTaskType::MigrateLSReplicaTask: {
-        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
-                        .do_migrate_ls_replica_task(arg))) {
-          LOG_WARN("migrate ls replica task failed", KR(ret), K(arg));
-        }
-        break;
-      }
-      case ObAlterLSReplicaTaskType::ModifyLSReplicaTypeTask: {
-        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
-                        .do_modify_ls_replica_type_task(arg))) {
-          LOG_WARN("modify ls replica task failed", KR(ret), K(arg));
-        }
-        break;
-      }
-      case ObAlterLSReplicaTaskType::ModifyLSPaxosReplicaNumTask: {
-        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
-                        .do_modify_ls_paxos_replica_num_task(arg))) {
-          LOG_WARN("modify ls paxos_replica_num task failed", KR(ret), K(arg));
-        }
-        break;
-      }
-      case ObAlterLSReplicaTaskType::CancelLSReplicaTask: {
-        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
-                        .do_cancel_ls_replica_task(arg))) {
-          LOG_WARN("cancel ls replica task failed", KR(ret), K(arg));
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task type unexpected", KR(ret), K(arg));
-        break;
-      }
-    }
-  }
-  int64_t cost_time = ObTimeUtility::current_time() - start_time;
-  FLOG_INFO("execute alter ls replica request over", KR(ret), K(arg), K(cost_time));
   return ret;
 }
 

@@ -150,7 +150,8 @@ private:
       ObLS *ls,
       const obrpc::ObCopyTabletInfo &tablet_info,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool is_only_replace_major);
   int hold_local_tablet_(
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
 private:
@@ -235,7 +236,7 @@ struct ObStorageHACopySSTableParam final
   int assign(const ObStorageHACopySSTableParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
-      K_(src_info), K_(local_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
+      K_(src_info), K_(src_ls_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
       K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
@@ -244,7 +245,7 @@ struct ObStorageHACopySSTableParam final
   common::ObArray<ObITable::TableKey> copy_table_key_array_;
 
   ObStorageHASrcInfo src_info_;
-  int64_t local_rebuild_seq_;
+  int64_t src_ls_rebuild_seq_;
   bool need_check_seq_;
   bool is_leader_restore_;
   ObTabletRestoreAction::ACTION restore_action_;
@@ -309,7 +310,7 @@ public:
 
   struct BatchBuildTabletTablesExtraParam
   {
-    BatchBuildTabletTablesExtraParam() : need_replace_remote_sstable_(false), param_array_() {}
+    BatchBuildTabletTablesExtraParam() : need_replace_remote_sstable_(false), param_array_(), is_only_replace_major_(false) {}
 
     int get_extra_table_param(
         const ObITable::TableKey &table_key,
@@ -320,8 +321,9 @@ public:
     void reset();
     bool need_replace_remote_sstable_;
     common::ObArray<BuildTabletTableExtraParam> param_array_;
+    bool is_only_replace_major_;
 
-    TO_STRING_KV(K_(need_replace_remote_sstable), K_(param_array));
+    TO_STRING_KV(K_(need_replace_remote_sstable), K_(param_array), K_(is_only_replace_major));
   };
 
   struct BatchBuildMinorSSTablesParam final
@@ -353,7 +355,8 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool is_only_replace_major);
   static int build_tablet_with_major_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -397,12 +400,12 @@ private:
   static int inner_update_tablet_table_store_with_major_(
       const int64_t multi_version_start,
       const ObTableHandleV2 &table_handle,
-      const bool need_replace_remote_sstable,
+      const BatchBuildTabletTablesExtraParam &batch_extra_param,
       ObLS *ls,
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
       const int64_t transfer_seq,
-      const BuildTabletTableExtraParam &extra_param);
+      const BuildTabletTableExtraParam &table_extra_param);
   static int inner_update_tablet_table_store_with_minor_(
       const BatchBuildMinorSSTablesParam &param,
       ObTablet *tablet,

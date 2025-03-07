@@ -16,7 +16,6 @@
 #include <stdint.h>
 #include "ob_block_sstable_struct.h"
 #include "ob_macro_block_common_header.h"
-#include "index_block/ob_index_block_row_struct.h"
 #include "index_block/ob_agg_row_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
@@ -43,7 +42,12 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+
 class ObMicroBlockTransformDesc;
+class ObIndexBlockRowHeader;
+class ObIndexBlockRowMinorMetaInfo;
+class ObDataMacroBlockMeta;
+
 class ObSSTablePrinter
 {
 public:

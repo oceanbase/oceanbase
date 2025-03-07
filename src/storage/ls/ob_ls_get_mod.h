@@ -43,7 +43,8 @@ enum class ObLSGetMod : int
   MDS_TABLE_MOD = 20,
   COMPACT_MODE = 21,
   SS_PREWARM_MOD = 22,
-  TOTAL_MAX_MOD = 23,
+  SHARED_META_SERVICE = 23,
+  TOTAL_MAX_MOD = 24,
 };
 
 }

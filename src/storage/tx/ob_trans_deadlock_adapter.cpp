@@ -10,23 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_trans_deadlock_adapter.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "share/ob_ls_id.h"
-#include "share/rc/ob_tenant_base.h"
-#include "sql/ob_sql_define.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tx_service.h"
+#include "ob_trans_deadlock_adapter.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "sql/engine/ob_exec_context.h"
-#include "storage/ls/ob_ls_get_mod.h"
 
 namespace oceanbase
 {

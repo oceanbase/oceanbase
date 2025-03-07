@@ -120,7 +120,7 @@ class ObSubSchemaReverseKey
             && other.str_signature_ == this->str_signature_);
   }
 
-  TO_STRING_KV(K_(type), K_(signature));
+  TO_STRING_KV(K_(type), K_(signature), K_(str_signature));
   ObSubSchemaType type_;
   uint64_t signature_;
   ObString str_signature_;

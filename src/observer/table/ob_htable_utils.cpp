@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_utils.h"
-#include <endian.h>  // be64toh
-#include "ob_htable_filters.h"
-#include "ob_htable_filter_operator.h"
-#include "share/table/ob_table.h"
+#include "src/observer/table/ob_table_filter.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share::schema;
@@ -81,17 +78,35 @@ void ObHTableCellEntity::reset(common::ObArenaAllocator &allocator)
 
 ObString ObHTableCellEntity::get_qualifier() const
 {
-  return ob_row_->get_cell(ObHTableConstants::COL_IDX_Q).get_varchar();
+  ObString qualifier_str;
+  if (OB_ISNULL(ob_row_)) {
+    LOG_INFO("get_qualifier but ob_row is null", K(ob_row_));
+  } else {
+    qualifier_str = ob_row_->get_cell(ObHTableConstants::COL_IDX_Q).get_varchar();
+  }
+  return qualifier_str;
 }
 
 int64_t ObHTableCellEntity::get_timestamp() const
 {
-  return ob_row_->get_cell(ObHTableConstants::COL_IDX_T).get_int();
+  int64_t timestamp = 0;
+  if (OB_ISNULL(ob_row_)) {
+    LOG_INFO("get_timestamp but ob_row is null", K(ob_row_));
+  } else {
+    timestamp = ob_row_->get_cell(ObHTableConstants::COL_IDX_T).get_int();
+  }
+  return timestamp;
 }
 
 ObString ObHTableCellEntity::get_value() const
 {
-  return ob_row_->get_cell(ObHTableConstants::COL_IDX_V).get_varchar();
+  ObString value_str;
+  if (OB_ISNULL(ob_row_)) {
+    LOG_INFO("get_value but ob_row is null", K(ob_row_));
+  } else {
+    value_str = ob_row_->get_cell(ObHTableConstants::COL_IDX_V).get_varchar();
+  }
+  return value_str;
 }
 
 ObString ObHTableCellEntity::get_family() const
@@ -99,7 +114,26 @@ ObString ObHTableCellEntity::get_family() const
   return family_;
 }
 
-void ObHTableCellEntity::set_family(const ObString family) {
+int ObHTableCellEntity::get_ttl(int64_t &ttl) const
+{
+  int ret = OB_SUCCESS;
+  ttl = INT64_MAX;
+  if (OB_ISNULL(ob_row_)) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("get_ttl but ob_row is null", K(ob_row_));
+  } else if (ob_row_->count_ <= ObHTableConstants::COL_IDX_TTL) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("failed to get property TTL", K(ret), K(ob_row_->count_));
+  } else if (ob_row_->get_cell(ObHTableConstants::COL_IDX_TTL).is_null()) {
+    ttl = INT64_MAX;
+  } else {
+    ttl = ob_row_->get_cell(ObHTableConstants::COL_IDX_TTL).get_int();
+  }
+  return ret;
+}
+
+void ObHTableCellEntity::set_family(const ObString family)
+{
   family_ = family;
 }
 ////////////////////////////////////////////////////////////////
@@ -109,7 +143,7 @@ ObString ObHTableCellEntity2::get_rowkey() const
   int ret = OB_SUCCESS;
   ObObj val;
   if (OB_FAIL(entity_->get_property(ObHTableConstants::ROWKEY_CNAME_STR, val))) {
-    LOG_WARN("failed to get property K", K(ret));
+    LOG_WARN("failed to get property K", K(ret), K(entity_));
   } else {
     rowkey_str = val.get_varchar();
   }
@@ -122,7 +156,7 @@ ObString ObHTableCellEntity2::get_qualifier() const
   int ret = OB_SUCCESS;
   ObObj val;
   if (OB_FAIL(entity_->get_property(ObHTableConstants::CQ_CNAME_STR, val))) {
-    LOG_WARN("failed to get property K", K(ret));
+    LOG_WARN("failed to get property Q", K(ret), K(entity_));
   } else {
     rowkey_str = val.get_varchar();
   }
@@ -135,7 +169,7 @@ int64_t ObHTableCellEntity2::get_timestamp() const
   int ret = OB_SUCCESS;
   ObObj val;
   if (OB_FAIL(entity_->get_property(ObHTableConstants::VERSION_CNAME_STR, val))) {
-    LOG_WARN("failed to get property K", K(ret));
+    LOG_WARN("failed to get property T", K(ret), K(entity_));
   } else {
     ts = val.get_int();
   }
@@ -155,12 +189,30 @@ ObString ObHTableCellEntity2::get_value() const
   return rowkey_str;
 }
 
+int ObHTableCellEntity2::get_ttl(int64_t &ttl) const
+{
+  int ret = OB_SUCCESS;
+  ttl = INT64_MAX;
+  ObObj val;
+  if (OB_ISNULL(entity_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity is null", K(ret));
+  } else if (OB_FAIL(entity_->get_property(ObHTableConstants::TTL_CNAME_STR, val))) {
+    LOG_WARN("failed to get property TTL", K(ret));
+  } else if (val.is_null()) {
+    ttl = INT64_MAX;
+  } else {
+    ttl = val.get_int();
+  }
+  return ret;
+}
+
 int ObHTableCellEntity2::get_value(ObString &str) const
 {
   int ret = OB_SUCCESS;
   ObObj val;
   if (OB_FAIL(entity_->get_property(ObHTableConstants::VALUE_CNAME_STR, val))) {
-    LOG_WARN("failed to get property K", K(ret));
+    LOG_WARN("failed to get property V", K(ret));
   } else {
     str = val.get_varchar();
   }
@@ -190,7 +242,7 @@ ObString ObHTableCellEntity3::get_qualifier() const
   ObObj obj;
   ObString val;
   if (OB_FAIL(entity_->get_rowkey_value(ObHTableConstants::COL_IDX_Q, obj))) {
-    LOG_WARN("failed to get T from entity", K(ret), K_(entity));
+    LOG_WARN("failed to get Q from entity", K(ret), K_(entity));
   } else if (obj.is_null()) {
     last_get_is_null_ = true;
   } else {
@@ -233,6 +285,26 @@ ObString ObHTableCellEntity3::get_value() const
     str = obj.get_varchar();
   }
   return str;
+}
+
+int ObHTableCellEntity3::get_ttl(int64_t &ttl) const
+{
+  int ret = OB_SUCCESS;
+  ttl = INT64_MAX;
+  last_get_is_null_ = false;
+  ObObj obj;
+  if (OB_ISNULL(entity_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity is null", K(ret));
+  } else if (OB_FAIL(entity_->get_property(ObHTableConstants::TTL_CNAME_STR, obj))) {
+    LOG_WARN("failed to get property TTL", K(ret));
+  } else if (obj.is_null()) {
+    last_get_is_null_ = true;
+    ttl = INT64_MAX;
+  } else {
+    ttl = obj.get_int();
+  }
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -547,41 +619,35 @@ int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, O
 
   return ret;
 }
-int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)
+
+bool ObHTableUtils::is_htable_schema(const ObTableSchema &table_schema)
 {
-  int ret = OB_SUCCESS;
+  bool is_htable_schema = false;
   const ObColumnSchemaV2 *rowkey_schema = NULL;
   const ObColumnSchemaV2 *qualifier_schema = NULL;
   const ObColumnSchemaV2 *version_schema = NULL;
   const ObColumnSchemaV2 *value_schema = NULL;
 
   if (OB_ISNULL(rowkey_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("can't get rowkey column schema");
+    // do nothing
   } else if (ObHTableConstants::ROWKEY_CNAME_STR.case_compare(rowkey_schema->get_column_name()) != 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the first column should be K", K(ret), K(rowkey_schema->get_column_name()));
+    // do nothing
   } else if (OB_ISNULL(qualifier_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_Q))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("can't get qualifier column schema");
+    // do nothing
   } else if (ObHTableConstants::CQ_CNAME_STR.case_compare(qualifier_schema->get_column_name()) != 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the second column should be Q", K(ret), K(qualifier_schema->get_column_name()));
+    // do nothing
   } else if (OB_ISNULL(version_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("can't get version column schema");
+    // do nothing
   } else if (ObHTableConstants::VERSION_CNAME_STR.case_compare(version_schema->get_column_name()) != 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the third column should be T", K(ret), K(version_schema->get_column_name()));
+    // do nothing
   } else if (OB_ISNULL(value_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("can't get version column schema");
+    // do nothing
   } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_schema->get_column_name()) != 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the fourth column should be V", K(ret), K(value_schema->get_column_name()));
+    // do nothing
+  } else {
+    is_htable_schema = true;
   }
-
-  return ret;
+  return is_htable_schema;
 }
 
 int ObHTableUtils::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos, const char *name)

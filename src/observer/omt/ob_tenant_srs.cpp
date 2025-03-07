@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX SERVER_OMT
 #include "ob_tenant_srs.h"
 #include "ob_tenant_srs.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_smart_var.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/ob_thread_mgr.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
+#include "src/share/ob_server_struct.h"
 #include "lib/geo/ob_geo_utils.h"
 
 using namespace oceanbase::share;

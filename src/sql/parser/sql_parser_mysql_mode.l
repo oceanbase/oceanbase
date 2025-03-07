@@ -114,11 +114,16 @@ _UTF8                         { REPUT_TOKEN_NEG_SIGN(_UTF8); }
 _UTF8MB4                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB4); }
 _UTF8MB3                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB3); }
 _GBK                          { REPUT_TOKEN_NEG_SIGN(_GBK); }
+_GB2312                       { REPUT_TOKEN_NEG_SIGN(_GB2312); }
 _GB18030                      { REPUT_TOKEN_NEG_SIGN(_GB18030); }
 _GB18030_2022                 { REPUT_TOKEN_NEG_SIGN(_GB18030_2022); }
 _LATIN1                       { REPUT_TOKEN_NEG_SIGN(_LATIN1); }
 _ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
 _TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
+_UJIS                         { REPUT_TOKEN_NEG_SIGN(_UJIS); }
+_EUCKR                        { REPUT_TOKEN_NEG_SIGN(_EUCKR);}
+_EUCJPMS                      { REPUT_TOKEN_NEG_SIGN(_EUCJPMS);}
+_CP932                        { REPUT_TOKEN_NEG_SIGN(_CP932);}
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
 _UTF16LE                      { REPUT_TOKEN_NEG_SIGN(_UTF16LE); }
@@ -127,6 +132,10 @@ _BIG5                         { REPUT_TOKEN_NEG_SIGN(_BIG5); }
 _HKSCS                      { REPUT_TOKEN_NEG_SIGN(_HKSCS); }
 _HKSCS31                     { REPUT_TOKEN_NEG_SIGN(_HKSCS31); }
 _DEC8                        { REPUT_TOKEN_NEG_SIGN(_DEC8); }
+_CP850                       { REPUT_TOKEN_NEG_SIGN(_CP850); }
+_HP8                         { REPUT_TOKEN_NEG_SIGN(_HP8); }
+_MACROMAN                    { REPUT_TOKEN_NEG_SIGN(_MACROMAN); }
+_SWE7                        { REPUT_TOKEN_NEG_SIGN(_SWE7); }
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {
@@ -439,9 +448,7 @@ FALSE {
     tmp_literal[yylval->node->str_len_] = '\0';
     yylval->node->children_ = (ParseNode **)parse_malloc(sizeof(ParseNode *), p->malloc_pool_);
     if (OB_UNLIKELY(NULL == yylval->node->children_)) {
-      p->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
-      yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);
-      return ERROR;
+      YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
@@ -582,9 +589,7 @@ FALSE {
 
     yylval->node->children_ = (ParseNode **)parse_malloc(sizeof(ParseNode *), p->malloc_pool_);
     if (OB_UNLIKELY(NULL == yylval->node->children_)) {
-      p->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
-      yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);
-      return ERROR;
+      YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
@@ -1024,6 +1029,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PARALLEL { return PARALLEL; }
 <hint>MANUAL { return MANUAL; }
 <hint>NO_PARALLEL { return NO_PARALLEL; }
+<hint>DML_PARALLEL { return DML_PARALLEL; }
 <hint>MONITOR  { return MONITOR; }
 <hint>AUTO { return AUTO; }
 <hint>FORCE { return FORCE; }
@@ -1192,6 +1198,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>RESOURCE_GROUP { return RESOURCE_GROUP; }
 <hint>PQ_GBY { return PQ_GBY; }
 <hint>PQ_DISTINCT { return PQ_DISTINCT; }
+<hint>PX_NODE_POLICY {return PX_NODE_POLICY; }
+<hint>PX_NODE_ADDRS {return PX_NODE_ADDRS; }
+<hint>PX_NODE_COUNT {return PX_NODE_COUNT; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_QRR
 #include "sql/ob_sql.h"
-#include "share/config/ob_server_config.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/udr/ob_udr_analyzer.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/udr/ob_udr_utils.h"
@@ -238,8 +236,7 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
                                                         NULL, session->get_sql_mode(),
                                                         enable_decimal_int,
                                                         compat_type,
-                                                        enable_mysql_compatible_dates,
-                                                        session->get_local_ob_enable_plan_cache()))) {
+                                                        enable_mysql_compatible_dates))) {
         LOG_WARN("fail to resolve const", K(ret));
       } else if (OB_FAIL(add_param_to_param_store(value, param_store))) {
         LOG_WARN("failed to add param to param store", K(ret), K(value), K(param_store));

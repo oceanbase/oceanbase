@@ -40,7 +40,7 @@
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
 #include "lib/hash/ob_hashset.h"
-#include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_utils.h"
 #include "sql/session/ob_local_session_var.h"
 
 
@@ -1390,6 +1390,12 @@ public:
     return get_const_cast_mode(cmp_op, right_const_param);
   }
 
+  static int eval_compare_composite(CollectionPredRes &cmp_result,
+                                    const common::ObObj &obj1,
+                                    const common::ObObj &obj2,
+                                    ObExecContext &exec_ctx,
+                                    const ObCmpOp cmp_op);
+
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type) {
     /*
      * maybe we can use associative array(table lookup) to get a better
@@ -2211,9 +2217,20 @@ public:
   common::ObFixedBitSet<common::OB_DEFAULT_BITSET_SIZE_FOR_DFM> &get_elem_flags() { return elem_flags_; }
   TO_STRING_KV(K(dfm_elems_), K(elem_flags_));
 
-private:
+protected:
   common::ObFixedArray<common::ObDFMElem, common::ObIAllocator> dfm_elems_;
   common::ObFixedBitSet<common::OB_DEFAULT_BITSET_SIZE_FOR_DFM> elem_flags_;
+};
+
+class ObExprDateTimeStringConvertCtx : public ObExprDFMConvertCtx
+{
+public:
+  void set_format_string(ObString format) { format_ = format; }
+  ObString &get_format_string() { return format_; }
+  TO_STRING_KV(K(dfm_elems_), K(elem_flags_), K(format_));
+
+private:
+  ObString format_;
 };
 
 class ObExprFindIntCachedValue : public ObExprOperatorCtx

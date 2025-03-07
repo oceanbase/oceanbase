@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_table_update_op.h"
-#include "share/system_variable/ob_system_variable.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -270,6 +266,8 @@ OB_INLINE int ObTableUpdateOp::close_table_for_each()
                                                              dml_rtctx_,
                                                              ObDmlEventType::DE_UPDATING))) {
           LOG_WARN("process after stmt trigger failed", K(ret));
+        } else if (lib::is_mysql_mode() && !primary_upd_rtdef.has_table_cycle_ && primary_upd_ctdef.need_check_table_cycle_ && OB_FAIL(ObDMLService::delete_table_id_from_parent_table_set(dml_rtctx_, primary_upd_ctdef))) {
+          LOG_WARN("delete from parent table set failed", K(ret), K(primary_upd_ctdef.das_base_ctdef_.index_tid_));
         }
       }
     }

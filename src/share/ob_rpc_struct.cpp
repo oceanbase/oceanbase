@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_rpc_struct.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/backup/ob_backup_struct.h"
-#include "lib/utility/ob_serialization_helper.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/ob_store_format.h"
-#include "observer/ob_server_struct.h"
+#include "ob_rpc_struct.h"
 #include "storage/tx/ob_trans_service.h"
-#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {
@@ -67,37 +60,6 @@ ObUpgradeStage get_upgrade_stage(const ObString &str)
   return stage;
 }
 
-int ObDDLArg::assign(const ObDDLArg &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(based_schema_object_infos_.assign(other.based_schema_object_infos_))) {
-    LOG_WARN("fail to assign based_schema_object_infos", KR(ret));
-  } else {
-    ddl_stmt_str_ = other.ddl_stmt_str_;
-    exec_tenant_id_ = other.exec_tenant_id_;
-    ddl_id_str_ = other.ddl_id_str_;
-    sync_from_primary_ = other.sync_from_primary_;
-    parallelism_ = other.parallelism_;
-    task_id_ = other.task_id_;
-    consumer_group_id_ = other.consumer_group_id_;
-    is_parallel_ = other.is_parallel_;
-  }
-  return ret;
-}
-
-DEF_TO_STRING(ObDDLArg)
-{
-  int64_t pos = 0;
-  J_KV("ddl_stmt_str", contain_sensitive_data() ? ObString(OB_MASKED_STR) : ddl_stmt_str_,
-       K_(exec_tenant_id),
-       K_(ddl_id_str),
-       K_(sync_from_primary),
-       K_(based_schema_object_infos),
-       K_(parallelism),
-       K_(task_id),
-       K_(consumer_group_id));
-  return pos;
-}
 
 DEF_TO_STRING(ObGetRootserverRoleResult)
 {
@@ -1114,196 +1076,6 @@ OB_SERIALIZE_MEMBER(ObVectorIndexRebuildRes,
                     task_id_,
                     trace_id_);
 
-bool ObMViewCompleteRefreshArg::is_valid() const
-{
-  bool bret = OB_INVALID_TENANT_ID != exec_tenant_id_ &&
-              !based_schema_object_infos_.empty() &&
-              OB_INVALID_TENANT_ID != tenant_id_ &&
-              OB_INVALID_ID != table_id_;
-  for (int64_t i = 0; bret && i < based_schema_object_infos_.count(); ++i) {
-    const ObBasedSchemaObjectInfo &based_info = based_schema_object_infos_.at(i);
-    bret = (OB_INVALID_TENANT_ID == based_info.schema_tenant_id_ ||
-            tenant_id_ == based_info.schema_tenant_id_) &&
-           OB_INVALID_ID != based_info.schema_id_ &&
-           ObSchemaType::TABLE_SCHEMA == based_info.schema_type_ &&
-           OB_INVALID_VERSION != based_info.schema_version_;
-  }
-  return bret;
-}
-
-void ObMViewCompleteRefreshArg::reset()
-{
-  tenant_id_ = OB_INVALID_TENANT_ID;
-  table_id_ = OB_INVALID_ID;
-  session_id_ = OB_INVALID_ID;
-  sql_mode_ = 0;
-  last_refresh_scn_.reset();
-  tz_info_.reset();
-  tz_info_wrap_.reset();
-  for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
-    nls_formats_[i].reset();
-  }
-  parent_task_id_ = 0;
-  allocator_.reset();
-  ObDDLArg::reset();
-}
-
-int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    reset();
-    if (OB_FAIL(ObDDLArg::assign(other))) {
-      LOG_WARN("fail to assign ddl arg", KR(ret));
-    } else {
-      tenant_id_ = other.tenant_id_;
-      table_id_ = other.table_id_;
-      session_id_ = other.session_id_;
-      sql_mode_ = other.sql_mode_;
-      last_refresh_scn_ = other.last_refresh_scn_;
-      parent_task_id_ = other.parent_task_id_;
-      if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
-        LOG_WARN("fail to assign tz info", KR(ret), "tz_info", other.tz_info_);
-      } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
-        LOG_WARN("fail to deep copy tz info wrap", KR(ret), "tz_info_wrap", other.tz_info_wrap_);
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
-        if (OB_FAIL(ob_write_string(allocator_, other.nls_formats_[i], nls_formats_[i]))) {
-          LOG_WARN("fail to deep copy nls format", KR(ret), K(i), "nls_format", other.nls_formats_[i]);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE(ObMViewCompleteRefreshArg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KPC(this));
-  } else {
-    BASE_SER((, ObDDLArg));
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                tenant_id_,
-                table_id_,
-                session_id_,
-                sql_mode_,
-                last_refresh_scn_,
-                tz_info_,
-                tz_info_wrap_);
-    OB_UNIS_ENCODE_ARRAY(nls_formats_, ObNLSFormatEnum::NLS_MAX);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, parent_task_id_);
-  }
-  return ret;
-}
-
-OB_DEF_DESERIALIZE(ObMViewCompleteRefreshArg)
-{
-  int ret = OB_SUCCESS;
-  reset();
-  int64_t nls_formats_count = -1;
-  ObString nls_formats[ObNLSFormatEnum::NLS_MAX];
-  BASE_DESER((, ObDDLArg));
-  LST_DO_CODE(OB_UNIS_DECODE,
-              tenant_id_,
-              table_id_,
-              session_id_,
-              sql_mode_,
-              last_refresh_scn_,
-              tz_info_,
-              tz_info_wrap_);
-  OB_UNIS_DECODE(nls_formats_count);
-  if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(ObNLSFormatEnum::NLS_MAX != nls_formats_count)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nls formats count", KR(ret), K(nls_formats_count));
-    }
-    OB_UNIS_DECODE_ARRAY(nls_formats, nls_formats_count);
-    for (int64_t i = 0; OB_SUCC(ret) && i < nls_formats_count; i++) {
-      if (OB_FAIL(ob_write_string(allocator_, nls_formats[i], nls_formats_[i]))) {
-        LOG_WARN("fail to deep copy nls format", KR(ret), K(i), K(nls_formats[i]));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, parent_task_id_);
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObMViewCompleteRefreshArg)
-{
-  int ret = OB_SUCCESS;
-  int64_t len = 0;
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KPC(this));
-  } else {
-    BASE_ADD_LEN((, ObDDLArg));
-    LST_DO_CODE(OB_UNIS_ADD_LEN,
-                tenant_id_,
-                table_id_,
-                session_id_,
-                sql_mode_,
-                last_refresh_scn_,
-                tz_info_,
-                tz_info_wrap_);
-    OB_UNIS_ADD_LEN_ARRAY(nls_formats_, ObNLSFormatEnum::NLS_MAX);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ADD_LEN, parent_task_id_);
-  }
-  if (OB_FAIL(ret)) {
-    len = -1;
-  }
-  return len;
-}
-
-OB_SERIALIZE_MEMBER(ObMViewCompleteRefreshRes,
-                    task_id_,
-                    trace_id_);
-
-bool ObMViewRefreshInfo::is_valid() const
-{
-  return OB_INVALID_ID != mview_table_id_ &&
-         refresh_scn_.is_valid() &&
-         OB_INVALID_TIMESTAMP != start_time_ &&
-         (!last_refresh_scn_.is_valid() || last_refresh_scn_ < refresh_scn_);
-}
-
-void ObMViewRefreshInfo::reset()
-{
-  mview_table_id_ = OB_INVALID_ID;
-  last_refresh_scn_.reset();
-  refresh_scn_.reset();
-  start_time_ = OB_INVALID_TIMESTAMP;
-  is_mview_complete_refresh_ = false;
-}
-
-int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    mview_table_id_ = other.mview_table_id_;
-    last_refresh_scn_ = other.last_refresh_scn_;
-    refresh_scn_ = other.refresh_scn_;
-    start_time_ = other.start_time_;
-    is_mview_complete_refresh_ = other.is_mview_complete_refresh_;
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
-                    mview_table_id_,
-                    last_refresh_scn_,
-                    refresh_scn_,
-                    start_time_,
-                    is_mview_complete_refresh_);
-
 /// pool
 
 DEF_TO_STRING(ObCreateResourcePoolArg)
@@ -1456,17 +1228,6 @@ OB_SERIALIZE_MEMBER((ObDropResourcePoolArg, ObDDLArg),
 OB_SERIALIZE_MEMBER(ObCmdArg,
                     sql_text_);
 
-OB_SERIALIZE_MEMBER(ObDDLArg,
-                    ddl_stmt_str_,
-                    exec_tenant_id_,
-                    ddl_id_str_,
-                    sync_from_primary_,
-                    based_schema_object_infos_,
-                    parallelism_,
-                    task_id_,
-                    consumer_group_id_,
-                    is_parallel_);
-
 //////////////////////////////////////////////
 //
 //  Tenant
@@ -1495,6 +1256,21 @@ bool ObCreateTenantArg::is_valid() const
                               && recovery_until_scn_.is_valid_and_not_min()
                               && compatible_version_ > 0))
          && (!is_creating_standby_ || (is_creating_standby_ && !log_restore_source_.empty()));
+}
+
+ObTenantRole ObCreateTenantArg::get_tenant_role() const
+{
+  ObTenantRole role;
+  if (is_clone_tenant()) {
+    role = share::CLONE_TENANT_ROLE;
+  } else if (is_restore_tenant()) {
+    role = share::RESTORE_TENANT_ROLE;
+  } else if (is_standby_tenant()) {
+    role = share::STANDBY_TENANT_ROLE;
+  } else {
+    role = share::PRIMARY_TENANT_ROLE;
+  }
+  return role;
 }
 
 int ObCreateTenantArg::check_valid() const
@@ -1575,6 +1351,81 @@ int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObCreateTenantSchemaResult, tenant_exist_, user_tenant_id_);
+
+int ObCreateTenantSchemaResult::assign(const ObCreateTenantSchemaResult &other)
+{
+  int ret = OB_SUCCESS;
+  user_tenant_id_ = other.user_tenant_id_;
+  tenant_exist_ = other.tenant_exist_;
+  return ret;
+}
+
+bool ObCreateTenantSchemaResult::is_valid() const
+{
+  bool valid = true;
+  if (tenant_exist_) {
+  // if tenant_exist_ is true, other values should be invalid
+  } else if (!is_valid_tenant_id(user_tenant_id_)) {
+    valid = false;
+  } else if (!is_user_tenant(user_tenant_id_)) {
+    valid = false;
+  }
+  return valid;
+}
+int ObCreateTenantSchemaResult::init(uint64_t user_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  user_tenant_id_ = user_tenant_id;
+  tenant_exist_ = false;
+  return ret;
+}
+
+int ObCreateTenantSchemaResult::init_with_tenant_exist()
+{
+  int ret = OB_SUCCESS;
+  tenant_exist_ = true;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObParallelCreateNormalTenantArg, ObDDLArg), create_tenant_arg_, tenant_id_);
+
+int ObParallelCreateNormalTenantArg::init(
+    const ObCreateTenantArg &create_tenant_arg,
+    const uint64_t &tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_tenant_arg_.assign(create_tenant_arg))) {
+    LOG_WARN("failed to assign create tenant arg", KR(ret), K(create_tenant_arg));
+  } else {
+    tenant_id_ = tenant_id;
+    exec_tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObParallelCreateNormalTenantArg::assign(const ObParallelCreateNormalTenantArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_tenant_arg_.assign(other.create_tenant_arg_))) {
+    LOG_WARN("failed to assign create_tenant_arg_", KR(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+bool ObParallelCreateNormalTenantArg::is_valid() const
+{
+  bool valid = true;
+  if (!is_valid_tenant_id(tenant_id_)) {
+    valid = false;
+  } else if (!create_tenant_arg_.is_valid()) {
+    valid = false;
+  }
+  return valid;
+}
+
 DEF_TO_STRING(ObCreateTenantArg)
 {
   int64_t pos = 0;
@@ -1608,6 +1459,13 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     log_restore_source_,
                     is_tmp_tenant_for_recover_,
                     source_tenant_id_);
+
+int ObCreateTenantEndArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = tenant_id;
+  return ret;
+}
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -2810,6 +2668,12 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
     }
   }
 
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              is_alter_mview_attributes_,
+              alter_mview_arg_,
+              is_alter_mlog_attributes_,
+              alter_mlog_arg_);
+
   return ret;
 }
 
@@ -2908,6 +2772,17 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               lock_priority_,
               is_direct_load_partition_,
               is_alter_column_group_delayed_);
+
+  if (OB_SUCC(ret) && pos < data_len) {
+    if (OB_FAIL(rebuild_index_arg_list_.deserialize(buf, data_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to deserialize rebuild_index_arg_list_", K(ret));
+    }
+  }
+  LST_DO_CODE(OB_UNIS_DECODE,
+              is_alter_mview_attributes_,
+              alter_mview_arg_,
+              is_alter_mlog_attributes_,
+              alter_mlog_arg_);
   return ret;
 }
 
@@ -2960,7 +2835,11 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 client_session_create_ts_,
                 lock_priority_,
                 is_direct_load_partition_,
-                is_alter_column_group_delayed_);
+                is_alter_column_group_delayed_,
+                is_alter_mview_attributes_,
+                alter_mview_arg_,
+                is_alter_mlog_attributes_,
+                alter_mlog_arg_);
   }
 
   if (OB_FAIL(ret)) {
@@ -3557,6 +3436,7 @@ DEF_TO_STRING(ObAlterIndexArg)
 }
 
 OB_SERIALIZE_MEMBER((ObAlterIndexArg, ObIndexArg), index_visibility_);
+OB_SERIALIZE_MEMBER((ObDropLobArg, ObDDLArg), tenant_id_, session_id_, data_table_id_, aux_lob_meta_table_id_);
 
 DEF_TO_STRING(ObDropIndexArg) {
   int64_t pos = 0;
@@ -3782,7 +3662,7 @@ DEF_TO_STRING(ObCreateForeignKeyArg)
        K_(foreign_key_name),
        K_(enable_flag),
        K_(is_modify_enable_flag),
-       K_(ref_cst_type),
+       K_(fk_ref_type),
        K_(ref_cst_id),
        K_(validate_flag),
        K_(is_modify_validate_flag),
@@ -3806,7 +3686,7 @@ OB_SERIALIZE_MEMBER((ObCreateForeignKeyArg, ObIndexArg),
                     foreign_key_name_,
                     enable_flag_,
                     is_modify_enable_flag_,
-                    ref_cst_type_,
+                    fk_ref_type_, // FARM COMPAT WHITELIST for ref_cst_type_
                     ref_cst_id_,
                     validate_flag_,
                     is_modify_validate_flag_,
@@ -7126,6 +7006,32 @@ DEF_TO_STRING(ObForceSetServerListArg)
 
 OB_SERIALIZE_MEMBER(ObForceSetServerListArg, server_list_, replica_num_);
 
+OB_SERIALIZE_MEMBER(ObForceSetServerListResult::LSFailedInfo, ls_id_, failed_ret_code_, failed_reason_);
+
+OB_SERIALIZE_MEMBER(ObForceSetServerListResult::ResultInfo, tenant_id_, successful_ls_, failed_ls_info_);
+
+int ObForceSetServerListResult::ResultInfo::add_ls_info(const share::ObLSID ls_id, const int failed_ret)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(failed_ret));
+  } else if (OB_SUCCESS == failed_ret) {
+    if (OB_FAIL(successful_ls_.push_back(ls_id))) {
+      LOG_WARN("push_back failed", K(ret), K(ls_id));
+    }
+  } else {
+    const common::ObString failed_reason = ob_error_name(failed_ret);
+    LSFailedInfo failed_info(ls_id, failed_ret, failed_reason);
+    if (OB_FAIL(failed_ls_info_.push_back(failed_info))) {
+      LOG_WARN("insert_and_get failed for failed_ls_info_", K(ret), K(ls_id), K(failed_ret));
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObForceSetServerListResult, ret_, result_list_);
+
 bool ObForceCreateSysTableArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
@@ -10418,16 +10324,17 @@ DEF_TO_STRING(ObCreateTabletInfo)
 
 OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_, create_commit_versions_, has_cs_replica_);
 
-int ObCreateTabletExtraInfo::init(
-    const uint64_t tenant_data_version,
-    const bool need_create_empty_major,
-    const bool micro_index_clustered,
-    const ObTabletID &split_src_tablet_id)
+int ObCreateTabletExtraInfo::init(const uint64_t tenant_data_version,
+                                  const bool need_create_empty_major,
+                                  const bool micro_index_clustered,
+                                  const ObTabletID &split_src_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tenant_data_version), K(need_create_empty_major), K(micro_index_clustered), K(split_src_tablet_id));
+    LOG_WARN("invalid arg",
+             K(ret), K(tenant_data_version), K(need_create_empty_major),
+             K(micro_index_clustered), K(split_src_tablet_id));
   } else {
     tenant_data_version_ = tenant_data_version;
     need_create_empty_major_ = need_create_empty_major;
@@ -10443,6 +10350,7 @@ void ObCreateTabletExtraInfo::reset()
   tenant_data_version_ = 0;
   micro_index_clustered_ = false;
   split_src_tablet_id_.reset();
+  split_can_reuse_macro_block_ = false;
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -10452,6 +10360,7 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   need_create_empty_major_ = other.need_create_empty_major_;
   micro_index_clustered_ = other.micro_index_clustered_;
   split_src_tablet_id_ = other.split_src_tablet_id_;
+  split_can_reuse_macro_block_ = other.split_can_reuse_macro_block_;
   return ret;
 }
 
@@ -10459,7 +10368,8 @@ OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo,
                     tenant_data_version_,
                     need_create_empty_major_,
                     micro_index_clustered_,
-                    split_src_tablet_id_);
+                    split_src_tablet_id_,
+                    split_can_reuse_macro_block_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {
@@ -11220,7 +11130,7 @@ ObBatchBroadcastSchemaArg::ObBatchBroadcastSchemaArg()
   : tenant_id_(common::OB_INVALID_TENANT_ID),
     sys_schema_version_(common::OB_INVALID_VERSION),
     allocator_("BroadcastSchema", OB_MALLOC_MIDDLE_BLOCK_SIZE),
-    tables_()
+    tables_(), generate_schema_(false), cluster_current_version_(OB_INVALID_VERSION)
 {}
 
 ObBatchBroadcastSchemaArg::~ObBatchBroadcastSchemaArg()
@@ -11229,14 +11139,17 @@ ObBatchBroadcastSchemaArg::~ObBatchBroadcastSchemaArg()
 int ObBatchBroadcastSchemaArg::init(
   const uint64_t tenant_id,
   const int64_t sys_schema_version,
-  const common::ObIArray<share::schema::ObTableSchema> &tables)
+  const common::ObIArray<share::schema::ObTableSchema> &tables,
+  bool generate_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(deep_copy_tables(tables))) {
+  if (!generate_schema && OB_FAIL(deep_copy_tables(tables))) {
     LOG_WARN("fail to assign tables", KR(ret), K(tables));
   } else {
     tenant_id_ = tenant_id;
     sys_schema_version_ = sys_schema_version;
+    generate_schema_ = generate_schema;
+    cluster_current_version_ = CLUSTER_CURRENT_VERSION;
   }
   return ret;
 }
@@ -11248,8 +11161,10 @@ int ObBatchBroadcastSchemaArg::assign(const ObBatchBroadcastSchemaArg &other)
   } else if (OB_FAIL(deep_copy_tables(other.tables_))) {
     LOG_WARN("fail to assign tables", KR(ret), K(other));
   } else {
+    generate_schema_ = other.generate_schema_;
     tenant_id_ = other.tenant_id_;
     sys_schema_version_ = other.sys_schema_version_;
+    cluster_current_version_ = other.cluster_current_version_;
   }
   return ret;
 }
@@ -11274,13 +11189,16 @@ void ObBatchBroadcastSchemaArg::reset()
   tenant_id_ = common::OB_INVALID_TENANT_ID;
   sys_schema_version_ = common::OB_INVALID_VERSION;
   tables_.reset();
+  allocator_.reset();
+  generate_schema_ = false;
+  cluster_current_version_ = OB_INVALID_VERSION;
 }
 
 bool ObBatchBroadcastSchemaArg::is_valid() const
 {
   return common::OB_INVALID_TENANT_ID != tenant_id_
          && sys_schema_version_ > 0
-         && tables_.count() > 0;
+         && (generate_schema_ || tables_.count() > 0);
 }
 
 uint64_t ObBatchBroadcastSchemaArg::get_tenant_id() const
@@ -11297,7 +11215,20 @@ const common::ObIArray<share::schema::ObTableSchema> &ObBatchBroadcastSchemaArg:
 {
   return tables_;
 }
-OB_SERIALIZE_MEMBER(ObBatchBroadcastSchemaArg, tenant_id_, sys_schema_version_, tables_);
+
+bool ObBatchBroadcastSchemaArg::need_generate_schema() const
+{
+  return generate_schema_;
+}
+
+uint64_t ObBatchBroadcastSchemaArg::get_cluster_current_version() const
+{
+  return cluster_current_version_;
+}
+
+
+OB_SERIALIZE_MEMBER(ObBatchBroadcastSchemaArg, tenant_id_, sys_schema_version_, tables_,
+    generate_schema_, cluster_current_version_);
 
 ObBatchBroadcastSchemaResult::ObBatchBroadcastSchemaResult()
   : ret_(common::OB_ERROR)
@@ -13488,5 +13419,34 @@ int ObNotifyStartArchiveArg::assign(const ObNotifyStartArchiveArg &other)
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObRebuildTabletArg, tenant_id_, ls_id_, tablet_id_array_, dest_, src_);
+
+bool ObRebuildTabletArg::is_valid() const
+{
+  return tenant_id_ > 0
+      && ls_id_.is_valid()
+      && !tablet_id_array_.empty()
+      && dest_.is_valid()
+      && src_.is_valid();
+}
+
+int ObRebuildTabletArg::assign(const ObRebuildTabletArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(tablet_id_array_.assign(arg.tablet_id_array_))) {
+    LOG_WARN("failed to assign tablet id array", K(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    ls_id_ = arg.ls_id_;
+    dest_ = arg.dest_;
+    src_ = arg.src_;
+  }
+  return ret;
+}
+
 }//end namespace obrpc
 }//end namespace oceanbase

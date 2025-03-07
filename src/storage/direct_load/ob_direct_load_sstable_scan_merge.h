@@ -12,13 +12,12 @@
 #pragma once
 
 #include "lib/container/ob_loser_tree.h"
-#include "lib/container/ob_se_array.h"
 #include "storage/access/ob_simple_rows_merger.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
+#include "storage/direct_load/ob_direct_load_row_iterator.h"
+#include "storage/direct_load/ob_direct_load_sstable.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge_loser_tree.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
-#include "storage/access/ob_store_row_iterator.h"
-#include "storage/direct_load/ob_direct_load_sstable.h"
-#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -46,7 +45,7 @@ public:
   ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
 
-class ObDirectLoadSSTableScanMerge : public ObIStoreRowIterator
+class ObDirectLoadSSTableScanMerge final : public ObDirectLoadIStoreRowIterator
 {
 public:
   static const int64_t MAX_SSTABLE_COUNT = 1024;
@@ -60,10 +59,10 @@ public:
   ~ObDirectLoadSSTableScanMerge();
   void reset();
   int init(const ObDirectLoadSSTableScanMergeParam &param,
-           const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
+           const ObDirectLoadTableHandleArray &sstable_array,
            const blocksstable::ObDatumRange &range);
   int get_next_row(const ObDirectLoadExternalRow *&external_row);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
 private:
   int init_rows_merger(int64_t sstable_count);
   int supply_consume();
@@ -82,7 +81,7 @@ private:
   ScanSimpleMerger *simple_merge_;
   ScanMergeLoserTree *loser_tree_;
   common::ObRowsMerger<LoserTreeItem, LoserTreeCompare> *rows_merger_;
-  blocksstable::ObDatumRow datum_row_;
+  ObDirectLoadDatumRow datum_row_;
   common::ObArray<const ObDirectLoadExternalRow *> rows_;
   bool is_inited_;
 };

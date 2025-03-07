@@ -1,0 +1,2 @@
+ob_unittest(test_plugin_mgr sys/test_plugin_mgr.cpp)
+ob_unittest(test_plugin_load_param sys/test_plugin_load_param.cpp)

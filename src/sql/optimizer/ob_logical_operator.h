@@ -1055,6 +1055,7 @@ public:
   inline uint64_t get_op_id() const { return op_id_; }
   inline void set_op_id(uint64_t op_id) { op_id_ = op_id; }
   inline bool is_partition_wise() const { return is_partition_wise_; }
+  int is_dfo_contains_partition_wise(bool &contain_partition_wise) const;
   inline void set_is_partition_wise(bool is_partition_wise)
   { is_partition_wise_ = is_partition_wise; }
   inline bool is_fully_partition_wise() const
@@ -1910,7 +1911,7 @@ private:
   int refine_dop_by_hint();
   int check_has_temp_table_access(ObLogicalOperator *cur, bool &has_temp_table_access);
 
-  int find_px_for_batch_rescan(const log_op_def::ObLogOpType, int64_t op_id, bool &find);
+  int find_px_for_batch_rescan(ObLogicalOperator *batch_rescan_op, bool &find);
   int find_nested_dis_rescan(bool &find, bool nested);
   int add_op_exprs(ObRawExpr* expr);
   // alloc mat for sync in output

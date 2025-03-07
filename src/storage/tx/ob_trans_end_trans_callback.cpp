@@ -11,8 +11,6 @@
  */
 
 #include "ob_trans_end_trans_callback.h"
-#include "lib/utility/utility.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

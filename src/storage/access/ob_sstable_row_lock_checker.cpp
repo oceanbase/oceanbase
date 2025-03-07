@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_lock_checker.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/tx/ob_trans_define.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
@@ -192,7 +190,7 @@ int ObSSTableRowLockMultiChecker::fetch_row(
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Failed to get next row", K(ret));
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
-          multi_checker->inc_empty_read();
+          multi_checker->inc_empty_read(read_handle);
           ret = OB_ITER_END;
         } else if (FALSE_IT(++prefetcher_.cur_micro_data_fetch_idx_)) {
         } else if (OB_FAIL(open_cur_data_block(read_handle))) {
@@ -236,7 +234,7 @@ int ObSSTableRowLockMultiChecker::open_cur_data_block(ObSSTableReadHandle &read_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K_(prefetcher), K(read_handle));
   } else {
-    micro_block_multi_checker->inc_empty_read();
+    micro_block_multi_checker->inc_empty_read(read_handle);
     micro_block_multi_checker->reuse();
     blocksstable::ObMicroIndexInfo &micro_info = prefetcher_.current_micro_info();
     ObMicroBlockDataHandle &micro_handle = prefetcher_.current_micro_handle();

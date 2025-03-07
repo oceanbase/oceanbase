@@ -14,16 +14,9 @@
 
 #include "observer/table_load/ob_table_load_instance.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
-#include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_index_long_wait.h"
 #include "observer/table_load/ob_table_load_redef_table.h"
-#include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "share/ls/ob_ls_operator.h"
-#include "share/table/ob_table_load_define.h"
-#include "sql/engine/ob_exec_context.h"
-#include "storage/ob_common_id_utils.h"
-#include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 
 namespace oceanbase
@@ -193,8 +186,8 @@ int ObTableLoadInstance::start_stmt(
       LOG_WARN("fail to build tx param", KR(ret), K(stmt_ctx_));
     } else if (OB_FAIL(start_sql_tx())) {
       LOG_WARN("fail to start sql tx", KR(ret), K(stmt_ctx_));
-    } else if (OB_FAIL(lock_table_in_tx())) {
-      LOG_WARN("fail to lock table in tx", KR(ret), K(stmt_ctx_));
+    } else if (OB_FAIL(lock_for_inc_load(tablet_ids))) {
+      LOG_WARN("fail to lock table in tx", KR(ret), K(stmt_ctx_), K(tablet_ids));
     } else if (OB_FAIL(init_ddl_param_for_inc_direct_load())) {
       LOG_WARN("fail to init ddl param for inc direct load", KR(ret), K(stmt_ctx_));
     }
@@ -357,33 +350,97 @@ int ObTableLoadInstance::end_sql_tx(const bool commit)
   return ret;
 }
 
+int ObTableLoadInstance::lock_for_inc_load(const ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (tablet_ids.empty()) {
+    if (OB_FAIL(lock_table_in_tx())) {
+      LOG_WARN("fail to lock table in tx", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(lock_tablets_in_tx(tablet_ids))) {
+      LOG_WARN("fail to lock tablets in tx", KR(ret), K(tablet_ids));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadInstance::build_base_lock_arg(ObLockTableRequest &lock_arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t table_id = stmt_ctx_.table_id_;
+  lock_arg.owner_id_.set_default();
+  lock_arg.lock_mode_ = tablelock::EXCLUSIVE;
+  lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_DML_LOCK;
+  lock_arg.timeout_us_ = 0; // try lock
+  lock_arg.table_id_ = table_id;
+  return ret;
+}
+
 int ObTableLoadInstance::lock_table_in_tx()
 {
   int ret = OB_SUCCESS;
-  ObTableLockService *table_lock_service = MTL(ObTableLockService *);
-  const uint64_t table_id = stmt_ctx_.table_id_;
-  ObTxDesc *tx_desc = stmt_ctx_.tx_desc_;
   ObLockTableRequest lock_table_arg;
-  lock_table_arg.owner_id_.set_default();
-  lock_table_arg.lock_mode_ = tablelock::EXCLUSIVE;
-  lock_table_arg.op_type_ = ObTableLockOpType::IN_TRANS_DML_LOCK;
-  lock_table_arg.timeout_us_ = 0; // try lock
-  lock_table_arg.table_id_ = table_id;
+  if (OB_FAIL(build_base_lock_arg(lock_table_arg))) {
+    LOG_WARN("fail to build lock arg", KR(ret));
+  } else if (OB_FAIL(try_lock_in_tx(lock_table_arg))) {
+    LOG_WARN("fail to try lock in tx", KR(ret), K(lock_table_arg));
+  } else {
+    LOG_INFO("lock table in tx succeed", K(lock_table_arg));
+  }
+  return ret;
+}
+
+int ObTableLoadInstance::lock_tablets_in_tx(const ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObLockTabletsRequest lock_tablets_arg;
+  ObArray<ObTabletID> tmp_tablet_ids;
+  if (OB_FAIL(tmp_tablet_ids.assign(tablet_ids))) {
+    LOG_WARN("fail to assign tablet ids", KR(ret), K(tablet_ids));
+  } else {
+    lib::ob_sort(tmp_tablet_ids.begin(), tmp_tablet_ids.end());
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(build_base_lock_arg(lock_tablets_arg))) {
+    LOG_WARN("fail to build lock arg", KR(ret), K(tablet_ids));
+  } else if (OB_FAIL(lock_tablets_arg.tablet_ids_.assign(tmp_tablet_ids))) {
+    LOG_WARN("fail to assign tablet ids", KR(ret), K(tmp_tablet_ids));
+  } else if (OB_FAIL(try_lock_in_tx(lock_tablets_arg))) {
+    LOG_WARN("fail to try lock in tx", KR(ret), K(lock_tablets_arg));
+  } else {
+    LOG_INFO("lock tablets in tx succeed", K(lock_tablets_arg), K(tablet_ids));
+  }
+  return ret;
+}
+
+int ObTableLoadInstance::try_lock_in_tx(const ObLockRequest &lock_arg)
+{
+  int ret = OB_SUCCESS;
+  ObTableLockService *table_lock_service = MTL(ObTableLockService *);
+  ObTxDesc *tx_desc = stmt_ctx_.tx_desc_;
   bool lock_succeed = false;
   int64_t sleep_time = 100 * 1000L; // 100ms
-  while (OB_SUCC(ret) && !lock_succeed) {
-    if (OB_FAIL(execute_ctx_->check_status())) {
-      LOG_WARN("failed to check status", KR(ret));
-    } else if (OB_FAIL(table_lock_service->lock(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
-      if (OB_EAGAIN == ret) {
-        ob_usleep(sleep_time);
-        ret = OB_SUCCESS;
+  if (OB_ISNULL(table_lock_service) || OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_lock_service or tx_desc is nullptr", KR(ret),
+                                                         KP(table_lock_service),
+                                                         KP(tx_desc));
+  } else {
+    while (OB_SUCC(ret) && !lock_succeed) {
+      if (OB_FAIL(execute_ctx_->check_status())) {
+        LOG_WARN("failed to check status", KR(ret));
+      } else if (OB_FAIL(table_lock_service->lock(*tx_desc, stmt_ctx_.tx_param_, lock_arg))) {
+        if (OB_EAGAIN == ret) {
+          ob_usleep(sleep_time);
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to lock table", KR(ret), K(lock_arg));
+        }
       } else {
-        LOG_WARN("failed to lock table", KR(ret), K(lock_table_arg));
+        lock_succeed = true;
       }
-    } else {
-      lock_succeed = true;
-      LOG_INFO("lock table in tx succeed", K(table_id), KPC(tx_desc));
     }
   }
   return ret;

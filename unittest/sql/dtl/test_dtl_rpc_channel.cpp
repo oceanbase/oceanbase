@@ -11,15 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/coro/testing.h"
-#include "rpc/testing.h"
-#include "sql/dtl/ob_dtl_rpc_processor.h"
-#include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/dtl/ob_dtl_task.h"
-#include "sql/dtl/ob_dtl_msg.h"
-#include "sql/dtl/ob_dtl_channel.h"
-#include "sql/dtl/ob_dtl.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
 
 using namespace oceanbase::sql::dtl;

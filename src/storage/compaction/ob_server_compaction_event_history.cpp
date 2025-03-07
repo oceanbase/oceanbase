@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/compaction/ob_server_compaction_event_history.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

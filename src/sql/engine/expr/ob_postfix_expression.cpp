@@ -12,12 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include "ob_postfix_expression.h"
 #include "share/ob_unique_index_row_transformer.h"
-#include "sql/engine/expr/ob_postfix_expression.h"
 #include "sql/ob_result_set.h"
 #include "sql/engine/expr/ob_expr_regexp.h"
-#include "sql/engine/expr/ob_expr_like.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 
 namespace oceanbase
 {

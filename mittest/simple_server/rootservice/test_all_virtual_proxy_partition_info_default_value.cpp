@@ -15,11 +15,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/timezone/ob_time_convert.h"
 
 namespace oceanbase
 {

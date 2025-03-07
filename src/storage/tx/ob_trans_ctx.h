@@ -60,7 +60,7 @@ namespace transaction
 {
 class ObITransCtxMgr;
 class ObTransService;
-class ObITsMgr;
+class ObTsMgr;
 class KillTransArg;
 class ObLSTxCtxMgr;
 }
@@ -178,7 +178,7 @@ protected:
   void set_stc_(const MonotonicTs stc);
   void set_stc_by_now_();
   MonotonicTs get_stc_();
-  ObITsMgr *get_ts_mgr_();
+  ObTsMgr *get_ts_mgr_();
   bool has_callback_scheduler_();
   int defer_callback_scheduler_(const int ret, const share::SCN &commit_version);
   int prepare_commit_cb_for_role_change_(const int cb_ret, ObTxCommitCallback *&cb_list);

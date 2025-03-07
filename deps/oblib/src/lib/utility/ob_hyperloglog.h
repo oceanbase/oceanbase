@@ -16,6 +16,7 @@
 #include "lib/ob_errno.h"
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
+#include "lib/utility/ob_unify_serialize.h"
 
 namespace oceanbase
 {
@@ -24,6 +25,7 @@ namespace common
 
 class ObHyperLogLogCalculator
 {
+  OB_UNIS_VERSION(1);
 public:
   ObHyperLogLogCalculator()
   : alloc_(nullptr), buckets_(nullptr), n_bucket_(0), n_bit_(0), n_count_(0)
@@ -37,7 +39,33 @@ public:
   inline void sets(uint64_t *hash_vals, int64_t count);
   inline char *get_buckets() { return buckets_; }
   inline int64_t get_bucket_num() { return n_bucket_; }
-  inline uint64_t estimate();
+  inline uint64_t estimate() const;
+  inline void set_deserialize_allocator(ObIAllocator *alloc) { alloc_ = alloc; }
+  inline int32_t get_n_bit() const { return n_bit_; }
+
+  void shadow_copy(const ObHyperLogLogCalculator& other) {
+    destroy();
+    alloc_ = other.alloc_;
+    buckets_ = other.buckets_;
+    n_bucket_ = other.n_bucket_;
+    n_bit_ = other.n_bit_;
+    n_count_ = other.n_count_;
+  }
+
+  int assign(const ObHyperLogLogCalculator& other, ObIAllocator *alloc = nullptr) {
+    int ret = OB_SUCCESS;
+    destroy();
+    alloc_ = alloc == nullptr ? other.alloc_ : alloc;
+    if (other.n_bit_ == 0) {
+      //do nothing
+    } else if(OB_FAIL(init(alloc_, other.n_bit_))) {
+      COMMON_LOG(WARN, "fail to init hyperloglog", K(ret));
+    } else {
+      merge(other);
+    }
+    return ret;
+  }
+
   void reuse()
   {
     memset(buckets_, 0, 1ULL << n_bit_);
@@ -56,7 +84,44 @@ public:
     n_count_ = 0;
   }
 
-  TO_STRING_KV(K_(n_bucket), K_(n_bit), K_(n_count), KP_(alloc), KP_(buckets));
+  int merge(const ObHyperLogLogCalculator & other_hllc)
+  {
+    int ret = OB_SUCCESS;
+    if (n_bucket_ != other_hllc.n_bucket_ || n_bit_ != other_hllc.n_bit_) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "merge hyperloglog should have the same bucket", K(ret), K_(n_bucket),
+                 K_(other_hllc.n_bucket), K_(n_bit), K_(other_hllc.n_bit));
+    } else {
+      for (int64_t i = 0; i < n_bucket_; i++) {
+        buckets_[i] = MAX(buckets_[i], other_hllc.buckets_[i]);
+      }
+      n_count_ += other_hllc.n_count_;
+    }
+
+    return ret;
+  }
+
+  DECLARE_TO_STRING
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_OBJ(n_bucket_);
+    J_COMMA();
+    J_OBJ(n_bit_);
+    J_COMMA();
+    J_OBJ(n_count_);
+    J_COMMA();
+    J_ARRAY_START();
+    for (int64_t i = 0; i < n_bucket_ && i < 10; ++i) {
+      BUF_PRINTO((int8_t)buckets_[i]);
+      if (i != 9 && i != n_bucket_ - 1) {
+        J_COMMA();
+      }
+    }
+    J_ARRAY_END();
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   inline int32_t calc_leading_zero(uint64_t hash_value)
@@ -64,7 +129,7 @@ private:
     return std::min(static_cast<int32_t>(MAX_HASH_VALUE_LENGTH - n_bit_), static_cast<int32_t>(__builtin_clzll(hash_value << n_bit_))) + 1;
   }
 
-  inline double hll_alpha_multiple_m_square(const uint64_t m)
+  inline double hll_alpha_multiple_m_square(const uint64_t m) const
   {
     double alpha = 0.0;
     switch (m) {
@@ -85,7 +150,7 @@ private:
   }
 
 private:
-  static const int64_t MIN_HLL_BIT = 4;
+  static const int64_t MIN_HLL_BIT = 1;
   static const int64_t MAX_HLL_BIT = 16;
   static const int64_t MAX_HASH_VALUE_LENGTH = 64;
   ObIAllocator *alloc_;
@@ -108,7 +173,7 @@ inline int ObHyperLogLogCalculator::init(ObIAllocator *alloc, int64_t n_bit)
     alloc_ = alloc;
     n_bit_ = n_bit;
     n_bucket_ = 1 << n_bit_;
-    buckets_ = (char*)alloc_->alloc(n_bucket_ * sizeof(char));
+    buckets_ = (char *)alloc_->alloc(n_bucket_ * sizeof(char));
     if (OB_ISNULL(buckets_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to allocate buckets", K(ret), K(n_bucket_));
@@ -165,12 +230,13 @@ inline void ObHyperLogLogCalculator::sets(uint64_t *hash_vals, int64_t count)
 }
 
 // E = alpha(m) *  m^2 * ( sigma( 1 / 2^buckets_[j] ) )^-1
-inline uint64_t ObHyperLogLogCalculator::estimate()
+inline uint64_t ObHyperLogLogCalculator::estimate() const
 {
   int ret = OB_SUCCESS;
   double sum_of_pmax = 0.0;
   uint64_t num_empty_buckets = 0;
-  ObString::obstr_size_t n_buckets = 1 << n_bit_;
+  //n_bit_ == 0 means haven't been init
+  ObString::obstr_size_t n_buckets = n_bit_ == 0 ? 0 : 1 << n_bit_;
   // 1. calculate the sum of bucket from 1 to buckets
   for (int64_t i = 0; i < n_buckets; ++i) {
     sum_of_pmax += 1.0 / static_cast<double>((1ULL << (buckets_[i])));
@@ -181,11 +247,12 @@ inline uint64_t ObHyperLogLogCalculator::estimate()
   // 2. alpha(m) * m^2 / SIGMA
   double estimate_ndv = 0 < sum_of_pmax ? hll_alpha_multiple_m_square(n_buckets) / sum_of_pmax : 0;
   if (OB_UNLIKELY(estimate_ndv > n_count_)) {
-    // COMMON_LOG(WARN, "before estimate ndv value overflows", K(estimate_ndv), K(n_count_));
+    // COMMON_LOG(WARN, "estimate ndv value overflows", K(estimate_ndv), K(n_count_));
     estimate_ndv = n_count_;
     // COMMON_LOG(WARN, "after estimate ndv value overflows", K(estimate_ndv), K(n_count_));
   } else {
     if (estimate_ndv <= 2.5 * static_cast<double>(n_buckets)) {
+      // COMMON_LOG(WARN, "estimate ndv may downgrade", K(estimate_ndv), K(2.5 * static_cast<double>(n_buckets)), K(num_empty_buckets));
       if (0 != num_empty_buckets) {
         // use linear count
         estimate_ndv = static_cast<double>(n_buckets)

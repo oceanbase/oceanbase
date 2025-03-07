@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
-#include "lib/stat/ob_diagnose_info.h"
 #include "ob_cg_sstable_row_getter.h"
 
 namespace oceanbase

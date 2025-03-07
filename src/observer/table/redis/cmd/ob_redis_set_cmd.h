@@ -18,20 +18,10 @@ namespace oceanbase
 {
 namespace table
 {
-/*
-sets table model:
-    create table modis_set_table(
-      db bigint not null,
-      rkey varbinary(1024) not null,
-      member varbinary(1024) not null,
-      expire_ts timestamp(6) default null,
-      primary key(db, rkey, member)) TTL(expire_ts + INTERVAL 0 SECOND)
-      partition by key(db, rkey) partitions 3;
-*/
 class SetCommand : public RedisCommand
 {
 public:
-  using MemberSet = common::hash::ObHashSet<ObString>;
+  using MemberSet = common::hash::ObHashSet<ObString, common::hash::NoPthreadDefendMode>;
   enum class AggFunc {
     DIFF,
     UNION,
@@ -39,7 +29,9 @@ public:
   };
 
   SetCommand() : RedisCommand()
-  {}
+  {
+    attr_.cmd_group_ = ObRedisCmdGroup::SET_CMD;
+  }
   virtual ~SetCommand() = default;
 };
 
@@ -51,13 +43,12 @@ public:
     attr_.arity_ = -2;
     attr_.need_snapshot_ = false;
     attr_.use_dist_das_ = true;
-    attr_.lock_mode_ = REDIS_LOCK_MODE::SHARED;
   }
   virtual ~SetAgg()
   {}
   // set and check args here
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  virtual int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
 protected:
   const ObIArray<common::ObString> *keys_;
@@ -73,7 +64,6 @@ class SDiff : public SetAgg
 public:
   explicit SDiff(ObIAllocator &allocator) : SetAgg(allocator, AggFunc::DIFF)
   {
-    attr_.cmd_name_ = "SDIFF";
   }
   virtual ~SDiff()
   {}
@@ -88,7 +78,6 @@ class SInter : public SetAgg
 public:
   explicit SInter(ObIAllocator &allocator) : SetAgg(allocator, AggFunc::INTER)
   {
-    attr_.cmd_name_ = "SINTER";
   }
   virtual ~SInter()
   {}
@@ -103,7 +92,6 @@ class SUnion : public SetAgg
 public:
   explicit SUnion(ObIAllocator &allocator) : SetAgg(allocator, AggFunc::UNION)
   {
-    attr_.cmd_name_ = "SUNION";
   }
   virtual ~SUnion()
   {}
@@ -120,19 +108,17 @@ public:
   {
     attr_.arity_ = -3;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "SADD";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~SAdd()
   {
     members_.destroy();
   }
   // set and check args here
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+  const MemberSet &members() const { return members_; }
 
 private:
-  common::ObString key_;
   MemberSet members_;
 
 private:
@@ -143,20 +129,17 @@ class SetAggStore : public SetCommand
 {
 public:
   explicit SetAggStore(ObIAllocator &allocator, AggFunc agg_func)
-      : dest_(),
-        keys_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisSetAgg")),
-        agg_func_(agg_func)
+      : dest_(), keys_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisSetAgg")), agg_func_(agg_func)
   {
     attr_.arity_ = -3;
     attr_.need_snapshot_ = false;
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
     attr_.use_dist_das_ = true;
   }
   virtual ~SetAggStore()
   {}
   // set and check args here
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  virtual int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
 protected:
   ObString dest_;
@@ -173,7 +156,6 @@ class SDiffStore : public SetAggStore
 public:
   explicit SDiffStore(ObIAllocator &allocator) : SetAggStore(allocator, AggFunc::DIFF)
   {
-    attr_.cmd_name_ = "SDIFFSTORE";
   }
   virtual ~SDiffStore()
   {}
@@ -188,7 +170,6 @@ class SInterStore : public SetAggStore
 public:
   explicit SInterStore(ObIAllocator &allocator) : SetAggStore(allocator, AggFunc::INTER)
   {
-    attr_.cmd_name_ = "SINTERSTORE";
   }
   virtual ~SInterStore()
   {}
@@ -203,13 +184,162 @@ class SUnionStore : public SetAggStore
 public:
   explicit SUnionStore(ObIAllocator &allocator) : SetAggStore(allocator, AggFunc::UNION)
   {
-    attr_.cmd_name_ = "SUNIONSTORE";
   }
   virtual ~SUnionStore()
   {}
 
 private:
   DISALLOW_COPY_AND_ASSIGN(SUnionStore);
+};
+
+// SCARD key
+class SCard : public SetCommand
+{
+public:
+  explicit SCard(ObIAllocator &allocator)
+  {
+    attr_.arity_ = 2;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~SCard()
+  {
+  }
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SCard);
+};
+
+// SISMEMBER key member
+class SIsMember : public SetCommand
+{
+public:
+  explicit SIsMember(ObIAllocator &allocator)
+  {
+    attr_.arity_ = 3;
+    attr_.need_snapshot_ = true;
+  }
+  virtual ~SIsMember()
+  {
+  }
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(SIsMember);
+};
+
+// SMEMBERS key
+class SMembers : public SetCommand
+{
+public:
+  explicit SMembers(ObIAllocator &allocator)
+  {
+    attr_.arity_ = 2;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~SMembers()
+  {
+  }
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SMembers);
+};
+
+// SMOVE source destination member
+class SMove : public SetCommand
+{
+public:
+  explicit SMove(ObIAllocator &allocator)
+  {
+    attr_.arity_ = 4;
+    attr_.need_snapshot_ = false;
+    attr_.use_dist_das_ = true;
+  }
+  virtual ~SMove()
+  {}
+
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  common::ObString src_;
+  ObString dest_;
+  ObString member_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SMove);
+};
+
+// SPOP key [count]
+class SPop : public SetCommand
+{
+public:
+  explicit SPop(ObIAllocator &allocator)
+  {
+    attr_.arity_ = -2;
+    attr_.need_snapshot_ = false;
+    attr_.use_dist_das_ = false;
+  }
+  virtual ~SPop()
+  {}
+  // set and check args here
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  common::ObString count_str_;
+  DISALLOW_COPY_AND_ASSIGN(SPop);
+};
+
+// SRANDMEMBER key [count]
+class SRandMember : public SetCommand
+{
+public:
+  explicit SRandMember(ObIAllocator &allocator)
+  {
+    attr_.arity_ = -2;
+    attr_.need_snapshot_ = false;
+    attr_.use_dist_das_ = false;
+  }
+  virtual ~SRandMember()
+  {}
+  // set and check args here
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  common::ObString count_str_;
+  DISALLOW_COPY_AND_ASSIGN(SRandMember);
+};
+
+// SREM key member [member ...]
+class SRem : public SetCommand
+{
+public:
+  explicit SRem(ObIAllocator &allocator)
+  {
+    attr_.arity_ = -3;
+    attr_.need_snapshot_ = false;
+    attr_.use_dist_das_ = false;
+  }
+  virtual ~SRem()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  MemberSet members_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SRem);
 };
 
 }  // namespace table

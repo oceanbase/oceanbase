@@ -15,6 +15,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/net/ob_addr.h"
 #include "rpc/ob_request.h"
+#include "lib/allocator/ob_fifo_allocator.h"
 
 namespace oceanbase
 {
@@ -26,14 +27,22 @@ public:
   ObTableConnection() {}
   ~ObTableConnection() {}
   int init(const common::ObAddr &addr, int64_t tenant_id, int64_t database_id, int64_t user_id);
-  void update_last_active_time(int64_t last_active_time);
-  void update_all_ids(int64_t tenant_id, int64_t database_id, int64_t user_id);
-  const common::ObAddr &get_addr() { return client_addr_; }
-  const int64_t &get_tenant_id() { return tenant_id_; }
-  const int64_t &get_database_id() { return database_id_; }
-  const int64_t &get_user_id() { return user_id_; }
-  const int64_t &get_first_active_time() { return first_active_time_; }
-  const int64_t &get_last_active_time() { return last_active_time_; }
+  OB_INLINE void set_last_active_time(int64_t last_active_time)
+  {
+    ATOMIC_STORE(&last_active_time_, last_active_time);
+  }
+  OB_INLINE void update_all_ids(int64_t tenant_id, int64_t database_id, int64_t user_id)
+  {
+    ATOMIC_STORE(&tenant_id_, tenant_id);
+    ATOMIC_STORE(&database_id_, database_id);
+    ATOMIC_STORE(&user_id_, user_id);
+  }
+  const common::ObAddr& get_addr() const { return client_addr_; }
+  OB_INLINE int64_t get_tenant_id() const  { return ATOMIC_LOAD(&tenant_id_); }
+  OB_INLINE int64_t get_database_id() const { return ATOMIC_LOAD(&database_id_); }
+  OB_INLINE int64_t get_user_id() const { return ATOMIC_LOAD(&user_id_); }
+  OB_INLINE int64_t get_first_active_time() const { return first_active_time_; }
+  OB_INLINE int64_t get_last_active_time() const { return ATOMIC_LOAD(&last_active_time_); }
   TO_STRING_KV(K_(client_addr),
                K_(tenant_id),
                K_(database_id),
@@ -51,7 +60,9 @@ private:
 
 class ObTableConnectionMgr
 {
-using ObTableConnectionMap = common::hash::ObHashMap<common::ObAddr, ObTableConnection>;
+  using ObTableConnectionMap =
+      common::hash::ObHashMap<common::ObAddr, ObTableConnection*, oceanbase::common::hash::SpinReadWriteDefendMode>;
+
 public:
   static ObTableConnectionMgr &get_instance();
   int update_table_connection(const common::ObAddr &client_addr, int64_t tenant_id, int64_t database_id, int64_t user_id);
@@ -64,6 +75,7 @@ private:
   int init();
 private:
   static const int64_t CONN_INFO_MAP_BUCKET_SIZE = 1024;
+  common::ObFIFOAllocator allocator_;
   ObTableConnectionMap connection_map_;
   static ObTableConnectionMgr *instance_;
   static int64_t once_;  // for singleton instance creating

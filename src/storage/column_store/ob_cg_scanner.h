@@ -28,6 +28,7 @@ public:
       is_inited_(false),
       is_reverse_scan_(false),
       is_new_range_(false),
+      is_padding_mode_(false),
       sstable_row_cnt_(OB_INVALID_CS_ROW_ID),
       current_(OB_INVALID_CS_ROW_ID),
       query_index_range_(),
@@ -66,6 +67,8 @@ public:
   }
   virtual ObCGIterType get_type() override
   { return OB_CG_SCANNER; }
+  OB_INLINE bool is_padding_mode() const
+  { return is_padding_mode_; }
   static bool can_skip_filter(const sql::ObPushdownFilterExecutor &parent,
                               const ObCGBitmap &parent_bitmap,
                               const ObCSRange &row_range);
@@ -74,7 +77,7 @@ public:
                            const ObCGBitmap *parent_bitmap,
                            ObCGBitmap &result_bitmap);
   int build_index_filter(sql::ObPushdownFilterExecutor &filter);
-  TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(is_new_range), K_(current),
+  TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(is_new_range), K_(is_padding_mode), K_(current),
                K_(query_index_range), K_(prefetcher), K_(sstable_row_cnt));
 
 protected:
@@ -100,6 +103,7 @@ protected:
   bool is_inited_;
   bool is_reverse_scan_;
   bool is_new_range_;
+  bool is_padding_mode_;
   uint64_t sstable_row_cnt_;
   ObCSRowId current_;
   ObCSRange query_index_range_;

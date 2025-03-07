@@ -12,21 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 
 #define private public
 #define protected public
 #undef private
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "share/ob_rpc_struct.h"
-#include "storage/multi_data_source/buffer_ctx.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "storage/schema_utils.h"
 #include "storage/test_dml_common.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
 
 namespace oceanbase
 {

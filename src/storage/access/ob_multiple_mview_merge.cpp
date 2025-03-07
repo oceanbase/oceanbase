@@ -449,7 +449,6 @@ int ObMviewMergeWrapper::get_mview_merge(
     merges_[merge_type] = tmp_merge;
     version_merge = tmp_merge;
     version_merge->set_iter_del_row(is_mview_need_deleted_row(context.mview_scan_info_->scan_type_));
-    param.op_filters_ = &context.mview_scan_info_->op_filters_;
   }
   if (OB_FAIL(ret) && nullptr != tmp_merge) {
     tmp_merge->~ObMviewMerge();

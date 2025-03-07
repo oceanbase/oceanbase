@@ -12,20 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_reader.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_writer.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/ob_super_block_struct.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
-#include "storage/slog/ob_storage_log_replayer.h"
-#include "storage/slog/ob_storage_log.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "storage/slog/ob_storage_logger.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
@@ -68,7 +60,7 @@ int ObServerCheckpointSlogHandler::init(ObStorageLogger *server_slogger)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObServerCheckpointSlogHandler has inited", K(ret));
-  } else if (OB_FAIL(task_timer_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(task_timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
     LOG_WARN("fail to set timer's run wrapper", K(ret));
   } else if (OB_FAIL(task_timer_.init("ServerCkptSlogHandler"))) {
     LOG_WARN("fail to init task timer", K(ret));

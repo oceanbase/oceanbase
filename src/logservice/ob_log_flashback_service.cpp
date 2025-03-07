@@ -9,9 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX CLOG
 #include "ob_log_flashback_service.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/scn.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

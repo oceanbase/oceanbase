@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX TRANS
 #include "ob_trans_ctx.h"
-#include "ob_trans_ctx_mgr.h"
 #include "ob_trans_service.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "share/ob_cluster_version.h"
-#include "share/rc/ob_context.h"
 
 namespace oceanbase
 {
@@ -197,7 +193,7 @@ MonotonicTs ObTransCtx::get_stc_()
   return stc_;
 }
 
-ObITsMgr *ObTransCtx::get_ts_mgr_()
+ObTsMgr *ObTransCtx::get_ts_mgr_()
 {
   return trans_service_->get_ts_mgr();
 }

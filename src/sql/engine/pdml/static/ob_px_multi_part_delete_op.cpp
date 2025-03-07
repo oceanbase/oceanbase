@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_multi_part_delete_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/dml/ob_dml_service.h"
 
@@ -214,7 +211,7 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
       if (OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("do delete rows post process failed", K(ret));
       } else {
-        op_monitor_info_.otherstat_6_value_ += del_rtdef_.das_rtdef_.affected_rows_;
+        op_monitor_info_.otherstat_5_value_ += del_rtdef_.das_rtdef_.affected_rows_;
       }
     }
     if (!(MY_SPEC.is_pdml_index_maintain_) && !(MY_SPEC.is_pdml_update_split_)) {
@@ -229,7 +226,7 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
     LOG_TRACE("pdml delete ok",K(MY_SPEC.is_pdml_index_maintain_),
               K(del_rtdef_.das_rtdef_.affected_rows_), K(op_monitor_info_.otherstat_1_value_),
               K(op_monitor_info_.otherstat_2_value_), K(op_monitor_info_.otherstat_3_value_),
-              K(op_monitor_info_.otherstat_4_value_), K(op_monitor_info_.otherstat_6_value_));
+              K(op_monitor_info_.otherstat_4_value_), K(op_monitor_info_.otherstat_5_value_));
     del_rtdef_.das_rtdef_.affected_rows_ = 0;
   }
   return ret;

@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_linked_block_reader.h"
+#include "ob_backup_linked_block_reader.h"
 #include "storage/backup/ob_backup_restore_util.h"
-#include "storage/blocksstable/ob_data_buffer.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

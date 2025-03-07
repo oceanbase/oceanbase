@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tenant_meta_snapshot_handler.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/ob_super_block_struct.h"
-#include "storage/tx/ob_timestamp_service.h"
 #include "observer/omt/ob_tenant.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "observer/ob_startup_accel_task_handler.h"
+#include "src/storage/ls/ob_ls.h"
 
 
 namespace oceanbase

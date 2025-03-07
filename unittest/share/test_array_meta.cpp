@@ -14,17 +14,13 @@
 #define private public
 #define protected public
 #include "lib/hash/ob_hashset.h"
-#include "lib/udt/ob_collection_type.h"
 #include "lib/udt/ob_array_utils.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_parse.h"
 #include "sql/engine/expr/ob_array_cast.h"
 #undef private
 #undef protected
 
-#include <iostream>
-#include <regex>
+
+using namespace std;
 
 namespace oceanbase {
 namespace common {
@@ -117,7 +113,7 @@ TEST_F(TestArrayMeta, varchar_arra_construct)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr1_text, arr_var1, dst_elem_type));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(arr_type1, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 
   // construct array(arrray(varchar))
@@ -136,13 +132,13 @@ TEST_F(TestArrayMeta, varchar_arra_construct)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var1, dst_elem_type));
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
   // push ["hello", "world", "hi", "what", "are you?"] to array(arrray(varchar))
   ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
   ASSERT_EQ(OB_SUCCESS, arr_var2->init());
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var2->print(arr_type2->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var2->print(format_str));
   std::cout << "arr_va2: " << format_str.ptr() << std::endl;
 
   char raw_binary[1024] = {0};
@@ -153,7 +149,7 @@ TEST_F(TestArrayMeta, varchar_arra_construct)
   ObString raw_str(raw_len, raw_binary);
   ASSERT_EQ(OB_SUCCESS, arr_var3->init(raw_str));
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var3->print(arr_type2->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var3->print(format_str));
   std::cout << "arr_va3: " << format_str.ptr() << std::endl;
 
   // construct array(array(array(varchar)))
@@ -169,7 +165,7 @@ TEST_F(TestArrayMeta, varchar_arra_construct)
   ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var4)->push_back(*arr_var3));
   ASSERT_EQ(OB_SUCCESS, arr_var4->init());
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var4->print(arr_type3->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var4->print(format_str));
   std::cout << "arr_va4: " << format_str.ptr() << std::endl;
 
   // arr_var4->at(i)
@@ -179,7 +175,7 @@ TEST_F(TestArrayMeta, varchar_arra_construct)
     ASSERT_EQ(OB_SUCCESS, arr_var4->at(i, *arr_var5));
     ASSERT_EQ(OB_SUCCESS, arr_var5->init());
     format_str.reset();
-    ASSERT_EQ(OB_SUCCESS, arr_var5->print(arr_type2->element_type_, format_str));
+    ASSERT_EQ(OB_SUCCESS, arr_var5->print(format_str));
     std::cout << "arr_va5: " << i << ": "<< format_str.ptr() << std::endl;
     arr_var5->clear();
   }
@@ -201,7 +197,7 @@ TEST_F(TestArrayMeta, fixsize_array_construct)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr1_text, arr_var1, dst_elem_type));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 
   // construct array(arrray(varchar))
@@ -221,13 +217,13 @@ TEST_F(TestArrayMeta, fixsize_array_construct)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var1, dst_elem_type));
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
   // push [5, 6.88, null, 8.01] to array(arrray(float))
   ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
   ASSERT_EQ(OB_SUCCESS, arr_var2->init());
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var2->print(arr_type2->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var2->print(format_str));
   std::cout << "arr_va2: " << format_str.ptr() << std::endl;
 
   char raw_binary[1024] = {0};
@@ -238,12 +234,12 @@ TEST_F(TestArrayMeta, fixsize_array_construct)
   ObString raw_str(raw_len, raw_binary);
   ASSERT_EQ(OB_SUCCESS, arr_var3->init(raw_str));
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var3->print(arr_type2->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var3->print(format_str));
   std::cout << "arr_va3: " << format_str.ptr() << std::endl;
 
 }
 
-TEST_F(TestArrayMeta, nested_vector_construct)
+TEST_F(TestArrayMeta, nested_vector_construct_float)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObSqlCollectionInfo type1_info_parse(allocator);
@@ -259,7 +255,7 @@ TEST_F(TestArrayMeta, nested_vector_construct)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr1_text, arr_var1, dst_elem_type));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
   std::cout << "vector(3): " << format_str.ptr() << std::endl;
 
   // construct array(vector(3))
@@ -279,14 +275,14 @@ TEST_F(TestArrayMeta, nested_vector_construct)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var1, dst_elem_type));
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
-  std::cout << "vector(3): " << format_str.ptr() << std::endl;
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
+  std::cout << "vector(3, FLOAT): " << format_str.ptr() << std::endl;
   // push [5, 6.88, null, 8.01] to array(arrray(float))
   ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
   ASSERT_EQ(OB_SUCCESS, arr_var2->init());
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var2->print(arr_type2->element_type_, format_str));
-  std::cout << "ARRAY(VECTOR(3)): " << format_str.ptr() << std::endl;
+  ASSERT_EQ(OB_SUCCESS, arr_var2->print(format_str));
+  std::cout << "ARRAY(VECTOR(3, FLOAT)): " << format_str.ptr() << std::endl;
 
   char raw_binary[1024] = {0};
   ASSERT_EQ(OB_SUCCESS, arr_var2->get_raw_binary(raw_binary, 1024));
@@ -296,8 +292,95 @@ TEST_F(TestArrayMeta, nested_vector_construct)
   ObString raw_str(raw_len, raw_binary);
   ASSERT_EQ(OB_SUCCESS, arr_var3->init(raw_str));
   format_str.reset();
-  ASSERT_EQ(OB_SUCCESS, arr_var3->print(arr_type2->element_type_, format_str));
-  std::cout << "ARRAY(VECTOR(3)): " << format_str.ptr() << std::endl;
+  ASSERT_EQ(OB_SUCCESS, arr_var3->print(format_str));
+  std::cout << "ARRAY(VECTOR(3, FLOAT)): " << format_str.ptr() << std::endl;
+}
+
+TEST_F(TestArrayMeta, nested_vector_construct_uint8)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObSqlCollectionInfo type1_info_parse(allocator);
+  ObString type1_name(strlen("VECTOR(3, UTINYINT)"), "VECTOR(3, UTINYINT)");
+  type1_info_parse.set_name(type1_name);
+  ASSERT_EQ(OB_SUCCESS, type1_info_parse.parse_type_info());
+  ObIArrayType *arr_var1 = nullptr;
+  ObCollectionArrayType *arr_type1 = static_cast<ObCollectionArrayType *>(type1_info_parse.collection_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type1, arr_var1));
+  std::cout << arr_var1->get_element_type() << std::endl;
+  // construct array from string [3.14, 1.414, 2.718]
+  ObString arr1_text("[3.14, 1.414, 2.718]");
+  ObCollectionBasicType *dst_elem_type = static_cast<ObCollectionBasicType *>(arr_type1->element_type_);
+  ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr1_text, arr_var1, dst_elem_type));
+  ObStringBuffer format_str(&allocator);
+  ASSERT_EQ(OB_SUCCESS, arr_var1->init());
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
+  ASSERT_EQ(0, format_str.string().compare("[3,1,3]"));
+  // truncate to [3,1,3], compatible with OB tinyint col
+  std::cout << "vector(3, UTINYINT): " << format_str.ptr() << std::endl;
+
+  // construct array(vector(3, UTINYINT))
+  ObSqlCollectionInfo type2_info_parse(allocator);
+  ObString type2_name(strlen("ARRAY(VECTOR(3, UTINYINT))"), "ARRAY(VECTOR(3, UTINYINT))");
+  type2_info_parse.set_name(type2_name);
+  ASSERT_EQ(OB_SUCCESS, type2_info_parse.parse_type_info());
+  ObIArrayType *arr_var2 = nullptr;
+  ObCollectionArrayType *arr_type2 = static_cast<ObCollectionArrayType *>(type2_info_parse.collection_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type2, arr_var2));
+  // push [3.14, 1.414, 2.718] to array(arrray(UTINYINT))
+  ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
+
+  // construct array from string [1, 2, 3]
+  ObString arr2_text("[1, 2, 3]");
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type1, arr_var1));
+  ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var1, dst_elem_type));
+  format_str.reset();
+  ASSERT_EQ(OB_SUCCESS, arr_var1->init());
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
+  ASSERT_EQ(0, format_str.string().compare("[1,2,3]"));
+  std::cout << "vector(3, UTINYINT): " << format_str.ptr() << std::endl;
+  // push [1, 2, 3] to array(arrray(UTINYINT))
+  ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
+  ASSERT_EQ(OB_SUCCESS, arr_var2->init());
+  format_str.reset();
+  ASSERT_EQ(OB_SUCCESS, arr_var2->print(format_str));
+  ASSERT_EQ(0, format_str.string().compare("[[3,1,3],[1,2,3]]"));
+  std::cout << "ARRAY(VECTOR(3, UTINYINT)): " << format_str.ptr() << std::endl;
+
+  char raw_binary[1024] = {0};
+  ASSERT_EQ(OB_SUCCESS, arr_var2->get_raw_binary(raw_binary, 1024));
+  int32_t raw_len = arr_var2->get_raw_binary_len();
+  ObIArrayType *arr_var3 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type2, arr_var3));
+  ObString raw_str(raw_len, raw_binary);
+  ASSERT_EQ(OB_SUCCESS, arr_var3->init(raw_str));
+  format_str.reset();
+  ASSERT_EQ(OB_SUCCESS, arr_var3->print(format_str));
+  ASSERT_EQ(0, format_str.string().compare("[[3,1,3],[1,2,3]]"));
+  std::cout << "ARRAY(VECTOR(3, UTINYINT)): " << format_str.ptr() << std::endl;
+
+  // error: out of uint8 range
+  ObString arr3_text("[5, 123456, 8.01]");
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type1, arr_var1));
+  ASSERT_EQ(OB_DATA_OUT_OF_RANGE, sql::ObArrayCastUtils::string_cast(allocator, arr3_text, arr_var1, dst_elem_type));
+  ObString arr4_text("[5, -1, 8.01]");
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type1, arr_var1));
+  ASSERT_EQ(OB_DATA_OUT_OF_RANGE, sql::ObArrayCastUtils::string_cast(allocator, arr4_text, arr_var1, dst_elem_type));
+}
+
+TEST_F(TestArrayMeta, nested_vector_construct_error)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  // 1. with not supported type
+  ObSqlCollectionInfo type2_info_parse(allocator);
+  ObString type2_name(strlen("VECTOR(3, TINYINT)"), "VECTOR(3, TINYINT)");
+  type2_info_parse.set_name(type2_name);
+  ASSERT_EQ(OB_NOT_SUPPORTED, type2_info_parse.parse_type_info());
+
+  // 2. should be all caps
+  ObSqlCollectionInfo type3_info_parse(allocator);
+  ObString type3_name(strlen("VECTOR(3, float)"), "VECTOR(3, float)");
+  type3_info_parse.set_name(type3_name);
+  ASSERT_EQ(OB_NOT_SUPPORTED, type3_info_parse.parse_type_info());
 }
 
 TEST_F(TestArrayMeta, type_deduce)
@@ -344,7 +427,7 @@ TEST_F(TestArrayMeta, nested_array_parse)
   ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr1_text, arr_var1, arr_type1->element_type_));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_var1->init());
-  ASSERT_EQ(OB_SUCCESS, arr_var1->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 }
 
@@ -823,7 +906,7 @@ TEST_F(TestArrayMeta, array_fix_distinct)
 
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_dist->init());
-  ASSERT_EQ(OB_SUCCESS, arr_dist->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_dist->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 }
 
@@ -847,7 +930,7 @@ TEST_F(TestArrayMeta, varchar_array_distinct)
 
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_dist->init());
-  ASSERT_EQ(OB_SUCCESS, arr_dist->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_dist->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 }
 
@@ -870,7 +953,7 @@ TEST_F(TestArrayMeta, nested_array_distinct)
 
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_dist->init());
-  ASSERT_EQ(OB_SUCCESS, arr_dist->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_dist->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 
 }
@@ -908,7 +991,7 @@ TEST_F(TestArrayMeta, array_nested_hasset)
   hash::ObHashSet<ObArrayNested>::iterator iter = nested_arrs.begin();
   for (; iter != nested_arrs.end(); iter++) {
     ObArrayNested &arr_item = iter->first;
-    ASSERT_EQ(OB_SUCCESS, arr_item.print(arr_type1->element_type_, format_str));
+    ASSERT_EQ(OB_SUCCESS, arr_item.print(format_str));
     std::cout << "arr_va3: " << format_str.ptr() << std::endl;
     format_str.reset();
   }
@@ -934,14 +1017,14 @@ TEST_F(TestArrayMeta, array_fix_remove)
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, &val_remove, false, arr_res));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
-  ASSERT_EQ(OB_SUCCESS, arr_res->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1 remove 3.14: " << format_str.ptr() << std::endl;
 
   arr_res->clear();
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, &val_remove, true, arr_res));
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
-  ASSERT_EQ(OB_SUCCESS, arr_res->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1 remove null: " << format_str.ptr() << std::endl;
 }
 
@@ -965,14 +1048,14 @@ TEST_F(TestArrayMeta, varchar_array_remove)
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, &remove_text, false, arr_res));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
-  ASSERT_EQ(OB_SUCCESS, arr_res->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1 remove hi: " << format_str.ptr() << std::endl;
 
   arr_res->clear();
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, &remove_text, true, arr_res));
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
-  ASSERT_EQ(OB_SUCCESS, arr_res->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1 remove null: " << format_str.ptr() << std::endl;
 
 }
@@ -1008,14 +1091,14 @@ TEST_F(TestArrayMeta, nested_array_remove)
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, arr_var2, false, arr_res));
   ObStringBuffer format_str(&allocator);
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
-  ASSERT_EQ(OB_SUCCESS, arr_res->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1: " << format_str.ptr() << std::endl;
 
   arr_res->clear();
   format_str.reset();
   ASSERT_EQ(OB_SUCCESS, ObArrayUtil::clone_except(allocator, *arr_var1, arr_var2, true, arr_res));
   ASSERT_EQ(OB_SUCCESS, arr_res->init());
-  ASSERT_EQ(OB_SUCCESS, arr_res->print(arr_type1->element_type_, format_str));
+  ASSERT_EQ(OB_SUCCESS, arr_res->print(format_str));
   std::cout << "arr_va1 remove null: " << format_str.ptr() << std::endl;
 }
 
@@ -1025,8 +1108,8 @@ TEST_F(TestArrayMeta, nested_array_remove)
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  //system("rm -f test_array_meta.log");
-  //OB_LOGGER.set_file_name("test_array_meta.log");
-  //OB_LOGGER.set_log_level("INFO");
+  // system("rm -f test_array_meta.log");
+  // OB_LOGGER.set_file_name("test_array_meta.log");
+  // OB_LOGGER.set_log_level("DEBUG");
   return RUN_ALL_TESTS();
 }

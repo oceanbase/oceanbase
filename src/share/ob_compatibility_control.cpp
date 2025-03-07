@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_compatibility_control.h"
-#include "share/ob_cluster_version.h"
 #include "share/ob_upgrade_utils.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/file/ob_string_util.h"
 
 namespace oceanbase
 {

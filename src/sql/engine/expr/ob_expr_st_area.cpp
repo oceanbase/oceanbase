@@ -15,10 +15,6 @@
 
 #include "ob_expr_st_area.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;

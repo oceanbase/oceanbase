@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_schedule_dag_func.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/ddl/ob_tablet_split_task.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/column_store/ob_co_merge_dag.h"
-#include "lib/oblog/ob_log_module.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"

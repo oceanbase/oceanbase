@@ -98,6 +98,20 @@ public:
 
 
   virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
+  /*
+    Retrieve server array for all tenants except the Meta tenant if tenant_id is invalid
+    Otherwise, retrieve server array for the specified tenant_id, noting that this tenant_id cannot be a meta tenant either.
+    If there is nothing you need in the table (or the table is empty), OB_ENTRY_NOT_EXIST will be returned.
+
+    @param[in] tenant_id:             Defaults to an invalid value.
+    @param[out] tenant_servers:       Tenant's server array
+    @return
+      - OB_SUCCESS:                   successfully
+      - OB_ENTRY_NOT_EXIST:           can't find what you need in the table
+      - other:                        other failures
+  */
+  int get_tenant_servers(common::ObIArray<ObTenantServers> &tenant_servers,
+                         const uint64_t tenant_id = OB_INVALID_TENANT_ID) const;
   static int read_unit(const common::sqlclient::ObMySQLResult &result, ObUnit &unit);
   virtual int check_server_empty(const common::ObAddr &server, bool &is_empty);
 private:
@@ -124,6 +138,12 @@ private:
   int read_unit_stat(const common::sqlclient::ObMySQLResult &result, ObUnitStat &unit_stat) const;
   int read_unit_stats(common::ObSqlString &sql,
                  common::ObIArray<ObUnitStat> &unit_stats) const;
+  int read_tenant_servers(common::ObSqlString &sql,
+                          common::ObIArray<ObTenantServers> &tenant_servers) const;
+  int read_tenant_server(const common::sqlclient::ObMySQLResult &result,
+                         uint64_t &tenant_id,
+                         common::ObAddr &server,
+                         common::ObAddr &migrate_from_server) const;
 private:
   bool inited_;
   common::ObMySQLProxy *proxy_;

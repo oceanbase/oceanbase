@@ -12,8 +12,6 @@
 
 #include "ob_direct_load_table_guard.h"
 
-#include "storage/ob_protected_memtable_mgr_handle.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 

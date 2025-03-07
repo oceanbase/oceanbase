@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_rebuild_cb_impl.h"
 #include "ob_rebuild_service.h"
-#include "share/ls/ob_ls_table_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {

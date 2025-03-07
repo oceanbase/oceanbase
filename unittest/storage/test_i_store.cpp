@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "blocksstable/ob_row_generate.h"
-#include "storage/ob_i_store.h"
-#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {

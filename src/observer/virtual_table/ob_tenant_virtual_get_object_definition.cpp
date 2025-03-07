@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_tenant_virtual_get_object_definition.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
 #include "sql/session/ob_sql_session_info.h"
-
-#include "share/schema/ob_table_schema.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -49,7 +46,9 @@ const char *ObGetObjectDefinition::ObjectTypeName[T_GET_DDL_MAX] =
   "SYNONYM",
   "TYPE",
   "TYPE_SPEC",
-  "TYPE_BODY"
+  "TYPE_BODY",
+  "PACKAGE_BODY",
+  "FUNCTION"
 };
 
 void ObGetObjectDefinition::reset()
@@ -170,9 +169,33 @@ int ObGetObjectDefinition::get_ddl_creation_str(ObString &ddl_str,
       // table, procedure, package仍使用原来的实现方式，未使用tenant_virtual_object_definition虚拟表
       // 在下一个barrier版本的下一个版本改为使用tenant_virtual_object_definition虚拟表，并删去旧的虚拟表
       //ret = get_table_definition(ddl_str, object_id);
-    case T_GET_DDL_PROCEDURE:
-    case T_GET_DDL_PACKAGE:
       ret = OB_NOT_SUPPORTED;
+      break;
+    case T_GET_DDL_PROCEDURE:
+    case T_GET_DDL_FUNCTION:
+      ret = get_routine_definition(ddl_str,object_name, db_name, object_type);
+      break;
+    case T_GET_DDL_PACKAGE:
+      ret = get_package_definition(ddl_str,object_name, db_name, PACKAGE_TYPE, object_type);
+      if(OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        ObString ddl_body_str;
+        tmp_ret = get_package_definition(ddl_body_str,object_name, db_name, PACKAGE_BODY_TYPE, object_type);
+        if (OB_ERR_OBJECT_NOT_FOUND == tmp_ret || OB_SUCC(tmp_ret)) {
+          MEMCPY(ddl_str.ptr() + ddl_str.length(), "\n", sizeof("\n"));
+          ddl_str.set_length(ddl_str.length() + sizeof("\n"));
+          MEMCPY(ddl_str.ptr() + ddl_str.length(), ddl_body_str.ptr(), ddl_body_str.length());
+          ddl_str.set_length(ddl_str.length() + ddl_body_str.length());
+        } else {
+          ret = tmp_ret;
+        }
+      }
+      break;
+    case T_GET_DDL_PACKAGE_SPEC:
+      ret = get_package_definition(ddl_str,object_name, db_name, PACKAGE_TYPE, object_type);
+      break;
+    case T_GET_DDL_PACKAGE_BODY:
+      ret = get_package_definition(ddl_str,object_name, db_name, PACKAGE_BODY_TYPE, object_type);
       break;
     case T_GET_DDL_CONSTRAINT:
       ret = get_constraint_definition(ddl_str,object_name, db_name, object_type);
@@ -584,6 +607,66 @@ int ObGetObjectDefinition::get_trigger_definition(ObString &ddl_str,
   return ret;
 }
 
+int ObGetObjectDefinition::get_routine_definition(ObString &ddl_str,
+                                                  const ObString &routine_name,
+                                                  const ObString &db_name,
+                                                  GetDDLObjectType object_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = table_schema_->get_tenant_id();
+  uint64_t database_id = OB_INVALID_ID;
+  const ObRoutineInfo *routine_info = NULL;
+  sql::ObExecEnv exec_env;
+  ObRoutineType routine_type = T_GET_DDL_PROCEDURE == object_type ?
+                               ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
+  if (OB_ISNULL(schema_guard_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "schema guard is NULL", K(ret), K(schema_guard_));
+  } else if (OB_FAIL(get_database_id(tenant_id, db_name, database_id))) {
+    ret = print_error_log(object_type, db_name, routine_name);
+    LOG_WARN("database not found", K(db_name));
+  } else if (ROUTINE_FUNCTION_TYPE == routine_type &&
+             OB_FAIL(schema_guard_->get_standalone_function_info(tenant_id, database_id,
+                                                                 routine_name,
+                                                                 routine_info))) {
+    LOG_WARN("get routine info failed", K(ret), K(tenant_id), K(routine_name));
+  } else if (ROUTINE_PROCEDURE_TYPE == routine_type &&
+             OB_FAIL(schema_guard_->get_standalone_procedure_info(tenant_id, database_id,
+                                                                  routine_name,
+                                                                  routine_info))) {
+    LOG_WARN("get routine info failed", K(ret), K(tenant_id), K(routine_name));
+  } else if (OB_ISNULL(routine_info)) {
+    ret = print_error_log(object_type, db_name, routine_name);
+    LOG_WARN("routine not found", K(ret));
+  } else if (OB_FAIL(exec_env.init(routine_info->get_exec_env()))) {
+    SERVER_LOG(ERROR, "fail to load exec env", K(ret));
+  } else {
+    char *routine_def_buf = NULL;
+    uint64_t routine_id = routine_info->get_routine_id();
+    int64_t routine_def_buf_size = OB_MAX_VARCHAR_LENGTH;
+    if (OB_UNLIKELY(OB_ISNULL(routine_def_buf = static_cast<char *>
+                                                 (allocator_->alloc(routine_def_buf_size))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SERVER_LOG(ERROR, "fail to alloc routine_def_buf", K(ret), K(routine_def_buf_size));
+    } else {
+      ObSchemaPrinter schema_printer(*schema_guard_);
+      int64_t pos = 0;
+      if (OB_FAIL(schema_printer.print_routine_definition(tenant_id,
+                                                          routine_id,
+                                                          exec_env,
+                                                          routine_def_buf,
+                                                          routine_def_buf_size,
+                                                          pos,
+                                                          TZ_INFO(session_)))) {
+        SERVER_LOG(WARN, "Generate routine definition failed");
+      } else {
+        ddl_str.assign(routine_def_buf, pos);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObGetObjectDefinition::get_user_definition(ObString &ddl_str,
                                               const ObString &user_name,
                                               const ObString &db_name,
@@ -834,6 +917,73 @@ int ObGetObjectDefinition::fill_row_cells(ObString &ddl_str,
     }
     if (OB_SUCC(ret)) {
       cell_idx++;
+    }
+  }
+  return ret;
+}
+
+int ObGetObjectDefinition::get_package_definition(ObString &ddl_str,
+                                                    const ObString &package_name,
+                                                    const ObString &db_name,
+                                                    ObPackageType package_type,
+                                                    GetDDLObjectType object_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = table_schema_->get_tenant_id();
+  const ObDatabaseSchema *database_schema = NULL;
+  uint64_t package_id = OB_INVALID_ID;
+  uint64_t database_id = OB_INVALID_ID;
+  const ObPackageInfo *package_info = NULL;
+  int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
+                                                : COMPATIBLE_MYSQL_MODE;
+  if (OB_ISNULL(schema_guard_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "schema guard is NULL", K(ret), K(schema_guard_));
+  } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, db_name, database_schema))) {
+    LOG_WARN("get database schema failed", K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = print_error_log(object_type, db_name, package_name);
+    LOG_WARN("database not found", K(db_name));
+  } else if (FALSE_IT(database_id = database_schema->get_database_id())) {
+  } else if (OB_FAIL(schema_guard_->get_package_info(tenant_id,
+                                                      database_id,
+                                                      package_name,
+                                                      package_type,
+                                                      compatible_mode,
+                                                      package_info))){
+    LOG_WARN("get package info failed", K(ret), K(tenant_id), K(database_id), K(package_name));
+  } else if (OB_ISNULL(package_info) && 0 == db_name.case_compare(OB_ORA_SYS_SCHEMA_NAME) &&
+             OB_FAIL(schema_guard_->get_package_info(OB_SYS_TENANT_ID,
+                                                     OB_SYS_DATABASE_ID,
+                                                     package_name,
+                                                     package_type,
+                                                     compatible_mode,
+                                                     package_info))) {
+    LOG_WARN("get package info failed in system tenant", K(ret), K(tenant_id), K(database_id), K(package_name));
+  } else if (OB_ISNULL(package_info)
+             || OB_INVALID_ID == (package_id = package_info->get_package_id())) {
+    ret = print_error_log(object_type, db_name, package_name);
+    LOG_WARN("package not found", K(db_name), K(package_name));
+  } else {
+    char *pkg_def_buf = NULL;
+    int64_t pkg_def_buf_size = OB_MAX_VARCHAR_LENGTH;
+    if (OB_UNLIKELY(NULL == (pkg_def_buf =
+                             static_cast<char *> (allocator_->alloc(pkg_def_buf_size))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SERVER_LOG(ERROR, "fail to alloc pkg_def_buf", K(ret), K(pkg_def_buf_size));
+    } else {
+      ObSchemaPrinter schema_printer(*schema_guard_);
+      int64_t pos = 0;
+      if (OB_FAIL(schema_printer.print_package_definition(package_info->get_tenant_id(),
+                                                          package_info->get_package_id(),
+                                                          pkg_def_buf,
+                                                          pkg_def_buf_size,
+                                                          pos))) {
+        SERVER_LOG(WARN, "Generate package definition failed");
+      } else {
+        ddl_str.assign_buffer(pkg_def_buf, pkg_def_buf_size);
+        ddl_str.set_length(pos);
+      }
     }
   }
   return ret;

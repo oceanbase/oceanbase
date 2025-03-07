@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #include "ob_concurrent_seq_queue.h"
 
-#include "share/ob_define.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/atomic/ob_atomic.h"
 

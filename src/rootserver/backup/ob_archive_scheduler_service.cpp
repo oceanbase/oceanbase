@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "rootserver/backup/ob_tenant_archive_scheduler.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_unit_manager.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/thread/ob_thread_name.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/backup/ob_tenant_archive_round.h"
 #include "share/ob_ddl_common.h"
 
 using namespace oceanbase;

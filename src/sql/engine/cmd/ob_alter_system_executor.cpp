@@ -12,46 +12,29 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/cmd/ob_alter_system_executor.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "observer/ob_server.h"
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/rc/ob_context.h"
-#include "observer/ob_server_struct.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_utils.h" //ObArbitrationServiceUtils
 #endif
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "observer/omt/ob_tenant.h" //ObTenant
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "rpc/obmysql/ob_sql_sock_session.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "share/restore/ob_tenant_clone_table_operator.h" //ObCancelCloneJobReason
-#include "share/table/ob_ttl_util.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 
 #include "rootserver/ob_service_name_command.h"
 #include "rootserver/ob_tenant_event_def.h"
+#include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
+#include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
+#include "share/table/ob_redis_importer.h"
 
 namespace oceanbase
 {
@@ -1425,9 +1408,23 @@ int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
   obrpc::ObCommonRpcProxy *common_rpc = NULL;
+  uint64_t sys_data_version = 0;
   if (OB_UNLIKELY(!stmt.get_rpc_arg().is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rpc args is invalid", KR(ret), K(stmt));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret));
+  } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
+    ObDRWorker dr_worker;
+    ObNotifyTenantThreadArg arg;
+    if (OB_FAIL(dr_worker.execute_manual_dr_task(stmt.get_rpc_arg()))) {
+      LOG_WARN("failed to execute manual drtask", KR(ret), K(stmt));
+    } else if (OB_FAIL(arg.init(gen_meta_tenant_id(stmt.get_rpc_arg().get_tenant_id()),
+                                obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE))) {
+      LOG_WARN("failed to init arg", KR(ret), K(stmt));
+    } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_service(arg))) {
+      LOG_WARN("fail to wake up", KR(ret), K(stmt), K(arg));
+    }
   } else if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", KR(ret));
@@ -2131,7 +2128,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
              pre_effective_tenant_id, schema_guard))) {
     LOG_WARN("get_schema_guard failed", KR(ret), K(pre_effective_tenant_id));
-  } else if (OB_FAIL(schema_guard.check_db_access(session_priv, database_name))) { // case 3
+  } else if (OB_FAIL(schema_guard.check_db_access(session_priv, session_info->get_enable_role_array(), database_name))) { // case 3
     LOG_WARN("fail to check db access", KR(ret), K(pre_effective_tenant_id),
              K(session_priv), K(database_name));
   } else if (session_info->get_ps_session_info_size() > 0) { // case 4
@@ -3003,6 +3000,7 @@ int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartition
   }
   return ret;
 }
+
 int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
 {
   int ret = OB_SUCCESS;
@@ -3045,6 +3043,70 @@ int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknown service operation", KR(ret), K(arg));
   }
+  return ret;
+}
+
+int ObRebuildTabletExecutor::execute(ObExecContext &ctx, ObRebuildTabletStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  ObCommonRpcProxy *common_proxy = NULL;
+  common::ObCurTraceId::mark_user_request();
+
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else {
+    LOG_INFO("ObRebuildTabletExecutor::execute", K(stmt), K(ctx));
+    obrpc::ObRebuildTabletArg arg;
+    arg.tenant_id_ = stmt.get_tenant_id();
+    arg.ls_id_ = stmt.get_ls_id();
+    arg.dest_ = stmt.get_dest_location();
+    arg.src_ = stmt.get_src_location();
+    if (OB_FAIL(arg.tablet_id_array_.assign(stmt.get_tablet_ids()))) {
+      LOG_WARN("failed to assign tablet ids", K(ret), K(stmt));
+    } else if (OB_FAIL(common_proxy->root_rebuild_tablet(arg))) {
+      LOG_WARN("rebuild tablet rpc failed", K(ret), K(arg), "dst", common_proxy->get_server());
+    }
+  }
+  return ret;
+}
+
+int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+  ObTimeoutCtx timeout_ctx;
+  const table::ObModuleDataArg &arg = stmt.get_arg();
+  LOG_INFO("start to handle module_data", K(arg), K(INNER_SQL_TIMEOUT), K(start_time));
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ObModuleDataArg", K(ret), K(arg));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, INNER_SQL_TIMEOUT))) {
+    LOG_WARN("failed to set default timeout ctx", K(ret), K(INNER_SQL_TIMEOUT));
+  } else {
+    switch (arg.module_) {
+      case table::ObModuleDataArg::REDIS: {
+        table::ObRedisImporter importer(arg.target_tenant_id_, ctx);
+        if (OB_FAIL(importer.exec_op(arg.op_))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
+        break;
+      }
+      // add other module before here
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "module except 'redis'");
+        LOG_WARN("modules except 'redis' are not supported yet", K(ret), K(arg.module_));
+      }
+    }
+  }
+  LOG_INFO("handle module data ended",
+      K(ret), K(arg), "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 } // end namespace sql

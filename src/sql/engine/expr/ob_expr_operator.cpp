@@ -12,32 +12,18 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/expr/ob_expr_operator.h"
-#include <math.h>
-#include "lib/oblog/ob_log.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
+#include "ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_expr_less_than.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/expr/ob_expr_add.h"
 #include "sql/engine/expr/ob_expr_minus.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/expr/ob_expr_null_safe_equal.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_infix_expression.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "lib/timezone/ob_oracle_format_models.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "share/vector/expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
-#include "share/schema/ob_schema_struct.h"
 
+#include "common/object/ob_object.h"
+#include "sql/engine/expr/ob_expr_multiset.h"
 
 namespace oceanbase
 {
@@ -2673,13 +2659,11 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
     }
     if (support && type1.is_ext()) {
       support = (type1.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
-                 ob_is_xml_pl_type(type1.get_type(), type1.get_udt_id()) ||
-                 ObObjUDTUtil::ob_is_supported_sql_udt(type1.get_udt_id()));
+                   OB_INVALID_ID != type1.get_udt_id());
     }
     if (support && type2.is_ext()) {
       support = (type2.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
-                 ob_is_xml_pl_type(type2.get_type(), type2.get_udt_id()) ||
-                 ObObjUDTUtil::ob_is_supported_sql_udt(type2.get_udt_id()));
+                   OB_INVALID_ID != type2.get_udt_id());
     }
     if (!support) {
       ret = OB_ERR_CALL_WRONG_ARG;
@@ -3267,33 +3251,45 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
   if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("compare udt failed due to null udt", K(ret), K(obj1), K(obj2));
-  } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()
-             || pl::PL_NESTED_TABLE_TYPE != c2->get_type()) {
+  } else if ((pl::PL_NESTED_TABLE_TYPE != obj1.get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != obj1.get_meta().get_extend_type())
+               || (pl::PL_NESTED_TABLE_TYPE != obj2.get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != obj2.get_meta().get_extend_type())
+               || (pl::PL_NESTED_TABLE_TYPE != c1->get_type() && pl::PL_VARRAY_TYPE != c1->get_type())
+               || (pl::PL_NESTED_TABLE_TYPE != c2->get_type() && pl::PL_VARRAY_TYPE != c2->get_type())
+               || (T_OBJ_SDO_ELEMINFO_ARRAY == c1->get_id() || T_OBJ_SDO_ELEMINFO_ARRAY == c2->get_id())
+               || (T_OBJ_SDO_ORDINATE_ARRAY == c1->get_id() || T_OBJ_SDO_ORDINATE_ARRAY == c2->get_id())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt compare except nested table");
-    LOG_WARN("not support udt compare except nested table", K(ret), K(c1), K(c2));
-  } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support udt compare with different elem type", K(ret), K(c1), K(c2));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt compare except nested table or varray");
+    LOG_WARN("not support udt compare except nested table or varray", K(ret), K(obj1), K(obj2));
+  } else if (c1->get_type() != c2->get_type()
+               ||c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
+    ObString op;
+
+    if (CO_EQ == cmp_op) {
+      op = "=";
+    } else if (CO_NE == cmp_op) {
+      op = "!=";
+    }
+
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, op.length(), op.ptr());
+    LOG_WARN("not support udt compare with different types or elem types",
+             K(ret), K(obj1), K(obj2), K(cmp_op), KPC(c1), KPC(c2));
   } else if (c1->is_of_composite()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "comparison of composite types is");
-    LOG_WARN("comparison of composite types is not supported",
-              K(c1->get_element_type()),
-              K(c2->get_element_type()));
+    if (c1->is_collection_null() || c2->is_collection_null()) {
+      cmp_result = CollectionPredRes::COLL_PRED_NULL;
+    } else if (OB_FAIL(eval_compare_composite(cmp_result, obj1, obj2, exec_ctx, cmp_op))) {
+      LOG_WARN("failed to eval_compare_composite", K(ret), K(cmp_result), K(obj1), K(obj2));
+    }
   } else if (!c1->is_inited() || !c2->is_inited()) {
     cmp_result = CollectionPredRes::COLL_PRED_NULL;
   } else if ((c1->get_actual_count() != c2->get_actual_count())) {
     SET_CMP_RESULT(COLL_PRED_FALSE, COLL_PRED_TRUE, COLL_PRED_INVALID);
   } else if (0 == c1->get_actual_count() && 0 == c2->get_actual_count()) {
     SET_CMP_RESULT(COLL_PRED_TRUE, COLL_PRED_FALSE, COLL_PRED_INVALID);
-  } else if (c1->is_contain_null_val() || c2->is_contain_null_val()) {
-    cmp_result = CollectionPredRes::COLL_PRED_NULL;
-  } else if (c1 == c2) {
-    // self compare
-    SET_CMP_RESULT(COLL_PRED_TRUE, COLL_PRED_FALSE, COLL_PRED_INVALID);
   } else {
     common::ObArray<const ObObj *> c1_copy, c2_copy;
+    int64_t c1_null_count = 0;
+    int64_t c2_null_count = 0;
     // for (int64_t i = 0; OB_SUCC(ret) && i < c1->get_count(); ++i) {
     //   OZ (c1_copy.push_back(reinterpret_cast<const ObObj*>(c1->get_data()) + i));
     //   OZ (c2_copy.push_back(reinterpret_cast<const ObObj*>(c2->get_data()) + i));
@@ -3304,6 +3300,7 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
       CK (OB_NOT_NULL(elem));
       if (OB_SUCC(ret)) {
         if (elem->is_null()) {
+          c1_null_count += 1;
         } else if (c1->is_elem_deleted(i, del_flag)) {
           LOG_WARN("failed to test if element is deleted", K(*elem), K(ret), K(i));
         } else {
@@ -3318,6 +3315,7 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
       CK (OB_NOT_NULL(elem));
       if (OB_SUCC(ret)) {
         if (elem->is_null()) {
+          c2_null_count += 1;
         } else if (c2->is_elem_deleted(i, del_flag)) {
           LOG_WARN("failed to test if element is deleted", K(*elem), K(ret), K(i));
         } else {
@@ -3328,54 +3326,59 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
       }
     }
     if (OB_SUCC(ret)) {
-      // 小于比较函数
-      obj_cmp_func lt_cmp_fp;
-      const ObTimeZoneInfo *tz_info = get_timezone_info(exec_ctx.get_my_session());
-      int64_t tz_off;
-      CK(NULL != tz_info);
-      OZ(get_tz_offset(tz_info, tz_off));
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_pl_udt_cmp_func(c1->get_element_type().get_obj_type(),
-                                      c2->get_element_type().get_obj_type(),
-                                      CO_LT,
-                                      lt_cmp_fp))) {
-        LOG_WARN("set compare function failed.", K(ret), K(obj1), K(obj2));
+      if (0 == c1_copy.count()) {  // all element in c1 is NULL
+        cmp_result = CollectionPredRes::COLL_PRED_NULL;
       } else {
-        ObCompareCtx cmp_ctx(c1->get_element_type().get_obj_type(),
-                             c1->get_element_type().get_collation_type(),
-                             false /* null safe */,
-                             tz_off,
-                             default_null_pos());
-        struct udtComparer{
-          udtComparer(ObCompareCtx &cmp_ctx, common::obj_cmp_func cmp_func) :
-          cmp_ctx_(cmp_ctx),
-          cmp_func_(cmp_func) {}
-
-          bool operator()(const ObObj *&e1, const ObObj *&e2) {
-            int cmpRes = cmp_func_(*e1, *e2, cmp_ctx_);
-            return cmpRes;
-          }
-          ObCompareCtx &cmp_ctx_;
-          common::obj_cmp_func cmp_func_;
-        };
-        udtComparer uc(cmp_ctx, lt_cmp_fp);
-        const ObObj **first = &c1_copy.at(0);
-        lib::ob_sort(first, first + c1_copy.count(), uc);
-        first = &c2_copy.at(0);
-        lib::ob_sort(first, first + c2_copy.count(), uc);
-        int cmp_res = 1;
-        // 可能是等值或者不等值
-        common::obj_cmp_func eq_cmp_fp;
-        ObObjType type1 = c1->get_element_type().get_obj_type();
-        ObObjType type2 = c2->get_element_type().get_obj_type();
-        if (OB_FAIL(get_pl_udt_cmp_func(type1, type2, CO_EQ, eq_cmp_fp))) {
-          LOG_WARN("get cmp func failed", K(type1), K(type2), K(cmp_op), K(ret));
+        common::hash::ObHashMap<ObObj, int64_t, common::hash::NoPthreadDefendMode> c1_map;
+        if (OB_FAIL(c1_map.create(c1_copy.count(), ObModIds::OB_SQL_HASH_SET))) {
+          LOG_WARN("failed to create hash map of c1", K(ret), K(obj1), KPC(c1), K(c1_copy));
         } else {
-          for (int64_t i = 0; 1 == cmp_res && i < c1->get_count(); ++i) {
-           cmp_res = eq_cmp_fp(*(c1_copy.at(i)), *(c2_copy.at(i)), cmp_ctx);
+          for (int64_t i = 0; OB_SUCC(ret) && i < c1_copy.count(); ++i) {
+            if (OB_ISNULL(c1_copy.at(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected NULL element ptr", K(ret), K(i), K(obj1), KPC(c1), K(c1_copy));
+            } else if (OB_FAIL(c1_map.set_refactored(*c1_copy.at(i), 1))) {
+              if (OB_HASH_EXIST == ret) {
+                ret = OB_SUCCESS;
+
+                int64_t *count = const_cast<int64_t*>(c1_map.get(*c1_copy.at(i)));
+
+                if (OB_ISNULL(count)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected NULL count ptr", K(ret), K(i), KPC(c1_copy.at(i)));
+                } else {
+                  *count += 1;
+                }
+              } else {
+                LOG_WARN("failed to set_refactored", K(ret), K(i), KPC(c1_copy.at(i)));
+              }
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            int64_t c2_unique = 0;
+
+            for (int64_t i = 0; OB_SUCC(ret) && i < c2_copy.count(); ++i) {
+              int64_t *count = const_cast<int64_t*>(c1_map.get(*c2_copy.at(i)));
+
+              if (OB_NOT_NULL(count) && 0 < *count) {
+                *count -= 1;
+              } else {
+                c2_unique +=1;
+              }
+            }
+
+            if (OB_SUCC(ret)) {
+              if (0 == c2_unique && 0 == c2_null_count) {
+                SET_CMP_RESULT(COLL_PRED_TRUE, COLL_PRED_FALSE, COLL_PRED_INVALID);
+              } else if (c2_unique > c1_null_count) {
+                SET_CMP_RESULT(COLL_PRED_FALSE, COLL_PRED_TRUE, COLL_PRED_INVALID);
+              } else {
+                cmp_result = CollectionPredRes::COLL_PRED_NULL;
+              }
+            }
           }
         }
-        cmp_result = static_cast<CollectionPredRes>(CO_EQ == cmp_op ? cmp_res : !cmp_res);
       }
     }
   }
@@ -3643,6 +3646,172 @@ int ObRelationalExprOperator::eval_vector_min_max_compare(
   return ret;
 }
 
+
+int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_result,
+                                                     const common::ObObj &obj1,
+                                                     const common::ObObj &obj2,
+                                                     ObExecContext &exec_ctx,
+                                                     const ObCmpOp cmp_op)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  // LHS = common_part(C) + unique_part(Ul) + null_part(Nl)
+  // RHS = common_part(C) + unique_part(Ur) + null_part(Nr)
+  // LHS == RHS if and only if |LHS| == |RHS| && |Ul| == 0 && |Nl| == 0 && |Ur| == 0 && |Nr| == 0
+  // LHS != RHS if and only if |LHS| != |RHS| || |Ul| > |Nr| || |Ur| > |Nl|
+  // otherwise (LHS == RHS) is NULL, because for all element, there are always a counterpart(equal or NULL).
+
+  // when |LHS| == |RHS|, we have |Ul| + |Nl| = |Ur| + |Nr|
+  // which leads to |Ul| == 0 && |Nl| == 0 <=> |Ur| == 0 && |Nr| == 0
+  // and |Ul| > |Nr| <=> |Ur| > |Nl|
+  // these formulas can reduce the condition.
+  static constexpr char CMP_EQ_PL[] =
+      "declare\n"
+      "cmp boolean;\n"
+      "round boolean;\n"
+      "lhs_null pls_integer := 0;\n" // Nl
+      "rhs_null pls_integer := 0;\n" // Nr
+      "matched pls_integer := 0;\n"  // C
+      "null_result boolean := NULL;\n"
+      "begin\n"
+      ":result := TRUE;\n"
+      "if :lhs.count != :rhs.count then\n"
+      "  :result := FALSE;\n"
+      "elsif :lhs.count = 0 then\n"
+      "  :result := TRUE;\n"
+      "elsif :lhs.count = 1 then\n"
+      "  :result := (:lhs(:lhs.first) = :rhs(:rhs.first));\n"
+      "else\n"
+      "  for j in :rhs.first..:rhs.last loop\n"
+      "    if :rhs.exists(j) and (:rhs(j) = :rhs(j)) is null then\n"
+      "      rhs_null := rhs_null + 1;\n"
+      "      :rhs.delete(j);"
+      "    end if;\n"
+      "  end loop;\n"
+      "  for i in :lhs.first..:lhs.last loop\n"
+      "    if not :lhs.exists(i) then continue; end if;\n"
+      "    if (:lhs(i) = :lhs(i)) is null then lhs_null := lhs_null + 1; continue; end if;\n"
+      "    round := FALSE;\n"
+      "    for j in :rhs.first..:rhs.last loop\n"
+      "      if not :rhs.exists(j) then continue; end if;\n"
+      "      cmp := (:lhs(i) = :rhs(j));\n"
+      "      if cmp then\n"
+      "        round := TRUE;\n"
+      "        :rhs.delete(j);\n"
+      "        exit;\n"
+      "      else\n"
+      "        round := cmp;\n"
+      "      end if;\n"
+      "    end loop;\n"
+      "    if round then\n"
+      "      matched := matched + 1;\n"
+      "    end if;\n"
+      "  end loop;\n"
+      "  if matched = :lhs.count then\n"
+      "    :result := TRUE;\n"
+      "  elsif :lhs.count - matched - lhs_null > rhs_null then\n"
+      "    :result := FALSE;\n"
+      "  else\n"
+      "    :result := null_result;\n"
+      "  end if;"
+      "end if;\n"
+      "end;";
+
+  pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
+  pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
+
+  pl::ObPLNestedTable rhs;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(pl::PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  pl::ObPLAllocator1 tmp_coll_alloc(pl::PL_MOD_IDX::OB_PL_COLLECTION, &tmp_alloc);
+  OZ (tmp_coll_alloc.init(nullptr));
+  ObObj c2_copy;
+  c2_copy.set_null();
+
+  ObArenaAllocator alloc;
+  ParamStore params((ObWrapperAllocator(alloc)));
+
+  ObObj result;
+  result.set_bool(false);
+
+  CK (OB_NOT_NULL(c1));
+  CK (OB_NOT_NULL(c2));
+  CK (c1->is_nested_table());
+  CK (c2->is_nested_table());
+
+  OX (rhs.set_id(c2->get_id()));
+  OX (rhs.set_allocator(&tmp_coll_alloc));
+  OZ (rhs.deep_copy(c2, nullptr));
+  OX (c2_copy.set_extend(reinterpret_cast<int64_t>(&rhs), obj2.get_meta().get_extend_type()));
+  DEFER(pl::ObUserDefinedType::destruct_obj(c2_copy));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (c1->get_id() != c2->get_id()) {
+    ObString op;
+
+    if (CO_EQ == cmp_op) {
+      op = "=";
+    } else if (CO_NE == cmp_op) {
+      op = "!=";
+    }
+
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, op.length(), op.ptr());
+    LOG_WARN("failed to compare udt with different id",
+             K(ret), K(obj1), K(obj2), K(cmp_op), KPC(c1), KPC(c2));
+  } else if (OB_FAIL(params.push_back(result))) {
+    LOG_WARN("failed to push back result", K(ret), K(result), K(params));
+  } else if (OB_FAIL(params.push_back(obj1))) {
+    LOG_WARN("failed to push back obj1", K(ret), K(obj1), K(params));
+  } else if (OB_FAIL(params.push_back(c2_copy))) {
+    LOG_WARN("failed to push back obj2", K(ret), K(obj2), K(params));
+  } else {
+    params.at(0).set_param_meta();
+
+    params.at(1).set_udt_id(c1->get_id());
+    params.at(1).set_param_meta();
+
+    params.at(2).set_udt_id(c2->get_id());
+    params.at(2).set_param_meta();
+  }
+
+  CK (OB_NOT_NULL(GCTX.pl_engine_));
+  CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+
+  if (OB_SUCC(ret)) {
+    ObBitSet<> out_args;
+
+    bool tmp_result = false;
+
+    if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(exec_ctx,
+                                                                        CMP_EQ_PL,
+                                                                        params,
+                                                                        out_args))) {
+      LOG_WARN("failed to execute PS anonymous bolck", K(ret), K(obj1), K(obj2), K(params));
+    } else if (out_args.num_members() != 2 || !out_args.has_member(0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected out args",
+               K(ret), K(obj1), K(obj2), K(params), K(out_args));
+    } else if (params.at(0).is_null()) {
+      cmp_result = COLL_PRED_NULL;
+    } else if (OB_FAIL(params.at(0).get_bool(tmp_result))) {
+      LOG_WARN("failed to get result",
+               K(ret), K(obj1), K(obj2), K(params), K(result), K(tmp_result));
+    } else if (CO_EQ == cmp_op) {
+      cmp_result = tmp_result ? COLL_PRED_TRUE : COLL_PRED_FALSE;
+    } else if (CO_NE == cmp_op) {
+      cmp_result = tmp_result ? COLL_PRED_FALSE : COLL_PRED_TRUE;
+    } else {
+      cmp_result = COLL_PRED_INVALID;
+    }
+  }
+
+#endif // OB_BUILD_ORACLE_PL
+
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER((ObSubQueryRelationalExpr, ObExprOperator),
                     subquery_key_,
@@ -4816,7 +4985,9 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
     bool has_composite_elem = false;
     // in 可能是nest table, (nt1 in (nt2, nt3, nt4))
     for (int64_t k = 0; lib::is_oracle_mode() && k < param_num; ++k) {
-      if (!types[k].is_ext()) { not_composite_elem_idx = k; }
+      if (!types[k].is_ext() && !types[k].is_null()) {
+        not_composite_elem_idx = k;
+      }
       has_composite_elem |= types[k].is_ext();
     }
     if (lib::is_oracle_mode() && has_composite_elem) {

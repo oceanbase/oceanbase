@@ -16,8 +16,6 @@
 #define protected public
 
 #include "storage/backup/ob_backup_data_struct.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
-#include "common/storage/ob_io_device.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

@@ -13,14 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_column_checksum_error_operator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_freeze_info_proxy.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_smart_var.h"
 #include "share/ob_server_struct.h"
 
 namespace oceanbase

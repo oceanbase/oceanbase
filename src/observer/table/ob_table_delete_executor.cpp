@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_delete_executor.h"
-#include "ob_table_scan_executor.h"
-#include "ob_htable_utils.h"
 #include "ob_htable_filter_operator.h"
-#include "ob_table_cg_service.h"
-#include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::sql;
 

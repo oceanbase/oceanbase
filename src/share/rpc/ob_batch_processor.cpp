@@ -13,10 +13,7 @@
 #include "ob_batch_processor.h"
 #include "sql/ob_sql.h"
 #include "sql/ob_sql_task.h"
-#include "observer/omt/ob_th_worker.h"
 #include "observer/omt/ob_tenant.h"
-#include "storage/tx/ob_trans_service.h"
-#include "lib/utility/serialization.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_request_handler.h"
 

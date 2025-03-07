@@ -12,8 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "ob_parquet_table_row_iter.h"
-#include "lib/charset/ob_charset.h"
+#include "ob_odps_table_row_iter.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "src/share/external_table/ob_external_table_utils.h"
 #include "src/sql/engine/expr/ob_datum_cast.h"
@@ -210,6 +209,8 @@ int ObODPSTableRowIterator::next_task()
       try {
         const ObString &part_spec = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
         int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+        bool is_part_table = scan_param_->table_param_->is_partition_table();
+        bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
         if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
           ret = OB_ITER_END;
           LOG_WARN("empty file", K(ret));
@@ -276,10 +277,6 @@ int ObODPSTableRowIterator::next_task()
                   temp_downloader->tunnel_ready_cond_.broadcast(); // wake other threads that temp_downloader has finished initializing. The initialization result may be failure or success.
                   temp_downloader->tunnel_ready_cond_.unlock();
                 }
-                if (OB_FAIL(ret) && OB_NOT_NULL(temp_downloader)) {
-                  allocator.free(temp_downloader);
-                  temp_downloader = NULL;
-                }
               } else {
                 LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
               }
@@ -300,9 +297,20 @@ int ObODPSTableRowIterator::next_task()
                                                                                          true)).get())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcepted null ptr", K(ret));
-        } else if (OB_FAIL(calc_file_partition_list_value(part_id, arena_alloc_, state_.part_list_val_))) {
-          LOG_WARN("failed to calc parttion list value", K(part_id), K(ret));
+        }
+
+        if (is_external_object) {
+          if (is_part_table) {
+            OZ (calc_file_part_list_value_by_array(part_id,
+                                                  arena_alloc_,
+                                                  scan_param_->partition_infos_,
+                                                  state_.part_list_val_));
+          }
         } else {
+          OZ (calc_file_partition_list_value(part_id, arena_alloc_, state_.part_list_val_));
+        }
+
+        if (OB_SUCC(ret)) {
           int64_t real_time_partition_row_count = state_.download_handle_->GetRecordCount();
           if (start >= real_time_partition_row_count) {
             start = real_time_partition_row_count;
@@ -617,7 +625,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
       {
-        if (ObDateTimeType == ob_type) {
+        if (ob_is_datetime_or_mysql_datetime(ob_type)) {
           // odps_type to ob_type is valid
           if (ob_type_scale < 6) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -697,9 +705,9 @@ int ObODPSTableRowIterator::prepare_expr()
         LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "wrong column index point to odps, please check the index of external$tablecol[index] and metadata$partition_list_col[index]");
       } else if (OB_FAIL(target_column_id_list_.push_back(target_idx))) {
         LOG_WARN("failed to keep target_idx", K(ret));
-      } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
-                 OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
-        LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
+      // } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
+      //            OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
+      //   LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
       }
     }
     if (OB_SUCC(ret)) {
@@ -828,6 +836,7 @@ int ObODPSTableRowIterator::pull_partition_info()
   return ret;
 }
 
+// non-partition column
 int ObODPSTableRowIterator::pull_column() {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_handle_.get())) {
@@ -891,6 +900,58 @@ int ObODPSTableRowIterator::fill_partition_list_data(ObExpr &expr, int64_t retur
     }
   } else {
     //do nothing
+  }
+  return ret;
+}
+// partition and non-partition column
+int ObODPSTableRowIterator::pull_all_columns() {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_handle_.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else {
+    try {
+      apsara::odps::sdk::IODPSTableSchemaPtr schema_handle = table_handle_->GetSchema();
+
+      if (OB_ISNULL(schema_handle.get())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null ptr", K(ret));
+      } else {
+        for (uint32_t i = 0; OB_SUCC(ret) && i < schema_handle->GetColumnCount(); i++) {
+          std::string name_ = schema_handle->GetTableColumn(i).GetName();
+          if (OB_FAIL(column_list_.push_back(ObODPSTableRowIterator::OdpsColumn(schema_handle->GetTableColumn(i).GetName(),
+                                                        schema_handle->GetTableColumn(i).GetTypeInfo())))) {
+            LOG_WARN("failed to push back column_list_", K(ret));
+          }
+        }
+      }
+      uint32_t partition_col_cnt = schema_handle->GetPartitionLevels();
+      for (uint32_t i = 0; OB_SUCC(ret) && i < partition_col_cnt; i++) {
+        if (OB_FAIL(part_col_names_.push_back(ObString(schema_handle->GetTablePartition(i).GetName().c_str())))) {
+          LOG_WARN("failed to push back part_col_names_", K(ret));
+        } else if (OB_FAIL(column_list_.push_back(ObODPSTableRowIterator::OdpsColumn(schema_handle->GetTablePartition(i).GetName(),
+                                                        schema_handle->GetTablePartition(i).GetTypeInfo())))) {
+          LOG_WARN("failed to push back paritition column_list_", K(ret));
+        }
+      }
+    } catch (apsara::odps::sdk::OdpsTunnelException& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("failed to call GetSchema method in ODPS sdk", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (const std::exception &ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("failed to call GetSchema method in ODPS sdk", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (...) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("odps exception occured when calling GetSchema method", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1528,14 +1589,20 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
               {
-                if (ObDateTimeType == type && !is_oracle_mode()) {
+                if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const apsara::odps::sdk::TimeStamp* v = records_[row_idx]->GetTimestampNTZValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
                     } else {
                       int64_t datetime = v->GetSecond() * USECS_PER_SEC + (v->GetNano() + 500) / 1000;
-                      datums[row_idx].set_datetime(datetime);
+                      if (ObMySQLDateTimeType == type) {
+                        ObMySQLDateTime mdt_value;
+                        ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                        datums[row_idx].set_mysql_datetime(mdt_value);
+                      } else {
+                        datums[row_idx].set_datetime(datetime);
+                      }
                     }
                   }
                 } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
@@ -1555,18 +1622,21 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_DATE:
               {
-                if (ObDateType == type && !is_oracle_mode()) {
+                if (ob_is_date_or_mysql_date(type) && !is_oracle_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const int64_t* v = records_[row_idx]->GetDateValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
+                    } else if (ObMySQLDateType == type) {
+                      ObMySQLDate md_value = 0;
+                      ret = ObTimeConverter::date_to_mdate(*v, md_value);
+                      datums[row_idx].set_mysql_date(md_value);
                     } else {
                       int32_t date = *v;
                       datums[row_idx].set_date(date);
                     }
                   }
-                } else if (false && (ObDateTimeType == type || ObMySQLDateTimeType == type)
-                           && is_oracle_mode()) {
+                } else if (false && ObDateTimeType == type && is_oracle_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const int64_t* v = records_[row_idx]->GetDateValue(target_idx);
                     if (v == NULL) {
@@ -1583,7 +1653,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_DATETIME:
               {
-                if (ObDateTimeType == type && !is_oracle_mode()) {
+                if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                   int32_t tmp_offset = 0;
                   int64_t res_offset = 0;
                   if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset))) {
@@ -1595,6 +1665,10 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                     const int64_t* v = records_[row_idx]->GetDatetimeValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
+                    } else if (ObMySQLDateTimeType == type) {
+                      ObMySQLDateTime mdt_value;
+                      ret = ObTimeConverter::datetime_to_mdatetime(*v * 1000 + res_offset, mdt_value);
+                      datums[row_idx].set_mysql_datetime(mdt_value);
                     } else {
                       int64_t datetime = *v * 1000 + res_offset;
                       datums[row_idx].set_datetime(datetime);
@@ -2196,10 +2270,15 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
             {
-              if (ObDateTimeType == type && !is_oracle_mode()) {
+              if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                 const apsara::odps::sdk::TimeStamp* v = record_->GetTimestampNTZValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();
+                } else if (ob_is_mysql_datetime(type)) {
+                  int64_t datetime = v->GetSecond() * USECS_PER_SEC + (v->GetNano() + 500) / 1000;
+                  ObMySQLDateTime mdt_value;
+                  ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                  datum.set_mysql_datetime(mdt_value);
                 } else {
                   int64_t datetime = v->GetSecond() * USECS_PER_SEC + (v->GetNano() + 500) / 1000;
                   datum.set_datetime(datetime);
@@ -2219,15 +2298,19 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_DATE:
             {
-              if (ObDateType == type && !is_oracle_mode()) {
+              if (ob_is_date_or_mysql_date(type) && is_mysql_mode()) {
                 const int64_t* v = record_->GetDateValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();
+                } else if (ObMySQLDateType == type) {
+                  ObMySQLDate md_value = 0;
+                  ret = ObTimeConverter::date_to_mdate(*v, md_value);
+                  datum.set_mysql_date(md_value);
                 } else {
                   int32_t date = *v;
                   datum.set_date(date);
                 }
-              } else if (false && (ObDateTimeType == type || ObMySQLDateTimeType == type) && is_oracle_mode()) {
+              } else if (false && ObDateTimeType == type && is_oracle_mode()) {
                 const int64_t* v = record_->GetDateValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();
@@ -2242,7 +2325,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_DATETIME:
             {
-              if (ObDateTimeType == type && !is_oracle_mode()) {
+              if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                 const int64_t* v = record_->GetDatetimeValue(target_idx);
                 int32_t tmp_offset = 0;
                 int64_t res_offset = 0;
@@ -2253,7 +2336,13 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                 } else {
                   res_offset = SEC_TO_USEC(tmp_offset);
                   int64_t datetime = *v * 1000 + res_offset;
-                  datum.set_datetime(datetime);
+                  if (ObMySQLDateTimeType == type) {
+                    ObMySQLDateTime mdt_value;
+                    ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                    datum.set_mysql_datetime(mdt_value);
+                  } else {
+                    datum.set_datetime(datetime);
+                  }
                 }
               } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
                 const int64_t* v = record_->GetDatetimeValue(target_idx);
@@ -2387,8 +2476,27 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
                                                        odps_partition_downloader))) {
         LOG_WARN("failed create odps partition downloader", K(ret), K(i), K(odps_partition.part_id_), K(odps_partition.file_url_));
       } else {
-        *(const_cast<int64_t*>(&odps_partition.file_size_)) = odps_partition_downloader->GetRecordCount();
-        odps_partition_downloader->Complete();
+        try {
+          *(const_cast<int64_t*>(&odps_partition.file_size_)) = odps_partition_downloader->GetRecordCount();
+          odps_partition_downloader->Complete();
+        } catch (apsara::odps::sdk::OdpsException& ex) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ODPS_ERROR;
+            LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+            LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+          }
+        } catch (const std::exception& ex) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ODPS_ERROR;
+            LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+            LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+          }
+        } catch (...) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ODPS_ERROR;
+            LOG_WARN("caught exception when create odps upload session", K(ret));
+          }
+        }
       }
     }
   }
@@ -2413,8 +2521,27 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString part_spec,
     if (OB_FAIL(odps_driver.create_downloader(part_spec, odps_partition_downloader))) {
       LOG_WARN("failed create odps partition downloader", K(ret), K(part_spec));
     } else {
-      row_count = odps_partition_downloader->GetRecordCount();
-      odps_partition_downloader->Complete();
+      try {
+        row_count = odps_partition_downloader->GetRecordCount();
+        odps_partition_downloader->Complete();
+      } catch (apsara::odps::sdk::OdpsException& ex) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+        }
+      } catch (const std::exception& ex) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+        }
+      } catch (...) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when create odps upload session", K(ret));
+        }
+      }
     }
   }
   return ret;

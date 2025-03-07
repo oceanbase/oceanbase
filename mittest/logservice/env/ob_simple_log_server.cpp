@@ -13,25 +13,9 @@
 #define protected public
 #include "ob_simple_log_server.h"
 
-#include "lib/file/file_directory_utils.h"
-#include "logservice/palf/log_define.h"
-#include <iostream>
 #define USING_LOG_PREFIX RPC_TEST
-#include<dirent.h>
-#include <memory>
 #include <net/if.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
-#include "util/easy_mod_stat.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/random/ob_random.h"
-#include "common/log/ob_log_constants.h"
-#include "share/ob_io_device_helper.h"
-#include "share/ob_thread_mgr.h"
-#include "logservice/palf/palf_options.h"
-#include "logservice/arbserver/arb_tg_helper.h"
-#include "mittest/logservice/env/ob_simple_log_cluster_testbase.h"
 #include "share/rpc/ob_batch_processor.h"
 #include "share/ob_device_manager.h"                                // ObDeviceManager
 #undef protected

@@ -31,12 +31,10 @@ struct ObServerStatus;
 namespace rootserver
 {
 class ObServerManager;
-class ObDRTaskMgr;
 class ObAllServerTask : public share::ObAsyncTask
 {
 public:
   ObAllServerTask(ObServerManager &server_manager,
-                  ObDRTaskMgr &disaster_recovery_task_mgr,
                   const common::ObAddr &server,
                   bool with_rootserver);
   virtual ~ObAllServerTask();
@@ -46,7 +44,6 @@ public:
   share::ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const;
 private:
   ObServerManager &server_manager_;
-  ObDRTaskMgr &disaster_recovery_task_mgr_;
   common::ObAddr server_;
   bool with_rootserver_;
 

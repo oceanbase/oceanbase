@@ -13,26 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_i_store.h"
-#include "blocksstable/ob_storage_cache_suite.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_operator.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/ob_relative_table.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "blocksstable/ob_datum_row.h"
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
 
 namespace oceanbase
 {
@@ -106,19 +88,21 @@ int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  ObTxTableGuard tx_table_guard;
+  ObTxTable *tx_table = nullptr;
   if (!ls_handle.is_valid() || timeout < 0 || !snapshot_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid arguments", K(ret), K(ls_handle), K(timeout), K(tx_lock_timeout), K(snapshot_version));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls is null", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ls->get_tx_table_guard(tx_table_guard))) {
-    STORAGE_LOG(WARN, "get_tx_table_guard from log stream fail.", K(ret), K(*ls));
+  } else if (OB_ISNULL(tx_table = ls->get_tx_table())) {
+    ret = OB_ERR_NULL_VALUE;
+    STORAGE_LOG(WARN, "get_tx_table from log stream fail.", K(ret), K(*ls));
+  } else if (OB_FAIL(mvcc_acc_ctx_.init_read(tx_table, snapshot_version, timeout, tx_lock_timeout))) {
+    STORAGE_LOG(WARN, "mvcc_acc_ctx init read fail", KR(ret), K(mvcc_acc_ctx_));
   } else {
     ls_id_ = ls->get_ls_id();
     timeout_ = timeout;
-    mvcc_acc_ctx_.init_read(tx_table_guard, snapshot_version, timeout, tx_lock_timeout);
   }
   return ret;
 }

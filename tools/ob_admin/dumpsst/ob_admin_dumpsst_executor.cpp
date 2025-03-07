@@ -10,16 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/log/ob_log_constants.h"
 #include "ob_admin_dumpsst_executor.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
 #include "share/ob_tenant_mem_limit_getter.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/ob_file_system_router.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/tablet/ob_tablet.h"
 #ifdef OB_BUILD_SHARED_STORAGE

@@ -11,12 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_co_sstable_row_scanner.h"
-#include "ob_cg_scanner.h"
 #include "ob_cg_tile_scanner.h"
 #include "ob_cg_group_by_scanner.h"
-#include "ob_column_oriented_sstable.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_vector_store.h"
 
 namespace oceanbase
@@ -94,6 +90,7 @@ int ObCOSSTableRowScanner::init(
     if (OB_FAIL(init_project_iter_for_single_row(param, context, table))) {
       LOG_WARN("Fail to init project iter for single row", K(ret));
     } else if (param.has_lob_column_out()
+        && nullptr != param.out_cols_project_ && param.out_cols_project_->count() > 0
         && (nullptr == context.lob_locator_helper_
             || !context.lob_locator_helper_->enable_lob_locator_v2()
             || !context.lob_locator_helper_->is_valid())) {

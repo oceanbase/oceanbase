@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_multiple_scan_merge.h"
-#include <math.h>
-#include "share/ob_get_compat_mode.h"
-#include "ob_block_row_store.h"
-#include "storage/ob_row_fuse.h"
-#include "ob_aggregated_store.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {

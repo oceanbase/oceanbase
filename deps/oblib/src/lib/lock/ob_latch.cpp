@@ -11,13 +11,10 @@
  */
 
 #include "lib/lock/ob_latch.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/worker.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "share/rc/ob_tenant_base.h"
+#include "deps/oblib/src/lib/rc/context.h"
 
 namespace oceanbase
 {

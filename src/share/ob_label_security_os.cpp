@@ -13,7 +13,6 @@
 #ifndef OB_BUILD_LABEL_SECURITY
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_label_security.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

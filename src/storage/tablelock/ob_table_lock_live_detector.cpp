@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX TABLELOCK
 #include "storage/tablelock/ob_table_lock_live_detector.h"
-#include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "storage/tablelock/ob_lock_func_executor.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/ob_table_access_helper.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_inner_sql_connection.h"
 
 namespace oceanbase
 {

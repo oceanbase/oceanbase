@@ -11,17 +11,8 @@
  */
 
 #include "ob_partition_range_spliter.h"
-#include "storage/tablet/ob_table_store_util.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/memtable/ob_memtable.h"
 #include "compaction/ob_tablet_merge_ctx.h"
-#include "share/rc/ob_tenant_base.h"
-#include "tx/ob_trans_service.h"
 #include "access/ob_multiple_scan_merge.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
-#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
@@ -839,7 +830,7 @@ void ObRangeSplitInfo::reset()
 }
 
 ObPartitionRangeSpliter::ObPartitionRangeSpliter()
-  : allocator_(),
+  : allocator_("RangeSpliter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     parallel_ranger_(allocator_)
 {
 }
@@ -1303,7 +1294,7 @@ int ObPartitionMultiRangeSpliter::split_multi_ranges(RangeSplitInfoArray &range_
     STORAGE_LOG(WARN, "Invalid argument to calc parallel target array", K(ret), K(range_info_array),
                 K(total_size), K(expected_task_count));
   } else {
-    ObArenaAllocator local_allocator;
+    ObArenaAllocator local_allocator("RangeSpliter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const int64_t avg_task_size = MAX(total_size / expected_task_count, 1);
     const int64_t split_task_size = MAX(avg_task_size / 2, 1);
     const int64_t task_size_high_watermark = MAX(avg_task_size *

@@ -12,24 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_thread_mgr.h"
-#include "storage/tx_storage/ob_tablet_gc_service.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
+#include "ob_tablet_gc_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
-#include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "logservice/ob_log_service.h"
-#include "logservice/palf/log_define.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "share/ob_tenant_info_proxy.h"
-#include "storage/tablet/ob_tablet.h" // ObTablet
-#include "rootserver/ob_tenant_info_loader.h"
-#include "share/ob_tenant_info_proxy.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -77,23 +62,18 @@ int ObTabletGCService::start()
 {
   int ret = OB_SUCCESS;
   bool is_shared_storage = GCTX.is_shared_storage_mode();
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (is_shared_storage) {
-    if (OB_FAIL(timer_for_private_block_gc_.set_run_wrapper(MTL_CTX()))) {
-      STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
-    }
-  }
-#endif
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(timer_for_tablet_change_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(timer_for_tablet_change_.set_run_wrapper_with_ret(MTL_CTX()))) {
     STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_change_.init())) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
-  } else if (OB_FAIL(timer_for_tablet_shell_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(timer_for_tablet_shell_.set_run_wrapper_with_ret(MTL_CTX()))) {
     STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_shell_.init("TabletShell", ObMemAttr(MTL_ID(), "TabletShell")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage && OB_FAIL(timer_for_private_block_gc_.set_run_wrapper_with_ret(MTL_CTX()))) {
+    STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
   } else if (is_shared_storage && OB_FAIL(timer_for_private_block_gc_.init("PvtBlkGCTimer", ObMemAttr(MTL_ID(), "PvtBlkGCTimer")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
 #endif

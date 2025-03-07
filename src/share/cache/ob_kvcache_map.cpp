@@ -11,10 +11,6 @@
  */
 
 #include "ob_kvcache_map.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/ob_running_mode.h"
-#include "share/config/ob_server_config.h"
-#include "common/ob_clock_generator.h"
 #include "storage/blocksstable/ob_micro_block_cache.h"
 
 namespace oceanbase
@@ -303,6 +299,7 @@ int ObKVCacheMap::get(
       iter = bucket_ptr;
       bool is_equal = false;
       while (NULL != iter && OB_SUCC(ret)) {
+        __builtin_prefetch(iter,0);
         if (hash_code == iter->hash_code_) {
           if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
             if (OB_FAIL(key.equal(*iter->key_, is_equal))) {

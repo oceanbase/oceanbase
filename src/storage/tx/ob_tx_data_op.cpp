@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_data_define.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_tx_data_op.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 using namespace oceanbase::share;

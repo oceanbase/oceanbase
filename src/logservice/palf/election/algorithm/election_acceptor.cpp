@@ -11,13 +11,9 @@
  */
 
 #include "share/ob_occam_time_guard.h"
+#include "share/ob_server_struct.h"
 #include "election_acceptor.h"
-#include "common/ob_clock_generator.h"
 #include "election_impl.h"
-#include "lib/net/ob_addr.h"
-#include "logservice/palf/election/interface/election_priority.h"
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/utils/election_event_recorder.h"
 
 namespace oceanbase
 {
@@ -32,8 +28,12 @@ do {\
     ELECT_LOG_RET(ERROR, common::OB_ERROR, "INIT_TS is less than 0, may not call GLOBAL_INIT_ELECTION_MODULE yet!", K(*this));\
     return;\
   } else if (OB_UNLIKELY(get_monotonic_ts() < ATOMIC_LOAD(&INIT_TS) + MAX_LEASE_TIME)) {\
-    ELECT_LOG(INFO, "keep silence for safty, won't send response", K(*this));\
-    return;\
+    if (GCTX.in_bootstrap_) {\
+      ELECT_LOG(INFO, "in bootstrap progress, no need to keep silence", K(*this), K(GCTX.in_bootstrap_));\
+    } else { \
+      ELECT_LOG(INFO, "keep silence for safty, won't send response", K(*this));\
+      return;\
+    }\
   }\
 } while(0)
 

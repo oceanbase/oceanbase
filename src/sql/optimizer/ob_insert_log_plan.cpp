@@ -11,26 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_select_into.h"
 #include "sql/optimizer/ob_insert_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_log_expr_values.h"
-#include "sql/optimizer/ob_log_group_by.h"
-#include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_insert_all.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
-#include "share/system_variable/ob_sys_var_class_type.h"
-#include "share/stat/ob_stat_define.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 using namespace oceanbase;
@@ -94,8 +79,11 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     OSGShareInfo *osg_info = NULL;
     double online_sample_percent = 100.;
     if (OB_SUCC(ret)) {
-      // compute parallel before check allocate stats gather
-      if (OB_FAIL(compute_dml_parallel())) {
+      if (OB_FAIL(check_use_direct_load())) {
+        LOG_WARN("failed to check use direct load", K(ret));
+      } else if (OB_FAIL(prepare_dml_infos())) {
+        LOG_WARN("failed to prepare dml infos", K(ret));
+      } else if (OB_FAIL(compute_dml_parallel())) {
         LOG_WARN("failed to compute dml parallel", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -138,21 +126,17 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         } else {
           LOG_TRACE("succeed to allocate select into clause", K(candidates_.candidate_plans_.count()));
         }
-      } else {
-        if (OB_FAIL(prepare_dml_infos())) {
-          LOG_WARN("failed to prepare dml infos", K(ret));
-        } else if (use_pdml()) {
-          if (OB_FAIL(candi_allocate_pdml_insert(osg_info))) {
-            LOG_WARN("failed to allocate pdml insert", K(ret));
-          } else {
-            LOG_TRACE("succeed to allocate pdml insert operator",
-                K(candidates_.candidate_plans_.count()));
-          }
-        } else if (OB_FAIL(candi_allocate_insert(osg_info))) {
-          LOG_WARN("failed to allocate insert operator", K(ret));
+      } else if (use_pdml()) {
+        if (OB_FAIL(candi_allocate_pdml_insert(osg_info))) {
+          LOG_WARN("failed to allocate pdml insert", K(ret));
         } else {
-          LOG_TRACE("succeed to allocate insert operator", K(candidates_.candidate_plans_.count()));
+          LOG_TRACE("succeed to allocate pdml insert operator",
+              K(candidates_.candidate_plans_.count()));
         }
+      } else if (OB_FAIL(candi_allocate_insert(osg_info))) {
+        LOG_WARN("failed to allocate insert operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate insert operator", K(candidates_.candidate_plans_.count()));
       }
     }
     if (OB_SUCC(ret) && insert_stmt->get_returning_aggr_item_size() > 0) {
@@ -1322,7 +1306,7 @@ int ObInsertLogPlan::prepare_unique_constraint_info(const ObTableSchema &index_s
                                           constraint_info.constraint_columns_,
                                           true))) {
     LOG_WARN("failed to generate index rowkey exprs", K(ret));
-  } else if (!index_schema.is_index_table() && index_schema.is_heap_table()) {
+  } else if (!index_schema.is_index_table() && index_schema.is_table_without_pk()) {
     // 如果是堆表，那么这里还需要在 constraint_info.constraint_columns_中追加分区建
     // 因为4.0版本堆表 分区建 + hidden_pk 才能保证唯一性
     const ColumnItem *col_item = NULL;
@@ -1766,7 +1750,8 @@ int ObInsertLogPlan::candi_allocate_select_into_for_insert()
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> select_into_plans;
   int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
-  if (OB_FAIL(get_parallel_info_from_candidate_plans(dml_parallel))) {
+  int64_t server_cnt = 0;
+  if (OB_FAIL(get_parallel_info_from_candidate_plans(server_cnt, dml_parallel))) {
     LOG_WARN("failed to get parallel info from candidate plans", K(ret));
   } else if (dml_parallel > 1) {
     exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;

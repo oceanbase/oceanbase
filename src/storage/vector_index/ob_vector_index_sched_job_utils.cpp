@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
-#include "common/object/ob_object.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/string/ob_string.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase {
@@ -59,17 +53,15 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
       job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
-      job_info.what_ = job_action;
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
-      job_info.interval_ = interval_str.string();
       job_info.repeat_interval_ = interval_str.string();
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
       job_info.interval_ts_ = repeat_interval_ts;
       job_info.exec_env_ = exec_env;
-
+      job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::VECTOR_INDEX_REFRESH_JOB;
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
               sql_client, tenant_id, job_id, job_info))) {
         LOG_WARN("failed to create dbms scheduler job", KR(ret));

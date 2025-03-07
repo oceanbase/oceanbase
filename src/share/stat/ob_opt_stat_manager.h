@@ -205,6 +205,11 @@ public:
                         const ObOptDSStat &value,
                         ObOptDSStatHandle &ds_stat_handle);
   int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
+
+  int update_table_stat_failed_count(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const ObIArray<int64_t> &part_ids,
+                                     int64_t &affected_rows);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
   ObOptStatService &get_stat_service() { return stat_service_; }
 

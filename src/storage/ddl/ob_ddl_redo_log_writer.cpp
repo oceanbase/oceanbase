@@ -14,25 +14,13 @@
 
 #include "ob_ddl_redo_log_writer.h"
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "logservice/ob_log_handler.h"
 #include "logservice/ob_log_service.h"
-#include "share/scn.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/tablet/ob_tablet.h"
 #include "share/ob_ddl_sim_point.h"
-#include "share/ob_ddl_common.h"
 
-#include "storage/compaction/ob_schedule_dag_func.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/compaction/ob_refresh_tablet_util.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
@@ -1723,7 +1711,7 @@ ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
   : is_inited_(false), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),table_key_(),ddl_writer_(), task_id_(0), data_format_version_(0),
     direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1),  parallel_cnt_(0), cg_cnt_(0), kv_mgr_handle_(), need_delay_(false), allocator_(), redo_info_array_(),
-    with_cs_replica_(false), need_submit_io_(true)
+    with_cs_replica_(false), need_submit_io_(true), merge_slice_idx_(0)
 {
   redo_info_array_.set_attr(lib::ObMemAttr(MTL_ID(), "DdlRedoInfo"));
 }
@@ -1819,6 +1807,7 @@ void ObDDLRedoLogWriterCallback::reset()
   allocator_.reuse();
   with_cs_replica_ = false;
   need_submit_io_ = true;
+  merge_slice_idx_ = 0;
 }
 
 bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
@@ -1882,6 +1871,7 @@ int ObDDLRedoLogWriterCallback::write(const ObStorageObjectHandle &macro_handle,
       redo_info.cg_cnt_ = cg_cnt_;
     }
     if (is_column_group_info_valid()) {
+      redo_info.merge_slice_idx_ = merge_slice_idx_;
       redo_info.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;
     }

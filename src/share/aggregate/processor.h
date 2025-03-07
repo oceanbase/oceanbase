@@ -38,7 +38,9 @@ public:
     fast_single_row_aggregates_(allocator_, aggr_infos.count()), extra_rt_info_buf_(nullptr),
     cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count()),
     row_selector_(nullptr), cur_batch_group_idx_(0), cur_batch_group_buf_(nullptr)
-  {}
+  {
+    agg_ctx_.op_monitor_info_ = &monitor_info;
+  }
   ~Processor() { destroy(); }
   int init();
   void destroy();
@@ -171,13 +173,15 @@ public:
 
   // FIXME: support all aggregate functions
   inline static bool all_supported_aggregate_functions(const ObIArray<sql::ObRawExpr *> &aggr_exprs,
-                                                       bool use_hash_rollup = false)
+                                                       bool use_hash_rollup = false,
+                                                       bool has_rollup = false)
   {
     bool supported = true;
     for (int i = 0; supported && i < aggr_exprs.count(); i++) {
       ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr *>(aggr_exprs.at(i));
       OB_ASSERT(agg_expr != NULL);
-      supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(), use_hash_rollup);
+      supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(),
+                                                          use_hash_rollup, has_rollup);
     }
     return supported;
   }
@@ -216,7 +220,7 @@ public:
   int init_fast_single_row_aggs();
   bool has_extra() const { return agg_ctx_.has_extra_; }
   bool get_need_advance_collect() const { return agg_ctx_.need_advance_collect_; }
-  void set_in_window_func(bool v) { agg_ctx_.in_window_func_ = v; }
+  void set_in_window_func(bool v = true) { agg_ctx_.in_window_func_ = v; }
   bool is_in_window_func() const { return agg_ctx_.in_window_func_; }
   void set_hp_infras_mgr(ObHashPartInfrasVecMgr *hp_infras_mgr)
   {
@@ -252,8 +256,12 @@ public:
 
   RuntimeContext *get_rt_ctx() { return &agg_ctx_; }
 
-  static VecExtraResult *&get_extra(const int64_t agg_col_id, RuntimeContext &agg_ctx,
-                                    char *extra_array_buf);
+  static ExtraStores *&get_extra_stores(const int64_t agg_col_id, RuntimeContext &agg_ctx,
+                                         char *extra_array_buf);
+  HashBasedDistinctVecExtraResult *&
+  get_distinct_store(const int64_t agg_col_id, RuntimeContext &agg_ctx, char *extra_array_buf);
+  DataStoreVecExtraResult *&get_extra_data_store(const int64_t agg_col_id,
+                                                   RuntimeContext &agg_ctx, char *extra_array_buf);
   static int setup_rt_info(AggrRowPtr data, RuntimeContext &agg_ctx,
                            ObIAllocator *extra_allocator = nullptr, const int64_t group_id = 0);
 

@@ -25,11 +25,30 @@
 #include "ob_table_cg_service.h"
 #include <utility>
 #include "share/schema/ob_table_schema.h"
+#include "ob_table_query_async_processor.h"
 
 namespace oceanbase
 {
 namespace table
 {
+class ObTableHbaseRowKeyDefaultCompare final : public observer::ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyDefaultCompare() = default;
+  ~ObTableHbaseRowKeyDefaultCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
+class ObTableHbaseRowKeyReverseCompare final : public observer::ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyReverseCompare() = default;
+  ~ObTableHbaseRowKeyReverseCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
 class ObHColumnDescriptor final
 {
 public:
@@ -39,6 +58,7 @@ public:
   {}
   void reset();
   int from_string(const common::ObString &kv_attributes);
+  void from_kv_attribute(const ObKVAttr &kv_attributes);
 
   void set_time_to_live(int32_t v) { time_to_live_ = v; }
   int32_t get_time_to_live() const { return time_to_live_; }
@@ -265,6 +285,8 @@ public:
 
   int match(const ObHTableCell &cell, ObHTableMatchCode &match_code);
   const ObHTableCell* get_curr_row() const;
+  int is_cell_ttl_expired(const ObHTableCell &cell, bool &is_expired);
+  void set_need_verify_cell_ttl(bool need_verify_cell_ttl) { need_verify_cell_ttl_ = need_verify_cell_ttl; }
   void clear_curr_row() { curr_row_.set_ob_row(NULL); }
   int set_to_new_row(const ObHTableCell &curr_row);
   int get_next_cell_hint(const ObHTableCell &cell, ObHTableCell *&new_cell);
@@ -283,6 +305,8 @@ private:
   common::ObArenaAllocator allocator_;
   ObHTableCellEntity curr_row_;  // the first cell of current row
   common::ObNewRow curr_ob_row_;
+  bool need_verify_cell_ttl_;
+  int64_t now_;
 };
 
 class ObHTableRowIterator: public ObTableQueryResultIterator
@@ -303,7 +327,8 @@ public:
   bool has_more_result() const { return has_more_cells_; }
   void no_more_result() { has_more_cells_ = false; }
   void set_hfilter(table::hfilter::Filter *hfilter);
-  void set_ttl(int32_t ttl_value);
+  void set_ttl(int32_t ttl_value) { time_to_live_ = ttl_value; }
+  void set_need_verify_cell_ttl(bool need_verify_cell_ttl);
   virtual int init()
   {
     is_inited_ = true;
@@ -321,8 +346,8 @@ public:
 private:
   template <typename ResultType>
   int get_next_result_internal(ResultType*& result);
-  virtual int get_next_result(ObTableQueryIterableResult *&one_result) override { return OB_SUCCESS; }
 
+  virtual int get_next_result(ObTableQueryIterableResult *&one_result) override { return OB_NOT_SUPPORTED; }
 protected:
   virtual int rescan_and_get_next_row(table::ObTableApiScanRowIterator *tb_op, ObNewRow *&ob_next_row);
   int seek_first_cell_on_hint(const ObNewRow *ob_row);
@@ -339,11 +364,9 @@ protected:
 
 protected:
   // try record expired rowkey accord cell's timestamp
-  virtual void try_record_expired_rowkey(const ObHTableCellEntity &cell);
+  virtual int try_record_expired_rowkey(const ObHTableCellEntity &cell);
   // try record expired rowkey accord cell's versions
   virtual void try_record_expired_rowkey(const int32_t versions, const ObString &rowkey);
-  // try record expired rowkey
-  virtual void try_record_expired_rowkey(const ObString &rowkey);
 
 protected:
   common::ObArenaAllocator allocator_;  // used for deep copy of curr_cell_
@@ -356,6 +379,7 @@ protected:
   ObRowkey start_row_key_;
   ObRowkey stop_row_key_;
   bool is_inited_;
+  bool need_verify_cell_ttl_;
 
 private:
   const table::ObHTableFilter &htable_filter_;
@@ -444,6 +468,13 @@ public:
       row_iterator_->set_ttl(ttl_value);
     };
   }
+
+  void set_need_verify_cell_ttl(bool need_verify_cell_ttl)
+  {
+    if (is_inited_) {
+      row_iterator_->set_need_verify_cell_ttl(need_verify_cell_ttl);
+    };
+  }
   void set_max_version(int32_t max_version_value)
   {
     if (is_inited_) {
@@ -460,6 +491,7 @@ private:
   ObHTableRowIterator *row_iterator_;
   table::ObTableQueryResult *one_result_;
   table::ObTableQueryIterableResult *iterable_result_;
+
   table::ObHTableFilterParser filter_parser_;
   int32_t batch_size_;
   const ObKVParams& ob_kv_params_;

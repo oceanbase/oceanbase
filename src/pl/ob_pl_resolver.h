@@ -237,7 +237,8 @@ public:
     question_mark_cnt_(0),
     next_user_defined_exception_id_(1),
     ob_sequence_ns_checker_(resolve_ctx_.params_),
-    item_type_(T_MAX) { expr_factory_.set_is_called_sql(false); }
+    item_type_(T_MAX),
+    fast_check_status_times_(0) { expr_factory_.set_is_called_sql(false); }
   virtual ~ObPLResolver() {}
 
   enum GotoRestrictionType {
@@ -412,8 +413,7 @@ public:
   static
   int build_record_type_by_view_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* view_schema,
-                                ObRecordType *&record_type,
-                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
+                                ObRecordType *&record_type);
   static
   int build_record_type_by_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                 common::ObIAllocator &allocator,
@@ -430,8 +430,11 @@ public:
   static
   int build_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* table_schema,
-                                ObRecordType *&record_type, bool with_rowid = false,
-                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
+                                ObRecordType *&record_type, bool with_rowid = false);
+  static
+  int build_dblink_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
+                                         const ObTableSchema* table_schema,
+                                         ObRecordType *&record_type);
 
   static
   int resolve_extern_type_info(bool is_row_type,
@@ -525,7 +528,11 @@ public:
   static int check_composite_compatible(const ObUserDefinedType *actual_param_type,
                                         const ObUserDefinedType *formal_param_type,
                                         bool &is_compatible);
-  int check_anonymous_array_compatible( uint64_t actual_param_type_id,
+  static int check_composite_cast(const ObPLINS &ns,
+                                  ObRawExpr *&expr);
+
+  static int check_anonymous_array_compatible(const ObPLINS &ns,
+                                        uint64_t actual_param_type_id,
                                         uint64_t formal_param_type_id,
                                         bool &is_compatible);
   static
@@ -1228,7 +1235,7 @@ private:
                               ObIArray<ObObjAccessIdx> &access_idxs,
                               const ObSQLSessionInfo *session_info,
                               const ObPLBlockNS &ns);
-
+  int fast_check_status(uint64_t n = 0xFF) const;
 private:
   ObPLResolveCtx resolve_ctx_;
   ObPLExternalNS external_ns_;
@@ -1244,6 +1251,7 @@ private:
   ObArray<int64_t> current_subprogram_path_; // 当前解析到的subprogram的寻址路径
   ObArray<ObPLStmt *> goto_stmts_; // goto语句的索引，用来二次解析。
   ObItemType item_type_;
+  mutable uint64_t fast_check_status_times_;
 };
 
 class ObPLSwitchDatabaseGuard

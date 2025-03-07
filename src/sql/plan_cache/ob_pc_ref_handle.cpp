@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_PC
 
 #include "ob_pc_ref_handle.h"
-#include "lib/string/ob_string.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

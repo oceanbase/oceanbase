@@ -21,7 +21,6 @@
 #include "lib/container/ob_se_array_iterator.h"   // begin
 
 #include "ob_log_config.h"                        // ObLogFetcherConfig
-#include "ob_log_rpc.h"                           // IObLogRpc
 #include "ob_ls_worker.h"                         // IObLSWorker
 #include "ob_log_part_progress_controller.h"      // PartProgressController
 #include "ob_log_trace_id.h"                      // ObLogTraceIdGuard

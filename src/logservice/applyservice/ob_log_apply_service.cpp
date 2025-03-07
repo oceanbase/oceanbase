@@ -11,14 +11,8 @@
  */
 
 #include "ob_log_apply_service.h"
-#include "logservice/ob_log_handler.h"
 #include "logservice/ob_ls_adapter.h"
-#include "logservice/palf/palf_env.h"
-#include "share/scn.h"
-#include "common/ob_clock_generator.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/ob_thread_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {

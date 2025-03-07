@@ -14,10 +14,6 @@
 
 #include "share/location_cache/ob_location_struct.h"
 #include "share/config/ob_server_config.h" // GCONF
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/net/ob_addr.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "share/transfer/ob_transfer_info.h"
 
 namespace oceanbase
@@ -951,100 +947,6 @@ bool ObLocationServiceUtility::treat_sql_as_timeout(const int error_code)
     }
   }
   return bool_ret;
-}
-
-ObVTableLocationCacheKey::ObVTableLocationCacheKey()
-  : tenant_id_(common::OB_INVALID_TENANT_ID),
-    table_id_(common::OB_INVALID_ID)
-{
-}
-
-ObVTableLocationCacheKey::ObVTableLocationCacheKey(
-    const uint64_t tenant_id,
-    const uint64_t table_id)
-    : tenant_id_(tenant_id),
-      table_id_(table_id)
-{
-}
-
-ObVTableLocationCacheKey::~ObVTableLocationCacheKey()
-{
-}
-
-bool ObVTableLocationCacheKey::operator ==(const ObIKVCacheKey &other) const
-{
-  const ObVTableLocationCacheKey &other_key =
-      reinterpret_cast<const ObVTableLocationCacheKey &>(other);
-  return tenant_id_ == other_key.tenant_id_
-      && table_id_ == other_key.table_id_;
-}
-
-bool ObVTableLocationCacheKey::operator !=(const ObIKVCacheKey &other) const
-{
-  const ObVTableLocationCacheKey &other_key =
-      reinterpret_cast<const ObVTableLocationCacheKey &>(other);
-  return tenant_id_ != other_key.tenant_id_
-      || table_id_ != other_key.table_id_;
-}
-
-uint64_t ObVTableLocationCacheKey::get_tenant_id() const
-{
-  return common::OB_SYS_TENANT_ID;
-}
-
-uint64_t ObVTableLocationCacheKey::hash() const
-{
-  uint64_t hash_val = 0;
-  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
-  hash_val = murmurhash(&table_id_, sizeof(table_id_), hash_val);
-  return hash_val;
-}
-
-int64_t ObVTableLocationCacheKey::size() const
-{
-  return sizeof(*this);
-}
-
-int ObVTableLocationCacheKey::deep_copy(
-    char *buf,
-    const int64_t buf_len,
-    ObIKVCacheKey *&key) const
-{
-  int ret = OB_SUCCESS;
-  if (NULL == buf || buf_len < size()) {
-    ret = common::OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(buf), K(buf_len), "size", size());
-  } else {
-    ObVTableLocationCacheKey *pkey = new (buf) ObVTableLocationCacheKey();
-    *pkey = *this;
-    key = pkey;
-  }
-  return ret;
-}
-
-int ObLocationKVCacheValue::deep_copy(
-    char *buf,
-    const int64_t buf_len,
-    ObIKVCacheValue *&value) const
-{
-  int ret = OB_SUCCESS;
-  if (NULL == buf || buf_len < size()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(buf), K(buf_len), "size", size());
-  } else {
-    ObLocationKVCacheValue *pvalue = new (buf) ObLocationKVCacheValue();
-    pvalue->size_ = size_;
-    pvalue->buffer_ = buf + sizeof(*this);
-    MEMCPY(pvalue->buffer_, buffer_, size_);
-    value = pvalue;
-  }
-  return ret;
-}
-
-void ObLocationKVCacheValue::reset()
-{
-  size_ = 0;
-  buffer_ = NULL;
 }
 
 ObLocationSem::ObLocationSem() : cur_count_(0), max_count_(0), cond_()

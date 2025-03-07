@@ -16,10 +16,6 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
 
 namespace oceanbase
 {

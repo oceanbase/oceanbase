@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tablet_block_aggregated_info.h"
-#include "storage/ob_super_block_struct.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
-#include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {

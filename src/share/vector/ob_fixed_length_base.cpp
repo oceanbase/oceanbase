@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/vector/ob_fixed_length_base.h"
+#include "ob_fixed_length_base.h"
 #include "sql/engine/basic/ob_compact_row.h"
 
 namespace oceanbase

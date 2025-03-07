@@ -15,7 +15,6 @@
 
 #include "lib/geo/ob_geo_dispatcher.h"
 #include "lib/geo/ob_geo_func_area.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

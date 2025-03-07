@@ -10,17 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define private public
-#include "share/datum/ob_datum_funcs.h"
-#include "sql/engine/expr/ob_expr_cmp_func.h"
 #include "sql/test_sql_utils.h"
 
-#include <fstream>
-#include <iterator>
-#include <string>
-#include <algorithm>
 
 #undef private
 

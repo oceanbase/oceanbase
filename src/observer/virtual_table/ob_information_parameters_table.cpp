@@ -12,10 +12,6 @@
 
 #include "observer/virtual_table/ob_information_parameters_table.h"
 
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_printer.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;

@@ -36,7 +36,6 @@ public:
   ObDirectLoadMemSample(observer::ObTableLoadTableCtx *ctx, ObDirectLoadMemContext *mem_ctx);
   virtual ~ObDirectLoadMemSample() {}
 
-  int do_pre_sort_sample();
   int do_sample();
 
 private:

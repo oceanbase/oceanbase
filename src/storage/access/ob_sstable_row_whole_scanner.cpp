@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_sstable.h"
 #include "ob_sstable_row_whole_scanner.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "ob_table_access_context.h"
-#include "ob_table_access_param.h"
-#include "ob_dml_param.h"
 
 namespace oceanbase
 {

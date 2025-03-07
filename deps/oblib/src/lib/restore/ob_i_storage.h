@@ -156,6 +156,10 @@ public:
     return (type_ == ObStorageObjectMetaType::OB_OBJ_NORMAL) ||
            (type_ == ObStorageObjectMetaType::OB_FS_FILE);
   }
+  bool is_dir_type() const
+  {
+    return type_ == ObStorageObjectMetaType::OB_FS_DIR;
+  }
   bool is_simulate_append_type() const { return type_ == ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND; }
 
   static bool fragment_meta_cmp_func(const ObAppendableFragmentMeta &left, const ObAppendableFragmentMeta &right);

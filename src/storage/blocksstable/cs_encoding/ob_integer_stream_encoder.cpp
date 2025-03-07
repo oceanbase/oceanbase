@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_integer_stream_encoder.h"
-#include "ob_cs_encoding_util.h"
 
 namespace oceanbase
 {

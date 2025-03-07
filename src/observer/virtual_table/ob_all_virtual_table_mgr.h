@@ -57,7 +57,8 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
     NESTED_SIZE,
     CG_IDX,
     DATA_CHECKSUM,
-    TABLE_FLAG
+    TABLE_FLAG,
+    REC_SCN
   };
 public:
   ObAllVirtualTableMgr();

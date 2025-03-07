@@ -15,7 +15,6 @@
 #define protected public
 
 #include "ob_index_block_data_prepare.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 
 namespace oceanbase
 {

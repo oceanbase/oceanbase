@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_import_table_persist_helper.h"
-#include "ob_import_table_struct.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 
 using namespace oceanbase;

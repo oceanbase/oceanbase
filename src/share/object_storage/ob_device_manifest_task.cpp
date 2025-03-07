@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/object_storage/ob_device_manifest_task.h"
-#include "lib/container/ob_array.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/config/ob_server_config.h"
 #include "share/object_storage/ob_device_config_mgr.h"
-#include "share/object_storage/ob_device_config_parser.h"
 #include "share/object_storage/ob_device_connectivity.h"
-#include "share/object_storage/ob_object_storage_struct.h"
 #include "share/object_storage/ob_zone_storage_table_operation.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"

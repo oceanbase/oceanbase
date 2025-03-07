@@ -143,6 +143,8 @@ public:
       uint64_t in_rpc_decode_ : 1;
       uint64_t in_connection_mgr_ : 1;
       uint64_t in_check_row_confliction_: 1;
+      uint64_t in_deadlock_row_register_ : 1; //register rowkey info to deadlock manager
+      uint64_t in_check_tx_status_ : 1;
     };
   };
 

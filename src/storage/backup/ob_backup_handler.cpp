@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log_module.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/backup/ob_backup_task.h"
 #include "storage/backup/ob_backup_handler.h"
-#include "share/backup/ob_backup_connectivity.h"
 #include "storage/backup/ob_backup_fuse_tablet_dag.h"
 #include "storage/backup/ob_backup_complement_log.h"
 

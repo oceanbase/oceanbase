@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_p2p_dh_msg.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"

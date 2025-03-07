@@ -10,23 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_multi_data_source.h"
-#include "lib/ob_abort.h"
-#include "lib/ob_errno.h"
-#include "storage/tx/ob_trans_define.h"
-#include "share/ob_errno.h"
-#include "storage/ddl/ob_ddl_clog.h"
+#include "ob_multi_data_source.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/tablelock/ob_table_lock_common.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
-#include "share/ls/ob_ls_operator.h"
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #define NEED_MDS_REGISTER_DEFINE
 #include "storage/multi_data_source/compile_utility/mds_register.h"
 #undef NEED_MDS_REGISTER_DEFINE
-#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
-#include "storage/multi_data_source/runtime_utility/mds_tlocal_info.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase
@@ -491,6 +479,18 @@ ObMulSourceTxDataDump::dump_buf(
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
         dump_str = helper.convert(modify_arg);
+      }
+      break;
+    }
+    case ObTxDataSourceType::UNBIND_LOB_TABLET: {
+      ObBatchUnbindLobTabletArg modify_arg;
+      if (OB_FAIL(modify_arg.deserialize(buf, len, pos))) {
+        TRANS_LOG(WARN, "failed to deserialize arg", K(ret));
+      } else if (pos > len) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
+      } else {
+        dump_str = to_cstring(modify_arg);
       }
       break;
     }

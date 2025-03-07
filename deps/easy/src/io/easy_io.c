@@ -1,10 +1,6 @@
 #include "io/easy_io.h"
 #include "io/easy_baseth_pool.h"
 #include "io/easy_connection.h"
-#include "io/easy_message.h"
-#include "io/easy_request.h"
-#include "io/easy_file.h"
-#include "io/easy_client.h"
 #include "io/easy_socket.h"
 #include "util/easy_mod_stat.h"
 #include <sched.h>

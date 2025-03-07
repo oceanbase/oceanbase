@@ -946,6 +946,68 @@ private:
   ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyRemoteSSTableMacroBlockRestoreReader);
 };
+
+class ObRebuildTabletSSTableInfoObReader
+{
+public:
+  ObRebuildTabletSSTableInfoObReader();
+  virtual ~ObRebuildTabletSSTableInfoObReader() {}
+
+  int init(
+      const ObStorageHASrcInfo &src_info,
+      const obrpc::ObRebuildTabletSSTableInfoArg &rpc_arg,
+      obrpc::ObStorageRpcProxy &srv_rpc_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
+  int get_next_sstable_info(
+      obrpc::ObCopyTabletSSTableInfo &sstable_info);
+  int get_next_tablet_sstable_header(
+      obrpc::ObCopyTabletSSTableHeader &copy_header);
+private:
+  int fetch_sstable_meta_(obrpc::ObCopyTabletSSTableInfo &sstable_info);
+
+private:
+  static const int64_t FETCH_TABLET_SSTABLE_INFO_TIMEOUT = 60 * 1000 * 1000; //60s
+  bool is_inited_;
+  ObStorageStreamRpcReader<obrpc::OB_HA_REBUILD_TABLET_SSTABLE_INFO> rpc_reader_;
+  common::ObArenaAllocator allocator_;
+  bool is_sstable_iter_end_;
+  int64_t sstable_index_;
+  int64_t sstable_count_;
+  DISALLOW_COPY_AND_ASSIGN(ObRebuildTabletSSTableInfoObReader);
+};
+
+class ObRebuildTabletSSTableProducer
+{
+public:
+  ObRebuildTabletSSTableProducer();
+  virtual ~ObRebuildTabletSSTableProducer() {}
+
+  int init (
+      const obrpc::ObRebuildTabletSSTableInfoArg &tablet_sstable_info,
+      ObLS *ls);
+  int get_next_sstable_info(
+      obrpc::ObCopyTabletSSTableInfo &sstable_info);
+  int get_copy_tablet_sstable_header(
+      obrpc::ObCopyTabletSSTableHeader &copy_header);
+private:
+  int get_copy_sstable_info_(const obrpc::ObRebuildTabletSSTableInfoArg &tablet_sstable_info);
+  int get_tablet_meta_(ObMigrationTabletParam &tablet_meta);
+  int fake_deleted_tablet_meta_(ObMigrationTabletParam &tablet_meta);
+
+private:
+  bool is_inited_;
+  share::ObLSID ls_id_;
+  obrpc::ObRebuildTabletSSTableInfoArg tablet_sstable_info_;
+  ObTabletHandle tablet_handle_;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper_;
+  storage::ObCopyTabletStatus::STATUS status_;
+  int64_t sstable_count_;
+  int64_t sstable_index_;
+  ObITable::TableKey major_table_key_;
+  DISALLOW_COPY_AND_ASSIGN(ObRebuildTabletSSTableProducer);
+};
+
+
 }
 }
 #endif

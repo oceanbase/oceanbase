@@ -1570,7 +1570,7 @@ typedef common::ObSEArray<ObElrTransInfo, 1, TransModulePageAllocator> ObElrTran
 typedef common::ObSEArray<int64_t, 10, TransModulePageAllocator> ObRedoLogIdArray;
 typedef common::ObSEArray<palf::LSN, 10, ModulePageAllocator> ObRedoLSNArray;
 typedef common::ObSEArray<ObLSLogInfo, 10, ModulePageAllocator> ObLSLogInfoArray;
-typedef common::ObSEArray<ObStateInfo, 1, ModulePageAllocator> ObStateInfoArray;
+typedef common::ObSEArray<ObStateInfo, 1, TransModulePageAllocator> ObStateInfoArray;
 
 struct CtxInfo final
 {

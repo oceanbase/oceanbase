@@ -42,6 +42,7 @@ public:
   virtual int get_string_data_len(uint32_t &len) const = 0;
 
   int get_stream_offsets(ObIArray<uint32_t> &offsets) const;
+  int64_t get_row_count() const {return row_count_; }
 
   VIRTUAL_TO_STRING_KV(K_(column_index), K_(column_type), K_(store_class),
     KPC_(ctx), K_(row_count), K_(column_header), K_(is_force_raw), K_(stream_offsets));

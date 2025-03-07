@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <cstdint>
 #include "ob_table_object.h"
-#include "lib/utility/ob_unify_serialize.h"
 #include "common/object/ob_obj_funcs.h"
 
 namespace oceanbase
@@ -711,6 +709,33 @@ int64_t ObTableObjFunc<ObTableLongBlobType>::get_serialize_size(const ObObj &obj
   return get_serialize_type_val_size<ObTableLongBlobType, ObLongTextType>(obj);
 }
 
+// 25. ObTableCharType
+template<>
+int ObTableObjFunc<ObTableCharType>::deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(obj_val_deserialize<ObCharType>(obj, buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KP(buf), K(data_len), K(pos));
+  } else {
+    obj.set_type(ObCharType);
+    obj.set_collation_level(CS_LEVEL_EXPLICIT);
+    obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  }
+  return ret;
+}
+
+template<>
+int ObTableObjFunc<ObTableCharType>::serialize(char *buf, const int64_t buf_len, int64_t &pos, const ObObj &obj)
+{
+  return serialize_type_val<ObTableCharType, ObCharType>(buf, buf_len, pos, obj);
+}
+
+template<>
+int64_t ObTableObjFunc<ObTableCharType>::get_serialize_size(const ObObj &obj)
+{
+  return get_serialize_type_val_size<ObTableCharType, ObCharType>(obj);
+}
+
 using ob_table_obj_deserialize = int (*)(const char *buf, const int64_t data_len, int64_t &pos, ObObj &obj);
 using ob_table_obj_serialize = int (*)(char *buf, const int64_t buf_len, int64_t &pos, const ObObj &obj);
 using ob_table_obj_get_serialize_size = int64_t (*)(const ObObj &obj);
@@ -755,6 +780,7 @@ static const ObTableObjTypeFuncs OB_TABLE_OBJ_FUNCS[ObTableObjTypeMax] =
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableBlobType),       // 22
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableMediumBlobType), // 23
   DEF_TABLE_OBJ_FUNC_ENTRY(ObTableLongBlobType),   // 24
+  DEF_TABLE_OBJ_FUNC_ENTRY(ObTableCharType),       // 25
 };
 
 #define OBJ_TABLE_TYPE_CASE(x, y) \
@@ -778,7 +804,8 @@ static const ObTableObjTypeFuncs OB_TABLE_OBJ_FUNCS[ObTableObjTypeMax] =
 		(ObUTinyIntType, ObTableUTinyIntType),     \
 		(ObUSmallIntType, ObTableUSmallIntType),    \
 		(ObUInt32Type, ObTableUInt32Type),       \
-		(ObUInt64Type, ObTableUInt64Type)
+		(ObUInt64Type, ObTableUInt64Type),      \
+    (ObCharType, ObTableCharType)
 
 static int convert_from_obj_type(const ObObj &obj, ObTableObjType &table_type)
 {

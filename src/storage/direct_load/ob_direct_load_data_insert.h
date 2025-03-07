@@ -25,20 +25,15 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObDirectLoadSSTable;
-class ObDirectLoadMultipleSSTable;
-
 struct ObDirectLoadDataInsertParam
 {
 public:
   ObDirectLoadDataInsertParam();
   ~ObDirectLoadDataInsertParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(store_column_count), K_(table_data_desc), KP_(datum_utils),
-               KP_(dml_row_handler));
+  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(datum_utils), KP_(dml_row_handler));
 public:
   common::ObTabletID tablet_id_;
-  int64_t store_column_count_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
@@ -49,42 +44,39 @@ class ObDirectLoadDataInsert
 public:
   ObDirectLoadDataInsert();
   ~ObDirectLoadDataInsert();
-  int init(
-      const ObDirectLoadDataInsertParam &param,
-      ObIStoreRowIterator *load_iter);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int init(const ObDirectLoadDataInsertParam &param,
+           ObDirectLoadIStoreRowIterator *load_iter);
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row);
 private:
   ObDirectLoadDataInsertParam param_;
-  ObIStoreRowIterator *load_iter_;
+  ObDirectLoadIStoreRowIterator *load_iter_;
   bool is_inited_;
 };
 
-class ObDirectLoadSSTableDataInsert : public ObDirectLoadIStoreRowIterator
+class ObDirectLoadSSTableDataInsert final : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadSSTableDataInsert();
   ~ObDirectLoadSSTableDataInsert();
-  int init(
-      const ObDirectLoadDataInsertParam &param,
-      const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
-      const blocksstable::ObDatumRange &range);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int init(const ObDirectLoadDataInsertParam &param,
+           const ObDirectLoadTableHandleArray &sstable_array,
+           const blocksstable::ObDatumRange &range);
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
 private:
   ObDirectLoadSSTableScanMerge scan_merge_;
   ObDirectLoadDataInsert data_insert_;
   bool is_inited_;
 };
 
-class ObDirectLoadMultipleSSTableDataInsert : public ObDirectLoadIStoreRowIterator
+class ObDirectLoadMultipleSSTableDataInsert final : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadMultipleSSTableDataInsert();
   ~ObDirectLoadMultipleSSTableDataInsert();
-  int init(
-      const ObDirectLoadDataInsertParam &param,
-      const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
-      const blocksstable::ObDatumRange &range);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int init(const ObDirectLoadDataInsertParam &param,
+           const ObDirectLoadTableHandleArray &sstable_array,
+           const blocksstable::ObDatumRange &range);
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
 private:
   ObDirectLoadMultipleDatumRange range_;
   ObDirectLoadMultipleSSTableScanMerge scan_merge_;

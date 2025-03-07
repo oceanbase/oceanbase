@@ -14,11 +14,6 @@
 
 #include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "share/vector/ob_uniform_base.h"
-#include "share/vector/ob_continuous_base.h"
-#include "share/vector/ob_discrete_base.h"
-#include "share/vector/ob_fixed_length_base.h"
 
 namespace oceanbase
 {

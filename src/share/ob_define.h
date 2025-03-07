@@ -596,6 +596,7 @@ const uint64_t OB_TABLE_PRIVILEGES_OLD_TID = 12002;  // not used anymore for "TA
 const uint64_t OB_USER_PRIVILEGES_OLD_TID = 12003;   // not used anymore for "USER_PRIVILEGES" has a new table id
 const uint64_t OB_SCHEMA_PRIVILEGES_OLD_TID = 12004; // not used anymore for "SCHEMA_PRIVILEGES" has a new table id
 const uint64_t OB_PARTITIONS_OLD_TID = 12007;        // not used anymore for "PARTITIONS" has a new table id
+const uint64_t OB_ALL_VIRTUAL_PROC_OLD_TID = 12030;              // not used anymore for "PROC" has a new table id
 //end of reserved table id for information schema
 
 ////////////////typedef

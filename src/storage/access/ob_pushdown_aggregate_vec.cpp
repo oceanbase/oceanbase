@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/aggregate/count.h"
-#include "share/aggregate/min_max.h"
-#include "share/aggregate/sum.h"
-#include "share/aggregate/first_row.h"
 #include "ob_pushdown_aggregate_vec.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 
@@ -27,16 +23,21 @@ namespace aggregate
 {
 namespace helper{
 int init_count_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                                ObIAllocator &allocator, IAggregate *&agg);
+                         ObIAllocator &allocator, IAggregate *&agg);
 int init_min_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                              ObIAllocator &allocator, IAggregate *&agg);
+                       ObIAllocator &allocator, IAggregate *&agg);
 int init_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                              ObIAllocator &allocator, IAggregate *&agg);
+                       ObIAllocator &allocator, IAggregate *&agg);
 int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                              ObIAllocator &allocator, IAggregate *&agg,
-                              int32 *tmp_res_size = NULL);
+                       ObIAllocator &allocator, IAggregate *&agg,
+                       int32 *tmp_res_size = NULL);
+int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                                  ObIAllocator &allocator, IAggregate *&agg);
+// TODO@fengshang, need to support sum_opnsize vec 2.0
+int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                               ObIAllocator &allocator, IAggregate *&agg);
 int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                              ObIAllocator &allocator, IAggregate *&agg);
+                            ObIAllocator &allocator, IAggregate *&agg);
 }
 }
 }
@@ -47,9 +48,11 @@ ObAggCellVec::ObAggCellVec(const int64_t agg_idx, const ObAggCellVecBasicInfo &b
   : ObAggCellBase(allocator),
     agg_idx_(agg_idx),
     basic_info_(basic_info),
-    aggregate_(nullptr)
+    aggregate_(nullptr),
+    padding_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   result_datum_.set_null();
+  default_datum_.set_nop();
 }
 
 ObAggCellVec::~ObAggCellVec()
@@ -67,31 +70,43 @@ int ObAggCellVec::init()
     switch (agg_type_) {
       case PD_COUNT: {
         if (OB_FAIL(helper::init_count_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init Count aggregate", K_(agg_idx));
+          LOG_WARN("Failed to init Count aggregate", K(ret), K_(agg_idx));
         }
         break;
       }
       case PD_MIN: {
         if (OB_FAIL(helper::init_min_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init MIN aggregate", K_(agg_idx));
+          LOG_WARN("Failed to init MIN aggregate", K(ret), K_(agg_idx));
         }
         break;
       }
       case PD_MAX: {
         if (OB_FAIL(helper::init_max_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init MAX aggregate", K_(agg_idx));
+          LOG_WARN("Failed to init MAX aggregate", K(ret), K_(agg_idx));
+        }
+        break;
+      }
+      case PD_HLL: {
+        if (OB_FAIL(helper::init_approx_count_distinct_synopsis_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
+          LOG_WARN("Failed to init HLL aggregate", K(ret), K_(agg_idx));
+        }
+        break;
+      }
+      case PD_SUM_OP_SIZE: {
+        if (OB_FAIL(helper::init_sum_opnsize_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
+          LOG_WARN("Failed to init SumOpNSize aggregate", K(ret), K_(agg_idx));
         }
         break;
       }
       case PD_SUM: {
         if (OB_FAIL(helper::init_sum_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init SUM aggregate", K_(agg_idx));
+          LOG_WARN("Failed to init SUM aggregate", K(ret), K_(agg_idx));
         }
         break;
       }
       case PD_RB_BUILD: {
         if (OB_FAIL(helper::init_rb_build_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
-          LOG_WARN("Failed to init rb build aggregate", K_(agg_idx));
+          LOG_WARN("Failed to init rb build aggregate", K(ret), K_(agg_idx));
         }
         break;
       }
@@ -101,7 +116,12 @@ int ObAggCellVec::init()
       }
     }
     if (OB_SUCC(ret)) {
-      is_inited_ = true;
+      if (OB_ISNULL(aggregate_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggregate is null", K(ret), KP_(aggregate));
+      } else {
+        is_inited_ = true;
+      }
     }
   }
   return ret;
@@ -115,11 +135,14 @@ void ObAggCellVec::reset()
     allocator_.free(aggregate_);
     aggregate_ = nullptr;
   }
+  padding_allocator_.reset();
+  default_datum_.set_nop();
 }
 
 void ObAggCellVec::reuse()
 {
   ObAggCellBase::reuse();
+  padding_allocator_.reuse();
 }
 
 int ObAggCellVec::eval(
@@ -377,7 +400,8 @@ int ObAggCellVec::read_agg_datum(
     // TODO: @baichangmin.bcm fix col_index in cg, use 0 temporarily
     meta.col_idx_ = col_index;
     switch (agg_type_) {
-      case PD_COUNT: {
+      case PD_COUNT:
+      case PD_SUM_OP_SIZE: {
         meta.col_type_ = blocksstable::SK_IDX_NULL_COUNT;
         break;
       }
@@ -413,9 +437,41 @@ int ObAggCellVec::read_agg_datum(
 int ObAggCellVec::pad_column_if_need(blocksstable::ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
+  padding_allocator_.reuse();
   if (!basic_info_.need_padding()) {
-  } else if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(), basic_info_.col_param_->get_accuracy(), allocator_, datum))) {
+  } else if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(),
+                                basic_info_.col_param_->get_accuracy(),
+                                padding_allocator_, datum))) {
     LOG_WARN("Fail to pad column", K(ret), K_(basic_info), KPC(this));
+  }
+  return ret;
+}
+
+int ObAggCellVec::get_def_datum(const blocksstable::ObStorageDatum *&default_datum)
+{
+  int ret = OB_SUCCESS;
+  if (!default_datum_.is_nop()) {
+    default_datum = &default_datum_;
+  } else {
+    const ObObj &def_cell = basic_info_.col_param_->get_orig_default_value();
+    if (!def_cell.is_nop_value()) {
+      if (OB_FAIL(default_datum_.from_obj_enhance(def_cell))) {
+        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+      } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
+        // lob def value must have no lob header when not null, should add lob header for default value
+        ObString data = default_datum_.get_string();
+        ObString out;
+        if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
+          LOG_WARN("failed to fill lob header for column.", K(ret), K(def_cell), K(data));
+        } else {
+          default_datum_.set_string(out);
+        }
+      }
+      default_datum = &default_datum_;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected, virtual column is not supported", K(ret), K(basic_info_.col_offset_));
+    }
   }
   return ret;
 }
@@ -477,7 +533,7 @@ int ObCountAggCellVec::eval_batch(
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
-    if (!exclude_null_) {
+    if (!need_get_row_ids()) {
       data += row_count;
     } else if (nullptr == reader) { // row scan or group by pushdown
       if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx))) {
@@ -771,6 +827,204 @@ int ObSumAggCellVec::eval_index_info(
   return ret;
 }
 
+ObHyperLogLogAggCellVec::ObHyperLogLogAggCellVec(
+    const int64_t agg_idx,
+    const ObAggCellVecBasicInfo &basic_info,
+    common:: ObIAllocator &allocator)
+      : ObAggCellVec(agg_idx, basic_info, allocator)
+{
+  agg_type_ = PD_HLL;
+}
+
+ObSumOpNSizeAggCellVec::ObSumOpNSizeAggCellVec(
+    const int64_t agg_idx,
+    const ObAggCellVecBasicInfo &basic_info,
+    common::ObIAllocator &allocator,
+    const bool exclude_null)
+      : ObAggCellVec(agg_idx, basic_info, allocator),
+        op_nsize_(0),
+        exclude_null_(exclude_null)
+{
+  agg_type_ = PD_SUM_OP_SIZE;
+}
+
+int ObSumOpNSizeAggCellVec::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObAggCellVec::init())) {
+    LOG_WARN("Failed to init agg cell", K(ret));
+  } else if (OB_FAIL(set_op_nsize())) {
+    LOG_WARN("Failed to get op size", K(ret));
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::set_op_nsize()
+{
+  int ret = OB_SUCCESS;
+  ObObjDatumMapType type = OBJ_DATUM_MAPPING_MAX;
+  const sql::ObExpr *proj_expr = get_project_expr();
+  if (OB_ISNULL(proj_expr) || OB_UNLIKELY(T_REF_COLUMN != proj_expr->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arg is null", K(ret), KPC(proj_expr));
+  } else if (FALSE_IT(type = proj_expr->obj_datum_map_)) {
+  } else if (OB_UNLIKELY(type >= common::OBJ_DATUM_MAPPING_MAX || type <= common::OBJ_DATUM_NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type", K(ret), K(type));
+  } else if (is_fixed_length_type()) {
+    op_nsize_ = sizeof(ObDatum) + common::ObDatum::get_reserved_size(type);
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::get_datum_op_nsize(blocksstable::ObStorageDatum &datum, int64_t &length)
+{
+  int ret = OB_SUCCESS;
+  const ObExpr *proj_expr = get_project_expr();
+  if (!is_lob_col() || datum.is_null()) {
+    length = sizeof(ObDatum) + datum.len_;
+  } else if (OB_ISNULL(proj_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected invalid agg expr", K(ret), KPC(proj_expr));
+  } else {
+    ObLobLocatorV2 locator(datum.get_string(), proj_expr->obj_meta_.has_lob_header());
+    int64_t lob_data_byte_len = 0;
+    if (OB_FAIL(locator.get_lob_data_byte_len(lob_data_byte_len))) {
+      LOG_WARN("Failed to get lob data byte len", K(ret), K(locator));
+    } else {
+      length = sizeof(ObDatum) + lob_data_byte_len;
+    }
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::eval(
+    blocksstable::ObStorageDatum &datum,
+    const int64_t row_count,
+    const int64_t agg_row_idx/*0*/)
+{
+  int ret = OB_SUCCESS;
+  AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCountAggCellVec not inited", K(ret));
+  } else if (OB_ISNULL(row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null row", K(ret));
+  } else {
+    char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
+    int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
+    int64_t length = 0;
+    if (OB_FAIL(pad_column_if_need(datum))) {
+      LOG_WARN("Failed to pad column", K(ret), K(datum));
+    } else if (OB_FAIL(get_datum_op_nsize(datum, length))) {
+      LOG_WARN("Failed to get datum length", K(ret), K(datum));
+    } else {
+      data += length * row_count;
+    }
+    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate one row", K(ret), K(datum),
+                K(row_count), K(agg_row_idx), K(data), KPC(this));
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::eval_batch(
+    blocksstable::ObIMicroBlockReader *reader,
+    const int32_t col_offset,
+    const int32_t *row_ids,
+    const int64_t row_count,
+    const int64_t row_offset, /*0*/
+    const int64_t agg_row_idx/*0*/)
+{
+  int ret = OB_SUCCESS;
+  AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCountAggCellVec not inited", K(ret));
+  } else if (OB_UNLIKELY(row_count < 0 || nullptr == row)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to aggregate batch rows", K(ret), K(row_count), KP(row), KPC(this));
+  } else {
+    char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
+    int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
+    if (!need_get_row_ids()) {
+      data += row_count * op_nsize_;
+    } else if (nullptr == reader || !is_fixed_length_type()) { // nullptr == reader means row scan or group by pushdown
+      if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx))) {
+        LOG_WARN("Failed to aggregate batch rows", K(ret));
+      }
+    } else {
+      int64_t valid_row_count = 0;
+      if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, basic_info_.col_param_, valid_row_count))) {
+        LOG_WARN("Failed to get row count from micro block reader", K(ret), K(row_count), KPC(this));
+      } else {
+        data += (row_count - valid_row_count) * sizeof(ObDatum) + valid_row_count * op_nsize_;
+      }
+    }
+    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
+                K(row_offset), K(agg_row_idx), K(data), K(reader), K(row_ids), KPC(this));
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::eval_index_info(
+    const blocksstable::ObMicroIndexInfo &index_info,
+    const bool is_cg,
+    const int64_t agg_row_idx/*0*/)
+{
+  int ret = OB_SUCCESS;
+  AggrRowPtr row = static_cast<char *>(basic_info_.rows_[agg_row_idx]->get_extra_payload(basic_info_.row_meta_));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCountAggCellVec not inited", K(ret));
+  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan(is_lob_col()) ||
+                                                      index_info.is_left_border() || index_info.is_right_border()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border",
+                K(ret), K(row), K(is_cg), K(index_info));
+  } else {
+    char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
+    int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
+    if (!exclude_null_) {
+      data += index_info.get_row_count() * op_nsize_;
+    } else if (OB_UNLIKELY(skip_index_datum_.is_null())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null skip index datum", K(ret), K(index_info));
+    } else {
+      const int64_t null_count = skip_index_datum_.get_int();
+      data += (index_info.get_row_count() - null_count) * op_nsize_ + null_count * sizeof(ObDatum);
+    }
+    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate index info", K(ret), K(data), K(is_cg), K(agg_row_idx),
+                K(index_info.get_row_count()), K(skip_index_datum_.get_int()), KPC(this));
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::can_use_index_info(
+    const blocksstable::ObMicroIndexInfo &index_info,
+    const int32_t col_index,
+    bool &can_agg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObAggCellVec not init", K(ret));
+  } else if (!exclude_null_ && is_fixed_length_type()) {
+    can_agg = true;
+  } else {
+    if (index_info.has_agg_data() && can_use_index_info()) {
+      if (OB_FAIL(read_agg_datum(index_info, col_index))) {
+        LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
+      } else {
+        can_agg = !skip_index_datum_.is_null();
+      }
+    } else {
+      can_agg = false;
+    }
+  }
+  return ret;
+}
+
 ObRbBuildAggCellVec::ObRbBuildAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
@@ -820,6 +1074,22 @@ int ObPDAggVecFactory::alloc_cell(
           OB_ISNULL(agg_cell = new (buf) ObSumAggCellVec(agg_idx, basic_info, allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc memory for SUM agg cell", K(ret));
+      }
+      break;
+    }
+    case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: {
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObHyperLogLogAggCellVec))) ||
+          OB_ISNULL(agg_cell = new (buf) ObHyperLogLogAggCellVec(agg_idx, basic_info, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc memory for HyperLogLog agg cell", K(ret));
+      }
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSumOpNSizeAggCellVec))) ||
+          OB_ISNULL(agg_cell = new (buf) ObSumOpNSizeAggCellVec(agg_idx, basic_info, allocator_, exclude_null))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc memory for SumOpNSize agg cell", K(ret));
       }
       break;
     }

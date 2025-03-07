@@ -15,7 +15,6 @@
 #include "lib/container/ob_array.h"
 #include "ob_unit_manager.h"
 #include "ob_root_utils.h"//get_tenant_id
-#include "ob_disaster_recovery_info.h"//DRLSInfo
 #include "share/ls/ob_ls_status_operator.h"//ObLSStatusInfo
 #include "share/ls/ob_ls_table_operator.h"//ls_operator_ ->get
 #include "share/ls/ob_ls_info.h"//ObLSInfo

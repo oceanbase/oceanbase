@@ -277,6 +277,7 @@ private:
   int init_pre_setting();
   int init_network();
   int init_interrupt();
+  int init_plugin();
   int init_zlib_lite_compressor();
   int init_multi_tenant();
   int init_sql_proxy();
@@ -336,6 +337,7 @@ private:
   int check_if_timezone_usable();
   int parse_mode();
   void deinit_zlib_lite_compressor();
+  void deinit_plugin();
 
   // ------------------------------- arb server start ------------------------------------
   int start_sig_worker_and_handle();

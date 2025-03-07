@@ -25,12 +25,12 @@
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-
 namespace oceanbase
 {
 namespace share
 {
 class ObLSID;
+class ObPartitionIdRowPairArray;
 }
 namespace sql
 {
@@ -79,9 +79,11 @@ struct SampleInfo
     SAMPLE_BASE_DATA = 1,
     SAMPLE_INCR_DATA = 2
   };
-  bool is_row_sample() const { return ROW_SAMPLE == method_; }
-  bool is_block_sample() const { return BLOCK_SAMPLE == method_; }
-  bool is_no_sample() const { return NO_SAMPLE == method_; }
+  OB_INLINE bool is_trival_sample() const { return ROW_SAMPLE == method_; }
+  OB_INLINE bool is_hybrid_sample() const { return HYBRID_SAMPLE == method_; }
+  OB_INLINE bool is_block_sample() const { return BLOCK_SAMPLE == method_; }
+  OB_INLINE bool is_no_sample() const { return NO_SAMPLE == method_; }
+  OB_INLINE bool is_row_sample() const { return is_trival_sample() || is_hybrid_sample(); }
   uint64_t hash(uint64_t seed) const;
   void reset()
   {
@@ -374,6 +376,7 @@ ObVTableScanParam() :
       table_scan_opt_(),
       ext_file_column_exprs_(NULL),
       ext_column_convert_exprs_(NULL),
+      partition_infos_(NULL),
       schema_guard_(NULL),
       auto_split_filter_type_(OB_INVALID_ID),
       auto_split_filter_(NULL),
@@ -458,6 +461,7 @@ ObVTableScanParam() :
   sql::ObExternalFileFormat external_file_format_;
   ObString external_file_location_;
   ObString external_file_access_info_;
+  const share::ObPartitionIdRowPairArray *partition_infos_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

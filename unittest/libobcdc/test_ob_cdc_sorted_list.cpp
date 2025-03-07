@@ -11,10 +11,7 @@
  */
 
 #include "gtest/gtest.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_define.h"
 #include "logservice/libobcdc/src/ob_cdc_lightly_sorted_list.h"
-#include "logservice/libobcdc/src/ob_log_trans_log.h"
 
 #define USING_LOG_PREFIX
 

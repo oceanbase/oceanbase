@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/vector/ob_fixed_length_vector.h"
-#include "lib/wide_integer/ob_wide_integer.h"
 
 namespace oceanbase
 {
@@ -36,7 +35,7 @@ int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash(BATCH_EVAL_HASH_ARGS) c
 }
 
 template<typename ValueType, typename BasicOp>
-int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash_v3(BATCH_EVAL_HASH_ARGS) const
+OB_INLINE int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash_v3(BATCH_EVAL_HASH_ARGS) const
 {
   BatchHashResIter hash_iter(hash_values);
   return VecOpUtil::template hash_dispatch<ObMurmurHash, true, BatchHashResIter>(

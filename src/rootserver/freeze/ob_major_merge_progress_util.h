@@ -198,13 +198,14 @@ public:
   bool is_verify_finished() const
   {
     // ls state can be IDLE when there is no tablet on ls
-    return ls_total_cnt_ == (ls_verified_cnt_ + ls_refreshed_cnt_);
+    return ls_total_cnt_ == (ls_verified_cnt_ + ls_refreshed_cnt_ + ls_refreshing_cnt_);
   }
   void reset() {
     ls_total_cnt_ = 0;
     ls_merging_cnt_ = 0;
     ls_verified_cnt_ = 0;
     ls_refreshed_cnt_ = 0;
+    ls_refreshing_cnt_ = 0;
   }
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
 public:
@@ -212,6 +213,7 @@ public:
   int64_t ls_merging_cnt_;
   int64_t ls_verified_cnt_;
   int64_t ls_refreshed_cnt_;
+  int64_t ls_refreshing_cnt_;
 };
 #endif
 

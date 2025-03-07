@@ -621,7 +621,7 @@ public:
   {
     return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR;
   }
-  virtual OB_INLINE bool is_sample_node() const { return type_ == HYBRID_SAMPLE_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_sample_node() const { return type_ == HYBRID_SAMPLE_FILTER_EXECUTOR || type_ == TRIVAL_SAMPLE_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node() || is_sample_node(); }
   virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR; }
@@ -750,6 +750,7 @@ public:
   void inc_ref() { ++ref_cnt_; }
   void dec_ref() { --ref_cnt_; }
   int64_t get_ref() { return ref_cnt_; }
+  bool is_padding_mode() const { return is_padding_mode_; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   int find_evaluated_datums(
@@ -789,6 +790,7 @@ protected:
   common::ObFixedArray<ObExpr *, common::ObIAllocator> cg_col_exprs_;
   common::ObIAllocator &allocator_;
   ObPushdownOperator &op_;
+  bool is_padding_mode_;
 private:
   bool is_rewrited_;
   ObBoolMask filter_bool_mask_;
@@ -853,7 +855,8 @@ public:
   OB_INLINE bool filter_can_continuous_filter() const override final {
     bool can_continuous_filter = true;
     for (int64_t i = 0; i < filter_.filter_exprs_.count();++i) {
-      if (T_OP_PUSHDOWN_TOPN_FILTER == filter_.filter_exprs_.at(i)->type_) {
+      if (T_OP_PUSHDOWN_TOPN_FILTER == filter_.filter_exprs_.at(i)->type_
+          || T_OP_RUNTIME_FILTER == filter_.filter_exprs_.at(i)->type_) {
         can_continuous_filter = false;
         break;
       }
@@ -1185,8 +1188,8 @@ public:
   };
   OB_INLINE bool filter_can_continuous_filter() const override final
   {
-    // for topn sort runtime filter, the filter can not do continuouly check
-    return DynamicFilterType::PD_TOPN_FILTER != get_filter_node().get_dynamic_filter_type();
+    // for runtime filter, the filter can not do continuously check
+    return false;
   }
   inline const ObWhiteFilterSmallHashSet &get_small_set() const {return small_set_;}
   void clear() override;

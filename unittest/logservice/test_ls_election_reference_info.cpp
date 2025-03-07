@@ -11,14 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "common/ob_range.h"
-#include "lib/container/ob_array.h"
-#include "lib/string/ob_string.h"
 #include "logservice/leader_coordinator/table_accessor.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/rc/ob_tenant_base.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
-#include "lib/net/ob_addr.h"
 
 namespace oceanbase
 {

@@ -400,6 +400,11 @@ public:
   int print_foreign_key_definition(const uint64_t tenant_id,
                                    const share::schema::ObForeignKeyInfo &foreign_key_info,
                                    char *buf, int64_t buf_len, int64_t &pos) const;
+  int print_package_definition(const uint64_t tenant_id,
+                               uint64_t package_id,
+                               char* buf,
+                               const int64_t& buf_len,
+                               int64_t &pos) const;
   int print_udt_definition(const uint64_t tenant_id,
                            const uint64_t udt_id,
                            char* buf,
@@ -430,6 +435,9 @@ public:
   int print_compound_instead_trigger_definition(const ObTriggerInfo &trigger_info,
                                                 char *buf, int64_t buf_len, int64_t &pos,
                                                 bool get_ddl) const;
+  int print_system_trigger_definition(const ObTriggerInfo &trigger_info,
+                                      char *buf, int64_t buf_len, int64_t &pos,
+                                      bool get_ddl) const;
   int print_trigger_status(const ObTriggerInfo &trigger_info, char *buf, int64_t buf_len, int64_t &pos) const;
   int print_trigger_base_object(const ObTriggerInfo &trigger_info,
                                 char *buf, int64_t buf_len, int64_t &pos) const;
@@ -516,7 +524,10 @@ public:
                                         char* buf,
                                         const int64_t& buf_len,
                                         int64_t& pos) const;
-
+  int print_heap_table_pk_info(const ObTableSchema &table_schema,
+                               char* buf,
+                               const int64_t& buf_len,
+                               int64_t& pos) const;
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {
@@ -526,6 +537,11 @@ private:
     ObPartitionFuncType sub_type = sub_part_opt.get_part_func_type();
     return is_hash_like_part(sub_type) && !is_hash_like_part(type);
   }
+#ifdef OB_BUILD_ORACLE_PL
+  int print_base64_cipher(ObIAllocator &allocator,
+                          const ObString &cipher,
+                          ObString &formatted_cipher) const;
+#endif  // OB_BUILD_ORACLE_PL
 
   ObSchemaGetterGuard &schema_guard_;
   bool strict_compat_;

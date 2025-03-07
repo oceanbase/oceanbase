@@ -12,21 +12,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_json_param_type.h"
-#include "ob_expr_json_func_helper.h"
-#include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
-#include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
-#include "lib/charset/ob_dtoa.h" // ob_gcvt_opt
-#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "sql/ob_result_set.h"
-#include "sql/ob_spi.h"
+#include "src/pl/ob_pl.h"
 #include "ob_expr_json_utils.h"
 #include "share/object/ob_obj_cast_util.h"
-#include "share/object/ob_obj_cast.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

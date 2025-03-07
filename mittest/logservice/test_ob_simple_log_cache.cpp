@@ -13,22 +13,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <stdexcept>
-#include <thread>
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
-#include "logservice/palf/palf_iterator.h"
 #undef private
 #undef protected
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/lsn.h"
-#include "share/ob_tenant_mem_limit_getter.h"
 
 
 const std::string TEST_NAME = "log_cache";

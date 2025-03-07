@@ -14,18 +14,7 @@
 
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/packet/ompk_resheader.h"
-#include "rpc/obmysql/packet/ompk_field.h"
-#include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/ob_mysql_field.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "lib/profile/ob_perf_event.h"
-#include "obsm_row.h"
 #include "observer/mysql/obmp_query.h"
-#include "sql/engine/px/ob_px_admission.h"
-#include "sql/ob_spi.h"
-#include "share/object/ob_obj_cast.h"
-#include "observer/mysql/obmp_stmt_prexecute.h"
 
 namespace oceanbase
 {
@@ -54,6 +43,7 @@ ObSyncPlanDriver::~ObSyncPlanDriver()
 int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
+  ObRetryWaitEventInfoGuard retry_info_guard(session_);
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL

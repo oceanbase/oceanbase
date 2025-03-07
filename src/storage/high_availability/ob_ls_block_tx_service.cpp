@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/scn.h"
-#include "storage/ls/ob_ls.h"
 #include "logservice/ob_log_service.h"
 #include "storage/high_availability/ob_ls_block_tx_service.h"
 #include "observer/ob_server_event_history_table_operator.h"

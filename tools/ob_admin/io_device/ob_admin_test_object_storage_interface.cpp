@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <time.h>
 #include "ob_admin_test_io_device_executor.h"
-#include "share/backup/ob_backup_io_adapter.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

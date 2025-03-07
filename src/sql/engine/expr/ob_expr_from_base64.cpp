@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_from_base64.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "lib/encode/ob_base64_encode.h"
-#include "objit/common/ob_item_type.h"
-#include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

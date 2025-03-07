@@ -8,7 +8,6 @@
  */
 
 
-#include <stddef.h>    /* size_t, ptrdiff_t */
 #include "zstd_v02.h"
 #include "error_private.h"
 
@@ -66,7 +65,6 @@ extern "C" {
 /******************************************
 *  Includes
 ******************************************/
-#include <stddef.h>    /* size_t, ptrdiff_t */
 #include <string.h>    /* memcpy */
 
 
@@ -918,7 +916,6 @@ extern "C" {
 /* *************************************
 *  Includes
 ***************************************/
-#include <stddef.h>   /* size_t */
 
 
 /* *************************************
@@ -1095,7 +1092,6 @@ typedef struct ZSTD_DCtx_s ZSTD_DCtx;
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
-#include <stdio.h>      /* printf (debug) */
 
 /****************************************************************
 *  Constants
@@ -1563,7 +1559,6 @@ static size_t FSE_decompress(void* dst, size_t maxDstSize, const void* cSrc, siz
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
-#include <stdio.h>      /* printf (debug) */
 
 /****************************************************************
 *  Error Management
@@ -2733,7 +2728,6 @@ static size_t HUF_decompress (void* dst, size_t dstSize, const void* cSrc, size_
 *********************************************************/
 #include <stdlib.h>      /* calloc */
 #include <string.h>      /* memcpy, memmove */
-#include <stdio.h>       /* debug : printf */
 
 
 /* *******************************************************

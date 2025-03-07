@@ -14,8 +14,7 @@
 
 #include "storage/direct_load/ob_direct_load_partition_del_lob_task.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
-#include "storage/direct_load/ob_direct_load_lob_meta_row_iter.h"
-#include "storage/lob/ob_lob_meta.h"
+#include "storage/direct_load/ob_direct_load_merge_ctx.h"
 
 namespace oceanbase
 {
@@ -30,31 +29,33 @@ ObDirectLoadPartitionDelLobTask::RowIterator::RowIterator() : is_inited_(false) 
 ObDirectLoadPartitionDelLobTask::RowIterator::~RowIterator() {}
 
 int ObDirectLoadPartitionDelLobTask::RowIterator::init(
-  const ObDirectLoadMergeParam &merge_param, const ObDirectLoadTabletMergeCtx *merge_ctx,
-  ObDirectLoadOriginTable *origin_table,
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array, const ObDatumRange &range,
-  int64_t parallel_idx, ObDirectLoadInsertTabletContext *insert_tablet_ctx)
+  ObDirectLoadTabletMergeCtx *merge_ctx, ObDirectLoadOriginTable &origin_table,
+  const ObDirectLoadTableDataDesc &table_data_desc,
+  const ObDirectLoadTableHandleArray &sstable_array, const ObDatumRange &range,
+  int64_t parallel_idx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator init twice", KR(ret),
-             KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
-                         nullptr == origin_table || !range.is_valid() ||
-                         nullptr == insert_tablet_ctx)) {
+    LOG_WARN("RowIterator init twice", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(nullptr == merge_ctx || !merge_ctx->is_valid() ||
+                         !origin_table.is_valid() || !table_data_desc.is_valid() ||
+                         !range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), K(sstable_array), K(range),
-             KP(insert_tablet_ctx));
+    LOG_WARN("invalid args", KR(ret), KPC(merge_ctx), K(origin_table), K(table_data_desc),
+             K(range));
   } else {
+    const ObDirectLoadMergeParam *merge_param = merge_ctx->get_param();
+    ObDirectLoadInsertTabletContext *insert_tablet_ctx = merge_ctx->get_insert_tablet_ctx();
     ObDirectLoadLobMetaIterParam iter_param;
     iter_param.tablet_id_ = merge_ctx->get_tablet_id();
-    iter_param.table_data_desc_ = merge_param.lob_id_table_data_desc_;
-    iter_param.datum_utils_ = merge_param.lob_meta_datum_utils_;
-    iter_param.col_descs_ = merge_param.lob_meta_col_descs_;
+    iter_param.table_data_desc_ = table_data_desc;
+    iter_param.datum_utils_ = merge_param->datum_utils_;
+    iter_param.col_descs_ = merge_param->col_descs_;
+    iter_param.dml_row_handler_ = merge_param->dml_row_handler_;
     if (OB_FAIL(lob_iter_.init(iter_param, origin_table, sstable_array, range))) {
       LOG_WARN("fail to init lob meta row iter", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->init_lob_datum_row(datum_row_))) {
+    } else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_, true/*is_delete*/))) {
       LOG_WARN("fail to init lob datum row", KR(ret));
     } else {
       is_inited_ = true;
@@ -69,18 +70,19 @@ int ObDirectLoadPartitionDelLobTask::RowIterator::get_next_row(const ObDatumRow 
   result_row = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator not init", KR(ret),
-             KP(this));
+    LOG_WARN("RowIterator not init", KR(ret), KP(this));
   } else {
-    const ObDatumRow *datum_row = nullptr;
+    const ObDirectLoadDatumRow *datum_row = nullptr;
     if (OB_FAIL(lob_iter_.get_next_row(datum_row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next row", KR(ret));
       }
-    } else if (OB_UNLIKELY(datum_row->count_ < ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT)) {
+    } else if (OB_UNLIKELY(!datum_row->is_delete_ ||
+                           datum_row->count_ < ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected datum row count", KR(ret), KPC(datum_row));
+      LOG_WARN("unexpected datum row", KR(ret), KPC(datum_row));
     } else {
+      // 删除lob只需要主键列
       for (int64_t i = 0; i < ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT; ++i) {
         datum_row_.storage_datums_[i] = datum_row->storage_datums_[i];
       }
@@ -91,42 +93,41 @@ int ObDirectLoadPartitionDelLobTask::RowIterator::get_next_row(const ObDatumRow 
 }
 
 ObDirectLoadPartitionDelLobTask::ObDirectLoadPartitionDelLobTask()
-  : merge_param_(nullptr),
-    merge_ctx_(nullptr),
+  : merge_ctx_(nullptr),
     origin_table_(nullptr),
-    sstable_array_(nullptr),
     range_(nullptr),
-    insert_front_(false),
     parallel_idx_(-1),
-    is_stop_(false),
     is_inited_(false)
 {
 }
 
 ObDirectLoadPartitionDelLobTask::~ObDirectLoadPartitionDelLobTask() {}
 
-int ObDirectLoadPartitionDelLobTask::init(
-  const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
-  ObDirectLoadOriginTable *origin_table,
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array, const ObDatumRange &range,
-  const bool insert_front, const int64_t parallel_idx)
+int ObDirectLoadPartitionDelLobTask::init(ObDirectLoadTabletMergeCtx *merge_ctx,
+                                          ObDirectLoadOriginTable &origin_table,
+                                          const ObDirectLoadTableDataDesc &table_data_desc,
+                                          const ObDirectLoadTableHandleArray &sstable_array,
+                                          const ObDatumRange &range, const ObMacroDataSeq &data_seq,
+                                          const int64_t parallel_idx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionDelLobTask init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
-                         nullptr == origin_table || !range.is_valid() || parallel_idx < 0)) {
+  } else if (OB_UNLIKELY(nullptr == merge_ctx || !merge_ctx->is_valid() ||
+                         !origin_table.is_valid() || !table_data_desc.is_valid() ||
+                         !range.is_valid() || !data_seq.is_valid() || parallel_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), K(sstable_array), K(range),
-             K(parallel_idx));
+    LOG_WARN("invalid args", KR(ret), KPC(merge_ctx), K(origin_table), K(table_data_desc), K(range),
+             K(data_seq), K(parallel_idx));
+  } else if (OB_FAIL(sstable_array_.assign(sstable_array))) {
+    LOG_WARN("fail to assign sstable array", KR(ret));
   } else {
-    merge_param_ = &merge_param;
     merge_ctx_ = merge_ctx;
-    origin_table_ = origin_table;
-    sstable_array_ = &sstable_array;
+    origin_table_ = &origin_table;
+    table_data_desc_ = table_data_desc;
     range_ = &range;
-    insert_front_ = insert_front;
+    data_seq_ = data_seq;
     parallel_idx_ = parallel_idx;
     is_inited_ = true;
   }
@@ -142,108 +143,35 @@ int ObDirectLoadPartitionDelLobTask::process()
   } else {
     int64_t slice_id = 0;
     const ObTabletID &tablet_id = merge_ctx_->get_tablet_id();
-    ObDirectLoadInsertTabletContext *insert_tablet_ctx = nullptr;
+    ObDirectLoadInsertTabletContext *insert_tablet_ctx = merge_ctx_->get_insert_tablet_ctx();
     RowIterator row_iter;
-    ObMacroDataSeq block_start_seq;
     int64_t affected_rows = 0;
-    if (OB_UNLIKELY(is_stop_)) {
-      ret = OB_CANCELED;
-      LOG_WARN("merge task canceled", KR(ret));
-    } else if (OB_FAIL(merge_param_->insert_table_ctx_->get_tablet_context(tablet_id,
-                                                                           insert_tablet_ctx))) {
-      LOG_WARN("fail to get tablet context ", KR(ret), K(tablet_id));
-    } else if (OB_FAIL(insert_tablet_ctx->get_del_lob_macro_data_seq(insert_front_, parallel_idx_,
-                                                                     block_start_seq))) {
-      LOG_WARN("fail to get del lob macro data seq", KR(ret), K(insert_front_), K(parallel_idx_));
-    } else if (OB_FAIL(row_iter.init(*merge_param_, merge_ctx_, origin_table_, *sstable_array_,
-                                     *range_, parallel_idx_, insert_tablet_ctx))) {
+    if (OB_FAIL(row_iter.init(merge_ctx_, *origin_table_, table_data_desc_, sstable_array_, *range_,
+                              parallel_idx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->open_lob_sstable_slice(block_start_seq, slice_id))) {
-      LOG_WARN("fail to construct lob sstable slice ", KR(ret), K(slice_id), K(block_start_seq));
+    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(data_seq_, 0/*slice_idx*/, slice_id))) {
+      LOG_WARN("fail to open lob sstable slice ", KR(ret), K(slice_id), K(data_seq_));
     } else {
-      LOG_INFO("add lob meta sstable slice begin", K(tablet_id), K(insert_front_), K(parallel_idx_),
-               K(block_start_seq), K(slice_id), KPC(range_));
-      if (OB_FAIL(
-            insert_tablet_ctx->fill_lob_meta_sstable_slice(slice_id, row_iter, affected_rows))) {
-        LOG_WARN("fail to fill lob meta sstable slice", KR(ret));
-      } else if (OB_FAIL(insert_tablet_ctx->close_lob_sstable_slice(slice_id))) {
-        LOG_WARN("fail to close writer", KR(ret));
+      LOG_INFO("add lob meta sstable slice begin", K(tablet_id), K(parallel_idx_), K(data_seq_),
+               K(slice_id), KPC(range_));
+      if (OB_FAIL(insert_tablet_ctx->fill_sstable_slice(slice_id, row_iter, affected_rows))) {
+        LOG_WARN("fail to fill lob sstable slice", KR(ret));
+      } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/))) {
+        LOG_WARN("fail to close sstable slice", KR(ret));
       }
       LOG_INFO("add lob meta sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_),
                K(affected_rows));
     }
-    if (OB_SUCC(ret)) {
-      bool is_ready = false;
-      if (OB_FAIL(merge_ctx_->inc_del_lob_finish_count(is_ready))) {
-        LOG_WARN("fail to inc del lob finish count", KR(ret));
-      } else if (is_ready) {
-        if (OB_FAIL(insert_tablet_ctx->close())) {
-          LOG_WARN("fail to close", KR(ret));
-        }
-      }
-    }
   }
   return ret;
 }
 
-void ObDirectLoadPartitionDelLobTask::stop() { is_stop_ = true; }
-
-ObDirectLoadDelLobTaskIterator::ObDirectLoadDelLobTaskIterator()
-  : merge_ctx_(nullptr), tablet_merge_ctx_(nullptr), tablet_pos_(0), task_pos_(0), is_inited_(false)
+void ObDirectLoadPartitionDelLobTask::stop()
 {
-}
-
-ObDirectLoadDelLobTaskIterator::~ObDirectLoadDelLobTaskIterator() {}
-
-int ObDirectLoadDelLobTaskIterator::init(ObDirectLoadMergeCtx *merge_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObDirectLoadDelLobTaskIterator init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(nullptr == merge_ctx)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(merge_ctx));
-  } else {
-    merge_ctx_ = merge_ctx;
-    is_inited_ = true;
+  if (nullptr != merge_ctx_) {
+    ObDirectLoadInsertTabletContext *insert_tablet_ctx = merge_ctx_->get_insert_tablet_ctx();
+    insert_tablet_ctx->cancel();
   }
-  return ret;
-}
-
-int ObDirectLoadDelLobTaskIterator::get_next_task(ObDirectLoadPartitionDelLobTask *&task)
-{
-  int ret = OB_SUCCESS;
-  task = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDirectLoadDelLobTaskIterator not init", KR(ret), KP(this));
-  } else {
-    while (OB_SUCC(ret) && nullptr == task) {
-      if (nullptr == tablet_merge_ctx_) {
-        // get next partition merge ctx
-        const ObIArray<ObDirectLoadTabletMergeCtx *> &tablet_merge_ctxs =
-          merge_ctx_->get_tablet_merge_ctxs();
-        if (tablet_pos_ >= tablet_merge_ctxs.count()) {
-          ret = OB_ITER_END;
-        } else {
-          tablet_merge_ctx_ = tablet_merge_ctxs.at(tablet_pos_++);
-          task_pos_ = 0;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        const ObIArray<ObDirectLoadPartitionDelLobTask *> &tasks =
-          tablet_merge_ctx_->get_del_lob_tasks();
-        if (task_pos_ >= tasks.count()) {
-          // try next partition
-          tablet_merge_ctx_ = nullptr;
-        } else {
-          task = tasks.at(task_pos_++);
-        }
-      }
-    }
-  }
-  return ret;
 }
 
 } // namespace storage

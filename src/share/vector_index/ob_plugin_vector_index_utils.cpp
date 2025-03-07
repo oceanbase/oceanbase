@@ -10,22 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SERVER
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
-#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
-#include "share/vector_index/ob_plugin_vector_index_scheduler.h"
-#include "src/share/vector_index/ob_plugin_vector_index_serialize.h"
 #include "share/ob_vec_index_builder_util.h"
-#include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/access/ob_table_access_param.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "storage/access/ob_table_scan_iterator.h"
-#include "lib/vector/ob_vector_util.h"
-#include "common/rowkey/ob_rowkey.h"
-#include "src/share/schema/ob_tenant_schema_service.h"
 
 namespace oceanbase
 {
@@ -498,7 +485,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     param.iter_ = snapshot_idx_iter;
     param.allocator_ = &tmp_allocator;
 
-    ObHNSWDeserializeCallback callback;
+    ObHNSWDeserializeCallback callback(static_cast<void*>(adapter));
     ObIStreamBuf::Callback cb = callback;
     // ToDo: concurrency with weakread
     ObVectorIndexSerializer index_seri(tmp_allocator);
@@ -506,12 +493,10 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     if (OB_ISNULL(snap_memdata)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("snap memdata is null", K(ret));
-    } else if (OB_FAIL(adapter->try_init_mem_data(VIRT_SNAP))) {
-      LOG_WARN("failed to init snapshot index.", K(ret));
     } else {
       TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
       int64_t index_count = 0;
-      if (OB_FAIL(obvectorutil::get_index_number(snap_memdata->index_, index_count))) {
+      if (OB_NOT_NULL(snap_memdata->index_) && OB_FAIL(obvectorutil::get_index_number(snap_memdata->index_, index_count))) {
         ret = OB_ERR_VSAG_RETURN_ERROR;
         LOG_WARN("fail to get incr index number", K(ret));
       } else if (index_count > 0) {
@@ -591,8 +576,7 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         LOG_WARN("fail to read local tablet", KR(ret), K(ls_id), K(INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL), KPC(adapter));
       } else {
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
-        ObArenaAllocator batch_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
-        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator, &batch_allocator);
+        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator);
         if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter, target_scn))) {
           LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
         }
@@ -919,11 +903,11 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null column schema ptr", K(ret));
-        } else if (col_schema->is_vec_vid_column()) {
+        } else if (col_schema->is_vec_hnsw_vid_column()) {
           vid_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_type_column()) {
+        } else if (col_schema->is_vec_hnsw_type_column()) {
           type_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_vector_column()) {
+        } else if (col_schema->is_vec_hnsw_vector_column()) {
           vector_column_id = col_schema->get_column_id();
         }
       }
@@ -968,13 +952,13 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null column schema ptr", K(ret));
-        } else if (col_schema->is_vec_scn_column()) {
+        } else if (col_schema->is_vec_hnsw_scn_column()) {
           scn_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_vid_column()) {
+        } else if (col_schema->is_vec_hnsw_vid_column()) {
           vid_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_type_column()) {
+        } else if (col_schema->is_vec_hnsw_type_column()) {
           type_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_vector_column()) {
+        } else if (col_schema->is_vec_hnsw_vector_column()) {
           vector_column_id = col_schema->get_column_id();
         }
       }
@@ -1006,7 +990,7 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null column schema ptr", K(ret));
-        } else if (col_schema->is_vec_vid_column()) {
+        } else if (col_schema->is_vec_hnsw_vid_column()) {
           vid_column_id = col_schema->get_column_id();
         }
       }
@@ -1044,9 +1028,9 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null column schema ptr", K(ret));
-        } else if (col_schema->is_vec_key_column()) {
+        } else if (col_schema->is_vec_hnsw_key_column()) {
           key_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_data_column()) {
+        } else if (col_schema->is_vec_hnsw_data_column()) {
           lob_data_column_id = col_schema->get_column_id();
         }
       }
@@ -1214,6 +1198,27 @@ int ObPluginVectorIndexUtils::release_vector_index_adapter(ObPluginVectorIndexAd
         allocator->free(adapter);
       }
       adapter = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::release_vector_index_build_helper(ObIvfBuildHelper* &helper)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(helper)) {
+    // do nothing
+  } else {
+    if (helper->dec_ref_and_check_release()) {
+      ObIAllocator *allocator = helper->get_allocator();
+      if (OB_ISNULL(allocator)) {
+        const int ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "release ivf vector index build helper failed", KPC(helper));
+      } else {
+        helper->~ObIvfBuildHelper();
+        allocator->free(helper);
+      }
+      helper = nullptr;
     }
   }
   return ret;

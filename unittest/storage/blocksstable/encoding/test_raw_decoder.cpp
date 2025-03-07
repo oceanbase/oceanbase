@@ -12,21 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "storage/blocksstable/encoding/ob_micro_block_encoder.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/encoding/ob_raw_decoder.h"
-#include "storage/blocksstable/encoding/ob_raw_encoder.h"
-#include "storage/blocksstable/ob_row_writer.h"
-#include "storage/access/ob_block_row_store.h"
-#include "storage/ob_i_store.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "lib/string/ob_sql_string.h"
 #include "../ob_row_generate.h"
-#include "common/rowkey/ob_rowkey.h"
 #include "test_column_decoder.h"
 
 

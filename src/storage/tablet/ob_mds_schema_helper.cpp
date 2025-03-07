@@ -12,15 +12,7 @@
 
 #include "storage/tablet/ob_mds_schema_helper.h"
 
-#include "lib/ob_errno.h"
-#include "lib/worker.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/oblog/ob_log.h"
-#include "common/object/ob_object.h"
 #include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_table_param.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -239,6 +231,8 @@ int ObMdsSchemaHelper::build_table_schema(
     table_schema.set_row_store_type(ObRowStoreType::FLAT_ROW_STORE);
     table_schema.set_table_name(MDS_TABLE_NAME);
     table_schema.set_schema_version(MDS_SCHEMA_VERSION);
+    // Disable macro block bloom filter for mds table.
+    table_schema.set_enable_macro_block_bloom_filter(false);
   }
 
   if (OB_FAIL(ret)) {

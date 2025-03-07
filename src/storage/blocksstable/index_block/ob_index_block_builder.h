@@ -313,6 +313,7 @@ public:
                  ObIndexBlockRowDesc &row_desc);
   int close(ObIAllocator &allocator, ObIndexTreeInfo &tree_info);
   void reset();
+  static uint64_t get_data_version(const ObDataStoreDesc &data_store_desc);
   static void block_to_row_desc(
       const ObMicroBlockDesc &micro_block_desc,
       ObIndexBlockRowDesc &row_desc);
@@ -421,7 +422,6 @@ private:
   compaction::ObLocalArena meta_row_allocator_; // Used to apply for memory whose lifetime is row
   ObBaseIndexBlockDumper macro_meta_dumper_;
   ObMicroBlockBufferHelper micro_helper_;
-  ObIndexBlockRowDesc macro_row_desc_;
   ObIndexTreeRootCtx *index_tree_root_ctx_;
   ObIMicroBlockWriter *meta_block_writer_;
   ObDatumRow meta_row_;
@@ -486,8 +486,8 @@ public:
   ~ObIndexBlockRebuilder();
   int init(
       ObSSTableIndexBuilder &sstable_builder,
-      const int64_t *task_idx = nullptr,
-      const bool is_ddl_merge = false,
+      const int64_t *task_idx,
+      const ObITable::TableKey &table_key,
       common::ObIArray<ObIODevice *> *device_handle_array = nullptr);
   int append_macro_row(
       const char *buf,
@@ -506,7 +506,8 @@ public:
   int get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const;
 
 private:
-  void set_task_type(const bool is_cg, const bool is_ddl_merge, const common::ObIArray<ObIODevice *> *device_handle_array);
+  static bool use_absolute_offset(const ObITable::TableKey &table_key);
+  void set_task_type(const bool is_cg, const bool use_absolute_offset, const common::ObIArray<ObIODevice *> *device_handle_array);
   OB_INLINE bool need_index_tree_dumper() const;
   int check_and_get_abs_offset(const ObDataMacroBlockMeta &macro_meta, const int64_t absolute_row_offset, int64_t &abs_offset);
   int inner_append_macro_row(
@@ -547,6 +548,7 @@ private:
   ObSSTableIndexBuilder *sstable_builder_;
   ObIODevice *device_handle_;
   ObClusteredIndexBlockWriter *clustered_index_writer_;
+  ObCompressorType compressor_type_; // Checkpoint for index_store_desc_.compressor_type, set in init and verify in close
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexBlockRebuilder);
 };
@@ -573,7 +575,8 @@ public:
         common::ObIAllocator &allocator,
         IndexTreeRootCtxList &roots,
         const int64_t meta_row_column_count,
-        const bool is_cg);
+        const bool is_cg,
+        const uint64_t data_version);
     int get_next_macro_block(ObDataMacroBlockMeta &macro_meta);
     int64_t get_macro_block_count() const { return block_cnt_; }
     void reuse();

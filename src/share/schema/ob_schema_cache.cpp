@@ -12,18 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
-#include "share/schema/ob_schema_cache.h"
 
-#include "lib/oblog/ob_log.h"
+#include "ob_schema_cache.h"
 #include "share/cache/ob_cache_name_define.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "observer/ob_server_struct.h"
-#include "lib/stat/ob_diagnose_info.h"
 namespace oceanbase
 {
 using namespace common;

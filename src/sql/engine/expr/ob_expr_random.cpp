@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX  SQL_ENG
-#include "lib/time/ob_time_utility.h" /* time */
 #include "sql/engine/expr/ob_expr_random.h"
 #include "sql/engine/ob_exec_context.h"
 

@@ -12,8 +12,11 @@
 
 #define USING_LOG_PREFIX LIB
 #include <regex>
+#include "common/object/ob_object.h"
 #include "ob_collection_type.h"
 #include "share/ob_errno.h"
+#include "lib/string/ob_string_buffer.h"
+#include "lib/utility/ob_fast_convert.h"
 
 namespace oceanbase {
 namespace common {
@@ -134,7 +137,7 @@ bool ObCollectionArrayType::has_same_super_type(const ObCollectionArrayType &oth
   } else if (get_compatiable_type_id() != other.get_compatiable_type_id()) {
     // return false
   } else if (OB_NOT_NULL(element_type_) && OB_NOT_NULL(other.element_type_)) {
-    if (element_type_->type_id_ != other.element_type_->type_id_) {
+    if (element_type_->get_compatiable_type_id() != other.element_type_->get_compatiable_type_id()) {
     } else if (element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       bret = static_cast<ObCollectionBasicType*>(element_type_)->has_same_super_type(*static_cast<ObCollectionBasicType*>(other.element_type_));
     } else {
@@ -142,6 +145,44 @@ bool ObCollectionArrayType::has_same_super_type(const ObCollectionArrayType &oth
     }
   }
   return bret;
+}
+
+int ObCollectionArrayType::generate_spec_type_info(const ObString &type, ObString &type_info)
+{
+  int ret = OB_SUCCESS;
+  ObStringBuffer buffer(&allocator_);
+  ObFastFormatInt ffi(dim_cnt_);
+  if (OB_FAIL(buffer.reserve(ffi.length() + type.length() + sizeof("VECTOR(, )")))) {
+    LOG_WARN("fail to reserve space for string buffer", K(ret), K(ffi.length()), K(type.length()));
+  } else if (OB_FAIL(buffer.append("VECTOR("))) {
+    LOG_WARN("fail to append str", K(ret));
+  } else if (OB_FAIL(buffer.append(ffi.str()))) {
+    LOG_WARN("fail to append str", K(ret), K(ffi.str()));
+  } else if (OB_FAIL(buffer.append(", "))) {
+    LOG_WARN("fail to append str", K(ret));
+  } else if (OB_FAIL(buffer.append(type))) {
+    LOG_WARN("fail to append str", K(ret), K(type));
+  } else if (OB_FAIL(buffer.append(")"))) {
+    LOG_WARN("fail to append str", K(ret));
+  } else if (OB_FAIL(buffer.get_result_string(type_info))) {
+    LOG_WARN("fail to get result string", K(ret));
+  }
+  return ret;
+}
+
+bool ObCollectionArrayType::check_is_valid_vector() const
+{
+  bool is_valid = true;
+  ObCollectionBasicType *meta_info = reinterpret_cast<ObCollectionBasicType*>(element_type_);
+  if (OB_ISNULL(meta_info) || meta_info->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+    is_valid = false;
+  } else {
+    ObObjType obj_type = meta_info->basic_meta_.get_obj_type();
+    if (obj_type != ObFloatType && obj_type != ObUTinyIntType) {
+      is_valid = false;
+    }
+  }
+  return is_valid;
 }
 
 OB_DEF_SERIALIZE(ObSqlCollectionInfo)
@@ -362,6 +403,10 @@ int ObSqlCollectionInfo::create_meta_info_by_name(const std::string &name, ObCol
   if (OB_FAIL(ret)) {
   } else if (0 == name.compare("NULL")) {
     basic_meta.meta_.set_null();
+  } else if (0 == name.compare("UTINYINT")) {
+    basic_meta.meta_.set_utinyint();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUTinyIntType].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUTinyIntType].precision_);
   } else if (0 == name.compare("TINYINT")) {
     basic_meta.meta_.set_tinyint();
     basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].scale_);
@@ -462,15 +507,33 @@ int ObSqlCollectionInfo::parse_type_info()
         LOG_WARN("create meta info failed", K(ret));
       } else if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
         curr_meta = static_cast<ObCollectionArrayType *>(curr_meta)->element_type_;
-      } else if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE
-                 && isNumber(type_name)) {
-        // vector element is float
-        std::string vector_elem = "FLOAT";
-        if (OB_FAIL(create_meta_info_by_name(vector_elem, static_cast<ObCollectionArrayType *>(curr_meta)->element_type_, arr_depth))) {
-          LOG_WARN("create meta info failed", K(ret));
-        } else {
+      } else if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+        // vector(4, float) -> "vector" "4" "float"
+        if (isNumber(type_name)) {
           int32_t dim = std::stoi(type_name);
-          static_cast<ObCollectionArrayType *>(curr_meta)->dim_cnt_ = dim;
+          if (dim <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid vector meta", K(ret));
+          } else {
+            static_cast<ObCollectionArrayType *>(curr_meta)->dim_cnt_ = dim;
+          }
+        } else if (0 == type_name.compare("UNSIGNED")) {
+          // to parse vector(dim, tinyint unsigned)
+          ObCollectionTypeBase *elem_type = static_cast<ObCollectionArrayType *>(curr_meta)->element_type_;
+          if (OB_ISNULL(elem_type)) {
+            ret = OB_ERR_NULL_VALUE;
+            LOG_WARN("invalid null elem_type", K(ret));
+          } else if (OB_FAIL(set_element_meta_unsigned(static_cast<ObCollectionBasicType *>(elem_type)))) {
+            LOG_WARN("set element meta unsighed failed", K(ret));
+          }
+        } else {
+          if (0 != type_name.compare("UTINYINT") && 0 != type_name.compare("FLOAT")
+            && 0 != type_name.compare("TINYINT")) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("vector only support utinyint/float elem type", K(ret));
+          } else if (OB_FAIL(create_meta_info_by_name(type_name, static_cast<ObCollectionArrayType *>(curr_meta)->element_type_, arr_depth))) {
+            LOG_WARN("create meta info failed", K(ret));
+          }
         }
       } else if (isNumber(type_name) && OB_FAIL(set_element_meta_info(type_name, idx++, static_cast<ObCollectionBasicType *>(curr_meta)))) {
         LOG_WARN("set element meta info failed", K(ret));
@@ -479,6 +542,22 @@ int ObSqlCollectionInfo::parse_type_info()
       }
     }
     searchStart = matches.suffix().first;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+      ObCollectionArrayType *vec_meta = static_cast<ObCollectionArrayType *>(curr_meta);
+      if (OB_ISNULL(vec_meta->element_type_)) {
+        // vector(4) -> use default float type
+        if (OB_FAIL(create_meta_info_by_name("FLOAT", vec_meta->element_type_, arr_depth))) {
+          LOG_WARN("create meta info failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && !vec_meta->check_is_valid_vector()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported vector meta", K(ret), KPC(vec_meta));
+      }
+    }
   }
   return ret;
 }

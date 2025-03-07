@@ -13,8 +13,6 @@
 #include "storage/high_availability/ob_cs_replica_migration.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "share/ob_debug_sync_point.h"
 
 namespace oceanbase
 {
@@ -260,20 +258,12 @@ int ObHATabletGroupCOConvertCtx::check_need_convert(const ObTablet &tablet, bool
 {
   int ret = OB_SUCCESS;
   need_convert = false;
-  common::ObArenaAllocator tmp_allocator; // for schema_on_tablet
-  ObStorageSchema *schema_on_tablet = nullptr;
   if (0 == tablet.get_last_major_snapshot_version()) {
     // no major, may be doing ddl, do not need to convert
-  } else if (OB_FAIL(tablet.load_storage_schema(tmp_allocator, schema_on_tablet))) {
-    LOG_WARN("failed to load storage schema", K(ret),K(tablet));
   } else {
-    need_convert = ObCSReplicaUtil::check_need_convert_cs_when_migration(tablet, *schema_on_tablet);
-  }
-
-  if (OB_NOT_NULL(schema_on_tablet)) {
-    schema_on_tablet->~ObStorageSchema();
-    tmp_allocator.free(schema_on_tablet);
-    schema_on_tablet = nullptr;
+    need_convert = tablet.is_user_data_table()
+                && tablet.is_user_tablet()
+                && tablet.is_row_store();
   }
   return ret;
 }

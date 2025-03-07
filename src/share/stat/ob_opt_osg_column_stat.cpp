@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "share/stat/ob_opt_osg_column_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_stat_define.h"
-#include "share/stat/ob_stat_item.h"
+#include "ob_opt_osg_column_stat.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 namespace oceanbase {
 namespace common {
 using namespace sql;

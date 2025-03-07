@@ -11,9 +11,9 @@
  */
 
 #include "ob_sstable_printer.h"
-#include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
+#include "storage/blocksstable/ob_macro_block_meta.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {

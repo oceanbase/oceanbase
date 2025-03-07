@@ -1345,7 +1345,8 @@ int ob_sql_type_str_with_coll(char *buff,
     int64_t scale,
     ObCollationType coll_type,
     const common::ObIArray<ObString> &type_info,
-    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
+    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX),
+    const bool is_string_lob = false);
 
 //such as "double(10,7)". with accuracy
 int ob_sql_type_str(char *buff,
@@ -1357,14 +1358,16 @@ int ob_sql_type_str(char *buff,
                     int64_t scale,
                     ObCollationType coll_type,
                     const common::ObIArray<ObString> &type_info,
-                    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
+                    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX),
+                    const bool is_string_lob = false);
 
 int ob_sql_type_str(const common::ObObjMeta &obj_meta,
                     const common::ObAccuracy &accuracy,
                     const common::ObIArray<ObString> &type_info,
                     const int16_t default_length_semantics,
                     char *buff, int64_t buff_length, int64_t &pos,
-                    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
+                    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX),
+                    const bool is_string_lob = false);
 
 
 //such as "double". without any accuracy.
@@ -1373,7 +1376,8 @@ int ob_sql_type_str(char *buff,
                     ObObjType type,
                     ObCollationType coll_type,
                     const common::ObIArray<ObString> &type_info,
-                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX,
+                    const bool is_string_lob = false);
 
 // print obj type class string
 const char *ob_obj_tc_str(ObObjTypeClass tc);

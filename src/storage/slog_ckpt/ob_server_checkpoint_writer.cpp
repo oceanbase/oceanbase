@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/slog_ckpt/ob_server_checkpoint_writer.h"
-#include "common/log/ob_log_cursor.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
-#include "storage/slog/ob_storage_logger.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "observer/omt/ob_tenant_meta.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

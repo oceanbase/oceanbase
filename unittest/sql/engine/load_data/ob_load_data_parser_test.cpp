@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL
 
 #include <gtest/gtest.h>
-//#include "lib/utility/ob_test_util.h"
-//#include "sql/engine/test_engine_util.h"
 #include "sql/ob_sql_init.h"
 #include "sql/engine/cmd/ob_load_data_impl.h"
-#include "sql/engine/cmd/ob_load_data_parser.h"
 
 static char *file_path = NULL;
 
@@ -177,10 +174,13 @@ TEST_F(TestParser, general_parser)
     int64_t temp_idx = 1;
     fprintf(stdout, "## Start parsing table:%s\n", f_meta.file_name);
     int64_t start_time = ObTimeUtility::current_time();
-    auto counting_lines = [](ObIArray<ObCSVGeneralParser::FieldValue> &arr) -> int {
-      UNUSED(arr);
-      return OB_SUCCESS;
+    struct Functor {
+      int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
+    struct Functor counting_lines;
     ObSEArray<ObCSVGeneralParser::LineErrRec, 256> error_msgs;
     for (int64_t read_bytes = INT64_MAX; read_bytes != 0;) {
       //fprintf(stdout, "==> DEBUG parsing %ld, %ld\n", buffer->get_remain_len(), total_read_bytes);
@@ -260,11 +260,13 @@ TEST_F(TestParser, general_parser_escape)
   int64_t temp_idx = 1;
   fprintf(stdout, "## Start parsing table:%s\n", f_meta.file_name);
   int64_t start_time = ObTimeUtility::current_time();
-  auto counting_lines = [](ObIArray<ObCSVGeneralParser::FieldValue> &arr) -> int {
-    UNUSED(arr);
-    LOG_INFO("parse result", K(arr));
-    return OB_SUCCESS;
+  struct Functor {
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+      UNUSED(param);
+      return OB_SUCCESS;
+    }
   };
+  struct Functor counting_lines;
   ObSEArray<ObCSVGeneralParser::LineErrRec, 256> error_msgs;
   for (int64_t read_bytes = INT64_MAX; read_bytes != 0;) {
     //fprintf(stdout, "==> DEBUG parsing %ld, %ld\n", buffer->get_remain_len(), total_read_bytes);

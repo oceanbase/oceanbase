@@ -1,10 +1,6 @@
-#include "io/easy_io.h"
 #include <easy_test.h>
-#include "util/easy_time.h"
 #include "packet/http/easy_http_handler.h"
-#include "packet/http/http_parser.h"
 #include "io/easy_connection.h"
-#include <sys/types.h>
 #include <sys/wait.h>
 
 static void *test_realloc (void *ptr, size_t size)

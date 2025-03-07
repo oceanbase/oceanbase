@@ -13,14 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/object_storage/ob_zone_storage_table_operation.h"
 #include "observer/ob_server.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "share/ob_encryption_util.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/object_storage/ob_object_storage_struct.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 
 using namespace oceanbase;
 using namespace share;

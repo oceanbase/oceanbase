@@ -16,7 +16,6 @@
 #include "ob_log_start_lsn_locator.h"
 #include "logservice/restoreservice/ob_log_archive_piece_mgr.h"
 
-#include "lib/allocator/ob_mod_define.h"          // ObModIds
 
 #include "ob_log_instance.h"                      // IObLogErrHandler
 #include "ob_log_trace_id.h"                      // ObLogTraceIdGuard

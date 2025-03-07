@@ -14,38 +14,12 @@
 
 #include "obmp_base.h"
 
-#include "lib/worker.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/packet/ompk_change_user.h"
-#include "rpc/obmysql/packet/ompk_error.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "observer/mysql/obsm_row.h"
-#include "observer/mysql/obsm_utils.h"            // ObSMUtils
-#include "rpc/obmysql/ob_mysql_request_utils.h"
-#include "share/config/ob_server_config.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "share/resource_manager/ob_resource_manager.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "observer/mysql/obmp_utils.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/mysql/ob_mysql_result_set.h"
 #include "observer/mysql/ob_query_driver.h"
-#include "share/config/ob_server_config.h"
-#include "storage/tx/ob_trans_define.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/monitor/flt/ob_flt_utils.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 namespace oceanbase
@@ -112,7 +86,7 @@ int ObMPBase::update_transmission_checksum_flag(const ObSQLSessionInfo &session)
   return packet_sender_.update_transmission_checksum_flag(session);
 }
 
-int ObMPBase::update_proxy_sys_vars(ObSQLSessionInfo &session)
+int ObMPBase::update_proxy_and_client_sys_vars(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   ObSMConnection* conn = get_conn();
@@ -122,6 +96,8 @@ int ObMPBase::update_proxy_sys_vars(ObSQLSessionInfo &session)
   } else if (OB_FAIL(session.set_proxy_user_privilege(session.get_user_priv_set()))) {
     LOG_WARN("fail to set proxy user privilege system variables", K(ret));
   } else if (OB_FAIL(session.set_proxy_capability(conn->proxy_cap_flags_.capability_))) {
+    LOG_WARN("fail to set proxy capability", K(ret));
+  } else if (OB_FAIL(session.set_client_capability())) {
     LOG_WARN("fail to set proxy capability", K(ret));
   }
   return ret;
@@ -614,7 +590,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
 
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
-      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields, schema_guard, session.get_effective_tenant_id());
+      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, session, fields, schema_guard, session.get_effective_tenant_id());
       sm_row.set_packed(is_packed);
       obmysql::OMPKRow rp(sm_row);
       rp.set_is_packed(is_packed);
@@ -724,6 +700,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
     SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
     share::schema::ObUserLoginInfo login_info = session->get_login_info();
     share::schema::ObSessionPrivInfo session_priv;
+    EnableRoleIdArray enable_role_id_array;
     // disconnect previous user connection first.
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(session->on_user_disconnect())) {
@@ -732,7 +709,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
     const ObUserInfo *user_info = NULL;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                ssl_st, user_info))) {
+                enable_role_id_array, ssl_st, user_info))) {
       OB_LOG(WARN, "User access denied", K(login_info), K(ret));
     } else if (OB_FAIL(session->on_user_connect(session_priv, user_info))) {
       OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
@@ -742,7 +719,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
       session->set_user_priv_set(session_priv.user_priv_set_);
       session->set_db_priv_set(session_priv.db_priv_set_);
-      session->set_enable_role_array(session_priv.enable_role_id_array_);
+      session->set_enable_role_array(enable_role_id_array);
       if (OB_FAIL(session->set_tenant(login_info.tenant_name_, session_priv.tenant_id_))) {
         OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
       } else if (OB_FAIL(session->set_real_client_ip_and_port(login_info.client_ip_, session->get_client_addr_port()))) {
@@ -763,8 +740,8 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
         OB_LOG(WARN, "failed to get database id", K(ret));
       } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
         LOG_WARN("update transmisson checksum flag failed", K(ret));
-      } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-        LOG_WARN("update_proxy_sys_vars failed", K(ret));
+      } else if (OB_FAIL(update_proxy_and_client_sys_vars(*session))) {
+        LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
       } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
         LOG_WARN("fail to update charset sys vars", K(ret));
       } else {

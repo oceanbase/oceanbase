@@ -13,17 +13,11 @@
 #include <gtest/gtest.h>
 #define private public  // 获取private成员
 #define protected public  // 获取protect成员
-#include "observer/table/ob_table_cg_service.h"
 #include "observer/table/ob_table_cg_service.cpp"
 #include "observer/table/ob_table_cache.h"
-#include "observer/table/ob_table_context.h"
 #include "../share/schema/mock_schema_service.h"
-#include "sql/code_generator/ob_static_engine_cg.h"
-#include "lib/net/ob_addr.h"
-#include "sql/plan_cache/ob_lib_cache_register.h"
-#include "observer/ob_req_time_service.h"
-#include "share/rc/ob_tenant_base.h"
 #include "sql/das/ob_data_access_service.h"
+#include "src/sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -514,7 +508,11 @@ TEST_F(TestCreateExecutor, test_cache)
 {
   uint64_t tenant_id = 1;
   ObTenantBase tenant_ctx(tenant_id);
+  ObTimerService *timer_service = OB_NEW(ObTimerService, ObModIds::TEST, tenant_id);
+  ASSERT_NE(nullptr, timer_service);
+  tenant_ctx.set(timer_service);
   ObTenantEnv::set_tenant(&tenant_ctx);
+  ASSERT_EQ(OB_SUCCESS, timer_service->start());
   // init plan cache
   ObPlanCache plan_cache;
   int ret = plan_cache.init(OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id);
@@ -563,6 +561,13 @@ TEST_F(TestCreateExecutor, test_cache)
     ObTableApiSpec *spec = cache_obj->get_spec();
     ASSERT_TRUE(nullptr != spec);
     ASSERT_EQ(TABLE_API_EXEC_INSERT, spec->type_);
+  }
+
+  if (nullptr != timer_service) {
+    timer_service->stop();
+    timer_service->wait();
+    timer_service->destroy();
+    OB_DELETE(ObTimerService, ObModIds::TEST, timer_service);
   }
 }
 } // end namespace oceanbase

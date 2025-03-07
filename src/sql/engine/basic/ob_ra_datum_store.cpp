@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_ra_datum_store.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/config/ob_server_config.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
-#include "sql/engine/ob_io_event_observer.h"
 
 
 namespace oceanbase

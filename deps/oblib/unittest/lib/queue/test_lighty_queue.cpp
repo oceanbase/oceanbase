@@ -11,10 +11,8 @@
  */
 
 #include "test_lighty_queue.h"
-#include <iostream>
+#include "deps/oblib/src/lib/queue/ob_lighty_queue.h"
 #include <gtest/gtest.h>
-#include "lib/atomic/ob_atomic.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/coro/testing.h"
 
 using namespace oceanbase::common;
@@ -49,6 +47,7 @@ TEST(TestObLightyQueue, Main)
   run();
 }
 
+#include <locale.h>
 int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);

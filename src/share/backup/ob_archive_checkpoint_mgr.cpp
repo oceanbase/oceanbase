@@ -9,11 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX SHARE
 #include "ob_archive_checkpoint_mgr.h"
-#include "lib/alloc/alloc_assist.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_archive_path.h"
 
 using namespace oceanbase;
 using namespace share;

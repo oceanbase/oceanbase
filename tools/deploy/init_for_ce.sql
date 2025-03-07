@@ -57,3 +57,4 @@ alter system set _enable_spf_batch_rescan = true tenant = all_meta;
 alter tenant mysql set variables ob_plan_cache_percentage = 20;
 
 alter system set _use_hash_rollup = "forced" tenant = 'mysql';
+alter system set _max_px_workers_per_cpu = 10 tenant = 'mysql';

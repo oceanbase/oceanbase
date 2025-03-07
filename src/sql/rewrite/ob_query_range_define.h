@@ -77,10 +77,10 @@ public:
       uint32_t include_end_:    1;
       uint32_t contain_in_:     1;
       uint32_t is_phy_rowid_:   1;
-      uint32_t is_domain_node_: 1;
+      uint32_t is_domain_node_: 1; // FARM COMPAT WHITELIST
       uint32_t is_not_in_node_: 1;
       uint32_t reserved_:      24;
-    };
+  };
   };
   int64_t column_cnt_;
   int64_t* start_keys_;
@@ -186,7 +186,8 @@ struct ObQueryRangeCtx
       index_prefix_(-1),
       is_geo_range_(false),
       can_range_get_(true),
-      contail_geo_filters_(false) {}
+      contail_geo_filters_(false),
+      unique_index_column_num_(-1) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -196,7 +197,8 @@ struct ObQueryRangeCtx
            const bool phy_rowid_for_table_loc,
            const bool ignore_calc_failure,
            const int64_t index_prefix,
-           const ColumnIdInfoMap *geo_column_id_map);
+           const ColumnIdInfoMap *geo_column_id_map,
+           const ObTableSchema *index_schema);
   int64_t column_cnt_;
   // 131 is the next prime number larger than OB_MAX_ROWKEY_COLUMN_NUMBER
   common::hash::ObPlacementHashMap<int64_t, int64_t, 131> range_column_map_;
@@ -227,6 +229,7 @@ struct ObQueryRangeCtx
   bool is_geo_range_;
   bool can_range_get_;
   bool contail_geo_filters_;
+  int64_t unique_index_column_num_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
@@ -276,6 +279,7 @@ public:
                                       const bool phy_rowid_for_table_loc = false,
                                       const bool ignore_calc_failure = true,
                                       const int64_t index_prefix = -1,
+                                      const ObTableSchema *index_schema = NULL,
                                       const ColumnIdInfoMap *geo_column_id_map = NULL);
   virtual int get_tablet_ranges(common::ObIAllocator &allocator,
                                 ObExecContext &exec_ctx,

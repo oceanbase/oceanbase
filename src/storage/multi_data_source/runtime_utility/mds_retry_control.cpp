@@ -11,9 +11,6 @@
  */
 
 #include "mds_retry_control.h"
-#include "lib/ob_errno.h"
-#include "logservice/ob_garbage_collector.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

@@ -55,7 +55,7 @@ add_library(zstd_1_3_8_objs OBJECT
 
 target_compile_definitions(zstd_1_3_8_objs PRIVATE -DZSTDERRORLIB_VISIBILITY= -DZDICTLIB_VISIBILITY= -DZSTDLIB_VISIBILITY=)
 target_compile_options(zstd_1_3_8_objs PRIVATE -fvisibility=hidden)
-target_link_libraries(zstd_1_3_8_objs PUBLIC oblib_base_base)
+target_link_libraries(zstd_1_3_8_objs PUBLIC oblib_base)
 
 add_custom_command(
   OUTPUT zstd_1_3_8_objs.o

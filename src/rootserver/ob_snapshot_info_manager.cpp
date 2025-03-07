@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_snapshot_info_manager.h"
-#include "share/ob_snapshot_table_proxy.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/ob_ddl_common.h"
 #include "common/ob_timeout_ctx.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"

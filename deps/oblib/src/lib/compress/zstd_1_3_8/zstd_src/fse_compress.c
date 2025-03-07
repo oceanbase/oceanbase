@@ -36,15 +36,9 @@
 *  Includes
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
-#include <string.h>     /* memcpy, memset */
-#include "compiler.h"
-#include "mem.h"        /* U32, U16, etc. */
-#include "debug.h"      /* assert, DEBUGLOG */
 #include "hist.h"       /* HIST_count_wksp */
-#include "bitstream.h"
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"
-#include "error_private.h"
 
 
 /* **************************************************************

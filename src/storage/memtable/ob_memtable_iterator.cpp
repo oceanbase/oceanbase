@@ -14,19 +14,9 @@
 
 #include "storage/memtable/ob_memtable_iterator.h"
 
-#include "share/object/ob_obj_cast.h"
-#include "common/ob_common_types.h"
 
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/mvcc/ob_mvcc_engine.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
-#include "storage/tx/ob_trans_define.h"
-#include "ob_memtable_context.h"
 #include "ob_memtable.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -390,8 +380,12 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
     int64_t row_scn = 0;
     key->get_rowkey(rowkey);
 
-    concurrency_control::ObTransStatRow trans_stat_row;
-    (void)value_iter->get_trans_stat_row(trans_stat_row);
+    // generate trans stat datum for 4377 check
+    if (param_->need_trans_info() && OB_NOT_NULL(row_.trans_info_)) {
+      concurrency_control::ObTransStatRow trans_stat_row;
+      (void)value_iter->get_trans_stat_row(trans_stat_row);
+      concurrency_control::build_trans_stat_datum(param_, row_, trans_stat_row);
+    }
 
     if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, row_, bitmap_, row_scn))) {
       TRANS_LOG(WARN, "iterate_row fail", K(ret), K(*rowkey), KP(value_iter));
@@ -405,9 +399,8 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
         } else {
           if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
             // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
-            TRANS_LOG(INFO, "use max row scn", KPC(value_iter->get_mvcc_acc_ctx()), K(trans_stat_row));
+            TRANS_LOG(INFO, "use max row scn", KPC(value_iter->get_mvcc_acc_ctx()));
           }
-
           for (int64_t i = 0; i < out_cols->count(); i++) {
             if (out_cols->at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
               row_.storage_datums_[i].reuse();
@@ -417,10 +410,6 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
           }
         }
       }
-
-      // generate trans stat datum for 4377 check
-      concurrency_control::build_trans_stat_datum(param_, row_, trans_stat_row);
-
       row_.scan_index_ = 0;
       row = &row_;
     }

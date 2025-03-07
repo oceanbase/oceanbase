@@ -11,34 +11,12 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "lib/thread/ob_thread_name.h"
-#include "share/ob_thread_mgr.h"
-#include "share/ob_thread_define.h"
+#include "ob_tenant_dag_scheduler.h"
 #include "lib/thread/thread_mgr.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/ob_force_print_log.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "share/rc/ob_context.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/config/ob_server_config.h"
-#include "ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/ddl/ob_complement_data_task.h"
 #include "storage/column_store/ob_co_merge_dag.h"
-#include "storage/multi_data_source/ob_mds_table_merge_dag.h"
-#include <sys/sysinfo.h>
-#include <algorithm>
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -2217,10 +2195,19 @@ int ObDagPrioScheduler::schedule_one_()
     add_schedule_info_(worker->get_task()->get_dag()->get_type(), worker->get_task()->get_dag()->get_data_size());
     running_workers_.add_last(worker);
     if (task != NULL) {
-      COMMON_LOG(INFO, "schedule one task", KPC(task), "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
+      if (is_compaction_dag_prio()) {
+        COMMON_LOG(INFO, "schedule one task", KPC(task),
+          "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
           "total_running_task_cnt", scheduler_->get_total_running_task_cnt(),
           "running_task_cnts_", running_task_cnts_, "limits_", limits_,
           "adaptive_task_limit", adaptive_task_limit_, KP(task->get_dag()->get_dag_net()));
+      } else {
+        COMMON_LOG(INFO, "schedule one task", KP(task),
+          "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
+          "total_running_task_cnt", scheduler_->get_total_running_task_cnt(),
+          "running_task_cnts_", running_task_cnts_, "limits_", limits_,
+          "adaptive_task_limit", adaptive_task_limit_, KP(task->get_dag()->get_dag_net()));
+      }
     }
     worker->resume();
   }
@@ -2690,10 +2677,10 @@ int ObDagPrioScheduler::finish_dag_(
     }
 
     // compaction dag success
-    if (ObIDag::DAG_STATUS_FINISH == status && is_compaction_dag(dag.get_type())) {
+    if (ObIDag::DAG_STATUS_FINISH == status && is_mini_compaction_dag(dag.get_type())) {
       ObTenantCompactionMemPool *mem_pool = MTL(ObTenantCompactionMemPool *);
       if (OB_NOT_NULL(mem_pool)) {
-        mem_pool->set_memory_mode(ObTenantCompactionMemPool::NORMAL_MODE);
+        mem_pool->reset_memory_mode();
       }
     }
 
@@ -3017,7 +3004,7 @@ int ObDagPrioScheduler::get_minor_exe_dag_info(
   while (head != cur && OB_SUCC(ret)) {
     if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
       compaction::ObTabletMergeExecuteDag *other_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
-      if (other_dag->belong_to_same_tablet(&dag)) {
+      if (other_dag->belong_to_same_tablet(&dag) && is_minor_merge_type(other_dag->get_param().merge_type_)) {
         if (OB_FAIL(merge_range_array.push_back(other_dag->get_merge_range()))) {
           LOG_WARN("failed to push merge range into array", K(ret), K(other_dag->get_merge_range()));
         }
@@ -3138,7 +3125,7 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
     }
   }
   if (OB_SUCC(ret)) {
-    COMMON_LOG(INFO, "cancel dag when check ls compaction dag exist", KR(ret), K(cancel_dag_cnt), K(exist));
+    COMMON_LOG(INFO, "cancel dag when check ls compaction dag exist", KR(ret), K(ls_id), K(cancel_dag_cnt), K(exist));
   }
   return OB_SUCCESS;
 }
@@ -3366,14 +3353,14 @@ int ObDagPrioScheduler::deal_with_finish_task(
     }
 
     bool retry_flag = false;
-    if (dag->is_dag_failed()) {
-      // dag can retry & this task is the last running task
+    if (dag->is_dag_failed()) { // dag can retry & this task is the last running task
       if (OB_ALLOCATE_MEMORY_FAILED == error_code && is_mini_compaction_dag(dag->get_type())) {
-        if (static_cast<compaction::ObTabletMergeDag *>(dag)->is_reserve_mode() &&
-            MTL(ObTenantCompactionMemPool *)->is_emergency_mode() && !MTL_IS_MINI_MODE()) {
-          COMMON_LOG(ERROR, "reserve mode dag failed to alloc mem unexpectly", KPC(dag)); // tmp debug log for reserve mode, remove later.
+        ObTenantCompactionMemPool *mem_pool = MTL(ObTenantCompactionMemPool *);
+        if (OB_ISNULL(mem_pool)) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null mem pool from mtl");
+        } else {
+          mem_pool->uplevel_memory_mode(static_cast<compaction::ObTabletMergeDag *>(dag)->is_reserve_mode());
         }
-        MTL(ObTenantCompactionMemPool *)->set_memory_mode(ObTenantCompactionMemPool::EMERGENCY_MODE);
       }
       if (OB_FAIL(deal_with_fail_dag_(*dag, error_code, retry_flag))) {
         COMMON_LOG(WARN, "failed to deal with fail dag", K(ret), KPC(dag));
@@ -3551,20 +3538,26 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
     ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
     int64_t load_shedding_factor = 1;
     const int64_t extra_limit = for_schedule ? 0 : 1;
+    ObTenantCompactionMemPool::MemoryMode mem_mode;
 
     if (OB_ISNULL(stat_mgr)) {
     } else if (FALSE_IT(load_shedding_factor = MAX(1, stat_mgr->get_load_shedding_factor()))) {
     } else if (load_shedding_factor <= 1 || !is_compaction_dag_prio()) {
       // no need to load shedding
+    } else if (FALSE_IT(mem_mode = MTL(ObTenantCompactionMemPool *)->get_memory_mode())) {
+    } else if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority_
+            && ObTenantCompactionMemPool::CRITICAL_MODE == mem_mode) {
+      need_shedding = true;
     } else {
       const int64_t load_shedding_limit = MAX(2, adaptive_task_limit_ / load_shedding_factor);
       if (running_task_cnts_ > load_shedding_limit + extra_limit) {
         need_shedding = true;
-        if (REACH_THREAD_TIME_INTERVAL(30_s)) {
-          FLOG_INFO("[ADAPTIVE_SCHED] DagScheduler needs to load shedding", K(load_shedding_factor), K(for_schedule),
-              K(extra_limit), K_(adaptive_task_limit), K_(running_task_cnts), K_(priority));
-        }
       }
+    }
+
+    if (need_shedding && REACH_THREAD_TIME_INTERVAL(30_s)) {
+      FLOG_INFO("[ADAPTIVE_SCHED] DagScheduler needs to load shedding", K(load_shedding_factor), K(for_schedule),
+                K(extra_limit), K_(adaptive_task_limit), K_(running_task_cnts), K_(priority), K(mem_mode));
     }
   }
   return need_shedding;
@@ -4648,12 +4641,20 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID
   int ret = OB_SUCCESS;
   exist = false;
   bool tmp_exist = false;
+  /*
+   * ATTENTION!!! Here must cancel BOTH dag net and dag.
+   * The desctruction of waiting dag net is executed when loop blocking dag net list.
+   * The desctruction of running dag net depends on the desctruction of its last dag, no matter ready or running dag.
+   * So for canceling dag net:
+   * - Need cancel dag for the final desctruction of dag net.
+   * - Need cancel the dag net to avoid scheduling more dags.
+   */
   if (OB_FAIL(dag_net_sche_.check_ls_compaction_dag_exist_with_cancel(ls_id, tmp_exist))) {
     LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
   } else if (tmp_exist) {
     exist = true;
   }
-  if (OB_FAIL(ret) || exist) {
+  if (OB_FAIL(ret)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ObIDag::MergeDagPrioCnt; ++i) {
       tmp_exist = false;

@@ -12,20 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/ob_errno.h"
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
-#include "share/ob_ls_id.h"
+#include "ob_access_service.h"
 #include "storage/ob_query_iterator_factory.h"
 #include "storage/access/ob_table_scan_iterator.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/access/ob_dml_param.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/sql/engine/ob_exec_context.h"
 namespace oceanbase
 {
 using namespace common;
@@ -713,6 +705,8 @@ int ObAccessService::check_read_allowed_(
       } else {
         LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id), "timeout", scan_param.timeout_);
       }
+    } else if (OB_FAIL(check_mlog_safe_(*tablet_handle.get_obj(), scan_param))) {
+      LOG_WARN("failed to check_mlog_safe", KR(ret), K(tablet_id), K(scan_param));
     }
   }
   return ret;
@@ -954,7 +948,7 @@ int ObAccessService::insert_rows(
       || OB_ISNULL(row_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(tx_desc),
-             K(dml_param), K(column_ids), K(row_iter));
+             K(dml_param), K(column_ids), KP(row_iter));
   } else if (OB_FAIL(check_write_allowed_(ls_id,
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
@@ -1046,9 +1040,6 @@ int ObAccessService::insert_row(
 
 int ObAccessService::revert_insert_iter(blocksstable::ObDatumRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (OB_LIKELY(nullptr != iter)) {
     ObQueryIteratorFactory::free_insert_dup_iter(iter);
@@ -1329,9 +1320,6 @@ int ObAccessService::get_multi_ranges_cost(
 
 int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1354,9 +1342,6 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
 
 int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   NG_TRACE(S_revert_iter_begin);
   if (IS_NOT_INIT) {
@@ -1412,6 +1397,38 @@ int ObAccessService::split_multi_ranges(
       tablet_id, timeout_us, ranges,
       expected_task_count, allocator, multi_range_split_array))) {
     LOG_WARN("Fail to split multi ranges", K(ret), K(ls_id), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObAccessService::check_mlog_safe_(
+    const ObTablet &tablet,
+    const ObTableScanParam &scan_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_version = -1;
+  if (OB_ISNULL(scan_param.table_param_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan_param.table_param_ is NULL", KR(ret), K(scan_param), K(tablet));
+  } else if (scan_param.table_param_->is_mlog_table()) {
+    if (OB_ISNULL(scan_param.op_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("scan_param.op_ is NULL", KR(ret), K(scan_param), K(tablet));
+    } else if (OB_ISNULL(scan_param.op_filters_)) {
+      // query has no filter
+    } else if (OB_FAIL(get_query_begin_version_for_mlog(*scan_param.op_filters_, scan_param.op_->get_eval_ctx(), begin_version))) {
+      LOG_WARN("failed to get_query_begin_version_for_mlog", KR(ret), K(scan_param), K(tablet));
+    } else if (-1 != begin_version) {
+      ObTabletCreateDeleteMdsUserData user_data;
+      if (OB_FAIL(tablet.ObITabletMdsInterface::get_tablet_status(
+              share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+        LOG_WARN("failed to get tablet status", KR(ret), K(tablet));
+      } else if (begin_version < user_data.create_commit_version_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "mlog query begin version which is more than tablet create commit version, materialized view need complete fresh");
+        LOG_WARN("mlog query begin version is more than create commit version", KR(ret), K(begin_version), K(user_data), K(tablet));
+      }
+    }
   }
   return ret;
 }

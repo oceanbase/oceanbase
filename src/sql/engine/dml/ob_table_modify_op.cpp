@@ -12,21 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/dml/ob_table_modify_op.h"
+#include "ob_table_modify_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/engine/dml/ob_table_update_op.h"
-#include "sql/engine/basic/ob_expr_values_op.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/executor/ob_task_spliter.h"
-#include "sql/das/ob_das_utils.h"
-#include "storage/ob_i_store.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "lib/worker.h"
-#include "share/ob_debug_sync.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -46,7 +34,9 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
   if (op.need_foreign_key_checks()) {
     const ObExprPtrIArray &old_row = dml_ctdef.old_row_;
     const ObExprPtrIArray &new_row = dml_ctdef.new_row_;
+    const bool save_in_ignore_cascading = op.get_exec_ctx().get_das_ctx().in_ignore_cascading_;
     op.get_exec_ctx().get_das_ctx().is_fk_cascading_ = true;
+    op.get_exec_ctx().get_das_ctx().in_ignore_cascading_ = dml_ctdef.das_base_ctdef_.is_ignore_;
     LOG_DEBUG("do foreign_key_handle", K(old_row), K(new_row));
     if (OB_FAIL(op.check_stack())) {
       LOG_WARN("fail to check stack", K(ret));
@@ -58,10 +48,16 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
         if (ACTION_CHECK_EXIST == fk_arg.ref_action_) {
           // insert or update.
           bool is_foreign_key_cascade = ObSQLUtils::is_fk_nested_sql(&op.get_exec_ctx());
-          if (is_foreign_key_cascade) {
+          bool in_ignore_cascading = false;
+          ObExecContext* parent_ctx = op.get_exec_ctx().get_parent_ctx();
+          if (OB_NOT_NULL(parent_ctx)) {
+            in_ignore_cascading = parent_ctx->get_das_ctx().in_ignore_cascading_;
+          }
+
+          if (is_foreign_key_cascade && !in_ignore_cascading) {
             // nested update can not check parent row.
             LOG_DEBUG("skip foreign_key_check_exist in nested session");
-          } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false))) {
+          } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false, fk_arg.use_das_scan_))) {
             LOG_WARN("failed to check exist", K(ret), K(fk_arg), K(new_row));
           }
         }
@@ -75,7 +71,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
                      K(ret), K(fk_arg), K(old_row), K(new_row));
           } else if (!has_changed) {
             // nothing.
-          } else if (OB_FAIL(check_exist(op, fk_arg, old_row, fk_checker, true))) {
+          } else if (OB_FAIL(check_exist(op, fk_arg, old_row, fk_checker, true, fk_arg.use_das_scan_))) {
             LOG_WARN("failed to check exist", K(ret), K(fk_arg), K(old_row));
           }
         } else if (ACTION_CASCADE == fk_arg.ref_action_) {
@@ -124,6 +120,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
     } // for
     //fk cascading end
     op.get_exec_ctx().get_das_ctx().is_fk_cascading_ = false;
+    op.get_exec_ctx().get_das_ctx().in_ignore_cascading_ = save_in_ignore_cascading;
   } else {
     LOG_DEBUG("skip foreign_key_handle");
   }
@@ -158,11 +155,11 @@ int ForeignKeyHandle::value_changed(ObTableModifyOp &op,
 }
 
 int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
-                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero)
+                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero, bool use_das_scan)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
-  if (!expect_zero) {
+  if (use_das_scan) {
     ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker);
   } else {
     if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, true))) {

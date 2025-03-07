@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_ddl_error_message_table_operator.h"
 #include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_table_param.h"
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::share;

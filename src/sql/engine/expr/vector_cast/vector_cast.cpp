@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "sql/engine/expr/ob_expr.h"
 #include "vector_cast.h"
-#include "share/ob_errno.h"
-#include "share/datum/ob_datum_util.h"
 
 #define USING_LOG_PREFIX SQL
 

@@ -11,23 +11,11 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "common/ob_tablet_id.h"
+#include "ob_freezer.h"
 #include "logservice/ob_log_service.h"
-#include "share/ob_force_print_log.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_freezer.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase
 {
@@ -1179,8 +1167,16 @@ int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
     } else if (protected_handle->get_max_saved_version_from_medium_info_recorder() >=
                freeze_snapshot_version.get_val_for_tx() && !GCTX.is_shared_storage_mode()) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
-              ls_id, *tablet, MEDIUM_MERGE, freeze_snapshot_version.get_val_for_tx(), EXEC_MODE_LOCAL))) {
+      ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type;
+      if (OB_FAIL(ObTenantTabletScheduler::get_co_merge_type_for_compaction(freeze_snapshot_version.get_val_for_tx(), *tablet, co_major_merge_type))) {
+        LOG_WARN("fail to get co merge type from medium info", K(ret), K(freeze_snapshot_version), KPC(tablet));
+      } else if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(ls_id,
+                                                                                     *tablet,
+                                                                                     MEDIUM_MERGE,
+                                                                                     freeze_snapshot_version.get_val_for_tx(),
+                                                                                     EXEC_MODE_LOCAL,
+                                                                                     nullptr, /*dag_net_id*/
+                                                                                     co_major_merge_type))) {
         if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
           ret = tmp_ret;
           LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id), K(tablet_id));

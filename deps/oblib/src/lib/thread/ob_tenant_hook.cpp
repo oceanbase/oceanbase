@@ -14,9 +14,7 @@
 #define _OCEABASE_TENANT_PRELOAD_H_
 
 #define _GNU_SOURCE 1
-#include "lib/thread/thread.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/thread/protected_stack_allocator.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include <dlfcn.h>

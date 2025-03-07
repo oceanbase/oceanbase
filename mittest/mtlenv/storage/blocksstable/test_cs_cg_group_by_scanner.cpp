@@ -10,14 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 #define USING_LOG_PREFIX STORAGE
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/aggregate/ob_aggregate_util.h"
-#include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_vector_store.h"
 #include "storage/column_store/ob_cg_group_by_scanner.h"
 #include "ob_index_block_data_prepare.h"

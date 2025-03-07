@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_hkv_table.h"
-#include "ob_table_service_client.h"
-#include "share/table/ob_table.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 

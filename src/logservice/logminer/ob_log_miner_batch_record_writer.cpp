@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
-#include "lib/container/ob_ext_ring_buffer.h"
 #include "ob_log_miner_batch_record_writer.h"
 #include "ob_log_miner_batch_record.h"
 #include "ob_log_miner_file_manager.h"

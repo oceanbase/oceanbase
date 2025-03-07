@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "lib/thread/ob_async_task_queue.h"
-#include "lib/profile/ob_trace_id.h"
 namespace oceanbase
 {
 using namespace common;

@@ -11,11 +11,6 @@
  */
 
 #include "log_rpc.h"
-#include "lib/net/ob_addr.h"                       // ObAddr
-#include "log_rpc_proxy.h"                         // LogRpcProxyV2
-#include "log_rpc_packet.h"                        // LogRpcPaket
-#include "log_req.h"                               // LogPushReq...
-#include "observer/ob_server_struct.h"             // GCTX
 namespace oceanbase
 {
 using namespace common;

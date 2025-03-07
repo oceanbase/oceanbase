@@ -71,10 +71,6 @@ public:
   static int check_local_is_cs_replica(
       const share::ObLSID &ls_id,
       bool &is_cs_replica);
-  // is migrated tablet need convert co major sstable
-  static bool check_need_convert_cs_when_migration(
-      const ObTablet &tablet,
-      const ObStorageSchema& schema_on_tablet);
   static int check_has_cs_replica(
       const share::ObLSID &ls_id,
       bool &has_column_store_replica);

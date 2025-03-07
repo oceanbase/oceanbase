@@ -1849,10 +1849,10 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[127].default_value_ = "1" ;
-      ObSysVars[127].info_ = "the routing policy of obproxy/java client and observer internal retry, 1=READONLY_ZONE_FIRST, 2=ONLY_READONLY_ZONE, 3=UNMERGE_ZONE_FIRST, 4=UNMERGE_FOLLOWER_FIRST" ;
+      ObSysVars[127].info_ = "the routing policy of obproxy/java client and observer internal retry, 1=READONLY_ZONE_FIRST, 2=ONLY_READONLY_ZONE, 3=UNMERGE_ZONE_FIRST, 4=UNMERGE_FOLLOWER_FIRST, 5=FORCE_READONLY_ZONE" ;
       ObSysVars[127].name_ = "ob_route_policy" ;
       ObSysVars[127].data_type_ = ObIntType ;
-      ObSysVars[127].enum_names_ = "[u'', u'READONLY_ZONE_FIRST', u'ONLY_READONLY_ZONE', u'UNMERGE_ZONE_FIRST', u'UNMERGE_FOLLOWER_FIRST', u'COLUMN_STORE_ONLY']" ;
+      ObSysVars[127].enum_names_ = "[u'', u'READONLY_ZONE_FIRST', u'ONLY_READONLY_ZONE', u'UNMERGE_ZONE_FIRST', u'UNMERGE_FOLLOWER_FIRST', u'COLUMN_STORE_ONLY', u'FORCE_READONLY_ZONE']" ;
       ObSysVars[127].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[127].id_ = SYS_VAR_OB_ROUTE_POLICY ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ROUTE_POLICY)) ;
@@ -3267,8 +3267,8 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[231].default_value_ = "10" ;
-      ObSysVars[231].info_ = "set default wait time ms for runtime filter, default is 10ms" ;
+      ObSysVars[231].default_value_ = "0" ;
+      ObSysVars[231].info_ = "specifies runtime filter wait time before output rows, 0 means adaptive wait according to data size" ;
       ObSysVars[231].name_ = "runtime_filter_wait_time_ms" ;
       ObSysVars[231].data_type_ = ObIntType ;
       ObSysVars[231].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
@@ -3308,7 +3308,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.3.5.0" ;
+      ObSysVars[234].default_value_ = "4.3.5.1" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -7035,1575 +7035,4366 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[503].default_value_ = "0" ;
-      ObSysVars[503].info_ = "This variable specifies how to use delayed key writes. It applies only to MyISAM tables. Delayed key writing causes key buffers not to be flushed between writes, merely simulates MySQL 5.7" ;
-      ObSysVars[503].name_ = "delay_key_write" ;
+      ObSysVars[503].info_ = "mock for mysql5.7" ;
+      ObSysVars[503].name_ = "ndb_allow_copying_alter_table" ;
       ObSysVars[503].data_type_ = ObIntType ;
-      ObSysVars[503].enum_names_ = "[u'ON', u'OFF', u'ALL']" ;
-      ObSysVars[503].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[503].id_ = SYS_VAR_DELAY_KEY_WRITE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAY_KEY_WRITE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DELAY_KEY_WRITE] = 503 ;
+      ObSysVars[503].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[503].id_ = SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE] = 503 ;
       ObSysVars[503].base_value_ = "0" ;
-    ObSysVars[503].alias_ = "OB_SV_DELAY_KEY_WRITE" ;
+    ObSysVars[503].alias_ = "OB_SV_NDB_ALLOW_COPYING_ALTER_TABLE" ;
     }();
 
     [&] (){
-      ObSysVars[504].default_value_ = "0" ;
-      ObSysVars[504].info_ = "When this option is enabled, index key prefixes longer than 767 bytes (up to 3072 bytes) are allowed for InnoDB tables that use DYNAMIC or COMPRESSED row format, merely simulates MySQL 5.7" ;
-      ObSysVars[504].name_ = "innodb_large_prefix" ;
+      ObSysVars[504].default_value_ = "1" ;
+      ObSysVars[504].info_ = "mock for mysql5.7" ;
+      ObSysVars[504].name_ = "ndb_autoincrement_prefetch_sz" ;
       ObSysVars[504].data_type_ = ObIntType ;
-      ObSysVars[504].enum_names_ = "[u'ON', u'OFF']" ;
-      ObSysVars[504].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[504].id_ = SYS_VAR_INNODB_LARGE_PREFIX ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LARGE_PREFIX)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LARGE_PREFIX] = 504 ;
-      ObSysVars[504].base_value_ = "0" ;
-    ObSysVars[504].alias_ = "OB_SV_INNODB_LARGE_PREFIX" ;
+      ObSysVars[504].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[504].id_ = SYS_VAR_NDB_AUTOINCREMENT_PREFETCH_SZ ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_AUTOINCREMENT_PREFETCH_SZ)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_AUTOINCREMENT_PREFETCH_SZ] = 504 ;
+      ObSysVars[504].base_value_ = "1" ;
+    ObSysVars[504].alias_ = "OB_SV_NDB_AUTOINCREMENT_PREFETCH_SZ" ;
     }();
 
     [&] (){
-      ObSysVars[505].default_value_ = "8388608" ;
-      ObSysVars[505].info_ = "The size of the buffer used for index blocks, merely simulates MySQL 5.7" ;
-      ObSysVars[505].name_ = "key_buffer_size" ;
+      ObSysVars[505].default_value_ = "65536" ;
+      ObSysVars[505].info_ = "mock for mysql5.7" ;
+      ObSysVars[505].name_ = "ndb_blob_read_batch_bytes" ;
       ObSysVars[505].data_type_ = ObIntType ;
-      ObSysVars[505].min_val_ = "0" ;
-      ObSysVars[505].max_val_ = "4294967295" ;
-      ObSysVars[505].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[505].id_ = SYS_VAR_KEY_BUFFER_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_BUFFER_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_BUFFER_SIZE] = 505 ;
-      ObSysVars[505].base_value_ = "8388608" ;
-    ObSysVars[505].alias_ = "OB_SV_KEY_BUFFER_SIZE" ;
+      ObSysVars[505].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[505].id_ = SYS_VAR_NDB_BLOB_READ_BATCH_BYTES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_BLOB_READ_BATCH_BYTES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_BLOB_READ_BATCH_BYTES] = 505 ;
+      ObSysVars[505].base_value_ = "65536" ;
+    ObSysVars[505].alias_ = "OB_SV_NDB_BLOB_READ_BATCH_BYTES" ;
     }();
 
     [&] (){
-      ObSysVars[506].default_value_ = "300" ;
-      ObSysVars[506].info_ = "This value controls the demotion of buffers from the hot sublist of a key cache to the warm sublist. Lower values cause demotion to happen more quickly, merely simulates MySQL 5.7" ;
-      ObSysVars[506].name_ = "key_cache_age_threshold" ;
-      ObSysVars[506].data_type_ = ObUInt64Type ;
-      ObSysVars[506].min_val_ = "100" ;
-      ObSysVars[506].max_val_ = "18446744073709551516" ;
-      ObSysVars[506].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[506].id_ = SYS_VAR_KEY_CACHE_AGE_THRESHOLD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_CACHE_AGE_THRESHOLD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_CACHE_AGE_THRESHOLD] = 506 ;
-      ObSysVars[506].base_value_ = "300" ;
-    ObSysVars[506].alias_ = "OB_SV_KEY_CACHE_AGE_THRESHOLD" ;
+      ObSysVars[506].default_value_ = "65536" ;
+      ObSysVars[506].info_ = "mock for mysql5.7" ;
+      ObSysVars[506].name_ = "ndb_blob_write_batch_bytes" ;
+      ObSysVars[506].data_type_ = ObIntType ;
+      ObSysVars[506].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[506].id_ = SYS_VAR_NDB_BLOB_WRITE_BATCH_BYTES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_BLOB_WRITE_BATCH_BYTES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_BLOB_WRITE_BATCH_BYTES] = 506 ;
+      ObSysVars[506].base_value_ = "65536" ;
+    ObSysVars[506].alias_ = "OB_SV_NDB_BLOB_WRITE_BATCH_BYTES" ;
     }();
 
     [&] (){
-      ObSysVars[507].default_value_ = "100" ;
-      ObSysVars[507].info_ = "The division point between the hot and warm sublists of the key cache buffer list, merely simulates MySQL 5.7" ;
-      ObSysVars[507].name_ = "key_cache_division_limit" ;
+      ObSysVars[507].default_value_ = "0" ;
+      ObSysVars[507].info_ = "mock for mysql5.7" ;
+      ObSysVars[507].name_ = "ndb_cache_check_time" ;
       ObSysVars[507].data_type_ = ObIntType ;
-      ObSysVars[507].min_val_ = "1" ;
-      ObSysVars[507].max_val_ = "100" ;
       ObSysVars[507].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[507].id_ = SYS_VAR_KEY_CACHE_DIVISION_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_CACHE_DIVISION_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_CACHE_DIVISION_LIMIT] = 507 ;
-      ObSysVars[507].base_value_ = "100" ;
-    ObSysVars[507].alias_ = "OB_SV_KEY_CACHE_DIVISION_LIMIT" ;
+      ObSysVars[507].id_ = SYS_VAR_NDB_CACHE_CHECK_TIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_CACHE_CHECK_TIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_CACHE_CHECK_TIME] = 507 ;
+      ObSysVars[507].base_value_ = "0" ;
+    ObSysVars[507].alias_ = "OB_SV_NDB_CACHE_CHECK_TIME" ;
     }();
 
     [&] (){
-      ObSysVars[508].default_value_ = "18446744073709551615" ;
-      ObSysVars[508].info_ = "Limit the assumed maximum number of seeks when looking up rows based on a key, merely simulates MySQL 5.7" ;
-      ObSysVars[508].name_ = "max_seeks_for_key" ;
-      ObSysVars[508].data_type_ = ObUInt64Type ;
-      ObSysVars[508].min_val_ = "1" ;
-      ObSysVars[508].max_val_ = "18446744073709551615" ;
-      ObSysVars[508].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[508].id_ = SYS_VAR_MAX_SEEKS_FOR_KEY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_SEEKS_FOR_KEY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_SEEKS_FOR_KEY] = 508 ;
-      ObSysVars[508].base_value_ = "18446744073709551615" ;
-    ObSysVars[508].alias_ = "OB_SV_MAX_SEEKS_FOR_KEY" ;
+      ObSysVars[508].default_value_ = "0" ;
+      ObSysVars[508].info_ = "mock for mysql5.7" ;
+      ObSysVars[508].name_ = "ndb_clear_apply_status" ;
+      ObSysVars[508].data_type_ = ObIntType ;
+      ObSysVars[508].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[508].id_ = SYS_VAR_NDB_CLEAR_APPLY_STATUS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_CLEAR_APPLY_STATUS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_CLEAR_APPLY_STATUS] = 508 ;
+      ObSysVars[508].base_value_ = "0" ;
+    ObSysVars[508].alias_ = "OB_SV_NDB_CLEAR_APPLY_STATUS" ;
     }();
 
     [&] (){
       ObSysVars[509].default_value_ = "0" ;
-      ObSysVars[509].info_ = "When this variable is enabled, the server does not use the optimized method of processing an ALTER TABLE operation, merely simulates MySQL 5.7" ;
-      ObSysVars[509].name_ = "old_alter_table" ;
+      ObSysVars[509].info_ = "mock for mysql5.7" ;
+      ObSysVars[509].name_ = "ndb_data_node_neighbour" ;
       ObSysVars[509].data_type_ = ObIntType ;
-      ObSysVars[509].enum_names_ = "[u'OFF', u'ON']" ;
-      ObSysVars[509].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[509].id_ = SYS_VAR_OLD_ALTER_TABLE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OLD_ALTER_TABLE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OLD_ALTER_TABLE] = 509 ;
+      ObSysVars[509].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[509].id_ = SYS_VAR_NDB_DATA_NODE_NEIGHBOUR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_DATA_NODE_NEIGHBOUR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_DATA_NODE_NEIGHBOUR] = 509 ;
       ObSysVars[509].base_value_ = "0" ;
-    ObSysVars[509].alias_ = "OB_SV_OLD_ALTER_TABLE" ;
+    ObSysVars[509].alias_ = "OB_SV_NDB_DATA_NODE_NEIGHBOUR" ;
     }();
 
     [&] (){
-      ObSysVars[510].default_value_ = "-1" ;
-      ObSysVars[510].info_ = "The number of table definitions that can be stored in the table definition cache, merely simulates MySQL 5.7" ;
-      ObSysVars[510].name_ = "table_definition_cache" ;
+      ObSysVars[510].default_value_ = "0" ;
+      ObSysVars[510].info_ = "mock for mysql5.7" ;
+      ObSysVars[510].name_ = "ndb_default_column_format" ;
       ObSysVars[510].data_type_ = ObIntType ;
-      ObSysVars[510].min_val_ = "400" ;
-      ObSysVars[510].max_val_ = "524288" ;
-      ObSysVars[510].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[510].id_ = SYS_VAR_TABLE_DEFINITION_CACHE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TABLE_DEFINITION_CACHE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_TABLE_DEFINITION_CACHE] = 510 ;
-      ObSysVars[510].base_value_ = "-1" ;
-    ObSysVars[510].alias_ = "OB_SV_TABLE_DEFINITION_CACHE" ;
+      ObSysVars[510].enum_names_ = "[u'FIXED', u'DYNAMIC']" ;
+      ObSysVars[510].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[510].id_ = SYS_VAR_NDB_DEFAULT_COLUMN_FORMAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_DEFAULT_COLUMN_FORMAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_DEFAULT_COLUMN_FORMAT] = 510 ;
+      ObSysVars[510].base_value_ = "0" ;
+    ObSysVars[510].alias_ = "OB_SV_NDB_DEFAULT_COLUMN_FORMAT" ;
     }();
 
     [&] (){
-      ObSysVars[511].default_value_ = "1048576" ;
-      ObSysVars[511].info_ = "The sort buffer size for online DDL operations that create or rebuild secondary indexes, merely simulates MySQL 5.7" ;
-      ObSysVars[511].name_ = "innodb_sort_buffer_size" ;
+      ObSysVars[511].default_value_ = "0" ;
+      ObSysVars[511].info_ = "mock for mysql5.7" ;
+      ObSysVars[511].name_ = "ndb_deferred_constraints" ;
       ObSysVars[511].data_type_ = ObIntType ;
-      ObSysVars[511].min_val_ = "65536" ;
-      ObSysVars[511].max_val_ = "67108864" ;
-      ObSysVars[511].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[511].id_ = SYS_VAR_INNODB_SORT_BUFFER_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SORT_BUFFER_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SORT_BUFFER_SIZE] = 511 ;
-      ObSysVars[511].base_value_ = "1048576" ;
-    ObSysVars[511].alias_ = "OB_SV_INNODB_SORT_BUFFER_SIZE" ;
+      ObSysVars[511].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[511].id_ = SYS_VAR_NDB_DEFERRED_CONSTRAINTS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_DEFERRED_CONSTRAINTS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_DEFERRED_CONSTRAINTS] = 511 ;
+      ObSysVars[511].base_value_ = "0" ;
+    ObSysVars[511].alias_ = "OB_SV_NDB_DEFERRED_CONSTRAINTS" ;
     }();
 
     [&] (){
-      ObSysVars[512].default_value_ = "1024" ;
-      ObSysVars[512].info_ = "The size in bytes of blocks in the key cache, merely simulates MySQL 5.7" ;
-      ObSysVars[512].name_ = "key_cache_block_size" ;
+      ObSysVars[512].default_value_ = "1" ;
+      ObSysVars[512].info_ = "mock for mysql5.7" ;
+      ObSysVars[512].name_ = "ndb_distribution" ;
       ObSysVars[512].data_type_ = ObIntType ;
-      ObSysVars[512].min_val_ = "512" ;
-      ObSysVars[512].max_val_ = "16384" ;
+      ObSysVars[512].enum_names_ = "[u'LINHASH', u'KEYHASH']" ;
       ObSysVars[512].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[512].id_ = SYS_VAR_KEY_CACHE_BLOCK_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_CACHE_BLOCK_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_CACHE_BLOCK_SIZE] = 512 ;
-      ObSysVars[512].base_value_ = "1024" ;
-    ObSysVars[512].alias_ = "OB_SV_KEY_CACHE_BLOCK_SIZE" ;
+      ObSysVars[512].id_ = SYS_VAR_NDB_DISTRIBUTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_DISTRIBUTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_DISTRIBUTION] = 512 ;
+      ObSysVars[512].base_value_ = "1" ;
+    ObSysVars[512].alias_ = "OB_SV_NDB_DISTRIBUTION" ;
     }();
 
     [&] (){
-      ObSysVars[513].default_value_ = "0" ;
-      ObSysVars[513].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
-      ObSysVars[513].name_ = "ob_kv_mode" ;
+      ObSysVars[513].default_value_ = "20" ;
+      ObSysVars[513].info_ = "mock for mysql5.7" ;
+      ObSysVars[513].name_ = "ndb_eventbuffer_free_percent" ;
       ObSysVars[513].data_type_ = ObIntType ;
-      ObSysVars[513].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
-      ObSysVars[513].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
-      ObSysVars[513].id_ = SYS_VAR_OB_KV_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_KV_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 513 ;
-      ObSysVars[513].base_value_ = "0" ;
-    ObSysVars[513].alias_ = "OB_SV_KV_MODE" ;
+      ObSysVars[513].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[513].id_ = SYS_VAR_NDB_EVENTBUFFER_FREE_PERCENT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_EVENTBUFFER_FREE_PERCENT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_EVENTBUFFER_FREE_PERCENT] = 513 ;
+      ObSysVars[513].base_value_ = "20" ;
+    ObSysVars[513].alias_ = "OB_SV_NDB_EVENTBUFFER_FREE_PERCENT" ;
     }();
 
     [&] (){
-      ObSysVars[514].default_value_ = "1" ;
-      ObSysVars[514].info_ = "wether use parameter anonymous_block" ;
-      ObSysVars[514].name_ = "ob_enable_parameter_anonymous_block" ;
+      ObSysVars[514].default_value_ = "0" ;
+      ObSysVars[514].info_ = "mock for mysql5.7" ;
+      ObSysVars[514].name_ = "ndb_eventbuffer_max_alloc" ;
       ObSysVars[514].data_type_ = ObIntType ;
-      ObSysVars[514].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[514].id_ = SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK] = 514 ;
-      ObSysVars[514].base_value_ = "1" ;
-    ObSysVars[514].alias_ = "OB_SV_ENABLE_PARAMETER_ANONYMOUS_BLOCK" ;
+      ObSysVars[514].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[514].id_ = SYS_VAR_NDB_EVENTBUFFER_MAX_ALLOC ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_EVENTBUFFER_MAX_ALLOC)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_EVENTBUFFER_MAX_ALLOC] = 514 ;
+      ObSysVars[514].base_value_ = "0" ;
+    ObSysVars[514].alias_ = "OB_SV_NDB_EVENTBUFFER_MAX_ALLOC" ;
     }();
 
     [&] (){
-      ObSysVars[515].default_value_ = "" ;
-      ObSysVars[515].info_ = "The directory where character sets are installed" ;
-      ObSysVars[515].name_ = "character_sets_dir" ;
-      ObSysVars[515].data_type_ = ObVarcharType ;
-      ObSysVars[515].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[515].id_ = SYS_VAR_CHARACTER_SETS_DIR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CHARACTER_SETS_DIR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CHARACTER_SETS_DIR] = 515 ;
-      ObSysVars[515].base_value_ = "" ;
-    ObSysVars[515].alias_ = "OB_SV_CHARACTER_SETS_DIR" ;
+      ObSysVars[515].default_value_ = "1" ;
+      ObSysVars[515].info_ = "mock for mysql5.7" ;
+      ObSysVars[515].name_ = "ndb_extra_logging" ;
+      ObSysVars[515].data_type_ = ObIntType ;
+      ObSysVars[515].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[515].id_ = SYS_VAR_NDB_EXTRA_LOGGING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_EXTRA_LOGGING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_EXTRA_LOGGING] = 515 ;
+      ObSysVars[515].base_value_ = "1" ;
+    ObSysVars[515].alias_ = "OB_SV_NDB_EXTRA_LOGGING" ;
     }();
 
     [&] (){
-      ObSysVars[516].default_value_ = "%Y-%m-%d" ;
-      ObSysVars[516].info_ = "" ;
-      ObSysVars[516].name_ = "date_format" ;
-      ObSysVars[516].data_type_ = ObVarcharType ;
-      ObSysVars[516].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[516].id_ = SYS_VAR_DATE_FORMAT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DATE_FORMAT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DATE_FORMAT] = 516 ;
-      ObSysVars[516].base_value_ = "%Y-%m-%d" ;
-    ObSysVars[516].alias_ = "OB_SV_DATE_FORMAT" ;
+      ObSysVars[516].default_value_ = "0" ;
+      ObSysVars[516].info_ = "mock for mysql5.7" ;
+      ObSysVars[516].name_ = "ndb_force_send" ;
+      ObSysVars[516].data_type_ = ObIntType ;
+      ObSysVars[516].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[516].id_ = SYS_VAR_NDB_FORCE_SEND ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_FORCE_SEND)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_FORCE_SEND] = 516 ;
+      ObSysVars[516].base_value_ = "0" ;
+    ObSysVars[516].alias_ = "OB_SV_NDB_FORCE_SEND" ;
     }();
 
     [&] (){
-      ObSysVars[517].default_value_ = "%Y-%m-%d %H:%i:%s" ;
-      ObSysVars[517].info_ = "" ;
-      ObSysVars[517].name_ = "datetime_format" ;
-      ObSysVars[517].data_type_ = ObVarcharType ;
-      ObSysVars[517].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[517].id_ = SYS_VAR_DATETIME_FORMAT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DATETIME_FORMAT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DATETIME_FORMAT] = 517 ;
-      ObSysVars[517].base_value_ = "%Y-%m-%d %H:%i:%s" ;
-    ObSysVars[517].alias_ = "OB_SV_DATETIME_FORMAT" ;
+      ObSysVars[517].default_value_ = "0" ;
+      ObSysVars[517].info_ = "mock for mysql5.7" ;
+      ObSysVars[517].name_ = "ndb_fully_replicated" ;
+      ObSysVars[517].data_type_ = ObIntType ;
+      ObSysVars[517].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[517].id_ = SYS_VAR_NDB_FULLY_REPLICATED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_FULLY_REPLICATED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_FULLY_REPLICATED] = 517 ;
+      ObSysVars[517].base_value_ = "0" ;
+    ObSysVars[517].alias_ = "OB_SV_NDB_FULLY_REPLICATED" ;
     }();
 
     [&] (){
-      ObSysVars[518].default_value_ = "1" ;
-      ObSysVars[518].info_ = "This variable controls how the server handles clients with expired passwords" ;
-      ObSysVars[518].name_ = "disconnect_on_expired_password" ;
+      ObSysVars[518].default_value_ = "0" ;
+      ObSysVars[518].info_ = "mock for mysql5.7" ;
+      ObSysVars[518].name_ = "ndb_index_stat_enable" ;
       ObSysVars[518].data_type_ = ObIntType ;
-      ObSysVars[518].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[518].id_ = SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD] = 518 ;
-      ObSysVars[518].base_value_ = "1" ;
-    ObSysVars[518].alias_ = "OB_SV_DISCONNECT_ON_EXPIRED_PASSWORD" ;
+      ObSysVars[518].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[518].id_ = SYS_VAR_NDB_INDEX_STAT_ENABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_INDEX_STAT_ENABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_INDEX_STAT_ENABLE] = 518 ;
+      ObSysVars[518].base_value_ = "0" ;
+    ObSysVars[518].alias_ = "OB_SV_NDB_INDEX_STAT_ENABLE" ;
     }();
 
     [&] (){
-      ObSysVars[519].default_value_ = "" ;
-      ObSysVars[519].info_ = "The external user name used during the authentication process, as set by the plugin used to authenticate the client" ;
-      ObSysVars[519].name_ = "external_user" ;
+      ObSysVars[519].default_value_ = "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90" ;
+      ObSysVars[519].info_ = "mock for mysql5.7" ;
+      ObSysVars[519].name_ = "ndb_index_stat_option" ;
       ObSysVars[519].data_type_ = ObVarcharType ;
-      ObSysVars[519].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::NULLABLE | ObSysVarFlag::READONLY ;
-      ObSysVars[519].id_ = SYS_VAR_EXTERNAL_USER ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_EXTERNAL_USER)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_EXTERNAL_USER] = 519 ;
-      ObSysVars[519].base_value_ = "" ;
-    ObSysVars[519].alias_ = "OB_SV_EXTERNAL_USER" ;
+      ObSysVars[519].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[519].id_ = SYS_VAR_NDB_INDEX_STAT_OPTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_INDEX_STAT_OPTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_INDEX_STAT_OPTION] = 519 ;
+      ObSysVars[519].base_value_ = "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90" ;
+    ObSysVars[519].alias_ = "OB_SV_NDB_INDEX_STAT_OPTION" ;
     }();
 
     [&] (){
-      ObSysVars[520].default_value_ = "YES" ;
-      ObSysVars[520].info_ = "The external user name used during the authentication process, as set by the plugin used to authenticate the client" ;
-      ObSysVars[520].name_ = "have_crypt" ;
-      ObSysVars[520].data_type_ = ObVarcharType ;
-      ObSysVars[520].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[520].id_ = SYS_VAR_HAVE_CRYPT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HAVE_CRYPT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_HAVE_CRYPT] = 520 ;
-      ObSysVars[520].base_value_ = "YES" ;
-    ObSysVars[520].alias_ = "OB_SV_HAVE_CRYPT" ;
+      ObSysVars[520].default_value_ = "0" ;
+      ObSysVars[520].info_ = "mock for mysql5.7" ;
+      ObSysVars[520].name_ = "ndb_join_pushdown" ;
+      ObSysVars[520].data_type_ = ObIntType ;
+      ObSysVars[520].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[520].id_ = SYS_VAR_NDB_JOIN_PUSHDOWN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_JOIN_PUSHDOWN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_JOIN_PUSHDOWN] = 520 ;
+      ObSysVars[520].base_value_ = "0" ;
+    ObSysVars[520].alias_ = "OB_SV_NDB_JOIN_PUSHDOWN" ;
     }();
 
     [&] (){
-      ObSysVars[521].default_value_ = "YES" ;
-      ObSysVars[521].info_ = "YES if mysqld supports dynamic loading of plugins, NO if not. If the value is NO, you cannot use options such as --plugin-load to load plugins at server startup, or the INSTALL PLUGIN statement to load plugins at runtime" ;
-      ObSysVars[521].name_ = "have_dynamic_loading" ;
-      ObSysVars[521].data_type_ = ObVarcharType ;
-      ObSysVars[521].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[521].id_ = SYS_VAR_HAVE_DYNAMIC_LOADING ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HAVE_DYNAMIC_LOADING)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_HAVE_DYNAMIC_LOADING] = 521 ;
-      ObSysVars[521].base_value_ = "YES" ;
-    ObSysVars[521].alias_ = "OB_SV_HAVE_DYNAMIC_LOADING" ;
+      ObSysVars[521].default_value_ = "0" ;
+      ObSysVars[521].info_ = "mock for mysql5.7" ;
+      ObSysVars[521].name_ = "ndb_log_binlog_index" ;
+      ObSysVars[521].data_type_ = ObIntType ;
+      ObSysVars[521].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[521].id_ = SYS_VAR_NDB_LOG_BINLOG_INDEX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_BINLOG_INDEX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_BINLOG_INDEX] = 521 ;
+      ObSysVars[521].base_value_ = "0" ;
+    ObSysVars[521].alias_ = "OB_SV_NDB_LOG_BINLOG_INDEX" ;
     }();
 
     [&] (){
-      ObSysVars[522].default_value_ = "" ;
-      ObSysVars[522].info_ = "The location of the configuration file for the keyring_aws plugin. This variable is unavailable unless that plugin is installed" ;
-      ObSysVars[522].name_ = "keyring_aws_conf_file" ;
-      ObSysVars[522].data_type_ = ObVarcharType ;
-      ObSysVars[522].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[522].id_ = SYS_VAR_KEYRING_AWS_CONF_FILE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_CONF_FILE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_CONF_FILE] = 522 ;
-      ObSysVars[522].base_value_ = "" ;
-    ObSysVars[522].alias_ = "OB_SV_KEYRING_AWS_CONF_FILE" ;
+      ObSysVars[522].default_value_ = "0" ;
+      ObSysVars[522].info_ = "mock for mysql5.7" ;
+      ObSysVars[522].name_ = "ndb_log_empty_epochs" ;
+      ObSysVars[522].data_type_ = ObIntType ;
+      ObSysVars[522].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[522].id_ = SYS_VAR_NDB_LOG_EMPTY_EPOCHS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_EMPTY_EPOCHS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_EMPTY_EPOCHS] = 522 ;
+      ObSysVars[522].base_value_ = "0" ;
+    ObSysVars[522].alias_ = "OB_SV_NDB_LOG_EMPTY_EPOCHS" ;
     }();
 
     [&] (){
-      ObSysVars[523].default_value_ = "" ;
-      ObSysVars[523].info_ = "The location of the storage file for the keyring_aws plugin. This variable is unavailable unless that plugin is installed" ;
-      ObSysVars[523].name_ = "keyring_aws_data_file" ;
-      ObSysVars[523].data_type_ = ObVarcharType ;
-      ObSysVars[523].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[523].id_ = SYS_VAR_KEYRING_AWS_DATA_FILE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_DATA_FILE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_DATA_FILE] = 523 ;
-      ObSysVars[523].base_value_ = "" ;
-    ObSysVars[523].alias_ = "OB_SV_KEYRING_AWS_DATA_FILE" ;
+      ObSysVars[523].default_value_ = "0" ;
+      ObSysVars[523].info_ = "mock for mysql5.7" ;
+      ObSysVars[523].name_ = "ndb_log_empty_update" ;
+      ObSysVars[523].data_type_ = ObIntType ;
+      ObSysVars[523].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[523].id_ = SYS_VAR_NDB_LOG_EMPTY_UPDATE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_EMPTY_UPDATE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_EMPTY_UPDATE] = 523 ;
+      ObSysVars[523].base_value_ = "0" ;
+    ObSysVars[523].alias_ = "OB_SV_NDB_LOG_EMPTY_UPDATE" ;
     }();
 
     [&] (){
-      ObSysVars[524].default_value_ = "" ;
-      ObSysVars[524].info_ = "The language to use for error messages" ;
-      ObSysVars[524].name_ = "language" ;
-      ObSysVars[524].data_type_ = ObVarcharType ;
-      ObSysVars[524].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[524].id_ = SYS_VAR_LANGUAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LANGUAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LANGUAGE] = 524 ;
-      ObSysVars[524].base_value_ = "" ;
-    ObSysVars[524].alias_ = "OB_SV_LANGUAGE" ;
+      ObSysVars[524].default_value_ = "0" ;
+      ObSysVars[524].info_ = "mock for mysql5.7" ;
+      ObSysVars[524].name_ = "ndb_log_exclusive_reads" ;
+      ObSysVars[524].data_type_ = ObIntType ;
+      ObSysVars[524].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[524].id_ = SYS_VAR_NDB_LOG_EXCLUSIVE_READS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_EXCLUSIVE_READS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_EXCLUSIVE_READS] = 524 ;
+      ObSysVars[524].base_value_ = "0" ;
+    ObSysVars[524].alias_ = "OB_SV_NDB_LOG_EXCLUSIVE_READS" ;
     }();
 
     [&] (){
-      ObSysVars[525].default_value_ = "" ;
-      ObSysVars[525].info_ = "The language to use for error messages" ;
-      ObSysVars[525].name_ = "lc_messages_dir" ;
-      ObSysVars[525].data_type_ = ObVarcharType ;
-      ObSysVars[525].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[525].id_ = SYS_VAR_LC_MESSAGES_DIR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_MESSAGES_DIR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LC_MESSAGES_DIR] = 525 ;
-      ObSysVars[525].base_value_ = "" ;
-    ObSysVars[525].alias_ = "OB_SV_LC_MESSAGES_DIR" ;
+      ObSysVars[525].default_value_ = "0" ;
+      ObSysVars[525].info_ = "mock for mysql5.7" ;
+      ObSysVars[525].name_ = "ndb_log_update_as_write" ;
+      ObSysVars[525].data_type_ = ObIntType ;
+      ObSysVars[525].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[525].id_ = SYS_VAR_NDB_LOG_UPDATE_AS_WRITE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_UPDATE_AS_WRITE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_UPDATE_AS_WRITE] = 525 ;
+      ObSysVars[525].base_value_ = "0" ;
+    ObSysVars[525].alias_ = "OB_SV_NDB_LOG_UPDATE_AS_WRITE" ;
     }();
 
     [&] (){
       ObSysVars[526].default_value_ = "0" ;
-      ObSysVars[526].info_ = "This variable describes the case sensitivity of file names on the file system where the data directory is located" ;
-      ObSysVars[526].name_ = "lower_case_file_system" ;
+      ObSysVars[526].info_ = "mock for mysql5.7" ;
+      ObSysVars[526].name_ = "ndb_log_update_minimal" ;
       ObSysVars[526].data_type_ = ObIntType ;
-      ObSysVars[526].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[526].id_ = SYS_VAR_LOWER_CASE_FILE_SYSTEM ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOWER_CASE_FILE_SYSTEM)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LOWER_CASE_FILE_SYSTEM] = 526 ;
+      ObSysVars[526].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[526].id_ = SYS_VAR_NDB_LOG_UPDATE_MINIMAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_UPDATE_MINIMAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_UPDATE_MINIMAL] = 526 ;
       ObSysVars[526].base_value_ = "0" ;
-    ObSysVars[526].alias_ = "OB_SV_LOWER_CASE_FILE_SYSTEM" ;
+    ObSysVars[526].alias_ = "OB_SV_NDB_LOG_UPDATE_MINIMAL" ;
     }();
 
     [&] (){
-      ObSysVars[527].default_value_ = "1024" ;
-      ObSysVars[527].info_ = "The maximum number of bytes of memory reserved per session for computation of normalized statement digests" ;
-      ObSysVars[527].name_ = "max_digest_length" ;
+      ObSysVars[527].default_value_ = "0" ;
+      ObSysVars[527].info_ = "mock for mysql5.7" ;
+      ObSysVars[527].name_ = "ndb_log_updated_only" ;
       ObSysVars[527].data_type_ = ObIntType ;
-      ObSysVars[527].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[527].id_ = SYS_VAR_MAX_DIGEST_LENGTH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_DIGEST_LENGTH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_DIGEST_LENGTH] = 527 ;
-      ObSysVars[527].base_value_ = "1024" ;
-    ObSysVars[527].alias_ = "OB_SV_MAX_DIGEST_LENGTH" ;
+      ObSysVars[527].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[527].id_ = SYS_VAR_NDB_LOG_UPDATED_ONLY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_UPDATED_ONLY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_UPDATED_ONLY] = 527 ;
+      ObSysVars[527].base_value_ = "0" ;
+    ObSysVars[527].alias_ = "OB_SV_NDB_LOG_UPDATED_ONLY" ;
     }();
 
     [&] (){
-      ObSysVars[528].default_value_ = "ndbinfo" ;
-      ObSysVars[528].info_ = "Shows the name used for the NDB information database" ;
-      ObSysVars[528].name_ = "ndbinfo_database" ;
-      ObSysVars[528].data_type_ = ObVarcharType ;
-      ObSysVars[528].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[528].id_ = SYS_VAR_NDBINFO_DATABASE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_DATABASE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_DATABASE] = 528 ;
-      ObSysVars[528].base_value_ = "ndbinfo" ;
-    ObSysVars[528].alias_ = "OB_SV_NDBINFO_DATABASE" ;
+      ObSysVars[528].default_value_ = "10" ;
+      ObSysVars[528].info_ = "mock for mysql5.7" ;
+      ObSysVars[528].name_ = "ndb_optimization_delay" ;
+      ObSysVars[528].data_type_ = ObIntType ;
+      ObSysVars[528].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[528].id_ = SYS_VAR_NDB_OPTIMIZATION_DELAY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_OPTIMIZATION_DELAY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_OPTIMIZATION_DELAY] = 528 ;
+      ObSysVars[528].base_value_ = "10" ;
+    ObSysVars[528].alias_ = "OB_SV_NDB_OPTIMIZATION_DELAY" ;
     }();
 
     [&] (){
-      ObSysVars[529].default_value_ = "ndb$" ;
-      ObSysVars[529].info_ = "The prefix used in naming the ndbinfo database's base tables (normally hidden, unless exposed by setting ndbinfo_show_hidden" ;
-      ObSysVars[529].name_ = "ndbinfo_table_prefix" ;
-      ObSysVars[529].data_type_ = ObVarcharType ;
-      ObSysVars[529].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[529].id_ = SYS_VAR_NDBINFO_TABLE_PREFIX ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_TABLE_PREFIX)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_TABLE_PREFIX] = 529 ;
-      ObSysVars[529].base_value_ = "ndb$" ;
-    ObSysVars[529].alias_ = "OB_SV_NDBINFO_TABLE_PREFIX" ;
+      ObSysVars[529].default_value_ = "0" ;
+      ObSysVars[529].info_ = "mock for mysql5.7" ;
+      ObSysVars[529].name_ = "ndb_read_backup" ;
+      ObSysVars[529].data_type_ = ObIntType ;
+      ObSysVars[529].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[529].id_ = SYS_VAR_NDB_READ_BACKUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_READ_BACKUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_READ_BACKUP] = 529 ;
+      ObSysVars[529].base_value_ = "0" ;
+    ObSysVars[529].alias_ = "OB_SV_NDB_READ_BACKUP" ;
     }();
 
     [&] (){
-      ObSysVars[530].default_value_ = "" ;
-      ObSysVars[530].info_ = "Shows the version of the ndbinfo engine in use" ;
-      ObSysVars[530].name_ = "ndbinfo_version" ;
-      ObSysVars[530].data_type_ = ObVarcharType ;
-      ObSysVars[530].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[530].id_ = SYS_VAR_NDBINFO_VERSION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_VERSION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_VERSION] = 530 ;
-      ObSysVars[530].base_value_ = "" ;
-    ObSysVars[530].alias_ = "OB_SV_NDBINFO_VERSION" ;
+      ObSysVars[530].default_value_ = "8" ;
+      ObSysVars[530].info_ = "mock for mysql5.7" ;
+      ObSysVars[530].name_ = "ndb_recv_thread_activation_threshold" ;
+      ObSysVars[530].data_type_ = ObIntType ;
+      ObSysVars[530].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[530].id_ = SYS_VAR_NDB_RECV_THREAD_ACTIVATION_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_RECV_THREAD_ACTIVATION_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_RECV_THREAD_ACTIVATION_THRESHOLD] = 530 ;
+      ObSysVars[530].base_value_ = "8" ;
+    ObSysVars[530].alias_ = "OB_SV_NDB_RECV_THREAD_ACTIVATION_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[531].default_value_ = "32768" ;
-      ObSysVars[531].info_ = "This sets the size in bytes that is used for NDB transaction batches" ;
-      ObSysVars[531].name_ = "ndb_batch_size" ;
-      ObSysVars[531].data_type_ = ObIntType ;
-      ObSysVars[531].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[531].id_ = SYS_VAR_NDB_BATCH_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_BATCH_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_BATCH_SIZE] = 531 ;
-      ObSysVars[531].base_value_ = "32768" ;
-    ObSysVars[531].alias_ = "OB_SV_NDB_BATCH_SIZE" ;
+      ObSysVars[531].default_value_ = "[empty]" ;
+      ObSysVars[531].info_ = "mock for mysql5.7" ;
+      ObSysVars[531].name_ = "ndb_recv_thread_cpu_mask" ;
+      ObSysVars[531].data_type_ = ObVarcharType ;
+      ObSysVars[531].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[531].id_ = SYS_VAR_NDB_RECV_THREAD_CPU_MASK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_RECV_THREAD_CPU_MASK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_RECV_THREAD_CPU_MASK] = 531 ;
+      ObSysVars[531].base_value_ = "[empty]" ;
+    ObSysVars[531].alias_ = "OB_SV_NDB_RECV_THREAD_CPU_MASK" ;
     }();
 
     [&] (){
-      ObSysVars[532].default_value_ = "1" ;
-      ObSysVars[532].info_ = "a mysqld process can use multiple connections to the cluster, effectively mimicking several SQL nodes" ;
-      ObSysVars[532].name_ = "ndb_cluster_connection_pool" ;
+      ObSysVars[532].default_value_ = "10" ;
+      ObSysVars[532].info_ = "mock for mysql5.7" ;
+      ObSysVars[532].name_ = "ndb_report_thresh_binlog_epoch_slip" ;
       ObSysVars[532].data_type_ = ObIntType ;
-      ObSysVars[532].min_val_ = "1" ;
-      ObSysVars[532].max_val_ = "63" ;
-      ObSysVars[532].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[532].id_ = SYS_VAR_NDB_CLUSTER_CONNECTION_POOL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_CLUSTER_CONNECTION_POOL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_CLUSTER_CONNECTION_POOL] = 532 ;
-      ObSysVars[532].base_value_ = "1" ;
-    ObSysVars[532].alias_ = "OB_SV_NDB_CLUSTER_CONNECTION_POOL" ;
+      ObSysVars[532].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[532].id_ = SYS_VAR_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP] = 532 ;
+      ObSysVars[532].base_value_ = "10" ;
+    ObSysVars[532].alias_ = "OB_SV_NDB_REPORT_THRESH_BINLOG_EPOCH_SLIP" ;
     }();
 
     [&] (){
-      ObSysVars[533].default_value_ = "" ;
-      ObSysVars[533].info_ = "Specifies a comma-separated list of node IDs for connections to the cluster used by an SQL node" ;
-      ObSysVars[533].name_ = "ndb_cluster_connection_pool_nodeids" ;
-      ObSysVars[533].data_type_ = ObVarcharType ;
-      ObSysVars[533].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[533].id_ = SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS] = 533 ;
-      ObSysVars[533].base_value_ = "" ;
-    ObSysVars[533].alias_ = "OB_SV_NDB_CLUSTER_CONNECTION_POOL_NODEIDS" ;
+      ObSysVars[533].default_value_ = "10" ;
+      ObSysVars[533].info_ = "mock for mysql5.7" ;
+      ObSysVars[533].name_ = "ndb_report_thresh_binlog_mem_usage" ;
+      ObSysVars[533].data_type_ = ObIntType ;
+      ObSysVars[533].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[533].id_ = SYS_VAR_NDB_REPORT_THRESH_BINLOG_MEM_USAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_REPORT_THRESH_BINLOG_MEM_USAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_REPORT_THRESH_BINLOG_MEM_USAGE] = 533 ;
+      ObSysVars[533].base_value_ = "10" ;
+    ObSysVars[533].alias_ = "OB_SV_NDB_REPORT_THRESH_BINLOG_MEM_USAGE" ;
     }();
 
     [&] (){
-      ObSysVars[534].default_value_ = "0" ;
-      ObSysVars[534].info_ = "Causes a replica mysqld to log any updates received from its immediate source to the mysql.ndb_apply_status table in its own binary log using its own server ID rather than the server ID of the source" ;
-      ObSysVars[534].name_ = "ndb_log_apply_status" ;
+      ObSysVars[534].default_value_ = "1" ;
+      ObSysVars[534].info_ = "mock for mysql5.7" ;
+      ObSysVars[534].name_ = "ndb_row_checksum" ;
       ObSysVars[534].data_type_ = ObIntType ;
-      ObSysVars[534].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[534].id_ = SYS_VAR_NDB_LOG_APPLY_STATUS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_APPLY_STATUS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_APPLY_STATUS] = 534 ;
-      ObSysVars[534].base_value_ = "0" ;
-    ObSysVars[534].alias_ = "OB_SV_NDB_LOG_APPLY_STATUS" ;
+      ObSysVars[534].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[534].id_ = SYS_VAR_NDB_ROW_CHECKSUM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_ROW_CHECKSUM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_ROW_CHECKSUM] = 534 ;
+      ObSysVars[534].base_value_ = "1" ;
+    ObSysVars[534].alias_ = "OB_SV_NDB_ROW_CHECKSUM" ;
     }();
 
     [&] (){
-      ObSysVars[535].default_value_ = "1" ;
-      ObSysVars[535].info_ = "Causes updates to NDB tables to be written to the binary log. Setting this variable has no effect if binary logging is not already enabled for the server using log_bin" ;
-      ObSysVars[535].name_ = "ndb_log_bin" ;
+      ObSysVars[535].default_value_ = "0" ;
+      ObSysVars[535].info_ = "mock for mysql5.7" ;
+      ObSysVars[535].name_ = "ndb_show_foreign_key_mock_tables" ;
       ObSysVars[535].data_type_ = ObIntType ;
-      ObSysVars[535].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[535].id_ = SYS_VAR_NDB_LOG_BIN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_BIN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_BIN] = 535 ;
-      ObSysVars[535].base_value_ = "1" ;
-    ObSysVars[535].alias_ = "OB_SV_NDB_LOG_BIN" ;
+      ObSysVars[535].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[535].id_ = SYS_VAR_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES] = 535 ;
+      ObSysVars[535].base_value_ = "0" ;
+    ObSysVars[535].alias_ = "OB_SV_NDB_SHOW_FOREIGN_KEY_MOCK_TABLES" ;
     }();
 
     [&] (){
       ObSysVars[536].default_value_ = "0" ;
-      ObSysVars[536].info_ = "When this option is specified, and complete logging of all found row events is not possible, the mysqld process is terminated" ;
-      ObSysVars[536].name_ = "ndb_log_fail_terminate" ;
+      ObSysVars[536].info_ = "mock for mysql5.7" ;
+      ObSysVars[536].name_ = "ndb_slave_conflict_role" ;
       ObSysVars[536].data_type_ = ObIntType ;
-      ObSysVars[536].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[536].id_ = SYS_VAR_NDB_LOG_FAIL_TERMINATE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_FAIL_TERMINATE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_FAIL_TERMINATE] = 536 ;
+      ObSysVars[536].enum_names_ = "[u'NONE', u'PRIMARY', u'SECONDARY', u'PASS']" ;
+      ObSysVars[536].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[536].id_ = SYS_VAR_NDB_SLAVE_CONFLICT_ROLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_SLAVE_CONFLICT_ROLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_SLAVE_CONFLICT_ROLE] = 536 ;
       ObSysVars[536].base_value_ = "0" ;
-    ObSysVars[536].alias_ = "OB_SV_NDB_LOG_FAIL_TERMINATE" ;
+    ObSysVars[536].alias_ = "OB_SV_NDB_SLAVE_CONFLICT_ROLE" ;
     }();
 
     [&] (){
       ObSysVars[537].default_value_ = "0" ;
-      ObSysVars[537].info_ = "Shows whether the originating server ID and epoch are logged in the ndb_binlog_index table" ;
-      ObSysVars[537].name_ = "ndb_log_orig" ;
+      ObSysVars[537].info_ = "mock for mysql5.7" ;
+      ObSysVars[537].name_ = "ndb_table_no_logging" ;
       ObSysVars[537].data_type_ = ObIntType ;
-      ObSysVars[537].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[537].id_ = SYS_VAR_NDB_LOG_ORIG ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_ORIG)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_ORIG] = 537 ;
+      ObSysVars[537].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[537].id_ = SYS_VAR_NDB_TABLE_NO_LOGGING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_TABLE_NO_LOGGING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_TABLE_NO_LOGGING] = 537 ;
       ObSysVars[537].base_value_ = "0" ;
-    ObSysVars[537].alias_ = "OB_SV_NDB_LOG_ORIG" ;
+    ObSysVars[537].alias_ = "OB_SV_NDB_TABLE_NO_LOGGING" ;
     }();
 
     [&] (){
       ObSysVars[538].default_value_ = "0" ;
-      ObSysVars[538].info_ = "shows whether a replica mysqld writes NDB transaction IDs in the binary log" ;
-      ObSysVars[538].name_ = "ndb_log_transaction_id" ;
+      ObSysVars[538].info_ = "mock for mysql5.7" ;
+      ObSysVars[538].name_ = "ndb_table_temporary" ;
       ObSysVars[538].data_type_ = ObIntType ;
-      ObSysVars[538].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[538].id_ = SYS_VAR_NDB_LOG_TRANSACTION_ID ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_TRANSACTION_ID)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_TRANSACTION_ID] = 538 ;
+      ObSysVars[538].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[538].id_ = SYS_VAR_NDB_TABLE_TEMPORARY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_TABLE_TEMPORARY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_TABLE_TEMPORARY] = 538 ;
       ObSysVars[538].base_value_ = "0" ;
-    ObSysVars[538].alias_ = "OB_SV_NDB_LOG_TRANSACTION_ID" ;
+    ObSysVars[538].alias_ = "OB_SV_NDB_TABLE_TEMPORARY" ;
     }();
 
     [&] (){
-      ObSysVars[539].default_value_ = "3" ;
-      ObSysVars[539].info_ = "" ;
-      ObSysVars[539].name_ = "ndb_optimized_node_selection" ;
+      ObSysVars[539].default_value_ = "0" ;
+      ObSysVars[539].info_ = "mock for mysql5.7" ;
+      ObSysVars[539].name_ = "ndb_use_exact_count" ;
       ObSysVars[539].data_type_ = ObIntType ;
-      ObSysVars[539].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[539].id_ = SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION] = 539 ;
-      ObSysVars[539].base_value_ = "3" ;
-    ObSysVars[539].alias_ = "OB_SV_NDB_OPTIMIZED_NODE_SELECTION" ;
+      ObSysVars[539].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[539].id_ = SYS_VAR_NDB_USE_EXACT_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_USE_EXACT_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_USE_EXACT_COUNT] = 539 ;
+      ObSysVars[539].base_value_ = "0" ;
+    ObSysVars[539].alias_ = "OB_SV_NDB_USE_EXACT_COUNT" ;
     }();
 
     [&] (){
-      ObSysVars[540].default_value_ = "" ;
-      ObSysVars[540].info_ = "If this MySQL Server is connected to an NDB cluster, this read-only variable shows the cluster system name. Otherwise, the value is an empty string" ;
-      ObSysVars[540].name_ = "Ndb_system_name" ;
-      ObSysVars[540].data_type_ = ObVarcharType ;
-      ObSysVars[540].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[540].id_ = SYS_VAR_NDB_SYSTEM_NAME ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_SYSTEM_NAME)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_SYSTEM_NAME] = 540 ;
-      ObSysVars[540].base_value_ = "" ;
-    ObSysVars[540].alias_ = "OB_SV_NDB_SYSTEM_NAME" ;
+      ObSysVars[540].default_value_ = "0" ;
+      ObSysVars[540].info_ = "mock for mysql5.7" ;
+      ObSysVars[540].name_ = "ndb_use_transactions" ;
+      ObSysVars[540].data_type_ = ObIntType ;
+      ObSysVars[540].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[540].id_ = SYS_VAR_NDB_USE_TRANSACTIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_USE_TRANSACTIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_USE_TRANSACTIONS] = 540 ;
+      ObSysVars[540].base_value_ = "0" ;
+    ObSysVars[540].alias_ = "OB_SV_NDB_USE_TRANSACTIONS" ;
     }();
 
     [&] (){
       ObSysVars[541].default_value_ = "0" ;
-      ObSysVars[541].info_ = "Forces NDB to use copying of tables in the event of problems with online ALTER TABLE operations" ;
-      ObSysVars[541].name_ = "ndb_use_copying_alter_table" ;
+      ObSysVars[541].info_ = "mock for mysql5.7" ;
+      ObSysVars[541].name_ = "ndbinfo_max_bytes" ;
       ObSysVars[541].data_type_ = ObIntType ;
-      ObSysVars[541].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[541].id_ = SYS_VAR_NDB_USE_COPYING_ALTER_TABLE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_USE_COPYING_ALTER_TABLE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_USE_COPYING_ALTER_TABLE] = 541 ;
+      ObSysVars[541].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[541].id_ = SYS_VAR_NDBINFO_MAX_BYTES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_MAX_BYTES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_MAX_BYTES] = 541 ;
       ObSysVars[541].base_value_ = "0" ;
-    ObSysVars[541].alias_ = "OB_SV_NDB_USE_COPYING_ALTER_TABLE" ;
+    ObSysVars[541].alias_ = "OB_SV_NDBINFO_MAX_BYTES" ;
     }();
 
     [&] (){
-      ObSysVars[542].default_value_ = "" ;
-      ObSysVars[542].info_ = "NDB engine version in ndb-x.y.z format" ;
-      ObSysVars[542].name_ = "ndb_version_string" ;
-      ObSysVars[542].data_type_ = ObVarcharType ;
-      ObSysVars[542].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[542].id_ = SYS_VAR_NDB_VERSION_STRING ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_VERSION_STRING)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_VERSION_STRING] = 542 ;
-      ObSysVars[542].base_value_ = "" ;
-    ObSysVars[542].alias_ = "OB_SV_NDB_VERSION_STRING" ;
+      ObSysVars[542].default_value_ = "10" ;
+      ObSysVars[542].info_ = "mock for mysql5.7" ;
+      ObSysVars[542].name_ = "ndbinfo_max_rows" ;
+      ObSysVars[542].data_type_ = ObIntType ;
+      ObSysVars[542].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[542].id_ = SYS_VAR_NDBINFO_MAX_ROWS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_MAX_ROWS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_MAX_ROWS] = 542 ;
+      ObSysVars[542].base_value_ = "10" ;
+    ObSysVars[542].alias_ = "OB_SV_NDBINFO_MAX_ROWS" ;
     }();
 
     [&] (){
-      ObSysVars[543].default_value_ = "30" ;
-      ObSysVars[543].info_ = "This option sets the period of time that the MySQL server waits for connections to NDB Cluster management and data nodes to be established before accepting MySQL client connections." ;
-      ObSysVars[543].name_ = "ndb_wait_connected" ;
+      ObSysVars[543].default_value_ = "0" ;
+      ObSysVars[543].info_ = "mock for mysql5.7" ;
+      ObSysVars[543].name_ = "ndbinfo_offline" ;
       ObSysVars[543].data_type_ = ObIntType ;
-      ObSysVars[543].min_val_ = "0" ;
-      ObSysVars[543].max_val_ = "31536000" ;
-      ObSysVars[543].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[543].id_ = SYS_VAR_NDB_WAIT_CONNECTED ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_WAIT_CONNECTED)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_WAIT_CONNECTED] = 543 ;
-      ObSysVars[543].base_value_ = "30" ;
-    ObSysVars[543].alias_ = "OB_SV_NDB_WAIT_CONNECTED" ;
+      ObSysVars[543].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[543].id_ = SYS_VAR_NDBINFO_OFFLINE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_OFFLINE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_OFFLINE] = 543 ;
+      ObSysVars[543].base_value_ = "0" ;
+    ObSysVars[543].alias_ = "OB_SV_NDBINFO_OFFLINE" ;
     }();
 
     [&] (){
-      ObSysVars[544].default_value_ = "30" ;
-      ObSysVars[544].info_ = "This variable shows the period of time that the MySQL server waits for the NDB storage engine to complete setup before timing out and treating NDB as unavailable. The time is specified in seconds." ;
-      ObSysVars[544].name_ = "ndb_wait_setup" ;
+      ObSysVars[544].default_value_ = "0" ;
+      ObSysVars[544].info_ = "mock for mysql5.7" ;
+      ObSysVars[544].name_ = "ndbinfo_show_hidden" ;
       ObSysVars[544].data_type_ = ObIntType ;
-      ObSysVars[544].min_val_ = "0" ;
-      ObSysVars[544].max_val_ = "31536000" ;
-      ObSysVars[544].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[544].id_ = SYS_VAR_NDB_WAIT_SETUP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_WAIT_SETUP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_WAIT_SETUP] = 544 ;
-      ObSysVars[544].base_value_ = "30" ;
-    ObSysVars[544].alias_ = "OB_SV_NDB_WAIT_SETUP" ;
+      ObSysVars[544].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[544].id_ = SYS_VAR_NDBINFO_SHOW_HIDDEN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_SHOW_HIDDEN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_SHOW_HIDDEN] = 544 ;
+      ObSysVars[544].base_value_ = "0" ;
+    ObSysVars[544].alias_ = "OB_SV_NDBINFO_SHOW_HIDDEN" ;
     }();
 
     [&] (){
-      ObSysVars[545].default_value_ = "" ;
-      ObSysVars[545].info_ = "If the current client is a proxy for another user, this variable is the proxy user account name" ;
-      ObSysVars[545].name_ = "proxy_user" ;
-      ObSysVars[545].data_type_ = ObVarcharType ;
-      ObSysVars[545].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[545].id_ = SYS_VAR_PROXY_USER ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PROXY_USER)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PROXY_USER] = 545 ;
-      ObSysVars[545].base_value_ = "" ;
-    ObSysVars[545].alias_ = "OB_SV_PROXY_USER" ;
+      ObSysVars[545].default_value_ = "6" ;
+      ObSysVars[545].info_ = "mock for mysql5.7" ;
+      ObSysVars[545].name_ = "myisam_data_pointer_size" ;
+      ObSysVars[545].data_type_ = ObIntType ;
+      ObSysVars[545].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[545].id_ = SYS_VAR_MYISAM_DATA_POINTER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYISAM_DATA_POINTER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYISAM_DATA_POINTER_SIZE] = 545 ;
+      ObSysVars[545].base_value_ = "6" ;
+    ObSysVars[545].alias_ = "OB_SV_MYISAM_DATA_POINTER_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[546].default_value_ = "1" ;
-      ObSysVars[546].info_ = "It controls whether the server autogenerates RSA private/public key-pair files in the data directory" ;
-      ObSysVars[546].name_ = "sha256_password_auto_generate_rsa_keys" ;
+      ObSysVars[546].default_value_ = "9223372036853720064" ;
+      ObSysVars[546].info_ = "mock for mysql5.7" ;
+      ObSysVars[546].name_ = "myisam_max_sort_file_size" ;
       ObSysVars[546].data_type_ = ObIntType ;
-      ObSysVars[546].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[546].id_ = SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS] = 546 ;
-      ObSysVars[546].base_value_ = "1" ;
-    ObSysVars[546].alias_ = "OB_SV_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS" ;
+      ObSysVars[546].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[546].id_ = SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE] = 546 ;
+      ObSysVars[546].base_value_ = "9223372036853720064" ;
+    ObSysVars[546].alias_ = "OB_SV_MYISAM_MAX_SORT_FILE_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[547].default_value_ = "private_key.pem" ;
-      ObSysVars[547].info_ = "Its value is the path name of the RSA private key file for the sha256_password authentication plugin" ;
-      ObSysVars[547].name_ = "sha256_password_private_key_path" ;
-      ObSysVars[547].data_type_ = ObVarcharType ;
-      ObSysVars[547].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[547].id_ = SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH] = 547 ;
-      ObSysVars[547].base_value_ = "private_key.pem" ;
-    ObSysVars[547].alias_ = "OB_SV_SHA256_PASSWORD_PRIVATE_KEY_PATH" ;
+      ObSysVars[547].default_value_ = "1" ;
+      ObSysVars[547].info_ = "mock for mysql5.7" ;
+      ObSysVars[547].name_ = "myisam_repair_threads" ;
+      ObSysVars[547].data_type_ = ObIntType ;
+      ObSysVars[547].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[547].id_ = SYS_VAR_MYISAM_REPAIR_THREADS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYISAM_REPAIR_THREADS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYISAM_REPAIR_THREADS] = 547 ;
+      ObSysVars[547].base_value_ = "1" ;
+    ObSysVars[547].alias_ = "OB_SV_MYISAM_REPAIR_THREADS" ;
     }();
 
     [&] (){
-      ObSysVars[548].default_value_ = "public_key.pem" ;
-      ObSysVars[548].info_ = "Its value is the path name of the RSA public key file for the sha256_password authentication plugin" ;
-      ObSysVars[548].name_ = "sha256_password_public_key_path" ;
-      ObSysVars[548].data_type_ = ObVarcharType ;
-      ObSysVars[548].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[548].id_ = SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH] = 548 ;
-      ObSysVars[548].base_value_ = "public_key.pem" ;
-    ObSysVars[548].alias_ = "OB_SV_SHA256_PASSWORD_PUBLIC_KEY_PATH" ;
+      ObSysVars[548].default_value_ = "8388608" ;
+      ObSysVars[548].info_ = "mock for mysql5.7" ;
+      ObSysVars[548].name_ = "myisam_sort_buffer_size" ;
+      ObSysVars[548].data_type_ = ObIntType ;
+      ObSysVars[548].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[548].id_ = SYS_VAR_MYISAM_SORT_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYISAM_SORT_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYISAM_SORT_BUFFER_SIZE] = 548 ;
+      ObSysVars[548].base_value_ = "8388608" ;
+    ObSysVars[548].alias_ = "OB_SV_MYISAM_SORT_BUFFER_SIZE" ;
     }();
 
     [&] (){
       ObSysVars[549].default_value_ = "0" ;
-      ObSysVars[549].info_ = " If the variable value is ON, the SHOW DATABASES statement is permitted only to users who have the SHOW DATABASES privilege, and the statement displays all database names" ;
-      ObSysVars[549].name_ = "skip_show_database" ;
-      ObSysVars[549].data_type_ = ObVarcharType ;
-      ObSysVars[549].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[549].id_ = SYS_VAR_SKIP_SHOW_DATABASE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_SHOW_DATABASE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_SHOW_DATABASE] = 549 ;
+      ObSysVars[549].info_ = "mock for mysql5.7" ;
+      ObSysVars[549].name_ = "myisam_stats_method" ;
+      ObSysVars[549].data_type_ = ObIntType ;
+      ObSysVars[549].enum_names_ = "[u'nulls_unequal', u'nulls_equal', u'nulls_ignored']" ;
+      ObSysVars[549].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[549].id_ = SYS_VAR_MYISAM_STATS_METHOD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYISAM_STATS_METHOD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYISAM_STATS_METHOD] = 549 ;
       ObSysVars[549].base_value_ = "0" ;
-    ObSysVars[549].alias_ = "OB_SV_SKIP_SHOW_DATABASE" ;
+    ObSysVars[549].alias_ = "OB_SV_MYISAM_STATS_METHOD" ;
     }();
 
     [&] (){
-      ObSysVars[550].default_value_ = "" ;
-      ObSysVars[550].info_ = "This option tells the server to load the named plugins at startup" ;
-      ObSysVars[550].name_ = "plugin_load" ;
-      ObSysVars[550].data_type_ = ObVarcharType ;
-      ObSysVars[550].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[550].id_ = SYS_VAR_PLUGIN_LOAD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLUGIN_LOAD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLUGIN_LOAD] = 550 ;
-      ObSysVars[550].base_value_ = "" ;
-    ObSysVars[550].alias_ = "OB_SV_PLUGIN_LOAD" ;
+      ObSysVars[550].default_value_ = "0" ;
+      ObSysVars[550].info_ = "mock for mysql5.7" ;
+      ObSysVars[550].name_ = "myisam_use_mmap" ;
+      ObSysVars[550].data_type_ = ObIntType ;
+      ObSysVars[550].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[550].id_ = SYS_VAR_MYISAM_USE_MMAP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYISAM_USE_MMAP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYISAM_USE_MMAP] = 550 ;
+      ObSysVars[550].base_value_ = "0" ;
+    ObSysVars[550].alias_ = "OB_SV_MYISAM_USE_MMAP" ;
     }();
 
     [&] (){
-      ObSysVars[551].default_value_ = "" ;
-      ObSysVars[551].info_ = "adds a plugin or plugins to the set of plugins to be loaded at startup" ;
-      ObSysVars[551].name_ = "plugin_load_add" ;
-      ObSysVars[551].data_type_ = ObVarcharType ;
-      ObSysVars[551].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[551].id_ = SYS_VAR_PLUGIN_LOAD_ADD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLUGIN_LOAD_ADD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLUGIN_LOAD_ADD] = 551 ;
-      ObSysVars[551].base_value_ = "" ;
-    ObSysVars[551].alias_ = "OB_SV_PLUGIN_LOAD_ADD" ;
+      ObSysVars[551].default_value_ = "32768" ;
+      ObSysVars[551].info_ = "mock for mysql5.7" ;
+      ObSysVars[551].name_ = "preload_buffer_size" ;
+      ObSysVars[551].data_type_ = ObIntType ;
+      ObSysVars[551].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[551].id_ = SYS_VAR_PRELOAD_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PRELOAD_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PRELOAD_BUFFER_SIZE] = 551 ;
+      ObSysVars[551].base_value_ = "32768" ;
+    ObSysVars[551].alias_ = "OB_SV_PRELOAD_BUFFER_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[552].default_value_ = "0" ;
-      ObSysVars[552].info_ = "the server stores all temporary tables on disk rather than in memory" ;
-      ObSysVars[552].name_ = "big_tables" ;
+      ObSysVars[552].default_value_ = "131072" ;
+      ObSysVars[552].info_ = "mock for mysql5.7" ;
+      ObSysVars[552].name_ = "read_buffer_size" ;
       ObSysVars[552].data_type_ = ObIntType ;
-      ObSysVars[552].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[552].id_ = SYS_VAR_BIG_TABLES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BIG_TABLES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_BIG_TABLES] = 552 ;
-      ObSysVars[552].base_value_ = "0" ;
-    ObSysVars[552].alias_ = "OB_SV_BIG_TABLES" ;
+      ObSysVars[552].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[552].id_ = SYS_VAR_READ_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_READ_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_READ_BUFFER_SIZE] = 552 ;
+      ObSysVars[552].base_value_ = "131072" ;
+    ObSysVars[552].alias_ = "OB_SV_READ_BUFFER_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[553].default_value_ = "0" ;
-      ObSysVars[553].info_ = "If the check_proxy_users system variable is enabled, the server performs proxy user mapping for any authentication plugins that make such a request" ;
-      ObSysVars[553].name_ = "check_proxy_users" ;
+      ObSysVars[553].default_value_ = "262144" ;
+      ObSysVars[553].info_ = "mock for mysql5.7" ;
+      ObSysVars[553].name_ = "read_rnd_buffer_size" ;
       ObSysVars[553].data_type_ = ObIntType ;
-      ObSysVars[553].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[553].id_ = SYS_VAR_CHECK_PROXY_USERS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CHECK_PROXY_USERS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CHECK_PROXY_USERS] = 553 ;
-      ObSysVars[553].base_value_ = "0" ;
-    ObSysVars[553].alias_ = "OB_SV_CHECK_PROXY_USERS" ;
+      ObSysVars[553].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[553].id_ = SYS_VAR_READ_RND_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_READ_RND_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_READ_RND_BUFFER_SIZE] = 553 ;
+      ObSysVars[553].base_value_ = "262144" ;
+    ObSysVars[553].alias_ = "OB_SV_READ_RND_BUFFER_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[554].default_value_ = "0" ;
-      ObSysVars[554].info_ = "The number of consecutive failed connection attempts permitted to accounts before the server adds a delay for subsequent connection attempts" ;
-      ObSysVars[554].name_ = "connection_control_failed_connections_threshold" ;
+      ObSysVars[554].default_value_ = "1" ;
+      ObSysVars[554].info_ = "mock for mysql5.7" ;
+      ObSysVars[554].name_ = "sync_frm" ;
       ObSysVars[554].data_type_ = ObIntType ;
-      ObSysVars[554].min_val_ = "0" ;
-      ObSysVars[554].max_val_ = "2147483647" ;
       ObSysVars[554].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[554].id_ = SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD] = 554 ;
-      ObSysVars[554].base_value_ = "0" ;
-    ObSysVars[554].alias_ = "OB_SV_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD" ;
+      ObSysVars[554].id_ = SYS_VAR_SYNC_FRM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SYNC_FRM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SYNC_FRM] = 554 ;
+      ObSysVars[554].base_value_ = "1" ;
+    ObSysVars[554].alias_ = "OB_SV_SYNC_FRM" ;
     }();
 
     [&] (){
-      ObSysVars[555].default_value_ = "2147483647" ;
-      ObSysVars[555].info_ = "The maximum delay in milliseconds for server response to failed connection attempts, if connection_control_failed_connections_threshold is greater than zero" ;
-      ObSysVars[555].name_ = "connection_control_max_connection_delay" ;
+      ObSysVars[555].default_value_ = "10000" ;
+      ObSysVars[555].info_ = "mock for mysql5.7" ;
+      ObSysVars[555].name_ = "sync_master_info" ;
       ObSysVars[555].data_type_ = ObIntType ;
-      ObSysVars[555].min_val_ = "1000" ;
-      ObSysVars[555].max_val_ = "2147483647" ;
       ObSysVars[555].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[555].id_ = SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY] = 555 ;
-      ObSysVars[555].base_value_ = "2147483647" ;
-    ObSysVars[555].alias_ = "OB_SV_CONNECTION_CONTROL_MAX_CONNECTION_DELAY" ;
+      ObSysVars[555].id_ = SYS_VAR_SYNC_MASTER_INFO ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SYNC_MASTER_INFO)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SYNC_MASTER_INFO] = 555 ;
+      ObSysVars[555].base_value_ = "10000" ;
+    ObSysVars[555].alias_ = "OB_SV_SYNC_MASTER_INFO" ;
     }();
 
     [&] (){
-      ObSysVars[556].default_value_ = "1000" ;
-      ObSysVars[556].info_ = "The minmum delay in milliseconds for server response to failed connection attempts, if connection_control_failed_connections_threshold is greater than zero" ;
-      ObSysVars[556].name_ = "connection_control_min_connection_delay" ;
+      ObSysVars[556].default_value_ = "2000" ;
+      ObSysVars[556].info_ = "mock for mysql5.7" ;
+      ObSysVars[556].name_ = "table_open_cache" ;
       ObSysVars[556].data_type_ = ObIntType ;
-      ObSysVars[556].min_val_ = "1000" ;
-      ObSysVars[556].max_val_ = "2147483647" ;
       ObSysVars[556].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[556].id_ = SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY] = 556 ;
-      ObSysVars[556].base_value_ = "1000" ;
-    ObSysVars[556].alias_ = "OB_SV_CONNECTION_CONTROL_MIN_CONNECTION_DELAY" ;
+      ObSysVars[556].id_ = SYS_VAR_TABLE_OPEN_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TABLE_OPEN_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TABLE_OPEN_CACHE] = 556 ;
+      ObSysVars[556].base_value_ = "2000" ;
+    ObSysVars[556].alias_ = "OB_SV_TABLE_OPEN_CACHE" ;
     }();
 
     [&] (){
-      ObSysVars[557].default_value_ = "0" ;
-      ObSysVars[557].info_ = "The default mode value to use for the WEEK() function" ;
-      ObSysVars[557].name_ = "default_week_format" ;
-      ObSysVars[557].data_type_ = ObIntType ;
-      ObSysVars[557].min_val_ = "0" ;
-      ObSysVars[557].max_val_ = "7" ;
-      ObSysVars[557].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[557].id_ = SYS_VAR_DEFAULT_WEEK_FORMAT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_WEEK_FORMAT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DEFAULT_WEEK_FORMAT] = 557 ;
-      ObSysVars[557].base_value_ = "0" ;
-    ObSysVars[557].alias_ = "OB_SV_DEFAULT_WEEK_FORMAT" ;
+      ObSysVars[557].default_value_ = "" ;
+      ObSysVars[557].info_ = "mock for mysql5.7" ;
+      ObSysVars[557].name_ = "innodb_monitor_disable" ;
+      ObSysVars[557].data_type_ = ObVarcharType ;
+      ObSysVars[557].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[557].id_ = SYS_VAR_INNODB_MONITOR_DISABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_DISABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_MONITOR_DISABLE] = 557 ;
+      ObSysVars[557].base_value_ = "" ;
+    ObSysVars[557].alias_ = "OB_SV_INNODB_MONITOR_DISABLE" ;
     }();
 
     [&] (){
-      ObSysVars[558].default_value_ = "300" ;
-      ObSysVars[558].info_ = "" ;
-      ObSysVars[558].name_ = "delayed_insert_timeout" ;
-      ObSysVars[558].data_type_ = ObIntType ;
-      ObSysVars[558].min_val_ = "1" ;
-      ObSysVars[558].max_val_ = "31536000" ;
+      ObSysVars[558].default_value_ = "" ;
+      ObSysVars[558].info_ = "mock for mysql5.7" ;
+      ObSysVars[558].name_ = "innodb_monitor_enable" ;
+      ObSysVars[558].data_type_ = ObVarcharType ;
       ObSysVars[558].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[558].id_ = SYS_VAR_DELAYED_INSERT_TIMEOUT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAYED_INSERT_TIMEOUT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DELAYED_INSERT_TIMEOUT] = 558 ;
-      ObSysVars[558].base_value_ = "300" ;
-    ObSysVars[558].alias_ = "OB_SV_DELAYED_INSERT_TIMEOUT" ;
+      ObSysVars[558].id_ = SYS_VAR_INNODB_MONITOR_ENABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_ENABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_MONITOR_ENABLE] = 558 ;
+      ObSysVars[558].base_value_ = "" ;
+    ObSysVars[558].alias_ = "OB_SV_INNODB_MONITOR_ENABLE" ;
     }();
 
     [&] (){
-      ObSysVars[559].default_value_ = "1000" ;
-      ObSysVars[559].info_ = "" ;
-      ObSysVars[559].name_ = "delayed_queue_size" ;
-      ObSysVars[559].data_type_ = ObUInt64Type ;
-      ObSysVars[559].min_val_ = "1" ;
-      ObSysVars[559].max_val_ = "18446744073709551615" ;
+      ObSysVars[559].default_value_ = "" ;
+      ObSysVars[559].info_ = "mock for mysql5.7" ;
+      ObSysVars[559].name_ = "innodb_monitor_reset" ;
+      ObSysVars[559].data_type_ = ObVarcharType ;
       ObSysVars[559].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[559].id_ = SYS_VAR_DELAYED_QUEUE_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAYED_QUEUE_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DELAYED_QUEUE_SIZE] = 559 ;
-      ObSysVars[559].base_value_ = "1000" ;
-    ObSysVars[559].alias_ = "OB_SV_DELAYED_QUEUE_SIZE" ;
+      ObSysVars[559].id_ = SYS_VAR_INNODB_MONITOR_RESET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_RESET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_MONITOR_RESET] = 559 ;
+      ObSysVars[559].base_value_ = "" ;
+    ObSysVars[559].alias_ = "OB_SV_INNODB_MONITOR_RESET" ;
     }();
 
     [&] (){
-      ObSysVars[560].default_value_ = "200" ;
-      ObSysVars[560].info_ = "This variable indicates the number of equality ranges in an equality comparison condition when the optimizer should switch from using index dives to index statistics in estimating the number of qualifying rows" ;
-      ObSysVars[560].name_ = "eq_range_index_dive_limit" ;
-      ObSysVars[560].data_type_ = ObIntType ;
-      ObSysVars[560].min_val_ = "0" ;
-      ObSysVars[560].max_val_ = "4294967295" ;
-      ObSysVars[560].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[560].id_ = SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT] = 560 ;
-      ObSysVars[560].base_value_ = "200" ;
-    ObSysVars[560].alias_ = "OB_SV_EQ_RANGE_INDEX_DIVE_LIMIT" ;
+      ObSysVars[560].default_value_ = "" ;
+      ObSysVars[560].info_ = "mock for mysql5.7" ;
+      ObSysVars[560].name_ = "innodb_monitor_reset_all" ;
+      ObSysVars[560].data_type_ = ObVarcharType ;
+      ObSysVars[560].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[560].id_ = SYS_VAR_INNODB_MONITOR_RESET_ALL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_MONITOR_RESET_ALL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_MONITOR_RESET_ALL] = 560 ;
+      ObSysVars[560].base_value_ = "" ;
+    ObSysVars[560].alias_ = "OB_SV_INNODB_MONITOR_RESET_ALL" ;
     }();
 
     [&] (){
-      ObSysVars[561].default_value_ = "1" ;
-      ObSysVars[561].info_ = "Causes InnoDB to automatically recalculate persistent statistics after the data in a table is changed substantially, merely simulates MySQL 5.7" ;
-      ObSysVars[561].name_ = "innodb_stats_auto_recalc" ;
+      ObSysVars[561].default_value_ = "37" ;
+      ObSysVars[561].info_ = "mock for mysql5.7" ;
+      ObSysVars[561].name_ = "innodb_old_blocks_pct" ;
       ObSysVars[561].data_type_ = ObIntType ;
-      ObSysVars[561].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[561].id_ = SYS_VAR_INNODB_STATS_AUTO_RECALC ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_AUTO_RECALC)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_AUTO_RECALC] = 561 ;
-      ObSysVars[561].base_value_ = "1" ;
-    ObSysVars[561].alias_ = "OB_SV_INNODB_STATS_AUTO_RECALC" ;
+      ObSysVars[561].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[561].id_ = SYS_VAR_INNODB_OLD_BLOCKS_PCT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_OLD_BLOCKS_PCT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_OLD_BLOCKS_PCT] = 561 ;
+      ObSysVars[561].base_value_ = "37" ;
+    ObSysVars[561].alias_ = "OB_SV_INNODB_OLD_BLOCKS_PCT" ;
     }();
 
     [&] (){
-      ObSysVars[562].default_value_ = "0" ;
-      ObSysVars[562].info_ = "When innodb_stats_include_delete_marked is enabled, ANALYZE TABLE considers delete-marked records when recalculating statistics" ;
-      ObSysVars[562].name_ = "innodb_stats_include_delete_marked" ;
+      ObSysVars[562].default_value_ = "1000" ;
+      ObSysVars[562].info_ = "mock for mysql5.7" ;
+      ObSysVars[562].name_ = "innodb_old_blocks_time" ;
       ObSysVars[562].data_type_ = ObIntType ;
       ObSysVars[562].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[562].id_ = SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED] = 562 ;
-      ObSysVars[562].base_value_ = "0" ;
-    ObSysVars[562].alias_ = "OB_SV_INNODB_STATS_INCLUDE_DELETE_MARKED" ;
+      ObSysVars[562].id_ = SYS_VAR_INNODB_OLD_BLOCKS_TIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_OLD_BLOCKS_TIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_OLD_BLOCKS_TIME] = 562 ;
+      ObSysVars[562].base_value_ = "1000" ;
+    ObSysVars[562].alias_ = "OB_SV_INNODB_OLD_BLOCKS_TIME" ;
     }();
 
     [&] (){
-      ObSysVars[563].default_value_ = "0" ;
-      ObSysVars[563].info_ = "How the server treats NULL values when collecting statistics about the distribution of index values for InnoDB tables" ;
-      ObSysVars[563].name_ = "innodb_stats_method" ;
+      ObSysVars[563].default_value_ = "300" ;
+      ObSysVars[563].info_ = "mock for mysql5.7" ;
+      ObSysVars[563].name_ = "innodb_purge_batch_size" ;
       ObSysVars[563].data_type_ = ObIntType ;
-      ObSysVars[563].enum_names_ = "[u'nulls_equal', u'nulls_unequal', u'nulls_ignored']" ;
       ObSysVars[563].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[563].id_ = SYS_VAR_INNODB_STATS_METHOD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_METHOD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_METHOD] = 563 ;
-      ObSysVars[563].base_value_ = "0" ;
-    ObSysVars[563].alias_ = "OB_SV_INNODB_STATS_METHOD" ;
+      ObSysVars[563].id_ = SYS_VAR_INNODB_PURGE_BATCH_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_PURGE_BATCH_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_PURGE_BATCH_SIZE] = 563 ;
+      ObSysVars[563].base_value_ = "300" ;
+    ObSysVars[563].alias_ = "OB_SV_INNODB_PURGE_BATCH_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[564].default_value_ = "0" ;
-      ObSysVars[564].info_ = "When innodb_stats_on_metadata is enabled, InnoDB updates non-persistent statistics when metadata statements such as SHOW TABLE STATUS or when accessing the Information Schema TABLES or STATISTICS tables" ;
-      ObSysVars[564].name_ = "innodb_stats_on_metadata" ;
+      ObSysVars[564].default_value_ = "128" ;
+      ObSysVars[564].info_ = "mock for mysql5.7" ;
+      ObSysVars[564].name_ = "innodb_purge_rseg_truncate_frequency" ;
       ObSysVars[564].data_type_ = ObIntType ;
       ObSysVars[564].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[564].id_ = SYS_VAR_INNODB_STATS_ON_METADATA ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_ON_METADATA)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_ON_METADATA] = 564 ;
-      ObSysVars[564].base_value_ = "0" ;
-    ObSysVars[564].alias_ = "OB_SV_INNODB_STATS_ON_METADATA" ;
+      ObSysVars[564].id_ = SYS_VAR_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY] = 564 ;
+      ObSysVars[564].base_value_ = "128" ;
+    ObSysVars[564].alias_ = "OB_SV_INNODB_PURGE_RSEG_TRUNCATE_FREQUENCY" ;
     }();
 
     [&] (){
-      ObSysVars[565].default_value_ = "" ;
-      ObSysVars[565].info_ = "The session value of this variable specifies the client version token list and indicates the tokens that the client session requires the server version token list to have, merely simulates MySQL 5.7" ;
-      ObSysVars[565].name_ = "version_tokens_session" ;
-      ObSysVars[565].data_type_ = ObVarcharType ;
-      ObSysVars[565].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[565].id_ = SYS_VAR_VERSION_TOKENS_SESSION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VERSION_TOKENS_SESSION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VERSION_TOKENS_SESSION] = 565 ;
-      ObSysVars[565].base_value_ = "" ;
-    ObSysVars[565].alias_ = "OB_SV_VERSION_TOKENS_SESSION" ;
+      ObSysVars[565].default_value_ = "0" ;
+      ObSysVars[565].info_ = "mock for mysql5.7" ;
+      ObSysVars[565].name_ = "innodb_random_read_ahead" ;
+      ObSysVars[565].data_type_ = ObIntType ;
+      ObSysVars[565].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[565].id_ = SYS_VAR_INNODB_RANDOM_READ_AHEAD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_RANDOM_READ_AHEAD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_RANDOM_READ_AHEAD] = 565 ;
+      ObSysVars[565].base_value_ = "0" ;
+    ObSysVars[565].alias_ = "OB_SV_INNODB_RANDOM_READ_AHEAD" ;
     }();
 
     [&] (){
-      ObSysVars[566].default_value_ = "20" ;
-      ObSysVars[566].info_ = "The number of index pages to sample when estimating cardinality and other statistics for an indexed column, such as those calculated by ANALYZE TABLE" ;
-      ObSysVars[566].name_ = "innodb_stats_persistent_sample_pages" ;
-      ObSysVars[566].data_type_ = ObUInt64Type ;
-      ObSysVars[566].min_val_ = "1" ;
-      ObSysVars[566].max_val_ = "18446744073709551615" ;
+      ObSysVars[566].default_value_ = "56" ;
+      ObSysVars[566].info_ = "mock for mysql5.7" ;
+      ObSysVars[566].name_ = "innodb_read_ahead_threshold" ;
+      ObSysVars[566].data_type_ = ObIntType ;
       ObSysVars[566].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[566].id_ = SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES] = 566 ;
-      ObSysVars[566].base_value_ = "20" ;
-    ObSysVars[566].alias_ = "OB_SV_INNODB_STATS_PERSISTENT_SAMPLE_PAGES" ;
+      ObSysVars[566].id_ = SYS_VAR_INNODB_READ_AHEAD_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_READ_AHEAD_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_READ_AHEAD_THRESHOLD] = 566 ;
+      ObSysVars[566].base_value_ = "56" ;
+    ObSysVars[566].alias_ = "OB_SV_INNODB_READ_AHEAD_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[567].default_value_ = "8" ;
-      ObSysVars[567].info_ = "The number of index pages to sample when estimating cardinality and other statistics for an indexed column, such as those calculated by ANALYZE TABLE" ;
-      ObSysVars[567].name_ = "innodb_stats_sample_pages" ;
-      ObSysVars[567].data_type_ = ObUInt64Type ;
-      ObSysVars[567].min_val_ = "1" ;
-      ObSysVars[567].max_val_ = "18446744073709551615" ;
+      ObSysVars[567].default_value_ = "128" ;
+      ObSysVars[567].info_ = "mock for mysql5.7" ;
+      ObSysVars[567].name_ = "innodb_rollback_segments" ;
+      ObSysVars[567].data_type_ = ObIntType ;
       ObSysVars[567].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[567].id_ = SYS_VAR_INNODB_STATS_SAMPLE_PAGES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_SAMPLE_PAGES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_SAMPLE_PAGES] = 567 ;
-      ObSysVars[567].base_value_ = "8" ;
-    ObSysVars[567].alias_ = "OB_SV_INNODB_STATS_SAMPLE_PAGES" ;
+      ObSysVars[567].id_ = SYS_VAR_INNODB_ROLLBACK_SEGMENTS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_ROLLBACK_SEGMENTS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_ROLLBACK_SEGMENTS] = 567 ;
+      ObSysVars[567].base_value_ = "128" ;
+    ObSysVars[567].alias_ = "OB_SV_INNODB_ROLLBACK_SEGMENTS" ;
     }();
 
     [&] (){
-      ObSysVars[568].default_value_ = "8" ;
-      ObSysVars[568].info_ = "The number of index pages to sample when estimating cardinality and other statistics for an indexed column, such as those calculated by ANALYZE TABLE" ;
-      ObSysVars[568].name_ = "innodb_stats_transient_sample_pages" ;
-      ObSysVars[568].data_type_ = ObUInt64Type ;
-      ObSysVars[568].min_val_ = "1" ;
-      ObSysVars[568].max_val_ = "18446744073709551615" ;
+      ObSysVars[568].default_value_ = "6" ;
+      ObSysVars[568].info_ = "mock for mysql5.7" ;
+      ObSysVars[568].name_ = "innodb_spin_wait_delay" ;
+      ObSysVars[568].data_type_ = ObIntType ;
       ObSysVars[568].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[568].id_ = SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES] = 568 ;
-      ObSysVars[568].base_value_ = "8" ;
-    ObSysVars[568].alias_ = "OB_SV_INNODB_STATS_TRANSIENT_SAMPLE_PAGES" ;
+      ObSysVars[568].id_ = SYS_VAR_INNODB_SPIN_WAIT_DELAY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SPIN_WAIT_DELAY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SPIN_WAIT_DELAY] = 568 ;
+      ObSysVars[568].base_value_ = "6" ;
+    ObSysVars[568].alias_ = "OB_SV_INNODB_SPIN_WAIT_DELAY" ;
     }();
 
     [&] (){
-      ObSysVars[569].default_value_ = "" ;
-      ObSysVars[569].info_ = "The customer master key (CMK) ID obtained from the AWS KMS server and used by the keyring_aws plugin" ;
-      ObSysVars[569].name_ = "keyring_aws_cmk_id" ;
-      ObSysVars[569].data_type_ = ObVarcharType ;
+      ObSysVars[569].default_value_ = "0" ;
+      ObSysVars[569].info_ = "mock for mysql5.7" ;
+      ObSysVars[569].name_ = "innodb_status_output" ;
+      ObSysVars[569].data_type_ = ObIntType ;
       ObSysVars[569].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[569].id_ = SYS_VAR_KEYRING_AWS_CMK_ID ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_CMK_ID)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_CMK_ID] = 569 ;
-      ObSysVars[569].base_value_ = "" ;
-    ObSysVars[569].alias_ = "OB_SV_KEYRING_AWS_CMK_ID" ;
+      ObSysVars[569].id_ = SYS_VAR_INNODB_STATUS_OUTPUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATUS_OUTPUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATUS_OUTPUT] = 569 ;
+      ObSysVars[569].base_value_ = "0" ;
+    ObSysVars[569].alias_ = "OB_SV_INNODB_STATUS_OUTPUT" ;
     }();
 
     [&] (){
-      ObSysVars[570].default_value_ = "19" ;
-      ObSysVars[570].info_ = "The AWS region for the keyring_aws plugin. This variable is unavailable unless that plugin is installed" ;
-      ObSysVars[570].name_ = "keyring_aws_region" ;
+      ObSysVars[570].default_value_ = "0" ;
+      ObSysVars[570].info_ = "mock for mysql5.7" ;
+      ObSysVars[570].name_ = "innodb_status_output_locks" ;
       ObSysVars[570].data_type_ = ObIntType ;
-      ObSysVars[570].enum_names_ = "[u'af-south-1', u'ap-east-1', u'ap-northeast-1', u'ap-northeast-2', u'ap-northeast-3', u'ap-south-1', u'ap-southeast-1', u'ap-southeast-2', u'ca-central-1', u'cn-north-1', u'cn-northwest-1', u'eu-central-1', u'eu-north-1', u'eu-south-1', u'eu-west-1', u'eu-west-2', u'eu-west-3', u'me-south-1', u'sa-east-1', u'us-east-1', u'us-east-2', u'us-gov-east-1', u'us-iso-east-1', u'us-iso-west-1', u'us-isob-east-1', u'us-west-1', u'us-west-2']" ;
       ObSysVars[570].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[570].id_ = SYS_VAR_KEYRING_AWS_REGION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_REGION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_REGION] = 570 ;
-      ObSysVars[570].base_value_ = "19" ;
-    ObSysVars[570].alias_ = "OB_SV_KEYRING_AWS_REGION" ;
+      ObSysVars[570].id_ = SYS_VAR_INNODB_STATUS_OUTPUT_LOCKS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATUS_OUTPUT_LOCKS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATUS_OUTPUT_LOCKS] = 570 ;
+      ObSysVars[570].base_value_ = "0" ;
+    ObSysVars[570].alias_ = "OB_SV_INNODB_STATUS_OUTPUT_LOCKS" ;
     }();
 
     [&] (){
-      ObSysVars[571].default_value_ = "" ;
-      ObSysVars[571].info_ = "The path name of the data file used for secure data storage by the keyring_encrypted_file plugin" ;
-      ObSysVars[571].name_ = "keyring_encrypted_file_data" ;
-      ObSysVars[571].data_type_ = ObVarcharType ;
+      ObSysVars[571].default_value_ = "30" ;
+      ObSysVars[571].info_ = "mock for mysql5.7" ;
+      ObSysVars[571].name_ = "innodb_sync_spin_loops" ;
+      ObSysVars[571].data_type_ = ObIntType ;
       ObSysVars[571].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[571].id_ = SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA] = 571 ;
-      ObSysVars[571].base_value_ = "" ;
-    ObSysVars[571].alias_ = "OB_SV_KEYRING_ENCRYPTED_FILE_DATA" ;
+      ObSysVars[571].id_ = SYS_VAR_INNODB_SYNC_SPIN_LOOPS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SYNC_SPIN_LOOPS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SYNC_SPIN_LOOPS] = 571 ;
+      ObSysVars[571].base_value_ = "30" ;
+    ObSysVars[571].alias_ = "OB_SV_INNODB_SYNC_SPIN_LOOPS" ;
     }();
 
     [&] (){
-      ObSysVars[572].default_value_ = "" ;
-      ObSysVars[572].info_ = "The password used by the keyring_encrypted_file pluginn" ;
-      ObSysVars[572].name_ = "keyring_encrypted_file_password" ;
-      ObSysVars[572].data_type_ = ObVarcharType ;
+      ObSysVars[572].default_value_ = "1" ;
+      ObSysVars[572].info_ = "mock for mysql5.7" ;
+      ObSysVars[572].name_ = "internal_tmp_disk_storage_engine" ;
+      ObSysVars[572].data_type_ = ObIntType ;
+      ObSysVars[572].enum_names_ = "[u'MYISAM', u'INNODB']" ;
       ObSysVars[572].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[572].id_ = SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD] = 572 ;
-      ObSysVars[572].base_value_ = "" ;
-    ObSysVars[572].alias_ = "OB_SV_KEYRING_ENCRYPTED_FILE_PASSWORD" ;
+      ObSysVars[572].id_ = SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE] = 572 ;
+      ObSysVars[572].base_value_ = "1" ;
+    ObSysVars[572].alias_ = "OB_SV_INTERNAL_TMP_DISK_STORAGE_ENGINE" ;
     }();
 
     [&] (){
-      ObSysVars[573].default_value_ = "" ;
-      ObSysVars[573].info_ = "The path name of the data file used for secure data storage by the keyring_file plugin" ;
-      ObSysVars[573].name_ = "keyring_file_data" ;
-      ObSysVars[573].data_type_ = ObVarcharType ;
-      ObSysVars[573].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[573].id_ = SYS_VAR_KEYRING_FILE_DATA ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_FILE_DATA)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_FILE_DATA] = 573 ;
-      ObSysVars[573].base_value_ = "" ;
-    ObSysVars[573].alias_ = "OB_SV_KEYRING_FILE_DATA" ;
+      ObSysVars[573].default_value_ = "0" ;
+      ObSysVars[573].info_ = "mock for mysql5.7" ;
+      ObSysVars[573].name_ = "keep_files_on_create" ;
+      ObSysVars[573].data_type_ = ObIntType ;
+      ObSysVars[573].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[573].id_ = SYS_VAR_KEEP_FILES_ON_CREATE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEEP_FILES_ON_CREATE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEEP_FILES_ON_CREATE] = 573 ;
+      ObSysVars[573].base_value_ = "0" ;
+    ObSysVars[573].alias_ = "OB_SV_KEEP_FILES_ON_CREATE" ;
     }();
 
     [&] (){
-      ObSysVars[574].default_value_ = "" ;
-      ObSysVars[574].info_ = "The path name of the directory that stores configuration information used by the keyring_okv plugin" ;
-      ObSysVars[574].name_ = "keyring_okv_conf_dir" ;
-      ObSysVars[574].data_type_ = ObVarcharType ;
-      ObSysVars[574].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[574].id_ = SYS_VAR_KEYRING_OKV_CONF_DIR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_OKV_CONF_DIR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_OKV_CONF_DIR] = 574 ;
-      ObSysVars[574].base_value_ = "" ;
-    ObSysVars[574].alias_ = "OB_SV_KEYRING_OKV_CONF_DIR" ;
+      ObSysVars[574].default_value_ = "16777216" ;
+      ObSysVars[574].info_ = "mock for mysql5.7" ;
+      ObSysVars[574].name_ = "max_heap_table_size" ;
+      ObSysVars[574].data_type_ = ObIntType ;
+      ObSysVars[574].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[574].id_ = SYS_VAR_MAX_HEAP_TABLE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_HEAP_TABLE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_HEAP_TABLE_SIZE] = 574 ;
+      ObSysVars[574].base_value_ = "16777216" ;
+    ObSysVars[574].alias_ = "OB_SV_MAX_HEAP_TABLE_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[575].default_value_ = "1" ;
-      ObSysVars[575].info_ = "Whether keyring operations are enabled. This variable is used during key migration operations" ;
-      ObSysVars[575].name_ = "keyring_operations" ;
+      ObSysVars[575].default_value_ = "8388608" ;
+      ObSysVars[575].info_ = "mock for mysql5.7" ;
+      ObSysVars[575].name_ = "bulk_insert_buffer_size" ;
       ObSysVars[575].data_type_ = ObIntType ;
-      ObSysVars[575].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[575].id_ = SYS_VAR_KEYRING_OPERATIONS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_OPERATIONS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_OPERATIONS] = 575 ;
-      ObSysVars[575].base_value_ = "1" ;
-    ObSysVars[575].alias_ = "OB_SV_KEYRING_OPERATIONS" ;
+      ObSysVars[575].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[575].id_ = SYS_VAR_BULK_INSERT_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BULK_INSERT_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BULK_INSERT_BUFFER_SIZE] = 575 ;
+      ObSysVars[575].base_value_ = "8388608" ;
+    ObSysVars[575].alias_ = "OB_SV_BULK_INSERT_BUFFER_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[576].default_value_ = "" ;
-      ObSysVars[576].info_ = "enables control over optimizer behavior" ;
-      ObSysVars[576].name_ = "optimizer_switch" ;
-      ObSysVars[576].data_type_ = ObVarcharType ;
-      ObSysVars[576].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[576].id_ = SYS_VAR_OPTIMIZER_SWITCH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_SWITCH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_SWITCH] = 576 ;
-      ObSysVars[576].base_value_ = "" ;
-    ObSysVars[576].alias_ = "OB_SV_OPTIMIZER_SWITCH" ;
+      ObSysVars[576].default_value_ = "279" ;
+      ObSysVars[576].info_ = "mock for mysql5.7" ;
+      ObSysVars[576].name_ = "host_cache_size" ;
+      ObSysVars[576].data_type_ = ObIntType ;
+      ObSysVars[576].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[576].id_ = SYS_VAR_HOST_CACHE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HOST_CACHE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_HOST_CACHE_SIZE] = 576 ;
+      ObSysVars[576].base_value_ = "279" ;
+    ObSysVars[576].alias_ = "OB_SV_HOST_CACHE_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[577].default_value_ = "100" ;
-      ObSysVars[577].info_ = "After max_connect_errors successive connection requests from a host are interrupted without a successful connection, the server blocks that host from further connections" ;
-      ObSysVars[577].name_ = "max_connect_errors" ;
-      ObSysVars[577].data_type_ = ObUInt64Type ;
-      ObSysVars[577].min_val_ = "1" ;
-      ObSysVars[577].max_val_ = "18446744073709551615" ;
+      ObSysVars[577].default_value_ = "null" ;
+      ObSysVars[577].info_ = "mock for mysql5.7" ;
+      ObSysVars[577].name_ = "init_slave" ;
+      ObSysVars[577].data_type_ = ObVarcharType ;
       ObSysVars[577].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[577].id_ = SYS_VAR_MAX_CONNECT_ERRORS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_CONNECT_ERRORS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_CONNECT_ERRORS] = 577 ;
-      ObSysVars[577].base_value_ = "100" ;
-    ObSysVars[577].alias_ = "OB_SV_MAX_CONNECT_ERRORS" ;
+      ObSysVars[577].id_ = SYS_VAR_INIT_SLAVE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INIT_SLAVE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INIT_SLAVE] = 577 ;
+      ObSysVars[577].base_value_ = "null" ;
+    ObSysVars[577].alias_ = "OB_SV_INIT_SLAVE" ;
     }();
 
     [&] (){
-      ObSysVars[578].default_value_ = "0" ;
-      ObSysVars[578].info_ = "Whether MySQL Enterprise Firewall is enabled (the default) or disabled" ;
-      ObSysVars[578].name_ = "mysql_firewall_mode" ;
+      ObSysVars[578].default_value_ = "1" ;
+      ObSysVars[578].info_ = "mock for mysql5.7" ;
+      ObSysVars[578].name_ = "innodb_fast_shutdown" ;
       ObSysVars[578].data_type_ = ObIntType ;
       ObSysVars[578].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[578].id_ = SYS_VAR_MYSQL_FIREWALL_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQL_FIREWALL_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQL_FIREWALL_MODE] = 578 ;
-      ObSysVars[578].base_value_ = "0" ;
-    ObSysVars[578].alias_ = "OB_SV_MYSQL_FIREWALL_MODE" ;
+      ObSysVars[578].id_ = SYS_VAR_INNODB_FAST_SHUTDOWN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_FAST_SHUTDOWN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_FAST_SHUTDOWN] = 578 ;
+      ObSysVars[578].base_value_ = "1" ;
+    ObSysVars[578].alias_ = "OB_SV_INNODB_FAST_SHUTDOWN" ;
     }();
 
     [&] (){
-      ObSysVars[579].default_value_ = "0" ;
-      ObSysVars[579].info_ = "Whether the MySQL Enterprise Firewall trace is enabled or disabled (the default)" ;
-      ObSysVars[579].name_ = "mysql_firewall_trace" ;
+      ObSysVars[579].default_value_ = "200" ;
+      ObSysVars[579].info_ = "mock for mysql5.7" ;
+      ObSysVars[579].name_ = "innodb_io_capacity" ;
       ObSysVars[579].data_type_ = ObIntType ;
       ObSysVars[579].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[579].id_ = SYS_VAR_MYSQL_FIREWALL_TRACE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQL_FIREWALL_TRACE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQL_FIREWALL_TRACE] = 579 ;
-      ObSysVars[579].base_value_ = "0" ;
-    ObSysVars[579].alias_ = "OB_SV_MYSQL_FIREWALL_TRACE" ;
+      ObSysVars[579].id_ = SYS_VAR_INNODB_IO_CAPACITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_IO_CAPACITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_IO_CAPACITY] = 579 ;
+      ObSysVars[579].base_value_ = "200" ;
+    ObSysVars[579].alias_ = "OB_SV_INNODB_IO_CAPACITY" ;
     }();
 
     [&] (){
-      ObSysVars[580].default_value_ = "0" ;
-      ObSysVars[580].info_ = "This variable controls whether the mysql_native_password built-in authentication plugin supports proxy users" ;
-      ObSysVars[580].name_ = "mysql_native_password_proxy_users" ;
+      ObSysVars[580].default_value_ = "2000" ;
+      ObSysVars[580].info_ = "mock for mysql5.7" ;
+      ObSysVars[580].name_ = "innodb_io_capacity_max" ;
       ObSysVars[580].data_type_ = ObIntType ;
       ObSysVars[580].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[580].id_ = SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS] = 580 ;
-      ObSysVars[580].base_value_ = "0" ;
-    ObSysVars[580].alias_ = "OB_SV_MYSQL_NATIVE_PASSWORD_PROXY_USERS" ;
+      ObSysVars[580].id_ = SYS_VAR_INNODB_IO_CAPACITY_MAX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_IO_CAPACITY_MAX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_IO_CAPACITY_MAX] = 580 ;
+      ObSysVars[580].base_value_ = "2000" ;
+    ObSysVars[580].alias_ = "OB_SV_INNODB_IO_CAPACITY_MAX" ;
     }();
 
     [&] (){
-      ObSysVars[581].default_value_ = "10" ;
-      ObSysVars[581].info_ = "If a read or write on a communication port is interrupted, retry this many times before giving up. This value should be set quite high on FreeBSD because internal interrupts are sent to all threads" ;
-      ObSysVars[581].name_ = "net_retry_count" ;
-      ObSysVars[581].data_type_ = ObUInt64Type ;
+      ObSysVars[581].default_value_ = "0" ;
+      ObSysVars[581].info_ = "mock for mysql5.7" ;
+      ObSysVars[581].name_ = "innodb_thread_concurrency" ;
+      ObSysVars[581].data_type_ = ObIntType ;
       ObSysVars[581].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[581].id_ = SYS_VAR_NET_RETRY_COUNT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NET_RETRY_COUNT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NET_RETRY_COUNT] = 581 ;
-      ObSysVars[581].base_value_ = "10" ;
-    ObSysVars[581].alias_ = "OB_SV_NET_RETRY_COUNT" ;
+      ObSysVars[581].id_ = SYS_VAR_INNODB_THREAD_CONCURRENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_THREAD_CONCURRENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_THREAD_CONCURRENCY] = 581 ;
+      ObSysVars[581].base_value_ = "0" ;
+    ObSysVars[581].alias_ = "OB_SV_INNODB_THREAD_CONCURRENCY" ;
     }();
 
     [&] (){
-      ObSysVars[582].default_value_ = "0" ;
-      ObSysVars[582].info_ = "This variable was used in MySQL 4.0 to turn on some 4.1 behaviors, and is retained for backward compatibility. Its value is always OFF" ;
-      ObSysVars[582].name_ = "new" ;
+      ObSysVars[582].default_value_ = "10000" ;
+      ObSysVars[582].info_ = "mock for mysql5.7" ;
+      ObSysVars[582].name_ = "innodb_thread_sleep_delay" ;
       ObSysVars[582].data_type_ = ObIntType ;
-      ObSysVars[582].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[582].id_ = SYS_VAR_NEW ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NEW)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NEW] = 582 ;
-      ObSysVars[582].base_value_ = "0" ;
-    ObSysVars[582].alias_ = "OB_SV_NEW" ;
+      ObSysVars[582].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[582].id_ = SYS_VAR_INNODB_THREAD_SLEEP_DELAY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_THREAD_SLEEP_DELAY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_THREAD_SLEEP_DELAY] = 582 ;
+      ObSysVars[582].base_value_ = "10000" ;
+    ObSysVars[582].alias_ = "OB_SV_INNODB_THREAD_SLEEP_DELAY" ;
     }();
 
     [&] (){
-      ObSysVars[583].default_value_ = "0" ;
-      ObSysVars[583].info_ = "This variable controls the password hashing method used by the PASSWORD() function. It also influences password hashing performed by CREATE USER and GRANT statements that specify a password using an IDENTIFIED BY clause" ;
-      ObSysVars[583].name_ = "old_passwords" ;
+      ObSysVars[583].default_value_ = "3" ;
+      ObSysVars[583].info_ = "mock for mysql5.7" ;
+      ObSysVars[583].name_ = "log_error_verbosity" ;
       ObSysVars[583].data_type_ = ObIntType ;
-      ObSysVars[583].enum_names_ = "[u'0', u'1', u'2']" ;
-      ObSysVars[583].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[583].id_ = SYS_VAR_OLD_PASSWORDS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OLD_PASSWORDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OLD_PASSWORDS] = 583 ;
-      ObSysVars[583].base_value_ = "0" ;
-    ObSysVars[583].alias_ = "OB_SV_OLD_PASSWORDS" ;
+      ObSysVars[583].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[583].id_ = SYS_VAR_LOG_ERROR_VERBOSITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_ERROR_VERBOSITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_ERROR_VERBOSITY] = 583 ;
+      ObSysVars[583].base_value_ = "3" ;
+    ObSysVars[583].alias_ = "OB_SV_LOG_ERROR_VERBOSITY" ;
     }();
 
     [&] (){
-      ObSysVars[584].default_value_ = "1" ;
-      ObSysVars[584].info_ = "Controls the heuristics applied during query optimization to prune less-promising partial plans from the optimizer search space" ;
-      ObSysVars[584].name_ = "optimizer_prune_level" ;
-      ObSysVars[584].data_type_ = ObIntType ;
-      ObSysVars[584].min_val_ = "0" ;
-      ObSysVars[584].max_val_ = "1" ;
-      ObSysVars[584].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[584].id_ = SYS_VAR_OPTIMIZER_PRUNE_LEVEL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_PRUNE_LEVEL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_PRUNE_LEVEL] = 584 ;
-      ObSysVars[584].base_value_ = "1" ;
-    ObSysVars[584].alias_ = "OB_SV_OPTIMIZER_PRUNE_LEVEL" ;
+      ObSysVars[584].default_value_ = "FILE" ;
+      ObSysVars[584].info_ = "mock for mysql5.7" ;
+      ObSysVars[584].name_ = "log_output" ;
+      ObSysVars[584].data_type_ = ObVarcharType ;
+      ObSysVars[584].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[584].id_ = SYS_VAR_LOG_OUTPUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_OUTPUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_OUTPUT] = 584 ;
+      ObSysVars[584].base_value_ = "FILE" ;
+    ObSysVars[584].alias_ = "OB_SV_LOG_OUTPUT" ;
     }();
 
     [&] (){
-      ObSysVars[585].default_value_ = "62" ;
-      ObSysVars[585].info_ = "The maximum depth of search performed by the query optimizer" ;
-      ObSysVars[585].name_ = "optimizer_search_depth" ;
+      ObSysVars[585].default_value_ = "0" ;
+      ObSysVars[585].info_ = "mock for mysql5.7" ;
+      ObSysVars[585].name_ = "log_queries_not_using_indexes" ;
       ObSysVars[585].data_type_ = ObIntType ;
-      ObSysVars[585].min_val_ = "0" ;
-      ObSysVars[585].max_val_ = "62" ;
-      ObSysVars[585].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[585].id_ = SYS_VAR_OPTIMIZER_SEARCH_DEPTH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_SEARCH_DEPTH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_SEARCH_DEPTH] = 585 ;
-      ObSysVars[585].base_value_ = "62" ;
-    ObSysVars[585].alias_ = "OB_SV_OPTIMIZER_SEARCH_DEPTH" ;
+      ObSysVars[585].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[585].id_ = SYS_VAR_LOG_QUERIES_NOT_USING_INDEXES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_QUERIES_NOT_USING_INDEXES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_QUERIES_NOT_USING_INDEXES] = 585 ;
+      ObSysVars[585].base_value_ = "0" ;
+    ObSysVars[585].alias_ = "OB_SV_LOG_QUERIES_NOT_USING_INDEXES" ;
     }();
 
     [&] (){
-      ObSysVars[586].default_value_ = "" ;
-      ObSysVars[586].info_ = "This variable controls optimizer tracing" ;
-      ObSysVars[586].name_ = "optimizer_trace" ;
-      ObSysVars[586].data_type_ = ObVarcharType ;
-      ObSysVars[586].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[586].id_ = SYS_VAR_OPTIMIZER_TRACE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE] = 586 ;
-      ObSysVars[586].base_value_ = "" ;
-    ObSysVars[586].alias_ = "OB_SV_OPTIMIZER_TRACE" ;
+      ObSysVars[586].default_value_ = "0" ;
+      ObSysVars[586].info_ = "mock for mysql5.7" ;
+      ObSysVars[586].name_ = "log_slow_admin_statements" ;
+      ObSysVars[586].data_type_ = ObIntType ;
+      ObSysVars[586].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[586].id_ = SYS_VAR_LOG_SLOW_ADMIN_STATEMENTS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SLOW_ADMIN_STATEMENTS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SLOW_ADMIN_STATEMENTS] = 586 ;
+      ObSysVars[586].base_value_ = "0" ;
+    ObSysVars[586].alias_ = "OB_SV_LOG_SLOW_ADMIN_STATEMENTS" ;
     }();
 
     [&] (){
-      ObSysVars[587].default_value_ = "" ;
-      ObSysVars[587].info_ = "This variable enables or disables selected optimizer tracing features" ;
-      ObSysVars[587].name_ = "optimizer_trace_features" ;
-      ObSysVars[587].data_type_ = ObVarcharType ;
-      ObSysVars[587].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[587].id_ = SYS_VAR_OPTIMIZER_TRACE_FEATURES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_FEATURES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_FEATURES] = 587 ;
-      ObSysVars[587].base_value_ = "" ;
-    ObSysVars[587].alias_ = "OB_SV_OPTIMIZER_TRACE_FEATURES" ;
+      ObSysVars[587].default_value_ = "0" ;
+      ObSysVars[587].info_ = "mock for mysql5.7" ;
+      ObSysVars[587].name_ = "log_slow_slave_statements" ;
+      ObSysVars[587].data_type_ = ObIntType ;
+      ObSysVars[587].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[587].id_ = SYS_VAR_LOG_SLOW_SLAVE_STATEMENTS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SLOW_SLAVE_STATEMENTS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SLOW_SLAVE_STATEMENTS] = 587 ;
+      ObSysVars[587].base_value_ = "0" ;
+    ObSysVars[587].alias_ = "OB_SV_LOG_SLOW_SLAVE_STATEMENTS" ;
     }();
 
     [&] (){
       ObSysVars[588].default_value_ = "1" ;
-      ObSysVars[588].info_ = "The maximum number of optimizer traces to display" ;
-      ObSysVars[588].name_ = "optimizer_trace_limit" ;
+      ObSysVars[588].info_ = "mock for mysql5.7" ;
+      ObSysVars[588].name_ = "log_statements_unsafe_for_binlog" ;
       ObSysVars[588].data_type_ = ObIntType ;
-      ObSysVars[588].min_val_ = "0" ;
-      ObSysVars[588].max_val_ = "2147483647" ;
-      ObSysVars[588].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[588].id_ = SYS_VAR_OPTIMIZER_TRACE_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_LIMIT] = 588 ;
+      ObSysVars[588].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[588].id_ = SYS_VAR_LOG_STATEMENTS_UNSAFE_FOR_BINLOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_STATEMENTS_UNSAFE_FOR_BINLOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_STATEMENTS_UNSAFE_FOR_BINLOG] = 588 ;
       ObSysVars[588].base_value_ = "1" ;
-    ObSysVars[588].alias_ = "OB_SV_OPTIMIZER_TRACE_LIMIT" ;
+    ObSysVars[588].alias_ = "OB_SV_LOG_STATEMENTS_UNSAFE_FOR_BINLOG" ;
     }();
 
     [&] (){
-      ObSysVars[589].default_value_ = "16384" ;
-      ObSysVars[589].info_ = "The maximum cumulative size of stored optimizer traces" ;
-      ObSysVars[589].name_ = "optimizer_trace_max_mem_size" ;
-      ObSysVars[589].data_type_ = ObUInt64Type ;
-      ObSysVars[589].min_val_ = "0" ;
-      ObSysVars[589].max_val_ = "4294967295" ;
-      ObSysVars[589].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[589].id_ = SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE] = 589 ;
-      ObSysVars[589].base_value_ = "16384" ;
-    ObSysVars[589].alias_ = "OB_SV_OPTIMIZER_TRACE_MAX_MEM_SIZE" ;
+      ObSysVars[589].default_value_ = "0" ;
+      ObSysVars[589].info_ = "mock for mysql5.7" ;
+      ObSysVars[589].name_ = "log_syslog" ;
+      ObSysVars[589].data_type_ = ObIntType ;
+      ObSysVars[589].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[589].id_ = SYS_VAR_LOG_SYSLOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SYSLOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SYSLOG] = 589 ;
+      ObSysVars[589].base_value_ = "0" ;
+    ObSysVars[589].alias_ = "OB_SV_LOG_SYSLOG" ;
     }();
 
     [&] (){
-      ObSysVars[590].default_value_ = "-1" ;
-      ObSysVars[590].info_ = "The offset of optimizer traces to display" ;
-      ObSysVars[590].name_ = "optimizer_trace_offset" ;
-      ObSysVars[590].data_type_ = ObIntType ;
-      ObSysVars[590].min_val_ = "-2147483647" ;
-      ObSysVars[590].max_val_ = "2147483647" ;
-      ObSysVars[590].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[590].id_ = SYS_VAR_OPTIMIZER_TRACE_OFFSET ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_OFFSET)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_OFFSET] = 590 ;
-      ObSysVars[590].base_value_ = "-1" ;
-    ObSysVars[590].alias_ = "OB_SV_OPTIMIZER_TRACE_OFFSET" ;
+      ObSysVars[590].default_value_ = "daemon" ;
+      ObSysVars[590].info_ = "mock for mysql5.7" ;
+      ObSysVars[590].name_ = "log_syslog_facility" ;
+      ObSysVars[590].data_type_ = ObVarcharType ;
+      ObSysVars[590].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[590].id_ = SYS_VAR_LOG_SYSLOG_FACILITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SYSLOG_FACILITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SYSLOG_FACILITY] = 590 ;
+      ObSysVars[590].base_value_ = "daemon" ;
+    ObSysVars[590].alias_ = "OB_SV_LOG_SYSLOG_FACILITY" ;
     }();
 
     [&] (){
-      ObSysVars[591].default_value_ = "18446744073709551615" ;
-      ObSysVars[591].info_ = "The maximum amount of memory available to the parser" ;
-      ObSysVars[591].name_ = "parser_max_mem_size" ;
-      ObSysVars[591].data_type_ = ObUInt64Type ;
-      ObSysVars[591].min_val_ = "10000000" ;
-      ObSysVars[591].max_val_ = "18446744073709551615" ;
-      ObSysVars[591].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[591].id_ = SYS_VAR_PARSER_MAX_MEM_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARSER_MAX_MEM_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PARSER_MAX_MEM_SIZE] = 591 ;
-      ObSysVars[591].base_value_ = "18446744073709551615" ;
-    ObSysVars[591].alias_ = "OB_SV_PARSER_MAX_MEM_SIZE" ;
+      ObSysVars[591].default_value_ = "1" ;
+      ObSysVars[591].info_ = "mock for mysql5.7" ;
+      ObSysVars[591].name_ = "log_syslog_include_pid" ;
+      ObSysVars[591].data_type_ = ObIntType ;
+      ObSysVars[591].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[591].id_ = SYS_VAR_LOG_SYSLOG_INCLUDE_PID ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SYSLOG_INCLUDE_PID)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SYSLOG_INCLUDE_PID] = 591 ;
+      ObSysVars[591].base_value_ = "1" ;
+    ObSysVars[591].alias_ = "OB_SV_LOG_SYSLOG_INCLUDE_PID" ;
     }();
 
     [&] (){
-      ObSysVars[592].default_value_ = "0" ;
-      ObSysVars[592].info_ = "For statements that invoke RAND(), the source passes two values to the replica, where they are used to seed the random number generator" ;
-      ObSysVars[592].name_ = "rand_seed1" ;
-      ObSysVars[592].data_type_ = ObUInt64Type ;
-      ObSysVars[592].min_val_ = "0" ;
-      ObSysVars[592].max_val_ = "4294967295" ;
-      ObSysVars[592].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[592].id_ = SYS_VAR_RAND_SEED1 ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RAND_SEED1)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RAND_SEED1] = 592 ;
-      ObSysVars[592].base_value_ = "0" ;
-    ObSysVars[592].alias_ = "OB_SV_RAND_SEED1" ;
+      ObSysVars[592].default_value_ = "null" ;
+      ObSysVars[592].info_ = "mock for mysql5.7" ;
+      ObSysVars[592].name_ = "log_syslog_tag" ;
+      ObSysVars[592].data_type_ = ObVarcharType ;
+      ObSysVars[592].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[592].id_ = SYS_VAR_LOG_SYSLOG_TAG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SYSLOG_TAG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SYSLOG_TAG] = 592 ;
+      ObSysVars[592].base_value_ = "null" ;
+    ObSysVars[592].alias_ = "OB_SV_LOG_SYSLOG_TAG" ;
     }();
 
     [&] (){
       ObSysVars[593].default_value_ = "0" ;
-      ObSysVars[593].info_ = "For statements that invoke RAND(), the source passes two values to the replica, where they are used to seed the random number generator" ;
-      ObSysVars[593].name_ = "rand_seed2" ;
-      ObSysVars[593].data_type_ = ObUInt64Type ;
-      ObSysVars[593].min_val_ = "0" ;
-      ObSysVars[593].max_val_ = "4294967295" ;
-      ObSysVars[593].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[593].id_ = SYS_VAR_RAND_SEED2 ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RAND_SEED2)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RAND_SEED2] = 593 ;
+      ObSysVars[593].info_ = "mock for mysql5.7" ;
+      ObSysVars[593].name_ = "log_throttle_queries_not_using_indexes" ;
+      ObSysVars[593].data_type_ = ObIntType ;
+      ObSysVars[593].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[593].id_ = SYS_VAR_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES] = 593 ;
       ObSysVars[593].base_value_ = "0" ;
-    ObSysVars[593].alias_ = "OB_SV_RAND_SEED2" ;
+    ObSysVars[593].alias_ = "OB_SV_LOG_THROTTLE_QUERIES_NOT_USING_INDEXES" ;
     }();
 
     [&] (){
-      ObSysVars[594].default_value_ = "4096" ;
-      ObSysVars[594].info_ = "The size in bytes of blocks that are allocated when doing range optimization" ;
-      ObSysVars[594].name_ = "range_alloc_block_size" ;
-      ObSysVars[594].data_type_ = ObUInt64Type ;
-      ObSysVars[594].min_val_ = "4096" ;
-      ObSysVars[594].max_val_ = "18446744073709550592" ;
-      ObSysVars[594].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[594].id_ = SYS_VAR_RANGE_ALLOC_BLOCK_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_ALLOC_BLOCK_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_ALLOC_BLOCK_SIZE] = 594 ;
-      ObSysVars[594].base_value_ = "4096" ;
-    ObSysVars[594].alias_ = "OB_SV_RANGE_ALLOC_BLOCK_SIZE" ;
+      ObSysVars[594].default_value_ = "0" ;
+      ObSysVars[594].info_ = "mock for mysql5.7" ;
+      ObSysVars[594].name_ = "log_timestamps" ;
+      ObSysVars[594].data_type_ = ObIntType ;
+      ObSysVars[594].enum_names_ = "[u'UTC', u'SYSTEM']" ;
+      ObSysVars[594].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[594].id_ = SYS_VAR_LOG_TIMESTAMPS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_TIMESTAMPS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_TIMESTAMPS] = 594 ;
+      ObSysVars[594].base_value_ = "0" ;
+    ObSysVars[594].alias_ = "OB_SV_LOG_TIMESTAMPS" ;
     }();
 
     [&] (){
-      ObSysVars[595].default_value_ = "8388608" ;
-      ObSysVars[595].info_ = "The limit on memory consumption for the range optimizer" ;
-      ObSysVars[595].name_ = "range_optimizer_max_mem_size" ;
-      ObSysVars[595].data_type_ = ObUInt64Type ;
-      ObSysVars[595].min_val_ = "0" ;
-      ObSysVars[595].max_val_ = "18446744073709551615" ;
-      ObSysVars[595].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[595].id_ = SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE] = 595 ;
-      ObSysVars[595].base_value_ = "8388608" ;
-    ObSysVars[595].alias_ = "OB_SV_RANGE_OPTIMIZER_MAX_MEM_SIZE" ;
+      ObSysVars[595].default_value_ = "2" ;
+      ObSysVars[595].info_ = "mock for mysql5.7" ;
+      ObSysVars[595].name_ = "log_warnings" ;
+      ObSysVars[595].data_type_ = ObIntType ;
+      ObSysVars[595].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[595].id_ = SYS_VAR_LOG_WARNINGS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_WARNINGS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_WARNINGS] = 595 ;
+      ObSysVars[595].base_value_ = "2" ;
+    ObSysVars[595].alias_ = "OB_SV_LOG_WARNINGS" ;
     }();
 
     [&] (){
-      ObSysVars[596].default_value_ = "1" ;
-      ObSysVars[596].info_ = "Whether the Rewriter query rewrite plugin is enabled" ;
-      ObSysVars[596].name_ = "rewriter_enabled" ;
+      ObSysVars[596].default_value_ = "20" ;
+      ObSysVars[596].info_ = "mock for mysql5.7" ;
+      ObSysVars[596].name_ = "max_delayed_threads" ;
       ObSysVars[596].data_type_ = ObIntType ;
-      ObSysVars[596].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[596].id_ = SYS_VAR_REWRITER_ENABLED ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REWRITER_ENABLED)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_REWRITER_ENABLED] = 596 ;
-      ObSysVars[596].base_value_ = "1" ;
-    ObSysVars[596].alias_ = "OB_SV_REWRITER_ENABLED" ;
+      ObSysVars[596].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[596].id_ = SYS_VAR_MAX_DELAYED_THREADS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_DELAYED_THREADS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_DELAYED_THREADS] = 596 ;
+      ObSysVars[596].base_value_ = "20" ;
+    ObSysVars[596].alias_ = "OB_SV_MAX_DELAYED_THREADS" ;
     }();
 
     [&] (){
       ObSysVars[597].default_value_ = "0" ;
-      ObSysVars[597].info_ = "For internal use in MySQL" ;
-      ObSysVars[597].name_ = "rewriter_verbose" ;
+      ObSysVars[597].info_ = "mock for mysql5.7" ;
+      ObSysVars[597].name_ = "offline_mode" ;
       ObSysVars[597].data_type_ = ObIntType ;
       ObSysVars[597].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[597].id_ = SYS_VAR_REWRITER_VERBOSE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REWRITER_VERBOSE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_REWRITER_VERBOSE] = 597 ;
+      ObSysVars[597].id_ = SYS_VAR_OFFLINE_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OFFLINE_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OFFLINE_MODE] = 597 ;
       ObSysVars[597].base_value_ = "0" ;
-    ObSysVars[597].alias_ = "OB_SV_REWRITER_VERBOSE" ;
+    ObSysVars[597].alias_ = "OB_SV_OFFLINE_MODE" ;
     }();
 
     [&] (){
-      ObSysVars[598].default_value_ = "1" ;
-      ObSysVars[598].info_ = "If this variable is enabled, the server blocks connections by clients that attempt to use accounts that have passwords stored in the old (pre-4.1) format" ;
-      ObSysVars[598].name_ = "secure_auth" ;
+      ObSysVars[598].default_value_ = "0" ;
+      ObSysVars[598].info_ = "mock for mysql5.7" ;
+      ObSysVars[598].name_ = "require_secure_transport" ;
       ObSysVars[598].data_type_ = ObIntType ;
       ObSysVars[598].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[598].id_ = SYS_VAR_SECURE_AUTH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SECURE_AUTH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SECURE_AUTH] = 598 ;
-      ObSysVars[598].base_value_ = "1" ;
-    ObSysVars[598].alias_ = "OB_SV_SECURE_AUTH" ;
+      ObSysVars[598].id_ = SYS_VAR_REQUIRE_SECURE_TRANSPORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REQUIRE_SECURE_TRANSPORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REQUIRE_SECURE_TRANSPORT] = 598 ;
+      ObSysVars[598].base_value_ = "0" ;
+    ObSysVars[598].alias_ = "OB_SV_REQUIRE_SECURE_TRANSPORT" ;
     }();
 
     [&] (){
-      ObSysVars[599].default_value_ = "0" ;
-      ObSysVars[599].info_ = "This variable controls whether the sha256_password built-in authentication plugin supports proxy users" ;
-      ObSysVars[599].name_ = "sha256_password_proxy_users" ;
+      ObSysVars[599].default_value_ = "2" ;
+      ObSysVars[599].info_ = "mock for mysql5.7" ;
+      ObSysVars[599].name_ = "slow_launch_time" ;
       ObSysVars[599].data_type_ = ObIntType ;
       ObSysVars[599].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[599].id_ = SYS_VAR_SHA256_PASSWORD_PROXY_USERS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PROXY_USERS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_PROXY_USERS] = 599 ;
-      ObSysVars[599].base_value_ = "0" ;
-    ObSysVars[599].alias_ = "OB_SV_SHA256_PASSWORD_PROXY_USERS" ;
+      ObSysVars[599].id_ = SYS_VAR_SLOW_LAUNCH_TIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLOW_LAUNCH_TIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLOW_LAUNCH_TIME] = 599 ;
+      ObSysVars[599].base_value_ = "2" ;
+    ObSysVars[599].alias_ = "OB_SV_SLOW_LAUNCH_TIME" ;
     }();
 
     [&] (){
       ObSysVars[600].default_value_ = "0" ;
-      ObSysVars[600].info_ = "which affects whether MySQL 5.6 compatibility is enabled with respect to how system and status variable information is provided by the INFORMATION_SCHEMA and Performance Schema tables, and also by the SHOW VARIABLES and SHOW STATUS statements" ;
-      ObSysVars[600].name_ = "show_compatibility_56" ;
+      ObSysVars[600].info_ = "mock for mysql5.7" ;
+      ObSysVars[600].name_ = "sql_log_off" ;
       ObSysVars[600].data_type_ = ObIntType ;
-      ObSysVars[600].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[600].id_ = SYS_VAR_SHOW_COMPATIBILITY_56 ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHOW_COMPATIBILITY_56)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHOW_COMPATIBILITY_56] = 600 ;
+      ObSysVars[600].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[600].id_ = SYS_VAR_SQL_LOG_OFF ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_LOG_OFF)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_LOG_OFF] = 600 ;
       ObSysVars[600].base_value_ = "0" ;
-    ObSysVars[600].alias_ = "OB_SV_SHOW_COMPATIBILITY_56" ;
+    ObSysVars[600].alias_ = "OB_SV_SQL_LOG_OFF" ;
     }();
 
     [&] (){
-      ObSysVars[601].default_value_ = "0" ;
-      ObSysVars[601].info_ = "Enabling this variable causes SHOW CREATE TABLE to display ROW_FORMAT regardless of whether it is the default format" ;
-      ObSysVars[601].name_ = "show_create_table_verbosity" ;
+      ObSysVars[601].default_value_ = "9" ;
+      ObSysVars[601].info_ = "mock for mysql5.7" ;
+      ObSysVars[601].name_ = "thread_cache_size" ;
       ObSysVars[601].data_type_ = ObIntType ;
-      ObSysVars[601].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[601].id_ = SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY] = 601 ;
-      ObSysVars[601].base_value_ = "0" ;
-    ObSysVars[601].alias_ = "OB_SV_SHOW_CREATE_TABLE_VERBOSITY" ;
+      ObSysVars[601].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[601].id_ = SYS_VAR_THREAD_CACHE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_CACHE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_CACHE_SIZE] = 601 ;
+      ObSysVars[601].base_value_ = "9" ;
+    ObSysVars[601].alias_ = "OB_SV_THREAD_CACHE_SIZE" ;
     }();
 
     [&] (){
       ObSysVars[602].default_value_ = "0" ;
-      ObSysVars[602].info_ = "Whether SHOW CREATE TABLE output includes comments" ;
-      ObSysVars[602].name_ = "show_old_temporals" ;
+      ObSysVars[602].info_ = "mock for mysql5.7" ;
+      ObSysVars[602].name_ = "thread_pool_high_priority_connection" ;
       ObSysVars[602].data_type_ = ObIntType ;
-      ObSysVars[602].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[602].id_ = SYS_VAR_SHOW_OLD_TEMPORALS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHOW_OLD_TEMPORALS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SHOW_OLD_TEMPORALS] = 602 ;
+      ObSysVars[602].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[602].id_ = SYS_VAR_THREAD_POOL_HIGH_PRIORITY_CONNECTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_POOL_HIGH_PRIORITY_CONNECTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_POOL_HIGH_PRIORITY_CONNECTION] = 602 ;
       ObSysVars[602].base_value_ = "0" ;
-    ObSysVars[602].alias_ = "OB_SV_SHOW_OLD_TEMPORALS" ;
+    ObSysVars[602].alias_ = "OB_SV_THREAD_POOL_HIGH_PRIORITY_CONNECTION" ;
     }();
 
     [&] (){
-      ObSysVars[603].default_value_ = "1" ;
-      ObSysVars[603].info_ = "If set to OFF, MySQL aborts SELECT statements that are likely to take a very long time to execute" ;
-      ObSysVars[603].name_ = "sql_big_selects" ;
+      ObSysVars[603].default_value_ = "0" ;
+      ObSysVars[603].info_ = "mock for mysql5.7" ;
+      ObSysVars[603].name_ = "thread_pool_max_unused_threads" ;
       ObSysVars[603].data_type_ = ObIntType ;
-      ObSysVars[603].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[603].id_ = SYS_VAR_SQL_BIG_SELECTS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_BIG_SELECTS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_BIG_SELECTS] = 603 ;
-      ObSysVars[603].base_value_ = "1" ;
-    ObSysVars[603].alias_ = "OB_SV_SQL_BIG_SELECTS" ;
+      ObSysVars[603].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[603].id_ = SYS_VAR_THREAD_POOL_MAX_UNUSED_THREADS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_POOL_MAX_UNUSED_THREADS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_POOL_MAX_UNUSED_THREADS] = 603 ;
+      ObSysVars[603].base_value_ = "0" ;
+    ObSysVars[603].alias_ = "OB_SV_THREAD_POOL_MAX_UNUSED_THREADS" ;
     }();
 
     [&] (){
-      ObSysVars[604].default_value_ = "1" ;
-      ObSysVars[604].info_ = "This variable controls whether updates to a view can be made when the view does not contain all columns of the primary key defined in the underlying table, if the update statement contains a LIMIT clause" ;
-      ObSysVars[604].name_ = "updatable_views_with_limit" ;
+      ObSysVars[604].default_value_ = "1000" ;
+      ObSysVars[604].info_ = "mock for mysql5.7" ;
+      ObSysVars[604].name_ = "thread_pool_prio_kickup_timer" ;
       ObSysVars[604].data_type_ = ObIntType ;
-      ObSysVars[604].enum_names_ = "[u'OFF', u'ON', u'NO', u'YES']" ;
-      ObSysVars[604].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[604].id_ = SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT] = 604 ;
-      ObSysVars[604].base_value_ = "1" ;
-    ObSysVars[604].alias_ = "OB_SV_UPDATABLE_VIEWS_WITH_LIMIT" ;
+      ObSysVars[604].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[604].id_ = SYS_VAR_THREAD_POOL_PRIO_KICKUP_TIMER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_POOL_PRIO_KICKUP_TIMER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_POOL_PRIO_KICKUP_TIMER] = 604 ;
+      ObSysVars[604].base_value_ = "1000" ;
+    ObSysVars[604].alias_ = "OB_SV_THREAD_POOL_PRIO_KICKUP_TIMER" ;
     }();
 
     [&] (){
-      ObSysVars[605].default_value_ = "" ;
-      ObSysVars[605].info_ = "The path name of the dictionary file that validate_password uses for checking passwords." ;
-      ObSysVars[605].name_ = "validate_password_dictionary_file" ;
-      ObSysVars[605].data_type_ = ObVarcharType ;
+      ObSysVars[605].default_value_ = "6" ;
+      ObSysVars[605].info_ = "mock for mysql5.7" ;
+      ObSysVars[605].name_ = "thread_pool_stall_limit" ;
+      ObSysVars[605].data_type_ = ObIntType ;
       ObSysVars[605].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[605].id_ = SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE] = 605 ;
-      ObSysVars[605].base_value_ = "" ;
-    ObSysVars[605].alias_ = "OB_SV_VALIDATE_PASSWORD_DICTIONARY_FILE" ;
+      ObSysVars[605].id_ = SYS_VAR_THREAD_POOL_STALL_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_POOL_STALL_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_POOL_STALL_LIMIT] = 605 ;
+      ObSysVars[605].base_value_ = "6" ;
+    ObSysVars[605].alias_ = "OB_SV_THREAD_POOL_STALL_LIMIT" ;
     }();
 
     [&] (){
-      ObSysVars[606].default_value_ = "100" ;
-      ObSysVars[606].info_ = "" ;
-      ObSysVars[606].name_ = "delayed_insert_limit" ;
-      ObSysVars[606].data_type_ = ObUInt64Type ;
-      ObSysVars[606].min_val_ = "1" ;
-      ObSysVars[606].max_val_ = "18446744073709551615" ;
-      ObSysVars[606].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[606].id_ = SYS_VAR_DELAYED_INSERT_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAYED_INSERT_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DELAYED_INSERT_LIMIT] = 606 ;
-      ObSysVars[606].base_value_ = "100" ;
-    ObSysVars[606].alias_ = "OB_SV_DELAYED_INSERT_LIMIT" ;
+      ObSysVars[606].default_value_ = "1" ;
+      ObSysVars[606].info_ = "mock for mysql5.7" ;
+      ObSysVars[606].name_ = "have_statement_timeout" ;
+      ObSysVars[606].data_type_ = ObIntType ;
+      ObSysVars[606].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[606].id_ = SYS_VAR_HAVE_STATEMENT_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HAVE_STATEMENT_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_HAVE_STATEMENT_TIMEOUT] = 606 ;
+      ObSysVars[606].base_value_ = "1" ;
+    ObSysVars[606].alias_ = "OB_SV_HAVE_STATEMENT_TIMEOUT" ;
     }();
 
     [&] (){
-      ObSysVars[607].default_value_ = "" ;
-      ObSysVars[607].info_ = "NDB engine version in ndb-x.y.z format" ;
-      ObSysVars[607].name_ = "ndb_version" ;
+      ObSysVars[607].default_value_ = "*" ;
+      ObSysVars[607].info_ = "mock for mysql5.7" ;
+      ObSysVars[607].name_ = "mysqlx_bind_address" ;
       ObSysVars[607].data_type_ = ObVarcharType ;
-      ObSysVars[607].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[607].id_ = SYS_VAR_NDB_VERSION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_VERSION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_VERSION] = 607 ;
-      ObSysVars[607].base_value_ = "" ;
-    ObSysVars[607].alias_ = "OB_SV_NDB_VERSION" ;
+      ObSysVars[607].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[607].id_ = SYS_VAR_MYSQLX_BIND_ADDRESS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_BIND_ADDRESS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_BIND_ADDRESS] = 607 ;
+      ObSysVars[607].base_value_ = "*" ;
+    ObSysVars[607].alias_ = "OB_SV_MYSQLX_BIND_ADDRESS" ;
     }();
 
     [&] (){
-      ObSysVars[608].default_value_ = "1" ;
-      ObSysVars[608].info_ = "This variable is available if the server was compiled using OpenSSL. It controls whether the server autogenerates SSL key and certificate files in the data directory, if they do not already exist" ;
-      ObSysVars[608].name_ = "auto_generate_certs" ;
+      ObSysVars[608].default_value_ = "33060" ;
+      ObSysVars[608].info_ = "mock for mysql5.7" ;
+      ObSysVars[608].name_ = "mysqlx_port" ;
       ObSysVars[608].data_type_ = ObIntType ;
-      ObSysVars[608].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[608].id_ = SYS_VAR_AUTO_GENERATE_CERTS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTO_GENERATE_CERTS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_AUTO_GENERATE_CERTS] = 608 ;
-      ObSysVars[608].base_value_ = "1" ;
-    ObSysVars[608].alias_ = "OB_SV_AUTO_GENERATE_CERTS" ;
+      ObSysVars[608].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[608].id_ = SYS_VAR_MYSQLX_PORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_PORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_PORT] = 608 ;
+      ObSysVars[608].base_value_ = "33060" ;
+    ObSysVars[608].alias_ = "OB_SV_MYSQLX_PORT" ;
     }();
 
     [&] (){
-      ObSysVars[609].default_value_ = "1" ;
-      ObSysVars[609].info_ = "control cost-based transformation search policy" ;
-      ObSysVars[609].name_ = "_optimizer_cost_based_transformation" ;
+      ObSysVars[609].default_value_ = "0" ;
+      ObSysVars[609].info_ = "mock for mysql5.7" ;
+      ObSysVars[609].name_ = "mysqlx_port_open_timeout" ;
       ObSysVars[609].data_type_ = ObIntType ;
-      ObSysVars[609].min_val_ = "0" ;
-      ObSysVars[609].max_val_ = "2" ;
-      ObSysVars[609].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[609].id_ = SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION] = 609 ;
-      ObSysVars[609].base_value_ = "1" ;
-    ObSysVars[609].alias_ = "OB_SV__OPTIMIZER_COST_BASED_TRANSFORMATION" ;
+      ObSysVars[609].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[609].id_ = SYS_VAR_MYSQLX_PORT_OPEN_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_PORT_OPEN_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_PORT_OPEN_TIMEOUT] = 609 ;
+      ObSysVars[609].base_value_ = "0" ;
+    ObSysVars[609].alias_ = "OB_SV_MYSQLX_PORT_OPEN_TIMEOUT" ;
     }();
 
     [&] (){
-      ObSysVars[610].default_value_ = "10" ;
-      ObSysVars[610].info_ = "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation" ;
-      ObSysVars[610].name_ = "range_index_dive_limit" ;
-      ObSysVars[610].data_type_ = ObIntType ;
-      ObSysVars[610].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[610].id_ = SYS_VAR_RANGE_INDEX_DIVE_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_INDEX_DIVE_LIMIT] = 610 ;
-      ObSysVars[610].base_value_ = "10" ;
-    ObSysVars[610].alias_ = "OB_SV_RANGE_INDEX_DIVE_LIMIT" ;
+      ObSysVars[610].default_value_ = "/tmp/mysqlx.sock" ;
+      ObSysVars[610].info_ = "mock for mysql5.7" ;
+      ObSysVars[610].name_ = "mysqlx_socket" ;
+      ObSysVars[610].data_type_ = ObVarcharType ;
+      ObSysVars[610].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[610].id_ = SYS_VAR_MYSQLX_SOCKET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SOCKET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SOCKET] = 610 ;
+      ObSysVars[610].base_value_ = "/tmp/mysqlx.sock" ;
+    ObSysVars[610].alias_ = "OB_SV_MYSQLX_SOCKET" ;
     }();
 
     [&] (){
-      ObSysVars[611].default_value_ = "10" ;
-      ObSysVars[611].info_ = "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation" ;
-      ObSysVars[611].name_ = "partition_index_dive_limit" ;
-      ObSysVars[611].data_type_ = ObIntType ;
-      ObSysVars[611].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[611].id_ = SYS_VAR_PARTITION_INDEX_DIVE_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PARTITION_INDEX_DIVE_LIMIT] = 611 ;
-      ObSysVars[611].base_value_ = "10" ;
-    ObSysVars[611].alias_ = "OB_SV_PARTITION_INDEX_DIVE_LIMIT" ;
+      ObSysVars[611].default_value_ = "" ;
+      ObSysVars[611].info_ = "mock for mysql5.7" ;
+      ObSysVars[611].name_ = "mysqlx_ssl_ca" ;
+      ObSysVars[611].data_type_ = ObVarcharType ;
+      ObSysVars[611].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[611].id_ = SYS_VAR_MYSQLX_SSL_CA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_CA] = 611 ;
+      ObSysVars[611].base_value_ = "" ;
+    ObSysVars[611].alias_ = "OB_SV_MYSQLX_SSL_CA" ;
     }();
 
     [&] (){
-      ObSysVars[612].default_value_ = "2" ;
-      ObSysVars[612].info_ = "Control the optimizer to generate a table access plan that prefers a specific storage format." ;
-      ObSysVars[612].name_ = "ob_table_access_policy" ;
-      ObSysVars[612].data_type_ = ObIntType ;
-      ObSysVars[612].enum_names_ = "[u'ROW_STORE', u'COLUMN_STORE', u'AUTO']" ;
-      ObSysVars[612].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[612].id_ = SYS_VAR_OB_TABLE_ACCESS_POLICY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TABLE_ACCESS_POLICY] = 612 ;
-      ObSysVars[612].base_value_ = "2" ;
-    ObSysVars[612].alias_ = "OB_SV_TABLE_ACCESS_POLICY" ;
+      ObSysVars[612].default_value_ = "" ;
+      ObSysVars[612].info_ = "mock for mysql5.7" ;
+      ObSysVars[612].name_ = "mysqlx_ssl_capath" ;
+      ObSysVars[612].data_type_ = ObVarcharType ;
+      ObSysVars[612].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[612].id_ = SYS_VAR_MYSQLX_SSL_CAPATH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CAPATH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_CAPATH] = 612 ;
+      ObSysVars[612].base_value_ = "" ;
+    ObSysVars[612].alias_ = "OB_SV_MYSQLX_SSL_CAPATH" ;
     }();
 
     [&] (){
-      ObSysVars[613].default_value_ = "3" ;
-      ObSysVars[613].info_ = "The path name of the file in which the server writes its process ID" ;
-      ObSysVars[613].name_ = "pid_file" ;
+      ObSysVars[613].default_value_ = "" ;
+      ObSysVars[613].info_ = "mock for mysql5.7" ;
+      ObSysVars[613].name_ = "mysqlx_ssl_cert" ;
       ObSysVars[613].data_type_ = ObVarcharType ;
       ObSysVars[613].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[613].id_ = SYS_VAR_PID_FILE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PID_FILE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PID_FILE] = 613 ;
-      ObSysVars[613].base_value_ = "3" ;
-    ObSysVars[613].alias_ = "OB_SV_PID_FILE" ;
+      ObSysVars[613].id_ = SYS_VAR_MYSQLX_SSL_CERT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CERT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_CERT] = 613 ;
+      ObSysVars[613].base_value_ = "" ;
+    ObSysVars[613].alias_ = "OB_SV_MYSQLX_SSL_CERT" ;
     }();
 
     [&] (){
-      ObSysVars[614].default_value_ = "3" ;
-      ObSysVars[614].info_ = "The number of the port on which the server listens for TCP/IP connections" ;
-      ObSysVars[614].name_ = "port" ;
-      ObSysVars[614].data_type_ = ObIntType ;
+      ObSysVars[614].default_value_ = "" ;
+      ObSysVars[614].info_ = "mock for mysql5.7" ;
+      ObSysVars[614].name_ = "mysqlx_ssl_cipher" ;
+      ObSysVars[614].data_type_ = ObVarcharType ;
       ObSysVars[614].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[614].id_ = SYS_VAR_PORT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PORT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PORT] = 614 ;
-      ObSysVars[614].base_value_ = "3" ;
-    ObSysVars[614].alias_ = "OB_SV_PORT" ;
+      ObSysVars[614].id_ = SYS_VAR_MYSQLX_SSL_CIPHER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CIPHER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_CIPHER] = 614 ;
+      ObSysVars[614].base_value_ = "" ;
+    ObSysVars[614].alias_ = "OB_SV_MYSQLX_SSL_CIPHER" ;
     }();
 
     [&] (){
-      ObSysVars[615].default_value_ = "3" ;
-      ObSysVars[615].info_ = "the name of the socket file that is used for local client connections" ;
-      ObSysVars[615].name_ = "socket" ;
+      ObSysVars[615].default_value_ = "" ;
+      ObSysVars[615].info_ = "mock for mysql5.7" ;
+      ObSysVars[615].name_ = "mysqlx_ssl_crl" ;
       ObSysVars[615].data_type_ = ObVarcharType ;
       ObSysVars[615].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[615].id_ = SYS_VAR_SOCKET ;
+      ObSysVars[615].id_ = SYS_VAR_MYSQLX_SSL_CRL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CRL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_CRL] = 615 ;
+      ObSysVars[615].base_value_ = "" ;
+    ObSysVars[615].alias_ = "OB_SV_MYSQLX_SSL_CRL" ;
+    }();
+
+    [&] (){
+      ObSysVars[616].default_value_ = "" ;
+      ObSysVars[616].info_ = "mock for mysql5.7" ;
+      ObSysVars[616].name_ = "mysqlx_ssl_crlpath" ;
+      ObSysVars[616].data_type_ = ObVarcharType ;
+      ObSysVars[616].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[616].id_ = SYS_VAR_MYSQLX_SSL_CRLPATH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_CRLPATH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_CRLPATH] = 616 ;
+      ObSysVars[616].base_value_ = "" ;
+    ObSysVars[616].alias_ = "OB_SV_MYSQLX_SSL_CRLPATH" ;
+    }();
+
+    [&] (){
+      ObSysVars[617].default_value_ = "" ;
+      ObSysVars[617].info_ = "mock for mysql5.7" ;
+      ObSysVars[617].name_ = "mysqlx_ssl_key" ;
+      ObSysVars[617].data_type_ = ObVarcharType ;
+      ObSysVars[617].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[617].id_ = SYS_VAR_MYSQLX_SSL_KEY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQLX_SSL_KEY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQLX_SSL_KEY] = 617 ;
+      ObSysVars[617].base_value_ = "" ;
+    ObSysVars[617].alias_ = "OB_SV_MYSQLX_SSL_KEY" ;
+    }();
+
+    [&] (){
+      ObSysVars[618].default_value_ = "0" ;
+      ObSysVars[618].info_ = "mock for mysql5.7" ;
+      ObSysVars[618].name_ = "old" ;
+      ObSysVars[618].data_type_ = ObIntType ;
+      ObSysVars[618].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[618].id_ = SYS_VAR_OLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OLD] = 618 ;
+      ObSysVars[618].base_value_ = "0" ;
+    ObSysVars[618].alias_ = "OB_SV_OLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[619].default_value_ = "-1" ;
+      ObSysVars[619].info_ = "mock for mysql5.7" ;
+      ObSysVars[619].name_ = "performance_schema_accounts_size" ;
+      ObSysVars[619].data_type_ = ObIntType ;
+      ObSysVars[619].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[619].id_ = SYS_VAR_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE] = 619 ;
+      ObSysVars[619].base_value_ = "-1" ;
+    ObSysVars[619].alias_ = "OB_SV_PERFORMANCE_SCHEMA_ACCOUNTS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[620].default_value_ = "10000" ;
+      ObSysVars[620].info_ = "mock for mysql5.7" ;
+      ObSysVars[620].name_ = "performance_schema_digests_size" ;
+      ObSysVars[620].data_type_ = ObIntType ;
+      ObSysVars[620].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[620].id_ = SYS_VAR_PERFORMANCE_SCHEMA_DIGESTS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_DIGESTS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_DIGESTS_SIZE] = 620 ;
+      ObSysVars[620].base_value_ = "10000" ;
+    ObSysVars[620].alias_ = "OB_SV_PERFORMANCE_SCHEMA_DIGESTS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[621].default_value_ = "10000" ;
+      ObSysVars[621].info_ = "mock for mysql5.7" ;
+      ObSysVars[621].name_ = "performance_schema_events_stages_history_long_size" ;
+      ObSysVars[621].data_type_ = ObIntType ;
+      ObSysVars[621].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[621].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE] = 621 ;
+      ObSysVars[621].base_value_ = "10000" ;
+    ObSysVars[621].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_LONG_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[622].default_value_ = "10" ;
+      ObSysVars[622].info_ = "mock for mysql5.7" ;
+      ObSysVars[622].name_ = "performance_schema_events_stages_history_size" ;
+      ObSysVars[622].data_type_ = ObIntType ;
+      ObSysVars[622].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[622].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE] = 622 ;
+      ObSysVars[622].base_value_ = "10" ;
+    ObSysVars[622].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_STAGES_HISTORY_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[623].default_value_ = "10000" ;
+      ObSysVars[623].info_ = "mock for mysql5.7" ;
+      ObSysVars[623].name_ = "performance_schema_events_statements_history_long_size" ;
+      ObSysVars[623].data_type_ = ObIntType ;
+      ObSysVars[623].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[623].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE] = 623 ;
+      ObSysVars[623].base_value_ = "10000" ;
+    ObSysVars[623].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_LONG_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[624].default_value_ = "10" ;
+      ObSysVars[624].info_ = "mock for mysql5.7" ;
+      ObSysVars[624].name_ = "performance_schema_events_statements_history_size" ;
+      ObSysVars[624].data_type_ = ObIntType ;
+      ObSysVars[624].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[624].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE] = 624 ;
+      ObSysVars[624].base_value_ = "10" ;
+    ObSysVars[624].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_STATEMENTS_HISTORY_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[625].default_value_ = "10000" ;
+      ObSysVars[625].info_ = "mock for mysql5.7" ;
+      ObSysVars[625].name_ = "performance_schema_events_transactions_history_long_size" ;
+      ObSysVars[625].data_type_ = ObIntType ;
+      ObSysVars[625].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[625].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE] = 625 ;
+      ObSysVars[625].base_value_ = "10000" ;
+    ObSysVars[625].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_LONG_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[626].default_value_ = "10" ;
+      ObSysVars[626].info_ = "mock for mysql5.7" ;
+      ObSysVars[626].name_ = "performance_schema_events_transactions_history_size" ;
+      ObSysVars[626].data_type_ = ObIntType ;
+      ObSysVars[626].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[626].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE] = 626 ;
+      ObSysVars[626].base_value_ = "10" ;
+    ObSysVars[626].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_TRANSACTIONS_HISTORY_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[627].default_value_ = "10000" ;
+      ObSysVars[627].info_ = "mock for mysql5.7" ;
+      ObSysVars[627].name_ = "performance_schema_events_waits_history_long_size" ;
+      ObSysVars[627].data_type_ = ObIntType ;
+      ObSysVars[627].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[627].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE] = 627 ;
+      ObSysVars[627].base_value_ = "10000" ;
+    ObSysVars[627].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_LONG_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[628].default_value_ = "10" ;
+      ObSysVars[628].info_ = "mock for mysql5.7" ;
+      ObSysVars[628].name_ = "performance_schema_events_waits_history_size" ;
+      ObSysVars[628].data_type_ = ObIntType ;
+      ObSysVars[628].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[628].id_ = SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE] = 628 ;
+      ObSysVars[628].base_value_ = "10" ;
+    ObSysVars[628].alias_ = "OB_SV_PERFORMANCE_SCHEMA_EVENTS_WAITS_HISTORY_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[629].default_value_ = "-1" ;
+      ObSysVars[629].info_ = "mock for mysql5.7" ;
+      ObSysVars[629].name_ = "performance_schema_hosts_size" ;
+      ObSysVars[629].data_type_ = ObIntType ;
+      ObSysVars[629].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[629].id_ = SYS_VAR_PERFORMANCE_SCHEMA_HOSTS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_HOSTS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_HOSTS_SIZE] = 629 ;
+      ObSysVars[629].base_value_ = "-1" ;
+    ObSysVars[629].alias_ = "OB_SV_PERFORMANCE_SCHEMA_HOSTS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[630].default_value_ = "80" ;
+      ObSysVars[630].info_ = "mock for mysql5.7" ;
+      ObSysVars[630].name_ = "performance_schema_max_cond_classes" ;
+      ObSysVars[630].data_type_ = ObIntType ;
+      ObSysVars[630].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[630].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_CLASSES] = 630 ;
+      ObSysVars[630].base_value_ = "80" ;
+    ObSysVars[630].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_COND_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[631].default_value_ = "-1" ;
+      ObSysVars[631].info_ = "mock for mysql5.7" ;
+      ObSysVars[631].name_ = "performance_schema_max_cond_instances" ;
+      ObSysVars[631].data_type_ = ObIntType ;
+      ObSysVars[631].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[631].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES] = 631 ;
+      ObSysVars[631].base_value_ = "-1" ;
+    ObSysVars[631].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_COND_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[632].default_value_ = "1024" ;
+      ObSysVars[632].info_ = "mock for mysql5.7" ;
+      ObSysVars[632].name_ = "performance_schema_max_digest_length" ;
+      ObSysVars[632].data_type_ = ObIntType ;
+      ObSysVars[632].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[632].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH] = 632 ;
+      ObSysVars[632].base_value_ = "1024" ;
+    ObSysVars[632].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_DIGEST_LENGTH" ;
+    }();
+
+    [&] (){
+      ObSysVars[633].default_value_ = "80" ;
+      ObSysVars[633].info_ = "mock for mysql5.7" ;
+      ObSysVars[633].name_ = "performance_schema_max_file_classes" ;
+      ObSysVars[633].data_type_ = ObIntType ;
+      ObSysVars[633].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[633].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES] = 633 ;
+      ObSysVars[633].base_value_ = "80" ;
+    ObSysVars[633].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_FILE_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[634].default_value_ = "32768" ;
+      ObSysVars[634].info_ = "mock for mysql5.7" ;
+      ObSysVars[634].name_ = "performance_schema_max_file_handles" ;
+      ObSysVars[634].data_type_ = ObIntType ;
+      ObSysVars[634].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[634].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES] = 634 ;
+      ObSysVars[634].base_value_ = "32768" ;
+    ObSysVars[634].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_FILE_HANDLES" ;
+    }();
+
+    [&] (){
+      ObSysVars[635].default_value_ = "-1" ;
+      ObSysVars[635].info_ = "mock for mysql5.7" ;
+      ObSysVars[635].name_ = "performance_schema_max_file_instances" ;
+      ObSysVars[635].data_type_ = ObIntType ;
+      ObSysVars[635].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[635].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES] = 635 ;
+      ObSysVars[635].base_value_ = "-1" ;
+    ObSysVars[635].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_FILE_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[636].default_value_ = "-1" ;
+      ObSysVars[636].info_ = "mock for mysql5.7" ;
+      ObSysVars[636].name_ = "performance_schema_max_index_stat" ;
+      ObSysVars[636].data_type_ = ObIntType ;
+      ObSysVars[636].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[636].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_INDEX_STAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_INDEX_STAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_INDEX_STAT] = 636 ;
+      ObSysVars[636].base_value_ = "-1" ;
+    ObSysVars[636].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_INDEX_STAT" ;
+    }();
+
+    [&] (){
+      ObSysVars[637].default_value_ = "320" ;
+      ObSysVars[637].info_ = "mock for mysql5.7" ;
+      ObSysVars[637].name_ = "performance_schema_max_memory_classes" ;
+      ObSysVars[637].data_type_ = ObIntType ;
+      ObSysVars[637].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[637].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES] = 637 ;
+      ObSysVars[637].base_value_ = "320" ;
+    ObSysVars[637].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_MEMORY_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[638].default_value_ = "-1" ;
+      ObSysVars[638].info_ = "mock for mysql5.7" ;
+      ObSysVars[638].name_ = "performance_schema_max_metadata_locks" ;
+      ObSysVars[638].data_type_ = ObIntType ;
+      ObSysVars[638].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[638].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS] = 638 ;
+      ObSysVars[638].base_value_ = "-1" ;
+    ObSysVars[638].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_METADATA_LOCKS" ;
+    }();
+
+    [&] (){
+      ObSysVars[639].default_value_ = "210" ;
+      ObSysVars[639].info_ = "mock for mysql5.7" ;
+      ObSysVars[639].name_ = "performance_schema_max_mutex_classes" ;
+      ObSysVars[639].data_type_ = ObIntType ;
+      ObSysVars[639].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[639].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES] = 639 ;
+      ObSysVars[639].base_value_ = "210" ;
+    ObSysVars[639].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_MUTEX_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[640].default_value_ = "-1" ;
+      ObSysVars[640].info_ = "mock for mysql5.7" ;
+      ObSysVars[640].name_ = "performance_schema_max_mutex_instances" ;
+      ObSysVars[640].data_type_ = ObIntType ;
+      ObSysVars[640].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[640].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES] = 640 ;
+      ObSysVars[640].base_value_ = "-1" ;
+    ObSysVars[640].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_MUTEX_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[641].default_value_ = "-1" ;
+      ObSysVars[641].info_ = "mock for mysql5.7" ;
+      ObSysVars[641].name_ = "performance_schema_max_prepared_statements_instances" ;
+      ObSysVars[641].data_type_ = ObIntType ;
+      ObSysVars[641].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[641].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES] = 641 ;
+      ObSysVars[641].base_value_ = "-1" ;
+    ObSysVars[641].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_PREPARED_STATEMENTS_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[642].default_value_ = "-1" ;
+      ObSysVars[642].info_ = "mock for mysql5.7" ;
+      ObSysVars[642].name_ = "performance_schema_max_program_instances" ;
+      ObSysVars[642].data_type_ = ObIntType ;
+      ObSysVars[642].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[642].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES] = 642 ;
+      ObSysVars[642].base_value_ = "-1" ;
+    ObSysVars[642].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_PROGRAM_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[643].default_value_ = "50" ;
+      ObSysVars[643].info_ = "mock for mysql5.7" ;
+      ObSysVars[643].name_ = "performance_schema_max_rwlock_classes" ;
+      ObSysVars[643].data_type_ = ObIntType ;
+      ObSysVars[643].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[643].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES] = 643 ;
+      ObSysVars[643].base_value_ = "50" ;
+    ObSysVars[643].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_RWLOCK_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[644].default_value_ = "-1" ;
+      ObSysVars[644].info_ = "mock for mysql5.7" ;
+      ObSysVars[644].name_ = "performance_schema_max_rwlock_instances" ;
+      ObSysVars[644].data_type_ = ObIntType ;
+      ObSysVars[644].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[644].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES] = 644 ;
+      ObSysVars[644].base_value_ = "-1" ;
+    ObSysVars[644].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_RWLOCK_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[645].default_value_ = "10" ;
+      ObSysVars[645].info_ = "mock for mysql5.7" ;
+      ObSysVars[645].name_ = "performance_schema_max_socket_classes" ;
+      ObSysVars[645].data_type_ = ObIntType ;
+      ObSysVars[645].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[645].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES] = 645 ;
+      ObSysVars[645].base_value_ = "10" ;
+    ObSysVars[645].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_SOCKET_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[646].default_value_ = "-1" ;
+      ObSysVars[646].info_ = "mock for mysql5.7" ;
+      ObSysVars[646].name_ = "performance_schema_max_socket_instances" ;
+      ObSysVars[646].data_type_ = ObIntType ;
+      ObSysVars[646].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[646].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES] = 646 ;
+      ObSysVars[646].base_value_ = "-1" ;
+    ObSysVars[646].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_SOCKET_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[647].default_value_ = "1024" ;
+      ObSysVars[647].info_ = "mock for mysql5.7" ;
+      ObSysVars[647].name_ = "performance_schema_max_sql_text_length" ;
+      ObSysVars[647].data_type_ = ObIntType ;
+      ObSysVars[647].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[647].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH] = 647 ;
+      ObSysVars[647].base_value_ = "1024" ;
+    ObSysVars[647].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_SQL_TEXT_LENGTH" ;
+    }();
+
+    [&] (){
+      ObSysVars[648].default_value_ = "150" ;
+      ObSysVars[648].info_ = "mock for mysql5.7" ;
+      ObSysVars[648].name_ = "performance_schema_max_stage_classes" ;
+      ObSysVars[648].data_type_ = ObIntType ;
+      ObSysVars[648].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[648].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES] = 648 ;
+      ObSysVars[648].base_value_ = "150" ;
+    ObSysVars[648].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_STAGE_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[649].default_value_ = "193" ;
+      ObSysVars[649].info_ = "mock for mysql5.7" ;
+      ObSysVars[649].name_ = "performance_schema_max_statement_classes" ;
+      ObSysVars[649].data_type_ = ObIntType ;
+      ObSysVars[649].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[649].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES] = 649 ;
+      ObSysVars[649].base_value_ = "193" ;
+    ObSysVars[649].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_STATEMENT_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[650].default_value_ = "10" ;
+      ObSysVars[650].info_ = "mock for mysql5.7" ;
+      ObSysVars[650].name_ = "performance_schema_max_statement_stack" ;
+      ObSysVars[650].data_type_ = ObIntType ;
+      ObSysVars[650].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[650].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK] = 650 ;
+      ObSysVars[650].base_value_ = "10" ;
+    ObSysVars[650].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_STATEMENT_STACK" ;
+    }();
+
+    [&] (){
+      ObSysVars[651].default_value_ = "-1" ;
+      ObSysVars[651].info_ = "mock for mysql5.7" ;
+      ObSysVars[651].name_ = "performance_schema_max_table_handles" ;
+      ObSysVars[651].data_type_ = ObIntType ;
+      ObSysVars[651].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[651].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES] = 651 ;
+      ObSysVars[651].base_value_ = "-1" ;
+    ObSysVars[651].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_TABLE_HANDLES" ;
+    }();
+
+    [&] (){
+      ObSysVars[652].default_value_ = "-1" ;
+      ObSysVars[652].info_ = "mock for mysql5.7" ;
+      ObSysVars[652].name_ = "performance_schema_max_table_instances" ;
+      ObSysVars[652].data_type_ = ObIntType ;
+      ObSysVars[652].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[652].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES] = 652 ;
+      ObSysVars[652].base_value_ = "-1" ;
+    ObSysVars[652].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_TABLE_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[653].default_value_ = "-1" ;
+      ObSysVars[653].info_ = "mock for mysql5.7" ;
+      ObSysVars[653].name_ = "performance_schema_max_table_lock_stat" ;
+      ObSysVars[653].data_type_ = ObIntType ;
+      ObSysVars[653].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[653].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT] = 653 ;
+      ObSysVars[653].base_value_ = "-1" ;
+    ObSysVars[653].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_TABLE_LOCK_STAT" ;
+    }();
+
+    [&] (){
+      ObSysVars[654].default_value_ = "50" ;
+      ObSysVars[654].info_ = "mock for mysql5.7" ;
+      ObSysVars[654].name_ = "performance_schema_max_thread_classes" ;
+      ObSysVars[654].data_type_ = ObIntType ;
+      ObSysVars[654].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[654].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES] = 654 ;
+      ObSysVars[654].base_value_ = "50" ;
+    ObSysVars[654].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_THREAD_CLASSES" ;
+    }();
+
+    [&] (){
+      ObSysVars[655].default_value_ = "-1" ;
+      ObSysVars[655].info_ = "mock for mysql5.7" ;
+      ObSysVars[655].name_ = "performance_schema_max_thread_instances" ;
+      ObSysVars[655].data_type_ = ObIntType ;
+      ObSysVars[655].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[655].id_ = SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES] = 655 ;
+      ObSysVars[655].base_value_ = "-1" ;
+    ObSysVars[655].alias_ = "OB_SV_PERFORMANCE_SCHEMA_MAX_THREAD_INSTANCES" ;
+    }();
+
+    [&] (){
+      ObSysVars[656].default_value_ = "512" ;
+      ObSysVars[656].info_ = "mock for mysql5.7" ;
+      ObSysVars[656].name_ = "performance_schema_session_connect_attrs_size" ;
+      ObSysVars[656].data_type_ = ObIntType ;
+      ObSysVars[656].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[656].id_ = SYS_VAR_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE] = 656 ;
+      ObSysVars[656].base_value_ = "512" ;
+    ObSysVars[656].alias_ = "OB_SV_PERFORMANCE_SCHEMA_SESSION_CONNECT_ATTRS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[657].default_value_ = "-1" ;
+      ObSysVars[657].info_ = "mock for mysql5.7" ;
+      ObSysVars[657].name_ = "performance_schema_setup_actors_size" ;
+      ObSysVars[657].data_type_ = ObIntType ;
+      ObSysVars[657].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[657].id_ = SYS_VAR_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE] = 657 ;
+      ObSysVars[657].base_value_ = "-1" ;
+    ObSysVars[657].alias_ = "OB_SV_PERFORMANCE_SCHEMA_SETUP_ACTORS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[658].default_value_ = "-1" ;
+      ObSysVars[658].info_ = "mock for mysql5.7" ;
+      ObSysVars[658].name_ = "performance_schema_setup_objects_size" ;
+      ObSysVars[658].data_type_ = ObIntType ;
+      ObSysVars[658].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[658].id_ = SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE] = 658 ;
+      ObSysVars[658].base_value_ = "-1" ;
+    ObSysVars[658].alias_ = "OB_SV_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[659].default_value_ = "-1" ;
+      ObSysVars[659].info_ = "mock for mysql5.7" ;
+      ObSysVars[659].name_ = "performance_schema_users_size" ;
+      ObSysVars[659].data_type_ = ObIntType ;
+      ObSysVars[659].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[659].id_ = SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE] = 659 ;
+      ObSysVars[659].base_value_ = "-1" ;
+    ObSysVars[659].alias_ = "OB_SV_PERFORMANCE_SCHEMA_USERS_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[660].default_value_ = "0" ;
+      ObSysVars[660].info_ = "mock for mysql5.7" ;
+      ObSysVars[660].name_ = "version_tokens_session_number" ;
+      ObSysVars[660].data_type_ = ObIntType ;
+      ObSysVars[660].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[660].id_ = SYS_VAR_VERSION_TOKENS_SESSION_NUMBER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VERSION_TOKENS_SESSION_NUMBER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VERSION_TOKENS_SESSION_NUMBER] = 660 ;
+      ObSysVars[660].base_value_ = "0" ;
+    ObSysVars[660].alias_ = "OB_SV_VERSION_TOKENS_SESSION_NUMBER" ;
+    }();
+
+    [&] (){
+      ObSysVars[661].default_value_ = "80" ;
+      ObSysVars[661].info_ = "mock for mysql5.7" ;
+      ObSysVars[661].name_ = "back_log" ;
+      ObSysVars[661].data_type_ = ObIntType ;
+      ObSysVars[661].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[661].id_ = SYS_VAR_BACK_LOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BACK_LOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BACK_LOG] = 661 ;
+      ObSysVars[661].base_value_ = "80" ;
+    ObSysVars[661].alias_ = "OB_SV_BACK_LOG" ;
+    }();
+
+    [&] (){
+      ObSysVars[662].default_value_ = "/usr/local/mysql/" ;
+      ObSysVars[662].info_ = "mock for mysql5.7" ;
+      ObSysVars[662].name_ = "basedir" ;
+      ObSysVars[662].data_type_ = ObVarcharType ;
+      ObSysVars[662].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[662].id_ = SYS_VAR_BASEDIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BASEDIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BASEDIR] = 662 ;
+      ObSysVars[662].base_value_ = "/usr/local/mysql/" ;
+    ObSysVars[662].alias_ = "OB_SV_BASEDIR" ;
+    }();
+
+    [&] (){
+      ObSysVars[663].default_value_ = "*" ;
+      ObSysVars[663].info_ = "mock for mysql5.7" ;
+      ObSysVars[663].name_ = "bind_address" ;
+      ObSysVars[663].data_type_ = ObVarcharType ;
+      ObSysVars[663].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[663].id_ = SYS_VAR_BIND_ADDRESS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BIND_ADDRESS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BIND_ADDRESS] = 663 ;
+      ObSysVars[663].base_value_ = "*" ;
+    ObSysVars[663].alias_ = "OB_SV_BIND_ADDRESS" ;
+    }();
+
+    [&] (){
+      ObSysVars[664].default_value_ = "0" ;
+      ObSysVars[664].info_ = "mock for mysql5.7" ;
+      ObSysVars[664].name_ = "core_file" ;
+      ObSysVars[664].data_type_ = ObIntType ;
+      ObSysVars[664].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[664].id_ = SYS_VAR_CORE_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CORE_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CORE_FILE] = 664 ;
+      ObSysVars[664].base_value_ = "0" ;
+    ObSysVars[664].alias_ = "OB_SV_CORE_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[665].default_value_ = "1" ;
+      ObSysVars[665].info_ = "mock for mysql5.7" ;
+      ObSysVars[665].name_ = "have_compress" ;
+      ObSysVars[665].data_type_ = ObIntType ;
+      ObSysVars[665].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[665].id_ = SYS_VAR_HAVE_COMPRESS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HAVE_COMPRESS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_HAVE_COMPRESS] = 665 ;
+      ObSysVars[665].base_value_ = "1" ;
+    ObSysVars[665].alias_ = "OB_SV_HAVE_COMPRESS" ;
+    }();
+
+    [&] (){
+      ObSysVars[666].default_value_ = "null" ;
+      ObSysVars[666].info_ = "mock for mysql5.7" ;
+      ObSysVars[666].name_ = "ignore_db_dirs" ;
+      ObSysVars[666].data_type_ = ObVarcharType ;
+      ObSysVars[666].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[666].id_ = SYS_VAR_IGNORE_DB_DIRS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_IGNORE_DB_DIRS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_IGNORE_DB_DIRS] = 666 ;
+      ObSysVars[666].base_value_ = "null" ;
+    ObSysVars[666].alias_ = "OB_SV_IGNORE_DB_DIRS" ;
+    }();
+
+    [&] (){
+      ObSysVars[667].default_value_ = "null" ;
+      ObSysVars[667].info_ = "mock for mysql5.7" ;
+      ObSysVars[667].name_ = "init_file" ;
+      ObSysVars[667].data_type_ = ObVarcharType ;
+      ObSysVars[667].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[667].id_ = SYS_VAR_INIT_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INIT_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INIT_FILE] = 667 ;
+      ObSysVars[667].base_value_ = "null" ;
+    ObSysVars[667].alias_ = "OB_SV_INIT_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[668].default_value_ = "0" ;
+      ObSysVars[668].info_ = "mock for mysql5.7" ;
+      ObSysVars[668].name_ = "innodb_numa_interleave" ;
+      ObSysVars[668].data_type_ = ObIntType ;
+      ObSysVars[668].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[668].id_ = SYS_VAR_INNODB_NUMA_INTERLEAVE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_NUMA_INTERLEAVE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_NUMA_INTERLEAVE] = 668 ;
+      ObSysVars[668].base_value_ = "0" ;
+    ObSysVars[668].alias_ = "OB_SV_INNODB_NUMA_INTERLEAVE" ;
+    }();
+
+    [&] (){
+      ObSysVars[669].default_value_ = "2000" ;
+      ObSysVars[669].info_ = "mock for mysql5.7" ;
+      ObSysVars[669].name_ = "innodb_open_files" ;
+      ObSysVars[669].data_type_ = ObIntType ;
+      ObSysVars[669].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[669].id_ = SYS_VAR_INNODB_OPEN_FILES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_OPEN_FILES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_OPEN_FILES] = 669 ;
+      ObSysVars[669].base_value_ = "2000" ;
+    ObSysVars[669].alias_ = "OB_SV_INNODB_OPEN_FILES" ;
+    }();
+
+    [&] (){
+      ObSysVars[670].default_value_ = "1" ;
+      ObSysVars[670].info_ = "mock for mysql5.7" ;
+      ObSysVars[670].name_ = "innodb_page_cleaners" ;
+      ObSysVars[670].data_type_ = ObIntType ;
+      ObSysVars[670].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[670].id_ = SYS_VAR_INNODB_PAGE_CLEANERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_PAGE_CLEANERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_PAGE_CLEANERS] = 670 ;
+      ObSysVars[670].base_value_ = "1" ;
+    ObSysVars[670].alias_ = "OB_SV_INNODB_PAGE_CLEANERS" ;
+    }();
+
+    [&] (){
+      ObSysVars[671].default_value_ = "4" ;
+      ObSysVars[671].info_ = "mock for mysql5.7" ;
+      ObSysVars[671].name_ = "innodb_purge_threads" ;
+      ObSysVars[671].data_type_ = ObIntType ;
+      ObSysVars[671].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[671].id_ = SYS_VAR_INNODB_PURGE_THREADS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_PURGE_THREADS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_PURGE_THREADS] = 671 ;
+      ObSysVars[671].base_value_ = "4" ;
+    ObSysVars[671].alias_ = "OB_SV_INNODB_PURGE_THREADS" ;
+    }();
+
+    [&] (){
+      ObSysVars[672].default_value_ = "4" ;
+      ObSysVars[672].info_ = "mock for mysql5.7" ;
+      ObSysVars[672].name_ = "innodb_read_io_threads" ;
+      ObSysVars[672].data_type_ = ObIntType ;
+      ObSysVars[672].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[672].id_ = SYS_VAR_INNODB_READ_IO_THREADS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_READ_IO_THREADS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_READ_IO_THREADS] = 672 ;
+      ObSysVars[672].base_value_ = "4" ;
+    ObSysVars[672].alias_ = "OB_SV_INNODB_READ_IO_THREADS" ;
+    }();
+
+    [&] (){
+      ObSysVars[673].default_value_ = "1" ;
+      ObSysVars[673].info_ = "mock for mysql5.7" ;
+      ObSysVars[673].name_ = "innodb_sync_array_size" ;
+      ObSysVars[673].data_type_ = ObIntType ;
+      ObSysVars[673].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[673].id_ = SYS_VAR_INNODB_SYNC_ARRAY_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SYNC_ARRAY_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SYNC_ARRAY_SIZE] = 673 ;
+      ObSysVars[673].base_value_ = "1" ;
+    ObSysVars[673].alias_ = "OB_SV_INNODB_SYNC_ARRAY_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[674].default_value_ = "1" ;
+      ObSysVars[674].info_ = "mock for mysql5.7" ;
+      ObSysVars[674].name_ = "innodb_use_native_aio" ;
+      ObSysVars[674].data_type_ = ObIntType ;
+      ObSysVars[674].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[674].id_ = SYS_VAR_INNODB_USE_NATIVE_AIO ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_USE_NATIVE_AIO)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_USE_NATIVE_AIO] = 674 ;
+      ObSysVars[674].base_value_ = "1" ;
+    ObSysVars[674].alias_ = "OB_SV_INNODB_USE_NATIVE_AIO" ;
+    }();
+
+    [&] (){
+      ObSysVars[675].default_value_ = "4" ;
+      ObSysVars[675].info_ = "mock for mysql5.7" ;
+      ObSysVars[675].name_ = "innodb_write_io_threads" ;
+      ObSysVars[675].data_type_ = ObIntType ;
+      ObSysVars[675].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[675].id_ = SYS_VAR_INNODB_WRITE_IO_THREADS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_WRITE_IO_THREADS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_WRITE_IO_THREADS] = 675 ;
+      ObSysVars[675].base_value_ = "4" ;
+    ObSysVars[675].alias_ = "OB_SV_INNODB_WRITE_IO_THREADS" ;
+    }();
+
+    [&] (){
+      ObSysVars[676].default_value_ = "1" ;
+      ObSysVars[676].info_ = "mock for mysql5.7" ;
+      ObSysVars[676].name_ = "large_files_support" ;
+      ObSysVars[676].data_type_ = ObIntType ;
+      ObSysVars[676].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[676].id_ = SYS_VAR_LARGE_FILES_SUPPORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LARGE_FILES_SUPPORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LARGE_FILES_SUPPORT] = 676 ;
+      ObSysVars[676].base_value_ = "1" ;
+    ObSysVars[676].alias_ = "OB_SV_LARGE_FILES_SUPPORT" ;
+    }();
+
+    [&] (){
+      ObSysVars[677].default_value_ = "0" ;
+      ObSysVars[677].info_ = "mock for mysql5.7" ;
+      ObSysVars[677].name_ = "large_pages" ;
+      ObSysVars[677].data_type_ = ObIntType ;
+      ObSysVars[677].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[677].id_ = SYS_VAR_LARGE_PAGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LARGE_PAGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LARGE_PAGES] = 677 ;
+      ObSysVars[677].base_value_ = "0" ;
+    ObSysVars[677].alias_ = "OB_SV_LARGE_PAGES" ;
+    }();
+
+    [&] (){
+      ObSysVars[678].default_value_ = "0" ;
+      ObSysVars[678].info_ = "mock for mysql5.7" ;
+      ObSysVars[678].name_ = "large_page_size" ;
+      ObSysVars[678].data_type_ = ObIntType ;
+      ObSysVars[678].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[678].id_ = SYS_VAR_LARGE_PAGE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LARGE_PAGE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LARGE_PAGE_SIZE] = 678 ;
+      ObSysVars[678].base_value_ = "0" ;
+    ObSysVars[678].alias_ = "OB_SV_LARGE_PAGE_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[679].default_value_ = "0" ;
+      ObSysVars[679].info_ = "mock for mysql5.7" ;
+      ObSysVars[679].name_ = "locked_in_memory" ;
+      ObSysVars[679].data_type_ = ObIntType ;
+      ObSysVars[679].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[679].id_ = SYS_VAR_LOCKED_IN_MEMORY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOCKED_IN_MEMORY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOCKED_IN_MEMORY] = 679 ;
+      ObSysVars[679].base_value_ = "0" ;
+    ObSysVars[679].alias_ = "OB_SV_LOCKED_IN_MEMORY" ;
+    }();
+
+    [&] (){
+      ObSysVars[680].default_value_ = "./obrd.16c.vd3-s2h6-n3.err" ;
+      ObSysVars[680].info_ = "mock for mysql5.7" ;
+      ObSysVars[680].name_ = "log_error" ;
+      ObSysVars[680].data_type_ = ObVarcharType ;
+      ObSysVars[680].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[680].id_ = SYS_VAR_LOG_ERROR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_ERROR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_ERROR] = 680 ;
+      ObSysVars[680].base_value_ = "./obrd.16c.vd3-s2h6-n3.err" ;
+    ObSysVars[680].alias_ = "OB_SV_LOG_ERROR" ;
+    }();
+
+    [&] (){
+      ObSysVars[681].default_value_ = "0" ;
+      ObSysVars[681].info_ = "mock for mysql5.7" ;
+      ObSysVars[681].name_ = "named_pipe" ;
+      ObSysVars[681].data_type_ = ObIntType ;
+      ObSysVars[681].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[681].id_ = SYS_VAR_NAMED_PIPE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NAMED_PIPE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NAMED_PIPE] = 681 ;
+      ObSysVars[681].base_value_ = "0" ;
+    ObSysVars[681].alias_ = "OB_SV_NAMED_PIPE" ;
+    }();
+
+    [&] (){
+      ObSysVars[682].default_value_ = "empty string" ;
+      ObSysVars[682].info_ = "mock for mysql5.7" ;
+      ObSysVars[682].name_ = "named_pipe_full_access_group" ;
+      ObSysVars[682].data_type_ = ObVarcharType ;
+      ObSysVars[682].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[682].id_ = SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP] = 682 ;
+      ObSysVars[682].base_value_ = "empty string" ;
+    ObSysVars[682].alias_ = "OB_SV_NAMED_PIPE_FULL_ACCESS_GROUP" ;
+    }();
+
+    [&] (){
+      ObSysVars[683].default_value_ = "655360" ;
+      ObSysVars[683].info_ = "mock for mysql5.7" ;
+      ObSysVars[683].name_ = "open_files_limit" ;
+      ObSysVars[683].data_type_ = ObIntType ;
+      ObSysVars[683].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[683].id_ = SYS_VAR_OPEN_FILES_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPEN_FILES_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPEN_FILES_LIMIT] = 683 ;
+      ObSysVars[683].base_value_ = "655360" ;
+    ObSysVars[683].alias_ = "OB_SV_OPEN_FILES_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[684].default_value_ = "null" ;
+      ObSysVars[684].info_ = "mock for mysql5.7" ;
+      ObSysVars[684].name_ = "report_host" ;
+      ObSysVars[684].data_type_ = ObVarcharType ;
+      ObSysVars[684].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[684].id_ = SYS_VAR_REPORT_HOST ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REPORT_HOST)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REPORT_HOST] = 684 ;
+      ObSysVars[684].base_value_ = "null" ;
+    ObSysVars[684].alias_ = "OB_SV_REPORT_HOST" ;
+    }();
+
+    [&] (){
+      ObSysVars[685].default_value_ = "null" ;
+      ObSysVars[685].info_ = "mock for mysql5.7" ;
+      ObSysVars[685].name_ = "report_password" ;
+      ObSysVars[685].data_type_ = ObVarcharType ;
+      ObSysVars[685].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[685].id_ = SYS_VAR_REPORT_PASSWORD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REPORT_PASSWORD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REPORT_PASSWORD] = 685 ;
+      ObSysVars[685].base_value_ = "null" ;
+    ObSysVars[685].alias_ = "OB_SV_REPORT_PASSWORD" ;
+    }();
+
+    [&] (){
+      ObSysVars[686].default_value_ = "null" ;
+      ObSysVars[686].info_ = "mock for mysql5.7" ;
+      ObSysVars[686].name_ = "report_port" ;
+      ObSysVars[686].data_type_ = ObVarcharType ;
+      ObSysVars[686].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[686].id_ = SYS_VAR_REPORT_PORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REPORT_PORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REPORT_PORT] = 686 ;
+      ObSysVars[686].base_value_ = "null" ;
+    ObSysVars[686].alias_ = "OB_SV_REPORT_PORT" ;
+    }();
+
+    [&] (){
+      ObSysVars[687].default_value_ = "null" ;
+      ObSysVars[687].info_ = "mock for mysql5.7" ;
+      ObSysVars[687].name_ = "report_user" ;
+      ObSysVars[687].data_type_ = ObVarcharType ;
+      ObSysVars[687].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[687].id_ = SYS_VAR_REPORT_USER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REPORT_USER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REPORT_USER] = 687 ;
+      ObSysVars[687].base_value_ = "null" ;
+    ObSysVars[687].alias_ = "OB_SV_REPORT_USER" ;
+    }();
+
+    [&] (){
+      ObSysVars[688].default_value_ = "32" ;
+      ObSysVars[688].info_ = "mock for mysql5.7" ;
+      ObSysVars[688].name_ = "server_id_bits" ;
+      ObSysVars[688].data_type_ = ObIntType ;
+      ObSysVars[688].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[688].id_ = SYS_VAR_SERVER_ID_BITS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SERVER_ID_BITS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SERVER_ID_BITS] = 688 ;
+      ObSysVars[688].base_value_ = "32" ;
+    ObSysVars[688].alias_ = "OB_SV_SERVER_ID_BITS" ;
+    }();
+
+    [&] (){
+      ObSysVars[689].default_value_ = "0" ;
+      ObSysVars[689].info_ = "mock for mysql5.7" ;
+      ObSysVars[689].name_ = "shared_memory" ;
+      ObSysVars[689].data_type_ = ObIntType ;
+      ObSysVars[689].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[689].id_ = SYS_VAR_SHARED_MEMORY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHARED_MEMORY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHARED_MEMORY] = 689 ;
+      ObSysVars[689].base_value_ = "0" ;
+    ObSysVars[689].alias_ = "OB_SV_SHARED_MEMORY" ;
+    }();
+
+    [&] (){
+      ObSysVars[690].default_value_ = "MYSQL" ;
+      ObSysVars[690].info_ = "mock for mysql5.7" ;
+      ObSysVars[690].name_ = "shared_memory_base_name" ;
+      ObSysVars[690].data_type_ = ObVarcharType ;
+      ObSysVars[690].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[690].id_ = SYS_VAR_SHARED_MEMORY_BASE_NAME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHARED_MEMORY_BASE_NAME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHARED_MEMORY_BASE_NAME] = 690 ;
+      ObSysVars[690].base_value_ = "MYSQL" ;
+    ObSysVars[690].alias_ = "OB_SV_SHARED_MEMORY_BASE_NAME" ;
+    }();
+
+    [&] (){
+      ObSysVars[691].default_value_ = "0" ;
+      ObSysVars[691].info_ = "mock for mysql5.7" ;
+      ObSysVars[691].name_ = "skip_name_resolve" ;
+      ObSysVars[691].data_type_ = ObIntType ;
+      ObSysVars[691].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[691].id_ = SYS_VAR_SKIP_NAME_RESOLVE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_NAME_RESOLVE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_NAME_RESOLVE] = 691 ;
+      ObSysVars[691].base_value_ = "0" ;
+    ObSysVars[691].alias_ = "OB_SV_SKIP_NAME_RESOLVE" ;
+    }();
+
+    [&] (){
+      ObSysVars[692].default_value_ = "0" ;
+      ObSysVars[692].info_ = "mock for mysql5.7" ;
+      ObSysVars[692].name_ = "skip_networking" ;
+      ObSysVars[692].data_type_ = ObIntType ;
+      ObSysVars[692].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[692].id_ = SYS_VAR_SKIP_NETWORKING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_NETWORKING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_NETWORKING] = 692 ;
+      ObSysVars[692].base_value_ = "0" ;
+    ObSysVars[692].alias_ = "OB_SV_SKIP_NETWORKING" ;
+    }();
+
+    [&] (){
+      ObSysVars[693].default_value_ = "1" ;
+      ObSysVars[693].info_ = "mock for mysql5.7" ;
+      ObSysVars[693].name_ = "thread_handling" ;
+      ObSysVars[693].data_type_ = ObIntType ;
+      ObSysVars[693].enum_names_ = "[u'no-threads', u'one-thread-per-connection', u'loaded-dynamically']" ;
+      ObSysVars[693].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[693].id_ = SYS_VAR_THREAD_HANDLING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_HANDLING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_HANDLING] = 693 ;
+      ObSysVars[693].base_value_ = "1" ;
+    ObSysVars[693].alias_ = "OB_SV_THREAD_HANDLING" ;
+    }();
+
+    [&] (){
+      ObSysVars[694].default_value_ = "0" ;
+      ObSysVars[694].info_ = "mock for mysql5.7" ;
+      ObSysVars[694].name_ = "thread_pool_algorithm" ;
+      ObSysVars[694].data_type_ = ObIntType ;
+      ObSysVars[694].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[694].id_ = SYS_VAR_THREAD_POOL_ALGORITHM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_POOL_ALGORITHM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_POOL_ALGORITHM] = 694 ;
+      ObSysVars[694].base_value_ = "0" ;
+    ObSysVars[694].alias_ = "OB_SV_THREAD_POOL_ALGORITHM" ;
+    }();
+
+    [&] (){
+      ObSysVars[695].default_value_ = "16" ;
+      ObSysVars[695].info_ = "mock for mysql5.7" ;
+      ObSysVars[695].name_ = "thread_pool_size" ;
+      ObSysVars[695].data_type_ = ObIntType ;
+      ObSysVars[695].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[695].id_ = SYS_VAR_THREAD_POOL_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_POOL_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_POOL_SIZE] = 695 ;
+      ObSysVars[695].base_value_ = "16" ;
+    ObSysVars[695].alias_ = "OB_SV_THREAD_POOL_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[696].default_value_ = "262144" ;
+      ObSysVars[696].info_ = "mock for mysql5.7" ;
+      ObSysVars[696].name_ = "thread_stack" ;
+      ObSysVars[696].data_type_ = ObIntType ;
+      ObSysVars[696].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[696].id_ = SYS_VAR_THREAD_STACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_THREAD_STACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_THREAD_STACK] = 696 ;
+      ObSysVars[696].base_value_ = "262144" ;
+    ObSysVars[696].alias_ = "OB_SV_THREAD_STACK" ;
+    }();
+
+    [&] (){
+      ObSysVars[697].default_value_ = "1" ;
+      ObSysVars[697].info_ = "mock for mysql5.7" ;
+      ObSysVars[697].name_ = "binlog_gtid_simple_recovery" ;
+      ObSysVars[697].data_type_ = ObIntType ;
+      ObSysVars[697].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[697].id_ = SYS_VAR_BINLOG_GTID_SIMPLE_RECOVERY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BINLOG_GTID_SIMPLE_RECOVERY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BINLOG_GTID_SIMPLE_RECOVERY] = 697 ;
+      ObSysVars[697].base_value_ = "1" ;
+    ObSysVars[697].alias_ = "OB_SV_BINLOG_GTID_SIMPLE_RECOVERY" ;
+    }();
+
+    [&] (){
+      ObSysVars[698].default_value_ = "0" ;
+      ObSysVars[698].info_ = "mock for mysql5.7" ;
+      ObSysVars[698].name_ = "innodb_api_enable_binlog" ;
+      ObSysVars[698].data_type_ = ObIntType ;
+      ObSysVars[698].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[698].id_ = SYS_VAR_INNODB_API_ENABLE_BINLOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_API_ENABLE_BINLOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_API_ENABLE_BINLOG] = 698 ;
+      ObSysVars[698].base_value_ = "0" ;
+    ObSysVars[698].alias_ = "OB_SV_INNODB_API_ENABLE_BINLOG" ;
+    }();
+
+    [&] (){
+      ObSysVars[699].default_value_ = "0" ;
+      ObSysVars[699].info_ = "mock for mysql5.7" ;
+      ObSysVars[699].name_ = "innodb_locks_unsafe_for_binlog" ;
+      ObSysVars[699].data_type_ = ObIntType ;
+      ObSysVars[699].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[699].id_ = SYS_VAR_INNODB_LOCKS_UNSAFE_FOR_BINLOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LOCKS_UNSAFE_FOR_BINLOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LOCKS_UNSAFE_FOR_BINLOG] = 699 ;
+      ObSysVars[699].base_value_ = "0" ;
+    ObSysVars[699].alias_ = "OB_SV_INNODB_LOCKS_UNSAFE_FOR_BINLOG" ;
+    }();
+
+    [&] (){
+      ObSysVars[700].default_value_ = "16777216" ;
+      ObSysVars[700].info_ = "mock for mysql5.7" ;
+      ObSysVars[700].name_ = "innodb_log_buffer_size" ;
+      ObSysVars[700].data_type_ = ObIntType ;
+      ObSysVars[700].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[700].id_ = SYS_VAR_INNODB_LOG_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LOG_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LOG_BUFFER_SIZE] = 700 ;
+      ObSysVars[700].base_value_ = "16777216" ;
+    ObSysVars[700].alias_ = "OB_SV_INNODB_LOG_BUFFER_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[701].default_value_ = "2" ;
+      ObSysVars[701].info_ = "mock for mysql5.7" ;
+      ObSysVars[701].name_ = "innodb_log_files_in_group" ;
+      ObSysVars[701].data_type_ = ObIntType ;
+      ObSysVars[701].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[701].id_ = SYS_VAR_INNODB_LOG_FILES_IN_GROUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LOG_FILES_IN_GROUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LOG_FILES_IN_GROUP] = 701 ;
+      ObSysVars[701].base_value_ = "2" ;
+    ObSysVars[701].alias_ = "OB_SV_INNODB_LOG_FILES_IN_GROUP" ;
+    }();
+
+    [&] (){
+      ObSysVars[702].default_value_ = "50331648" ;
+      ObSysVars[702].info_ = "mock for mysql5.7" ;
+      ObSysVars[702].name_ = "innodb_log_file_size" ;
+      ObSysVars[702].data_type_ = ObIntType ;
+      ObSysVars[702].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[702].id_ = SYS_VAR_INNODB_LOG_FILE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LOG_FILE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LOG_FILE_SIZE] = 702 ;
+      ObSysVars[702].base_value_ = "50331648" ;
+    ObSysVars[702].alias_ = "OB_SV_INNODB_LOG_FILE_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[703].default_value_ = "./" ;
+      ObSysVars[703].info_ = "mock for mysql5.7" ;
+      ObSysVars[703].name_ = "innodb_log_group_home_dir" ;
+      ObSysVars[703].data_type_ = ObVarcharType ;
+      ObSysVars[703].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[703].id_ = SYS_VAR_INNODB_LOG_GROUP_HOME_DIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LOG_GROUP_HOME_DIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LOG_GROUP_HOME_DIR] = 703 ;
+      ObSysVars[703].base_value_ = "./" ;
+    ObSysVars[703].alias_ = "OB_SV_INNODB_LOG_GROUP_HOME_DIR" ;
+    }();
+
+    [&] (){
+      ObSysVars[704].default_value_ = "./" ;
+      ObSysVars[704].info_ = "mock for mysql5.7" ;
+      ObSysVars[704].name_ = "innodb_undo_directory" ;
+      ObSysVars[704].data_type_ = ObVarcharType ;
+      ObSysVars[704].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[704].id_ = SYS_VAR_INNODB_UNDO_DIRECTORY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_UNDO_DIRECTORY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_UNDO_DIRECTORY] = 704 ;
+      ObSysVars[704].base_value_ = "./" ;
+    ObSysVars[704].alias_ = "OB_SV_INNODB_UNDO_DIRECTORY" ;
+    }();
+
+    [&] (){
+      ObSysVars[705].default_value_ = "0" ;
+      ObSysVars[705].info_ = "mock for mysql5.7" ;
+      ObSysVars[705].name_ = "innodb_undo_tablespaces" ;
+      ObSysVars[705].data_type_ = ObIntType ;
+      ObSysVars[705].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[705].id_ = SYS_VAR_INNODB_UNDO_TABLESPACES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_UNDO_TABLESPACES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_UNDO_TABLESPACES] = 705 ;
+      ObSysVars[705].base_value_ = "0" ;
+    ObSysVars[705].alias_ = "OB_SV_INNODB_UNDO_TABLESPACES" ;
+    }();
+
+    [&] (){
+      ObSysVars[706].default_value_ = "null" ;
+      ObSysVars[706].info_ = "mock for mysql5.7" ;
+      ObSysVars[706].name_ = "log_bin_basename" ;
+      ObSysVars[706].data_type_ = ObVarcharType ;
+      ObSysVars[706].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[706].id_ = SYS_VAR_LOG_BIN_BASENAME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_BIN_BASENAME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_BIN_BASENAME] = 706 ;
+      ObSysVars[706].base_value_ = "null" ;
+    ObSysVars[706].alias_ = "OB_SV_LOG_BIN_BASENAME" ;
+    }();
+
+    [&] (){
+      ObSysVars[707].default_value_ = "null" ;
+      ObSysVars[707].info_ = "mock for mysql5.7" ;
+      ObSysVars[707].name_ = "log_bin_index" ;
+      ObSysVars[707].data_type_ = ObVarcharType ;
+      ObSysVars[707].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[707].id_ = SYS_VAR_LOG_BIN_INDEX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_BIN_INDEX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_BIN_INDEX] = 707 ;
+      ObSysVars[707].base_value_ = "null" ;
+    ObSysVars[707].alias_ = "OB_SV_LOG_BIN_INDEX" ;
+    }();
+
+    [&] (){
+      ObSysVars[708].default_value_ = "0" ;
+      ObSysVars[708].info_ = "mock for mysql5.7" ;
+      ObSysVars[708].name_ = "log_slave_updates" ;
+      ObSysVars[708].data_type_ = ObIntType ;
+      ObSysVars[708].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[708].id_ = SYS_VAR_LOG_SLAVE_UPDATES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SLAVE_UPDATES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SLAVE_UPDATES] = 708 ;
+      ObSysVars[708].base_value_ = "0" ;
+    ObSysVars[708].alias_ = "OB_SV_LOG_SLAVE_UPDATES" ;
+    }();
+
+    [&] (){
+      ObSysVars[709].default_value_ = "null" ;
+      ObSysVars[709].info_ = "mock for mysql5.7" ;
+      ObSysVars[709].name_ = "relay_log" ;
+      ObSysVars[709].data_type_ = ObVarcharType ;
+      ObSysVars[709].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[709].id_ = SYS_VAR_RELAY_LOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RELAY_LOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RELAY_LOG] = 709 ;
+      ObSysVars[709].base_value_ = "null" ;
+    ObSysVars[709].alias_ = "OB_SV_RELAY_LOG" ;
+    }();
+
+    [&] (){
+      ObSysVars[710].default_value_ = "/usr/local/mysql/data/obrd-relay-bin" ;
+      ObSysVars[710].info_ = "mock for mysql5.7" ;
+      ObSysVars[710].name_ = "relay_log_basename" ;
+      ObSysVars[710].data_type_ = ObVarcharType ;
+      ObSysVars[710].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[710].id_ = SYS_VAR_RELAY_LOG_BASENAME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RELAY_LOG_BASENAME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RELAY_LOG_BASENAME] = 710 ;
+      ObSysVars[710].base_value_ = "/usr/local/mysql/data/obrd-relay-bin" ;
+    ObSysVars[710].alias_ = "OB_SV_RELAY_LOG_BASENAME" ;
+    }();
+
+    [&] (){
+      ObSysVars[711].default_value_ = "/usr/local/mysql/data/obrd-relay-bin.index" ;
+      ObSysVars[711].info_ = "mock for mysql5.7" ;
+      ObSysVars[711].name_ = "relay_log_index" ;
+      ObSysVars[711].data_type_ = ObVarcharType ;
+      ObSysVars[711].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[711].id_ = SYS_VAR_RELAY_LOG_INDEX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RELAY_LOG_INDEX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RELAY_LOG_INDEX] = 711 ;
+      ObSysVars[711].base_value_ = "/usr/local/mysql/data/obrd-relay-bin.index" ;
+    ObSysVars[711].alias_ = "OB_SV_RELAY_LOG_INDEX" ;
+    }();
+
+    [&] (){
+      ObSysVars[712].default_value_ = "relay-log.info" ;
+      ObSysVars[712].info_ = "mock for mysql5.7" ;
+      ObSysVars[712].name_ = "relay_log_info_file" ;
+      ObSysVars[712].data_type_ = ObVarcharType ;
+      ObSysVars[712].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[712].id_ = SYS_VAR_RELAY_LOG_INFO_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RELAY_LOG_INFO_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RELAY_LOG_INFO_FILE] = 712 ;
+      ObSysVars[712].base_value_ = "relay-log.info" ;
+    ObSysVars[712].alias_ = "OB_SV_RELAY_LOG_INFO_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[713].default_value_ = "0" ;
+      ObSysVars[713].info_ = "mock for mysql5.7" ;
+      ObSysVars[713].name_ = "relay_log_recovery" ;
+      ObSysVars[713].data_type_ = ObIntType ;
+      ObSysVars[713].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[713].id_ = SYS_VAR_RELAY_LOG_RECOVERY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RELAY_LOG_RECOVERY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RELAY_LOG_RECOVERY] = 713 ;
+      ObSysVars[713].base_value_ = "0" ;
+    ObSysVars[713].alias_ = "OB_SV_RELAY_LOG_RECOVERY" ;
+    }();
+
+    [&] (){
+      ObSysVars[714].default_value_ = "0" ;
+      ObSysVars[714].info_ = "mock for mysql5.7" ;
+      ObSysVars[714].name_ = "relay_log_space_limit" ;
+      ObSysVars[714].data_type_ = ObIntType ;
+      ObSysVars[714].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[714].id_ = SYS_VAR_RELAY_LOG_SPACE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RELAY_LOG_SPACE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RELAY_LOG_SPACE_LIMIT] = 714 ;
+      ObSysVars[714].base_value_ = "0" ;
+    ObSysVars[714].alias_ = "OB_SV_RELAY_LOG_SPACE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[715].default_value_ = "0" ;
+      ObSysVars[715].info_ = "This variable specifies how to use delayed key writes. It applies only to MyISAM tables. Delayed key writing causes key buffers not to be flushed between writes, merely simulates MySQL 5.7" ;
+      ObSysVars[715].name_ = "delay_key_write" ;
+      ObSysVars[715].data_type_ = ObIntType ;
+      ObSysVars[715].enum_names_ = "[u'ON', u'OFF', u'ALL']" ;
+      ObSysVars[715].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[715].id_ = SYS_VAR_DELAY_KEY_WRITE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAY_KEY_WRITE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DELAY_KEY_WRITE] = 715 ;
+      ObSysVars[715].base_value_ = "0" ;
+    ObSysVars[715].alias_ = "OB_SV_DELAY_KEY_WRITE" ;
+    }();
+
+    [&] (){
+      ObSysVars[716].default_value_ = "0" ;
+      ObSysVars[716].info_ = "When this option is enabled, index key prefixes longer than 767 bytes (up to 3072 bytes) are allowed for InnoDB tables that use DYNAMIC or COMPRESSED row format, merely simulates MySQL 5.7" ;
+      ObSysVars[716].name_ = "innodb_large_prefix" ;
+      ObSysVars[716].data_type_ = ObIntType ;
+      ObSysVars[716].enum_names_ = "[u'ON', u'OFF']" ;
+      ObSysVars[716].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[716].id_ = SYS_VAR_INNODB_LARGE_PREFIX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LARGE_PREFIX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LARGE_PREFIX] = 716 ;
+      ObSysVars[716].base_value_ = "0" ;
+    ObSysVars[716].alias_ = "OB_SV_INNODB_LARGE_PREFIX" ;
+    }();
+
+    [&] (){
+      ObSysVars[717].default_value_ = "8388608" ;
+      ObSysVars[717].info_ = "The size of the buffer used for index blocks, merely simulates MySQL 5.7" ;
+      ObSysVars[717].name_ = "key_buffer_size" ;
+      ObSysVars[717].data_type_ = ObIntType ;
+      ObSysVars[717].min_val_ = "0" ;
+      ObSysVars[717].max_val_ = "4294967295" ;
+      ObSysVars[717].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[717].id_ = SYS_VAR_KEY_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_BUFFER_SIZE] = 717 ;
+      ObSysVars[717].base_value_ = "8388608" ;
+    ObSysVars[717].alias_ = "OB_SV_KEY_BUFFER_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[718].default_value_ = "300" ;
+      ObSysVars[718].info_ = "This value controls the demotion of buffers from the hot sublist of a key cache to the warm sublist. Lower values cause demotion to happen more quickly, merely simulates MySQL 5.7" ;
+      ObSysVars[718].name_ = "key_cache_age_threshold" ;
+      ObSysVars[718].data_type_ = ObUInt64Type ;
+      ObSysVars[718].min_val_ = "100" ;
+      ObSysVars[718].max_val_ = "18446744073709551516" ;
+      ObSysVars[718].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[718].id_ = SYS_VAR_KEY_CACHE_AGE_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_CACHE_AGE_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_CACHE_AGE_THRESHOLD] = 718 ;
+      ObSysVars[718].base_value_ = "300" ;
+    ObSysVars[718].alias_ = "OB_SV_KEY_CACHE_AGE_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[719].default_value_ = "100" ;
+      ObSysVars[719].info_ = "The division point between the hot and warm sublists of the key cache buffer list, merely simulates MySQL 5.7" ;
+      ObSysVars[719].name_ = "key_cache_division_limit" ;
+      ObSysVars[719].data_type_ = ObIntType ;
+      ObSysVars[719].min_val_ = "1" ;
+      ObSysVars[719].max_val_ = "100" ;
+      ObSysVars[719].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[719].id_ = SYS_VAR_KEY_CACHE_DIVISION_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_CACHE_DIVISION_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_CACHE_DIVISION_LIMIT] = 719 ;
+      ObSysVars[719].base_value_ = "100" ;
+    ObSysVars[719].alias_ = "OB_SV_KEY_CACHE_DIVISION_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[720].default_value_ = "18446744073709551615" ;
+      ObSysVars[720].info_ = "Limit the assumed maximum number of seeks when looking up rows based on a key, merely simulates MySQL 5.7" ;
+      ObSysVars[720].name_ = "max_seeks_for_key" ;
+      ObSysVars[720].data_type_ = ObUInt64Type ;
+      ObSysVars[720].min_val_ = "1" ;
+      ObSysVars[720].max_val_ = "18446744073709551615" ;
+      ObSysVars[720].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[720].id_ = SYS_VAR_MAX_SEEKS_FOR_KEY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_SEEKS_FOR_KEY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_SEEKS_FOR_KEY] = 720 ;
+      ObSysVars[720].base_value_ = "18446744073709551615" ;
+    ObSysVars[720].alias_ = "OB_SV_MAX_SEEKS_FOR_KEY" ;
+    }();
+
+    [&] (){
+      ObSysVars[721].default_value_ = "0" ;
+      ObSysVars[721].info_ = "When this variable is enabled, the server does not use the optimized method of processing an ALTER TABLE operation, merely simulates MySQL 5.7" ;
+      ObSysVars[721].name_ = "old_alter_table" ;
+      ObSysVars[721].data_type_ = ObIntType ;
+      ObSysVars[721].enum_names_ = "[u'OFF', u'ON']" ;
+      ObSysVars[721].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[721].id_ = SYS_VAR_OLD_ALTER_TABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OLD_ALTER_TABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OLD_ALTER_TABLE] = 721 ;
+      ObSysVars[721].base_value_ = "0" ;
+    ObSysVars[721].alias_ = "OB_SV_OLD_ALTER_TABLE" ;
+    }();
+
+    [&] (){
+      ObSysVars[722].default_value_ = "-1" ;
+      ObSysVars[722].info_ = "The number of table definitions that can be stored in the table definition cache, merely simulates MySQL 5.7" ;
+      ObSysVars[722].name_ = "table_definition_cache" ;
+      ObSysVars[722].data_type_ = ObIntType ;
+      ObSysVars[722].min_val_ = "400" ;
+      ObSysVars[722].max_val_ = "524288" ;
+      ObSysVars[722].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[722].id_ = SYS_VAR_TABLE_DEFINITION_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TABLE_DEFINITION_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TABLE_DEFINITION_CACHE] = 722 ;
+      ObSysVars[722].base_value_ = "-1" ;
+    ObSysVars[722].alias_ = "OB_SV_TABLE_DEFINITION_CACHE" ;
+    }();
+
+    [&] (){
+      ObSysVars[723].default_value_ = "1048576" ;
+      ObSysVars[723].info_ = "The sort buffer size for online DDL operations that create or rebuild secondary indexes, merely simulates MySQL 5.7" ;
+      ObSysVars[723].name_ = "innodb_sort_buffer_size" ;
+      ObSysVars[723].data_type_ = ObIntType ;
+      ObSysVars[723].min_val_ = "65536" ;
+      ObSysVars[723].max_val_ = "67108864" ;
+      ObSysVars[723].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[723].id_ = SYS_VAR_INNODB_SORT_BUFFER_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SORT_BUFFER_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SORT_BUFFER_SIZE] = 723 ;
+      ObSysVars[723].base_value_ = "1048576" ;
+    ObSysVars[723].alias_ = "OB_SV_INNODB_SORT_BUFFER_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[724].default_value_ = "1024" ;
+      ObSysVars[724].info_ = "The size in bytes of blocks in the key cache, merely simulates MySQL 5.7" ;
+      ObSysVars[724].name_ = "key_cache_block_size" ;
+      ObSysVars[724].data_type_ = ObIntType ;
+      ObSysVars[724].min_val_ = "512" ;
+      ObSysVars[724].max_val_ = "16384" ;
+      ObSysVars[724].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[724].id_ = SYS_VAR_KEY_CACHE_BLOCK_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEY_CACHE_BLOCK_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEY_CACHE_BLOCK_SIZE] = 724 ;
+      ObSysVars[724].base_value_ = "1024" ;
+    ObSysVars[724].alias_ = "OB_SV_KEY_CACHE_BLOCK_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[725].default_value_ = "0" ;
+      ObSysVars[725].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
+      ObSysVars[725].name_ = "ob_kv_mode" ;
+      ObSysVars[725].data_type_ = ObIntType ;
+      ObSysVars[725].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
+      ObSysVars[725].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
+      ObSysVars[725].id_ = SYS_VAR_OB_KV_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_KV_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 725 ;
+      ObSysVars[725].base_value_ = "0" ;
+    ObSysVars[725].alias_ = "OB_SV_KV_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[726].default_value_ = "0" ;
+      ObSysVars[726].info_ = "Indicate features that observer supports, readonly after modified by first observer" ;
+      ObSysVars[726].name_ = "__ob_client_capability_flag" ;
+      ObSysVars[726].data_type_ = ObUInt64Type ;
+      ObSysVars[726].min_val_ = "0" ;
+      ObSysVars[726].max_val_ = "18446744073709551615" ;
+      ObSysVars[726].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[726].id_ = SYS_VAR___OB_CLIENT_CAPABILITY_FLAG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR___OB_CLIENT_CAPABILITY_FLAG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR___OB_CLIENT_CAPABILITY_FLAG] = 726 ;
+      ObSysVars[726].base_value_ = "0" ;
+    ObSysVars[726].alias_ = "OB_SV___OB_CLIENT_CAPABILITY_FLAG" ;
+    }();
+
+    [&] (){
+      ObSysVars[727].default_value_ = "1" ;
+      ObSysVars[727].info_ = "wether use parameter anonymous_block" ;
+      ObSysVars[727].name_ = "ob_enable_parameter_anonymous_block" ;
+      ObSysVars[727].data_type_ = ObIntType ;
+      ObSysVars[727].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[727].id_ = SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK] = 727 ;
+      ObSysVars[727].base_value_ = "1" ;
+    ObSysVars[727].alias_ = "OB_SV_ENABLE_PARAMETER_ANONYMOUS_BLOCK" ;
+    }();
+
+    [&] (){
+      ObSysVars[728].default_value_ = "" ;
+      ObSysVars[728].info_ = "The directory where character sets are installed" ;
+      ObSysVars[728].name_ = "character_sets_dir" ;
+      ObSysVars[728].data_type_ = ObVarcharType ;
+      ObSysVars[728].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[728].id_ = SYS_VAR_CHARACTER_SETS_DIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CHARACTER_SETS_DIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CHARACTER_SETS_DIR] = 728 ;
+      ObSysVars[728].base_value_ = "" ;
+    ObSysVars[728].alias_ = "OB_SV_CHARACTER_SETS_DIR" ;
+    }();
+
+    [&] (){
+      ObSysVars[729].default_value_ = "%Y-%m-%d" ;
+      ObSysVars[729].info_ = "" ;
+      ObSysVars[729].name_ = "date_format" ;
+      ObSysVars[729].data_type_ = ObVarcharType ;
+      ObSysVars[729].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[729].id_ = SYS_VAR_DATE_FORMAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DATE_FORMAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DATE_FORMAT] = 729 ;
+      ObSysVars[729].base_value_ = "%Y-%m-%d" ;
+    ObSysVars[729].alias_ = "OB_SV_DATE_FORMAT" ;
+    }();
+
+    [&] (){
+      ObSysVars[730].default_value_ = "%Y-%m-%d %H:%i:%s" ;
+      ObSysVars[730].info_ = "" ;
+      ObSysVars[730].name_ = "datetime_format" ;
+      ObSysVars[730].data_type_ = ObVarcharType ;
+      ObSysVars[730].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[730].id_ = SYS_VAR_DATETIME_FORMAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DATETIME_FORMAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DATETIME_FORMAT] = 730 ;
+      ObSysVars[730].base_value_ = "%Y-%m-%d %H:%i:%s" ;
+    ObSysVars[730].alias_ = "OB_SV_DATETIME_FORMAT" ;
+    }();
+
+    [&] (){
+      ObSysVars[731].default_value_ = "1" ;
+      ObSysVars[731].info_ = "This variable controls how the server handles clients with expired passwords" ;
+      ObSysVars[731].name_ = "disconnect_on_expired_password" ;
+      ObSysVars[731].data_type_ = ObIntType ;
+      ObSysVars[731].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[731].id_ = SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD] = 731 ;
+      ObSysVars[731].base_value_ = "1" ;
+    ObSysVars[731].alias_ = "OB_SV_DISCONNECT_ON_EXPIRED_PASSWORD" ;
+    }();
+
+    [&] (){
+      ObSysVars[732].default_value_ = "" ;
+      ObSysVars[732].info_ = "The external user name used during the authentication process, as set by the plugin used to authenticate the client" ;
+      ObSysVars[732].name_ = "external_user" ;
+      ObSysVars[732].data_type_ = ObVarcharType ;
+      ObSysVars[732].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::NULLABLE | ObSysVarFlag::READONLY ;
+      ObSysVars[732].id_ = SYS_VAR_EXTERNAL_USER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_EXTERNAL_USER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_EXTERNAL_USER] = 732 ;
+      ObSysVars[732].base_value_ = "" ;
+    ObSysVars[732].alias_ = "OB_SV_EXTERNAL_USER" ;
+    }();
+
+    [&] (){
+      ObSysVars[733].default_value_ = "YES" ;
+      ObSysVars[733].info_ = "The external user name used during the authentication process, as set by the plugin used to authenticate the client" ;
+      ObSysVars[733].name_ = "have_crypt" ;
+      ObSysVars[733].data_type_ = ObVarcharType ;
+      ObSysVars[733].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[733].id_ = SYS_VAR_HAVE_CRYPT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HAVE_CRYPT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_HAVE_CRYPT] = 733 ;
+      ObSysVars[733].base_value_ = "YES" ;
+    ObSysVars[733].alias_ = "OB_SV_HAVE_CRYPT" ;
+    }();
+
+    [&] (){
+      ObSysVars[734].default_value_ = "YES" ;
+      ObSysVars[734].info_ = "YES if mysqld supports dynamic loading of plugins, NO if not. If the value is NO, you cannot use options such as --plugin-load to load plugins at server startup, or the INSTALL PLUGIN statement to load plugins at runtime" ;
+      ObSysVars[734].name_ = "have_dynamic_loading" ;
+      ObSysVars[734].data_type_ = ObVarcharType ;
+      ObSysVars[734].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[734].id_ = SYS_VAR_HAVE_DYNAMIC_LOADING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_HAVE_DYNAMIC_LOADING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_HAVE_DYNAMIC_LOADING] = 734 ;
+      ObSysVars[734].base_value_ = "YES" ;
+    ObSysVars[734].alias_ = "OB_SV_HAVE_DYNAMIC_LOADING" ;
+    }();
+
+    [&] (){
+      ObSysVars[735].default_value_ = "" ;
+      ObSysVars[735].info_ = "The location of the configuration file for the keyring_aws plugin. This variable is unavailable unless that plugin is installed" ;
+      ObSysVars[735].name_ = "keyring_aws_conf_file" ;
+      ObSysVars[735].data_type_ = ObVarcharType ;
+      ObSysVars[735].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[735].id_ = SYS_VAR_KEYRING_AWS_CONF_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_CONF_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_CONF_FILE] = 735 ;
+      ObSysVars[735].base_value_ = "" ;
+    ObSysVars[735].alias_ = "OB_SV_KEYRING_AWS_CONF_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[736].default_value_ = "" ;
+      ObSysVars[736].info_ = "The location of the storage file for the keyring_aws plugin. This variable is unavailable unless that plugin is installed" ;
+      ObSysVars[736].name_ = "keyring_aws_data_file" ;
+      ObSysVars[736].data_type_ = ObVarcharType ;
+      ObSysVars[736].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[736].id_ = SYS_VAR_KEYRING_AWS_DATA_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_DATA_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_DATA_FILE] = 736 ;
+      ObSysVars[736].base_value_ = "" ;
+    ObSysVars[736].alias_ = "OB_SV_KEYRING_AWS_DATA_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[737].default_value_ = "" ;
+      ObSysVars[737].info_ = "The language to use for error messages" ;
+      ObSysVars[737].name_ = "language" ;
+      ObSysVars[737].data_type_ = ObVarcharType ;
+      ObSysVars[737].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[737].id_ = SYS_VAR_LANGUAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LANGUAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LANGUAGE] = 737 ;
+      ObSysVars[737].base_value_ = "" ;
+    ObSysVars[737].alias_ = "OB_SV_LANGUAGE" ;
+    }();
+
+    [&] (){
+      ObSysVars[738].default_value_ = "" ;
+      ObSysVars[738].info_ = "The language to use for error messages" ;
+      ObSysVars[738].name_ = "lc_messages_dir" ;
+      ObSysVars[738].data_type_ = ObVarcharType ;
+      ObSysVars[738].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[738].id_ = SYS_VAR_LC_MESSAGES_DIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_MESSAGES_DIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LC_MESSAGES_DIR] = 738 ;
+      ObSysVars[738].base_value_ = "" ;
+    ObSysVars[738].alias_ = "OB_SV_LC_MESSAGES_DIR" ;
+    }();
+
+    [&] (){
+      ObSysVars[739].default_value_ = "0" ;
+      ObSysVars[739].info_ = "This variable describes the case sensitivity of file names on the file system where the data directory is located" ;
+      ObSysVars[739].name_ = "lower_case_file_system" ;
+      ObSysVars[739].data_type_ = ObIntType ;
+      ObSysVars[739].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[739].id_ = SYS_VAR_LOWER_CASE_FILE_SYSTEM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOWER_CASE_FILE_SYSTEM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOWER_CASE_FILE_SYSTEM] = 739 ;
+      ObSysVars[739].base_value_ = "0" ;
+    ObSysVars[739].alias_ = "OB_SV_LOWER_CASE_FILE_SYSTEM" ;
+    }();
+
+    [&] (){
+      ObSysVars[740].default_value_ = "1024" ;
+      ObSysVars[740].info_ = "The maximum number of bytes of memory reserved per session for computation of normalized statement digests" ;
+      ObSysVars[740].name_ = "max_digest_length" ;
+      ObSysVars[740].data_type_ = ObIntType ;
+      ObSysVars[740].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[740].id_ = SYS_VAR_MAX_DIGEST_LENGTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_DIGEST_LENGTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_DIGEST_LENGTH] = 740 ;
+      ObSysVars[740].base_value_ = "1024" ;
+    ObSysVars[740].alias_ = "OB_SV_MAX_DIGEST_LENGTH" ;
+    }();
+
+    [&] (){
+      ObSysVars[741].default_value_ = "ndbinfo" ;
+      ObSysVars[741].info_ = "Shows the name used for the NDB information database" ;
+      ObSysVars[741].name_ = "ndbinfo_database" ;
+      ObSysVars[741].data_type_ = ObVarcharType ;
+      ObSysVars[741].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[741].id_ = SYS_VAR_NDBINFO_DATABASE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_DATABASE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_DATABASE] = 741 ;
+      ObSysVars[741].base_value_ = "ndbinfo" ;
+    ObSysVars[741].alias_ = "OB_SV_NDBINFO_DATABASE" ;
+    }();
+
+    [&] (){
+      ObSysVars[742].default_value_ = "ndb$" ;
+      ObSysVars[742].info_ = "The prefix used in naming the ndbinfo database's base tables (normally hidden, unless exposed by setting ndbinfo_show_hidden" ;
+      ObSysVars[742].name_ = "ndbinfo_table_prefix" ;
+      ObSysVars[742].data_type_ = ObVarcharType ;
+      ObSysVars[742].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[742].id_ = SYS_VAR_NDBINFO_TABLE_PREFIX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_TABLE_PREFIX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_TABLE_PREFIX] = 742 ;
+      ObSysVars[742].base_value_ = "ndb$" ;
+    ObSysVars[742].alias_ = "OB_SV_NDBINFO_TABLE_PREFIX" ;
+    }();
+
+    [&] (){
+      ObSysVars[743].default_value_ = "" ;
+      ObSysVars[743].info_ = "Shows the version of the ndbinfo engine in use" ;
+      ObSysVars[743].name_ = "ndbinfo_version" ;
+      ObSysVars[743].data_type_ = ObVarcharType ;
+      ObSysVars[743].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[743].id_ = SYS_VAR_NDBINFO_VERSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDBINFO_VERSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDBINFO_VERSION] = 743 ;
+      ObSysVars[743].base_value_ = "" ;
+    ObSysVars[743].alias_ = "OB_SV_NDBINFO_VERSION" ;
+    }();
+
+    [&] (){
+      ObSysVars[744].default_value_ = "32768" ;
+      ObSysVars[744].info_ = "This sets the size in bytes that is used for NDB transaction batches" ;
+      ObSysVars[744].name_ = "ndb_batch_size" ;
+      ObSysVars[744].data_type_ = ObIntType ;
+      ObSysVars[744].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[744].id_ = SYS_VAR_NDB_BATCH_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_BATCH_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_BATCH_SIZE] = 744 ;
+      ObSysVars[744].base_value_ = "32768" ;
+    ObSysVars[744].alias_ = "OB_SV_NDB_BATCH_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[745].default_value_ = "1" ;
+      ObSysVars[745].info_ = "a mysqld process can use multiple connections to the cluster, effectively mimicking several SQL nodes" ;
+      ObSysVars[745].name_ = "ndb_cluster_connection_pool" ;
+      ObSysVars[745].data_type_ = ObIntType ;
+      ObSysVars[745].min_val_ = "1" ;
+      ObSysVars[745].max_val_ = "63" ;
+      ObSysVars[745].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[745].id_ = SYS_VAR_NDB_CLUSTER_CONNECTION_POOL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_CLUSTER_CONNECTION_POOL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_CLUSTER_CONNECTION_POOL] = 745 ;
+      ObSysVars[745].base_value_ = "1" ;
+    ObSysVars[745].alias_ = "OB_SV_NDB_CLUSTER_CONNECTION_POOL" ;
+    }();
+
+    [&] (){
+      ObSysVars[746].default_value_ = "" ;
+      ObSysVars[746].info_ = "Specifies a comma-separated list of node IDs for connections to the cluster used by an SQL node" ;
+      ObSysVars[746].name_ = "ndb_cluster_connection_pool_nodeids" ;
+      ObSysVars[746].data_type_ = ObVarcharType ;
+      ObSysVars[746].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[746].id_ = SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_CLUSTER_CONNECTION_POOL_NODEIDS] = 746 ;
+      ObSysVars[746].base_value_ = "" ;
+    ObSysVars[746].alias_ = "OB_SV_NDB_CLUSTER_CONNECTION_POOL_NODEIDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[747].default_value_ = "0" ;
+      ObSysVars[747].info_ = "Causes a replica mysqld to log any updates received from its immediate source to the mysql.ndb_apply_status table in its own binary log using its own server ID rather than the server ID of the source" ;
+      ObSysVars[747].name_ = "ndb_log_apply_status" ;
+      ObSysVars[747].data_type_ = ObIntType ;
+      ObSysVars[747].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[747].id_ = SYS_VAR_NDB_LOG_APPLY_STATUS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_APPLY_STATUS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_APPLY_STATUS] = 747 ;
+      ObSysVars[747].base_value_ = "0" ;
+    ObSysVars[747].alias_ = "OB_SV_NDB_LOG_APPLY_STATUS" ;
+    }();
+
+    [&] (){
+      ObSysVars[748].default_value_ = "1" ;
+      ObSysVars[748].info_ = "Causes updates to NDB tables to be written to the binary log. Setting this variable has no effect if binary logging is not already enabled for the server using log_bin" ;
+      ObSysVars[748].name_ = "ndb_log_bin" ;
+      ObSysVars[748].data_type_ = ObIntType ;
+      ObSysVars[748].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[748].id_ = SYS_VAR_NDB_LOG_BIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_BIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_BIN] = 748 ;
+      ObSysVars[748].base_value_ = "1" ;
+    ObSysVars[748].alias_ = "OB_SV_NDB_LOG_BIN" ;
+    }();
+
+    [&] (){
+      ObSysVars[749].default_value_ = "0" ;
+      ObSysVars[749].info_ = "When this option is specified, and complete logging of all found row events is not possible, the mysqld process is terminated" ;
+      ObSysVars[749].name_ = "ndb_log_fail_terminate" ;
+      ObSysVars[749].data_type_ = ObIntType ;
+      ObSysVars[749].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[749].id_ = SYS_VAR_NDB_LOG_FAIL_TERMINATE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_FAIL_TERMINATE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_FAIL_TERMINATE] = 749 ;
+      ObSysVars[749].base_value_ = "0" ;
+    ObSysVars[749].alias_ = "OB_SV_NDB_LOG_FAIL_TERMINATE" ;
+    }();
+
+    [&] (){
+      ObSysVars[750].default_value_ = "0" ;
+      ObSysVars[750].info_ = "Shows whether the originating server ID and epoch are logged in the ndb_binlog_index table" ;
+      ObSysVars[750].name_ = "ndb_log_orig" ;
+      ObSysVars[750].data_type_ = ObIntType ;
+      ObSysVars[750].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[750].id_ = SYS_VAR_NDB_LOG_ORIG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_ORIG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_ORIG] = 750 ;
+      ObSysVars[750].base_value_ = "0" ;
+    ObSysVars[750].alias_ = "OB_SV_NDB_LOG_ORIG" ;
+    }();
+
+    [&] (){
+      ObSysVars[751].default_value_ = "0" ;
+      ObSysVars[751].info_ = "shows whether a replica mysqld writes NDB transaction IDs in the binary log" ;
+      ObSysVars[751].name_ = "ndb_log_transaction_id" ;
+      ObSysVars[751].data_type_ = ObIntType ;
+      ObSysVars[751].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[751].id_ = SYS_VAR_NDB_LOG_TRANSACTION_ID ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_LOG_TRANSACTION_ID)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_LOG_TRANSACTION_ID] = 751 ;
+      ObSysVars[751].base_value_ = "0" ;
+    ObSysVars[751].alias_ = "OB_SV_NDB_LOG_TRANSACTION_ID" ;
+    }();
+
+    [&] (){
+      ObSysVars[752].default_value_ = "3" ;
+      ObSysVars[752].info_ = "" ;
+      ObSysVars[752].name_ = "ndb_optimized_node_selection" ;
+      ObSysVars[752].data_type_ = ObIntType ;
+      ObSysVars[752].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[752].id_ = SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_OPTIMIZED_NODE_SELECTION] = 752 ;
+      ObSysVars[752].base_value_ = "3" ;
+    ObSysVars[752].alias_ = "OB_SV_NDB_OPTIMIZED_NODE_SELECTION" ;
+    }();
+
+    [&] (){
+      ObSysVars[753].default_value_ = "" ;
+      ObSysVars[753].info_ = "If this MySQL Server is connected to an NDB cluster, this read-only variable shows the cluster system name. Otherwise, the value is an empty string" ;
+      ObSysVars[753].name_ = "Ndb_system_name" ;
+      ObSysVars[753].data_type_ = ObVarcharType ;
+      ObSysVars[753].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[753].id_ = SYS_VAR_NDB_SYSTEM_NAME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_SYSTEM_NAME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_SYSTEM_NAME] = 753 ;
+      ObSysVars[753].base_value_ = "" ;
+    ObSysVars[753].alias_ = "OB_SV_NDB_SYSTEM_NAME" ;
+    }();
+
+    [&] (){
+      ObSysVars[754].default_value_ = "0" ;
+      ObSysVars[754].info_ = "Forces NDB to use copying of tables in the event of problems with online ALTER TABLE operations" ;
+      ObSysVars[754].name_ = "ndb_use_copying_alter_table" ;
+      ObSysVars[754].data_type_ = ObIntType ;
+      ObSysVars[754].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[754].id_ = SYS_VAR_NDB_USE_COPYING_ALTER_TABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_USE_COPYING_ALTER_TABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_USE_COPYING_ALTER_TABLE] = 754 ;
+      ObSysVars[754].base_value_ = "0" ;
+    ObSysVars[754].alias_ = "OB_SV_NDB_USE_COPYING_ALTER_TABLE" ;
+    }();
+
+    [&] (){
+      ObSysVars[755].default_value_ = "" ;
+      ObSysVars[755].info_ = "NDB engine version in ndb-x.y.z format" ;
+      ObSysVars[755].name_ = "ndb_version_string" ;
+      ObSysVars[755].data_type_ = ObVarcharType ;
+      ObSysVars[755].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[755].id_ = SYS_VAR_NDB_VERSION_STRING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_VERSION_STRING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_VERSION_STRING] = 755 ;
+      ObSysVars[755].base_value_ = "" ;
+    ObSysVars[755].alias_ = "OB_SV_NDB_VERSION_STRING" ;
+    }();
+
+    [&] (){
+      ObSysVars[756].default_value_ = "30" ;
+      ObSysVars[756].info_ = "This option sets the period of time that the MySQL server waits for connections to NDB Cluster management and data nodes to be established before accepting MySQL client connections." ;
+      ObSysVars[756].name_ = "ndb_wait_connected" ;
+      ObSysVars[756].data_type_ = ObIntType ;
+      ObSysVars[756].min_val_ = "0" ;
+      ObSysVars[756].max_val_ = "31536000" ;
+      ObSysVars[756].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[756].id_ = SYS_VAR_NDB_WAIT_CONNECTED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_WAIT_CONNECTED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_WAIT_CONNECTED] = 756 ;
+      ObSysVars[756].base_value_ = "30" ;
+    ObSysVars[756].alias_ = "OB_SV_NDB_WAIT_CONNECTED" ;
+    }();
+
+    [&] (){
+      ObSysVars[757].default_value_ = "30" ;
+      ObSysVars[757].info_ = "This variable shows the period of time that the MySQL server waits for the NDB storage engine to complete setup before timing out and treating NDB as unavailable. The time is specified in seconds." ;
+      ObSysVars[757].name_ = "ndb_wait_setup" ;
+      ObSysVars[757].data_type_ = ObIntType ;
+      ObSysVars[757].min_val_ = "0" ;
+      ObSysVars[757].max_val_ = "31536000" ;
+      ObSysVars[757].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[757].id_ = SYS_VAR_NDB_WAIT_SETUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_WAIT_SETUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_WAIT_SETUP] = 757 ;
+      ObSysVars[757].base_value_ = "30" ;
+    ObSysVars[757].alias_ = "OB_SV_NDB_WAIT_SETUP" ;
+    }();
+
+    [&] (){
+      ObSysVars[758].default_value_ = "" ;
+      ObSysVars[758].info_ = "If the current client is a proxy for another user, this variable is the proxy user account name" ;
+      ObSysVars[758].name_ = "proxy_user" ;
+      ObSysVars[758].data_type_ = ObVarcharType ;
+      ObSysVars[758].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[758].id_ = SYS_VAR_PROXY_USER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PROXY_USER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PROXY_USER] = 758 ;
+      ObSysVars[758].base_value_ = "" ;
+    ObSysVars[758].alias_ = "OB_SV_PROXY_USER" ;
+    }();
+
+    [&] (){
+      ObSysVars[759].default_value_ = "1" ;
+      ObSysVars[759].info_ = "It controls whether the server autogenerates RSA private/public key-pair files in the data directory" ;
+      ObSysVars[759].name_ = "sha256_password_auto_generate_rsa_keys" ;
+      ObSysVars[759].data_type_ = ObIntType ;
+      ObSysVars[759].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[759].id_ = SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS] = 759 ;
+      ObSysVars[759].base_value_ = "1" ;
+    ObSysVars[759].alias_ = "OB_SV_SHA256_PASSWORD_AUTO_GENERATE_RSA_KEYS" ;
+    }();
+
+    [&] (){
+      ObSysVars[760].default_value_ = "private_key.pem" ;
+      ObSysVars[760].info_ = "Its value is the path name of the RSA private key file for the sha256_password authentication plugin" ;
+      ObSysVars[760].name_ = "sha256_password_private_key_path" ;
+      ObSysVars[760].data_type_ = ObVarcharType ;
+      ObSysVars[760].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[760].id_ = SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_PRIVATE_KEY_PATH] = 760 ;
+      ObSysVars[760].base_value_ = "private_key.pem" ;
+    ObSysVars[760].alias_ = "OB_SV_SHA256_PASSWORD_PRIVATE_KEY_PATH" ;
+    }();
+
+    [&] (){
+      ObSysVars[761].default_value_ = "public_key.pem" ;
+      ObSysVars[761].info_ = "Its value is the path name of the RSA public key file for the sha256_password authentication plugin" ;
+      ObSysVars[761].name_ = "sha256_password_public_key_path" ;
+      ObSysVars[761].data_type_ = ObVarcharType ;
+      ObSysVars[761].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[761].id_ = SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_PUBLIC_KEY_PATH] = 761 ;
+      ObSysVars[761].base_value_ = "public_key.pem" ;
+    ObSysVars[761].alias_ = "OB_SV_SHA256_PASSWORD_PUBLIC_KEY_PATH" ;
+    }();
+
+    [&] (){
+      ObSysVars[762].default_value_ = "0" ;
+      ObSysVars[762].info_ = " If the variable value is ON, the SHOW DATABASES statement is permitted only to users who have the SHOW DATABASES privilege, and the statement displays all database names" ;
+      ObSysVars[762].name_ = "skip_show_database" ;
+      ObSysVars[762].data_type_ = ObVarcharType ;
+      ObSysVars[762].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[762].id_ = SYS_VAR_SKIP_SHOW_DATABASE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_SHOW_DATABASE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_SHOW_DATABASE] = 762 ;
+      ObSysVars[762].base_value_ = "0" ;
+    ObSysVars[762].alias_ = "OB_SV_SKIP_SHOW_DATABASE" ;
+    }();
+
+    [&] (){
+      ObSysVars[763].default_value_ = "" ;
+      ObSysVars[763].info_ = "This option tells the server to load the named plugins at startup" ;
+      ObSysVars[763].name_ = "plugin_load" ;
+      ObSysVars[763].data_type_ = ObVarcharType ;
+      ObSysVars[763].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[763].id_ = SYS_VAR_PLUGIN_LOAD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLUGIN_LOAD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLUGIN_LOAD] = 763 ;
+      ObSysVars[763].base_value_ = "" ;
+    ObSysVars[763].alias_ = "OB_SV_PLUGIN_LOAD" ;
+    }();
+
+    [&] (){
+      ObSysVars[764].default_value_ = "" ;
+      ObSysVars[764].info_ = "adds a plugin or plugins to the set of plugins to be loaded at startup" ;
+      ObSysVars[764].name_ = "plugin_load_add" ;
+      ObSysVars[764].data_type_ = ObVarcharType ;
+      ObSysVars[764].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[764].id_ = SYS_VAR_PLUGIN_LOAD_ADD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLUGIN_LOAD_ADD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLUGIN_LOAD_ADD] = 764 ;
+      ObSysVars[764].base_value_ = "" ;
+    ObSysVars[764].alias_ = "OB_SV_PLUGIN_LOAD_ADD" ;
+    }();
+
+    [&] (){
+      ObSysVars[765].default_value_ = "0" ;
+      ObSysVars[765].info_ = "the server stores all temporary tables on disk rather than in memory" ;
+      ObSysVars[765].name_ = "big_tables" ;
+      ObSysVars[765].data_type_ = ObIntType ;
+      ObSysVars[765].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[765].id_ = SYS_VAR_BIG_TABLES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BIG_TABLES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BIG_TABLES] = 765 ;
+      ObSysVars[765].base_value_ = "0" ;
+    ObSysVars[765].alias_ = "OB_SV_BIG_TABLES" ;
+    }();
+
+    [&] (){
+      ObSysVars[766].default_value_ = "0" ;
+      ObSysVars[766].info_ = "If the check_proxy_users system variable is enabled, the server performs proxy user mapping for any authentication plugins that make such a request" ;
+      ObSysVars[766].name_ = "check_proxy_users" ;
+      ObSysVars[766].data_type_ = ObIntType ;
+      ObSysVars[766].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[766].id_ = SYS_VAR_CHECK_PROXY_USERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CHECK_PROXY_USERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CHECK_PROXY_USERS] = 766 ;
+      ObSysVars[766].base_value_ = "0" ;
+    ObSysVars[766].alias_ = "OB_SV_CHECK_PROXY_USERS" ;
+    }();
+
+    [&] (){
+      ObSysVars[767].default_value_ = "0" ;
+      ObSysVars[767].info_ = "The number of consecutive failed connection attempts permitted to accounts before the server adds a delay for subsequent connection attempts" ;
+      ObSysVars[767].name_ = "connection_control_failed_connections_threshold" ;
+      ObSysVars[767].data_type_ = ObIntType ;
+      ObSysVars[767].min_val_ = "0" ;
+      ObSysVars[767].max_val_ = "2147483647" ;
+      ObSysVars[767].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[767].id_ = SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD] = 767 ;
+      ObSysVars[767].base_value_ = "0" ;
+    ObSysVars[767].alias_ = "OB_SV_CONNECTION_CONTROL_FAILED_CONNECTIONS_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[768].default_value_ = "2147483647" ;
+      ObSysVars[768].info_ = "The maximum delay in milliseconds for server response to failed connection attempts, if connection_control_failed_connections_threshold is greater than zero" ;
+      ObSysVars[768].name_ = "connection_control_max_connection_delay" ;
+      ObSysVars[768].data_type_ = ObIntType ;
+      ObSysVars[768].min_val_ = "1000" ;
+      ObSysVars[768].max_val_ = "2147483647" ;
+      ObSysVars[768].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[768].id_ = SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CONNECTION_CONTROL_MAX_CONNECTION_DELAY] = 768 ;
+      ObSysVars[768].base_value_ = "2147483647" ;
+    ObSysVars[768].alias_ = "OB_SV_CONNECTION_CONTROL_MAX_CONNECTION_DELAY" ;
+    }();
+
+    [&] (){
+      ObSysVars[769].default_value_ = "1000" ;
+      ObSysVars[769].info_ = "The minmum delay in milliseconds for server response to failed connection attempts, if connection_control_failed_connections_threshold is greater than zero" ;
+      ObSysVars[769].name_ = "connection_control_min_connection_delay" ;
+      ObSysVars[769].data_type_ = ObIntType ;
+      ObSysVars[769].min_val_ = "1000" ;
+      ObSysVars[769].max_val_ = "2147483647" ;
+      ObSysVars[769].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[769].id_ = SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CONNECTION_CONTROL_MIN_CONNECTION_DELAY] = 769 ;
+      ObSysVars[769].base_value_ = "1000" ;
+    ObSysVars[769].alias_ = "OB_SV_CONNECTION_CONTROL_MIN_CONNECTION_DELAY" ;
+    }();
+
+    [&] (){
+      ObSysVars[770].default_value_ = "0" ;
+      ObSysVars[770].info_ = "The default mode value to use for the WEEK() function" ;
+      ObSysVars[770].name_ = "default_week_format" ;
+      ObSysVars[770].data_type_ = ObIntType ;
+      ObSysVars[770].min_val_ = "0" ;
+      ObSysVars[770].max_val_ = "7" ;
+      ObSysVars[770].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[770].id_ = SYS_VAR_DEFAULT_WEEK_FORMAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_WEEK_FORMAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DEFAULT_WEEK_FORMAT] = 770 ;
+      ObSysVars[770].base_value_ = "0" ;
+    ObSysVars[770].alias_ = "OB_SV_DEFAULT_WEEK_FORMAT" ;
+    }();
+
+    [&] (){
+      ObSysVars[771].default_value_ = "300" ;
+      ObSysVars[771].info_ = "" ;
+      ObSysVars[771].name_ = "delayed_insert_timeout" ;
+      ObSysVars[771].data_type_ = ObIntType ;
+      ObSysVars[771].min_val_ = "1" ;
+      ObSysVars[771].max_val_ = "31536000" ;
+      ObSysVars[771].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[771].id_ = SYS_VAR_DELAYED_INSERT_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAYED_INSERT_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DELAYED_INSERT_TIMEOUT] = 771 ;
+      ObSysVars[771].base_value_ = "300" ;
+    ObSysVars[771].alias_ = "OB_SV_DELAYED_INSERT_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[772].default_value_ = "1000" ;
+      ObSysVars[772].info_ = "" ;
+      ObSysVars[772].name_ = "delayed_queue_size" ;
+      ObSysVars[772].data_type_ = ObUInt64Type ;
+      ObSysVars[772].min_val_ = "1" ;
+      ObSysVars[772].max_val_ = "18446744073709551615" ;
+      ObSysVars[772].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[772].id_ = SYS_VAR_DELAYED_QUEUE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAYED_QUEUE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DELAYED_QUEUE_SIZE] = 772 ;
+      ObSysVars[772].base_value_ = "1000" ;
+    ObSysVars[772].alias_ = "OB_SV_DELAYED_QUEUE_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[773].default_value_ = "200" ;
+      ObSysVars[773].info_ = "This variable indicates the number of equality ranges in an equality comparison condition when the optimizer should switch from using index dives to index statistics in estimating the number of qualifying rows" ;
+      ObSysVars[773].name_ = "eq_range_index_dive_limit" ;
+      ObSysVars[773].data_type_ = ObIntType ;
+      ObSysVars[773].min_val_ = "0" ;
+      ObSysVars[773].max_val_ = "4294967295" ;
+      ObSysVars[773].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[773].id_ = SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT] = 773 ;
+      ObSysVars[773].base_value_ = "200" ;
+    ObSysVars[773].alias_ = "OB_SV_EQ_RANGE_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[774].default_value_ = "1" ;
+      ObSysVars[774].info_ = "Causes InnoDB to automatically recalculate persistent statistics after the data in a table is changed substantially, merely simulates MySQL 5.7" ;
+      ObSysVars[774].name_ = "innodb_stats_auto_recalc" ;
+      ObSysVars[774].data_type_ = ObIntType ;
+      ObSysVars[774].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[774].id_ = SYS_VAR_INNODB_STATS_AUTO_RECALC ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_AUTO_RECALC)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_AUTO_RECALC] = 774 ;
+      ObSysVars[774].base_value_ = "1" ;
+    ObSysVars[774].alias_ = "OB_SV_INNODB_STATS_AUTO_RECALC" ;
+    }();
+
+    [&] (){
+      ObSysVars[775].default_value_ = "0" ;
+      ObSysVars[775].info_ = "When innodb_stats_include_delete_marked is enabled, ANALYZE TABLE considers delete-marked records when recalculating statistics" ;
+      ObSysVars[775].name_ = "innodb_stats_include_delete_marked" ;
+      ObSysVars[775].data_type_ = ObIntType ;
+      ObSysVars[775].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[775].id_ = SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_INCLUDE_DELETE_MARKED] = 775 ;
+      ObSysVars[775].base_value_ = "0" ;
+    ObSysVars[775].alias_ = "OB_SV_INNODB_STATS_INCLUDE_DELETE_MARKED" ;
+    }();
+
+    [&] (){
+      ObSysVars[776].default_value_ = "0" ;
+      ObSysVars[776].info_ = "How the server treats NULL values when collecting statistics about the distribution of index values for InnoDB tables" ;
+      ObSysVars[776].name_ = "innodb_stats_method" ;
+      ObSysVars[776].data_type_ = ObIntType ;
+      ObSysVars[776].enum_names_ = "[u'nulls_equal', u'nulls_unequal', u'nulls_ignored']" ;
+      ObSysVars[776].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[776].id_ = SYS_VAR_INNODB_STATS_METHOD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_METHOD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_METHOD] = 776 ;
+      ObSysVars[776].base_value_ = "0" ;
+    ObSysVars[776].alias_ = "OB_SV_INNODB_STATS_METHOD" ;
+    }();
+
+    [&] (){
+      ObSysVars[777].default_value_ = "0" ;
+      ObSysVars[777].info_ = "When innodb_stats_on_metadata is enabled, InnoDB updates non-persistent statistics when metadata statements such as SHOW TABLE STATUS or when accessing the Information Schema TABLES or STATISTICS tables" ;
+      ObSysVars[777].name_ = "innodb_stats_on_metadata" ;
+      ObSysVars[777].data_type_ = ObIntType ;
+      ObSysVars[777].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[777].id_ = SYS_VAR_INNODB_STATS_ON_METADATA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_ON_METADATA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_ON_METADATA] = 777 ;
+      ObSysVars[777].base_value_ = "0" ;
+    ObSysVars[777].alias_ = "OB_SV_INNODB_STATS_ON_METADATA" ;
+    }();
+
+    [&] (){
+      ObSysVars[778].default_value_ = "" ;
+      ObSysVars[778].info_ = "The session value of this variable specifies the client version token list and indicates the tokens that the client session requires the server version token list to have, merely simulates MySQL 5.7" ;
+      ObSysVars[778].name_ = "version_tokens_session" ;
+      ObSysVars[778].data_type_ = ObVarcharType ;
+      ObSysVars[778].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[778].id_ = SYS_VAR_VERSION_TOKENS_SESSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VERSION_TOKENS_SESSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VERSION_TOKENS_SESSION] = 778 ;
+      ObSysVars[778].base_value_ = "" ;
+    ObSysVars[778].alias_ = "OB_SV_VERSION_TOKENS_SESSION" ;
+    }();
+
+    [&] (){
+      ObSysVars[779].default_value_ = "20" ;
+      ObSysVars[779].info_ = "The number of index pages to sample when estimating cardinality and other statistics for an indexed column, such as those calculated by ANALYZE TABLE" ;
+      ObSysVars[779].name_ = "innodb_stats_persistent_sample_pages" ;
+      ObSysVars[779].data_type_ = ObUInt64Type ;
+      ObSysVars[779].min_val_ = "1" ;
+      ObSysVars[779].max_val_ = "18446744073709551615" ;
+      ObSysVars[779].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[779].id_ = SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_PERSISTENT_SAMPLE_PAGES] = 779 ;
+      ObSysVars[779].base_value_ = "20" ;
+    ObSysVars[779].alias_ = "OB_SV_INNODB_STATS_PERSISTENT_SAMPLE_PAGES" ;
+    }();
+
+    [&] (){
+      ObSysVars[780].default_value_ = "8" ;
+      ObSysVars[780].info_ = "The number of index pages to sample when estimating cardinality and other statistics for an indexed column, such as those calculated by ANALYZE TABLE" ;
+      ObSysVars[780].name_ = "innodb_stats_sample_pages" ;
+      ObSysVars[780].data_type_ = ObUInt64Type ;
+      ObSysVars[780].min_val_ = "1" ;
+      ObSysVars[780].max_val_ = "18446744073709551615" ;
+      ObSysVars[780].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[780].id_ = SYS_VAR_INNODB_STATS_SAMPLE_PAGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_SAMPLE_PAGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_SAMPLE_PAGES] = 780 ;
+      ObSysVars[780].base_value_ = "8" ;
+    ObSysVars[780].alias_ = "OB_SV_INNODB_STATS_SAMPLE_PAGES" ;
+    }();
+
+    [&] (){
+      ObSysVars[781].default_value_ = "8" ;
+      ObSysVars[781].info_ = "The number of index pages to sample when estimating cardinality and other statistics for an indexed column, such as those calculated by ANALYZE TABLE" ;
+      ObSysVars[781].name_ = "innodb_stats_transient_sample_pages" ;
+      ObSysVars[781].data_type_ = ObUInt64Type ;
+      ObSysVars[781].min_val_ = "1" ;
+      ObSysVars[781].max_val_ = "18446744073709551615" ;
+      ObSysVars[781].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[781].id_ = SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_TRANSIENT_SAMPLE_PAGES] = 781 ;
+      ObSysVars[781].base_value_ = "8" ;
+    ObSysVars[781].alias_ = "OB_SV_INNODB_STATS_TRANSIENT_SAMPLE_PAGES" ;
+    }();
+
+    [&] (){
+      ObSysVars[782].default_value_ = "" ;
+      ObSysVars[782].info_ = "The customer master key (CMK) ID obtained from the AWS KMS server and used by the keyring_aws plugin" ;
+      ObSysVars[782].name_ = "keyring_aws_cmk_id" ;
+      ObSysVars[782].data_type_ = ObVarcharType ;
+      ObSysVars[782].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[782].id_ = SYS_VAR_KEYRING_AWS_CMK_ID ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_CMK_ID)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_CMK_ID] = 782 ;
+      ObSysVars[782].base_value_ = "" ;
+    ObSysVars[782].alias_ = "OB_SV_KEYRING_AWS_CMK_ID" ;
+    }();
+
+    [&] (){
+      ObSysVars[783].default_value_ = "19" ;
+      ObSysVars[783].info_ = "The AWS region for the keyring_aws plugin. This variable is unavailable unless that plugin is installed" ;
+      ObSysVars[783].name_ = "keyring_aws_region" ;
+      ObSysVars[783].data_type_ = ObIntType ;
+      ObSysVars[783].enum_names_ = "[u'af-south-1', u'ap-east-1', u'ap-northeast-1', u'ap-northeast-2', u'ap-northeast-3', u'ap-south-1', u'ap-southeast-1', u'ap-southeast-2', u'ca-central-1', u'cn-north-1', u'cn-northwest-1', u'eu-central-1', u'eu-north-1', u'eu-south-1', u'eu-west-1', u'eu-west-2', u'eu-west-3', u'me-south-1', u'sa-east-1', u'us-east-1', u'us-east-2', u'us-gov-east-1', u'us-iso-east-1', u'us-iso-west-1', u'us-isob-east-1', u'us-west-1', u'us-west-2']" ;
+      ObSysVars[783].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[783].id_ = SYS_VAR_KEYRING_AWS_REGION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_AWS_REGION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_AWS_REGION] = 783 ;
+      ObSysVars[783].base_value_ = "19" ;
+    ObSysVars[783].alias_ = "OB_SV_KEYRING_AWS_REGION" ;
+    }();
+
+    [&] (){
+      ObSysVars[784].default_value_ = "" ;
+      ObSysVars[784].info_ = "The path name of the data file used for secure data storage by the keyring_encrypted_file plugin" ;
+      ObSysVars[784].name_ = "keyring_encrypted_file_data" ;
+      ObSysVars[784].data_type_ = ObVarcharType ;
+      ObSysVars[784].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[784].id_ = SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_ENCRYPTED_FILE_DATA] = 784 ;
+      ObSysVars[784].base_value_ = "" ;
+    ObSysVars[784].alias_ = "OB_SV_KEYRING_ENCRYPTED_FILE_DATA" ;
+    }();
+
+    [&] (){
+      ObSysVars[785].default_value_ = "" ;
+      ObSysVars[785].info_ = "The password used by the keyring_encrypted_file pluginn" ;
+      ObSysVars[785].name_ = "keyring_encrypted_file_password" ;
+      ObSysVars[785].data_type_ = ObVarcharType ;
+      ObSysVars[785].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[785].id_ = SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_ENCRYPTED_FILE_PASSWORD] = 785 ;
+      ObSysVars[785].base_value_ = "" ;
+    ObSysVars[785].alias_ = "OB_SV_KEYRING_ENCRYPTED_FILE_PASSWORD" ;
+    }();
+
+    [&] (){
+      ObSysVars[786].default_value_ = "" ;
+      ObSysVars[786].info_ = "The path name of the data file used for secure data storage by the keyring_file plugin" ;
+      ObSysVars[786].name_ = "keyring_file_data" ;
+      ObSysVars[786].data_type_ = ObVarcharType ;
+      ObSysVars[786].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[786].id_ = SYS_VAR_KEYRING_FILE_DATA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_FILE_DATA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_FILE_DATA] = 786 ;
+      ObSysVars[786].base_value_ = "" ;
+    ObSysVars[786].alias_ = "OB_SV_KEYRING_FILE_DATA" ;
+    }();
+
+    [&] (){
+      ObSysVars[787].default_value_ = "" ;
+      ObSysVars[787].info_ = "The path name of the directory that stores configuration information used by the keyring_okv plugin" ;
+      ObSysVars[787].name_ = "keyring_okv_conf_dir" ;
+      ObSysVars[787].data_type_ = ObVarcharType ;
+      ObSysVars[787].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[787].id_ = SYS_VAR_KEYRING_OKV_CONF_DIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_OKV_CONF_DIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_OKV_CONF_DIR] = 787 ;
+      ObSysVars[787].base_value_ = "" ;
+    ObSysVars[787].alias_ = "OB_SV_KEYRING_OKV_CONF_DIR" ;
+    }();
+
+    [&] (){
+      ObSysVars[788].default_value_ = "1" ;
+      ObSysVars[788].info_ = "Whether keyring operations are enabled. This variable is used during key migration operations" ;
+      ObSysVars[788].name_ = "keyring_operations" ;
+      ObSysVars[788].data_type_ = ObIntType ;
+      ObSysVars[788].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[788].id_ = SYS_VAR_KEYRING_OPERATIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_KEYRING_OPERATIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_KEYRING_OPERATIONS] = 788 ;
+      ObSysVars[788].base_value_ = "1" ;
+    ObSysVars[788].alias_ = "OB_SV_KEYRING_OPERATIONS" ;
+    }();
+
+    [&] (){
+      ObSysVars[789].default_value_ = "" ;
+      ObSysVars[789].info_ = "enables control over optimizer behavior" ;
+      ObSysVars[789].name_ = "optimizer_switch" ;
+      ObSysVars[789].data_type_ = ObVarcharType ;
+      ObSysVars[789].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[789].id_ = SYS_VAR_OPTIMIZER_SWITCH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_SWITCH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_SWITCH] = 789 ;
+      ObSysVars[789].base_value_ = "" ;
+    ObSysVars[789].alias_ = "OB_SV_OPTIMIZER_SWITCH" ;
+    }();
+
+    [&] (){
+      ObSysVars[790].default_value_ = "100" ;
+      ObSysVars[790].info_ = "After max_connect_errors successive connection requests from a host are interrupted without a successful connection, the server blocks that host from further connections" ;
+      ObSysVars[790].name_ = "max_connect_errors" ;
+      ObSysVars[790].data_type_ = ObUInt64Type ;
+      ObSysVars[790].min_val_ = "1" ;
+      ObSysVars[790].max_val_ = "18446744073709551615" ;
+      ObSysVars[790].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[790].id_ = SYS_VAR_MAX_CONNECT_ERRORS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_CONNECT_ERRORS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_CONNECT_ERRORS] = 790 ;
+      ObSysVars[790].base_value_ = "100" ;
+    ObSysVars[790].alias_ = "OB_SV_MAX_CONNECT_ERRORS" ;
+    }();
+
+    [&] (){
+      ObSysVars[791].default_value_ = "0" ;
+      ObSysVars[791].info_ = "Whether MySQL Enterprise Firewall is enabled (the default) or disabled" ;
+      ObSysVars[791].name_ = "mysql_firewall_mode" ;
+      ObSysVars[791].data_type_ = ObIntType ;
+      ObSysVars[791].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[791].id_ = SYS_VAR_MYSQL_FIREWALL_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQL_FIREWALL_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQL_FIREWALL_MODE] = 791 ;
+      ObSysVars[791].base_value_ = "0" ;
+    ObSysVars[791].alias_ = "OB_SV_MYSQL_FIREWALL_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[792].default_value_ = "0" ;
+      ObSysVars[792].info_ = "Whether the MySQL Enterprise Firewall trace is enabled or disabled (the default)" ;
+      ObSysVars[792].name_ = "mysql_firewall_trace" ;
+      ObSysVars[792].data_type_ = ObIntType ;
+      ObSysVars[792].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[792].id_ = SYS_VAR_MYSQL_FIREWALL_TRACE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQL_FIREWALL_TRACE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQL_FIREWALL_TRACE] = 792 ;
+      ObSysVars[792].base_value_ = "0" ;
+    ObSysVars[792].alias_ = "OB_SV_MYSQL_FIREWALL_TRACE" ;
+    }();
+
+    [&] (){
+      ObSysVars[793].default_value_ = "0" ;
+      ObSysVars[793].info_ = "This variable controls whether the mysql_native_password built-in authentication plugin supports proxy users" ;
+      ObSysVars[793].name_ = "mysql_native_password_proxy_users" ;
+      ObSysVars[793].data_type_ = ObIntType ;
+      ObSysVars[793].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[793].id_ = SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MYSQL_NATIVE_PASSWORD_PROXY_USERS] = 793 ;
+      ObSysVars[793].base_value_ = "0" ;
+    ObSysVars[793].alias_ = "OB_SV_MYSQL_NATIVE_PASSWORD_PROXY_USERS" ;
+    }();
+
+    [&] (){
+      ObSysVars[794].default_value_ = "10" ;
+      ObSysVars[794].info_ = "If a read or write on a communication port is interrupted, retry this many times before giving up. This value should be set quite high on FreeBSD because internal interrupts are sent to all threads" ;
+      ObSysVars[794].name_ = "net_retry_count" ;
+      ObSysVars[794].data_type_ = ObUInt64Type ;
+      ObSysVars[794].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[794].id_ = SYS_VAR_NET_RETRY_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NET_RETRY_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NET_RETRY_COUNT] = 794 ;
+      ObSysVars[794].base_value_ = "10" ;
+    ObSysVars[794].alias_ = "OB_SV_NET_RETRY_COUNT" ;
+    }();
+
+    [&] (){
+      ObSysVars[795].default_value_ = "0" ;
+      ObSysVars[795].info_ = "This variable was used in MySQL 4.0 to turn on some 4.1 behaviors, and is retained for backward compatibility. Its value is always OFF" ;
+      ObSysVars[795].name_ = "new" ;
+      ObSysVars[795].data_type_ = ObIntType ;
+      ObSysVars[795].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[795].id_ = SYS_VAR_NEW ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NEW)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NEW] = 795 ;
+      ObSysVars[795].base_value_ = "0" ;
+    ObSysVars[795].alias_ = "OB_SV_NEW" ;
+    }();
+
+    [&] (){
+      ObSysVars[796].default_value_ = "0" ;
+      ObSysVars[796].info_ = "This variable controls the password hashing method used by the PASSWORD() function. It also influences password hashing performed by CREATE USER and GRANT statements that specify a password using an IDENTIFIED BY clause" ;
+      ObSysVars[796].name_ = "old_passwords" ;
+      ObSysVars[796].data_type_ = ObIntType ;
+      ObSysVars[796].enum_names_ = "[u'0', u'1', u'2']" ;
+      ObSysVars[796].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[796].id_ = SYS_VAR_OLD_PASSWORDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OLD_PASSWORDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OLD_PASSWORDS] = 796 ;
+      ObSysVars[796].base_value_ = "0" ;
+    ObSysVars[796].alias_ = "OB_SV_OLD_PASSWORDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[797].default_value_ = "1" ;
+      ObSysVars[797].info_ = "Controls the heuristics applied during query optimization to prune less-promising partial plans from the optimizer search space" ;
+      ObSysVars[797].name_ = "optimizer_prune_level" ;
+      ObSysVars[797].data_type_ = ObIntType ;
+      ObSysVars[797].min_val_ = "0" ;
+      ObSysVars[797].max_val_ = "1" ;
+      ObSysVars[797].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[797].id_ = SYS_VAR_OPTIMIZER_PRUNE_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_PRUNE_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_PRUNE_LEVEL] = 797 ;
+      ObSysVars[797].base_value_ = "1" ;
+    ObSysVars[797].alias_ = "OB_SV_OPTIMIZER_PRUNE_LEVEL" ;
+    }();
+
+    [&] (){
+      ObSysVars[798].default_value_ = "62" ;
+      ObSysVars[798].info_ = "The maximum depth of search performed by the query optimizer" ;
+      ObSysVars[798].name_ = "optimizer_search_depth" ;
+      ObSysVars[798].data_type_ = ObIntType ;
+      ObSysVars[798].min_val_ = "0" ;
+      ObSysVars[798].max_val_ = "62" ;
+      ObSysVars[798].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[798].id_ = SYS_VAR_OPTIMIZER_SEARCH_DEPTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_SEARCH_DEPTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_SEARCH_DEPTH] = 798 ;
+      ObSysVars[798].base_value_ = "62" ;
+    ObSysVars[798].alias_ = "OB_SV_OPTIMIZER_SEARCH_DEPTH" ;
+    }();
+
+    [&] (){
+      ObSysVars[799].default_value_ = "" ;
+      ObSysVars[799].info_ = "This variable controls optimizer tracing" ;
+      ObSysVars[799].name_ = "optimizer_trace" ;
+      ObSysVars[799].data_type_ = ObVarcharType ;
+      ObSysVars[799].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[799].id_ = SYS_VAR_OPTIMIZER_TRACE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE] = 799 ;
+      ObSysVars[799].base_value_ = "" ;
+    ObSysVars[799].alias_ = "OB_SV_OPTIMIZER_TRACE" ;
+    }();
+
+    [&] (){
+      ObSysVars[800].default_value_ = "" ;
+      ObSysVars[800].info_ = "This variable enables or disables selected optimizer tracing features" ;
+      ObSysVars[800].name_ = "optimizer_trace_features" ;
+      ObSysVars[800].data_type_ = ObVarcharType ;
+      ObSysVars[800].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[800].id_ = SYS_VAR_OPTIMIZER_TRACE_FEATURES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_FEATURES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_FEATURES] = 800 ;
+      ObSysVars[800].base_value_ = "" ;
+    ObSysVars[800].alias_ = "OB_SV_OPTIMIZER_TRACE_FEATURES" ;
+    }();
+
+    [&] (){
+      ObSysVars[801].default_value_ = "1" ;
+      ObSysVars[801].info_ = "The maximum number of optimizer traces to display" ;
+      ObSysVars[801].name_ = "optimizer_trace_limit" ;
+      ObSysVars[801].data_type_ = ObIntType ;
+      ObSysVars[801].min_val_ = "0" ;
+      ObSysVars[801].max_val_ = "2147483647" ;
+      ObSysVars[801].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[801].id_ = SYS_VAR_OPTIMIZER_TRACE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_LIMIT] = 801 ;
+      ObSysVars[801].base_value_ = "1" ;
+    ObSysVars[801].alias_ = "OB_SV_OPTIMIZER_TRACE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[802].default_value_ = "16384" ;
+      ObSysVars[802].info_ = "The maximum cumulative size of stored optimizer traces" ;
+      ObSysVars[802].name_ = "optimizer_trace_max_mem_size" ;
+      ObSysVars[802].data_type_ = ObUInt64Type ;
+      ObSysVars[802].min_val_ = "0" ;
+      ObSysVars[802].max_val_ = "4294967295" ;
+      ObSysVars[802].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[802].id_ = SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_MAX_MEM_SIZE] = 802 ;
+      ObSysVars[802].base_value_ = "16384" ;
+    ObSysVars[802].alias_ = "OB_SV_OPTIMIZER_TRACE_MAX_MEM_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[803].default_value_ = "-1" ;
+      ObSysVars[803].info_ = "The offset of optimizer traces to display" ;
+      ObSysVars[803].name_ = "optimizer_trace_offset" ;
+      ObSysVars[803].data_type_ = ObIntType ;
+      ObSysVars[803].min_val_ = "-2147483647" ;
+      ObSysVars[803].max_val_ = "2147483647" ;
+      ObSysVars[803].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[803].id_ = SYS_VAR_OPTIMIZER_TRACE_OFFSET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_TRACE_OFFSET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_TRACE_OFFSET] = 803 ;
+      ObSysVars[803].base_value_ = "-1" ;
+    ObSysVars[803].alias_ = "OB_SV_OPTIMIZER_TRACE_OFFSET" ;
+    }();
+
+    [&] (){
+      ObSysVars[804].default_value_ = "18446744073709551615" ;
+      ObSysVars[804].info_ = "The maximum amount of memory available to the parser" ;
+      ObSysVars[804].name_ = "parser_max_mem_size" ;
+      ObSysVars[804].data_type_ = ObUInt64Type ;
+      ObSysVars[804].min_val_ = "10000000" ;
+      ObSysVars[804].max_val_ = "18446744073709551615" ;
+      ObSysVars[804].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[804].id_ = SYS_VAR_PARSER_MAX_MEM_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARSER_MAX_MEM_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARSER_MAX_MEM_SIZE] = 804 ;
+      ObSysVars[804].base_value_ = "18446744073709551615" ;
+    ObSysVars[804].alias_ = "OB_SV_PARSER_MAX_MEM_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[805].default_value_ = "0" ;
+      ObSysVars[805].info_ = "For statements that invoke RAND(), the source passes two values to the replica, where they are used to seed the random number generator" ;
+      ObSysVars[805].name_ = "rand_seed1" ;
+      ObSysVars[805].data_type_ = ObUInt64Type ;
+      ObSysVars[805].min_val_ = "0" ;
+      ObSysVars[805].max_val_ = "4294967295" ;
+      ObSysVars[805].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[805].id_ = SYS_VAR_RAND_SEED1 ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RAND_SEED1)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RAND_SEED1] = 805 ;
+      ObSysVars[805].base_value_ = "0" ;
+    ObSysVars[805].alias_ = "OB_SV_RAND_SEED1" ;
+    }();
+
+    [&] (){
+      ObSysVars[806].default_value_ = "0" ;
+      ObSysVars[806].info_ = "For statements that invoke RAND(), the source passes two values to the replica, where they are used to seed the random number generator" ;
+      ObSysVars[806].name_ = "rand_seed2" ;
+      ObSysVars[806].data_type_ = ObUInt64Type ;
+      ObSysVars[806].min_val_ = "0" ;
+      ObSysVars[806].max_val_ = "4294967295" ;
+      ObSysVars[806].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[806].id_ = SYS_VAR_RAND_SEED2 ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RAND_SEED2)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RAND_SEED2] = 806 ;
+      ObSysVars[806].base_value_ = "0" ;
+    ObSysVars[806].alias_ = "OB_SV_RAND_SEED2" ;
+    }();
+
+    [&] (){
+      ObSysVars[807].default_value_ = "4096" ;
+      ObSysVars[807].info_ = "The size in bytes of blocks that are allocated when doing range optimization" ;
+      ObSysVars[807].name_ = "range_alloc_block_size" ;
+      ObSysVars[807].data_type_ = ObUInt64Type ;
+      ObSysVars[807].min_val_ = "4096" ;
+      ObSysVars[807].max_val_ = "18446744073709550592" ;
+      ObSysVars[807].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[807].id_ = SYS_VAR_RANGE_ALLOC_BLOCK_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_ALLOC_BLOCK_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_ALLOC_BLOCK_SIZE] = 807 ;
+      ObSysVars[807].base_value_ = "4096" ;
+    ObSysVars[807].alias_ = "OB_SV_RANGE_ALLOC_BLOCK_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[808].default_value_ = "8388608" ;
+      ObSysVars[808].info_ = "The limit on memory consumption for the range optimizer" ;
+      ObSysVars[808].name_ = "range_optimizer_max_mem_size" ;
+      ObSysVars[808].data_type_ = ObUInt64Type ;
+      ObSysVars[808].min_val_ = "0" ;
+      ObSysVars[808].max_val_ = "18446744073709551615" ;
+      ObSysVars[808].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[808].id_ = SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE] = 808 ;
+      ObSysVars[808].base_value_ = "8388608" ;
+    ObSysVars[808].alias_ = "OB_SV_RANGE_OPTIMIZER_MAX_MEM_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[809].default_value_ = "1" ;
+      ObSysVars[809].info_ = "Whether the Rewriter query rewrite plugin is enabled" ;
+      ObSysVars[809].name_ = "rewriter_enabled" ;
+      ObSysVars[809].data_type_ = ObIntType ;
+      ObSysVars[809].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[809].id_ = SYS_VAR_REWRITER_ENABLED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REWRITER_ENABLED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REWRITER_ENABLED] = 809 ;
+      ObSysVars[809].base_value_ = "1" ;
+    ObSysVars[809].alias_ = "OB_SV_REWRITER_ENABLED" ;
+    }();
+
+    [&] (){
+      ObSysVars[810].default_value_ = "0" ;
+      ObSysVars[810].info_ = "For internal use in MySQL" ;
+      ObSysVars[810].name_ = "rewriter_verbose" ;
+      ObSysVars[810].data_type_ = ObIntType ;
+      ObSysVars[810].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[810].id_ = SYS_VAR_REWRITER_VERBOSE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REWRITER_VERBOSE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REWRITER_VERBOSE] = 810 ;
+      ObSysVars[810].base_value_ = "0" ;
+    ObSysVars[810].alias_ = "OB_SV_REWRITER_VERBOSE" ;
+    }();
+
+    [&] (){
+      ObSysVars[811].default_value_ = "1" ;
+      ObSysVars[811].info_ = "If this variable is enabled, the server blocks connections by clients that attempt to use accounts that have passwords stored in the old (pre-4.1) format" ;
+      ObSysVars[811].name_ = "secure_auth" ;
+      ObSysVars[811].data_type_ = ObIntType ;
+      ObSysVars[811].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[811].id_ = SYS_VAR_SECURE_AUTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SECURE_AUTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SECURE_AUTH] = 811 ;
+      ObSysVars[811].base_value_ = "1" ;
+    ObSysVars[811].alias_ = "OB_SV_SECURE_AUTH" ;
+    }();
+
+    [&] (){
+      ObSysVars[812].default_value_ = "0" ;
+      ObSysVars[812].info_ = "This variable controls whether the sha256_password built-in authentication plugin supports proxy users" ;
+      ObSysVars[812].name_ = "sha256_password_proxy_users" ;
+      ObSysVars[812].data_type_ = ObIntType ;
+      ObSysVars[812].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[812].id_ = SYS_VAR_SHA256_PASSWORD_PROXY_USERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHA256_PASSWORD_PROXY_USERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHA256_PASSWORD_PROXY_USERS] = 812 ;
+      ObSysVars[812].base_value_ = "0" ;
+    ObSysVars[812].alias_ = "OB_SV_SHA256_PASSWORD_PROXY_USERS" ;
+    }();
+
+    [&] (){
+      ObSysVars[813].default_value_ = "0" ;
+      ObSysVars[813].info_ = "which affects whether MySQL 5.6 compatibility is enabled with respect to how system and status variable information is provided by the INFORMATION_SCHEMA and Performance Schema tables, and also by the SHOW VARIABLES and SHOW STATUS statements" ;
+      ObSysVars[813].name_ = "show_compatibility_56" ;
+      ObSysVars[813].data_type_ = ObIntType ;
+      ObSysVars[813].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[813].id_ = SYS_VAR_SHOW_COMPATIBILITY_56 ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHOW_COMPATIBILITY_56)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHOW_COMPATIBILITY_56] = 813 ;
+      ObSysVars[813].base_value_ = "0" ;
+    ObSysVars[813].alias_ = "OB_SV_SHOW_COMPATIBILITY_56" ;
+    }();
+
+    [&] (){
+      ObSysVars[814].default_value_ = "0" ;
+      ObSysVars[814].info_ = "Enabling this variable causes SHOW CREATE TABLE to display ROW_FORMAT regardless of whether it is the default format" ;
+      ObSysVars[814].name_ = "show_create_table_verbosity" ;
+      ObSysVars[814].data_type_ = ObIntType ;
+      ObSysVars[814].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[814].id_ = SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHOW_CREATE_TABLE_VERBOSITY] = 814 ;
+      ObSysVars[814].base_value_ = "0" ;
+    ObSysVars[814].alias_ = "OB_SV_SHOW_CREATE_TABLE_VERBOSITY" ;
+    }();
+
+    [&] (){
+      ObSysVars[815].default_value_ = "0" ;
+      ObSysVars[815].info_ = "Whether SHOW CREATE TABLE output includes comments" ;
+      ObSysVars[815].name_ = "show_old_temporals" ;
+      ObSysVars[815].data_type_ = ObIntType ;
+      ObSysVars[815].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[815].id_ = SYS_VAR_SHOW_OLD_TEMPORALS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SHOW_OLD_TEMPORALS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SHOW_OLD_TEMPORALS] = 815 ;
+      ObSysVars[815].base_value_ = "0" ;
+    ObSysVars[815].alias_ = "OB_SV_SHOW_OLD_TEMPORALS" ;
+    }();
+
+    [&] (){
+      ObSysVars[816].default_value_ = "1" ;
+      ObSysVars[816].info_ = "If set to OFF, MySQL aborts SELECT statements that are likely to take a very long time to execute" ;
+      ObSysVars[816].name_ = "sql_big_selects" ;
+      ObSysVars[816].data_type_ = ObIntType ;
+      ObSysVars[816].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[816].id_ = SYS_VAR_SQL_BIG_SELECTS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_BIG_SELECTS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_BIG_SELECTS] = 816 ;
+      ObSysVars[816].base_value_ = "1" ;
+    ObSysVars[816].alias_ = "OB_SV_SQL_BIG_SELECTS" ;
+    }();
+
+    [&] (){
+      ObSysVars[817].default_value_ = "1" ;
+      ObSysVars[817].info_ = "This variable controls whether updates to a view can be made when the view does not contain all columns of the primary key defined in the underlying table, if the update statement contains a LIMIT clause" ;
+      ObSysVars[817].name_ = "updatable_views_with_limit" ;
+      ObSysVars[817].data_type_ = ObIntType ;
+      ObSysVars[817].enum_names_ = "[u'OFF', u'ON', u'NO', u'YES']" ;
+      ObSysVars[817].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[817].id_ = SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_UPDATABLE_VIEWS_WITH_LIMIT] = 817 ;
+      ObSysVars[817].base_value_ = "1" ;
+    ObSysVars[817].alias_ = "OB_SV_UPDATABLE_VIEWS_WITH_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[818].default_value_ = "" ;
+      ObSysVars[818].info_ = "The path name of the dictionary file that validate_password uses for checking passwords." ;
+      ObSysVars[818].name_ = "validate_password_dictionary_file" ;
+      ObSysVars[818].data_type_ = ObVarcharType ;
+      ObSysVars[818].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[818].id_ = SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_DICTIONARY_FILE] = 818 ;
+      ObSysVars[818].base_value_ = "" ;
+    ObSysVars[818].alias_ = "OB_SV_VALIDATE_PASSWORD_DICTIONARY_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[819].default_value_ = "100" ;
+      ObSysVars[819].info_ = "" ;
+      ObSysVars[819].name_ = "delayed_insert_limit" ;
+      ObSysVars[819].data_type_ = ObUInt64Type ;
+      ObSysVars[819].min_val_ = "1" ;
+      ObSysVars[819].max_val_ = "18446744073709551615" ;
+      ObSysVars[819].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[819].id_ = SYS_VAR_DELAYED_INSERT_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DELAYED_INSERT_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DELAYED_INSERT_LIMIT] = 819 ;
+      ObSysVars[819].base_value_ = "100" ;
+    ObSysVars[819].alias_ = "OB_SV_DELAYED_INSERT_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[820].default_value_ = "" ;
+      ObSysVars[820].info_ = "NDB engine version in ndb-x.y.z format" ;
+      ObSysVars[820].name_ = "ndb_version" ;
+      ObSysVars[820].data_type_ = ObVarcharType ;
+      ObSysVars[820].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[820].id_ = SYS_VAR_NDB_VERSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_VERSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NDB_VERSION] = 820 ;
+      ObSysVars[820].base_value_ = "" ;
+    ObSysVars[820].alias_ = "OB_SV_NDB_VERSION" ;
+    }();
+
+    [&] (){
+      ObSysVars[821].default_value_ = "1" ;
+      ObSysVars[821].info_ = "This variable is available if the server was compiled using OpenSSL. It controls whether the server autogenerates SSL key and certificate files in the data directory, if they do not already exist" ;
+      ObSysVars[821].name_ = "auto_generate_certs" ;
+      ObSysVars[821].data_type_ = ObIntType ;
+      ObSysVars[821].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[821].id_ = SYS_VAR_AUTO_GENERATE_CERTS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTO_GENERATE_CERTS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AUTO_GENERATE_CERTS] = 821 ;
+      ObSysVars[821].base_value_ = "1" ;
+    ObSysVars[821].alias_ = "OB_SV_AUTO_GENERATE_CERTS" ;
+    }();
+
+    [&] (){
+      ObSysVars[822].default_value_ = "1" ;
+      ObSysVars[822].info_ = "control cost-based transformation search policy" ;
+      ObSysVars[822].name_ = "_optimizer_cost_based_transformation" ;
+      ObSysVars[822].data_type_ = ObIntType ;
+      ObSysVars[822].min_val_ = "0" ;
+      ObSysVars[822].max_val_ = "2" ;
+      ObSysVars[822].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[822].id_ = SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION] = 822 ;
+      ObSysVars[822].base_value_ = "1" ;
+    ObSysVars[822].alias_ = "OB_SV__OPTIMIZER_COST_BASED_TRANSFORMATION" ;
+    }();
+
+    [&] (){
+      ObSysVars[823].default_value_ = "10" ;
+      ObSysVars[823].info_ = "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation" ;
+      ObSysVars[823].name_ = "range_index_dive_limit" ;
+      ObSysVars[823].data_type_ = ObIntType ;
+      ObSysVars[823].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[823].id_ = SYS_VAR_RANGE_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_INDEX_DIVE_LIMIT] = 823 ;
+      ObSysVars[823].base_value_ = "10" ;
+    ObSysVars[823].alias_ = "OB_SV_RANGE_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[824].default_value_ = "10" ;
+      ObSysVars[824].info_ = "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation" ;
+      ObSysVars[824].name_ = "partition_index_dive_limit" ;
+      ObSysVars[824].data_type_ = ObIntType ;
+      ObSysVars[824].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[824].id_ = SYS_VAR_PARTITION_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARTITION_INDEX_DIVE_LIMIT] = 824 ;
+      ObSysVars[824].base_value_ = "10" ;
+    ObSysVars[824].alias_ = "OB_SV_PARTITION_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[825].default_value_ = "2" ;
+      ObSysVars[825].info_ = "Control the optimizer to generate a table access plan that prefers a specific storage format." ;
+      ObSysVars[825].name_ = "ob_table_access_policy" ;
+      ObSysVars[825].data_type_ = ObIntType ;
+      ObSysVars[825].enum_names_ = "[u'ROW_STORE', u'COLUMN_STORE', u'AUTO']" ;
+      ObSysVars[825].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[825].id_ = SYS_VAR_OB_TABLE_ACCESS_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TABLE_ACCESS_POLICY] = 825 ;
+      ObSysVars[825].base_value_ = "2" ;
+    ObSysVars[825].alias_ = "OB_SV_TABLE_ACCESS_POLICY" ;
+    }();
+
+    [&] (){
+      ObSysVars[826].default_value_ = "3" ;
+      ObSysVars[826].info_ = "The path name of the file in which the server writes its process ID" ;
+      ObSysVars[826].name_ = "pid_file" ;
+      ObSysVars[826].data_type_ = ObVarcharType ;
+      ObSysVars[826].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[826].id_ = SYS_VAR_PID_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PID_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PID_FILE] = 826 ;
+      ObSysVars[826].base_value_ = "3" ;
+    ObSysVars[826].alias_ = "OB_SV_PID_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[827].default_value_ = "3" ;
+      ObSysVars[827].info_ = "The number of the port on which the server listens for TCP/IP connections" ;
+      ObSysVars[827].name_ = "port" ;
+      ObSysVars[827].data_type_ = ObIntType ;
+      ObSysVars[827].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[827].id_ = SYS_VAR_PORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PORT] = 827 ;
+      ObSysVars[827].base_value_ = "3" ;
+    ObSysVars[827].alias_ = "OB_SV_PORT" ;
+    }();
+
+    [&] (){
+      ObSysVars[828].default_value_ = "3" ;
+      ObSysVars[828].info_ = "the name of the socket file that is used for local client connections" ;
+      ObSysVars[828].name_ = "socket" ;
+      ObSysVars[828].data_type_ = ObVarcharType ;
+      ObSysVars[828].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[828].id_ = SYS_VAR_SOCKET ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SOCKET)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SOCKET] = 615 ;
-      ObSysVars[615].base_value_ = "3" ;
-    ObSysVars[615].alias_ = "OB_SV_SOCKET" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SOCKET] = 828 ;
+      ObSysVars[828].base_value_ = "3" ;
+    ObSysVars[828].alias_ = "OB_SV_SOCKET" ;
     }();
 
     [&] (){
-      ObSysVars[616].default_value_ = "1" ;
-      ObSysVars[616].info_ = "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation." ;
-      ObSysVars[616].name_ = "enable_optimizer_rowgoal" ;
-      ObSysVars[616].data_type_ = ObIntType ;
-      ObSysVars[616].enum_names_ = "[u'OFF', u'AUTO', u'ON']" ;
-      ObSysVars[616].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[616].id_ = SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL ;
+      ObSysVars[829].default_value_ = "4" ;
+      ObSysVars[829].info_ = "The default refresh parallelism of materialized view" ;
+      ObSysVars[829].name_ = "mview_refresh_dop" ;
+      ObSysVars[829].data_type_ = ObUInt64Type ;
+      ObSysVars[829].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[829].id_ = SYS_VAR_MVIEW_REFRESH_DOP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MVIEW_REFRESH_DOP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MVIEW_REFRESH_DOP] = 829 ;
+      ObSysVars[829].base_value_ = "4" ;
+    ObSysVars[829].alias_ = "OB_SV_MVIEW_REFRESH_DOP" ;
+    }();
+
+    [&] (){
+      ObSysVars[830].default_value_ = "1" ;
+      ObSysVars[830].info_ = "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation." ;
+      ObSysVars[830].name_ = "enable_optimizer_rowgoal" ;
+      ObSysVars[830].data_type_ = ObIntType ;
+      ObSysVars[830].enum_names_ = "[u'OFF', u'AUTO', u'ON']" ;
+      ObSysVars[830].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[830].id_ = SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL] = 616 ;
-      ObSysVars[616].base_value_ = "1" ;
-    ObSysVars[616].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL] = 830 ;
+      ObSysVars[830].base_value_ = "1" ;
+    ObSysVars[830].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
     }();
 
     [&] (){
-      ObSysVars[617].default_value_ = "8" ;
-      ObSysVars[617].info_ = "The number of nearest cluster centers from the IVF vector index searched during this session." ;
-      ObSysVars[617].name_ = "ob_ivf_nprobes" ;
-      ObSysVars[617].data_type_ = ObUInt64Type ;
-      ObSysVars[617].min_val_ = "1" ;
-      ObSysVars[617].max_val_ = "65536" ;
-      ObSysVars[617].flags_ = ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[617].id_ = SYS_VAR_OB_IVF_NPROBES ;
+      ObSysVars[831].default_value_ = "8" ;
+      ObSysVars[831].info_ = "The number of nearest cluster centers from the IVF vector index searched during this session." ;
+      ObSysVars[831].name_ = "ob_ivf_nprobes" ;
+      ObSysVars[831].data_type_ = ObUInt64Type ;
+      ObSysVars[831].min_val_ = "1" ;
+      ObSysVars[831].max_val_ = "65536" ;
+      ObSysVars[831].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[831].id_ = SYS_VAR_OB_IVF_NPROBES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IVF_NPROBES] = 617 ;
-      ObSysVars[617].base_value_ = "8" ;
-    ObSysVars[617].alias_ = "OB_SV_IVF_NPROBES" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IVF_NPROBES] = 831 ;
+      ObSysVars[831].base_value_ = "8" ;
+    ObSysVars[831].alias_ = "OB_SV_IVF_NPROBES" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -8612,7 +11403,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 618;
+static int64_t var_amount = 832;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

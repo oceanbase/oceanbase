@@ -12,10 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "sql/engine/ob_physical_plan.h"
-#include "sql/monitor/ob_phy_operator_stats.h"
 #include "sql/monitor/ob_phy_operator_monitor_info.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "lib/allocator/page_arena.h"
 using namespace std;
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

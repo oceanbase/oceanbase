@@ -10,21 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/atomic/ob_atomic.h"
-#include "share/config/ob_server_config.h"
-#include <algorithm>
-#include "share/ob_occam_time_guard.h"
-#include "ob_lcl_utils.h"
-#include "share/deadlock/ob_deadlock_parameters.h"
-#include "ob_lcl_parameters.h"
 #include "ob_lcl_node.h"
-#include "ob_lcl_batch_sender_thread.h"
-#include "common/ob_clock_generator.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "share/deadlock/ob_deadlock_message.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
 #include "share/deadlock/ob_deadlock_detector_rpc.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

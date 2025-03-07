@@ -170,6 +170,7 @@ protected:
   ObNextLevelRowsArray *next_level_rows_list_; // for disk
   ObMacroMetasArray *macro_metas_; // for ObMacroMetaOptimizationMode::DISABLE
   ObDatumRowkey last_rowkey_;
+  ObCompressorType compressor_type_; // Checkpoint for container_store_desc_.compressor_type, set in init and verify in close and new_macro_writer
   int64_t micro_block_cnt_;
   int64_t row_count_;
   bool is_meta_;
@@ -217,7 +218,7 @@ public:
   ~ObIndexBlockLoader();
   void reset();
   void reuse();
-  int init(common::ObIAllocator &allocator);
+  int init(common::ObIAllocator &allocator, const uint64_t data_version);
   int open(const ObIndexBlockInfo& index_block_info);
   int get_next_row(ObDatumRow &row);
   // get micro block only for disk info
@@ -230,7 +231,7 @@ public:
     return macro_id_array_ != nullptr && cur_block_idx_ == macro_id_array_->count() - 1;
   }
   TO_STRING_KV(K_(is_inited), K_(curr_block_row_idx), K_(curr_block_row_cnt), K_(cur_block_idx),
-      K_(prefetch_idx), KPC_(index_block_info), KPC_(macro_id_array));
+      K_(prefetch_idx), K_(data_version), KPC_(index_block_info), KPC_(macro_id_array));
 
 private:
   OB_INLINE int not_open_mem_block() const { return curr_block_row_idx_ < 0; }
@@ -262,6 +263,7 @@ private:
   int64_t curr_block_row_cnt_;
   int64_t cur_block_idx_; // in disk: macro block, in mem: micro block
   int64_t prefetch_idx_;
+  uint64_t data_version_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexBlockLoader);
 };

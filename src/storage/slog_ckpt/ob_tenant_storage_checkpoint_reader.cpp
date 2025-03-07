@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/slog_ckpt/ob_tenant_storage_checkpoint_reader.h"
-#include "storage/tx/ob_timestamp_service.h"
-#include "storage/tx/ob_trans_id_service.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "storage/tx_storage/ob_ls_map.h"
+#include "ob_tenant_storage_checkpoint_reader.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

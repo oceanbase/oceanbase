@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_bloom_filter_data_writer.h"
-#include "share/ob_task_define.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
-#include "storage/blocksstable/ob_macro_block_handle.h"
 
 namespace oceanbase {
 using namespace common;

@@ -12,9 +12,7 @@
 
 #pragma once
 
-#include "common/row/ob_row.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
-#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {

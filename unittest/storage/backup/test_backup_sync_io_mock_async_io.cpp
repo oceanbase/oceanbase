@@ -15,15 +15,8 @@
 #define private public
 #define protected public
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
-#include "lib/allocator/page_arena.h"
-#include "share/io/ob_io_define.h"
-#include "share/io/ob_io_manager.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#include "share/ob_local_device.h"
-#include "share/ob_device_manager.h"
 
 
 using namespace oceanbase;

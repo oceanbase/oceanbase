@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/exchange/ob_row_heap.h"
-#include "common/row/ob_row.h"
-#include "sql/engine/basic/ob_compact_row.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

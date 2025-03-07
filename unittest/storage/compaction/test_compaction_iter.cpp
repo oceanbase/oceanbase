@@ -10,18 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-
 #define USING_LOG_PREFIX STORAGE
+#include <gtest/gtest.h>
 #define protected public
 #define private public
 
-#include "share/rc/ob_tenant_base.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/compaction/ob_compaction_schedule_iterator.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "src/storage/ob_i_store.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "lib/hash/ob_hashmap.h"
 namespace oceanbase
 {
 using namespace share;

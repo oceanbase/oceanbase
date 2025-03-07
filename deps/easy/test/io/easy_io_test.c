@@ -1,5 +1,4 @@
 #define EASY_MULTIPLICITY
-#include "io/easy_io.h"
 #include "packet/easy_simple_handler.h"
 #include <easy_test.h>
 #include <sys/wait.h>

@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
 #include "ob_column_oriented_merger.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/lob/ob_lob_manager.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {

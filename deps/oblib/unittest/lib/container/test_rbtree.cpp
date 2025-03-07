@@ -10,10 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <unistd.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <time.h>
 #include "lib/container/ob_rbtree.h"
 #include "gtest/gtest.h"
 

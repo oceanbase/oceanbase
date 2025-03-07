@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX COMMON
 #include "share/compaction/ob_table_ckm_items.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "rootserver/freeze/ob_major_merge_progress_util.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 namespace oceanbase

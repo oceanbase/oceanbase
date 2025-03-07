@@ -11,12 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/geo/ob_geo_common.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/json_type/ob_json_common.h"
-#include "rpc/obmysql/ob_mysql_global.h"
-#include "src/pl/ob_pl_user_type.h"
-#include "src/pl/ob_pl_allocator.h"
+#include "src/pl/ob_pl.h"
 #include "src/sql/engine/expr/ob_expr_sql_udt_utils.h"
 #define private public
 #undef private
@@ -199,7 +195,7 @@ void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator
   elem_array->set_capacity(elem_cnt);
   elem_array->set_column_count(elem_cnt);
   elem_array->set_count(elem_cnt);
-  elem_array->set_data(array_data);
+  elem_array->set_data(array_data, elem_cnt);
   elem_desc.set_pl_type(PL_VARRAY_TYPE);
   elem_desc.set_not_null(false);
   elem_desc.set_field_count(elem_cnt);
@@ -236,7 +232,7 @@ void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &c
   elem_array->set_capacity(ori_size);
   elem_array->set_column_count(ori_size);
   elem_array->set_count(ori_size);
-  elem_array->set_data(array_data);
+  elem_array->set_data(array_data, ori_size);
   elem_desc.set_pl_type(PL_VARRAY_TYPE);
   elem_desc.set_not_null(false);
   elem_desc.set_field_count(ori_size);

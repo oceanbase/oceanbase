@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_log_restore_driver_base.h"
-#include "lib/ob_errno.h"
-#include "lib/ob_define.h"
-#include "storage/tx_storage/ob_ls_map.h"       // ObLSIterator
-#include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "logservice/ob_log_service.h"
 

@@ -13,12 +13,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

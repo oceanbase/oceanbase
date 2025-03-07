@@ -8,14 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_major_checksum_info.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "ob_major_checksum_info.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/blocksstable/ob_sstable.h"
 namespace oceanbase
 {
 using namespace compaction;

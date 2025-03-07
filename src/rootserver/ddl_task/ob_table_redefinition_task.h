@@ -102,6 +102,12 @@ private:
   int check_target_cg_cnt();
   int check_ddl_can_retry(const bool ddl_need_retry_at_executor, const share::schema::ObTableSchema *table_schema);
   int check_take_effect_succ(bool &has_took_effect_succ);
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    //we should always retry when the redefinition task is split recovery redefinition
+    return is_partition_split_recovery_table_redefinition(task_type_) ? (task_status_ <= share::ObDDLTaskStatus::TAKE_EFFECT)
+        : ObDDLTask::is_error_need_retry(ret_code);
+  }
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;

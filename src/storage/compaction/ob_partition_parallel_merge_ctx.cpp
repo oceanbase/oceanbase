@@ -11,16 +11,8 @@
  */
 
 #include "ob_partition_parallel_merge_ctx.h"
-#include "storage/memtable/ob_memtable.h"
-#include "share/config/ob_server_config.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/ob_partition_range_spliter.h"
 #include "ob_tablet_merge_ctx.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/compaction/ob_medium_compaction_mgr.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
@@ -94,9 +86,9 @@ int ObParallelMergeCtx::init(compaction::ObBasicTabletMergeCtx &merge_ctx)
   }
 
   if (OB_FAIL(ret)) {
-  } else if ((tablet_size <= 0
+  } else if (tablet_size <= 0
           || (!enable_parallel_minor_merge && !is_major_merge_type(merge_type))
-          || (is_mini_merge(merge_type) && MTL(ObTenantCompactionMemPool *)->is_emergency_mode()))) {
+          || (is_mini_merge(merge_type) && ObTenantCompactionMemPool::NORMAL_MODE != MTL(ObTenantCompactionMemPool *)->get_memory_mode())) {
     if (OB_FAIL(init_serial_merge())) {
       STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret), K(tablet_size), K(merge_ctx));
     }

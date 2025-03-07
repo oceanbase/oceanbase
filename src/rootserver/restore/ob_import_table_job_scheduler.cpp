@@ -12,14 +12,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_import_table_job_scheduler.h"
-#include "ob_recover_table_initiator.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "src/rootserver/restore/ob_import_table_task_generator.h"
 #include "storage/ddl/ob_ddl_server_client.h"
-#include "share/backup/ob_backup_struct.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
 #include "share/restore/ob_import_util.h"
 #include "rootserver/restore/ob_restore_service.h"
 

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "share/stat/ob_opt_system_stat.h"
 #include "share/ob_io_device_helper.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "src/storage/blocksstable/ob_object_manager.h"
 #include "src/share/io/ob_io_manager.h"
 #include "observer/ob_server_struct.h"
 

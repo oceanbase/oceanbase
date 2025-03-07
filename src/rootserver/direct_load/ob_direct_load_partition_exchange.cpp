@@ -14,7 +14,6 @@
 
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
 #include "rootserver/ob_ddl_service.h"
-#include "rootserver/ob_ddl_operator.h"
 
 namespace oceanbase
 {
@@ -26,7 +25,7 @@ namespace rootserver
 {
 ObDirectLoadPartitionExchange::ObDirectLoadPartitionExchange(
     ObDDLService &ddl_service, const uint64_t data_version)
-  : ObPartitionExchange(ddl_service, data_version)
+  : ObPartitionExchange(ddl_service, data_version, false/*exchange_part_id*/)
 {
 }
 
@@ -151,7 +150,7 @@ int ObDirectLoadPartitionExchange::check_multipart_exchange_conditions(
       base_table_schema, inc_table_schema, base_tablet_ids, inc_tablet_ids, exchange_part_level, is_oracle_mode))) {
     LOG_WARN("failed to check data table partition exchange conditions",
         KR(ret), K(base_table_schema), K(inc_table_schema), K(part_name), K(exchange_part_level), K(is_oracle_mode));
-  } else {
+  } else if (data_version_ < DATA_VERSION_4_3_5_1) {
     ObPartitionFuncType part_type = PARTITION_FUNC_TYPE_MAX;
     if (ObPartitionLevel::PARTITION_LEVEL_ONE == exchange_part_level) {
       part_type = base_table_schema.get_part_option().get_part_func_type();

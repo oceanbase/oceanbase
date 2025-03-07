@@ -14,8 +14,6 @@
 #include <gtest/gtest.h>
 #define private public
 #include "sql/audit/ob_audit_log_utils.h"
-#include "sql/audit/ob_audit_logger.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_device_manager.h"
 #undef private

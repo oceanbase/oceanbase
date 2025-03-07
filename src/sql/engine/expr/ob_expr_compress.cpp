@@ -14,7 +14,6 @@
 #include "ob_expr_compress.h"
 
 #include "sql/engine/ob_exec_context.h"
-#include <zlib.h>
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;

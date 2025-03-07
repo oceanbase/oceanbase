@@ -327,6 +327,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
       profile_.set_exec_ctx(exec_ctx_);
       op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::SORT_MERGE_SORT_ROUND;
       op_monitor_info_.otherstat_2_value_ = 1;
+      op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
+      op_monitor_info_.otherstat_7_value_ = 0;
+      op_monitor_info_.otherstat_10_id_ = ObSqlMonitorStatIds::COMPRESS_TYPE;
+      op_monitor_info_.otherstat_10_value_ = static_cast<int64_t>(compress_type_);
       ObPhysicalPlanCtx *plan_ctx = nullptr;
       const ObPhysicalPlan *phy_plan = nullptr;
       if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_))) {
@@ -916,6 +920,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
     buffer_len = row->get_max_size(row_meta);
     dst = row;
   } else {
+    reclaim_row = row;
     if (topn_cnt_ < 256) {
       buffer_len = row_size > 256 ? row_size * 4 : 1024;
     } else {
@@ -928,7 +933,6 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
       sql_mem_processor_.alloc(buffer_len);
       inmem_row_size_ += buffer_len;
       dst = new (buf) Store_Row();
-      reclaim_row = row;
     }
   }
   if (OB_SUCC(ret)) {
@@ -1963,6 +1967,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
     blk_holder_.release();
     set_blk_holder(nullptr);
     // do merge sort
+    op_monitor_info_.otherstat_9_id_ = ObSqlMonitorStatIds::MERGE_SORT_START_TIME;
+    op_monitor_info_.otherstat_9_value_ = ObTimeUtility::fast_current_time();
+    int64_t this_level_chunks = sort_chunks_.get_size();
+    int64_t next_level_chunks = 0;
+    int64_t sort_round = 1;
     int64_t ways = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(build_ems_heap(ways))) {
@@ -1971,6 +1980,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
         // last merge round,
         if (ways == sort_chunks_.get_size()) {
           break;
+        }
+        if (op_monitor_info_.otherstat_5_id_ == ObSqlMonitorStatIds::DDL_TASK_ID) {
+          int64_t expected_next_level_chunks = next_level_chunks + (this_level_chunks + ways - 1) / ways;   //ceil
+          op_monitor_info_.otherstat_8_id_ = ObSqlMonitorStatIds::SORT_EXPECTED_ROUND_COUNT;
+          op_monitor_info_.otherstat_8_value_ = sort_round + ceil(log(expected_next_level_chunks) / log(ways)) - 1;
         }
         auto input = [&](const Store_Row *&sk_row, const Store_Row *&addon_row) {
           int ret = OB_SUCCESS;
@@ -2003,9 +2017,19 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
             mem_context_->get_malloc_allocator().free(c);
           }
         }
+        if (op_monitor_info_.otherstat_5_id_ == ObSqlMonitorStatIds::DDL_TASK_ID) {
+          this_level_chunks -= ways;
+          next_level_chunks += 1;
+          if(this_level_chunks == 0 || this_level_chunks == 1) {
+            sort_round++;
+            op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
+            op_monitor_info_.otherstat_1_value_ = sort_round  * op_monitor_info_.otherstat_7_value_;
+            this_level_chunks += next_level_chunks;
+            next_level_chunks = 0;
+          }
+        }
       }
     }
-
     if (OB_SUCC(ret)) {
       set_blk_holder(&blk_holder_);
       next_stored_row_func_ = &ObSortVecOpImpl::ems_heap_next_stored_row;

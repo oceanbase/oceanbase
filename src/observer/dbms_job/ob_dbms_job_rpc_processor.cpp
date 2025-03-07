@@ -14,11 +14,9 @@
 
 #include "ob_dbms_job_rpc_processor.h"
 
-#include "lib/oblog/ob_log_module.h"
 
 #include "ob_dbms_job_master.h"
 #include "ob_dbms_job_executor.h"
-#include "ob_dbms_job_rpc_proxy.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::dbms_job;

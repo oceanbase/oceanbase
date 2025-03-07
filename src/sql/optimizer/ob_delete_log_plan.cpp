@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_log_delete.h"
-#include "sql/optimizer/ob_log_group_by.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "ob_log_operator_factory.h"
-#include "ob_log_table_scan.h"
-#include "ob_log_sort.h"
-#include "ob_log_limit.h"
-#include "ob_log_table_scan.h"
-#include "ob_join_order.h"
-#include "ob_opt_est_cost.h"
 /**
  * DELETE syntax from MySQL 5.7
  *
@@ -116,10 +107,10 @@ int ObDeleteLogPlan::generate_normal_raw_plan()
     
     // 4. allocate delete operator
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before call prepare_dml_infos
-        LOG_WARN("failed to compute dml parallel", K(ret));
-      } else if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
+      } else if (OB_FAIL(compute_dml_parallel())) {
+        LOG_WARN("failed to compute dml parallel", K(ret));
       } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_delete())) {
           LOG_WARN("failed to allocate pdml as top", K(ret));

@@ -12,20 +12,13 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
+#include "ob_expr_json_func_helper.h"
 #include "share/ob_json_access_utils.h"
 #include "ob_expr_json_utils.h"
 #include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "ob_expr_json_func_helper.h"
-#include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
-#include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
-#include "lib/charset/ob_dtoa.h" // ob_gcvt_opt
-#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "sql/ob_result_set.h"
 #include "sql/ob_spi.h"
 #include "storage/lob/ob_lob_manager.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -2438,67 +2431,75 @@ int ObJsonExprHelper::calc_asciistr_in_expr(const ObString &src,
                                             char* buf, const int64_t buf_len, int32_t &pos)
 {
   int ret = OB_SUCCESS;
-  ObStringScanner scanner(src, src_cs_type);
-  ObString encoding;
-  int32_t wchar = 0;
+  struct Functor {
+    Functor(char* buf, int32_t& pos, int64_t buf_len, ObCollationType dst_cs_type)
+      : buf(buf), pos(pos), buf_len(buf_len), dst_cs_type(dst_cs_type) {}
+    char* buf;
+    int32_t& pos;
+    int64_t buf_len;
+    const ObCollationType dst_cs_type;
+    int operator() (const ObString &encoding, ob_wc_t wchar) {
+      int ret = OB_SUCCESS;
+      if (ob_isascii(wchar) && '\\' != wchar) {
+        int32_t written_bytes = 0;
 
-  while (OB_SUCC(ret)
-         && scanner.next_character(encoding, wchar, ret)) {
-
-    if (ob_isascii(wchar) && '\\' != wchar) {
-      int32_t written_bytes = 0;
-
-      if (OB_FAIL(ObCharset::wc_mb(dst_cs_type, wchar,
-                                   buf + pos, buf_len - pos, written_bytes))) {
-        LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
-      } else {
-        pos += written_bytes;
-      }
-    } else {
-      const int64_t temp_buf_len = 4;
-      char temp_buf[temp_buf_len];
-      int32_t temp_written_bytes = 0;
-
-      if (OB_FAIL(ObCharset::wc_mb(CS_TYPE_UTF16_BIN, wchar,
-                                   temp_buf, temp_buf_len, temp_written_bytes))) {
-        LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
-      } else {
-        const int utf16_minmb_len = 2;
-
-        if (OB_UNLIKELY(ObCharset::is_cs_nonascii(dst_cs_type))) {
-          // not support non-ascii database charset for now
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "charset except ascii");
-          LOG_WARN("not support charset", K(ret), K(dst_cs_type));
+        if (OB_FAIL(ObCharset::wc_mb(dst_cs_type, wchar,
+                                    buf + pos, buf_len - pos, written_bytes))) {
+          LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
         } else {
-          for (int i = 0; OB_SUCC(ret) && i < temp_written_bytes/utf16_minmb_len; ++i) {
-            if (OB_UNLIKELY(pos >= buf_len)) {
-              ret = OB_SIZE_OVERFLOW;
-              LOG_WARN("size overflow", K(ret), K(pos), K(buf_len));
-            } else {
-              buf[pos++] = '\\';
-            }
-            if (OB_SUCC(ret) && '\\' != wchar) {
+          pos += written_bytes;
+        }
+      } else {
+        const int64_t temp_buf_len = 4;
+        char temp_buf[temp_buf_len];
+        int32_t temp_written_bytes = 0;
+
+        if (OB_FAIL(ObCharset::wc_mb(CS_TYPE_UTF16_BIN, wchar,
+                                    temp_buf, temp_buf_len, temp_written_bytes))) {
+          LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
+        } else {
+          const int utf16_minmb_len = 2;
+
+          if (OB_UNLIKELY(ObCharset::is_cs_nonascii(dst_cs_type))) {
+            // not support non-ascii database charset for now
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "charset except ascii");
+            LOG_WARN("not support charset", K(ret), K(dst_cs_type));
+          } else {
+            for (int i = 0; OB_SUCC(ret) && i < temp_written_bytes/utf16_minmb_len; ++i) {
               if (OB_UNLIKELY(pos >= buf_len)) {
                 ret = OB_SIZE_OVERFLOW;
                 LOG_WARN("size overflow", K(ret), K(pos), K(buf_len));
               } else {
-                buf[pos++] = 'u';
+                buf[pos++] = '\\';
               }
-              int64_t hex_writtern_bytes = 0;
-              if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(hex_print(temp_buf + i*utf16_minmb_len, utf16_minmb_len,
-                                    buf + pos, buf_len - pos, hex_writtern_bytes))) {
-                LOG_WARN("fail to convert to hex", K(ret), K(temp_written_bytes), K(pos), K(buf_len));
-              } else {
-                pos += hex_writtern_bytes;
+              if (OB_SUCC(ret) && '\\' != wchar) {
+                if (OB_UNLIKELY(pos >= buf_len)) {
+                  ret = OB_SIZE_OVERFLOW;
+                  LOG_WARN("size overflow", K(ret), K(pos), K(buf_len));
+                } else {
+                  buf[pos++] = 'u';
+                }
+                int64_t hex_writtern_bytes = 0;
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(hex_print(temp_buf + i*utf16_minmb_len, utf16_minmb_len,
+                                      buf + pos, buf_len - pos, hex_writtern_bytes))) {
+                  LOG_WARN("fail to convert to hex", K(ret), K(temp_written_bytes), K(pos), K(buf_len));
+                } else {
+                  pos += hex_writtern_bytes;
+                }
               }
             }
           }
         }
       }
-    }
-  }
+      return ret;
+    };
+  };
+
+  ObCharsetType src_charset_type = ObCharset::charset_type_by_coll(src_cs_type);
+  struct Functor temp_handle(buf, pos, buf_len, dst_cs_type);
+  OZ(ObFastStringScanner::foreach_char(src, src_charset_type, temp_handle));
   return ret;
 }
 

@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_tablet_meta_table_compaction_operator.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/tablet/ob_tablet_filter.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/scn.h"
-#include "observer/ob_server_struct.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 namespace oceanbase
 {

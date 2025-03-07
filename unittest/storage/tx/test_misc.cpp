@@ -12,8 +12,6 @@
 
 #define protected public
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase

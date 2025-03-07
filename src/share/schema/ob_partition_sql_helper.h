@@ -400,7 +400,7 @@ public:
         schema_version_(schema_version),
         sql_client_(sql_client) {}
   virtual ~ObAddIncSubPartHelper() {}
-  int add_subpartition_info();
+  int add_subpartition_info(const bool is_subpart_idx_specified = false);
 private:
   const ObPartitionSchema *ori_table_;
   const ObPartitionSchema *inc_table_;

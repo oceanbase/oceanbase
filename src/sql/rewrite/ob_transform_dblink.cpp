@@ -12,17 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_dblink.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "common/ob_smart_call.h"
 
 
 namespace oceanbase
@@ -359,9 +353,9 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
       LOG_WARN("failed to write string", K(ret));
     }
   } else if (table->is_joined_table()) {
-    if (OB_FAIL(reverse_one_link_table(static_cast<JoinedTable*>(table)->left_table_, target_dblink_id))) {
+    if (OB_FAIL(SMART_CALL(reverse_one_link_table(static_cast<JoinedTable*>(table)->left_table_, target_dblink_id)))) {
       LOG_WARN("failed to reverse left_table_", K(ret));
-    } else if (OB_FAIL(reverse_one_link_table(static_cast<JoinedTable*>(table)->right_table_, target_dblink_id))) {
+    } else if (OB_FAIL(SMART_CALL(reverse_one_link_table(static_cast<JoinedTable*>(table)->right_table_, target_dblink_id)))) {
       LOG_WARN("failed to reverse right_table_", K(ret));
     }
   } else {

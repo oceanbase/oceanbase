@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/meta_mem/ob_tablet_leak_checker.h"
-#include "storage/tablet/ob_tablet.h"
+#include "ob_tablet_handle.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 namespace oceanbase
 {

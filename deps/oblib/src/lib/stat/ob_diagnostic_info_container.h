@@ -165,7 +165,7 @@ public:
 private:
   int aggregate_diagnostic_info_summary(ObDiagnosticInfo *di_info);
   int return_diagnostic_info(ObDiagnosticInfo *di_info);
-  int inc_ref(ObDiagnosticInfo *di);
+  int inc_ref(ObDiagnosticInfo *di)__attribute__((deprecated("pls use ObLocalDiagnosticInfo::inc_ref instead")));
   void dec_ref(ObDiagnosticInfo *di);
   bool is_inited_;
   bool stop_;

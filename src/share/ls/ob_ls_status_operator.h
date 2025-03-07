@@ -87,6 +87,13 @@ private:
 
 struct ObLSStatusInfo
 {
+  struct Compare {
+    bool operator() (const ObLSStatusInfo &left, const ObLSStatusInfo &right)
+    {
+      return left.get_ls_id() < right.get_ls_id();
+    }
+  };
+
   ObLSStatusInfo() : tenant_id_(OB_INVALID_TENANT_ID),
                           ls_id_(), ls_group_id_(OB_INVALID_ID),
                           status_(OB_LS_EMPTY), unit_group_id_(OB_INVALID_ID),
@@ -150,6 +157,7 @@ struct ObLSStatusInfo
   {
     return ls_id_;
   }
+  uint64_t get_ls_group_id() const { return ls_group_id_; }
 
   ObLSFlag get_flag() const
   {
@@ -369,7 +377,7 @@ public:
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
 
-  // get duplicate ls status info
+  // get duplicate ls status info with smallest ls id
   // @params[in]  tenant_id, which tenant to get
   // @params[in]  client, client to execute sql
   // @params[out] status_info, duplicate ls status info
@@ -380,7 +388,19 @@ public:
   int get_duplicate_ls_status_info(const uint64_t tenant_id,
                                    ObISQLClient &client,
                                    share::ObLSStatusInfo &status_info,
-                                   const int32_t group_id);
+                                   const int32_t group_id = 0/*OBCG_DEFAULT*/);
+
+  // check whether transfer ls contain duplicate scope ls
+  // @params[in]  tenant_id, which tenant to get
+  // @params[in]  client, client to execute sql
+  // @params[in]  src_ls_id, source ls id for transfer
+  // @params[in]  dst_ls_id, destination ls id for transfer
+  // @params[out] conrain, whether contain duplicate ls
+  int check_transfer_contain_duplicate_ls(const uint64_t tenant_id,
+                                          ObISQLClient &client,
+                                          const share::ObLSID &src_ls_id,
+                                          const share::ObLSID &dst_ls_id,
+                                          bool &contain);
   /**
    * @description:
    *    get ls list from all_ls_status order by tenant_id, ls_id for switchover tenant

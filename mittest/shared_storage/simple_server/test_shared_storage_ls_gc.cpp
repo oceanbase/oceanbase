@@ -10,25 +10,19 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define USING_LOG_PREFIX SERVER
 #define protected public
 #define private public
 #define UNITTEST
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/object_storage/ob_device_config_mgr.h"
-#include "close_modules/shared_storage/storage/shared_storage/ob_private_block_gc_task.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_dir_manager.h"
-#include "share/ob_io_device_helper.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #include "sensitive_test/object_storage/object_storage_authorization_info.h"
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/init_basic_struct.h"
 #include "rootserver/ob_ls_recovery_reportor.h"
-#include "storage/shared_storage/ob_file_op.h"
 
 namespace oceanbase
 {

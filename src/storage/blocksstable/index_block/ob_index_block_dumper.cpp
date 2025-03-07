@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/index_block/ob_index_block_dumper.h"
+#include "ob_index_block_dumper.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_storage_object_rw_info.h"
-#include "storage/blocksstable/ob_object_manager.h"
 namespace oceanbase
 {
 namespace blocksstable
@@ -77,13 +75,25 @@ void ObIndexBlockInfo::reset()
 
 ////////////////////////////////////// Index Block Dumper //////////////////////////////////////////
 ObBaseIndexBlockDumper::ObBaseIndexBlockDumper()
-  : index_store_desc_(nullptr), container_store_desc_(nullptr), sstable_index_builder_(nullptr),
+  : index_store_desc_(nullptr),
+    container_store_desc_(nullptr),
+    sstable_index_builder_(nullptr),
     device_handle_(nullptr),
-    sstable_allocator_(nullptr), task_allocator_(nullptr), row_allocator_(),
-    meta_micro_writer_(nullptr), meta_macro_writer_(nullptr),
-    micro_block_adaptive_splitter_(), next_level_rows_list_(nullptr),
-    last_rowkey_(), micro_block_cnt_(0), row_count_(0), is_meta_(true),
-    need_build_next_row_(false), need_check_order_(true), is_inited_(false)
+    sstable_allocator_(nullptr),
+    task_allocator_(nullptr),
+    row_allocator_(),
+    meta_micro_writer_(nullptr),
+    meta_macro_writer_(nullptr),
+    micro_block_adaptive_splitter_(),
+    next_level_rows_list_(nullptr),
+    last_rowkey_(),
+    compressor_type_(INVALID_COMPRESSOR),
+    micro_block_cnt_(0),
+    row_count_(0),
+    is_meta_(true),
+    need_build_next_row_(false),
+    need_check_order_(true),
+    is_inited_(false)
 {
 }
 
@@ -118,6 +128,7 @@ void ObBaseIndexBlockDumper::reset()
   row_count_ = 0;
   enable_dump_disk_ = false;
   is_inited_ = false;
+  compressor_type_ = INVALID_COMPRESSOR;
 }
 
 int ObBaseIndexBlockDumper::init(const ObDataStoreDesc &index_store_desc,
@@ -164,6 +175,7 @@ int ObBaseIndexBlockDumper::init(const ObDataStoreDesc &index_store_desc,
     need_check_order_ = need_check_order;
     enable_dump_disk_ = enable_dump_disk;
     is_inited_ = true;
+    compressor_type_ = container_store_desc_->get_compressor_type();
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(meta_micro_writer_)) {
@@ -265,7 +277,11 @@ int ObBaseIndexBlockDumper::new_macro_writer()
   macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   macro_seq_param.start_ = 0;
   share::ObPreWarmerParam pre_warm_param(share::MEM_PRE_WARM);
-  if (OB_ISNULL(meta_macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_))) {
+  if (OB_UNLIKELY(compressor_type_ != container_store_desc_->get_compressor_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to new macro block writer, unexpected compressor type",
+             K(ret), K(compressor_type_), KPC(container_store_desc_));
+  } else if (OB_ISNULL(meta_macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro writer", K(ret));
   // callback only can be ddl callback.
@@ -365,6 +381,9 @@ int ObBaseIndexBlockDumper::close(ObIndexBlockInfo& index_block_info)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "Not inited", K(ret));
+  } else if (OB_UNLIKELY(compressor_type_ != container_store_desc_->get_compressor_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected compressor type", K(ret), K(compressor_type_), KPC(container_store_desc_));
   } else if (FALSE_IT(index_block_info.is_meta_ = is_meta_)) {
   } else if (micro_block_cnt_ == 0 && row_count_ == 0) {
     STORAGE_LOG(DEBUG, "build empty index block info", K(ret));
@@ -577,11 +596,11 @@ void ObIndexTreeBlockDumper::clean_status()
 }
 
 ////////////////////////////////////// Index Block Loader //////////////////////////////////////////
-ObIndexBlockLoader::ObIndexBlockLoader(): macro_io_handle_(), micro_reader_helper_(), cur_micro_block_(),
-    micro_iter_(), row_allocator_("IndexBlkLoader"), micro_reader_(nullptr), index_block_info_(nullptr),
-    macro_id_array_(nullptr), io_allocator_(nullptr), io_buf_(),
-    curr_block_row_idx_(-1), curr_block_row_cnt_(-1),
-    cur_block_idx_(-1), prefetch_idx_(-1), is_inited_(false)
+ObIndexBlockLoader::ObIndexBlockLoader()
+    : macro_io_handle_(), micro_reader_helper_(), cur_micro_block_(), micro_iter_(), row_allocator_("IndexBlkLoader"),
+      micro_reader_(nullptr), index_block_info_(nullptr), macro_id_array_(nullptr), io_allocator_(nullptr), io_buf_(),
+      curr_block_row_idx_(-1), curr_block_row_cnt_(-1), cur_block_idx_(-1), prefetch_idx_(-1),
+      data_version_(0), is_inited_(false)
 {
 }
 
@@ -607,6 +626,7 @@ void ObIndexBlockLoader::reset()
   curr_block_row_cnt_ = -1;
   cur_block_idx_ = -1;
   prefetch_idx_ = -1;
+  data_version_ = 0;
   macro_id_array_ = nullptr;
   io_allocator_ = nullptr;
   is_inited_ = false;
@@ -624,12 +644,16 @@ void ObIndexBlockLoader::reuse()
   macro_id_array_ = nullptr;
 }
 
-int ObIndexBlockLoader::init(common::ObIAllocator &allocator)
+int ObIndexBlockLoader::init(common::ObIAllocator &allocator, const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "Init twice", K(ret));
+  } else if (OB_UNLIKELY(data_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to init index block loader, invalid major working cluster version",
+             K(ret), K(data_version));
   } else if (OB_FAIL(micro_reader_helper_.init(allocator))) {
     STORAGE_LOG(WARN, "Fail to init micro reader helper");
   } else {
@@ -646,6 +670,7 @@ int ObIndexBlockLoader::init(common::ObIAllocator &allocator)
       curr_block_row_cnt_ = -1;
       cur_block_idx_ = -1;
       prefetch_idx_ = -1;
+      data_version_ = data_version;
       is_inited_ = true;
     }
   }
@@ -686,8 +711,8 @@ int ObIndexBlockLoader::get_next_array_row(ObDatumRow &row)
   } else {
     row_allocator_.reuse();
     const ObDataMacroBlockMeta *macro_meta = index_block_info_->macro_meta_list_->at(curr_block_row_idx_);
-    if (OB_FAIL(macro_meta->build_row(row, row_allocator_))) {
-      STORAGE_LOG(WARN, "fail to build row", K(ret), KPC(macro_meta));
+    if (OB_FAIL(macro_meta->build_row(row, row_allocator_, data_version_))) {
+      STORAGE_LOG(WARN, "fail to build row", K(ret), K(data_version_), KPC(macro_meta));
     } else {
       curr_block_row_idx_++;
       STORAGE_LOG(DEBUG, "loader get next array row", K(ret),

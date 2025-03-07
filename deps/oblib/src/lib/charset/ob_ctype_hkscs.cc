@@ -10,22 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "lib/charset/ob_ctype.h"
-#include "ob_ctype_hkscs_tab.h"
-#include "ob_ctype_hkscs31_tab.h"
-#include "ob_template_helper.h"
-
-/*
-    this is different form mysql is hkscs for the newly added char in hkscs
-*/
-#define ishkscshead(c) (0x81 <= (unsigned char)(c) && (unsigned char)(c) <= 0xfe)
-#define ishkscstail(c)                            \
-  ((0x40 <= (unsigned char)(c) && (unsigned char)(c) <= 0x7e) || \
-   (0xa1 <= (unsigned char)(c) && (unsigned char)(c) <= 0xfe))
-
-#define ishkscscode(c, d) (ishkscshead(c) && ishkscstail(d))
-#define hkscscode(c, d) (((unsigned char)(c) << 8) | (unsigned char)(d))
-#define hkscshead(e) ((unsigned char)(e >> 8))
-#define hkscstail(e) ((unsigned char)(e & 0xff))
+#include "lib/charset/ob_ctype_hkscs_tab.h"
+#include "lib/charset/ob_ctype_hkscs31_tab.h"
+#include "lib/charset/ob_template_helper.h"
 
 extern "C" {
 static unsigned int ismbchar_hkscs(const ObCharsetInfo *cs [[maybe_unused]],
@@ -67,38 +54,6 @@ static size_t ob_well_formed_len_hkscs(const ObCharsetInfo *cs [[maybe_unused]],
 }
 
 static ObUnicaseInfo ob_caseinfo_hk = {0xFFFF, ob_caseinfo_pages_hkscs};
-
-static int func_hkscs_uni_onechar(int code) {
-  auto iter = hkscs_to_uni_map.find(code);
-  if (iter != hkscs_to_uni_map.end()) {
-    return iter->second;
-  }
-  return (0);
-}
-
-static int func_uni_hkscs_onechar(int code) {
-  auto iter = uni_to_hkscs_map.find(code);
-  if (iter != uni_to_hkscs_map.end()) {
-    return iter->second;
-  }
-  return (0);
-}
-
-static int func_hkscs31_uni_onechar(int code) {
-  auto iter = hkscs31_to_uni_map.find(code);
-  if (iter != hkscs31_to_uni_map.end()) {
-    return iter->second;
-  }
-  return (0);
-}
-
-static int func_uni_hkscs31_onechar(int code) {
-  auto iter = uni_to_hkscs31_map.find(code);
-  if (iter != uni_to_hkscs31_map.end()) {
-    return iter->second;
-  }
-  return (0);
-}
 
 
 extern "C" {
@@ -189,13 +144,14 @@ bool hkscs_init(ObCharsetInfo *cs, ObCharsetLoader *loader) {
   bool succ = true;
   pair<decltype(hkscs_to_uni_map.begin()), bool> ret;
   if (hkscs_to_uni_map.size() == 0) {
-    for (int i = 0; i < array_elements(hkscs_to_uni_map_array) && succ; ++i) {
+    for (int i = 0; i < size_of_hkscs_to_uni_map_array && succ; ++i) {
       ret = hkscs_to_uni_map.insert(hkscs_to_uni_map_array[i]);
       succ = succ && ret.second;
     }
   }
+
   if (succ && uni_to_hkscs_map.size() == 0) {
-    for (int i = 0; i < array_elements(uni_to_hkscs_map_array) && succ; ++i) {
+    for (int i = 0; i < size_of_uni_to_hkscs_map_array && succ; ++i) {
       ret = uni_to_hkscs_map.insert(uni_to_hkscs_map_array[i]);
       succ = succ && ret.second;
     }
@@ -209,14 +165,14 @@ bool hkscs31_init(ObCharsetInfo *cs, ObCharsetLoader *loader) {
   bool succ = true;
   pair<decltype(hkscs31_to_uni_map.begin()), bool> ret;
   if (hkscs31_to_uni_map.size() == 0) {
-    for (int i = 0; i < array_elements(hkscs31_to_uni_map_array) && succ; ++i) {
+    for (int i = 0; i < size_of_hkscs31_to_uni_map_array && succ; ++i) {
 	    ret = hkscs31_to_uni_map.insert(hkscs31_to_uni_map_array[i]);
       succ = succ && ret.second;
     }
   }
   pair<decltype(uni_to_hkscs31_map.begin()), bool> rett;
   if (succ && uni_to_hkscs31_map.size() == 0) {
-    for (int i = 0; i < array_elements(uni_to_hkscs31_map_array) && succ; ++i) {
+    for (int i = 0; i < size_of_uni_to_hkscs31_map_array && succ; ++i) {
 	    rett = uni_to_hkscs31_map.insert(uni_to_hkscs31_map_array[i]);
       succ = succ && rett.second;
 	 }

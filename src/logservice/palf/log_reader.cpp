@@ -11,13 +11,6 @@
  */
 
 #include "log_reader.h"
-#include "lib/ob_define.h"                // some constexpr
-#include "lib/ob_errno.h"
-#include "share/ob_errno.h"               // ERRNO
-#include "lib/utility/ob_utility.h"       // ob_pread
-#include "log_define.h"                   // LOG_READ_FLAG
-#include "log_define.h"                   // LOG_DIO_ALIGN_SIZE...
-#include "log_reader_utils.h"             // ReadBuf
 #include "lib/stat/ob_session_stat.h"     // Session
 #include "log_io_adapter.h"               // LogIOAdapter
 #include "share/rc/ob_tenant_base.h"

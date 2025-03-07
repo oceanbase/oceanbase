@@ -11,7 +11,6 @@
  */
 
 #include "observer/ob_inner_sql_rpc_proxy.h"
-#include "lib/utility/serialization.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

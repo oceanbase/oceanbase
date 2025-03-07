@@ -12,19 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "ob_tablet_table_updater.h"
 
-#include "lib/utility/ob_tracepoint.h"
-#include "share/tablet/ob_tablet_info.h"            // for ObTabletInfo
+#include "ob_tablet_table_updater.h"
 #include "share/tablet/ob_tablet_table_operator.h"  // for ObTabletOperator
 #include "observer/ob_service.h"                    // for is_mini_mode
 #include "share/ob_tablet_replica_checksum_operator.h" // for ObTabletReplicaChecksumItem
-#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
-#include "share/compaction/ob_compaction_locality_cache.h" // ObCompactionLocalityCache
 
 namespace oceanbase
 {

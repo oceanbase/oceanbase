@@ -11,14 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
 #include "observer/omt/ob_tenant_mtl_helper.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/backup/ob_backup_index_merger.h"
-#include "storage/backup/ob_backup_index_store.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 

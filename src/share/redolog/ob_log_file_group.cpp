@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include <sys/vfs.h>
-#include "share/redolog/ob_log_file_group.h"
+#include "ob_log_file_group.h"
 #include "share/redolog/ob_log_file_handler.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_io_device_helper.h"

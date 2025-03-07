@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_struct.h"
-#include "storage/ls/ob_ls_meta_package.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/ls/ob_ls_tablet_service.h"
 #include "logservice/ob_log_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
@@ -450,6 +443,15 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_(
       if (OB_SUCC(ret) && !allow_gc) {
         LOG_INFO("transfer dest ls replay on src ls, do not allow gc", "src_ls", ls_id, "dest_ls", ls->get_ls_id(),
             K(transfer_meta_info));
+#ifdef ERRSIM
+        const uint64_t tenant_id = MTL_ID();
+        SERVER_EVENT_ADD("storage_ha", "transfer_ls_gc",
+                         "tenant_id", tenant_id,
+                         "src_ls_id", ls_id.id(),
+                         "dest_ls_id", ls->get_ls_id().id(),
+                         "addr", GCTX.self_addr(),
+                         "comment", "transfer src ls do not allow gc");
+#endif
         break;
       }
     }
@@ -462,6 +464,7 @@ int ObMigrationStatusHelper::allow_transfer_src_ls_gc_(
     bool &allow_gc)
 {
   int ret = OB_SUCCESS;
+  allow_gc = false;
   if (!is_valid(status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allow transfer src ls gc get invalid argument", K(ret), K(status));
@@ -471,6 +474,8 @@ int ObMigrationStatusHelper::allow_transfer_src_ls_gc_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
       && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
     allow_gc = true;
+  } else {
+    allow_gc = false;
   }
   return ret;
 }
@@ -1118,13 +1123,15 @@ ObMigrationOpArg::ObMigrationOpArg()
     dst_(),
     data_src_(),
     paxos_replica_number_(0),
-    prioritize_same_zone_src_(false)
+    prioritize_same_zone_src_(false),
+    tablet_id_array_()
 {
 }
 
 bool ObMigrationOpArg::is_valid() const
 {
-  return ls_id_.is_valid()
+  bool b_ret = false;
+  b_ret = ls_id_.is_valid()
       && type_>= 0 && type_ < ObMigrationOpType::MAX_LS_OP
       && cluster_id_ > 0
       && src_.is_valid()
@@ -1132,6 +1139,13 @@ bool ObMigrationOpArg::is_valid() const
       && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_)
       && (ObMigrationOpType::MIGRATE_LS_OP == type_ ?
          (src_.get_server() != dst_.get_server()) : true);
+
+  if (b_ret) {
+    if (ObMigrationOpType::REBUILD_TABLET_OP == type_ && tablet_id_array_.empty()) {
+      b_ret = false;
+    }
+  }
+  return b_ret;
 }
 
 void ObMigrationOpArg::reset()
@@ -1145,6 +1159,7 @@ void ObMigrationOpArg::reset()
   data_src_.reset();
   paxos_replica_number_ = 0;
   prioritize_same_zone_src_ = false;
+  tablet_id_array_.reset();
 }
 
 /******************ObTabletsTransferArg*********************/
@@ -1779,10 +1794,18 @@ void ObLSRebuildInfo::reset()
 
 bool ObLSRebuildInfo::is_valid() const
 {
-  return status_.is_valid()
+  bool b_ret = false;
+  b_ret = status_.is_valid()
       && type_.is_valid()
       && ((ObLSRebuildStatus::NONE == status_ && ObLSRebuildType::NONE == type_)
           || (ObLSRebuildStatus::NONE != status_ && ObLSRebuildType::NONE != type_));
+
+  if (b_ret) {
+    if (ObLSRebuildType::TABLET == type_) {
+      b_ret = !tablet_id_array_.empty() && src_.is_valid();
+    }
+  }
+  return b_ret;
 }
 
 bool ObLSRebuildInfo::is_in_rebuild() const

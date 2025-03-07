@@ -12,47 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "sql/session/ob_basic_session_info.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/ob_sql_client_decorator.h"
-
-#define ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME  "tenant_id, " \
-                                              "job_name, " \
-                                              "job, "  \
-                                              "lowner, " \
-                                              "powner, " \
-                                              "cowner, "  \
-                                              "next_date,"      \
-                                              "total,"          \
-                                              "`interval#`,"     \
-                                              "flag," \
-                                              "what," \
-                                              "nlsenv,"    \
-                                              "field1,"        \
-                                              "exec_env,"\
-                                              "job_style,"\
-                                              "program_name,"\
-                                              "job_type,"\
-                                              "job_action,"\
-                                              "number_of_argument,"\
-                                              "start_date,"\
-                                              "repeat_interval,"\
-                                              "end_date,"\
-                                              "job_class,"\
-                                              "enabled,"\
-                                              "auto_drop,"\
-                                              "comments,"\
-                                              "credential_name,"\
-                                              "destination_name,"\
-                                              "interval_ts,"\
-                                              "max_run_duration"
 
 namespace oceanbase {
 
@@ -72,8 +35,7 @@ const char *spm_stats_manager = "SPM_STATS_MANAGER";
 
 int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const ObSysVariableSchema &sys_variable,
                                                                         const uint64_t tenant_id,
-                                                                        ObSqlString &raw_sql,
-                                                                        int64_t &expected_affected_rows)
+                                                                        common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   char buf[OB_MAX_PROC_ENV_LENGTH];
@@ -84,10 +46,7 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
   int64_t pos = 0;
   int32_t offset_sec = 0;
   bool is_oracle_mode = false;
-  if (OB_FAIL(raw_sql.append_fmt("INSERT INTO %s( "ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME") VALUES ",
-                                  share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sys_variable.get_oracle_mode(is_oracle_mode))) {
+  if (OB_FAIL(sys_variable.get_oracle_mode(is_oracle_mode))) {
     LOG_WARN("failed to get oracle mode", K(ret));
   } else if (OB_FAIL(sql::ObExecEnv::gen_exec_env(sys_variable, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
     LOG_WARN("failed to gen exec env", K(ret));
@@ -95,303 +54,175 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
     LOG_WARN("failed to get time zone offset", K(ret));
   } else {
     ObString exec_env(pos, buf);
-    //current_time = current_time + offset_sec * 1000000;
-    for (int64_t i = 0; i < DAY_OF_WEEK; ++i) {
-      tmp_sql.reset();
-      int64_t start_usec = -1;
-      ObSqlString job_action;
-      if (OB_FAIL(get_window_job_info(current_time, i + 1, offset_sec, start_usec, job_action))) {
-        LOG_WARN("failed to get window job info", K(ret));
-      } else if (OB_UNLIKELY(start_usec == -1 || job_action.empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(start_usec), K(job_action));
-      } else {
-        if (OB_FAIL(get_stat_window_job_sql(is_oracle_mode,
-                                                  tenant_id,
-                                                  job_id++,
-                                                  windows_name[i],
-                                                  exec_env,
-                                                  start_usec,
-                                                  job_action,
-                                                  tmp_sql))) {
-          LOG_WARN("failed to get stat window job sql", K(ret));
-        } else if (OB_FAIL(raw_sql.append_fmt("%s(%s)", (i == 0 ? "" : ","), tmp_sql.ptr()))) {
-          LOG_WARN("failed to append sql", K(ret));
+    HEAP_VAR(dbms_scheduler::ObDBMSSchedJobInfo, job_info) {
+      //current_time = current_time + offset_sec * 1000000;
+      for (int64_t i = 0; i < DAY_OF_WEEK; ++i) {
+        int64_t start_usec = -1;
+        ObSqlString job_action;
+        if (OB_FAIL(get_window_job_info(current_time, i + 1, offset_sec, start_usec, job_action))) {
+          LOG_WARN("failed to get window job info", K(ret));
+        } else if (OB_UNLIKELY(start_usec == -1 || job_action.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(start_usec), K(job_action));
         } else {
-          ++ expected_affected_rows;
-          tmp_sql.reset();
-          job_action.reset();
-          if (OB_FAIL(get_stat_window_job_sql(is_oracle_mode,
+          if (OB_FAIL(get_stat_window_job_info(is_oracle_mode,
                                                     tenant_id,
-                                                    0,
+                                                    job_id,
                                                     windows_name[i],
                                                     exec_env,
                                                     start_usec,
                                                     job_action,
-                                                    tmp_sql))) {
-            LOG_WARN("failed to get stat window job sql", K(ret));
-          } else if (OB_FAIL(raw_sql.append_fmt("%s(%s)", ",", tmp_sql.ptr()))) {
-            LOG_WARN("failed to append sql", K(ret));
+                                                    job_info))) {
+            LOG_WARN("failed to get stat window job info", K(ret));
+          } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(sql_client, tenant_id, job_id, job_info))) {
+            LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
           } else {
-            ++ expected_affected_rows;
-            tmp_sql.reset();
-            job_action.reset();
+            ++ job_id;
           }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      //set stats history manager job
-      if (OB_FAIL(get_stats_history_manager_job_sql(is_oracle_mode, tenant_id,
-                                                    job_id++, exec_env, tmp_sql))) {
-        LOG_WARN("failed to get stats history manager job sql", K(ret));
-      } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-        LOG_WARN("failed to append sql", K(ret));
-      } else {
-         ++ expected_affected_rows;
-         tmp_sql.reset();
-        if (OB_FAIL(get_stats_history_manager_job_sql(is_oracle_mode, tenant_id,
-                                                      0, exec_env, tmp_sql))) {
+      if (OB_SUCC(ret)) {
+        //set stats history manager job
+        if (OB_FAIL(get_stats_history_manager_job_info(is_oracle_mode, tenant_id,
+                                                      job_id, exec_env, job_info))) {
           LOG_WARN("failed to get stats history manager job sql", K(ret));
-        } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-          LOG_WARN("failed to append sql", K(ret));
+        } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(sql_client, tenant_id, job_id, job_info))) {
+          LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
         } else {
-          ++ expected_affected_rows;
-          tmp_sql.reset();
+          ++ job_id;
         }
-      }
 
-      //set async gather stats job
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_async_gather_stats_job_sql(is_oracle_mode, tenant_id,
-                                                 job_id++, exec_env, tmp_sql))) {
-        LOG_WARN("failed to get async gather stats job sql", K(ret));
-      } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-        LOG_WARN("failed to append sql", K(ret));
-      } else {
-        ++ expected_affected_rows;
-        tmp_sql.reset();
-        if (OB_FAIL(get_async_gather_stats_job_sql(is_oracle_mode, tenant_id,
-                                                   0, exec_env, tmp_sql))) {
+        //set async gather stats job
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(get_async_gather_stats_job_info(is_oracle_mode, tenant_id,
+                                                  job_id, exec_env, job_info))) {
           LOG_WARN("failed to get async gather stats job sql", K(ret));
-        } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-          LOG_WARN("failed to append sql", K(ret));
+        } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(sql_client, tenant_id, job_id, job_info))) {
+          LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
         } else {
-          ++ expected_affected_rows;
-          tmp_sql.reset();
+          ++ job_id;
         }
-      }
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, job_id++,
-                                               offset_sec, exec_env, tmp_sql))) {
-        LOG_WARN("failed to get stats history manager job sql", K(ret));
-      } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-        LOG_WARN("failed to append sql", K(ret));
-      } else {
-         ++ expected_affected_rows;
-         tmp_sql.reset();
-        if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, 0,
-                                          offset_sec, exec_env, tmp_sql))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(get_spm_stats_job_info(is_oracle_mode, tenant_id, job_id,
+                                                offset_sec, exec_env, job_info))) {
           LOG_WARN("failed to get stats history manager job sql", K(ret));
-        } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-          LOG_WARN("failed to append sql", K(ret));
+        } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(sql_client, tenant_id, job_id, job_info))) {
+          LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
         } else {
-          ++ expected_affected_rows;
-          tmp_sql.reset();
+          ++ job_id;
         }
-      }
-
-      //set dummy guard job
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_dummy_guard_job_sql(tenant_id, job_id, tmp_sql))) {
-        LOG_WARN("failed to insert dummy guard job", K(ret));
-      } else if (OB_FAIL(raw_sql.append_fmt(", (%s);", tmp_sql.ptr()))) {
-        LOG_WARN("failed to append sql", K(ret));
-      } else {
-        ++ expected_affected_rows;
-        LOG_INFO("succeed to get stats maintenance window job sql", K(raw_sql));
       }
     }
   }
   return ret;
 }
 
-int ObDbmsStatsMaintenanceWindow::get_stat_window_job_sql(const bool is_oracle_mode,
+int ObDbmsStatsMaintenanceWindow::get_stat_window_job_info(const bool is_oracle_mode,
                                                           const uint64_t tenant_id,
                                                           const int64_t job_id,
                                                           const char *job_name,
                                                           const ObString &exec_env,
                                                           const int64_t start_usec,
                                                           ObSqlString &job_action,
-                                                          ObSqlString &raw_sql)
+                                                          dbms_scheduler::ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   int64_t interval_ts = DEFAULT_WEEK_INTERVAL_USEC;
   int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
-  int64_t default_duration_sec = is_work_day(job_id) ? DEFAULT_WORKING_DAY_DURATION_SEC : DEFAULT_NON_WORKING_DAY_DURATION_SEC;
-  share::ObDMLSqlSplicer dml;
-  OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(job_name))));
-  OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-  OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-  OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
-  OZ (dml.add_time_column("next_date", start_usec));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("FREQ=WEEKLY; INTERVAL=1"))));
-  OZ (dml.add_column("flag", 0));
-  OZ (dml.add_column("what", ObHexEscapeSqlStr(job_action.string())));
-  OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("field1", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
-  OZ (dml.add_column("job_style", ObHexEscapeSqlStr(ObString("REGULER"))));
-  OZ (dml.add_column("program_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString("STORED_PROCEDURE"))));
-  OZ (dml.add_column("job_action", ObHexEscapeSqlStr(job_action.string())));
-  OZ (dml.add_column("number_of_argument", 0));
-  OZ (dml.add_time_column("start_date", start_usec));
-  OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=WEEKLY; INTERVAL=1"))));
-  OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
-  OZ (dml.add_column("enabled", true));
-  OZ (dml.add_column("auto_drop", false));
-  OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to auto gather table stats"))));
-  OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("interval_ts", interval_ts));
-  OZ (dml.add_column("max_run_duration", default_duration_sec));
-  OZ (dml.splice_values(raw_sql));
+  int64_t default_duration_sec = DEFAULT_WORKING_DAY_DURATION_SEC;
+  job_info.tenant_id_ = tenant_id;
+  job_info.job_name_ = ObString(job_name);
+  job_info.job_ = job_id;
+  job_info.job_action_ = job_action.string();
+  job_info.lowner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+  job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+  job_info.cowner_ = is_oracle_mode ? ObString("SYS") : ObString("oceanbase");
+  job_info.job_style_ = ObString("regular");
+  job_info.job_type_ = ObString("STORED_PROCEDURE");
+  job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
+  job_info.start_date_ = start_usec;
+  job_info.end_date_ = end_date;
+  job_info.repeat_interval_ = ObString("FREQ=WEEKLY; INTERVAL=1");
+  job_info.enabled_ = true;
+  job_info.auto_drop_ = false;
+  job_info.max_run_duration_ = default_duration_sec;
+  job_info.exec_env_ = exec_env;
+  job_info.comments_ = ObString("used to auto gather table stats");
+  job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
   return ret;
 }
 
-int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_sql(const bool is_oracle_mode,
+int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_info(const bool is_oracle_mode,
                                                                     const uint64_t tenant_id,
                                                                     const int64_t job_id,
                                                                     const ObString &exec_env,
-                                                                    ObSqlString &raw_sql)
+                                                                    dbms_scheduler::ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   int64_t interval_ts = DEFAULT_DAY_INTERVAL_USEC;
   int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
   int64_t current = ObTimeUtility::current_time() + DEFAULT_DAY_INTERVAL_USEC;
-  share::ObDMLSqlSplicer dml;
-  OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(opt_stats_history_manager))));
-  OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-  OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-  OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
-  OZ (dml.add_time_column("next_date", current));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
-  OZ (dml.add_column("flag", 0));
-  OZ (dml.add_column("what", ObHexEscapeSqlStr("DBMS_STATS.PURGE_STATS(NULL)")));
-  OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("field1", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
-  OZ (dml.add_column("job_style", ObHexEscapeSqlStr(ObString("REGULER"))));
-  OZ (dml.add_column("program_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString("STORED_PROCEDURE"))));
-  OZ (dml.add_column("job_action", ObHexEscapeSqlStr("DBMS_STATS.PURGE_STATS(NULL)")));
-  OZ (dml.add_column("number_of_argument", 0));
-  OZ (dml.add_raw_time_column("start_date", current));
-  OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
-  OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
-  OZ (dml.add_column("enabled", true));
-  OZ (dml.add_column("auto_drop", false));
-  OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to stats history manager"))));
-  OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("interval_ts", interval_ts));
-  OZ (dml.add_column("max_run_duration", DEFAULT_HISTORY_MANAGER_DURATION_SEC));
-  OZ (dml.splice_values(raw_sql));
+  job_info.tenant_id_ = tenant_id;
+  job_info.job_name_ = ObString(opt_stats_history_manager);
+  job_info.job_ = job_id;
+  job_info.job_action_ = ObString("DBMS_STATS.PURGE_STATS(NULL)");
+  job_info.lowner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+  job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+  job_info.cowner_ = is_oracle_mode ? ObString("SYS") : ObString("oceanbase");
+  job_info.job_style_ = ObString("regular");
+  job_info.job_type_ = ObString("STORED_PROCEDURE");
+  job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
+  job_info.start_date_ = current;
+  job_info.end_date_ = end_date;
+  job_info.repeat_interval_ = ObString("FREQ=DAYLY; INTERVAL=1");
+  job_info.enabled_ = true;
+  job_info.auto_drop_ = false;
+  job_info.max_run_duration_ = DEFAULT_HISTORY_MANAGER_DURATION_SEC;
+  job_info.exec_env_ = exec_env;
+  job_info.comments_ = ObString("used to stats history manager");
+  job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
   return ret;
 }
 
-int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_sql(const bool is_oracle_mode,
+int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_info(const bool is_oracle_mode,
                                                                  const uint64_t tenant_id,
                                                                  const int64_t job_id,
                                                                  const ObString &exec_env,
-                                                                 ObSqlString &raw_sql)
+                                                                 dbms_scheduler::ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   int64_t interval_ts = DEFAULT_ASYNC_GATHER_STATS_INTERVAL_USEC;
   int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
   int64_t current = ObTimeUtility::current_time() + DEFAULT_ASYNC_GATHER_STATS_INTERVAL_USEC;
-  share::ObDMLSqlSplicer dml;
-  OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(async_gather_stats_job_proc))));
-  OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-  OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-  OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
-  OZ (dml.add_time_column("next_date", current));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("FREQ=MINUTELY; INTERVAL=15"))));
-  OZ (dml.add_column("flag", 0));
-  OZ (dml.add_column("what", ObHexEscapeSqlStr("DBMS_STATS.ASYNC_GATHER_STATS_JOB_PROC(600000000)")));
-  OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("field1", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
-  OZ (dml.add_column("job_style", ObHexEscapeSqlStr(ObString("REGULER"))));
-  OZ (dml.add_column("program_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString("STORED_PROCEDURE"))));
-  OZ (dml.add_column("job_action", ObHexEscapeSqlStr("DBMS_STATS.ASYNC_GATHER_STATS_JOB_PROC(600000000)")));
-  OZ (dml.add_column("number_of_argument", 0));
-  OZ (dml.add_raw_time_column("start_date", current));
-  OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=MINUTELY; INTERVAL=15"))));
-  OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
-  OZ (dml.add_column("enabled", true));
-  OZ (dml.add_column("auto_drop", false));
-  OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to async gather stats"))));
-  OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("interval_ts", interval_ts));
-  OZ (dml.add_column("max_run_duration", DEFAULT_ASYNC_GATHER_STATS_DURATION_SEC));
-  OZ (dml.splice_values(raw_sql));
+  job_info.tenant_id_ = tenant_id;
+  job_info.job_name_ = ObString(async_gather_stats_job_proc);
+  job_info.job_ = job_id;
+  job_info.job_action_ = ObString("DBMS_STATS.ASYNC_GATHER_STATS_JOB_PROC(600000000)");
+  job_info.lowner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+  job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+  job_info.cowner_ = is_oracle_mode ? ObString("SYS") : ObString("oceanbase");
+  job_info.job_style_ = ObString("regular");
+  job_info.job_type_ = ObString("STORED_PROCEDURE");
+  job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
+  job_info.start_date_ = current;
+  job_info.end_date_ = end_date;
+  job_info.repeat_interval_ = ObString("FREQ=MINUTELY; INTERVAL=15");
+  job_info.enabled_ = true;
+  job_info.auto_drop_ = false;
+  job_info.max_run_duration_ = DEFAULT_ASYNC_GATHER_STATS_DURATION_SEC;
+  job_info.exec_env_ = exec_env;
+  job_info.comments_ = ObString("used to async gather stats");
+  job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
   return ret;
 }
 
-//this dummy guard job is used to make sure the job id is monotonically increaseing
-int ObDbmsStatsMaintenanceWindow::get_dummy_guard_job_sql(const uint64_t tenant_id,
-                                                          const int64_t job_id,
-                                                          ObSqlString &raw_sql)
-{
-  int ret = OB_SUCCESS;
-  share::ObDMLSqlSplicer dml;
-  OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString("__dummy_guard"))));
-  OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("lowner", ObHexEscapeSqlStr(ObString("SYS"))));
-  OZ (dml.add_column("powner", ObHexEscapeSqlStr(ObString("SYS"))));
-  OZ (dml.add_column("cowner", ObHexEscapeSqlStr(ObString("SYS"))));
-  OZ (dml.add_time_column("next_date", 0));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("null"))));
-  OZ (dml.add_column("flag", 0));
-  OZ (dml.splice_values(raw_sql));
-  //column_name:
-  //  what,nlsenv,field1,exec_env,job_style,program_name,job_type,job_action,number_of_argument,
-  //  start_date,repeat_interval,end_date,job_class,enabled,auto_drop,comments,credential_name,
-  //  destination_name,interval_ts
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(raw_sql.append(", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,"
-                               "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL"))) {
-      LOG_WARN("failed to append", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_sql(const bool is_oracle_mode,
+int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_info(const bool is_oracle_mode,
                                                         const uint64_t tenant_id,
                                                         const int64_t job_id,
                                                         const int64_t offset_sec,
                                                         const ObString &exec_env,
-                                                        ObSqlString &raw_sql)
+                                                        dbms_scheduler::ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
 
@@ -414,38 +245,25 @@ int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_sql(const bool is_oracle_mod
                                                K(default_start_hour));
     int64_t interval_ts = DEFAULT_DAY_INTERVAL_USEC;
     int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
-    share::ObDMLSqlSplicer dml;
-    OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-    OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(spm_stats_manager))));
-    OZ (dml.add_pk_column("job", job_id));
-    OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-    OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
-    OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
-    OZ (dml.add_time_column("next_date", start_usec));
-    OZ (dml.add_column("total", 0));
-    OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
-    OZ (dml.add_column("flag", 0));
-    OZ (dml.add_column("what", ObHexEscapeSqlStr("DBMS_SPM.HANDLE_SPM_STATS_JOB_PROC()")));
-    OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
-    OZ (dml.add_column("field1", ObHexEscapeSqlStr(ObString(""))));
-    OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
-    OZ (dml.add_column("job_style", ObHexEscapeSqlStr(ObString("REGULER"))));
-    OZ (dml.add_column("program_name", ObHexEscapeSqlStr(ObString(""))));
-    OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString("STORED_PROCEDURE"))));
-    OZ (dml.add_column("job_action", ObHexEscapeSqlStr("DBMS_SPM.HANDLE_SPM_STATS_JOB_PROC()")));
-    OZ (dml.add_column("number_of_argument", 0));
-    OZ (dml.add_raw_time_column("start_date", start_usec));
-    OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
-    OZ (dml.add_raw_time_column("end_date", end_date));
-    OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
-    OZ (dml.add_column("enabled", true));
-    OZ (dml.add_column("auto_drop", false));
-    OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to handle spm stats"))));
-    OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
-    OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
-    OZ (dml.add_column("interval_ts", interval_ts));
-    OZ (dml.add_column("max_run_duration", 10 * 60)); // 10 min
-    OZ (dml.splice_values(raw_sql));
+    job_info.tenant_id_ = tenant_id;
+    job_info.job_name_ = ObString(spm_stats_manager);
+    job_info.job_ = job_id;
+    job_info.job_action_ = ObString("DBMS_SPM.HANDLE_SPM_STATS_JOB_PROC()");
+    job_info.lowner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+    job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+    job_info.cowner_ = is_oracle_mode ? ObString("SYS") : ObString("oceanbase");
+    job_info.job_style_ = ObString("regular");
+    job_info.job_type_ = ObString("STORED_PROCEDURE");
+    job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
+    job_info.start_date_ = start_usec;
+    job_info.end_date_ = end_date;
+    job_info.repeat_interval_ = ObString("FREQ=DAYLY; INTERVAL=1");
+    job_info.enabled_ = true;
+    job_info.auto_drop_ = false;
+    job_info.max_run_duration_ = 10 * 60; // 10 min
+    job_info.exec_env_ = exec_env;
+    job_info.comments_ = ObString("used to handle spm stats");
+    job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
   }
   return ret;
 }
@@ -481,9 +299,9 @@ int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time
     LOG_WARN("get unexpected error", K(ret), K(ob_time.parts_[DT_WDAY]));
   } else {
     //work day set default start time is 22:00 and non-work day set default start time is 6:00
-    int64_t default_start_hour = is_work_day(nth_window) ? DEFAULT_WORKING_DAY_START_HOHR : DEFAULT_NON_WORKING_DAY_START_HOHR;
+    int64_t default_start_hour = DEFAULT_WORKING_DAY_START_HOHR;
     //work day set default duration time is 4 hours and non-work day set default duration time is 20 hours
-    int64_t default_duration_usec = is_work_day(nth_window) ? DEFAULT_WORKING_DAY_DURATION_USEC : DEFAULT_NON_WORKING_DAY_DURATION_USEC;
+    int64_t default_duration_usec = DEFAULT_WORKING_DAY_DURATION_USEC;
     int64_t total_hour_with_trunc = current_time / USEC_OF_HOUR;
     int64_t current_hour = ob_time.parts_[DT_HOUR];
     int64_t current_wday = ob_time.parts_[DT_WDAY];
@@ -603,7 +421,10 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
       }
     } else if (0 == attr_name.case_compare("duration")) {
       // support set duration column.
-      int64_t specify_time = atol(val_name.ptr());
+      const int MAX_SPECIFY_TIME_LEN = 16;
+      char specify_time_buf[MAX_SPECIFY_TIME_LEN];
+      int64_t pos = val_name.to_string(specify_time_buf, MAX_SPECIFY_TIME_LEN);
+      int64_t specify_time = atoll(specify_time_buf);
       if (specify_time < 0 || specify_time > DEFAULT_DAY_INTERVAL_USEC) {
         ret = OB_ERR_DBMS_STATS_PL;
         LOG_WARN("the hour of interval must be between 0 and 24", K(ret));
@@ -727,15 +548,13 @@ int ObDbmsStatsMaintenanceWindow::check_date_validate(const ObString &job_name,
 }
 
 int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
-                                                                         const uint64_t tenant_id,
-                                                                         ObSqlString &sql)
+                                                                         const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   int64_t job_id = 0;
   ObString exec_env;
   ObSqlString values_list;
-  sql.reset();
   bool is_join_exists = false;
   //bug:
   ObArenaAllocator allocator("AsyncStatsJob");
@@ -751,20 +570,14 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
     LOG_WARN("get unexpected error", K(ret), K(job_id), K(exec_env));
   } else if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
     LOG_WARN("failed to get tenant compat mode", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_async_gather_stats_job_sql(lib::Worker::CompatMode::ORACLE == compat_mode,
-                                                    tenant_id, job_id, exec_env, values_list))) {
-    LOG_WARN("failed to get async gather stats job sql", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("REPLACE INTO %s( "ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME") VALUES (%s)",
-                                     share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
-                                     values_list.ptr()))) {
-    LOG_WARN("failed to append fmt", K(ret));
   } else {
-    values_list.reset();
-    if (OB_FAIL(get_async_gather_stats_job_sql(lib::Worker::CompatMode::ORACLE == compat_mode,
-                                               tenant_id, 0, exec_env, values_list))) {
-      LOG_WARN("failed to get async gather stats job sql", K(ret));
-    } else if (OB_FAIL(sql.append_fmt(", (%s);", values_list.ptr()))) {
-      LOG_WARN("failed to append fmt", K(ret));
+    HEAP_VAR(dbms_scheduler::ObDBMSSchedJobInfo, job_info) {
+      if (OB_FAIL(get_async_gather_stats_job_info(lib::Worker::CompatMode::ORACLE == compat_mode,
+                                                        tenant_id, job_id, exec_env, job_info))) {
+        LOG_WARN("failed to get async gather stats job info", K(ret), K(job_info));
+      } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(*sql_proxy, tenant_id, job_id, job_info))) {
+        LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
+      }
     }
   }
   return ret;
@@ -896,12 +709,10 @@ int ObDbmsStatsMaintenanceWindow::check_job_exists(common::ObMySQLProxy *sql_pro
 int ObDbmsStatsMaintenanceWindow::get_spm_stats_upgrade_jobs_sql(common::ObMySQLProxy *sql_proxy,
                                                                  const ObSysVariableSchema &sys_variable,
                                                                  const uint64_t tenant_id,
-                                                                 const bool is_oracle_mode,
-                                                                 ObSqlString &raw_sql)
+                                                                 const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
   char buf[OB_MAX_PROC_ENV_LENGTH];
-  ObSqlString tmp_sql;
   int64_t pos = 0;
   int32_t offset_sec = 0;
   int64_t job_id = 0;
@@ -913,26 +724,19 @@ int ObDbmsStatsMaintenanceWindow::get_spm_stats_upgrade_jobs_sql(common::ObMySQL
                          tmp_exec_env.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(job_id), K(tmp_exec_env));
-  } else if (OB_FAIL(raw_sql.assign_fmt("INSERT INTO %s( "ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME") VALUES ",
-              share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME))) {
-    LOG_WARN("failed to assign fmt", K(ret));
   } else if (OB_FAIL(sql::ObExecEnv::gen_exec_env(sys_variable, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
     LOG_WARN("failed to gen exec env", K(ret));
   } else if (OB_FAIL(get_time_zone_offset(sys_variable, tenant_id, offset_sec))) {
     LOG_WARN("failed to get time zone offset", K(ret));
   } else {
-    ObString exec_env(pos, buf);
-    if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, job_id,
-                                      offset_sec, exec_env, tmp_sql))) {
-      LOG_WARN("failed to get stats history manager job sql", K(ret));
-    } else if (OB_FAIL(raw_sql.append_fmt(" (%s)", tmp_sql.ptr()))) {
-      LOG_WARN("failed to append sql", K(ret));
-    } else if (OB_FALSE_IT(tmp_sql.reset())) {
-    } else if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, 0,
-                                             offset_sec, exec_env, tmp_sql))) {
-      LOG_WARN("failed to get stats history manager job sql", K(ret));
-    } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
-      LOG_WARN("failed to append sql", K(ret));
+    HEAP_VAR(dbms_scheduler::ObDBMSSchedJobInfo, job_info) {
+      ObString exec_env(pos, buf);
+      if (OB_FAIL(get_spm_stats_job_info(is_oracle_mode, tenant_id, job_id,
+                                        offset_sec, exec_env, job_info))) {
+        LOG_WARN("failed to get stats history manager job sql", K(ret));
+      } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(*sql_proxy, tenant_id, job_id, job_info))) {
+        LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
+      }
     }
   }
   return ret;

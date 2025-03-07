@@ -11,10 +11,6 @@
  */
 
 #include "palf_options.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "log_define.h"
-#include <cstdint>
 
 namespace oceanbase
 {

@@ -14,7 +14,6 @@
 #include "lib/geo/ob_geo_cache_polygon.h"
 #include "lib/geo/ob_point_location_analyzer.h"
 #include "lib/geo/ob_geo_segment_intersect_analyzer.h"
-#include "lib/geo/ob_geo_point_location_visitor.h"
 #include "lib/geo/ob_geo_segment_collect_visitor.h"
 #include "lib/geo/ob_geo_vertex_collect_visitor.h"
 

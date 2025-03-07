@@ -10,8 +10,6 @@
 
 
 /* ======   Dependencies   ======= */
-#include <stddef.h>    /* size_t */
-#include "debug.h"     /* assert */
 #include "zstd_internal.h"  /* ZSTD_malloc, ZSTD_free */
 #include "pool.h"
 
@@ -23,7 +21,6 @@
 
 #ifdef ZSTD_MULTITHREAD
 
-#include "threading.h"   /* pthread adaptation */
 
 /* A job is a function and an opaque argument */
 typedef struct POOL_job_s {

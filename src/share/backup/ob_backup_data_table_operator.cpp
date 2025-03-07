@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_backup_data_table_operator.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_smart_var.h"
-#include "share/config/ob_server_config.h"
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_share_util.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 { 
@@ -2456,7 +2450,7 @@ int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt("select t1.tablet_id tablet_id,t2.major_version major_version from %s as of snapshot %ld t1"
-            " join (select p_obj table_id,min(b.last_refresh_scn) major_version from %s as of snapshot %ld a"
+            " join (select p_obj table_id,cast(min(case when b.last_refresh_type>0 then b.last_refresh_scn else 0 end) as unsigned) major_version from %s as of snapshot %ld a"
             " join %s as of snapshot %ld b on a.mview_id=b.mview_id where b.refresh_mode=%ld group by p_obj"
             " union all (select a.data_table_id table_id,b.last_refresh_scn major_version from %s as of snapshot %ld a"
             " join %s as of snapshot %ld b on a.table_id=b.mview_id and b.refresh_mode=%ld)) t2 on t1.table_id=t2.table_id",

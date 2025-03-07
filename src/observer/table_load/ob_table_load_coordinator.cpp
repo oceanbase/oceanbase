@@ -14,21 +14,14 @@
 
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/ob_server.h"
-#include "observer/table_load/control/ob_table_load_control_rpc_proxy.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
-#include "observer/table_load/ob_table_load_redef_table.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_bucket_writer.h"
-#include "observer/table_load/ob_table_load_utils.h"
-#include "share/ob_share_util.h"
-#include "share/stat/ob_incremental_stat_estimator.h"
 #include "share/stat/ob_dbms_stats_executor.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "observer/table_load/ob_table_load_index_long_wait.h"
@@ -397,7 +390,7 @@ int ObTableLoadCoordinator::cal_memory_size(
       if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
         thread_count = unit.thread_count_;
       }
-      if (ctx_->schema_.is_heap_table_) {
+      if (ctx_->schema_.is_table_without_pk_) {
         // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
         min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * thread_count;
         if (!ctx_->param_.need_sort_) {
@@ -437,7 +430,7 @@ int ObTableLoadCoordinator::cal_memory_size(
     if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
       thread_count = unit.thread_count_;
     }
-    if (ctx_->schema_.is_heap_table_) {
+    if (ctx_->schema_.is_table_without_pk_) {
       min_unsort_memory = MIN(MACROBLOCK_BUFFER_SIZE * partitions[i] * thread_count, memory_limit);
     } else {
       min_unsort_memory = MIN(MAX(SSTABLE_BUFFER_SIZE * partitions[i] * thread_count, MACROBLOCK_BUFFER_SIZE * thread_count), memory_limit);
@@ -514,7 +507,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
 
         // 数据写入阶段，导入内部无法控制并发，由pdml控制，所以并行度需要根据pdml的规则来调整
         // 影响了快速堆表路径，pdml的并发可能比limit_session_count大
-        if (ctx_->schema_.is_heap_table_ && (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_))) {
+        if (ctx_->schema_.is_table_without_pk_ && (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_))) {
           if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(tenant_id, SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_servers_target))) {
             LOG_WARN("fail read tenant variable", KR(ret), K(tenant_id));
           } else if (ctx_->param_.parallel_ > limit_session_count && limit_session_count < parallel_servers_target) {
@@ -584,7 +577,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
             ctx_->param_.task_need_sort_ = task_need_sort;
             ctx_->param_.session_count_ = coord_session_count;
             ctx_->param_.write_session_count_ = write_session_count;
-            ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ?
+            ctx_->param_.exe_mode_ = (ctx_->schema_.is_table_without_pk_ ?
                 (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
                 (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
             ctx_->job_stat_->parallel_ = coord_session_count;

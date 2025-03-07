@@ -14,23 +14,10 @@
 
 #include "rootserver/freeze/ob_major_merge_info_manager.h"
 
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_root_utils.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/utility/utility.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_zone_table_operation.h"
 #include "share/ob_global_stat_proxy.h"
-#include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "rootserver/ob_ddl_service.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_snapshot_table_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "storage/tx/wrs/ob_weak_read_util.h"
-#include "share/ob_server_table_operator.h"
 #include "rootserver/ob_tenant_balance_service.h"
 namespace oceanbase
 {

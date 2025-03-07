@@ -19,12 +19,8 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "logservice/ob_log_service.h"
 #include "observer/ob_server_utils.h"
 #include "env/ob_simple_server_restart_helper.h"
-#include "observer/omt/ob_tenant.h"
-#include "share/unit/ob_unit_config.h"
 #undef protected
 #undef private
 

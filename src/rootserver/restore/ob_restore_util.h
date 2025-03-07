@@ -71,9 +71,10 @@ public:
              ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
   static int insert_user_tenant_restore_job(
-             common::ObISQLClient &sql_client,
+             common::ObMySQLProxy &sql_client,
              const ObString &tenant_name,
-             const int64_t user_tenant_id);
+             const int64_t user_tenant_id,
+             ObMySQLTransaction &trans);
   static int get_user_restore_job_history(common::ObISQLClient &sql_client,
                                           const uint64_t user_tenant_id,
                                           const uint64_t initiator_tenant_id,

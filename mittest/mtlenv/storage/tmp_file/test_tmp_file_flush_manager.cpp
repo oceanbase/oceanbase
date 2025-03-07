@@ -720,7 +720,7 @@ TEST_F(TestTmpFileFlushMgr, test_single_file_wbp_shrink_basic)
   LOG_INFO("simulate tenant memory shrink, wbp is going to shrink...");
   wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
   for (int32_t i = 0; i < 10; i++) {
-    mock_swap_tg.do_work_();
+    mock_swap_tg.shrink_wbp_if_needed_();
     flush_tg.do_work_();
     usleep(20 * 1000);
   }
@@ -773,13 +773,13 @@ TEST_F(TestTmpFileFlushMgr, test_single_file_wbp_shrink_abort)
   pc_ctrl.write_buffer_pool_.print_statistics();
   wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
 
-  mock_swap_tg.do_work_();
-  mock_swap_tg.do_work_();
+  mock_swap_tg.shrink_wbp_if_needed_();
+  mock_swap_tg.shrink_wbp_if_needed_();
 
   LOG_INFO("simulate tenant memory enlarge, abort shrinking");
   wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT; // abort wbp shrinking
   for (int32_t i = 0; i < 10; i++) {
-    mock_swap_tg.do_work_();
+    mock_swap_tg.shrink_wbp_if_needed_();
     flush_tg.do_work_();
     usleep(10 * 1000);
   }

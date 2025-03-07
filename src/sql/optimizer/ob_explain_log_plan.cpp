@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "lib/json/ob_json.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/optimizer/ob_log_values.h"
 #include "sql/code_generator/ob_code_generator.h"
-#include "sql/monitor/ob_sql_plan.h"
 
 using namespace oceanbase;
 using namespace sql;

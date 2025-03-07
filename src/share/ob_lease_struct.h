@@ -69,6 +69,21 @@ enum LeaseRequestServerStatus
   LEASE_REQUEST_DATA_DISK_ERROR = 0x1,
 };
 
+struct DataDiskSuggestedOperationType
+{
+  enum TYPE : uint8_t
+  {
+    NONE = 0,
+    EXPAND = 1,
+    SHRINK = 2,
+  };
+  static const char *get_str(const TYPE &type);
+  static OB_INLINE bool is_valid(const TYPE &type)
+  {
+    return type >= 0 && type <= TYPE::SHRINK;
+  }
+};
+
 struct ObServerResourceInfo
 {
   OB_UNIS_VERSION(1);
@@ -89,6 +104,9 @@ public:
   int64_t report_data_disk_assigned_;   // 数据盘已分配大小：server所有unit data_disk_size总和.
                                         //   仅 shared-storage 模式下有效. shared-nothing 模式下为 0
   int64_t data_disk_in_use_;            // 数据盘已使用大小（旧版本 disk_in_use_） // FARM COMPAT WHITELIST: Type not match
+
+  DataDiskSuggestedOperationType::TYPE report_data_disk_suggested_operation_;  // 数据盘建议操作：none（无操作），expand（扩容），shrink（缩容）. 仅SS模式下有效. SN模式下为none
+  int64_t report_data_disk_suggested_size_;                                    // 数据盘建议大小：仅SS模式下有效. SN模式下为0
 
   ObServerResourceInfo();
   void reset();

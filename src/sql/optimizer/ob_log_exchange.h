@@ -53,6 +53,7 @@ public:
       null_row_dist_method_(ObNullDistributeMethod::NONE),
       slave_mapping_type_(SlaveMappingType::SM_NONE),
       gi_info_(),
+      px_batch_op_(NULL),
       px_batch_op_id_(OB_INVALID_ID),
       px_batch_op_type_(log_op_def::LOG_OP_INVALID),
       partition_id_expr_(NULL),
@@ -140,10 +141,13 @@ public:
   virtual int compute_plan_type() override;
   SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
   bool is_slave_mapping() const { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
+  ObLogicalOperator *get_px_batch_op() { return px_batch_op_; }
+  void set_px_batch_op(ObLogicalOperator *op) { px_batch_op_ = op; }
+  int64_t get_px_batch_op_id() { return px_batch_op_id_; }
   void set_px_batch_op_id(int64_t id) { px_batch_op_id_ = id; }
+  log_op_def::ObLogOpType get_px_batch_op_type() { return px_batch_op_type_;}
   void set_px_batch_op_type(log_op_def::ObLogOpType px_batch_op_type)
   { px_batch_op_type_ = px_batch_op_type; }
-  int64_t get_px_batch_op_id() { return px_batch_op_id_; }
 
   void set_rollup_hybrid(bool is_rollup_hybrid) { is_rollup_hybrid_ = is_rollup_hybrid; }
   bool is_rollup_hybrid() { return is_rollup_hybrid_; }
@@ -161,7 +165,6 @@ public:
     return wf_hybrid_pby_exprs_cnt_array_;
   }
 
-  log_op_def::ObLogOpType get_px_batch_op_type() { return px_batch_op_type_;}
   common::ObIArray<ObTableLocation> &get_pruning_table_locations() { return table_locations_; }
   common::ObIArray<int64_t> &get_bloom_filter_ids() { return filter_id_array_; }
   int gen_px_pruning_table_locations();
@@ -258,6 +261,7 @@ private:
   //granule info
   ObAllocGIInfo gi_info_;
   // px batch rescan drive op
+  ObLogicalOperator *px_batch_op_;
   int64_t px_batch_op_id_;
   log_op_def::ObLogOpType px_batch_op_type_;
   ObOpPseudoColumnRawExpr *partition_id_expr_;

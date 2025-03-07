@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <errno.h>
-#include "lib/oblog/ob_trace_log.h"
 #include "common/ob_queue_thread.h"
-#include "lib/utility/utility.h"
 
 extern "C" {
 int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);

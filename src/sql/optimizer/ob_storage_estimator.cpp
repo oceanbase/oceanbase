@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_storage_estimator.h"
-#include "lib/worker.h"
 #include "storage/tx_storage/ob_access_service.h"
-#include "storage/access/ob_table_scan_range.h"
-#include "share/ob_simple_batch.h"
-#include "storage/access/ob_dml_param.h"
 #include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase {

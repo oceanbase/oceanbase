@@ -186,6 +186,15 @@ public:
   {
     return ATOMIC_LOAD(&flag_) & F_INCOMPLETE_STATE;
   }
+  bool need_elr() const
+  {
+    blocksstable::ObDmlFlag dml_type = get_dml_flag();
+    return (dml_type == blocksstable::ObDmlFlag::DF_LOCK
+          || dml_type == blocksstable::ObDmlFlag::DF_UPDATE) &&
+            ObMvccTransNode::F_ELR != flag_ &&
+            ObMvccTransNode::F_COMMITTED != flag_ &&
+            ObMvccTransNode::F_ABORTED != flag_;
+  }
 
   // ===================== ObMvccTransNode Setter/Getter =====================
   blocksstable::ObDmlFlag get_dml_flag() const;

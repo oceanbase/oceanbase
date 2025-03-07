@@ -15,11 +15,9 @@
 #define USING_LOG_PREFIX OBLOG_FORMATTER
 
 #ifdef OB_USE_DRCMSG
-#include <drcmsg/MD.h>                        // ITableMeta
 #endif
 
 #include "ob_log_binlog_record.h"
-#include "ob_log_utils.h"
 #include "ob_log_instance.h"                  // TCTX
 
 using namespace oceanbase::common;

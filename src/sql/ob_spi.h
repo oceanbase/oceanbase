@@ -328,12 +328,14 @@ public:
                   pl::ObPLBlockNS *secondary_ns,
                   bool is_dynamic_sql,
                   bool is_dbms_sql,
-                  bool is_cursor)
+                  bool is_cursor,
+                  bool is_parser_dynamic_sql = false)
     : sess_info_(sess_info),
       secondary_ns_(secondary_ns),
       is_dynamic_sql_(is_dynamic_sql),
       is_dbms_sql_(is_dbms_sql),
-      is_cursor_(is_cursor)
+      is_cursor_(is_cursor),
+      is_parser_dynamic_sql_(is_parser_dynamic_sql)
     {
     }
     ObSQLSessionInfo &sess_info_;    // pl执行用到的session
@@ -344,7 +346,8 @@ public:
         uint16_t is_dynamic_sql_ : 1; // 标记当前执行的sql是否是动态sql
         uint16_t is_dbms_sql_ : 1;    // 标记当前执行的sql是否是dbms_sql
         uint16_t is_cursor_ : 1;      // 标记当前执行的sql是否是cursor
-        uint16_t reserved_ : 13;
+        uint16_t is_parser_dynamic_sql_ : 1;
+        uint16_t reserved_ : 12;
       };
     };
     TO_STRING_KV(KP_(secondary_ns), K_(is_dynamic_sql), K_(is_dbms_sql), K_(is_cursor));
@@ -358,7 +361,8 @@ public:
         mem_context_destroy_guard_(mem_context_),
         result_set_(nullptr),
         sql_ctx_(),
-        schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT) {}
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT),
+        question_mark_cnt_(0) {}
     ~PLPrepareResult() { reset(); }
     int init(sql::ObSQLSessionInfo &session_info);
     void reset()
@@ -380,6 +384,7 @@ public:
     sql::ObResultSet *result_set_;
     sql::ObSqlCtx sql_ctx_; // life period follow result_set_
     share::schema::ObSchemaGetterGuard schema_guard_;
+    int64_t question_mark_cnt_;
   };
 
   enum ObCusorDeclareLoc {
@@ -709,6 +714,11 @@ public:
                                    int64_t *addr,
                                    ObIAllocator *alloc);
 
+  static int spi_new_coll_element(uint64_t collection_id,
+                                  ObIAllocator *allocator,
+                                  const pl::ObPLINS *ns,
+                                  ObObj *new_element);
+
   static int spi_extend_collection(pl::ObPLExecCtx *ctx,
                                    const int64_t collection_expr_idx,
                                    int64_t column_count,
@@ -755,8 +765,6 @@ public:
                               observer::ObInnerSQLConnection *&spi_conn);
 
   static int spi_destruct_collection(pl::ObPLExecCtx *ctx, int64_t idx);
-
-  static int spi_init_collection(pl::ObPLExecCtx *ctx, pl::ObPLCollection *src, pl::ObPLCollection *dest, int64_t row_size, uint64_t package_id = OB_INVALID_ID);
 
   static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper);
 
@@ -811,6 +819,8 @@ public:
                                           ObIAllocator *allocator,
                                           ObObj *result);
 
+  static int spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level);
+
   static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf, int level);
 
   static int spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code);
@@ -860,7 +870,8 @@ public:
                              bool &for_update,
                              bool &hidden_rowid,
                              int64_t &into_cnt,
-                             bool &skip_locked);
+                             bool &skip_locked,
+                             ParamStore *params = nullptr);
   static int prepare_dynamic(pl::ObPLExecCtx *ctx,
                              ObIAllocator &allocator,
                              bool is_returning,
@@ -873,6 +884,7 @@ public:
                              bool &hidden_rowid,
                              int64_t &into_cnt,
                              bool &skip_locked,
+                             ParamStore *params,
                              common::ColumnsFieldArray *field_list = NULL);
   static int force_refresh_schema(uint64_t tenant_id, int64_t refresh_version = OB_INVALID_VERSION);
 
@@ -1292,6 +1304,7 @@ private:
   static int store_params_string(pl::ObPLExecCtx *ctx, ObSPIResultSet &spi_result, ParamStore *exec_params);
 
   static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);
+  static int save_unstreaming_cursor_sql(pl::ObPLCursorInfo &cursor, const ObString &sql_text);
 };
 
 struct ObPLSubPLSqlTimeGuard
@@ -1302,6 +1315,15 @@ struct ObPLSubPLSqlTimeGuard
   int64_t execute_start_;
   pl::ObPLExecState *state_;
   int64_t old_pure_sql_exec_time_;
+};
+
+struct ObPLPartitionHitGuard
+{
+  ObPLPartitionHitGuard(pl::ObPLExecCtx &pl_exec_ctx_);
+  ~ObPLPartitionHitGuard();
+  pl::ObPLExecCtx &pl_exec_ctx_;
+  bool old_partition_hit_;
+  bool can_freeze_;
 };
 
 }

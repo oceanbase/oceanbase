@@ -13,14 +13,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <math.h>
 #include "sql/session/ob_sess_info_verify.h"
-#include "share/ob_define.h"
-#include "share/system_variable/ob_system_variable_factory.h"
-#include "lib/trace/ob_trace_event.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
@@ -426,11 +420,10 @@ int ObSessInfoVerify::sql_port_to_rpc_port(sql::ObSQLSessionInfo &sess,
         SERVER_LOG(WARN, "failed to start transaction", K(ret));
       } else {
         int sql_len = 0;
-        const static int MAX_IP_BUFFER_LEN = 32;
-        char ip_buf[MAX_IP_BUFFER_LEN];
+        char ip_buf[MAX_IP_ADDR_LENGTH];
         ip_buf[0] = '\0';
         if (sess_info_verification.get_verify_info_addr().ip_to_string(ip_buf,
-            MAX_IP_BUFFER_LEN)) {
+            MAX_IP_ADDR_LENGTH)) {
           SMART_VAR(char[OB_MAX_SQL_LENGTH], sql) {
             const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
             const char *table_name = share::OB_ALL_SERVER_TNAME;

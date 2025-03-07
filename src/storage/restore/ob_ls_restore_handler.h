@@ -104,6 +104,7 @@ public:
   void set_result(const int result, const share::ObTaskId &trace_id, const RestoreFailedType &failed_type);
   int get_comment_str(const ObLSID &ls_id, const ObAddr &addr, ObHAResultInfo::Comment &comment) const;
   bool can_retrieable_err(const int err) const;
+  void reset();
 
   TO_STRING_KV(K_(result), K_(retry_cnt), K_(trace_id), K_(failed_type));
 private:
@@ -164,6 +165,7 @@ private:
   template <typename T>
   int construct_state_handler_(T *&new_handler);
   int deal_failed_restore_();
+  bool need_update_state_handle_(share::ObLSRestoreStatus &new_status);
 private:
   bool is_inited_;
   bool is_stop_; // used by ls destory

@@ -57,18 +57,32 @@ void ObKvSchemaCacheKey::reset()
 int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, table_schema->get_table_name_str(), table_name_, true))) {
     LOG_WARN("fail to copy column name", K(ret), K(table_schema->get_table_name_str()));
-  } else if (OB_FAIL(ob_write_string(allocator_, table_schema->get_kv_attributes(), kv_attributes_))) {
-    LOG_WARN("fail to copy kv attributes", K(ret), K(table_schema->get_kv_attributes()));
+  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), kv_attributes_))) {
+    LOG_WARN("fail to parse kv attributes", K(ret), K(table_schema->get_kv_attributes()));
   } else {
     auto_inc_cache_size_ = table_schema->get_auto_increment_cache_size();
     set_is_ttl_table(!table_schema->get_ttl_definition().empty());
     set_is_partitioned_table(table_schema->is_partitioned_table());
-    if (flags_.is_ttl_table_ ) {
+    if (ObHTableUtils::is_htable_schema(*table_schema)) {
+      uint64_t data_version = 0;
+      if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
+        flags_.has_hbase_ttl_column_ = true;
+        if (GET_MIN_DATA_VERSION(MTL_ID(), data_version)) {
+          LOG_WARN("get data version failed", K(ret));
+        } else if (data_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support ttl column with data version less than 4_3_5_1", K(ret), K(data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl column with data version less than 4_3_5_1");
+        }
+      }
+    }
+    if (OB_SUCC(ret) && flags_.is_ttl_table_) {
       if (OB_FAIL(ob_write_string(allocator_, table_schema->get_ttl_definition(), ttl_definition_))) {
         LOG_WARN("fail to copy ttl definaitions", K(ret));
       }
@@ -82,26 +96,26 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
                                         common::ObTableID table_id)
 {
   int ret = OB_SUCCESS;
-  int64_t index_aux_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
-  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
   if (OB_ISNULL(schema_guard) || !schema_guard->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is NULL or not inited", K(ret));
   } else if (OB_FAIL(schema_guard->get_can_write_index_array(tenant_id,
                                                              table_id,
                                                              tids,
-                                                             index_aux_cnt,
+                                                             index_cnt,
                                                              false /*only global*/))) {
     LOG_WARN("fail to get can write index array", K(ret), K(table_id));
-  } else if (OB_FAIL(local_index_tids_.init(index_aux_cnt))) {
+  } else if (OB_FAIL(local_index_tids_.init(index_cnt))) {
     LOG_WARN("fail to init local index tids", K(ret));
-  } else if (OB_FAIL(global_index_tids_.init(index_aux_cnt))) {
+  } else if (OB_FAIL(global_index_tids_.init(index_cnt))) {
     LOG_WARN("fail to init global index tids", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_aux_cnt; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_cnt; i++) {
       const ObTableSchema *index_schema = nullptr;
       if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, tids[i], index_schema))) {
-        LOG_WARN("fail to get index schema", K(ret), K(tids[i]), K(i), K(index_aux_cnt));
+        LOG_WARN("fail to get index schema", K(ret), K(tids[i]), K(i), K(index_cnt));
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("null index schema", K(ret));
@@ -110,6 +124,9 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
           LOG_WARN("fail to push back local index tids", K(ret));
         } else {
           flags_.has_local_index_ = true;
+          if (index_schema->is_fts_index()) {
+            flags_.has_fts_index_ = true;
+          }
         }
       } else if (index_schema->is_global_index_table()) {
         if (OB_FAIL(global_index_tids_.push_back(tids[i]))) {
@@ -180,9 +197,7 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
         col_info->col_idx_ = i;
         col_info->column_id_ = col_schema->get_column_id();
         col_info->table_id_ = col_schema->get_table_id();
-        col_info->is_generated_column_ = col_schema->is_generated_column();
-        col_info->is_stored_generated_column_ = col_schema->is_stored_generated_column();
-        col_info->is_virtual_generated_column_ = col_schema->is_virtual_generated_column();
+        col_info->column_flags_ = col_schema->get_column_flags();
         col_info->is_auto_increment_ = col_schema->is_autoincrement();
         col_info->is_nullable_ = col_schema->is_nullable();
         col_info->is_tbl_part_key_column_ = col_schema->is_tbl_part_key_column();
@@ -231,7 +246,7 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
           }
 
           if (OB_FAIL(ret)) {
-          } else if (col_info->is_generated_column_) {
+          } else if (col_info->is_generated_column()) {
             col_info->cascaded_column_ids_.set_allocator(&allocator_);
             if (OB_FAIL(col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
               LOG_WARN("fail to get cascaded column ids", K(ret), K(i));
@@ -254,8 +269,8 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
         if (!flags_.has_auto_inc_ && col_info->is_auto_increment_) {
           set_has_auto_inc(col_info->is_auto_increment_);
         }
-        if (!flags_.has_generated_column_ && col_info->is_generated_column_) {
-          set_has_generated_column(col_info->is_generated_column_);
+        if (!flags_.has_generated_column_ && col_info->is_generated_column()) {
+          set_has_generated_column(col_info->is_generated_column());
         }
         if (!flags_.has_lob_column_ && is_lob_storage(col_info->type_.get_type())) {
           set_has_lob_column(true);
@@ -447,7 +462,7 @@ int ObKvSchemaCacheGuard::get_column_info_idx(uint64_t col_id, int64_t &idx)
   return ret;
 }
 
-int ObKvSchemaCacheGuard::get_kv_attributes(ObString &kv_attributes)
+int ObKvSchemaCacheGuard::get_kv_attributes(ObKVAttr &kv_attributes)
 {
   int ret = OB_SUCCESS;
   ObKvSchemaCacheObj *cache_obj = nullptr;
@@ -491,6 +506,30 @@ int ObKvSchemaCacheGuard::is_ttl_table(bool &is_ttl_table)
     LOG_WARN("fail to get cache obj", K(ret));
   } else {
     is_ttl_table = cache_obj->get_schema_flags().is_ttl_table_;
+  }
+  return ret;
+}
+
+int ObKvSchemaCacheGuard::is_redis_ttl_table(bool &is_redis_ttl_table)
+{
+  int ret = OB_SUCCESS;
+  ObKvSchemaCacheObj *cache_obj = nullptr;
+  if (OB_FAIL(get_cache_obj(cache_obj))) {
+    LOG_WARN("fail to get cache obj", K(ret));
+  } else {
+    is_redis_ttl_table = cache_obj->get_kv_attributes().is_redis_ttl_;
+  }
+  return ret;
+}
+
+int ObKvSchemaCacheGuard::has_hbase_ttl_column(bool &has_ttl_column)
+{
+  int ret = OB_SUCCESS;
+  ObKvSchemaCacheObj *cache_obj = nullptr;
+  if (OB_FAIL(get_cache_obj(cache_obj))) {
+    LOG_WARN("fail to get cache obj", K(ret));
+  } else {
+    has_ttl_column = cache_obj->get_schema_flags().has_hbase_ttl_column_;
   }
   return ret;
 }
@@ -549,8 +588,6 @@ int ObKvSchemaCacheGuard::get_rowkey_column_ids(common::ObIArray<uint64_t> &colu
         LOG_WARN("Fail to add rowkey id to scan", K(ret), K(rowkey_info->column_id_), K(i));
       }
     }
-
-    LOG_WARN("fail to get rowkey ids ", K(ret));
   }
   return ret;
 }

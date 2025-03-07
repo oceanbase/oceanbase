@@ -12,21 +12,13 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "storage/access/ob_table_scan_iterator.h"
 #include "ob_lob_persistent_adaptor.h"
-#include "ob_lob_piece.h"
-#include "ob_lob_meta.h"
-#include "ob_lob_persistent_iterator.h"
+#include "storage/access/ob_table_scan_iterator.h"
 #include "ob_lob_persistent_reader.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "share/schema/ob_table_dml_param.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 
 namespace oceanbase
 {

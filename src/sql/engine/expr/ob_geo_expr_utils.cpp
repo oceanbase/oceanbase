@@ -14,23 +14,19 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_coordinate_range_visitor.h"
 #include "lib/geo/ob_geo_wkb_size_visitor.h"
 #include "lib/geo/ob_geo_wkb_visitor.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_normalize_visitor.h"
-#include "lib/geo/ob_geo_wkb_check_visitor.h"
 #include "lib/geo/ob_geo_denormalize_visitor.h"
 #include "lib/geo/ob_geo_check_empty_visitor.h"
 #include "lib/geo/ob_geo_latlong_check_visitor.h"
 #include "lib/geo/ob_geo_zoom_in_visitor.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_3d.h"
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
-#include "lib/geo/ob_geo_cache_polygon.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "deps/oblib/src/lib/geo/ob_geo_cache.h"
+
 using namespace oceanbase::common;
 namespace oceanbase
 {

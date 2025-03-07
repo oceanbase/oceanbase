@@ -12,24 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_tenant_info_proxy.h"
-#include "share/ob_cluster_role.h"//ObClusterTYPE
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/ob_tenant_info_proxy.h" //ObAllTenantInfo
-#include "share/config/ob_server_config.h"//GCONF
-#include "share/inner_table/ob_inner_table_schema.h"//ALL_TENANT_INFO_TNAME
-#include "share/ls/ob_ls_i_life_manager.h"//TODO SCN VALUE
-#include "share/ls/ob_ls_status_operator.h"//get_tenant max ls id
-#include "lib/string/ob_sql_string.h"//ObSqlString
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
-#include "common/ob_timeout_ctx.h"//ObTimeoutCtx
 #include "ob_tenant_info_proxy.h"
-#include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
-#include "lib/string/ob_sql_string.h"//ObSqlString
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
-#include "common/ob_timeout_ctx.h"//ObTimeoutCtx
+#include "share/ls/ob_ls_status_operator.h"//get_tenant max ls id
 #include "rootserver/ob_root_utils.h"//ObRootUtils
-#include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 

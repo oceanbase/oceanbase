@@ -24,6 +24,7 @@ namespace aggregate
 
 bool is_grouping(const ObAggrInfo &aggr_info, const int64_t val);
 int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t val, number::ObCompactNumber *grouping_id);
+int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t val, int64_t *grouping_id);
 
 template<ObExprOperatorType agg_func, VecValueTypeClass out_tc>
 class GroupingAggregate final: public BatchAggregateWrapper<GroupingAggregate<agg_func, out_tc>>
@@ -59,8 +60,14 @@ public:
           *reinterpret_cast<int64_t *>(agg_cell) = is_grouping(aggr_info, grouping_vec->get_int(i));
           found = true;
         } else if (agg_func == T_FUN_GROUPING_ID) {
-          if (OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(i),
-                                      reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+          if (OB_UNLIKELY(out_tc != VEC_TC_NUMBER && out_tc != VEC_TC_INTEGER)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "invalid out type class", K(ret));
+          } else if (out_tc == VEC_TC_NUMBER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(i),
+                                                                        reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+            SQL_LOG(WARN, "get grouping id failed", K(ret));
+          } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(i),
+                                                                         reinterpret_cast<int64_t *>(agg_cell)))) {
             SQL_LOG(WARN, "get grouping id failed", K(ret));
           } else {
             found = true;
@@ -80,8 +87,14 @@ public:
           *reinterpret_cast<int64_t *>(agg_cell) = is_grouping(aggr_info, grouping_vec->get_int(row_sel.index(i)));
           found = true;
         } else if (agg_func == T_FUN_GROUPING_ID) {
-          if (OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(row_sel.index(i)),
-                                      reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+          if (OB_UNLIKELY(out_tc != VEC_TC_NUMBER && out_tc != VEC_TC_INTEGER)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "invalid out type class", K(ret));
+          } else if (out_tc == VEC_TC_NUMBER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(row_sel.index(i)),
+                                                                        reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+            SQL_LOG(WARN, "get grouping id failed", K(ret));
+          } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(row_sel.index(i)),
+                                                                         reinterpret_cast<int64_t *>(agg_cell)))) {
             SQL_LOG(WARN, "get grouping id failed", K(ret));
           } else {
             found = true;
@@ -114,8 +127,14 @@ public:
         *reinterpret_cast<int64_t *>(agg_cell) = is_grouping(aggr_info, grouping_vec->get_int(batch_idx));
         not_nulls.set(agg_col_idx);
       } else if (agg_func == T_FUN_GROUPING_ID) {
-        if (OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx),
-                                    reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+        if (OB_UNLIKELY(out_tc != VEC_TC_NUMBER && out_tc != VEC_TC_INTEGER)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "invalid out type class", K(ret));
+        } else if (out_tc == VEC_TC_NUMBER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx),
+                                                                      reinterpret_cast<number::ObCompactNumber *>(agg_cell)))) {
+          SQL_LOG(WARN, "get grouping id failed", K(ret));
+        } else if (out_tc == VEC_TC_INTEGER && OB_FAIL(get_grouping_id(aggr_info, grouping_vec->get_int(batch_idx),
+                                                                       reinterpret_cast<int64_t *>(agg_cell)))) {
           SQL_LOG(WARN, "get grouping id failed", K(ret));
         } else {
           not_nulls.set(agg_col_idx);
@@ -170,9 +189,15 @@ public:
         ob_assert(false);
       }
     } else if (agg_func == T_FUN_GROUPING_ID) {
-      const number::ObCompactNumber *res_cnum = reinterpret_cast<const number::ObCompactNumber *>(data);
-      number::ObNumber res_num(*res_cnum);
-      out_vec->set_number(output_idx, res_num);
+      if (out_tc == VEC_TC_NUMBER) {
+        const number::ObCompactNumber *res_cnum = reinterpret_cast<const number::ObCompactNumber *>(data);
+        number::ObNumber res_num(*res_cnum);
+        out_vec->set_number(output_idx, res_num);
+      } else if (out_tc == VEC_TC_INTEGER) {
+        out_vec->set_int(output_idx, *reinterpret_cast<const int64_t *>(data));
+      } else {
+        ob_assert(false);
+      }
     } else {
       ob_assert(false);
     }

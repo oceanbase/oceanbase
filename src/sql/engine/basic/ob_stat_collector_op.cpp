@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/hash/ob_hashmap.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/table/ob_block_sample_scan_op.h"
-#include "sql/engine/table/ob_row_sample_scan_op.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::common;

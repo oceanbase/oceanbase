@@ -10,8 +10,6 @@
  */
 
 #include "ob_kvcache_pointer_swizzle.h"
-#include "ob_kvcache_inst_map.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "storage/blocksstable/ob_micro_block_cache.h"
 
 namespace oceanbase

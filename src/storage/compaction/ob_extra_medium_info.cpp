@@ -11,8 +11,6 @@
  */
 
 #include "storage/compaction/ob_extra_medium_info.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
 
 using namespace oceanbase::common;
 

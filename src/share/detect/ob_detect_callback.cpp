@@ -11,9 +11,8 @@
  */
 #define USING_LOG_PREFIX SHARE
 
-#include "share/detect/ob_detect_callback.h"
-#include "share/detect/ob_detect_manager.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
+#include "ob_detect_callback.h"
+#include "src/share/detect/ob_detect_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
 
@@ -300,6 +299,27 @@ int ObP2PDataHubDetectCB::do_callback()
   ret = PX_P2P_DH.erase_msg_if(key_, msg, is_erased, false/* need unregister dm */);
   ret = ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : ret;
   LIB_LOG(WARN, "[DM] p2p dh erase p2p msg", K(ret), K(key_), K_(trace_id), K(is_erased));
+  return ret;
+}
+
+
+int ObDASRemoteTaskDetectCB::do_callback()
+{
+  int ret = OB_SUCCESS;
+  ObDataAccessService *das = MTL(ObDataAccessService *);
+  ObInterruptCode int_code(OB_RPC_CONNECT_ERROR,
+                           GETTID(),
+                           from_svr_addr_,
+                           "Dm interrupt das task");
+  if (OB_ISNULL(das)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "[DM] das is null", K(ret), K(key_));
+  } else if (OB_FAIL(ObGlobalInterruptManager::getInstance()->interrupt(tid_, int_code))) {
+    LIB_LOG(WARN, "[DM] fail to send interrupt message", K(int_code), K(tid_), K_(trace_id));
+  } else if (OB_FAIL(das->get_task_res_mgr().erase_task_result(key_.get_value(), false /* need unregister dm */))) {
+    LIB_LOG(WARN, "[DM] erase task result failed", K(ret), K(key_));
+  }
+  LIB_LOG(WARN, "[DM] interrupt das task and erase extra result", K(ret), K(tid_), K(key_), K(trace_id_));
   return ret;
 }
 

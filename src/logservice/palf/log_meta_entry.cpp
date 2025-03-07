@@ -11,9 +11,6 @@
  */
 
 #include "log_meta_entry.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"        // LOG*
-#include "lib/checksum/ob_crc64.h"        // ob_crc64
 
 namespace oceanbase
 {

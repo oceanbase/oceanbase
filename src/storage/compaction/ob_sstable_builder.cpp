@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_sstable_builder.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_macro_block_meta.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 
 namespace oceanbase

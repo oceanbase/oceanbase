@@ -13,21 +13,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include "mtlenv/mock_tenant_module_env.h"
-#include "common/log/ob_log_cursor.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/test_dml_common.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {

@@ -116,12 +116,14 @@ public:
                            const ObTableSchema &origin_table_schema,
                            const ObTableSchema &new_table_schema,
                            const ObColumnSchemaV2 &column_schema,
-                           const bool record_ddl_operation);
+                           const bool record_ddl_operation,
+                           const bool need_del_stats);
   //alter table drop column
   int delete_single_column(const int64_t new_schema_version,
                            common::ObISQLClient &sql_client,
                            const ObTableSchema &table_schema,
-                           const ObColumnSchemaV2 &column_schema);
+                           const ObColumnSchemaV2 &column_schema,
+                           const bool record_ddl_operation);
   //alter table drop constraint
   int delete_single_constraint(const int64_t new_schema_version,
                                common::ObISQLClient &sql_client,
@@ -160,7 +162,8 @@ public:
                              ObTableSchema &inc_table,
                              const int64_t schema_version,
                              bool ignore_log_operation,
-                             bool is_subpart);
+                             bool is_subpart,
+                             const bool is_subpart_idx_specified = false);
   int add_inc_part_info(common::ObISQLClient &sql_client,
                         const ObTableSchema &ori_table,
                         const ObTableSchema &inc_table,
@@ -171,9 +174,10 @@ public:
                               const ObTableSchema &inc_table,
                               const int64_t schema_version);
   int add_inc_subpart_info(common::ObISQLClient &sql_client,
-                        const ObTableSchema &ori_table,
-                        const ObTableSchema &inc_table,
-                        const int64_t schema_version);
+                           const ObTableSchema &ori_table,
+                           const ObTableSchema &inc_table,
+                           const int64_t schema_version,
+                           const bool is_subpart_idx_specified = false);
   int update_part_info(common::ObISQLClient &sql_client,
                              const ObTableSchema &ori_table,
                              const ObTableSchema &upd_table,
@@ -236,14 +240,17 @@ public:
       const ObTableSchema &ori_table,
       ObTableSchema &inc_table,
       ObTableSchema &del_table,
-      const int64_t schema_version);
+      const int64_t drop_schema_version,
+      const int64_t add_schema_version);
 
   int exchange_subpart_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,
       ObTableSchema &inc_table,
       ObTableSchema &del_table,
-      const int64_t schema_version);
+      const int64_t drop_schema_version,
+      const int64_t add_schema_version,
+      const bool is_subpart_idx_specified);
 
   int sync_schema_version_for_history(
       common::ObISQLClient &sql_client,
@@ -309,6 +316,10 @@ private:
                                   const uint64_t tenant_id,
                                   const uint64_t table_id,
                                   ObSqlString *extra_condition = NULL);
+  int delete_column_stat(ObISQLClient &sql_client,
+                         const uint64_t tenant_id,
+                         const uint64_t table_id,
+                         const uint64_t column_id);
   int delete_from_all_histogram_stat(common::ObISQLClient &sql_client,
                                      const uint64_t tenant_id,
                                      const uint64_t table_id,

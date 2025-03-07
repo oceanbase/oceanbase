@@ -219,6 +219,12 @@ TEST_F(TestTimer, task_service_stop)
   usleep(100000); // 100ms
   ASSERT_EQ(1, task1.task_run_count_);
   ASSERT_EQ(0, task2.task_run_count_);
+  timer1.stop();
+  timer1.wait();
+  timer1.destroy();
+  timer2.stop();
+  timer2.wait();
+  timer2.destroy();
 }
 
 TEST_F(TestTimer, task_run1_wait)
@@ -261,6 +267,29 @@ TEST_F(TestTimer, schedule_after_stop)
   ASSERT_EQ(1, task.task_run_count_);
   timer.stop();
   ASSERT_EQ(OB_CANCELED, timer.schedule(task, 0, false, false));
+  timer.wait();
+  timer.destroy();
+}
+
+TEST_F(TestTimer, without_start)
+{
+  // ensure that the timer still works without calling start
+  TestTimerTask task;
+  task.exec_time_ = 10000; // 10ms
+  ObTimer timer;
+  ASSERT_EQ(OB_SUCCESS, timer.init());
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
+  usleep(50000); // 50ms
+  ASSERT_EQ(1, task.task_run_count_);
+  timer.stop();
+  timer.wait();
+  timer.destroy();
+  // ensure that the timer still works after destroy and re-init
+  ASSERT_EQ(OB_SUCCESS, timer.init());
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
+  usleep(50000); // 50ms
+  ASSERT_EQ(2, task.task_run_count_);
+  timer.stop();
   timer.wait();
   timer.destroy();
 }

@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/report/ob_server_meta_table_checker.h"
-#include "observer/ob_server_struct.h" // GCTX
-#include "share/ob_thread_define.h" // ServerMetaChecker
-#include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "share/tablet/ob_tablet_table_operator.h" // ObTabletTableOperator
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "observer/omt/ob_multi_tenant.h" // ObMultiTenant
-#include "share/tablet/ob_tablet_info.h" // ObTabletInfo
 #include "share/ob_tablet_replica_checksum_operator.h" // for ObTabletReplicaChecksumItem
-#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
 
 namespace oceanbase
 {

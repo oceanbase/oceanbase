@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_group_by_checker.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "sql/ob_sql_context.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "common/ob_smart_call.h"
 
 namespace oceanbase
 {

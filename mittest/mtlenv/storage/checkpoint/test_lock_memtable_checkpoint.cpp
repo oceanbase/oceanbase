@@ -13,15 +13,12 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX TABLELOCK
-#include <gtest/gtest.h>
 #define protected public
 #define private public
 
 #include "storage/ls/ob_ls.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "mtlenv/tablelock/table_lock_common_env.h"
-#include "mtlenv/tablelock/table_lock_tx_common_env.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 

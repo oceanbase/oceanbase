@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_log_request_handler.h"
-#include "ob_log_rpc_req.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/ob_log_handler.h"
-#include "logservice/logrpc/ob_log_rpc_proxy.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "logservice/ob_reconfig_checker_adapter.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/replayservice/ob_log_replay_service.h"
 
 namespace oceanbase
 {
@@ -249,6 +243,9 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
     switch (req.cmd_type_) {
       case FORCE_SINGLE_MEMBER_CMD:
         ret = palf_handle_->force_set_as_single_replica();
+        break;
+      case FORCE_SET_MEMBER_LIST_CMD:
+        ret = palf_handle_->force_set_member_list(req.new_member_list_, req.new_replica_num_);
         break;
       case CHANGE_REPLICA_NUM_CMD:
         ret = palf_handle_->change_replica_num(req.curr_member_list_, req.curr_replica_num_,

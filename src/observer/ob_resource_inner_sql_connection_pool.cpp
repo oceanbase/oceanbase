@@ -11,8 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "observer/ob_server.h"
 #include "ob_resource_inner_sql_connection_pool.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {

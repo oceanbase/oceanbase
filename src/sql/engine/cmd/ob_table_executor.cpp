@@ -10,16 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_cluster_version.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_table_executor.h"
 #include "sql/engine/cmd/ob_index_executor.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_ddl_error_message_table_operator.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
@@ -29,33 +23,12 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/resolver/ddl/ob_optimize_stmt.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
-#include "sql/parser/ob_parser.h"
-#include "share/system_variable/ob_sys_var_class_type.h"
 
 #include "sql/printer/ob_select_stmt_printer.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "lib/worker.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
-#include "share/external_table/ob_external_table_file_task.h"
-#include "share/external_table/ob_external_table_file_rpc_proxy.h"
-#include "observer/ob_srv_network_frame.h"
-#include "observer/dbms_job/ob_dbms_job_master.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/external_table/ob_external_table_file_rpc_processor.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "share/ob_debug_sync.h"
-#include "share/schema/ob_schema_utils.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "storage/ob_partition_pre_split.h"
 
@@ -1277,7 +1250,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         is_support_cancel = false;
       }
       const bool need_wait_ddl_finish = is_double_table_long_running_ddl(res.ddl_type_)
-                                     || is_simple_table_long_running_ddl(res.ddl_type_);
+                                     || is_simple_table_long_running_ddl(res.ddl_type_)
+                                     || (ObDDLType::DDL_DROP_COLUMN_INSTANT == res.ddl_type_ && res.task_id_ > 0 /* with drop lob*/);
       if (OB_SUCC(ret) && need_wait_ddl_finish) {
         int64_t affected_rows = 0;
         if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {

@@ -11,18 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_merge_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "common/ob_smart_call.h"
-#include "sql/rewrite/ob_stmt_comparer.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 
 using namespace oceanbase;
@@ -272,6 +263,7 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
                                                           *target_table_partition,
                                                           *index_dml_info,
                                                           false,/*is_index_maintenance*/
+                                                          false,/*is_pdml_update_split*/
                                                           exch_info))) {
     LOG_WARN("failed to compute exchange info for insert", K(ret));
   } else if (!get_stmt()->has_insert_clause() &&

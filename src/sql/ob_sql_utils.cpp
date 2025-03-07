@@ -11,59 +11,26 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/ob_sql_utils.h"
-#include <algorithm>
+#include "ob_sql_utils.h"
 #include "sql/ob_sql.h"
-#include <sys/time.h>
-#include <openssl/md5.h>
-#include "lib/string/ob_sql_string.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/ob_i_tablet_scan.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/parser/parse_malloc.h"
-#include "sql/parser/parse_node.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_sql_hint.h"
-#include "sql/resolver/ob_stmt_type.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/rewrite/ob_query_range.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
 #include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/printer/ob_insert_all_stmt_printer.h"
 #include "sql/printer/ob_insert_stmt_printer.h"
 #include "sql/printer/ob_update_stmt_printer.h"
 #include "sql/printer/ob_delete_stmt_printer.h"
 #include "sql/printer/ob_merge_stmt_printer.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/optimizer/ob_route_policy.h"
-#include "sql/rewrite/ob_transform_rule.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "common/ob_smart_call.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/schema/ob_schema_printer.h"
-#include "share/ob_order_perserving_encoder.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "storage/ob_locality_manager.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/charset/ob_charset.h"
-#include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "sql/engine/cmd/ob_load_data_parser.h"
-#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
 #include "observer/omt/ob_tenant_srs.h"
-#include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
-#include "sql/resolver/dcl/ob_dcl_resolver.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
@@ -639,6 +606,12 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "charset not supported when data_version < 4_2_5_0 or between [430,434)",K(charset_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5 or between [430,434), charset is");
+  } else if ((CHARSET_GB2312 == charset_type || CHARSET_UJIS == charset_type || CHARSET_EUCKR == charset_type || CHARSET_EUCJPMS == charset_type || CHARSET_CP932 == charset_type
+              || CHARSET_CP850 == charset_type || CHARSET_HP8 == charset_type || CHARSET_MACROMAN == charset_type || CHARSET_SWE7 == charset_type)
+              && ((data_version < MOCK_DATA_VERSION_4_2_5_0) || (DATA_VERSION_4_3_0_0 <= data_version && data_version < DATA_VERSION_4_3_5_1)) ) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "charset not supported when data_version < 4_2_5_0 or between [430,435.1)",K(charset_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5 or between [430,435.1), charset is");
   }
   return ret;
 }
@@ -6350,7 +6323,8 @@ bool ObSQLUtils::check_need_disconnect_parser_err(const int ret_code)
                 || OB_ERR_NON_INT_LITERAL == ret_code
                 || OB_ERR_PARSER_INIT == ret_code
                 || OB_NOT_SUPPORTED == ret_code
-                || OB_ALLOCATE_MEMORY_FAILED == ret_code)) {
+                || OB_ALLOCATE_MEMORY_FAILED == ret_code
+                || OB_ERR_MALFORMED_WRAPPED_UNIT == ret_code)) {
     bret = false;
   }
   return bret;

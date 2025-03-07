@@ -20,6 +20,7 @@
 #include "common/object/ob_obj_type.h"
 #include "sql/engine/ob_bit_vector.h"
 #include "share/vector/ob_vector_define.h"
+#include "share/ob_cluster_version.h"
 
 #define EXTRACT_MEM_ADDR(ptr) (reinterpret_cast<char *>(*reinterpret_cast<int64_t *>((ptr))))
 #define STORE_MEM_ADDR(addr, dst)                                                                  \
@@ -652,7 +653,8 @@ struct AggBitVector: sql::ObTinyBitVector
 
 using NotNullBitVector = AggBitVector;
 
-inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_rollup = false)
+inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_rollup = false,
+                                         bool has_rollup = false)
 {
   switch (agg_op) {
   case T_FUN_COUNT:
@@ -674,6 +676,15 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
   }
   case T_FUN_SYS_RB_BUILD_AGG: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
+  }
+  case T_FUN_SUM_OPNSIZE: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1;
+  }
+  case T_FUN_GROUP_CONCAT: {
+    uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+    if (!has_rollup && ob_version >= CLUSTER_VERSION_4_3_5_1) {
+      return true;
+    }
   }
   default:
     return false;

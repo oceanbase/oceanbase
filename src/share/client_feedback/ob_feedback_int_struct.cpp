@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "rpc/obmysql/ob_mysql_util.h"
 #include "share/client_feedback/ob_feedback_int_struct.h"
 
 namespace oceanbase

@@ -14,7 +14,6 @@
 
 #include "ob_sstable_index_filter.h"
 #include "ob_table_access_param.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {

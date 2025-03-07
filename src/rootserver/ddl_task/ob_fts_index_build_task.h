@@ -110,12 +110,13 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       uint64_t &index_table_id);
   int prepare();
+  int load_dictionary();
+  int get_charset_type(ObCharsetType &charset_type);
   int wait_aux_table_complement();
   int submit_build_aux_index_task(
       const obrpc::ObCreateIndexArg &create_index_arg,
       ObDDLTaskRecord &task_record,
       bool &task_submitted);
-  int validate_checksum();
   int clean_on_failed();
   int submit_drop_fts_index_task();
   int wait_drop_index_finish(bool &is_finish);
@@ -131,6 +132,12 @@ private:
       obrpc::ObCreateIndexArg &dest_arg);
   int get_task_status();
   int get_task_status(int64_t task_id, uint64_t aux_table_id, bool& is_succ);
+  int wait_schema_refresh_and_trans_end();
+  int check_schema_and_trans_end(
+      const int64_t ddl_task_id,
+      const uint64_t index_tid,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &is_trans_end);
 private:
   typedef share::ObDomainDependTaskStatus DependTaskStatus;
 
@@ -182,6 +189,8 @@ private:
   bool is_doc_rowkey_succ_;
   bool is_domain_aux_succ_;
   bool is_fts_doc_word_succ_;
+  bool fts_index_aux_is_trans_end_;
+  bool fts_doc_word_aux_is_trans_end_;
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
 };

@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_move_response.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "observer/ob_server_struct.h"
-#include "share/partition_table/ob_partition_location.h"
 #include "share/location_cache/ob_location_service.h"
 
 using namespace oceanbase::observer;

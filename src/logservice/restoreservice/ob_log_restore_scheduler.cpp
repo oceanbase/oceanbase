@@ -11,15 +11,8 @@
  */
 
 #include "ob_log_restore_scheduler.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "logservice/restoreservice/ob_log_restore_define.h"
 #include "ob_remote_fetch_log_worker.h"
 #include "ob_log_restore_allocator.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/rc/ob_tenant_base.h"
-#include <cstdint>
 
 namespace oceanbase
 {

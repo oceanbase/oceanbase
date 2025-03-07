@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE_PT
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
-#include "lib/list/ob_dlist.h"
 #include "lib/allocator/page_arena.h"
 
 using ::testing::_;

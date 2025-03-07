@@ -1,8 +1,5 @@
 CREATE OR REPLACE PACKAGE BODY dbms_vector
 
-  -- ------------------------------------------------------------------------
-  -- refresh_index
-
   PROCEDURE do_refresh_index(
     IN     idx_name               VARCHAR(65535),
     IN     table_name             VARCHAR(65535),
@@ -22,9 +19,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_vector
     COMMIT;
     CALL do_refresh_index(idx_name, table_name, idx_vector_col, refresh_threshold, refresh_type);
   END;
-
-  -- ------------------------------------------------------------------------
-  -- rebuild_index
 
   PROCEDURE do_rebuild_index (
     IN     idx_name                VARCHAR(65535),

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2024 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -12,52 +12,75 @@
 
 #pragma once
 
-#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 
 namespace oceanbase
 {
 namespace observer
 {
-class ObTableLoadStoreTableCtx;
-
-class ObTableLoadIndexRowHandler : public ObDirectLoadDMLRowHandler
+class ObTableLoadIndexRowHandler : public storage::ObDirectLoadDMLRowHandler
 {
 public:
-  ObTableLoadIndexRowHandler();
-  virtual ~ObTableLoadIndexRowHandler();
-  int handle_insert_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row);
-  int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) override
+  ObTableLoadIndexRowHandler() = default;
+  virtual ~ObTableLoadIndexRowHandler() = default;
+
+  /**
+   * handle rows direct insert into sstable
+   */
+  int handle_insert_row(const ObTabletID &tablet_id,
+                        const storage::ObDirectLoadDatumRow &datum_row) override
+  {
+    // do nothing
+    return OB_SUCCESS;
+  }
+  int handle_delete_row(const ObTabletID &tablet_id,
+                        const storage::ObDirectLoadDatumRow &datum_row) override
+  {
+    // do nothing
+    return OB_SUCCESS;
+  }
+  int handle_insert_row(const ObTabletID &tablet_id,
+                        const blocksstable::ObDatumRow &datum_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row);
-  int handle_insert_row_with_multi_version(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
+  int handle_insert_batch(const ObTabletID &tablet_id,
+                          const blocksstable::ObBatchDatumRows &datum_rows) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_insert_batch_with_multi_version(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows)
+
+  /**
+   * handle rows with the same primary key in the imported data
+   */
+  int handle_update_row(const ObTabletID &tablet_id,
+                        const storage::ObDirectLoadDatumRow &datum_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_update_row(const blocksstable::ObDatumRow &row) override { return OB_ERR_UNEXPECTED; };
-  int handle_update_row(common::ObArray<const ObDirectLoadExternalRow *> &rows,
-                        const ObDirectLoadExternalRow *&row) override
+  int handle_update_row(const ObTabletID &tablet_id,
+                        common::ObArray<const storage::ObDirectLoadExternalRow *> &rows,
+                        const storage::ObDirectLoadExternalRow *&row) override
   {
     return OB_ERR_UNEXPECTED;
-  };
-  int handle_update_row(common::ObArray<const ObDirectLoadMultipleDatumRow *> &rows,
-                        const ObDirectLoadMultipleDatumRow *&row) override
+  }
+  int handle_update_row(common::ObArray<const storage::ObDirectLoadMultipleDatumRow *> &rows,
+                        const storage::ObDirectLoadMultipleDatumRow *&row) override
   {
     return OB_ERR_UNEXPECTED;
-  };
-  int handle_update_row(const ObTabletID tablet_id,
-                        const blocksstable::ObDatumRow &old_row,
-                        const blocksstable::ObDatumRow &new_row,
-                        const blocksstable::ObDatumRow *&result_row) override
+  }
+
+  /**
+   * handle rows with the same primary key between the imported data and the original data
+   */
+  int handle_update_row(const ObTabletID &tablet_id,
+                        const storage::ObDirectLoadDatumRow &old_row,
+                        const storage::ObDirectLoadDatumRow &new_row,
+                        const storage::ObDirectLoadDatumRow *&result_row) override
   {
     return OB_ERR_UNEXPECTED;
-  };
+  }
+
   TO_STRING_EMPTY();
 };
 

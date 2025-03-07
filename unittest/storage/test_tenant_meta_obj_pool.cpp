@@ -18,7 +18,6 @@
 #define private public
 
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 
 namespace oceanbase
 {

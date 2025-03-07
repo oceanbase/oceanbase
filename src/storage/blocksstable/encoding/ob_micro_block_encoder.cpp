@@ -13,24 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_micro_block_encoder.h"
-#include "lib/container/ob_array_iterator.h"
-#include "ob_icolumn_encoder.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_task_define.h"
-#include "share/ob_force_print_log.h"
-#include "ob_raw_encoder.h"
-#include "ob_dict_encoder.h"
-#include "ob_integer_base_diff_encoder.h"
-#include "ob_string_diff_encoder.h"
-#include "ob_hex_string_encoder.h"
-#include "ob_rle_encoder.h"
-#include "ob_const_encoder.h"
-#include "ob_column_equal_encoder.h"
-#include "ob_encoding_hash_util.h"
-#include "ob_string_prefix_encoder.h"
-#include "ob_inter_column_substring_encoder.h"
+#include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
 
 namespace oceanbase
 {
@@ -113,7 +96,8 @@ ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
     col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, MICRO_BLOCK_PAGE_ALLOCATOR),
     length_(0),
     encoder_freezed_(false),
-    is_inited_(false)
+    is_inited_(false),
+    block_generated_(false)
 {
   encoding_meta_allocator_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
   datum_rows_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
@@ -241,6 +225,7 @@ void ObMicroBlockEncoder::reset()
   col_ctxs_.reset();
   string_col_cnt_ = 0;
   length_ = 0;
+  block_generated_ = false;
 }
 
 void ObMicroBlockEncoder::reuse()
@@ -272,6 +257,7 @@ void ObMicroBlockEncoder::reuse()
   string_col_cnt_ = 0;
   length_ = 0;
   encoder_freezed_ = false;
+  block_generated_ = false;
 }
 
 void ObMicroBlockEncoder::dump_diagnose_info()
@@ -731,6 +717,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
     if (OB_SUCC(ret)) {
       buf = data_buffer_.data();
       size = data_buffer_.length();
+      block_generated_ = true;
     }
   }
 
@@ -1928,6 +1915,30 @@ int ObMicroBlockEncoder::force_raw_encoding(const int64_t column_idx,
     } else {
       encoder = e;
     }
+  }
+  return ret;
+}
+
+int ObMicroBlockEncoder::get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!block_generated_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("need to build block before get pre-agg parameters", K(ret));
+  } else if (OB_UNLIKELY(col_idx >= ctx_.column_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column index", K(ret), K(col_idx), K_(ctx));
+  } else {
+    pre_agg_param.reset();
+    const ObColumnEncodingCtx &col_ctx = col_ctxs_.at(col_idx);
+    pre_agg_param.null_cnt_ = col_ctx.null_cnt_;
+    pre_agg_param.col_datums_ = col_ctx.col_datums_;
+    pre_agg_param.encoding_ht_ = col_ctx.ht_;
+    pre_agg_param.is_pax_encoding_ = true;
+    pre_agg_param.is_integer_aggregated_ = false;
   }
   return ret;
 }

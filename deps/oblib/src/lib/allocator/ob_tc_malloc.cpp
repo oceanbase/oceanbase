@@ -12,18 +12,11 @@
 
 #define USING_LOG_PREFIX LIB_ALLOC
 
-#include <sys/mman.h>
+#include "ob_tc_malloc.h"
 #include <malloc.h>
 #include "lib/signal/ob_signal_struct.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/list/ob_free_list.h"
 #include "lib/utility/ob_tracepoint.h"
-#include "lib/utility/utility.h"
-#include "lib/hash_func/ob_hash_func.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/worker.h"
 #include "lib/alloc/malloc_hook.h"
 
 using namespace oceanbase::lib;

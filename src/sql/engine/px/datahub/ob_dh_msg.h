@@ -99,6 +99,7 @@ public:
     worker N  piece -/
    */
   virtual int aggregate_piece(const dtl::ObDtlMsg &piece) { return OB_NOT_IMPLEMENT; }
+  virtual int after_aggregate_piece() { return OB_NOT_IMPLEMENT; }
   VIRTUAL_TO_STRING_KV(K_(op_id));
   uint64_t op_id_;   // 在 whole 消息处理中，用于寻址 SQC 端 msg provider
 };

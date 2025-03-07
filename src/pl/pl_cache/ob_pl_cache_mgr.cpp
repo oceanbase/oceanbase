@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX PL_CACHE
 #include "ob_pl_cache_mgr.h"
-#include "observer/ob_req_time_service.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 
 using namespace oceanbase::observer;
 

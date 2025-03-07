@@ -14,8 +14,6 @@
 #include "ob_dtl_buf_allocator.h"
 #include "sql/dtl/ob_dtl.h"
 #include "sql/dtl/ob_dtl_basic_channel.h"
-#include "sql/dtl/ob_dtl_linked_buffer.h"
-#include "lib/random/ob_random.h"
 
 using namespace oceanbase::common;
 

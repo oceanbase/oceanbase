@@ -98,6 +98,8 @@ enum MICRO_BLOCK_MERGE_VERIFY_LEVEL
   ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE = 3,
 };
 
+struct ObMicroDataPreAggParam;
+
 class ObMicroBufferWriter : public compaction::ObCompactionBuffer
 {
 public:
@@ -172,7 +174,11 @@ public:
     has_lob_out_row_ = false;
     is_last_row_last_flag_ = false;
   }
-
+  virtual bool micro_block_row_data_buffered() const
+  {
+    return false;
+  }
+  virtual int get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const;
   void set_block_size_upper_bound(const int64_t &size) { block_size_upper_bound_ = size; }
   int build_micro_block_desc(ObMicroBlockDesc &micro_block_desc);
   int32_t get_row_count_delta() const { return row_count_delta_; }

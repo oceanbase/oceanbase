@@ -80,7 +80,8 @@ bool ObMViewInfo::is_valid() const
   if (OB_LIKELY(ObSchema::is_valid())) {
     bret = (OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != mview_id_ &&
             ObMViewBuildMode::MAX != build_mode_ && ObMVRefreshMode::MAX != refresh_mode_ &&
-            ObMVRefreshMethod::MAX != refresh_method_ && OB_INVALID_VERSION != schema_version_);
+            ObMVRefreshMethod::MAX != refresh_method_ && OB_INVALID_VERSION != schema_version_ &&
+            0 <= refresh_dop_);
   }
   return bret;
 }
@@ -135,7 +136,13 @@ OB_SERIALIZE_MEMBER(ObMViewInfo,
 int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id_));
+  } else if (data_version < DATA_VERSION_4_3_5_1 && OB_UNLIKELY(refresh_dop_ != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected refresh dop", KR(ret), KDV(data_version), K(refresh_dop_));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
       OB_FAIL(dml.add_pk_column("mview_id", mview_id_)) ||
       OB_FAIL(dml.add_column("build_mode", build_mode_)) ||
       OB_FAIL(dml.add_column("refresh_mode", refresh_mode_)) ||
@@ -157,7 +164,8 @@ int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSpl
       (!last_refresh_trace_id_.empty() &&
        OB_FAIL(
          dml.add_column("last_refresh_trace_id", ObHexEscapeSqlStr(last_refresh_trace_id_)))) ||
-      OB_FAIL(dml.add_column("schema_version", schema_version_))) {
+      OB_FAIL(dml.add_column("schema_version", schema_version_)) ||
+      (data_version >= DATA_VERSION_4_3_5_1 && OB_FAIL(dml.add_column("refresh_dop", refresh_dop_)))) {
     LOG_WARN("add column failed", KR(ret));
   }
   return ret;
@@ -198,20 +206,28 @@ int ObMViewInfo::gen_update_mview_attribute_dml(const uint64_t exec_tenant_id,
                                                 ObDMLSqlSplicer &dml) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
-      OB_FAIL(dml.add_pk_column("mview_id", mview_id_)) ||
-      OB_FAIL(dml.add_column("build_mode", build_mode_)) ||
-      OB_FAIL(dml.add_column("refresh_mode", refresh_mode_)) ||
-      OB_FAIL(dml.add_column("refresh_method", refresh_method_)) ||
-      (OB_INVALID_TIMESTAMP != refresh_start_
-         ? OB_FAIL(dml.add_time_column("refresh_start", refresh_start_))
-         : OB_FAIL(dml.add_column(true, "refresh_start"))) ||
-      (!refresh_next_.empty()
-         ? OB_FAIL(dml.add_column("refresh_next", ObHexEscapeSqlStr(refresh_next_)))
-         : OB_FAIL(dml.add_column(true, "refresh_next"))) ||
-      (!refresh_job_.empty()
-         ? OB_FAIL(dml.add_column("refresh_job", ObHexEscapeSqlStr(refresh_job_)))
-         : OB_FAIL(dml.add_column(true, "refresh_next")))) {
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
+  } else if (data_version < DATA_VERSION_4_3_5_1 && OB_UNLIKELY(refresh_dop_ != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected refresh dop", KR(ret), KDV(data_version), K(refresh_dop_));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
+             OB_FAIL(dml.add_pk_column("mview_id", mview_id_)) ||
+             OB_FAIL(dml.add_column("build_mode", build_mode_)) ||
+             OB_FAIL(dml.add_column("refresh_mode", refresh_mode_)) ||
+             OB_FAIL(dml.add_column("refresh_method", refresh_method_)) ||
+             (OB_INVALID_TIMESTAMP != refresh_start_
+                  ? OB_FAIL(dml.add_time_column("refresh_start", refresh_start_))
+                  : OB_FAIL(dml.add_column(true, "refresh_start"))) ||
+             (!refresh_next_.empty()
+                  ? OB_FAIL(dml.add_column("refresh_next", ObHexEscapeSqlStr(refresh_next_)))
+                  : OB_FAIL(dml.add_column(true, "refresh_next"))) ||
+             (!refresh_job_.empty()
+                  ? OB_FAIL(dml.add_column("refresh_job", ObHexEscapeSqlStr(refresh_job_)))
+                  : OB_FAIL(dml.add_column(true, "refresh_next"))) ||
+             (data_version >= DATA_VERSION_4_3_5_1 &&
+              OB_FAIL(dml.add_column("refresh_dop", refresh_dop_)))) {
     LOG_WARN("add column failed", KR(ret));
   }
   return ret;
@@ -413,6 +429,7 @@ int ObMViewInfo::fetch_mview_info(ObISQLClient &sql_client, uint64_t tenant_id, 
                                                           int64_t, true, false, OB_INVALID_COUNT);
       EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(*result, last_refresh_trace_id, mview_info);
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, schema_version, mview_info, int64_t);
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, refresh_dop, mview_info, int64_t, true, true, 0);
     }
   }
   return ret;

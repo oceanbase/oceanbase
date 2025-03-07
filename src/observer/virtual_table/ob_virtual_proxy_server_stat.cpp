@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_virtual_proxy_server_stat.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;

@@ -11,11 +11,7 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_table_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 
 using namespace oceanbase;
 using namespace common;

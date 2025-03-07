@@ -17,10 +17,7 @@
 #define private public
 #include "storage/blocksstable/encoding/ob_micro_block_encoder.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/ob_i_store.h"
-#include "lib/string/ob_sql_string.h"
 #include "../ob_row_generate.h"
-#include "common/rowkey/ob_rowkey.h"
 #include "share/ob_storage_format.h"
 
 namespace oceanbase

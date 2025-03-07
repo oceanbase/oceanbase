@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_tablet_compaction_history.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
 
 namespace oceanbase
 {

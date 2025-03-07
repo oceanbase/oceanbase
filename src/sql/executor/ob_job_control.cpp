@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "sql/executor/ob_job_control.h"
-#include "sql/executor/ob_task_event.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/exchange/ob_transmit_op.h"
 
 namespace oceanbase
 {

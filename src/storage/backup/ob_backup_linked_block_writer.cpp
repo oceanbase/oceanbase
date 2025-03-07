@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_linked_block_writer.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

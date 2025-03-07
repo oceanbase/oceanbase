@@ -13,18 +13,12 @@
 #define USING_LOG_PREFIX STORAGE
 
 #define ASSERT_OK(x) ASSERT_EQ(OB_SUCCESS, (x))
-#include <gtest/gtest.h>
 
 #define private public
 #define protected public
-#include "share/ob_tenant_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/blocksstable/ob_row_generate.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "src/sql/engine/basic/ob_chunk_datum_store.h"
 #include "unittest/storage/blocksstable/ob_data_file_prepare.h"
-#include "src/sql/engine/basic/chunk_store/ob_compact_store.h"
-#include "src/sql/engine/basic/ob_temp_block_store.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #undef private
 

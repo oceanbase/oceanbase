@@ -14,20 +14,11 @@
 
 #include "sql/executor/ob_remote_scheduler.h"
 #include "sql/executor/ob_remote_job_control.h"
-#include "sql/executor/ob_task_spliter_factory.h"
 #include "sql/executor/ob_remote_job_executor.h"
 #include "sql/executor/ob_remote_task_executor.h"
 #include "sql/executor/ob_local_job_executor.h"
 #include "sql/executor/ob_local_task_executor.h"
-#include "sql/executor/ob_job.h"
-#include "share/partition_table/ob_partition_location.h"
 #include "sql/executor/ob_job_parser.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "share/ob_define.h"
-#include "lib/utility/utility.h"
-#include "sql/engine/ob_exec_context.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
 
 namespace oceanbase
 {
@@ -153,6 +144,7 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
   ObSQLSessionInfo *session = nullptr;
+  share::ObLSArray task_ls_list;
   if (OB_FAIL(remote_task.assign_dependency_tables(dependency_tables))) {
     LOG_WARN("fail to assign dependency_tables", K(ret));
   }
@@ -168,6 +160,12 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
   } else if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(DAS_CTX(ctx).get_all_lsid(task_ls_list))) {
+    LOG_WARN("get ls ids failed", K(ret));
+  } else if(OB_FAIL(remote_task.assign_ls_list(task_ls_list))) {
+    LOG_WARN("fail to assign ls list", K(ret));
+  } else if (OB_FAIL(session->get_trans_result().add_touched_ls(task_ls_list))) {
+    LOG_WARN("add touched ls failed", K(ret));
   } else {
     remote_task.set_runner_svr(first_tablet_loc->server_);
     ObTaskID task_id;

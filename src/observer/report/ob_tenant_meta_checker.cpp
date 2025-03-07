@@ -13,17 +13,11 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/report/ob_tenant_meta_checker.h"
-#include "observer/ob_server_struct.h" // GCTX
-#include "share/ob_thread_define.h" // TenantLSMetaChecker, TenantTabletMetaChecker
-#include "share/ls/ob_ls_operator.h" // ObLSOperator
 #include "share/ls/ob_ls_table_iterator.h" // ObLSTableIterator
 #include "storage/tablet/ob_tablet_iterator.h" // ObLSTabletIterator
-#include "share/tablet/ob_tablet_table_operator.h" // ObTabletTableOperator
 #include "share/tablet/ob_tablet_table_iterator.h" // ObTenantTabletTableIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService, ObLSIterator
-#include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
-#include "storage/tablet/ob_tablet.h" // ObTablet
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_ss_meta_checker.h" // ObTenantSSMetaChecker
 #endif

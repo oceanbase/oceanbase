@@ -11,9 +11,7 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_tx_data_table.h"
-#include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;

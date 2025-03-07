@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX  LIB_TIME
 
 #include "lib/timezone/ob_timezone_info.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
 
 namespace oceanbase
 {

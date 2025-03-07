@@ -11,7 +11,6 @@
  */
 
 #include "common/ob_version_def.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

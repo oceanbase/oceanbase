@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_insert_op.h"
-#include "share/ob_scanner.h"
-#include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/das/ob_das_extra_data.h"
+#include "sql/das/ob_das_domain_utils.h"
 #include "storage/ob_query_iterator_factory.h"
-#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
 {
@@ -287,7 +284,7 @@ int ObDASInsertOp::insert_row_with_fetch()
     const bool is_local_unique_index = index_ins_ctdef->table_param_.get_data_table().is_unique_index();
     if (!is_local_unique_index) {
       // insert it later
-    } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
+    } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef, nullptr/*fts_doc_word_info*/))) {
       LOG_WARN("rewind dml iter failed", K(ret));
     } else if (OB_FAIL(insert_index_with_fetch(dml_param,
                                                as,
@@ -313,7 +310,7 @@ int ObDASInsertOp::insert_row_with_fetch()
       // insert it before
     } else if (is_duplicated_) {
       LOG_TRACE("is duplicated before, not need write non_unique index");
-    } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
+    } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef, nullptr/*fts_doc_word_info*/))) {
       LOG_WARN("rewind dml iter failed", K(ret));
     } else {
       ObDASMLogDMLIterator mlog_iter(ls_id_, index_tablet_id, dml_param, &dml_iter, DAS_OP_TABLE_INSERT);

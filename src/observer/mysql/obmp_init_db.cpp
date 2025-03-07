@@ -14,16 +14,7 @@
 
 #include "observer/mysql/obmp_init_db.h"
 
-#include "lib/worker.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/mysql/obmp_utils.h"
-#include "observer/mysql/ob_query_retry_ctrl.h"
+#include "src/sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
@@ -221,7 +212,7 @@ int ObMPInitDB::do_process(sql::ObSQLSessionInfo *session)
       LOG_WARN("fail to get session priv info", K(ret));
     } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, session, db_name_, NULL/*allocator*/))) {
       LOG_WARN("fail to cvt db name to orignal", K(db_name_), K(ret));
-    } else if (OB_FAIL(schema_guard.check_db_access(session_priv, db_name_))) {
+    } else if (OB_FAIL(schema_guard.check_db_access(session_priv, session->get_enable_role_array(), db_name_))) {
       LOG_WARN("fail to check db access.", K_(db_name), K(ret));
       if (OB_ERR_NO_DB_SELECTED == ret) {
         sret = OB_ERR_BAD_DATABASE;// 将错误码抛出让外层重试

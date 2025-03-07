@@ -13,9 +13,6 @@
 #include "ob_ts_worker.h"
 #include "ob_ts_response_handler.h"
 #include "ob_ts_mgr.h"
-#include "share/ob_thread_mgr.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

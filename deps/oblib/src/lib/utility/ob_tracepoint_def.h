@@ -461,6 +461,7 @@ GLOBAL_ERRSIM_POINT_DEF(746, EN_SHARED_STORAGE_DONT_UPDATE_LS_STATE, "");
 GLOBAL_ERRSIM_POINT_DEF(747, EN_MAKE_DATA_CKM_ERROR_BY_WRITE_WRONG_ROW, "change last datum of row into int(999) for making checksum error");
 GLOBAL_ERRSIM_POINT_DEF(748, EN_COMPACTION_ITER_SET_BATCH_CNT, "");
 GLOBAL_ERRSIM_POINT_DEF(749, EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM, "");
+GLOBAL_ERRSIM_POINT_DEF(750, EN_SHARED_STORAGE_IGNORE_REPLICA, "ignore one replica in compaction");
 // compaction end at 750
 
 // please add new trace point after 750
@@ -611,5 +612,10 @@ GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enabl
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
 GLOBAL_ERRSIM_POINT_DEF(2502, EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP, "whether to enable column group under shared storage mode");
 GLOBAL_ERRSIM_POINT_DEF(2503, EN_OBJECT_STORAGE_IO_RETRY, "whether to enable probability-based retries for object storage IO");
+
+// PL begin 2550 - 2600
+GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
+GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
+// PL end
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

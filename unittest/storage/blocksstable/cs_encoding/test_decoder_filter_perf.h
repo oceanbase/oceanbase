@@ -1160,7 +1160,7 @@ void TestDecoderFilterPerf::init_encoding_ctx(
       int64_t round = execute_round_; \
       while (round > 0) { \
         decode_start_ns = ObTimeUtility::current_time_ns(); \
-        ret = cur_decoder->get_rows(cols, col_params, row_ids, cell_datas, SIMPLE_ROW_CNT, datum_arr); \
+        ret = cur_decoder->get_rows(cols, col_params, true, row_ids, cell_datas, SIMPLE_ROW_CNT, datum_arr); \
         decode_cost_ns = ObTimeUtility::current_time_ns() - decode_start_ns; \
         ASSERT_EQ(OB_SUCCESS, ret); \
         perf_ctx_.decoder_time_ctx_.add_decode_cost(is_column_store, op_idx, decode_cost_ns); \

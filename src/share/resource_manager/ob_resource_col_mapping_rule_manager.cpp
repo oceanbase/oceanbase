@@ -14,10 +14,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_resource_col_mapping_rule_manager.h"
-#include "lib/string/ob_string.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
-#include "observer/ob_server_struct.h"
 #include "sql/ob_sql.h"
 
 

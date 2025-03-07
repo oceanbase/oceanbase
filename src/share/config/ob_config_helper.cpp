@@ -11,38 +11,21 @@
  */
 #define USING_LOG_PREFIX SHARE
 
-#include "share/config/ob_config_helper.h"
-#include "share/config/ob_config.h"
-#include "lib/ob_running_mode.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "lib/resource/achunk_mgr.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "common/ob_store_format.h"
-#include "common/ob_smart_var.h"
-#include "share/config/ob_server_config.h"
-#include "sql/monitor/ob_security_audit_utils.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "sql/optimizer/ob_log_join_filter.h"
-#include "share/ob_encryption_util.h"
+#include "ob_config_helper.h"
 #include "share/ob_resource_limit.h"
-#include "share/table/ob_ttl_util.h"
 #include "src/observer/ob_server.h"
-#include "share/table/ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/ob_ddl_common.h"
 #include "share/backup/ob_archive_persist_helper.h"
-#include "lib/utility/utility.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "share/vector_index/ob_vector_index_util.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "plugin/sys/ob_plugin_load_param.h"
+#include "share/table/ob_table_config_util.h"
+
 namespace oceanbase
 {
 using namespace share;
 using namespace obrpc;
+using namespace plugin;
+
 namespace common
 {
 
@@ -1583,6 +1566,14 @@ bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigDefaultTableOrganizationChecker::check(const obrpc::ObAdminSetConfigItem &t)
+{
+  const ObString tmp_str(t.value_.size(), t.value_.ptr());
+  return 0 == tmp_str.case_compare("INDEX")
+      || 0 == tmp_str.case_compare("HEAP");
+}
+
+
 bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
 {
   int bret = false;
@@ -1590,6 +1581,43 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
   bret = (0 == tmp_str.case_compare("auto")
           || 0 == tmp_str.case_compare("forced")
           || 0 == tmp_str.case_compare("disabled"));
+  return bret;
+}
+
+bool ObConfigPxNodePolicyChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("data")
+          || 0 == tmp_str.case_compare("zone")
+          || 0 == tmp_str.case_compare("cluster"));
+  return bret;
+}
+
+bool ObConfigPluginsLoadChecker::check(const ObConfigItem& t) const
+{
+  bool bret = false;
+  ObString plugins_load(t.str());
+  ObArray<ObPluginLoadParam> plugin_load_params;
+  ObMemAttr mem_attr(OB_SYS_TENANT_ID, "Config");
+  plugin_load_params.set_attr(mem_attr);
+  int ret = ObPluginLoadParamParser::parse(plugins_load, plugin_load_params);
+  if (OB_FAIL(ret)) {
+    OB_LOG_RET(WARN, OB_INVALID_CONFIG, "failed to parse plugins load config", K(plugins_load));
+    bret = false;
+  } else {
+    bret = true;
+  }
+  return bret;
+}
+
+bool ObConfigNonStdCmpLevelChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("none")
+          || 0 == tmp_str.case_compare("equal")
+          || 0 == tmp_str.case_compare("range"));
   return bret;
 }
 
@@ -1603,11 +1631,19 @@ bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
-bool ObConfigDefaultOrganizationChecker::check(const ObConfigItem &t) const
+bool ObConfigEnableAutoSplitChecker::check(const ObConfigItem &t) const
 {
-  const ObString tmp_str(t.str());
-  return 0 == tmp_str.case_compare("INDEX")
-      || 0 == tmp_str.case_compare("HEAP");
+  bool is_valid = false;
+  bool enable_auto_split = ObConfigBoolParser::get(t.str(), is_valid);
+  return is_valid && !(GCTX.is_shared_storage_mode() && enable_auto_split);
 }
+
+bool ObConfigAutoSplitTabletSizeChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  return is_valid && !GCTX.is_shared_storage_mode();
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
-#include <gtest/gtest.h>
 #include "storage/test_tablet_helper.h"
-#include <lib/oblog/ob_log.h>
-#include "storage/tx_storage/ob_ls_service.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "init_basic_struct.h"
 
 #define USING_LOG_PREFIX STORAGE
 

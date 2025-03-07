@@ -1,4 +1,3 @@
-#include "easy_atomic.h"
 #include "thread/easy_uthread.h"
 #include <signal.h>
 

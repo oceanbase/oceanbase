@@ -14,10 +14,6 @@
 
 
 #include "ob_executor_rpc_impl.h"
-#include "lib/worker.h"
-#include "share/ob_cluster_version.h"
-#include "sql/ob_sql_context.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/executor/ob_remote_executor_processor.h"
 using namespace oceanbase::common;
 namespace oceanbase

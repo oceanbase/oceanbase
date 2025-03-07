@@ -12,39 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_schema_service_sql_impl.h"
-#include "lib/utility/utility.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/charset/ob_dtoa.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/system_variable/ob_system_variable.h"
 // TODO, move basic structs to ob_schema_struct.h
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_schema_mgr.h"
 #include "share/schema/ob_schema_retrieve_utils.h"
-#include "share/ob_cluster_role.h"
-#include "share/ob_get_compat_mode.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "share/ob_get_compat_mode.h" // ObCompatModeGetter
-#include "common/sql_mode/ob_sql_mode_utils.h"
 
 #define COMMON_SQL              "SELECT * FROM %s"
 #define COMMON_SQL_WITH_TENANT  "SELECT * FROM %s WHERE tenant_id = %lu"
@@ -1785,27 +1756,18 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
         }
       }
 
-      bool non_default_cg_exist = false;
       // get all column_group ids of this table
       ObArray<uint64_t> cg_ids;
       ObTableSchema::const_column_group_iterator it_begin = table_schema->column_group_begin();
       ObTableSchema::const_column_group_iterator it_end = table_schema->column_group_end();
       const ObColumnGroupSchema *column_group = NULL;
-      if (FAILEDx(table_schema->has_non_default_column_group(non_default_cg_exist))) {
-        LOG_WARN("fail to check table schema has non default column group", K(ret), K(table_schema));
-      } else {
-        for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
-          column_group = *it_begin;
-          if (OB_ISNULL(column_group)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column_group schema should not be null", KR(ret));
-          } else if (ObColumnGroupType::DEFAULT_COLUMN_GROUP == column_group->get_column_group_type() && non_default_cg_exist) {
-            LOG_INFO("filter old version default column group", K(non_default_cg_exist), KPC(column_group));
-            // support multi-version column group read for alter column group delayed, filter old version default_cg
-            continue;
-          } else if (OB_FAIL(cg_ids.push_back(column_group->get_column_group_id()))) {
-            LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
-          }
+      for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
+        column_group = *it_begin;
+        if (OB_ISNULL(column_group)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column_group schema should not be null", KR(ret));
+        } else if (OB_FAIL(cg_ids.push_back(column_group->get_column_group_id()))) {
+          LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
         }
       }
 
@@ -1836,6 +1798,8 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
           } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_column_group_mapping(
                     tenant_id, check_deleted, *result, table_schema))) {
             LOG_WARN("fail to retrieve column group mapping", KR(ret), K(table_id), K(check_deleted), K(sql));
+          } else {
+            LOG_DEBUG("fetch all column group mapping", KR(ret), K(table_id), K(check_deleted), K(table_schema));
           }
         }
       }
@@ -1909,7 +1873,7 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
     ObSqlString hint;
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+index(%s idx_data_table_id)*/ table_id, table_type, index_type FROM "\
+    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ index(%s idx_data_table_id)*/ table_id, table_type, index_type FROM "\
                                                 "(SELECT TABLE_ID, SCHEMA_VERSION, TABLE_TYPE, INDEX_TYPE, IS_DELETED, ROW_NUMBER() OVER " \
                                                 "(PARTITION BY TABLE_ID ORDER BY SCHEMA_VERSION DESC) AS RN FROM %s " \
                                                 "WHERE TENANT_ID = %lu AND DATA_TABLE_ID = %lu AND SCHEMA_VERSION <= %ld) V "\
@@ -4680,6 +4644,13 @@ int ObSchemaServiceSQLImpl::fetch_all_user_info(
                                                user_keys,
                                                users_size))) {
         LOG_WARN("fetch proxy user info failed", K(ret));
+      } else if (OB_FAIL(fetch_trigger_list(schema_status,
+                                            tenant_id,
+                                            user_array.at(0).get_user_id(),
+                                            schema_version,
+                                            sql_client,
+                                            user_array.at(0)))) {
+        LOG_WARN("fetch trigger list failed", K(ret));
       }
     }
   }
@@ -7370,12 +7341,13 @@ int ObSchemaServiceSQLImpl::fetch_all_encrypt_info(
   return ret;
 }
 
+template <typename T>
 int ObSchemaServiceSQLImpl::fetch_trigger_list(const ObRefreshSchemaStatus &schema_status,
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                const int64_t schema_version,
                                                ObISQLClient &sql_client,
-                                               ObTableSchema &table_schema)
+                                               T &schema)
 {
   int ret = OB_SUCCESS;
   ObMySQLResult *result = NULL;
@@ -7404,10 +7376,10 @@ int ObSchemaServiceSQLImpl::fetch_trigger_list(const ObRefreshSchemaStatus &sche
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get result", K(ret));
     } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_trigger_list(tenant_id, *result,
-                                                                    table_schema.get_trigger_list()))) {
+                                                                    schema.get_trigger_list()))) {
       LOG_WARN("failed to retrieve trigger list", K(ret));
     } else {
-      LOG_DEBUG("TRIGGER", K(table_schema.get_trigger_list()));
+      LOG_DEBUG("TRIGGER", K(schema.get_trigger_list()));
     }
   }
   return ret;
@@ -9599,7 +9571,7 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(dblink_param_ctx &param_ctx,
     } else if (lib::is_oracle_mode() && OB_FAIL(try_mock_link_table_column(*table_schema))) {
       LOG_WARN("failed to mock link table pkey", K(ret));
     } else {
-      table_schema->set_table_organization_mode(ObTableOrganizationMode::TOM_HEAP_ORGANIZED);
+      table_schema->set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITHOUT_PK);
     }
     if (OB_SUCC(ret) && DBLINK_DRV_OB == param_ctx.link_type_ && NULL != current_scn) {
       if (OB_FAIL(fetch_link_current_scn(param_ctx,

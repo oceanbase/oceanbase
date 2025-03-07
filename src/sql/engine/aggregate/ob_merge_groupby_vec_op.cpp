@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/aggregate/ob_merge_groupby_vec_op.h"
-#include "lib/number/ob_number_v2.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
-#include "lib/utility/ob_hyperloglog.h"
-#include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase

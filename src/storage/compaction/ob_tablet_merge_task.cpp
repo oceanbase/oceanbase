@@ -11,37 +11,16 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_tablet_merge_task.h"
+#include "ob_tablet_merge_task.h"
 #include "storage/compaction/ob_partition_merger.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/stat/ob_session_stat.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/tablet/ob_tablet_common.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/compaction/ob_partition_merge_progress.h"
 #include "ob_tenant_compaction_progress.h"
-#include "ob_compaction_diagnose.h"
-#include "ob_compaction_suggestion.h"
-#include "ob_partition_merge_progress.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "share/ob_get_compat_mode.h"
-#include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/compaction/ob_schedule_status_cache.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
-#include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
-#include "storage/compaction/ob_mview_compaction_util.h"
 
 namespace oceanbase
 {

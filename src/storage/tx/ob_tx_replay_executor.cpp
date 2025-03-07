@@ -11,23 +11,12 @@
  */
 
 #include "share/throttle/ob_throttle_unit.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/ob_storage_table_guard.h"
-#include "storage/ob_i_store.h"
-#include "storage/ob_relative_table.h"
 
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_log_operator.h"
 #include "storage/tx/ob_tx_replay_executor.h"
-#include "storage/tx/ob_timestamp_service.h"
-#include "storage/tx/ob_trans_id_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
-#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -733,7 +722,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
     ObTablet *tablet = tablet_handle.get_obj();
     storage::ObStoreCtx storeCtx;
     storeCtx.ls_id_ = ctx_->get_ls_id();
-    storeCtx.mvcc_acc_ctx_.init_replay(
+    (void)storeCtx.mvcc_acc_ctx_.init_replay(
       *ctx_,
       *mt_ctx_,
       ctx_->get_trans_id()

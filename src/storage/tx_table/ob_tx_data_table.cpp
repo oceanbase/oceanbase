@@ -10,23 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_data_table.h"
 
-#include "lib/lock/ob_tc_rwlock.h"
-#include "lib/time/ob_time_utility.h"
+#include "ob_tx_data_table.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tx/ob_tx_data_functor.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "storage/tx/ob_tx_data_define.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_table/ob_tx_ctx_table.h"
-#include "storage/tx_table/ob_tx_table_define.h"
-#include "storage/tx_table/ob_tx_data_cache.h"
-#include "storage/tablet/ob_tablet.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 
 #define USING_LOG_PREFIX STORAGE

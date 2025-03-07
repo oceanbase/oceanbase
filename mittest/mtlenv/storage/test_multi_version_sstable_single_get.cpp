@@ -13,15 +13,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
-#include "storage/mock_access_service.h"
-#include "storage/mock_ls_tablet_service.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -88,6 +83,7 @@ void TestMultiVersionSSTableSingleGet::prepare_query_param(
     const bool is_reverse_scan)
 {
   context_.reset();
+  store_ctx_.reset();
   ObLSID ls_id(ls_id_);
   iter_param_.table_id_ = table_id_;
   iter_param_.tablet_id_ = tablet_id_;

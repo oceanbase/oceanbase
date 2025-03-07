@@ -269,6 +269,10 @@ struct VectorCasterUtil
   SET_RES_OBJ(expr.extra_, int, 0, value, idx)
 #define SET_RES_UINT(idx, value)        \
   SET_RES_OBJ(expr.extra_, uint,0, value, idx)
+#define SET_RES_DATE(idx, value)        \
+  SET_RES_OBJ(expr.extra_, date, ObTimeConverter::ZERO_DATE, value, idx)
+#define SET_RES_DATETIME(idx, value)    \
+  SET_RES_OBJ(expr.extra_, datetime,ObTimeConverter::ZERO_DATETIME, value, idx)
 
 #define EVAL_COMMON_ARG()                                                                   \
   int ret = OB_SUCCESS;                                                                     \
@@ -291,6 +295,11 @@ struct VectorCasterUtil
 #include "sql/engine/expr/vector_cast/string_float.ipp"
 #include "sql/engine/expr/vector_cast/cast_to_decimalint.ipp"
 #include "sql/engine/expr/vector_cast/cast_to_int.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_float.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_date.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_number.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_datetime.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_string.ipp"
 
 #undef DEF_VECTOR_IMPLICIT_CAST_FUNC
 #undef CAST_FAIL

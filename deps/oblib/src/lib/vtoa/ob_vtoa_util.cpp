@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_vtoa_util.h"
-#include <sys/socket.h>
-#include <sys/types.h>
-#include "lib/net/ob_addr.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

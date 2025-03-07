@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "share/ob_cluster_role.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

@@ -264,6 +264,8 @@ public:
   int get_clone_job_by_clone_tenant_name(const ObString &clone_tenant_name,
                                          const bool need_lock,
                                          ObCloneJob &job);
+  int get_clone_job_by_clone_tenant_id(const uint64_t clone_tenant_id,
+                                       ObCloneJob &job);
   int get_all_clone_jobs(ObArray<ObCloneJob> &jobs);
   int insert_clone_job(const ObCloneJob &job);
   int update_job_status(const int64_t job_id,

@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <cstdint>
 #include "lib/container/ob_se_array.h"
 
 namespace oceanbase

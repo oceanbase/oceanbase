@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX PL
 
-//#include "objit/ob_llvm_helper.h"
 #include "core/jit_context.h"
 #include "core/jit_di_context.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/container/ob_se_array.h"
 
 #include "objit/ob_llvm_di_helper.h"
 

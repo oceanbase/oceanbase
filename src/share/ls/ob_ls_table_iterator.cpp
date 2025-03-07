@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ls/ob_ls_table_iterator.h"
-#include "share/ls/ob_ls_info.h" // ObLSInfo
 #include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 
 namespace oceanbase

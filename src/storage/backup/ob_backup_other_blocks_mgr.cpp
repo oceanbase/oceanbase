@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/backup/ob_backup_other_blocks_mgr.h"
+#include "ob_backup_other_blocks_mgr.h"
 #include "storage/backup/ob_backup_ctx.h"
 
 namespace oceanbase

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/alloc/alloc_struct.h"
-#include "lib/alloc/object_set.h"
-#include "lib/alloc/memory_sanity.h"
-#include "lib/alloc/memory_dump.h"
+#include "ob_malloc_allocator.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/allocator/ob_page_manager.h"
-#include "lib/rc/ob_rc.h"
-#include "lib/rc/context.h"
 #include "common/ob_smart_var.h"
 #include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/utility/ob_tracepoint.h"

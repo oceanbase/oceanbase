@@ -39,6 +39,7 @@ class ObExprFrameInfo;
 class ObDASScanOp;
 class ObDASTaskFactory;
 class ObDasAggregatedTask;
+struct ObDASTCBInterruptInfo;
 
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
@@ -207,7 +208,7 @@ public:
     UNUSED(memory_limit);
     return OB_NOT_IMPLEMENT;
   }
-  virtual int fill_extra_result()
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info)
   {
     return common::OB_NOT_IMPLEMENT;
   }

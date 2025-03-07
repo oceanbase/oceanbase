@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
-#include "lib/json_type/ob_json_base.h"               // ObJsonBaseUtil
 #include "lib/timezone/ob_time_convert.h"             // ObTimeConverter
 #include "ob_log_miner_record_converter.h"
-#include "logservice/common_util/ob_log_time_utils.h"
-#include "ob_log_miner_logger.h"
 #include "ob_log_miner_utils.h"
 #include "src/logservice/logminer/ob_log_miner_timezone_getter.h"
 

@@ -12,6 +12,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_data_fuse.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
+#include "storage/direct_load/ob_direct_load_origin_table.h"
 
 namespace oceanbase
 {
@@ -27,9 +29,7 @@ using namespace sql;
  */
 
 ObDirectLoadDataFuseParam::ObDirectLoadDataFuseParam()
-  : store_column_count_(0),
-    datum_utils_(nullptr),
-    dml_row_handler_(nullptr)
+  : datum_utils_(nullptr), dml_row_handler_(nullptr)
 {
 }
 
@@ -39,8 +39,8 @@ ObDirectLoadDataFuseParam::~ObDirectLoadDataFuseParam()
 
 bool ObDirectLoadDataFuseParam::is_valid() const
 {
-  return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
-         nullptr != datum_utils_ && nullptr != dml_row_handler_;
+  return tablet_id_.is_valid() && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
+         nullptr != dml_row_handler_;
 }
 
 /**
@@ -70,8 +70,9 @@ int ObDirectLoadDataFuse::TwoRowsMerger::init(int64_t rowkey_column_num,
   return ret;
 }
 
-int ObDirectLoadDataFuse::TwoRowsMerger::compare(const ObDatumRow &first_row,
-                                                 const ObDatumRow &second_row, int &cmp_ret)
+int ObDirectLoadDataFuse::TwoRowsMerger::compare(const ObDirectLoadDatumRow &first_row,
+                                                 const ObDirectLoadDatumRow &second_row,
+                                                 int &cmp_ret)
 {
   int ret = OB_SUCCESS;
   ObDatumRowkey first_key(first_row.storage_datums_, rowkey_column_num_);
@@ -157,15 +158,17 @@ ObDirectLoadDataFuse::~ObDirectLoadDataFuse()
 }
 
 int ObDirectLoadDataFuse::init(const ObDirectLoadDataFuseParam &param,
-                               ObIStoreRowIterator *origin_iter, ObIStoreRowIterator *load_iter)
+                               ObDirectLoadIStoreRowIterator *origin_iter,
+                               ObDirectLoadIStoreRowIterator *load_iter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadDataFuse init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid() || nullptr == origin_iter || nullptr == load_iter)) {
+  } else if (OB_UNLIKELY(!param.is_valid() || nullptr == origin_iter || nullptr == load_iter ||
+                         origin_iter->get_column_count() != load_iter->get_column_count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param), KP(origin_iter), KP(load_iter));
+    LOG_WARN("Invalid argument", K(ret), K(param), KPC(origin_iter), KPC(load_iter));
   } else {
     param_ = param;
     if (OB_FAIL(rows_merger_.init(param.table_data_desc_.rowkey_column_num_, param.datum_utils_))) {
@@ -187,16 +190,13 @@ int ObDirectLoadDataFuse::supply_consume()
   Item item;
   for (int64_t i = 0; OB_SUCC(ret) && i < consumer_cnt_; ++i) {
     const int64_t iter_idx = consumers_[i];
-    ObIStoreRowIterator *iter = iters_[iter_idx];
+    ObDirectLoadIStoreRowIterator *iter = iters_[iter_idx];
     if (OB_FAIL(iter->get_next_row(item.datum_row_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next row from scanner", KR(ret));
       } else {
         ret = OB_SUCCESS;
       }
-    } else if (OB_UNLIKELY(item.datum_row_->count_ != param_.store_column_count_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected column count", KR(ret), K(item.datum_row_->count_), K(param_.store_column_count_));
     } else {
       item.iter_idx_ = iter_idx;
       if (OB_FAIL(rows_merger_.push(item))) {
@@ -213,7 +213,7 @@ int ObDirectLoadDataFuse::supply_consume()
   return ret;
 }
 
-int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadDataFuse::inner_get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (rows_merger_.empty()) {
@@ -228,21 +228,18 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
       if (OB_FAIL(rows_merger_.pop())) {
         LOG_WARN("fail to pop item", KR(ret));
       } else if (item->iter_idx_ == LOAD_IDX) {
-        if (datum_row->row_flag_.is_delete()) {
-          if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
-            LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
-          }
-        } else {
-          if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
-            LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
-          }
+        if (OB_UNLIKELY(datum_row->is_delete_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected delete row", KR(ret), KPC(datum_row));
+        } else if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
+          LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
         }
       }
     }
   } else {
     const Item *item = nullptr;
-    const ObDatumRow *old_row = nullptr;
-    const ObDatumRow *new_row = nullptr;
+    const ObDirectLoadDatumRow *old_row = nullptr;
+    const ObDirectLoadDatumRow *new_row = nullptr;
     while (OB_SUCC(ret) && !rows_merger_.empty()) {
       if (OB_FAIL(rows_merger_.top(item))) {
         LOG_WARN("fail to rebuild", KR(ret));
@@ -259,7 +256,10 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *old_row, *new_row, datum_row))) {
+      if (OB_UNLIKELY(new_row->is_delete_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected delete row", KR(ret), KPC(new_row));
+      } else if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *old_row, *new_row, datum_row))) {
         LOG_WARN("fail to handle update row", KR(ret), KPC(old_row), KPC(new_row));
       }
     }
@@ -267,7 +267,7 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
   return ret;
 }
 
-int ObDirectLoadDataFuse::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadDataFuse::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -290,23 +290,23 @@ int ObDirectLoadDataFuse::get_next_row(const ObDatumRow *&datum_row)
  */
 
 ObDirectLoadSSTableDataFuse::ObDirectLoadSSTableDataFuse()
-  : allocator_("TLD_DataFuse"), origin_iter_(nullptr), is_inited_(false)
+  : allocator_("TLD_DataFuse"), origin_scanner_(nullptr), is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTableDataFuse::~ObDirectLoadSSTableDataFuse()
 {
-  if (nullptr != origin_iter_) {
-    origin_iter_->~ObDirectLoadIStoreRowIterator();
-    allocator_.free(origin_iter_);
-    origin_iter_ = nullptr;
+  if (nullptr != origin_scanner_) {
+    origin_scanner_->~ObDirectLoadOriginTableScanner();
+    allocator_.free(origin_scanner_);
+    origin_scanner_ = nullptr;
   }
 }
 
 int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
                                       ObDirectLoadOriginTable *origin_table,
-                                      const ObIArray<ObDirectLoadSSTable *> &sstable_array,
+                                      const ObDirectLoadTableHandleArray &sstable_array,
                                       const ObDatumRange &range)
 {
   int ret = OB_SUCCESS;
@@ -318,7 +318,7 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
     LOG_WARN("Invalid argument", K(ret), K(param), KP(origin_table), K(range));
   } else {
     // construct iters
-    if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_, false/*skip_read_lob*/))) {
+    if (OB_FAIL(origin_table->scan(range, allocator_, origin_scanner_, false/*skip_read_lob*/))) {
       LOG_WARN("fail to scan origin table", KR(ret));
     } else {
       ObDirectLoadSSTableScanMergeParam scan_merge_param;
@@ -331,12 +331,11 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(data_fuse_.init(param, origin_iter_, &scan_merge_))) {
+      if (OB_FAIL(data_fuse_.init(param, origin_scanner_, &scan_merge_))) {
         LOG_WARN("fail to init data fuse", KR(ret));
       } else {
-        row_flag_.uncontain_hidden_pk_ = false;
-        row_flag_.has_multi_version_cols_ = false;
-        // row_flag_.has_delete_row_ = ?;
+        // set parent params
+        row_flag_ = param.table_data_desc_.row_flag_;
         column_count_ = param.table_data_desc_.column_count_;
         is_inited_ = true;
       }
@@ -345,7 +344,7 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
   return ret;
 }
 
-int ObDirectLoadSSTableDataFuse::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadSSTableDataFuse::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -362,24 +361,24 @@ int ObDirectLoadSSTableDataFuse::get_next_row(const ObDatumRow *&datum_row)
  */
 
 ObDirectLoadMultipleSSTableDataFuse::ObDirectLoadMultipleSSTableDataFuse()
-  : allocator_("TLD_DataFuse"), origin_iter_(nullptr), is_inited_(false)
+  : allocator_("TLD_DataFuse"), origin_scanner_(nullptr), is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTableDataFuse::~ObDirectLoadMultipleSSTableDataFuse()
 {
-  if (nullptr != origin_iter_) {
-    origin_iter_->~ObDirectLoadIStoreRowIterator();
-    allocator_.free(origin_iter_);
-    origin_iter_ = nullptr;
+  if (nullptr != origin_scanner_) {
+    origin_scanner_->~ObDirectLoadOriginTableScanner();
+    allocator_.free(origin_scanner_);
+    origin_scanner_ = nullptr;
   }
 }
 
 int ObDirectLoadMultipleSSTableDataFuse::init(
   const ObDirectLoadDataFuseParam &param,
   ObDirectLoadOriginTable *origin_table,
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDatumRange &range)
 {
   int ret = OB_SUCCESS;
@@ -394,7 +393,7 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
       LOG_WARN("fail to assign range", KR(ret));
     }
     // construct iters
-    else if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_, false/*skip_read_lob*/))) {
+    else if (OB_FAIL(origin_table->scan(range, allocator_, origin_scanner_, false/*skip_read_lob*/))) {
       LOG_WARN("fail to scan origin table", KR(ret));
     } else {
       ObDirectLoadMultipleSSTableScanMergeParam scan_merge_param;
@@ -406,12 +405,11 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(data_fuse_.init(param, origin_iter_, &scan_merge_))) {
+      if (OB_FAIL(data_fuse_.init(param, origin_scanner_, &scan_merge_))) {
         LOG_WARN("fail to init data fuse", KR(ret));
       } else {
-        row_flag_.uncontain_hidden_pk_ = false;
-        row_flag_.has_multi_version_cols_ = false;
-        // row_flag_.has_delete_row_ = ?;
+        // set parent params
+        row_flag_ = param.table_data_desc_.row_flag_;
         column_count_ = param.table_data_desc_.column_count_;
         is_inited_ = true;
       }
@@ -420,7 +418,7 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableDataFuse::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadMultipleSSTableDataFuse::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

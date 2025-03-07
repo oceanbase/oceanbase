@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_gts_define.h"
 #include "ob_gts_local_cache.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

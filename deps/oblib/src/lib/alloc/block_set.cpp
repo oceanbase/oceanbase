@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "block_set.h"
 
-#include <sys/mman.h>
-#include "lib/allocator/ob_tc_malloc.h"
-#include "lib/ob_define.h"
+#include "block_set.h"
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
 
 using namespace oceanbase;

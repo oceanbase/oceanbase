@@ -681,6 +681,12 @@ public:
                                ObIArray<ObRawExpr *> &exprs,
                                ObIArray<ObRawExpr *> &child_exprs);
 
+  static int deduce_determined_exprs(ObIArray<ObRawExpr *> &determined_exprs,
+                                     const ObDMLStmt *stmt,
+                                     const ObFdItemSet &fd_item_set,
+                                     const EqualSets &equal_sets,
+                                     const ObIArray<ObRawExpr *> &const_exprs);
+
   static int is_expr_is_determined(const ObIArray<ObRawExpr *> &exprs,
                                    const ObFdItemSet &fd_item_set,
                                    const EqualSets &equal_sets,

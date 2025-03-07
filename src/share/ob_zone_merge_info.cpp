@@ -12,15 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_zone_merge_info.h"
-#include "share/ob_zone_merge_table_operator.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_storage_format.h"
-#include "share/config/ob_server_config.h"
-#include "common/ob_zone_type.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_param.h"
-#include "share/schema/ob_column_schema.h"
 
 namespace oceanbase
 {

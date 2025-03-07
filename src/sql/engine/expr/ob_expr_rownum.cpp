@@ -14,8 +14,6 @@
 #include "sql/engine/expr/ob_expr_rownum.h"
 #include "sql/engine/basic/ob_count_op.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {

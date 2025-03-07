@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_transfer_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "observer/ob_server_struct.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase

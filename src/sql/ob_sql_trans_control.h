@@ -175,16 +175,28 @@ public:
   static int create_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int release_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int explicit_start_trans(ObExecContext &exec_ctx, const bool read_only, const ObString hint = ObString());
+  static int explicit_start_trans(ObSQLSessionInfo *session,
+                                  transaction::ObTxParam &tx_param,
+                                  bool &need_disconnect,
+                                  const bool read_only,
+                                  const ObString hint = ObString());
   static int explicit_end_trans(ObExecContext &exec_ctx, const bool is_rollback, const ObString hint = ObString());
   static int implicit_end_trans(ObExecContext &exec_ctx,
                                 const bool is_rollback,
                                 ObEndTransAsyncCallback *callback = NULL,
                                 bool reset_trans_variable = true);
-  static int end_trans(ObExecContext &exec_ctx,
+  static int end_trans(ObSQLSessionInfo *session,
+                       bool &need_disconnect,
+                       TransState &trans_state,
                        const bool is_rollback,
                        const bool is_explicit,
                        ObEndTransAsyncCallback *callback = NULL,
-                       bool reset_trans_variable = true);
+                       bool reset_trans_variable = true,
+                       const ObString hint = ObString());
+  static int end_trans_before_cmd_execute(ObSQLSessionInfo &session,
+                                          bool &need_disconnect,
+                                          TransState &trans_state,
+                                          const int cmd_type);
   static int rollback_trans(ObSQLSessionInfo *session,
                             bool &need_disconnect);
   static int do_end_trans_(ObSQLSessionInfo *session,

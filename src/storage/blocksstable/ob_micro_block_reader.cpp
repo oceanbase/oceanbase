@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_reader.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "share/ob_force_print_log.h"
 #include "storage/access/ob_aggregated_store.h"
 
 namespace oceanbase
@@ -767,7 +764,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
             LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(tmp_datum), K(obj_type), K(map_type));
           }
           if (OB_FAIL(ret) || nullptr == col_params.at(i) || datum.is_null()) {
-          } else if (col_params.at(i)->get_meta_type().is_fixed_len_char_type()) {
+          } else if (need_padding(filter.is_padding_mode(), col_params.at(i)->get_meta_type())) {
             if (OB_FAIL(storage::pad_column(
                         col_params.at(i)->get_meta_type(),
                         col_params.at(i)->get_accuracy(),
@@ -822,7 +819,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
 int ObMicroBlockReader::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const blocksstable::ObDatumRow *default_row,
+    const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+    const bool is_padding_mode,
     const int32_t *row_ids,
     const int64_t row_cap,
     ObDatumRow &row_buf,
@@ -867,16 +865,16 @@ int ObMicroBlockReader::get_rows(
           } else if (row_buf.storage_datums_[col_idx].is_null()) {
             datum.set_null();
           } else if (row_buf.storage_datums_[col_idx].is_nop()) {
-            if (OB_ISNULL(default_row)) {
+            if (OB_ISNULL(default_datums)) {
               ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(WARN, "Unexpected null default row", K(ret), KP(default_row));
-            } else if (default_row->storage_datums_[i].is_nop()) {
+              STORAGE_LOG(WARN, "Unexpected null default row", K(ret), KP(default_datums));
+            } else if (default_datums->at(i).is_nop()) {
               // virtual columns will be calculated in sql
-            } else if (OB_FAIL(datum.from_storage_datum(default_row->storage_datums_[i], datum_infos.at(i).get_obj_datum_map()))) {
+            } else if (OB_FAIL(datum.from_storage_datum(default_datums->at(i), datum_infos.at(i).get_obj_datum_map()))) {
               // fill columns added
-              LOG_WARN("Fail to transfer datum", K(ret), K(i), K(idx), K(row_idx), KPC(default_row));
+              LOG_WARN("Fail to transfer datum", K(ret), K(i), K(idx), K(row_idx), KPC(default_datums));
             }
-            LOG_TRACE("Transfer nop value", K(ret), K(idx), K(row_idx), K(col_idx), KPC(default_row));
+            LOG_TRACE("Transfer nop value", K(ret), K(idx), K(row_idx), K(col_idx), KPC(default_datums));
           } else {
             bool need_copy = false;
             if (row_buf.storage_datums_[col_idx].need_copy_for_encoding_column_with_flat_format(datum_infos.at(i).get_obj_datum_map())) {
@@ -894,8 +892,7 @@ int ObMicroBlockReader::get_rows(
 
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
-        const bool need_padding = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_fixed_len_char_type();
-        if (need_padding) {
+        if (nullptr != col_params.at(i) && need_padding(is_padding_mode, col_params.at(i)->get_meta_type())) {
           ObDatum *col_datums = datum_infos.at(i).datum_ptr_ + datum_offset;
           if (OB_FAIL(storage::pad_on_datums(
                       col_params.at(i)->get_accuracy(),
@@ -915,7 +912,8 @@ int ObMicroBlockReader::get_rows(
 int ObMicroBlockReader::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const blocksstable::ObDatumRow *default_row,
+    const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+    const bool is_padding_mode,
     const int32_t *row_ids,
     const int64_t vector_offset,
     const int64_t row_cap,
@@ -961,7 +959,7 @@ int ObMicroBlockReader::get_rows(
         for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
           sql::ObExpr *expr = exprs.at(i);
           int32_t col_idx = cols_projector.at(i);
-          ObDatum *col_datum = nullptr;
+          const ObDatum *col_datum = nullptr;
           const VectorFormat format = expr->get_format(eval_ctx);
           if (col_idx >= read_info_->get_request_count()) {
             ret = OB_ERR_UNEXPECTED;
@@ -971,13 +969,13 @@ int ObMicroBlockReader::get_rows(
             trans_datum.set_int(-row_buf.storage_datums_[col_idx].get_int());
             col_datum = &trans_datum;
           } else if (row_buf.storage_datums_[col_idx].is_nop()) {
-            if (OB_ISNULL(default_row)) {
+            if (OB_ISNULL(default_datums)) {
               ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(WARN, "Unexpected null default row", K(ret), KP(default_row));
-            } else if (default_row->storage_datums_[i].is_nop()) {
+              STORAGE_LOG(WARN, "Unexpected null default row", K(ret), KP(default_datums));
+            } else if (default_datums->at(i).is_nop()) {
               // virtual columns will be calculated in sql
             } else {
-              col_datum = &(default_row->storage_datums_[i]);
+              col_datum = &(default_datums->at(i));
             }
           } else {
             ObStorageDatum &tmp_datum = row_buf.storage_datums_[col_idx];
@@ -1013,9 +1011,8 @@ int ObMicroBlockReader::get_rows(
 
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
-        const bool need_padding = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_fixed_len_char_type();
         const bool need_dispatch_collection = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_collection_sql_type();
-        if (need_padding) {
+        if (nullptr != col_params.at(i) && need_padding(is_padding_mode, col_params.at(i)->get_meta_type())) {
           if (OB_FAIL(storage::pad_on_rich_format_columns(
                       col_params.at(i)->get_accuracy(),
                       col_params.at(i)->get_meta_type().get_collation_type(),
@@ -1114,8 +1111,6 @@ int ObMicroBlockReader::get_aggregate_result(
     ObStorageDatum tmp_datum; // used for deep copy decimalint
     const bool has_lob_out_row = col_param.get_meta_type().is_lob_storage() && header_->has_lob_out_row();
     bool need_reuse_lob_locator = false;
-    const bool need_padding = is_pad_char_to_full_length(context.sql_mode_) &&
-                              col_param.get_meta_type().is_fixed_len_char_type();
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
       row_idx = row_ids[i];
       datum.set_nop();
@@ -1196,17 +1191,14 @@ int ObMicroBlockReader::get_aggregate_result(
           const int32_t col_offset = agg_cells.at(i)->get_col_offset();
           tmp_datum.set_nop();
           if (OB_COUNT_AGG_PD_COLUMN_ID != col_offset) {
-            const bool need_padding = is_pad_char_to_full_length(context.sql_mode_) &&
-                                    col_params->at(col_offset)->get_meta_type().is_fixed_len_char_type();
             const ObObjMeta &obj_meta = cols_desc.at(col_offset).col_type_;
             const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_meta.get_type());
             if (row_buf.storage_datums_[col_offset].is_nop()) {
             } else if (row_buf.storage_datums_[col_offset].is_null()) {
               tmp_datum.set_null();
-            } else if (need_padding && OB_FAIL(pad_column(col_params->at(col_offset)->get_meta_type(),
-                                                          col_params->at(col_offset)->get_accuracy(),
-                                                          allocator_.get_inner_allocator(),
-                                                          row_buf.storage_datums_[col_offset]))) {
+            } else if (agg_cells.at(i)->need_padding() &&
+                       OB_FAIL(pad_column(col_params->at(col_offset)->get_meta_type(), col_params->at(col_offset)->get_accuracy(),
+                                          allocator_.get_inner_allocator(), row_buf.storage_datums_[col_offset]))) {
               LOG_WARN("Failed to pad column", K(ret), K(col_offset), K(row_buf.storage_datums_));
             } else if (OB_FAIL(tmp_datum.from_storage_datum(row_buf.storage_datums_[col_offset], map_type))) {
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(col_offset),

@@ -12,31 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_table_schema.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "common/ob_common_utility.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_update_stmt.h"
+#include "ob_transform_utils.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/rewrite/ob_transform_rule.h"
-#include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/rewrite/ob_equal_analysis.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/parser/ob_parser.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/ob_sql_utils.h"
@@ -469,11 +450,11 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
       LOG_WARN("failed to check rowkey", K(ret));
     //new heap table not add partition key in rowkey and the tablet id is unique in partition,
     //we need check partition key
-    } else if (is_unique && table_schema->is_heap_table() &&
+    } else if (is_unique && table_schema->is_table_without_pk() &&
                table_schema->get_partition_key_info().is_valid() &&
                OB_FAIL(exprs_has_unique_subset(exprs, table_schema->get_partition_key_info(), is_unique))) {
       LOG_WARN("failed to check rowkey", K(ret));
-    } else if (is_unique && table_schema->is_heap_table() &&
+    } else if (is_unique && table_schema->is_table_without_pk() &&
                table_schema->get_subpartition_key_info().is_valid() &&
                OB_FAIL(exprs_has_unique_subset(exprs, table_schema->get_subpartition_key_info(), is_unique))) {
       LOG_WARN("failed to check rowkey", K(ret));
@@ -5902,7 +5883,7 @@ int ObTransformUtils::generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
     LOG_WARN("table schema is null", K(ret), K(table_schema));
   //new heap table not add partition key in rowkey and the tablet id is unique in partition,
   //we need add partition key to ensure the output unique.
-  } else if (table_schema->is_heap_table() &&
+  } else if (table_schema->is_table_without_pk() &&
              OB_FAIL(add_part_column_exprs_for_heap_table(stmt, table_schema,
                                                           item->table_id_, unique_keys))) {
     LOG_WARN("failed to add part column exprs for heap table", K(ret));
@@ -7435,13 +7416,13 @@ int ObTransformUtils::inner_copy_joined_table_expr(ObRawExprCopier &copier,
     LOG_WARN("failed to assign new conditions", K(ret));
   } else if (NULL != table->left_table_ &&
              table->left_table_->is_joined_table() &&
-             OB_FAIL(inner_copy_joined_table_expr(copier,
-                                                  static_cast<JoinedTable*>(table->left_table_)))) {
+             OB_FAIL(SMART_CALL(inner_copy_joined_table_expr(copier,
+                                                  static_cast<JoinedTable*>(table->left_table_))))) {
     LOG_WARN("failed to inner copy joined table expr", K(ret));
   } else if (NULL != table->right_table_ &&
              table->right_table_->is_joined_table() &&
-             OB_FAIL(inner_copy_joined_table_expr(copier,
-                                                  static_cast<JoinedTable*>(table->right_table_)))) {
+             OB_FAIL(SMART_CALL(inner_copy_joined_table_expr(copier,
+                                                  static_cast<JoinedTable*>(table->right_table_))))) {
     LOG_WARN("failed to inner copy joined table expr", K(ret));
   }
   return ret;
@@ -9365,9 +9346,9 @@ int ObTransformUtils::get_on_condition(TableItem *table_item,
     JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
     if (OB_FAIL(append(conditions, joined_table->get_join_conditions()))) {
       LOG_WARN("failed to append join conditions", K(ret));
-    } else if (OB_FAIL(get_on_condition(joined_table->left_table_, conditions))) {
+    } else if (OB_FAIL(SMART_CALL(get_on_condition(joined_table->left_table_, conditions)))) {
       LOG_WARN("failed to get on condition", K(ret));
-    } else if (OB_FAIL(get_on_condition(joined_table->right_table_, conditions))) {
+    } else if (OB_FAIL(SMART_CALL(get_on_condition(joined_table->right_table_, conditions)))) {
       LOG_WARN("failed to get on condition", K(ret));
     }
   }
@@ -10677,6 +10658,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
         for (int64_t k = 0; OB_SUCC(ret) && !is_existed && k < groupby_exprs.count(); k++) {
           check_context.param_expr_.reset();
           check_context.equal_param_info_.reset();
+          check_context.ora_numeric_cmp_for_grouping_items_ = true;
           if (OB_ISNULL(groupby_exprs.at(k))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got an unexpected null", K(ret));
@@ -10803,7 +10785,7 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
     const ParamStore &param_store = trans_ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
     const ObObjParam &left_param = param_store.at(idx_left);
     const ObObjParam &right_param = param_store.at(idx_right);
-    if (!check_objparam_abs_equal(left_param, right_param)) {
+    if (!check_objparam_abs_equal(left_param, right_param, true)) {
       //do nothing.
     } else if (OB_FAIL(add_compare_int_constraint(trans_ctx,
                                                    static_cast<ObConstRawExpr*>(expr_r),
@@ -10829,7 +10811,10 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
   return ret;
 }
 
-bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2) {
+bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2,
+                                                const bool override_ora_const_numeric_cmp)
+{
+  int ret = OB_SUCCESS;
   bool is_abs_equal = false;
   if (obj1.is_number() && obj2.is_number()) {
     is_abs_equal = (obj1.get_number().abs_compare(obj2.get_number()) == 0);
@@ -10839,6 +10824,29 @@ bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const Ob
     is_abs_equal = (obj1.get_float() + obj2.get_float() == 0) || (obj1.get_float() == obj2.get_float());
   } else if (obj1.is_decimal_int() && obj2.is_decimal_int()) {
     is_abs_equal = wide::abs_equal(obj1, obj2);
+  } else if (override_ora_const_numeric_cmp
+             && ((obj1.is_decimal_int() && obj2.is_number())
+                 || (obj1.is_number() && obj2.is_decimal_int()))) {
+    // select (a - 1) from t group by grouping sets(a, 1);
+    // `1` parsed as decimal int in `a - 1`
+    // `1' parsed as number in grouping sets
+    // special comparision is needed here to replace const `1`
+    ObNumStackOnceAlloc tmp_alloc;
+    ObNumber l_nmb, r_nmb;
+    if (obj1.is_decimal_int()) {
+      if (OB_FAIL(wide::to_number(obj1.get_decimal_int(), obj1.get_int_bytes(), obj1.get_scale(), tmp_alloc, l_nmb))) {
+        LOG_ERROR("wide::to_number failed", K(ret));
+      } else {
+        r_nmb.shadow_copy(obj2.get_number());
+      }
+    } else if (OB_FAIL(wide::to_number(obj2.get_decimal_int(), obj2.get_int_bytes(),
+                                       obj2.get_scale(), tmp_alloc, r_nmb))) {
+      LOG_ERROR("wide::to_number failed", K(ret));
+    } else {
+      l_nmb.shadow_copy(obj1.get_number());
+    }
+    OB_ASSERT(ret == OB_SUCCESS);
+    is_abs_equal = l_nmb.abs_compare(r_nmb) == 0;
   }
   return is_abs_equal;
 }
@@ -12462,7 +12470,7 @@ int ObTransformUtils::add_part_column_exprs_for_heap_table(const ObDMLStmt *stmt
   if (OB_ISNULL(stmt) || OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(table_schema));
-  } else if (table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_without_pk()) {
     const ObRawExpr *part_expr = stmt->get_part_expr(table_id, table_schema->get_table_id());
     const ObRawExpr *subpart_expr = stmt->get_subpart_expr(table_id, table_schema->get_table_id());
     if (part_expr != NULL &&
@@ -14378,6 +14386,9 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
       LOG_WARN("fail to set expand mview flag", K(ret));
+    } else if (mv_provider.is_major_refresh_mview()
+               && OB_FAIL(ObMVPrinter::set_real_time_table_scan_flag_for_mr_mv(*view_stmt))) {
+      LOG_WARN("fail to set table scan flag for major refresh mview", K(ret));
     } else if (OB_FAIL(upper_stmt->generate_view_name(*ctx->allocator_,
                                                       rt_mv_table->table_name_))) {
       LOG_WARN("failed to generate view name", K(ret));
@@ -16963,14 +16974,14 @@ int ObTransformUtils::check_left_join_chain_recursively(ObDMLStmt *stmt,
       is_valid_join_chain = false;
     } else if (!left_table->is_joined_table()) {
       is_valid_join_chain = true;
-    } else if (OB_FAIL(check_left_join_chain_recursively(stmt,
+    } else if (OB_FAIL(SMART_CALL(check_left_join_chain_recursively(stmt,
                                                         static_cast<JoinedTable*>(left_table),
                                                         target_relation_ids,
                                                         join_left_rels,
                                                         join_right_rels,
                                                         null_reject_rels,
                                                         false,
-                                                        is_valid_join_chain))) {
+                                                        is_valid_join_chain)))) {
       LOG_WARN("failed to check left join chain recursively", K(ret));
     }
   } else {

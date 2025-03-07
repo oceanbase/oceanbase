@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_retry_ctrl.h"
-#include "sql/das/ob_das_task.h"
-#include "sql/das/ob_das_ref.h"
+#include "ob_das_retry_ctrl.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {

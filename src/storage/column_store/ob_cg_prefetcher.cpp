@@ -10,7 +10,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_prefetcher.h"
-#include "ob_i_cg_iterator.h"
 #include "storage/access/ob_aggregate_base.h"
 
 namespace oceanbase {
@@ -402,6 +401,9 @@ int ObCGPrefetcher::refresh_constant_filter_info()
       }
     }
 
+    // disable this because need to reconstruct index tree block row scanner when update
+    // max_filter_constant_id_
+    /*
     for (int64_t level = 0; need_check && level <= cur_level_; level++) {
       ObIndexTreeLevelHandle &tree_handle = tree_handles_[level];
       for (int64_t idx = tree_handle.read_idx_; need_check && idx <= tree_handle.prefetch_idx_; idx++) {
@@ -417,6 +419,7 @@ int ObCGPrefetcher::refresh_constant_filter_info()
         }
       }
     }
+    */
   }
   return ret;
 }

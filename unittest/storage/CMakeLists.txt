@@ -6,9 +6,9 @@ add_library(mock_access_service SHARED
   mock_access_service.cpp)
 target_link_libraries(mock_access_service PUBLIC oceanbase)
 
-add_library(mock_ft_parser SHARED
-  mock_ft_parser.cpp)
-target_link_libraries(mock_ft_parser PUBLIC oceanbase)
+# add_library(mock_ft_parser SHARED
+#   mock_ft_parser.cpp)
+# target_link_libraries(mock_ft_parser PUBLIC oceanbase)
 
 function(storage_unittest case)
   ob_unittest(${ARGV})
@@ -28,7 +28,7 @@ endfunction()
 
 function(storage_fts_unittest case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE mockcontainer mock_ft_parser)
+  target_link_libraries(${case} PRIVATE mockcontainer)
 endfunction()
 
 add_subdirectory(mockcontainer)
@@ -41,6 +41,7 @@ add_subdirectory(tx_table)
 add_subdirectory(ddl)
 add_subdirectory(share_storage)
 add_subdirectory(column_store_replica)
+add_subdirectory(fts)
 
 storage_unittest(test_io_manager_v1)
 storage_unittest(test_io_manager)
@@ -93,6 +94,7 @@ storage_unittest(test_checkpoint_diagnose checkpoint/test_checkpoint_diagnose.cp
 storage_unittest(test_tenant_meta_obj_pool test_tenant_meta_obj_pool.cpp)
 storage_unittest(test_tablet_pointer_map test_tablet_pointer_map.cpp)
 storage_fts_unittest(test_fts_plugin test_fts_plugin.cpp)
+storage_fts_unittest(test_fts_property test_fts_property.cpp)
 storage_unittest(test_storage_logger_manager slog/test_storage_logger_manager.cpp)
 storage_unittest(test_storage_log_read_write slog/test_storage_log_read_write.cpp)
 storage_unittest(test_storage_log_replay slog/test_storage_log_replay.cpp)
@@ -136,6 +138,7 @@ storage_unittest(test_tablet_create_mds_ctx test_tablet_create_mds_ctx.cpp)
 storage_unittest(test_ddl_sstable_macro_range_ob_producer test_ddl_sstable_macro_range_ob_producer.cpp)
 storage_unittest(test_choose_migration_source_policy migration/test_choose_migration_source_policy.cpp)
 storage_unittest(test_transfer_mds_ctx test_transfer_mds_ctx.cpp)
+storage_unittest(test_rebuild_src test_rebuild_src.cpp)
 
 if(OB_BUILD_CLOSE_MODULES)
 storage_dml_unittest(test_compaction_policy)

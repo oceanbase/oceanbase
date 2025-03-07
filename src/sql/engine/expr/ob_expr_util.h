@@ -43,6 +43,10 @@ typedef ObNumStackAllocator<1> ObNumStackOnceAlloc;
 
 #define array_elements(A) ((uint) (sizeof(A)/sizeof(A[0])))
 
+template <typename T>
+class ObTextStringVectorResult;
+using ObTextStringDatumResult = ObTextStringVectorResult<common::ObIVector>;
+
 class ObExprUtil
 {
 public:
@@ -115,6 +119,12 @@ public:
   // e.g.:
   //   dump() need result is NLS_CHARACTERSET, but we can only generate ASCII string in code,
   //   this function is used to convert the result characterset.
+  static int set_expr_asscii_result(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      ObTextStringDatumResult &out_res,
+                                      const ObString &ascii, const int64_t datum_idx,
+                                      const bool is_ascii,
+                                      const common::ObCollationType src_coll_type = CS_TYPE_UTF8MB4_BIN);
   static int set_expr_ascii_result(const ObExpr &expr,
                                 ObEvalCtx &ctx,
                                 common::ObDatum &expr_datum,
@@ -159,6 +169,7 @@ public:
                                   const common::ObCollationType& from_collation,
                                   const common::ObString &from_string,
                                   common::ObString &dest_string);
+  static int get_real_expr_without_cast(const ObExpr *expr, const ObExpr *&out_expr);
 
 private:
   static int get_int64_from_num(common::number::ObNumber &nmb,

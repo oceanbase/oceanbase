@@ -12,7 +12,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX SHARE
@@ -20,8 +19,6 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "share/location_cache/ob_location_service.h" // ObLocationService
 
 namespace oceanbase
 {
@@ -430,6 +427,100 @@ TEST_F(TestLocationService, test_clear_ls_location)
   usleep(ls_location_service->RENEW_LS_LOCATION_BY_RPC_INTERVAL_US + GCONF.rpc_timeout);
   ASSERT_EQ(OB_CACHE_NOT_HIT, ls_location_service->get_from_cache_(GCONF.cluster_id, user_tenant_id, user_ls_id, location));
   ASSERT_EQ(OB_CACHE_NOT_HIT, ls_location_service->get_from_cache_(GCONF.cluster_id, meta_tenant_id, SYS_LS, location));
+}
+
+TEST_F(TestLocationService, get_vtable_location)
+{
+  int ret = OB_SUCCESS;
+  ASSERT_TRUE(is_valid_tenant_id(g_tenant_id));
+  ObLocationService *location_service = GCTX.location_service_;
+  ASSERT_TRUE(OB_NOT_NULL(location_service));
+  ObVTableLocationService *vtable_location_service = &(location_service->vtable_location_service_);
+  ASSERT_TRUE(OB_NOT_NULL(vtable_location_service));
+
+  common::ObArray<common::ObAddr> servers;
+  bool is_cache_hit;
+  servers.reset();
+  common::ObAddr rs_addr;
+  ASSERT_EQ(OB_SUCCESS, GCTX.rs_mgr_->get_master_root_server(rs_addr));
+  ASSERT_EQ(OB_SUCCESS ,vtable_location_service->vtable_get(OB_SYS_TENANT_ID, OB_ALL_VIRTUAL_CORE_META_TABLE_TID, 0, is_cache_hit, servers));
+  ASSERT_TRUE(servers.count() == 1);
+  if (rs_addr.is_valid()) {
+    ASSERT_TRUE(is_cache_hit == true);
+    ASSERT_TRUE(servers.at(0) == rs_addr);
+  } else {
+    ASSERT_TRUE(is_cache_hit == false);
+  }
+  ASSERT_EQ(OB_SUCCESS ,vtable_location_service->vtable_get(OB_SYS_TENANT_ID, OB_ALL_VIRTUAL_CORE_META_TABLE_TID, INT64_MAX, is_cache_hit, servers));
+  ASSERT_TRUE(is_cache_hit == false);
+  ASSERT_TRUE(servers.at(0) == rs_addr);
+
+  ObZone all_zone;
+  servers.reuse();
+  common::ObArray<common::ObAddr> alive_servers;
+
+  common::ObMySQLProxy &inner_proxy = get_curr_simple_server().get_observer().get_mysql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+
+  ASSERT_EQ(OB_SUCCESS, SVR_TRACER.get_alive_servers(all_zone, alive_servers));
+  ASSERT_EQ(OB_SUCCESS, vtable_location_service->vtable_get(g_tenant_id, OB_ALL_VIRTUAL_DISK_STAT_TID, 0, is_cache_hit, servers));
+  if (alive_servers.count() == 0) {
+    ASSERT_TRUE(is_cache_hit == false);
+  } else{
+    ASSERT_TRUE(alive_servers.count() == servers.count());
+  }
+
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = CLUSTER_LOCATION_INFO_ERROR, error_code = 4018, frequency = 1"));
+  ASSERT_EQ(OB_SUCCESS, inner_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_LOCATION_NOT_EXIST, vtable_location_service->vtable_get(g_tenant_id, OB_ALL_VIRTUAL_DISK_STAT_TID, 0, is_cache_hit, servers));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = CLUSTER_LOCATION_INFO_ERROR, error_code = 4018, frequency = 0"));
+  ASSERT_EQ(OB_SUCCESS, inner_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+
+  ASSERT_EQ(OB_SUCCESS, vtable_location_service->vtable_get(g_tenant_id, OB_ALL_VIRTUAL_DISK_STAT_TID, INT64_MAX, is_cache_hit, servers));
+  ASSERT_TRUE(is_cache_hit == false);
+  ASSERT_TRUE(alive_servers.count() == servers.count());
+
+  servers.reuse();
+  ASSERT_EQ(OB_SUCCESS, vtable_location_service->vtable_get(g_tenant_id, OB_TENANT_VIRTUAL_TENANT_STATUS_TID, 0, is_cache_hit, servers));
+  ASSERT_TRUE(servers.count() != 0);
+
+  common::ObArray<common::ObAddr> servers_compare;
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = TENANT_LOCATION_INFO_ERROR, error_code = 4018, frequency = 1"));
+  ASSERT_EQ(OB_SUCCESS, inner_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_LOCATION_NOT_EXIST, vtable_location_service->vtable_get(g_tenant_id, OB_TENANT_VIRTUAL_TENANT_STATUS_TID, 0, is_cache_hit, servers_compare));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = TENANT_LOCATION_INFO_ERROR, error_code = 4018, frequency = 0"));
+  ASSERT_EQ(OB_SUCCESS, inner_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+
+  servers.reuse();
+  uint64_t new_tenant_id = OB_INVALID_TENANT_ID;
+  ASSERT_EQ(OB_SUCCESS, create_tenant("oracle1234", "2G", "2G", true));
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(new_tenant_id, "oracle1234"));
+  ASSERT_TRUE(is_valid_tenant_id(new_tenant_id));
+  ASSERT_EQ(OB_SUCCESS, SVR_TRACER.renew_tenant_servers_cache_map());
+  ASSERT_EQ(OB_SUCCESS, vtable_location_service->vtable_get(new_tenant_id, OB_TENANT_VIRTUAL_TENANT_STATUS_TID, 0, is_cache_hit, servers));
+  ASSERT_TRUE(is_cache_hit == true);
+
+  common::ObArray<common::ObAddr> new_servers;
+  ASSERT_EQ(OB_SUCCESS, vtable_location_service->vtable_get(new_tenant_id, OB_TENANT_VIRTUAL_TENANT_STATUS_TID, INT64_MAX, is_cache_hit, new_servers));
+  ASSERT_TRUE(is_cache_hit == false);
+  ASSERT_TRUE(servers.count() == new_servers.count());
+  ARRAY_FOREACH(servers, idx) {
+    ASSERT_TRUE(servers.at(idx) == new_servers.at(idx));
+  }
+
+  int64_t renew_time;
+  ASSERT_EQ(OB_SUCCESS, SVR_TRACER.renew_tenant_servers_cache_by_id(new_tenant_id));
+  ASSERT_EQ(OB_SUCCESS, vtable_location_service->vtable_get(new_tenant_id, OB_TENANT_VIRTUAL_TENANT_STATUS_TID, 0, is_cache_hit, new_servers));
+  ASSERT_TRUE(is_cache_hit == true);
+  ASSERT_EQ(OB_SUCCESS, SVR_TRACER.get_alive_tenant_servers(new_tenant_id, servers, renew_time));
+  ASSERT_TRUE(servers.count() == new_servers.count());
+  ARRAY_FOREACH(servers, idx) {
+    ASSERT_TRUE(servers.at(idx) == new_servers.at(idx));
+  }
+
+  uint64_t invalid_tenant_id = new_tenant_id + 2;
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, SVR_TRACER.renew_tenant_servers_cache_by_id(invalid_tenant_id));
 }
 
 } // namespace rootserver

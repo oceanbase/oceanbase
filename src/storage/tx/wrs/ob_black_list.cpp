@@ -11,9 +11,6 @@
  */
 
 #include "ob_black_list.h"
-#include "share/ob_thread_mgr.h"                                // set_thread_name
-#include "observer/ob_server_struct.h"                          // for GCTX
-#include "deps/oblib/src/common/ob_role.h"                      // role
 #include "storage/tx/wrs/ob_weak_read_util.h"               // ObWeakReadUtil
 #include "storage/tx/ob_ts_mgr.h"
 #include "lib/ash/ob_active_session_guard.h"                    // ObASHSetInnerSqlWaitGuard

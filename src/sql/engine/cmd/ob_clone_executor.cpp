@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_clone_executor.h"
 #include "sql/resolver/cmd/ob_tenant_clone_stmt.h"
-#include "share/restore/ob_tenant_clone_table_operator.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 
 namespace oceanbase

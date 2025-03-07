@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_sort_op_impl.h"
-#include "sql/engine/ob_operator.h"
-#include "sql/engine/ob_tenant_sql_memory_manager.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
-#include "lib/container/ob_iarray.h"
 #include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase
@@ -791,6 +787,10 @@ int ObSortOpImpl::init(
       profile_.set_exec_ctx(exec_ctx);
       op_monitor_info_->otherstat_2_id_ = ObSqlMonitorStatIds::SORT_MERGE_SORT_ROUND;
       op_monitor_info_->otherstat_2_value_ = 1;
+      op_monitor_info_->otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
+      op_monitor_info_->otherstat_7_value_ = 0;
+      op_monitor_info_->otherstat_10_id_ = ObSqlMonitorStatIds::COMPRESS_TYPE;
+      op_monitor_info_->otherstat_10_value_ = static_cast<int64_t>(compress_type_);
       ObPhysicalPlanCtx *plan_ctx = NULL;
       const ObPhysicalPlan *phy_plan = nullptr;
       if (!exec_ctx->get_my_session()->get_ddl_info().is_ddl()) {
@@ -988,8 +988,10 @@ int ObSortOpImpl::build_chunk(const int64_t level, Input &input, int64_t extra_s
         LOG_WARN("copy row to row store failed");
       } else {
         stored_row_cnt++;
-        op_monitor_info_->otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
-        op_monitor_info_->otherstat_1_value_ += 1;
+        if (level > 0) {
+          op_monitor_info_->otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
+          op_monitor_info_->otherstat_1_value_ += 1;
+        }
         total_size += src_store_row->row_size_;
       }
     }
@@ -2076,6 +2078,11 @@ int ObSortOpImpl::sort()
 
     set_blk_holder(nullptr, nullptr);
     // do merge sort
+    op_monitor_info_->otherstat_9_id_ = ObSqlMonitorStatIds::MERGE_SORT_START_TIME;
+    op_monitor_info_->otherstat_9_value_ = ObTimeUtility::fast_current_time();
+    int64_t this_level_chunks = sort_chunks_.get_size();
+    int64_t next_level_chunks = 0;
+    int64_t sort_round = 1;
     int64_t ways = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(build_ems_heap(ways))) {
@@ -2084,6 +2091,11 @@ int ObSortOpImpl::sort()
         // last merge round,
         if (ways == sort_chunks_.get_size()) {
           break;
+        }
+        if (op_monitor_info_->otherstat_5_id_ == ObSqlMonitorStatIds::DDL_TASK_ID) {
+          int64_t expected_next_level_chunks = next_level_chunks + (this_level_chunks + ways - 1) / ways;
+          op_monitor_info_->otherstat_8_id_ = ObSqlMonitorStatIds::SORT_EXPECTED_ROUND_COUNT;
+          op_monitor_info_->otherstat_8_value_ = sort_round + ceil(log(expected_next_level_chunks) / log(ways)) - 1;
         }
         auto input = [&](const ObChunkDatumStore::StoredRow *&row) {
           int ret = OB_SUCCESS;
@@ -2111,6 +2123,17 @@ int ObSortOpImpl::sort()
             ObSortOpChunk *c = sort_chunks_.remove_first();
             c->~ObSortOpChunk();
             mem_context_->get_malloc_allocator().free(c);
+          }
+        }
+        if (op_monitor_info_->otherstat_5_id_ == ObSqlMonitorStatIds::DDL_TASK_ID) {
+          this_level_chunks -= ways;
+          next_level_chunks += 1;
+          if(this_level_chunks == 0 || this_level_chunks == 1) {
+            sort_round++;
+            op_monitor_info_->otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
+            op_monitor_info_->otherstat_1_value_ = sort_round  * op_monitor_info_->otherstat_7_value_;
+            this_level_chunks += next_level_chunks;
+            next_level_chunks = 0;
           }
         }
       }

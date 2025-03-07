@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "common/row/ob_row_iterator.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl_stmt.h"
-#include "pl/ob_pl_user_type.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/ob_spi.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 
@@ -371,6 +366,7 @@ int ObExprSubQueryRef::expr_eval(
     if (OB_SUCC(ret)) {
       OX (spi_cursor->row_store_.finish_add_row());
       OX (cursor->open(spi_cursor));
+      OZ (session->add_non_session_cursor(cursor));  //add to non session cursor map
       if (lib::is_oracle_mode()) {
         transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
         OZ (cursor->set_and_register_snapshot(snapshot));

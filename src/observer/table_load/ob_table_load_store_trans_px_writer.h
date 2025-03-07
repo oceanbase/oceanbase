@@ -15,6 +15,7 @@
 #include "common/ob_tablet_id.h"
 #include "lib/hash/ob_hashset.h"
 #include "storage/direct_load/ob_direct_load_batch_row_buffer.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "observer/table_load/ob_table_load_pre_sort_writer.h"
 #include "src/share/table/ob_table_load_row_array.h"
@@ -60,7 +61,7 @@ public:
   TO_STRING_KV(KP_(store_ctx),
                KP_(trans),
                KP_(writer),
-               K_(is_heap_table),
+               K_(is_table_without_pk),
                K_(column_count),
                K_(store_column_count),
                KP_(non_partitioned_tablet_id_vector),
@@ -127,6 +128,7 @@ private:
     ObIVector *tablet_id_const_vector_;
     // for non-vectorized
     storage::ObDirectLoadRowFlag row_flag_;
+    storage::ObDirectLoadDatumRow datum_row_;
     storage::ObDirectLoadBatchRowBuffer batch_buffer_;
     // for vectorized
     // shallow copy unfixed cols
@@ -150,7 +152,7 @@ private:
   ObTableLoadStoreCtx *store_ctx_;
   ObTableLoadStoreTrans *trans_;
   ObTableLoadTransStoreWriter *writer_;
-  bool is_heap_table_;
+  bool is_table_without_pk_;
   // number of columns received from px
   int64_t column_count_;
   // number of columns write to direct load

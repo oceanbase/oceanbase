@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_subquery_equal.h"
-#include "common/object/ob_obj_compare.h"
-#include "sql/engine/expr/ob_expr_equal.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

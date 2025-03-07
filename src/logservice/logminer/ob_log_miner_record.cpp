@@ -15,8 +15,6 @@
 #include "lib/utility/ob_fast_convert.h"
 #include "ob_log_miner_record.h"
 #include "ob_log_miner_br.h"
-#include "ob_log_binlog_record.h"
-#include "ob_log_miner_logger.h"
 
 #define APPEND_STMT(stmt, args...) \
   do { \

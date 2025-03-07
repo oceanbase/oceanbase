@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX  OBLOG_FETCHER
 
-#include "share/rc/ob_tenant_base.h"  // MTL_ID
 #include "ob_log_fetch_stream_container_mgr.h"
 
 #ifdef ERRSIM

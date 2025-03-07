@@ -255,7 +255,8 @@ public:
   int from(const int16_t precision, const int16_t scale, const char *str, const int64_t length,
            T &allocator);
   template <class T>
-  int from_sci(const char *str, const int64_t length, T &allocator, int16_t *precision, int16_t *scale, const bool do_rounding = true);
+  int from_sci(const char *str, const int64_t length, T &allocator, int16_t *precision,
+               int16_t *scale, const bool do_rounding = true, const bool catch_trunc_err = false);
   template <class T>
   int from(const uint32_t desc, const ObCalcVector &vector, T &allocator);
   template <class T>
@@ -277,7 +278,8 @@ public:
   template <class T>
   int from_sci_opt(const char *str, const int64_t length, T &allocator,
                    int16_t *precision = NULL, int16_t *scale = NULL,
-                   const bool do_rounding = true);
+                   const bool do_rounding = true,
+                   const bool catch_trunc_err = false);
   inline int round_v3(const int64_t scale, const bool for_oracle_to_char = false);
   // used when cast number to string in oracle mode
   inline int round_for_sci(const int64_t scale, const bool for_oracle_to_char = false);
@@ -602,7 +604,9 @@ protected:
   int from_v2_(const uint32_t desc, const ObCalcVector &vector, IAllocator &allocator);
   int from_(const ObNumber &other, IAllocator &allocator);
   int from_(const ObNumber &other, uint32_t *digits);
-  int from_sci_(const char *str, const int64_t length, IAllocator &allocator, int &warning, int16_t *precision, int16_t *scale, const bool do_rounding);
+  int from_sci_(const char *str, const int64_t length, IAllocator &allocator, int &warning,
+                int16_t *precision, int16_t *scale, const bool do_rounding,
+                const bool catch_trunc_err = false);
   int deep_copy_to_allocator_(ObIAllocator &allocator);
   int add_(const ObNumber &other, ObNumber &value, IAllocator &allocator) const;
   template <typename T>
@@ -1612,12 +1616,13 @@ int ObNumber::from_sci(const char *str,
                    T &allocator,
                    int16_t *precision,
                    int16_t *scale,
-                   const bool do_rounding)
+                   const bool do_rounding,
+                   const bool catch_trunc_err)
 {
   int ret = OB_SUCCESS;
   int warning = OB_SUCCESS;
   TAllocator<T> ta(allocator);
-  ret = from_sci_(str, length, ta, warning, precision, scale, do_rounding);
+  ret = from_sci_(str, length, ta, warning, precision, scale, do_rounding, catch_trunc_err);
   if (OB_SUCCESS == ret && OB_SUCCESS != warning) {
     ret = warning;
   }
@@ -1630,12 +1635,13 @@ int ObNumber::from_sci_opt(const char *str,
                            T &allocator,
                            int16_t *precision,
                            int16_t *scale,
-                           const bool do_rounding)
+                           const bool do_rounding,
+                           const bool catch_trunc_err)
 {
   int ret = OB_SUCCESS;
   const common::ObString tmp_string(length, str);
   if (!tmp_string.empty() && (NULL != tmp_string.find('e') || NULL != tmp_string.find('E'))) {
-    ret = from_sci(str, length, allocator, precision, scale, do_rounding);
+    ret = from_sci(str, length, allocator, precision, scale, do_rounding, catch_trunc_err);
   } else {
     ret = from(str, length, allocator, precision, scale, do_rounding);
   }

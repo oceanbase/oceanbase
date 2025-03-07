@@ -11,22 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "lib/utility/utility.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "ob_dml_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
-#include "sql/parser/parse_malloc.h"
-#include "sql/ob_sql_context.h"
-#include "sql/rewrite/ob_equal_analysis.h"
-#include "sql/resolver/dml/ob_dml_resolver.h"
-#include "sql/resolver/dml/ob_stmt_expr_visitor.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_lob_access_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -259,6 +246,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   skip_locked_ = other.skip_locked_;
   need_expand_rt_mv_ = other.need_expand_rt_mv_;
   mview_id_ = other.mview_id_;
+  mr_mv_flags_ = other.mr_mv_flags_;
   node_ = other.node_; // should deep copy ? seems to be unnecessary
   flashback_query_type_ = other.flashback_query_type_;
   // dblink
@@ -355,9 +343,9 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
       LOG_WARN("failed to allocate memory for joined table", K(ret));
     } else {
       tmp_left = new (ptr) JoinedTable();
-      if (OB_FAIL(tmp_left->deep_copy(allocator,
+      if (OB_FAIL(SMART_CALL(tmp_left->deep_copy(allocator,
                                       expr_copier,
-                                      static_cast<JoinedTable &>(*left_table_)))) {
+                                      static_cast<JoinedTable &>(*left_table_))))) {
         LOG_WARN("failed to deep copy left table", K(ret));
       } else {
         left_table_ = tmp_left;
@@ -372,9 +360,9 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
       LOG_WARN("failed to allocate memory for joined table", K(ret));
     } else {
       tmp_right = new (ptr) JoinedTable();
-      if (OB_FAIL(tmp_right->deep_copy(allocator,
+      if (OB_FAIL(SMART_CALL(tmp_right->deep_copy(allocator,
                                        expr_copier,
-                                       static_cast<JoinedTable &>(*right_table_)))) {
+                                       static_cast<JoinedTable &>(*right_table_))))) {
         LOG_WARN("failed to deep copy right table", K(ret));
       } else {
         right_table_ = tmp_right;
@@ -1012,7 +1000,7 @@ int ObDMLStmt::iterate_joined_table_expr(JoinedTable *joined_table,
       NULL != joined_table->left_table_ &&
       joined_table->left_table_->is_joined_table()) {
     JoinedTable *left = static_cast<JoinedTable *>(joined_table->left_table_);
-    if (OB_FAIL(iterate_joined_table_expr(left, visitor))) {
+    if (OB_FAIL(SMART_CALL(iterate_joined_table_expr(left, visitor)))) {
       LOG_WARN("failed to visit joined table", K(ret));
     }
   }
@@ -1020,7 +1008,7 @@ int ObDMLStmt::iterate_joined_table_expr(JoinedTable *joined_table,
       NULL != joined_table->right_table_ &&
       joined_table->right_table_->is_joined_table()) {
     JoinedTable *right = static_cast<JoinedTable *>(joined_table->right_table_);
-    if (OB_FAIL(iterate_joined_table_expr(right, visitor))) {
+    if (OB_FAIL(SMART_CALL(iterate_joined_table_expr(right, visitor)))) {
       LOG_WARN("failed to visit joined table", K(ret));
     }
   }
@@ -1098,9 +1086,9 @@ int ObDMLStmt::construct_join_table(const ObDMLStmt &other_stmt,
   // replace right table item
   if (OB_SUCC(ret)) {
     if (other.right_table_->is_joined_table()) {
-      if (OB_FAIL(construct_join_table(other_stmt,
+      if (OB_FAIL(SMART_CALL(construct_join_table(other_stmt,
                                        static_cast<JoinedTable&>(*other.right_table_),
-                                       static_cast<JoinedTable&>(*current.right_table_)))) {
+                                       static_cast<JoinedTable&>(*current.right_table_))))) {
         LOG_WARN("failed to replace joined table", K(ret));
       } else { /*do nothing*/ }
     } else {
@@ -1356,15 +1344,15 @@ int ObDMLStmt::update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.left_table_->is_joined_table() &&
              current.left_table_->is_joined_table() &&
-             OB_FAIL(update_table_item_id_for_joined_table(other_stmt,
+             OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.left_table_),
-                                                           static_cast<JoinedTable&>(*current.left_table_)))) {
+                                                           static_cast<JoinedTable&>(*current.left_table_))))) {
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.right_table_->is_joined_table() &&
              current.right_table_->is_joined_table() &&
-             OB_FAIL(update_table_item_id_for_joined_table(other_stmt,
+             OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.right_table_),
-                                                           static_cast<JoinedTable&>(*current.right_table_)))) {
+                                                           static_cast<JoinedTable&>(*current.right_table_))))) {
     LOG_WARN("failed to update table id", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -5721,6 +5709,32 @@ int ObDMLStmt::get_partition_columns(const int64_t table_id,
     }
   }
   return ret;
+}
+
+bool ObDMLStmt::is_contain_vector_origin_distance_calc() const
+{
+  bool bool_ret = false;
+
+  if (is_select_stmt()) {
+    int ret = OB_SUCCESS;
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(this);
+    ObRawExpr* vector_expr = get_first_vector_expr();
+    for (int64_t i = 0; OB_NOT_NULL(vector_expr) && OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
+      const SelectItem &si = select_stmt->get_select_items().at(i);
+      ObExprEqualCheckContext equal_ctx;
+      equal_ctx.override_const_compare_ = true;
+      if (OB_ISNULL(si.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select item expr is null", K(ret));
+      } else if (si.expr_->is_vector_sort_expr()) {
+        if (si.expr_->same_as(*vector_expr, &equal_ctx)) {
+          bool_ret = true;
+          break;
+        }
+      }
+    }
+  }
+  return bool_ret;
 }
 
 int ObDMLStmt::extract_partition_columns(const int64_t table_id,

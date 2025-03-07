@@ -38,6 +38,7 @@
 #include "pl/sys_package/ob_dbms_scheduler.h"
 #include "pl/sys_package/ob_dbms_scheduler_mysql.h"
 #include "pl/sys_package/ob_dbms_crypto.h"
+#include "pl/sys_package/ob_dbms_ddl.h"
 #include "pl/sys_package/ob_dbms_job.h"
 #include "pl/sys_package/ob_pl_utl_file.h"
 #include "pl/sys_package/ob_dbms_plan_cache.h"
@@ -65,6 +66,8 @@
 #include "pl/sys_package/ob_xml_type.h"
 #include "pl/sys_package/ob_sdo_geom.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
+#include "pl/sys_package/ob_utl_tcp.h"
+#include "pl/sys_package/ob_utl_smtp.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -292,6 +295,7 @@
   INTERFACE_DEF(INTERFACE_GET_TIME, "GET_TIME", (DbmsUtilityHelper::get_time))
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
+  INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
   // end dbms_utility
 
 #endif
@@ -570,7 +574,22 @@
   INTERFACE_DEF(INTERFACE_UTL_FILE_FIS_OPEN, "UTL_FILE_FIS_OPEN", (ObPLUtlFile::fis_open))
   //end of utl_file
 
+  //start of utl_tcp
+  INTERFACE_DEF(INTERFACE_UTL_TCP_OPEN_CONNECTION, "UTL_TCP_OPEN_CONNECTION", (ObPLUtlTcp::open_connection))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_CLOSE_CONNECTION, "UTL_TCP_CLOSE_CONNECTION", (ObPLUtlTcp::close_connection))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_CLOSE_ALL_CONNECTIONS, "UTL_TCP_CLOSE_ALL_CONNECTIONS", (ObPLUtlTcp::close_all_connections))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_WRITE_LINE, "UTL_TCP_WRITE_LINE", (ObPLUtlTcp::write_line))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_WRITE_TEXT, "UTL_TCP_WRITE_TEXT", (ObPLUtlTcp::write_text))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_WRITE_RAW, "UTL_TCP_WRITE_RAW", (ObPLUtlTcp::write_raw))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_READ_LINE, "UTL_TCP_READ_LINE", (ObPLUtlTcp::read_line))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_READ_TEXT, "UTL_TCP_READ_TEXT", (ObPLUtlTcp::read_text))
+
+  //start of utl_smtp
+  INTERFACE_DEF(INTERFACE_UTL_SMTP_RAISE, "UTL_SMTP_RAISE", (ObPLUtlSmtp::raise))
+  INTERFACE_DEF(INTERFACE_UTL_SMTP_ESCAPE_DOT, "UTL_SMTP_ESCAPE_DOT", (ObPLUtlSmtp::escape_dot))
+
   //start of dbms_sys_error
+  // begin (to maintain compatibility during upgrading from 4.2.5.0 to 4.2.5.1)
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE0, "KKXERE0", (ObDBMSSysError::ere0))
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE1, "KKXERE1", (ObDBMSSysError::ere1))
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE2, "KKXERE2", (ObDBMSSysError::ere2))
@@ -580,12 +599,27 @@
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE6, "KKXERE6", (ObDBMSSysError::ere6))
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE7, "KKXERE7", (ObDBMSSysError::ere7))
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE8, "KKXERE8", (ObDBMSSysError::ere8))
+  // end
+  INTERFACE_DEF(INTERFACE_SYS_ERROR0_IMPL, "SYS_ERR0_IMPL", (ObDBMSSysError::ere0))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR1_IMPL, "SYS_ERR1_IMPL", (ObDBMSSysError::ere1))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR2_IMPL, "SYS_ERR2_IMPL", (ObDBMSSysError::ere2))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR3_IMPL, "SYS_ERR3_IMPL", (ObDBMSSysError::ere3))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR4_IMPL, "SYS_ERR4_IMPL", (ObDBMSSysError::ere4))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR5_IMPL, "SYS_ERR5_IMPL", (ObDBMSSysError::ere5))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR6_IMPL, "SYS_ERR6_IMPL", (ObDBMSSysError::ere6))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR7_IMPL, "SYS_ERR7_IMPL", (ObDBMSSysError::ere7))
+  INTERFACE_DEF(INTERFACE_SYS_ERROR8_IMPL, "SYS_ERR8_IMPL", (ObDBMSSysError::ere8))
   //end of dbms_sys_error
 
   // start of dbms_preprocessor
+  // begin (to maintain compatibility during upgrading from 4.2.5.0 to 4.2.5.1)
   INTERFACE_DEF(INTERFACE_PREPROCESSOR_KKXCCG1, "KKXCCG1", (ObDBMSPreprocessor::kkxccg1))
   INTERFACE_DEF(INTERFACE_PREPROCESSOR_KKXCCG2, "KKXCCG2", (ObDBMSPreprocessor::kkxccg2))
   INTERFACE_DEF(INTERFACE_PREPROCESSOR_KKXCCG3, "KKXCCG3", (ObDBMSPreprocessor::kkxccg3))
+  // end
+  INTERFACE_DEF(INTERFACE_PREPROCESSOR_GET_PP_SOURCE_I1, "GET_PP_SOURCE_I1", (ObDBMSPreprocessor::kkxccg1))
+  INTERFACE_DEF(INTERFACE_PREPROCESSOR_GET_PP_SOURCE_I2, "GET_PP_SOURCE_I2", (ObDBMSPreprocessor::kkxccg2))
+  INTERFACE_DEF(INTERFACE_PREPROCESSOR_GET_PP_SOURCE_I3, "GET_PP_SOURCE_I3", (ObDBMSPreprocessor::kkxccg3))
   // end of dbms_preprocessor
 #endif
 
@@ -815,6 +849,17 @@
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
   //end of dbms_external_table
+
+  // start of dbms_ddl
+#ifdef OB_BUILD_ORACLE_PL
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_WRAP, "DBMS_DDL_WRAP", (ObDbmsDDL::wrap))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_WRAP_VS, "DBMS_DDL_WRAP_VS", (ObDbmsDDL::wrap_clob))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_WRAP_VA, "DBMS_DDL_WRAP_VA", (ObDbmsDDL::wrap_clob))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED, "DBMS_DDL_CREATE_WRAPPED", (ObDbmsDDL::create_wrapped))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED_VS, "DBMS_DDL_CREATE_WRAPPED_VS", (ObDbmsDDL::create_wrapped))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED_VA, "DBMS_DDL_CREATE_WRAPPED_VA", (ObDbmsDDL::create_wrapped))
+#endif
+  // end of dbms_ddl
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

@@ -13,7 +13,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include "../mock_tenant_module_env.h"
 
 namespace oceanbase

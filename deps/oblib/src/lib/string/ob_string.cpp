@@ -11,7 +11,6 @@
  */
 
 #include "lib/string/ob_string.h"
-#include "lib/utility/serialization.h"
 #include "common/data_buffer.h"
 
 using namespace oceanbase;

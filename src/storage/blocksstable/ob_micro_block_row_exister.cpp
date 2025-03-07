@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_row_exister.h"
-#include "storage/access/ob_table_access_param.h"
 
 namespace oceanbase {
 namespace blocksstable {

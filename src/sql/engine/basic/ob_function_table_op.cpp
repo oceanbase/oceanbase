@@ -13,14 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/basic/ob_function_table_op.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl_user_type.h"
-#include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 

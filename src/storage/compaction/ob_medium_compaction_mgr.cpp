@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/compaction/ob_medium_compaction_mgr.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet.h"
-#include "logservice/ob_log_base_header.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/multi_data_source/mds_writer.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "storage/tablet/ob_tablet_service_clog_replay_executor.h"
+#include "ob_medium_compaction_mgr.h"
+#include "src/logservice/replayservice/ob_tablet_replay_executor.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase

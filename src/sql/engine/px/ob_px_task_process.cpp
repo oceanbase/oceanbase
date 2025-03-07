@@ -12,34 +12,19 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_task_process.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/px/ob_granule_iterator_op.h"
-#include "sql/dtl/ob_dtl_channel_group.h"
 #include "observer/ob_server.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "lib/stat/ob_session_stat.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/engine/px/ob_px_worker_stat.h"
-#include "sql/engine/px/ob_px_interruption.h"
-#include "share/rc/ob_context.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/exchange/ob_px_transmit_op.h"
-#include "sql/engine/px/exchange/ob_px_receive_op.h"
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
-#include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/join/ob_hash_join_op.h"
-#include "sql/engine/window_function/ob_window_function_op.h"
-#include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/pdml/static/ob_px_multi_part_insert_op.h"
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "sql/engine/px/ob_granule_pump.h"
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
 #include "observer/mysql/obmp_base.h"
-#include "lib/alloc/ob_malloc_callback.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 #include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 
@@ -297,6 +282,8 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     int64_t batch_count = arg_.get_sqc_handler()->
       get_sqc_init_arg().sqc_.get_rescan_batch_params().get_count();
     bool need_fill_batch_info = false;
+    LOG_TRACE("trace run op spec root", K(&ctx), K(ctx.get_frames()),
+              K(batch_count), K(root_spec.get_id()), K(&(root->get_exec_ctx())));
     //  这里统一处理了 batch rescan 和非 batch rescan 的场景
     //  一般场景下，传入的参数是 batch_count = 0
     //  为了复用下面的循环代码,将batch_count 改为1, 但无需初始化rescan 参数
@@ -305,8 +292,6 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     } else {
       need_fill_batch_info = true;
     }
-    LOG_TRACE("trace run op spec root", K(&ctx), K(ctx.get_frames()),
-              K(batch_count), K(need_fill_batch_info), K(root_spec.get_id()), K(&(root->get_exec_ctx())));
     CK(IS_PX_TRANSMIT(root_spec.get_type()));
     for (int i = 0; i < batch_count && OB_SUCC(ret); ++i) {
       if (need_fill_batch_info) {

@@ -11,12 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/net/ob_addr.h"
 #include "storage/tx/ob_timestamp_service.h"
-#include "storage/tx/ob_gts_rpc.h"
-#include "storage/tx/ob_gts_define.h"
 
 namespace oceanbase
 {

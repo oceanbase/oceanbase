@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_local_channel.h"
-#include "lib/oblog/ob_log_module.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
-#include "sql/engine/basic/ob_chunk_row_store.h"
-#include "ob_dtl_interm_result_manager.h"
-#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 
 using namespace oceanbase::common;
 

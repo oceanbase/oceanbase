@@ -10,31 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <thread>
 #define private public
 #include "ob_simple_log_cluster_env.h"
-#include "ob_simple_log_server.h"
-#include "common/ob_member_list.h"
-#include "common/ob_role.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/ob_log_handler.h"
-#include "logservice/palf/lsn.h"
-#include "share/scn.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/palf_handle.h"
-#include "logservice/palf/palf_base_info.h"
-#include "logservice/palf/palf_handle_impl_guard.h"
-#include "logservice/palf/palf_iterator.h"
-#include "logservice/palf/palf_options.h"
-#include "logservice/palf_handle_guard.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_service.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "log/ob_shared_log_utils.h"

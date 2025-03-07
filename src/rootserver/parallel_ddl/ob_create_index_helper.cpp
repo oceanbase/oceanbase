@@ -581,6 +581,12 @@ int ObCreateIndexHelper::create_index_()
       LOG_WARN("new arg is null", KR(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
       LOG_WARN("fail to get data version", K(ret), K_(tenant_id));
+    } else if (tenant_data_version < DATA_VERSION_4_3_5_1
+        && (share::schema::is_fts_index_aux(new_arg_->index_type_) || share::schema::is_fts_doc_word_aux(new_arg_->index_type_))
+        && !new_arg_->index_option_.parser_properties_.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
     } else if (OB_FAIL(index_builder_.submit_build_index_task(trans_,
                                                               *new_arg_,
                                                               new_data_table_schema_,

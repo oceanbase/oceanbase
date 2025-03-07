@@ -12,20 +12,7 @@
 
 #include "ob_lock_wait_mgr.h"
 
-#include "common/ob_clock_generator.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/ob_errno.h"
-#include "lib/rowid/ob_urowid.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "observer/ob_server.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "lib/function/ob_function.h"
-#include "lib/hash/ob_linear_hash_map.h"
-#include "lib/utility/utility.h"
-#include "storage/tx/ob_trans_ctx.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_deadlock_adapter.h"
-#include <cstdint>
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/engine/expr/ob_expr_uuid_short.h"
 #include "observer/ob_server_struct.h"
-#include "lib/time/ob_time_utility.h"
 
 using namespace oceanbase::common;
 

@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_major_freeze_service.h"
-#include "rootserver/freeze/ob_tenant_major_freeze.h"
 #include "share/ob_all_server_tracer.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

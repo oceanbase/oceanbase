@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_sequence_namespace_checker.h"
-#include "lib/charset/ob_charset.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/ob_resolver_define.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 
 namespace oceanbase

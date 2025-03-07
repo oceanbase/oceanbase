@@ -57,6 +57,8 @@ public:
       bool &is_cache_hit,
       ObLSLocation &location);
 
+  int renew_all_ls_locations_by_rpc();
+
   // Gets leader address of a log stream synchronously.
   //
   // @param [in] force_renew: whether to renew location synchronously.
@@ -222,9 +224,7 @@ public:
       ObLSTableOperator &ls_pt,
       schema::ObMultiVersionSchemaService &schema_service,
       common::ObMySQLProxy &sql_proxy,
-      ObIAliveServerTracer &server_tracer,
       ObRsMgr &rs_mgr,
-      obrpc::ObCommonRpcProxy &rpc_proxy,
       obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   int start();
   void stop();

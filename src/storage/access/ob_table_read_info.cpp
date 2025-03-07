@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_read_info.h"
-#include "storage/ob_i_store.h"
-#include "storage/ob_storage_schema.h"
-#include "share/schema/ob_table_param.h"
-#include "storage/blocksstable/ob_macro_block.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {

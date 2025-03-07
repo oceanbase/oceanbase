@@ -22,6 +22,36 @@
 #include "ob_java_helper.h"
 #include "share/ob_errno.h"
 
+GETJNIENV getJNIEnv = NULL;
+DETACHCURRENTTHREAD detachCurrentThread = NULL;
+DESTROYJNIENV destroyJNIEnv = NULL;
+
+// hdfs functions
+HdfsGetPathInfoFunc obHdfsGetPathInfo = NULL;
+HdfsFreeFileInfoFunc obHdfsFreeFileInfo = NULL;
+HdfsDeleteFunc obHdfsDelete = NULL;
+HdfsGetLastExceptionRootCauseFunc obHdfsGetLastExceptionRootCause = NULL;
+HdfsCreateDirectoryFunc obHdfsCreateDirectory = NULL;
+HdfsListDirectoryFunc obHdfsListDirectory = NULL;
+HdfsCloseFileFunc obHdfsCloseFile = NULL;
+HdfsOpenFileFunc obHdfsOpenFile = NULL;
+HdfsFileIsOpenForReadFunc obHdfsFileIsOpenForRead = NULL;
+HdfsFileIsOpenForWriteFunc obHdfsFileIsOpenForWrite = NULL;
+HdfsPreadFunc obHdfsPread = NULL;
+HdfsNewBuilderFunc obHdfsNewBuilder = NULL;
+HdfsBuilderSetNameNodeFunc obHdfsBuilderSetNameNode = NULL;
+HdfsBuilderSetUserNameFunc obHdfsBuilderSetUserName = NULL;
+HdfsBuilderSetForceNewInstanceFunc obHdfsBuilderSetForceNewInstance = NULL;
+HdfsBuilderConnectFunc obHdfsBuilderConnect = NULL;
+HdfsFreeBuilderFunc obHdfsFreeBuilder = NULL;
+HdfsDisconnectFunc obHdfsDisconnect = NULL;
+
+HdfsBuilderConfSetStrFunc obHdfsBuilderConfSetStr = NULL;
+HdfsBuilderSetPrincipalFunc obHdfsBuilderSetPrincipal = NULL;
+HdfsBuilderSetKerb5ConfFunc obHdfsBuilderSetKerb5Conf = NULL;
+HdfsBuilderSetKeyTabFileFunc obHdfsBuilderSetKeyTabFile = NULL;
+HdfsBuilderSetKerbTicketCachePathFunc obHdfsBuilderSetKerbTicketCachePath = NULL;
+
 namespace oceanbase
 {
 
@@ -206,7 +236,7 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
   bool found = false;
   if (OB_ISNULL(env_str)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cann't find oci lib in LD_LIBRARY_PATH", K(ret));
+    LOG_WARN("cann't find lib in LD_LIBRARY_PATH", K(ret));
   } else {
     const char *ptr = env_str;
     while (' ' == *ptr || ':' == *ptr) { ++ptr; }
@@ -385,23 +415,54 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     LIB_SYMBOL(hdfs_lib_handle_, "getJNIEnv", getJNIEnv, GETJNIENV);
     LIB_SYMBOL(hdfs_lib_handle_, "detachCurrentThread", detachCurrentThread, DETACHCURRENTTHREAD);
     LIB_SYMBOL(hdfs_lib_handle_, "destroyJNIEnv", destroyJNIEnv, DESTROYJNIENV);
+    // link related useful hdfs func
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsGetPathInfo", obHdfsGetPathInfo, HdfsGetPathInfoFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsFreeFileInfo", obHdfsFreeFileInfo, HdfsFreeFileInfoFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsDelete", obHdfsDelete, HdfsDeleteFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsGetLastExceptionRootCause", obHdfsGetLastExceptionRootCause, HdfsGetLastExceptionRootCauseFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsCreateDirectory", obHdfsCreateDirectory, HdfsCreateDirectoryFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsListDirectory", obHdfsListDirectory, HdfsListDirectoryFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsCloseFile", obHdfsCloseFile, HdfsCloseFileFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsOpenFile", obHdfsOpenFile, HdfsOpenFileFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsFileIsOpenForRead", obHdfsFileIsOpenForRead, HdfsFileIsOpenForReadFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsFileIsOpenForWrite", obHdfsFileIsOpenForWrite, HdfsFileIsOpenForWriteFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsPread", obHdfsPread, HdfsPreadFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsNewBuilder", obHdfsNewBuilder, HdfsNewBuilderFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetNameNode", obHdfsBuilderSetNameNode, HdfsBuilderSetNameNodeFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetUserName", obHdfsBuilderSetUserName, HdfsBuilderSetUserNameFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetForceNewInstance", obHdfsBuilderSetForceNewInstance, HdfsBuilderSetForceNewInstanceFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderConnect", obHdfsBuilderConnect, HdfsBuilderConnectFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsFreeBuilder", obHdfsFreeBuilder, HdfsFreeBuilderFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsDisconnect", obHdfsDisconnect, HdfsDisconnectFunc);
+
+    // extra added for kerberos auth
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderConfSetStr", obHdfsBuilderConfSetStr, HdfsBuilderConfSetStrFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetPrincipal", obHdfsBuilderSetPrincipal, HdfsBuilderSetPrincipalFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetKerb5Conf", obHdfsBuilderSetKerb5Conf, HdfsBuilderSetKerb5ConfFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetKeyTabFile", obHdfsBuilderSetKeyTabFile, HdfsBuilderSetKeyTabFileFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetKerbTicketCachePath", obHdfsBuilderSetKerbTicketCachePath, HdfsBuilderSetKerbTicketCachePathFunc);
 
     int user_error_len = STRLEN(hdfs_lib_buf);
-    if (OB_ISNULL(getJNIEnv)) {
-      ret = OB_JNI_ENV_ERROR;
+    if (OB_ISNULL(getJNIEnv) || OB_ISNULL(detachCurrentThread) ||
+        OB_ISNULL(destroyJNIEnv) ||
+        /* hdfs funcs */
+        OB_ISNULL(obHdfsGetPathInfo) ||
+        OB_ISNULL(obHdfsFreeFileInfo) || OB_ISNULL(obHdfsDelete) ||
+        OB_ISNULL(obHdfsGetLastExceptionRootCause) ||
+        OB_ISNULL(obHdfsCreateDirectory) || OB_ISNULL(obHdfsListDirectory) ||
+        OB_ISNULL(obHdfsCloseFile) || OB_ISNULL(obHdfsOpenFile) ||
+        OB_ISNULL(obHdfsFileIsOpenForRead) || OB_ISNULL(obHdfsFileIsOpenForWrite) ||
+        OB_ISNULL(obHdfsPread) || OB_ISNULL(obHdfsNewBuilder) ||
+        OB_ISNULL(obHdfsBuilderSetNameNode) ||
+        OB_ISNULL(obHdfsBuilderSetUserName) ||
+        OB_ISNULL(obHdfsBuilderSetForceNewInstance) ||
+        OB_ISNULL(obHdfsBuilderConnect) || OB_ISNULL(obHdfsFreeBuilder) ||
+        OB_ISNULL(obHdfsDisconnect) || OB_ISNULL(obHdfsBuilderSetPrincipal) ||
+        OB_ISNULL(obHdfsBuilderSetKerb5Conf) || OB_ISNULL(obHdfsBuilderSetKeyTabFile)) {
+      ret = OB_ERR_UNEXPECTED;
       const char * dlerror_str = dlerror();
       int dlerror_str_len = STRLEN(dlerror_str);
-      LOG_WARN("getJNIEnv is null, the loaded hdfs lib is not the expected", K(ret), K(dlerror_str));
-    } else if (OB_ISNULL(detachCurrentThread)) {
-      ret = OB_JNI_ENV_ERROR;
-      const char * dlerror_str = dlerror();
-      int dlerror_str_len = STRLEN(dlerror_str);
-      LOG_WARN("detachCurrentThread is null, the loaded hdfs lib is not the expected", K(ret), K(dlerror_str));
-    } else if (OB_ISNULL(destroyJNIEnv)) {
-      ret = OB_JNI_ENV_ERROR;
-      const char * dlerror_str = dlerror();
-      int dlerror_str_len = STRLEN(dlerror_str);
-      LOG_WARN("destroyJNIEnv is null, the loaded hdfs lib is not the expected", K(ret), K(dlerror_str));
+      LOG_WARN("expected funcs exist some null, the loaded hdfs lib is not the expected", K(ret), K(dlerror_str));
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(hdfs_lib_handle_)) {

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX LIB
-#include "common/object/ob_obj_type.h"
 #include "ob_json_bin.h"
 #include "ob_json_tree.h"
 #include "ob_json_diff.h"
@@ -2344,7 +2343,7 @@ int ObJsonBin::init_bin_data()
         if (OB_FAIL(cursor_->read_i32(pos_, &val))) {
           LOG_WARN("read_id32 fail", K(ret), K(pos_));
         } else {
-          meta_.field_type_ = ObJsonBaseUtil::get_time_type(node_type);;
+          meta_.field_type_ = ObJsonBaseUtil::get_time_type(node_type);
           int_val_ = val;
           meta_.bytes_ = sizeof(int32_t);
         }

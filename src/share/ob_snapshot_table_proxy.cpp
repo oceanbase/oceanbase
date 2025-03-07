@@ -13,18 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_snapshot_table_proxy.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_zone_table_operation.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_cluster_version.h"
-#include "common/ob_timeout_ctx.h"
 #include "rootserver/ob_root_utils.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_dml_sql_splicer.h"
 
 namespace oceanbase
 {

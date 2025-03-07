@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/ob_unit_getter.h"
-#include "share/ob_i_sql_expression.h"
-#include "share/config/ob_server_config.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 namespace oceanbase

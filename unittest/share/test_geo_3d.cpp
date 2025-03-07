@@ -14,11 +14,9 @@
 #define private public
 #define protected public
 #include "lib/geo/ob_geo_3d.h"
-#include "lib/geo/ob_wkt_parser.h"
 #undef private
 #undef protected
 
-#include <iostream>
 
 namespace oceanbase {
 namespace common {

@@ -10,21 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <new>
-#include <unistd.h>
 
 #include "cos_api.h"
 #include "cos_log.h"
-#include "cos_utility.h"
-#include "cos_string.h"
-#include "cos_status.h"
 #include "cos_auth.h"
-#include "cos_sys_util.h"
-#include "apr_errno.h"
-#include "cos_crc64.h"
 
 #include "ob_cos_wrapper.h"
 #include "lib/restore/ob_object_storage_base.h"

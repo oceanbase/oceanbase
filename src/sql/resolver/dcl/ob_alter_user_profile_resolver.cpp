@@ -14,12 +14,7 @@
 
 #include "sql/resolver/dcl/ob_alter_user_profile_resolver.h"
 
-#include "share/schema/ob_schema_struct.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/dcl/ob_grant_resolver.h"
-#include "share/ob_rpc_struct.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

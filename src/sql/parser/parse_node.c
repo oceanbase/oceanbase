@@ -11,13 +11,9 @@
  */
 
 #include "sql/parser/parse_node.h"
-#include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 #include "lib/alloc/alloc_assist.h"
-#include "sql/parser/parse_malloc.h"
 #include "sql/parser/parse_node_hash.h"
-#include "sql/parser/parse_define.h"
 #include "sql/parser/sql_parser_base.h"
 #include "sql/executor/ob_memory_tracker_wrapper.h"
 extern const char *get_type_name(int type);
@@ -620,7 +616,7 @@ char *str_toupper(char *buff, int64_t len)
 {
   if (OB_LIKELY(NULL != buff)) {
     char *ptr = buff;
-	char *end = buff + len;
+	  char *end = buff + len;
     unsigned char ch = *ptr;
     while (ptr != end) {
       ch = *ptr;

@@ -12,17 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_pushdown_filter.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
-#include "storage/column_store/ob_column_store_util.h"
-#include "storage/lob/ob_lob_manager.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase
@@ -49,7 +40,8 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObAndFilterExecutor, ObPushdownAndFilterNode, AND_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObOrFilterExecutor, ObPushdownOrFilterNode, OR_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObDynamicFilterExecutor, ObPushdownDynamicFilterNode, DYNAMIC_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObSampleFilterExecutor, ObPushdownSampleFilterNode, HYBRID_SAMPLE_FILTER_EXECUTOR>
+  ObPushdownFilterFactory::alloc<ObHybridSampleFilterExecutor, ObPushdownSampleFilterNode, HYBRID_SAMPLE_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObTrivalSampleFilterExecutor, ObPushdownSampleFilterNode, TRIVAL_SAMPLE_FILTER_EXECUTOR>
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
@@ -1175,6 +1167,7 @@ int ObPushdownFilterExecutor::init_filter_param(
 
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
+  is_padding_mode_ = need_padding;
   if (is_filter_node()) {
     if (0 == col_count) {
     } else if (OB_FAIL(init_array_param(col_params_, col_count))) {
@@ -1203,29 +1196,30 @@ int ObPushdownFilterExecutor::init_filter_param(
         } else if (OB_FAIL(col_offsets_.push_back(idx))) {
           LOG_WARN("failed to push back col offset", K(ret));
         } else {
-          col_param = nullptr;
           blocksstable::ObStorageDatum default_datum;
-          const common::ObObj &def_cell = col_params.at(idx)->get_orig_default_value();
-          const common::ObObjMeta &obj_meta = col_params.at(idx)->get_meta_type();
-          if (need_padding && obj_meta.is_fixed_len_char_type()) {
-            col_param = col_params.at(idx);
-          } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
-            col_param = col_params.at(idx);
-          }
+          col_param = col_params.at(idx);
+          const common::ObObj &def_cell = col_param->get_orig_default_value();
+          const common::ObObjMeta &obj_meta = col_param->get_meta_type();
           if (OB_FAIL(col_params_.push_back(col_param))) {
             LOG_WARN("failed to push back col param", K(ret));
           } else if (!def_cell.is_nop_value()) {
             if (OB_FAIL(default_datum.from_obj(def_cell))) {
               LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
-            } else if (obj_meta.is_lob_storage() && !def_cell.is_null()) {
-              // lob def value must have no lob header when not null
-              // When do lob pushdown, should add lob header for default value
-              ObString data = default_datum.get_string();
-              ObString out;
-              if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
-                LOG_WARN("failed to fill lob header for column", K(ret), K(idx), K(def_cell), K(data));
-              } else {
-                default_datum.set_string(out);
+            } else if (!def_cell.is_null()) {
+              if (need_padding && obj_meta.is_fixed_len_char_type()) {
+                if (OB_FAIL(storage::pad_column(obj_meta, col_param->get_accuracy(), allocator_, default_datum))) {
+                  LOG_WARN("failed to pad column", K(ret), K(i), K(idx), K(obj_meta), K(default_datum));
+                }
+              } else if (obj_meta.is_lob_storage()) {
+                // lob def value must have no lob header when not null
+                // When do lob pushdown, should add lob header for default value
+                ObString data = default_datum.get_string();
+                ObString out;
+                if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
+                  LOG_WARN("failed to fill lob header for column", K(ret), K(idx), K(def_cell), K(data));
+                } else {
+                  default_datum.set_string(out);
+                }
               }
             }
           }
@@ -1258,6 +1252,7 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
   const common::ObIArray<ObExpr *> *cg_exprs = nullptr;
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
+  is_padding_mode_ = need_padding;
   if (OB_UNLIKELY(!iter_param.is_valid() || nullptr == (read_info = iter_param.get_read_info())
                   || nullptr == read_info->get_cg_idxs())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1313,11 +1308,7 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
           blocksstable::ObStorageDatum default_datum;
           const common::ObObj &def_cell = col_param->get_orig_default_value();
           const common::ObObjMeta &obj_meta = col_param->get_meta_type();
-          if (need_padding && obj_meta.is_fixed_len_char_type()) {
-            cg_col_param = col_param;
-          } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
-            cg_col_param = col_param;
-          }
+          cg_col_param = col_param;
 
           if (OB_FAIL(col_params_.push_back(cg_col_param))) {
             LOG_WARN("failed to push back col param", K(ret));
@@ -1664,7 +1655,7 @@ ObPushdownFilterExecutor::ObPushdownFilterExecutor(common::ObIAllocator &alloc,
   : type_(type), need_check_row_filter_(false), filter_tree_status_(ObCommonFilterTreeStatus::NONE_FILTER),
     n_cols_(0), n_child_(0), cg_iter_idx_(INVALID_CG_ITER_IDX), skipped_rows_(0), childs_(nullptr),
     filter_bitmap_(nullptr), col_params_(alloc), col_offsets_(alloc), cg_col_offsets_(alloc), default_datums_(alloc),
-    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_rewrited_(false), filter_bool_mask_(),
+    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_padding_mode_(false), is_rewrited_(false), filter_bool_mask_(),
     enable_reorder_(false), ref_cnt_(0), filter_realtime_statistics_()
 {}
 
@@ -1690,6 +1681,7 @@ ObPushdownFilterExecutor::~ObPushdownFilterExecutor()
   n_child_ = 0;
   cg_iter_idx_ = INVALID_CG_ITER_IDX;
   need_check_row_filter_ = false;
+  is_padding_mode_ = false;
   is_rewrited_ = false;
   enable_reorder_ = false;
   ref_cnt_ = 0;
@@ -1704,7 +1696,7 @@ DEF_TO_STRING(ObPushdownFilterExecutor)
        K_(n_child), KP_(childs), KP_(filter_bitmap),
        K_(col_params), K_(default_datums), K_(col_offsets),
        K_(cg_col_offsets), K_(cg_idxs), K_(cg_col_exprs),
-       K_(is_rewrited), K_(filter_bool_mask));
+       K_(is_rewrited), K_(filter_bool_mask), K_(is_padding_mode));
   J_OBJ_END();
   return pos;
 }

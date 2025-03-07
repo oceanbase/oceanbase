@@ -11,11 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_create_replay_executor.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
-#include "storage/multi_data_source/buffer_ctx.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
 #define USING_LOG_PREFIX STORAGE
 

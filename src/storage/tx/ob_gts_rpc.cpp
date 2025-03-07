@@ -10,17 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_srv_task.h"
-#include "observer/omt/ob_tenant.h"
 #include "ob_gts_rpc.h"
-#include "ob_ts_worker.h"
-#include "ob_ts_mgr.h"
 #include "ob_timestamp_access.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {

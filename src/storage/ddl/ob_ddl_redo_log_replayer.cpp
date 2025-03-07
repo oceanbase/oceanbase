@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_redo_log_replayer.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ddl/ob_ddl_clog.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_ddl_replay_executor.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

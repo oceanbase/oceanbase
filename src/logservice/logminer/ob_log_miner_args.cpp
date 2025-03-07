@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
-#include "lib/container/ob_array_wrap.h"
 #include "ob_log_miner_utils.h"                       // logminer_str2ll
 #include "ob_log_miner_args.h"                        // ObLogMinerCmdArgs/ObLogMinerArgs/AnalyzerArgs/FlashbackerArgs
 #include "ob_log_miner_logger.h"                      // LOGMINER_LOGGER

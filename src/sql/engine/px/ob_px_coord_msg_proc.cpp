@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "ob_px_coord_msg_proc.h"
 #include "sql/engine/px/ob_sqc_ctx.h"
-#include "sql/engine/px/ob_px_coord_msg_proc.h"
-#include "sql/engine/px/datahub/ob_dh_msg_provider.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
-#include "sql/dtl/ob_dtl_msg_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

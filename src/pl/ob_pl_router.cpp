@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/ob_pl_router.h"
-#include "share/schema/ob_routine_info.h"
-#include "parser/ob_pl_parser.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "share/ob_errno.h"
-#include "sql/ob_sql_utils.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
 
 namespace oceanbase {
 using namespace common;
@@ -108,7 +104,7 @@ int ObPLRouter::check_error_in_resolve(int code)
   return ret;
 }
 
-int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_info, ObRoutineInfo &routine_info)
+int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_info, ObRoutineInfo &routine_info, obrpc::ObDDLArg *ddl_arg)
 {
   int ret = OB_SUCCESS;
   HEAP_VAR(ObPLFunctionAST, func_ast, inner_allocator_) {
@@ -130,6 +126,8 @@ int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_inf
                                             dep_info,
                                             routine_info_.get_object_type(),
                                             0, dep_attr, dep_attr));
+      OZ (ObDDLResolver::ob_add_ddl_dependency(func_ast.get_dependency_table(),
+                                               *ddl_arg));
     }
     if (OB_SUCC(ret)) {
       if (func_ast.is_modifies_sql_data()) {

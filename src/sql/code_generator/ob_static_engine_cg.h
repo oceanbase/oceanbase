@@ -597,7 +597,16 @@ private:
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
                               bool &is_dup);
-  bool has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id);
+  int check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_ids,
+                          const uint64_t root_table_id,
+                          const uint64_t root_column_id,
+                          ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns,
+                          bool &is_dup);
+  int check_fk_self_ref_upd(const ObIArray<uint64_t> &table_list,
+                            const ObTableUpdateSpec &spec, bool &self_ref_update);
+  bool table_exists_in_list(DASTableIdList &parent_tables, const uint64_t table_id);
+
+  bool column_exists_in_list(const ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns, const uint64_t table_id, const uint64_t column_id);
 
   void set_murmur_hash_func(ObHashFunc &hash_func, const ObExprBasicFuncs *basic_funcs_);
 

@@ -14,7 +14,6 @@
 
 #include "rpc/obmysql/packet/ompk_ok.h"
 
-#include "lib/utility/ob_macro_utils.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;

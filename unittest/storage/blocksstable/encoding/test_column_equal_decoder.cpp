@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 #include "test_column_decoder.h"
 #define protected public
 #define private public

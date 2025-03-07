@@ -18,9 +18,6 @@
 #define protected public
 
 #include "storage/ob_partition_range_spliter.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "ob_index_block_data_prepare.h"
 
 namespace oceanbase
@@ -276,7 +273,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   int tmp_ret = OB_SUCCESS;
@@ -301,7 +298,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_,
       false, 3));
@@ -334,7 +331,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   tmp_ret = OB_SUCCESS;
@@ -358,7 +355,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   tmp_ret = OB_SUCCESS;
@@ -386,7 +383,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   ASSERT_EQ(OB_SUCCESS, meta_iter.get_next(data_macro_meta));
@@ -405,7 +402,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
 

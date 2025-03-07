@@ -126,6 +126,16 @@ public:
                         const common::ObIArray<ObOptTableStat*> &table_stats,
                         const int64_t current_time,
                         const bool is_index_stat);
+
+  int update_table_stat_failed_count(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const ObIArray<int64_t> &part_ids,
+                                     int64_t &affected_rows);
+
+  int get_update_fail_count_value_list(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       const ObIArray<int64_t> &part_ids,
+                                       ObSqlString &value_str);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t exec_tenant_id,
                          ObIAllocator &allocator,

@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 #include "ob_tenant_config_mgr.h"
-#include "lib/thread/thread_mgr.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server_struct.h"
-#include "share/config/ob_common_config.h"
-#include "ob_multi_tenant.h"
-#include "ob_tenant.h"
-#include "share/ob_rpc_struct.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "common/ob_tenant_data_version_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

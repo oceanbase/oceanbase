@@ -11,9 +11,6 @@
  */
 
 #include "palf_callback_wrapper.h"
-#include "lib/ob_errno.h"
-#include "logservice/palf/palf_callback.h"
-#include "lib/net/ob_addr.h"
 namespace oceanbase
 {
 namespace palf

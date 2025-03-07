@@ -283,6 +283,8 @@ enum ObTransferTaskComment
   INACTIVE_SERVER_IN_MEMBER_LIST = 5,
   WAIT_DUE_TO_LAST_FAILURE = 6,
   WAIT_FOR_MAJOR_COMPACTION = 7,
+  WAIT_FOR_LEARNER_LIST = 8,
+  PART_LIST_ALL_LOCK_CONFLICT = 9,
   MAX_COMMENT
 };
 
@@ -478,6 +480,39 @@ private:
       const ObDisplayTabletList &table_lock_tablet_list,
       transaction::tablelock::ObLockAloneTabletRequest &lock_arg);
 };
+
+class ObTransferTaskKey
+{
+public:
+  ObTransferTaskKey(const ObLSID &src_ls_id, const ObLSID &dest_ls_id)
+      : src_ls_id_(src_ls_id), dest_ls_id_(dest_ls_id) {}
+  ObTransferTaskKey(const ObTransferTaskKey &other)
+  {
+    src_ls_id_ = other.src_ls_id_;
+    dest_ls_id_ = other.dest_ls_id_;
+  }
+  ObTransferTaskKey() {}
+  int hash(uint64_t &res) const
+  {
+    res = 0;
+    res = murmurhash(&src_ls_id_, sizeof(src_ls_id_), res);
+    res = murmurhash(&dest_ls_id_, sizeof(dest_ls_id_), res);
+    return OB_SUCCESS;
+  }
+  bool operator ==(const ObTransferTaskKey &other) const
+  {
+    return src_ls_id_ == other.src_ls_id_ && dest_ls_id_ == other.dest_ls_id_;
+  }
+  bool operator !=(const ObTransferTaskKey &other) const { return !(operator ==(other)); }
+  ObLSID get_src_ls_id() const { return src_ls_id_; }
+  ObLSID get_dest_ls_id() const { return dest_ls_id_; }
+  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id));
+private:
+  ObLSID src_ls_id_;
+  ObLSID dest_ls_id_;
+};
+
+typedef common::hash::ObHashMap<ObTransferTaskKey, ObTransferPartList> ObTransferPartMap;
 
 } // end namespace share
 } // end namespace oceanbase

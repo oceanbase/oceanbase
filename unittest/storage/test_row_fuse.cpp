@@ -10,12 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #define protected public
-#include "storage/ob_row_fuse.h"
-#include "lib/allocator/page_arena.h"
 #include "mockcontainer/mock_ob_iterator.h"
 
 

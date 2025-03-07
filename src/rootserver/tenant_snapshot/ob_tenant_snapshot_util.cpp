@@ -13,20 +13,16 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_tenant_snapshot_util.h"
-#include "rootserver/ob_ls_service_helper.h" //ObTenantLSInfo
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/balance/ob_balance_job_table_operator.h" //ObBalanceJob
 #include "share/balance/ob_balance_task_table_operator.h" //ObBalanceTaskArray
 #include "share/balance/ob_balance_task_helper_operator.h" //ObBalanceTaskHelper
-#include "share/location_cache/ob_location_service.h"
-#include "share/ls/ob_ls_operator.h" //ObLSAttrOperator
 #include "share/ob_global_stat_proxy.h" //ObGlobalStatProxy
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tablelock/ob_lock_utils.h" //ObInnerTableLockUtil
 #include "storage/tablelock/ob_lock_inner_connection_util.h" // for ObInnerConnectionLockUtil
 #include "observer/ob_inner_sql_connection.h"
-#include "src/share/restore/ob_tenant_clone_table_operator.h"
 #include "src/rootserver/restore/ob_tenant_clone_util.h"
 
 using namespace oceanbase::rootserver;

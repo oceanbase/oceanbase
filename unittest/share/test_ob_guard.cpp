@@ -12,13 +12,9 @@
 
 #define UNITTEST_DEBUG
 
-#include "lib/guard/ob_shared_guard.h"
-#include "lib/guard/ob_unique_guard.h"
 #include "lib/guard/ob_weak_guard.h"
 #include "lib/container/ob_se_array.h"
 #include <gtest/gtest.h>
-#include <iostream>
-#include <vector>
 
 namespace oceanbase {
 namespace unittest {

@@ -11,19 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_dependency_info.h"
-#include "ob_schema_getter_guard.h"
-#include "lib/container/ob_tuple.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
+#include "ob_dependency_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
-#include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_ddl_operator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -924,6 +915,33 @@ int ObDependencyInfo::modify_all_obj_status(const ObIArray<std::pair<uint64_t, s
       } else if (share::schema::ObObjectType::SYNONYM == objs.at(i).second) {
         // TODO:peihan.dph
       }
+    }
+  }
+  return ret;
+}
+
+int ObDependencyInfo::insert_dependency_infos(common::ObMySQLTransaction &trans,
+                                           ObIArray<ObDependencyInfo> &dep_infos,
+                                           uint64_t tenant_id,
+                                           uint64_t dep_obj_id,
+                                           uint64_t schema_version, uint64_t owner_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == owner_id
+   || OB_INVALID_ID == dep_obj_id
+   || OB_INVALID_ID == tenant_id
+   || OB_INVALID_SCHEMA_VERSION == schema_version) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
+                                                   K(owner_id), K(dep_obj_id));
+  } else {
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
+      ObDependencyInfo & dep = dep_infos.at(i);
+      dep.set_tenant_id(tenant_id);
+      dep.set_dep_obj_id(dep_obj_id);
+      dep.set_dep_obj_owner_id(owner_id);
+      dep.set_schema_version(schema_version);
+      OZ (dep.insert_schema_object_dependency(trans));
     }
   }
   return ret;

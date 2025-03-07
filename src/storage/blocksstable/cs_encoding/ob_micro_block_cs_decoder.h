@@ -18,6 +18,7 @@
 #include "ob_cs_encoding_allocator.h"
 #include "ob_cs_micro_block_transformer.h"
 #include "ob_icolumn_cs_decoder.h"
+#include "ob_new_column_cs_decoder.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/ob_i_store.h"
 
@@ -208,6 +209,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const bool is_padding_mode,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
@@ -258,7 +260,7 @@ public:
       ObAggCellVec &agg_cell) override;
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(const int32_t group_by_col, const char **cell_datas,
-    storage::ObGroupByCellBase &group_by_cell) const override;
+    const bool is_padding_mode, storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int read_reference(const int32_t group_by_col, const int32_t *row_ids,
     const int64_t row_cap, storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(const int32_t *row_ids, const char **cell_datas,
@@ -268,12 +270,15 @@ public:
       const char **cell_datas,
       const int64_t row_cap,
       const int64_t vec_offset,
+      const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
       storage::ObGroupByCellVec &group_by_cell) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
       const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,
@@ -291,7 +296,11 @@ private:
   void inner_reset();
   int do_init(const ObMicroBlockData &block_data);
   int init_decoders();
-  int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, ObColumnCSDecoder &dest);
+  int add_decoder(
+      const int64_t store_idx,
+      const ObObjMeta &obj_meta,
+      const ObColumnParam *col_param,
+      ObColumnCSDecoder &dest);
   int free_decoders();
   int get_stream_data_buf(const int64_t stream_idx, const char *&buf);
   int decode_cells(
@@ -336,6 +345,7 @@ private:
   ObColumnCSDecoderCtx **ctxs_;
   static ObNoneExistColumnCSDecoder none_exist_column_decoder_;
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
+  static ObNewColumnCSDecoder new_column_decoder_;
   ObBlockReaderAllocator decoder_allocator_;
   common::ObArenaAllocator buf_allocator_;
   common::ObArenaAllocator transform_allocator_;

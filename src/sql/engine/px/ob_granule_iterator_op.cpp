@@ -13,19 +13,11 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_granule_iterator_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_granule_pump.h"
-#include "sql/executor/ob_task_spliter.h"
-#include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "src/sql/engine/dml/ob_table_modify_op.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-
 
 namespace oceanbase
 {
@@ -188,7 +180,8 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   tablet2part_id_map_(),
   real_child_(NULL),
   is_parallel_runtime_filtered_(false),
-  is_parallel_rf_qr_extracted_(false)
+  is_parallel_rf_qr_extracted_(false),
+  splitter_type_(GIT_UNINITIALIZED)
 {
   op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::FILTERED_GRANULE_COUNT;
   op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::TOTAL_GRANULE_COUNT;
@@ -199,7 +192,7 @@ void ObGranuleIteratorOp::destroy()
   rescan_tasks_info_.destroy();
   pwj_rescan_task_infos_.reset();
   table_location_keys_.reset();
-  pruning_partition_ids_.reset();
+  pruning_tablet_ids_.reset();
   tablet2part_id_map_.destroy();
 }
 
@@ -281,10 +274,10 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info, bool round_robi
       if (OB_FAIL(gi_task_pump->fetch_granule_task(taskset,
                                                    pos,
                                                    from_share_pool ? 0: worker_id_,
-                                                   tsc_op_id_, fetched_task_cnt))) {
+                                                   tsc_op_id_, fetched_task_cnt, splitter_type_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("failed to fetch next granule task", K(ret),
-                   K(gi_task_pump), K(worker_id_), K(MY_SPEC.affinitize_));
+                   K(gi_task_pump), K(worker_id_), K(MY_SPEC.affinitize_), K(spec_.id_));
         } else {
           all_task_fetched_ = true;
         }
@@ -295,8 +288,10 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info, bool round_robi
         LOG_WARN("get task info failed", K(ret));
       } else if (FALSE_IT(info.task_id_ = worker_id_)) {
       } else if (OB_FAIL(rescan_tasks_info_.insert_rescan_task(pos, info))) {
-        LOG_WARN("array push back failed", K(ret), K(info));
+        LOG_WARN("array push back failed", K(ret), K(info), K(splitter_type_), K(pos), K(taskset));
       } else {
+        LOG_TRACE("gi op fetch task", K(get_spec().id_), K(pos), K(taskset),
+                  KPC(taskset),K(info), K(splitter_type_));
         if (NULL == rescan_taskset_) {
           rescan_taskset_ = taskset;
         } else if (rescan_taskset_ != taskset) {
@@ -406,7 +401,7 @@ int ObGranuleIteratorOp::rescan()
     rescan_tasks_info_.reset();
     all_task_fetched_ = false;
     pwj_rescan_task_infos_.reset();
-    pruning_partition_ids_.reset();
+    pruning_tablet_ids_.reset();
     while (OB_SUCC(get_next_granule_task(false /* prepare */, true /* round_robin */))) {}
     if (ret != OB_ITER_END) {
       LOG_WARN("failed to get all granule task", K(ret));
@@ -437,7 +432,7 @@ int ObGranuleIteratorOp::rescan()
       }
     }
     if (OB_SUCC(ret)) {
-      pruning_partition_ids_.reset();
+      pruning_tablet_ids_.reset();
       rescan_task_idx_ = 0;
       state_ = GI_GET_NEXT_GRANULE_TASK;
       is_rescan_ = true;
@@ -463,6 +458,7 @@ int ObGranuleIteratorOp::inner_open()
 {
   int ret = OB_SUCCESS;
   ObOperator *real_child = nullptr;
+  splitter_type_ = ObGranuleUtil::calc_split_type(MY_SPEC.gi_attri_flag_);
   if (OB_FAIL(parameters_init())) {
     LOG_WARN("parameters init failed", K(ret));
   } else if (OB_FAIL(init_rescan_tasks_info())) {
@@ -727,7 +723,8 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool 
           }
         }
       }
-      LOG_DEBUG("produce a gi task", K(tsc_op_id_), K(gi_task_info));
+      LOG_DEBUG("produce a gi task", K(tsc_op_id_), K(gi_task_info), K(get_spec().id_),
+               K(gi_task_info.tablet_loc_), KPC(gi_task_info.tablet_loc_));
     }
     if (OB_SUCC(ret)) {
       if (enable_single_runtime_filter_pruning() &&
@@ -934,7 +931,7 @@ int ObGranuleIteratorOp::fetch_full_pw_tasks(
   } else if (nullptr == (gi_task_pump = pump_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the pump can not be null", K(ret));
-  } else if (OB_FAIL(gi_task_pump->try_fetch_pwj_tasks(infos, op_ids, worker_id_))) {
+  } else if (OB_FAIL(gi_task_pump->try_fetch_pwj_tasks(infos, op_ids, worker_id_, splitter_type_))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to fetch next granule task", K(ret), K(gi_task_pump));
     }
@@ -1053,8 +1050,8 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const ObGranuleTaskInfo &g
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is null", K(ret));
   } else if (pump_->need_partition_pruning()) {
-    int64_t partition_id =  gi_task_info.tablet_loc_->tablet_id_.id();
-    if (pruning_partition_ids_.empty()) {
+    int64_t tablet_id =  gi_task_info.tablet_loc_->tablet_id_.id();
+    if (pruning_tablet_ids_.empty()) {
       uint64_t table_location_key = OB_INVALID_ID;
       if (pump_->get_pruning_table_location()->empty()) {
         ret = OB_ERR_UNEXPECTED;
@@ -1065,16 +1062,16 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const ObGranuleTaskInfo &g
           table_location_key = table_location_keys_.at(i);
           for (int j = 0; j < locations->count() && OB_SUCC(ret) && !partition_pruning; ++j) {
             if (table_location_key == locations->at(j).get_table_id()) {
-              OZ(locations->at(j).pruning_single_partition(partition_id, ctx_,
-                  partition_pruning, pruning_partition_ids_));
+              OZ(locations->at(j).pruning_single_partition(tablet_id, ctx_,
+                  partition_pruning, pruning_tablet_ids_));
             }
           }
         }
       }
     } else {
       partition_pruning = true;
-      for (int i = 0; i < pruning_partition_ids_.count() && OB_SUCC(ret); ++i) {
-        if (pruning_partition_ids_.at(i) == partition_id) {
+      for (int i = 0; i < pruning_tablet_ids_.count() && OB_SUCC(ret); ++i) {
+        if (pruning_tablet_ids_.at(i).id() == tablet_id) {
           partition_pruning = false;
           break;
         }
@@ -1093,7 +1090,7 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is null", K(ret));
   } else if (pump_->need_partition_pruning()) {
-    int64_t partition_id = OB_INVALID_ID;
+    int64_t tablet_id = OB_INVALID_ID;
     uint64_t table_location_key = OB_INVALID_ID;
     if (table_location_keys_.count() != gi_task_infos.count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1112,7 +1109,7 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
        * */
       bool single_table_partition_pruning = false;
       for (int i = 0; i < gi_task_infos.count() && OB_SUCC(ret); ++i) {
-        partition_id =  gi_task_infos.at(i).tablet_loc_->tablet_id_.id();
+        tablet_id =  gi_task_infos.at(i).tablet_loc_->tablet_id_.id();
         single_table_partition_pruning = false;
         if (pump_->get_pruning_table_location()->empty()) {
           ret = OB_ERR_UNEXPECTED;
@@ -1122,8 +1119,8 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
           common::ObIArray<ObTableLocation> *locations = pump_->get_pruning_table_location();
           for (int j = 0; j < locations->count()  && OB_SUCC(ret); ++j) {
             if (table_location_key == locations->at(j).get_table_id()) {
-              OZ(locations->at(j).pruning_single_partition(partition_id, ctx_,
-                  single_table_partition_pruning, pruning_partition_ids_));
+              OZ(locations->at(j).pruning_single_partition(tablet_id, ctx_,
+                  single_table_partition_pruning, pruning_tablet_ids_));
             }
           }
           if (OB_SUCC(ret)) {

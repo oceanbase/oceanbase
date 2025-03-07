@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/timezone/ob_time_convert.h"
 
 namespace oceanbase
 {

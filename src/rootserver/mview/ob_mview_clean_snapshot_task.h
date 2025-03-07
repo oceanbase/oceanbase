@@ -39,7 +39,6 @@ public:
 private:
   int get_table_id_(ObISQLClient &sql_client, const uint64_t tablet_id, uint64_t &table_id);
   int is_mv_container_table_(const uint64_t table_id, bool &is_container);
-  int check_space_occupy_(bool &space_danger);
 private:
   bool is_inited_;
   bool in_sched_;

@@ -11,7 +11,6 @@
  */
 
 #include "ob_exec_hash_struct.h"
-#include "common/row/ob_row_store.h"
 
 namespace oceanbase
 {

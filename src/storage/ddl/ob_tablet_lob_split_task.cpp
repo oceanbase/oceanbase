@@ -11,20 +11,9 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_lob_split_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_trans_service.h"
-#include "share/ob_ddl_common.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "src/storage/ddl/ob_ddl_merge_task.h"
-#include "src/storage/ddl/ob_tablet_split_task.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase

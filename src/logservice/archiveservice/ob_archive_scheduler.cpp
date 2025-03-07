@@ -11,16 +11,10 @@
  */
 
 #include "ob_archive_scheduler.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "objit/common/ob_item_type.h"        // print
 #include "observer/omt/ob_tenant_config_mgr.h"   // tenant_config
 #include "ob_archive_sender.h"                // ObArchiveSender
 #include "ob_archive_fetcher.h"               // ObArchiveFetcher
 #include "ob_archive_allocator.h"             // ObArchiveAllocator
-#include "share/rc/ob_tenant_base.h"          // MTL_CPU_COUNT
-#include <cstdint>
 
 namespace oceanbase
 {

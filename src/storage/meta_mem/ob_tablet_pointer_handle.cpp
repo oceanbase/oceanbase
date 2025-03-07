@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
 */
 
-#include "storage/meta_mem/ob_tablet_pointer_handle.h"
+#include "ob_tablet_pointer_handle.h"
 #include "storage/meta_mem/ob_tablet_pointer_map.h"
 
 namespace oceanbase

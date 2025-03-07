@@ -14,12 +14,10 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "ob_log_part_mgr.h"
 
-#include <fnmatch.h>                                  // FNM_CASEFOLD
+#include "ob_log_part_mgr.h"
 #include "share/schema/ob_schema_struct.h"            // USER_TABLE
 #include "share/inner_table/ob_inner_table_schema.h"  // OB_ALL_DDL_OPERATION_TID
-#include "share/schema/ob_part_mgr_util.h"            // ObTablePartitionKeyIter
 
 #include "ob_log_schema_getter.h"                     // IObLogSchemaGetter, ObLogSchemaGuard
 #include "ob_log_utils.h"                             // is_ddl_table

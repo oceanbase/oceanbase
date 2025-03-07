@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/dml/ob_link_dml_op.h"
+#include "src/sql/engine/dml/ob_link_op.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_dblink_mgr.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
 using namespace common;

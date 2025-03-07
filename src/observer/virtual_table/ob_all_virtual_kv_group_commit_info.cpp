@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
-#include "observer/ob_server.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 
@@ -21,14 +20,6 @@ namespace oceanbase
 {
 namespace observer
 {
-int ObGetAllGroupInfoOp::operator()(common::hash::HashMapPair<uint64_t, table::ObTableLsGroupInfo> &entry) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(group_infos_.push_back(entry.second))) {
-    SERVER_LOG(WARN, "fail to push back group info", K(ret), K(entry.second));
-  }
-  return ret;
-}
-
 void ObAllVirtualKvGroupCommitInfo::reset()
 {
   cur_idx_ = 0;
@@ -70,12 +61,12 @@ int ObAllVirtualKvGroupCommitInfo::process_curr_tenant(ObNewRow *&row)
   ObGetAllGroupInfoOp get_all_op(group_infos_);
   start_to_read_ = true;
   if (group_infos_.count() == 0 &&
-      OB_FAIL(TABLEAPI_GROUP_COMMIT_MGR->get_group_info_map().foreach_refactored(get_all_op))) {
+      OB_FAIL(TABLEAPI_GROUP_COMMIT_MGR->get_all_group_info(get_all_op))) {
     LOG_WARN("fail to get group info map", K(ret), K(group_infos_));
   } else if (cur_idx_ >= group_infos_.count()) {
     ret = OB_ITER_END;
   } else {
-    ObTableLsGroupInfo &group_info = group_infos_.at(cur_idx_);
+    ObTableGroupInfo &group_info = group_infos_.at(cur_idx_);
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
       uint64_t col_id = output_column_ids_.at(i);

@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_major_mv_merge_info.h"
-#include "share/ob_table_range.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
 
 namespace oceanbase

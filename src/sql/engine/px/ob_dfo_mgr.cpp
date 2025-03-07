@@ -12,19 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/px/ob_dfo_mgr.h"
-#include "sql/engine/px/ob_px_util.h"
+#include "ob_dfo_mgr.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
-#include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/basic/ob_temp_table_access_vec_op.h"
-#include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
-#include "sql/engine/px/exchange/ob_transmit_op.h"
 #include "sql/engine/basic/ob_material_op.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "sql/engine/px/exchange/ob_px_repart_transmit_op.h"
-#include "sql/optimizer/ob_px_resource_analyzer.h"
-#include "sql/engine/px/ob_px_scheduler.h"
+#include "src/sql/engine/px/exchange/ob_px_transmit_op.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"

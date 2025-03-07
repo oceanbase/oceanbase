@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_ls_life_manager.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
-#include "share/scn.h"//SCN
 
 using namespace oceanbase;
 using namespace oceanbase::common;

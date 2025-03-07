@@ -12,17 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_partition_merger.h"
-#include "lib/file/file_directory_utils.h"
-#include "logservice/ob_log_service.h"
 #include "ob_tenant_tablet_scheduler.h"
-#include "ob_tablet_merge_task.h"
-#include "ob_tablet_merge_ctx.h"
-#include "ob_i_compaction_filter.h"
-#include "storage/tx/ob_trans_service.h"
 #include "storage/blocksstable/ob_data_macro_block_merge_writer.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {

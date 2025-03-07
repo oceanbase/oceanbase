@@ -50,7 +50,7 @@ private:
   bool is_config_cgroup_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char tname_[16];
-  char wait_event_[64];
+  char wait_event_[96];
   char wait_addr_[16];
   char locks_addr_[256];
   char trace_id_buf_[40];

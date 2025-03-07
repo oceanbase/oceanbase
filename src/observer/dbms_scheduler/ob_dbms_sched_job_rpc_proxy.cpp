@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SERVER
 
+
+
 #include "ob_dbms_sched_job_rpc_proxy.h"
-
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "observer/ob_server.h"
-
 #include "ob_dbms_sched_job_rpc_processor.h"
 
 using namespace oceanbase::common;

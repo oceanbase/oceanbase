@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_routine_info.h"
 #include "pl/ob_pl_stmt.h"
 
 using namespace oceanbase::common;

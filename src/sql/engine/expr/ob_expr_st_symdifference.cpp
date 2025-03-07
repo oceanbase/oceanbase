@@ -11,12 +11,8 @@
  * This file contains implementation for eval_st_symdifference.
  */
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_ibin.h"
-#include "sql/engine/ob_exec_context.h"
 #include "ob_expr_st_symdifference.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_elevation_visitor.h"
 #include "lib/geo/ob_geo_func_utils.h"
 

@@ -28,6 +28,10 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/udt/ob_array_type.h"
+#include "share/vector_type/ob_vector_l2_distance.h"
+#include "share/vector_type/ob_vector_cosine_distance.h"
+#include "share/vector_type/ob_vector_ip_distance.h"
+#include "share/vector_type/ob_vector_l1_distance.h"
 
 
 namespace oceanbase
@@ -82,8 +86,11 @@ public:
     HAMMING,
     MAX_TYPE,
   };
-  using FuncPtrType = int (*)(const float* a, const float* b, const int64_t len, double& distance);
-  static FuncPtrType distance_funcs[];
+  template <typename T = float>
+  struct DisFunc {
+    using FuncPtrType = int (*)(const T* a, const T* b, const int64_t len, double& distance);
+    static FuncPtrType distance_funcs[];
+  };
 public:
   explicit ObExprVectorDistance(common::ObIAllocator &alloc);
   explicit ObExprVectorDistance(common::ObIAllocator &alloc, ObExprOperatorType type,
@@ -102,6 +109,17 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprVectorDistance);
+};
+
+template <typename T>
+typename ObExprVectorDistance::DisFunc<T>::FuncPtrType ObExprVectorDistance::DisFunc<T>::distance_funcs[] =
+{
+  ObVectorCosineDistance<T>::cosine_distance_func,
+  ObVectorIpDistance<T>::ip_distance_func,
+  ObVectorL2Distance<T>::l2_distance_func,
+  ObVectorL1Distance<T>::l1_distance_func,
+  ObVectorL2Distance<T>::l2_square_func,
+  nullptr,
 };
 
 class ObExprVectorL1Distance : public ObExprVectorDistance

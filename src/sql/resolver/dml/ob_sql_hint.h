@@ -301,7 +301,7 @@ struct LogTableHint
                                           dynamic_sampling_hint_(NULL),
                                           is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
-  int init_index_hints(ObSqlSchemaGuard &schema_guard);
+  int init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard);
   bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
                                           && index_hints_.at(0)->is_use_index_hint(); }
   bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
@@ -333,7 +333,7 @@ struct LogTableHint
   const ObIndexHint *use_das_hint_;
   const ObIndexHint *use_column_store_hint_;
   const ObUnionMergeHint *union_merge_hint_;
-  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> merge_index_list_;
+  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> union_merge_list_;
   ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
@@ -388,6 +388,7 @@ struct LogLeadingHint
                                    ObIArray<LeadingInfo> &leading_infos,
                                    TableItem *table,
                                    ObRelIds &table_set);
+  int try_init_leading_info_for_major_refresh_real_time_mview(const ObDMLStmt &stmt);
 
   TO_STRING_KV(K_(leading_tables),
                K_(leading_infos),
@@ -417,7 +418,7 @@ struct ObLogPlanHint
                            const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObIArray<ObHint*> &hints);
-  int init_log_table_hints(ObSqlSchemaGuard &schema_guard);
+  int init_log_table_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard);
   int init_log_join_hints();
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
@@ -488,6 +489,7 @@ struct ObLogPlanHint
                            bool &force_partition_wise,
                            bool &force_dist_hash,
                            bool &force_pull_to_local) const;
+  int get_aggregation_dop(int64_t &dop) const;
   int get_distinct_info(bool &force_use_hash,
                         bool &force_use_merge,
                         bool &force_basic,

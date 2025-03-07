@@ -11,12 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_delete_replay_executor.h"
-#include "lib/worker.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
 #define USING_LOG_PREFIX MDS
 

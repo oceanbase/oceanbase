@@ -12,25 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "sql/executor/ob_remote_executor_processor.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/oblog/ob_warning_buffer.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/monitor/ob_exec_stat_collector.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/mysql/obmp_base.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server.h"
-#include "lib/stat/ob_session_stat.h"
-#include "sql/ob_sql.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/tx/ob_trans_service.h"
-#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 namespace oceanbase
@@ -680,6 +664,8 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      share::ObLSArray new_ls_list;
+
       if (enable_perf_event) {
         exec_record.record_start();
       }
@@ -697,7 +683,13 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
       } else if (OB_ISNULL(plan)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("plan is null", K(ret));
+      } else if (OB_FAIL(DAS_CTX(exec_ctx_).get_all_lsid(new_ls_list))) {
+        LOG_WARN("get ls list failed", K(ret));
+      } else if(!task.check_ls_list(new_ls_list)) {
+        ret = OB_LOCATION_NOT_EXIST;
+        LOG_WARN("check ls list failed", K(ret),  K(new_ls_list), K(task.get_all_ls()));
       }
+
       //监控项统计开始
       exec_start_timestamp_ = ObTimeUtility::current_time();
       exec_ctx_.set_plan_start_time(exec_start_timestamp_);

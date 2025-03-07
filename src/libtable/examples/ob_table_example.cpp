@@ -11,7 +11,6 @@
  */
 
 #include "libobtable.h"
-#include "src/share/partition_table/ob_partition_location.h"
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 

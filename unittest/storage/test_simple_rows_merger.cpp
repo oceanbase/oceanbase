@@ -11,7 +11,6 @@
  */
 
 #include "storage/access/ob_simple_rows_merger.h"
-#include "lib/container/ob_se_array.h"
 #include <gtest/gtest.h>
 using namespace oceanbase::storage;
 

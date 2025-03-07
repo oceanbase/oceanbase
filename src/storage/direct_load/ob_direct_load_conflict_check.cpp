@@ -13,6 +13,8 @@
 
 #include "storage/direct_load/ob_direct_load_conflict_check.h"
 #include "storage/direct_load/ob_direct_load_compare.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
+#include "storage/direct_load/ob_direct_load_origin_table.h"
 
 namespace oceanbase
 {
@@ -28,14 +30,10 @@ using namespace sql;
  */
 
 ObDirectLoadConflictCheckParam::ObDirectLoadConflictCheckParam()
-  : store_column_count_(0),
-    origin_table_(nullptr),
+  : origin_table_(nullptr),
     range_(nullptr),
     col_descs_(nullptr),
-    lob_column_idxs_(nullptr),
-    builder_(nullptr),
     datum_utils_(nullptr),
-    lob_meta_datum_utils_(nullptr),
     dml_row_handler_(nullptr)
 {
 }
@@ -46,12 +44,13 @@ ObDirectLoadConflictCheckParam::~ObDirectLoadConflictCheckParam()
 
 bool ObDirectLoadConflictCheckParam::is_valid() const
 {
-  return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
-         nullptr != origin_table_ && nullptr != range_ && range_->is_valid() &&
-         nullptr != col_descs_ && nullptr != lob_column_idxs_ && nullptr != builder_ &&
-         nullptr != datum_utils_ && nullptr != lob_meta_datum_utils_ &&
-         nullptr != dml_row_handler_ &&
-         (lob_column_idxs_->empty() || tablet_id_in_lob_id_.is_valid());
+  return tablet_id_.is_valid() &&
+         table_data_desc_.is_valid() &&
+         nullptr != origin_table_ &&
+         nullptr != range_ && range_->is_valid() &&
+         nullptr != col_descs_ &&
+         nullptr != datum_utils_ &&
+         nullptr != dml_row_handler_;
 }
 
 /**
@@ -62,7 +61,7 @@ ObDirectLoadConflictCheck::ObDirectLoadConflictCheck()
   : allocator_("TLD_CfltCheck"),
     range_allocator_("TLD_RCfltCheck"),
     load_iter_(nullptr),
-    origin_iter_(nullptr),
+    origin_scanner_(nullptr),
     origin_row_(nullptr),
     origin_iter_is_end_(false),
     is_inited_(false)
@@ -73,16 +72,16 @@ ObDirectLoadConflictCheck::ObDirectLoadConflictCheck()
 
 ObDirectLoadConflictCheck::~ObDirectLoadConflictCheck()
 {
-  if (origin_iter_ != nullptr) {
-    origin_iter_->~ObDirectLoadIStoreRowIterator();
-    allocator_.free(origin_iter_);
-    origin_iter_ = nullptr;
+  if (origin_scanner_ != nullptr) {
+    origin_scanner_->~ObDirectLoadOriginTableScanner();
+    allocator_.free(origin_scanner_);
+    origin_scanner_ = nullptr;
   }
 }
 
 int ObDirectLoadConflictCheck::init(
     const ObDirectLoadConflictCheckParam &param,
-    ObIStoreRowIterator *load_iter)
+    ObDirectLoadIStoreRowIterator *load_iter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -95,12 +94,9 @@ int ObDirectLoadConflictCheck::init(
     param_ = param;
     load_iter_ = load_iter;
     new_range_ = *param_.range_;
-    if (OB_FAIL(param_.origin_table_->scan(*param_.range_, allocator_, origin_iter_, true/*skip_read_lob*/))) {
+    if (OB_FAIL(param_.origin_table_->scan(*param_.range_, allocator_, origin_scanner_, true/*skip_read_lob*/))) {
       LOG_WARN("fail to scan origin table", KR(ret));
-    } else if (OB_FAIL(append_row_.init(1/*lobid*/))) {
-      LOG_WARN("fail to init append_rows_", KR(ret));
-    }
-    if (OB_SUCC(ret)) {
+    } else {
       is_inited_ = true;
     }
   }
@@ -108,25 +104,25 @@ int ObDirectLoadConflictCheck::init(
   return ret;
 }
 
-int ObDirectLoadConflictCheck::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadConflictCheck::get_next_row(const ObDirectLoadDatumRow *&result_row)
 {
   int ret = OB_SUCCESS;
-  datum_row = nullptr;
-  const ObDatumRow *load_row = nullptr;
+  result_row = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), KP(this));
   } else {
-    while (OB_SUCC(ret) && OB_ISNULL(datum_row)) {
-      if (OB_FAIL(load_iter_->get_next_row(load_row))) {
+    while (OB_SUCC(ret) && nullptr == result_row) {
+      const ObDirectLoadDatumRow *datum_row = nullptr;
+      if (OB_FAIL(load_iter_->get_next_row(datum_row))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("fail to get next row", KR(ret));
         }
-      } else if (OB_UNLIKELY(load_row->count_ != param_.store_column_count_)) {
+      } else if (OB_UNLIKELY(datum_row->is_delete_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column count", KR(ret), K(load_row->count_), K(param_.store_column_count_));
-      } else if (OB_FAIL(handle_get_next_row_finish(load_row, datum_row))) {
-        LOG_WARN("fail to handle get next row finish", KR(ret), KP(load_row));
+        LOG_WARN("unexpected delete row", KR(ret), KPC(datum_row));
+      } else if (OB_FAIL(handle_get_next_row_finish(datum_row, result_row))) {
+        LOG_WARN("fail to handle get next row finish", KR(ret), KPC(datum_row));
       }
     }
   }
@@ -135,25 +131,21 @@ int ObDirectLoadConflictCheck::get_next_row(const ObDatumRow *&datum_row)
 }
 
 int ObDirectLoadConflictCheck::handle_get_next_row_finish(
-    const ObDatumRow *load_row,
-    const ObDatumRow *&datum_row)
+    const ObDirectLoadDatumRow *load_row,
+    const ObDirectLoadDatumRow *&result_row)
 {
   int ret = OB_SUCCESS;
-  int cmp_ret = 1;
+  int cmp_ret = 0;
   int64_t skip_count = 0;
   while (OB_SUCC(ret) && !origin_iter_is_end_) {
-    cmp_ret = 1;
     if (origin_row_ == nullptr) {
-      if (OB_FAIL(origin_iter_->get_next_row(origin_row_))) {
+      if (OB_FAIL(origin_scanner_->get_next_row(origin_row_))) {
         if (ret == OB_ITER_END) {
           origin_iter_is_end_ = true;
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("fail to get next row", KR(ret));
         }
-      } else if (OB_UNLIKELY(origin_row_->count_ != param_.store_column_count_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column count", KR(ret), K(origin_row_->count_), K(param_.store_column_count_));
       }
     }
     if (OB_SUCC(ret) && origin_row_ != nullptr) {
@@ -167,8 +159,8 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
           origin_row_ = nullptr;
           if (skip_count == SKIP_THESHOLD) {
             skip_count = 0;
-            if (OB_FAIL(reopen_origin_iter(load_row))) {
-              LOG_WARN("fail to reopen origin_iter_", KR(ret));
+            if (OB_FAIL(reopen_origin_scanner(load_row))) {
+              LOG_WARN("fail to reopen origin scanner", KR(ret));
             }
           }
         }
@@ -176,29 +168,20 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
     }
   }
   if (OB_SUCC(ret)) {
-    if (cmp_ret == 0) {
-      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *origin_row_, *load_row, datum_row))) {
+    if (nullptr != origin_row_ && cmp_ret == 0) {
+      // 有冲突
+      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *origin_row_, *load_row, result_row))) {
         LOG_WARN("fail to handle update row", KR(ret), KP(origin_row_), KP(load_row));
-      } else {
-        if (datum_row == load_row) {
-          if (OB_FAIL(handle_old_row(origin_row_))) {
-            LOG_WARN("fail to handle old row", KR(ret), KP(origin_row_));
-          }
-        } else {
-          datum_row = nullptr;
-        }
+      } else if (result_row == origin_row_) {
+        // 不吐出origin_row_
+        result_row = nullptr;
       }
       origin_row_ = nullptr;
     } else {
-      datum_row = load_row;
-      if (datum_row->row_flag_.is_delete()) {
-        if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
-          LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
-        }
-      } else {
-        if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
-          LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
-        }
+      // 无冲突
+      result_row = load_row;
+      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *result_row))) {
+        LOG_WARN("fail to handle insert row", KR(ret), KP(result_row));
       }
     }
   }
@@ -206,8 +189,8 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
 }
 
 int ObDirectLoadConflictCheck::compare(
-    const ObDatumRow &first_row,
-    const ObDatumRow &second_row,
+    const ObDirectLoadDatumRow &first_row,
+    const ObDirectLoadDatumRow &second_row,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
@@ -220,7 +203,7 @@ int ObDirectLoadConflictCheck::compare(
   return ret;
 }
 
-int ObDirectLoadConflictCheck::reopen_origin_iter(const ObDatumRow *datum_row)
+int ObDirectLoadConflictCheck::reopen_origin_scanner(const ObDirectLoadDatumRow *datum_row)
 {
   int ret = OB_SUCCESS;
   range_allocator_.reuse();
@@ -231,60 +214,11 @@ int ObDirectLoadConflictCheck::reopen_origin_iter(const ObDatumRow *datum_row)
     LOG_WARN("fail to prepare_memtable_readable", KR(ret));
   } else {
     new_range_.set_left_closed();
-    if (OB_FAIL(param_.origin_table_->rescan(new_range_, origin_iter_))) {
-      LOG_WARN("fail to rescan origin table", KR(ret), K(new_range_));
+    if (OB_FAIL(origin_scanner_->open(new_range_))) {
+      LOG_WARN("fail to open origin scanner", KR(ret), K(new_range_));
     }
   }
 
-  return ret;
-}
-
-int ObDirectLoadConflictCheck::handle_old_row(const ObDatumRow *old_row)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_.lob_column_idxs_->count(); i++) {
-    int64_t lob_idx = param_.lob_column_idxs_->at(i);
-    ObStorageDatum &datum = old_row->storage_datums_[lob_idx];
-    const ObLobCommon &lob_common = datum.get_lob_data();
-    if (!lob_common.in_row_) {
-      const ObLobId &lob_id = reinterpret_cast<const ObLobData*>(lob_common.buffer_)->id_;
-      append_row_.storage_datums_[0].set_string(reinterpret_cast<const char*>(&lob_id), sizeof(ObLobId));
-      if (OB_FAIL(param_.builder_->append_row(param_.tablet_id_, 0/*seq_no*/, append_row_))) {
-        LOG_WARN("fail to append row", KR(ret));
-      } else if (OB_FAIL(update_max_del_lob_id(lob_id))) {
-        LOG_WARN("fail to update max del lob id", KR(ret), K(lob_id));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObDirectLoadConflictCheck::update_max_del_lob_id(const ObLobId &lob_id)
-{
-  int ret = OB_SUCCESS;
-  if (lob_id.tablet_id_ != param_.tablet_id_in_lob_id_.id()) {
-    // do nothing
-  } else if (!max_del_lob_id_.is_valid()) {
-    max_del_lob_id_ = lob_id;
-  } else {
-    ObStorageDatum max_del_lob_id_datum, lob_id_datum;
-    ObDirectLoadSingleDatumCompare compare;
-    int cmp_ret = 0;
-    max_del_lob_id_datum.set_string(reinterpret_cast<const char *>(&max_del_lob_id_), sizeof(ObLobId));
-    lob_id_datum.set_string(reinterpret_cast<const char *>(&lob_id), sizeof(ObLobId));
-    if (OB_FAIL(compare.init(*param_.lob_meta_datum_utils_))) {
-      LOG_WARN("fail to init compare", KR(ret));
-    } else if (OB_FAIL(compare.compare(&max_del_lob_id_datum, &lob_id_datum, cmp_ret))) {
-      LOG_WARN("fail to compare lob id", KR(ret), K(max_del_lob_id_datum), K(lob_id_datum));
-    } else if (OB_UNLIKELY(cmp_ret == 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected lob id is same", KR(ret), K(max_del_lob_id_), K(lob_id),
-               K(max_del_lob_id_datum), K(lob_id_datum));
-    } else if (cmp_ret < 0) {
-      max_del_lob_id_ = lob_id;
-    }
-  }
   return ret;
 }
 
@@ -303,7 +237,7 @@ ObDirectLoadSSTableConflictCheck::~ObDirectLoadSSTableConflictCheck()
 
 int ObDirectLoadSSTableConflictCheck::init(
     const ObDirectLoadConflictCheckParam &param,
-    const ObIArray<ObDirectLoadSSTable *> &sstable_array)
+    const ObDirectLoadTableHandleArray &sstable_array)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -323,9 +257,8 @@ int ObDirectLoadSSTableConflictCheck::init(
     } else if (OB_FAIL(conflict_check_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init conflict_check_", KR(ret));
     } else {
-      row_flag_.uncontain_hidden_pk_ = false;
-      row_flag_.has_multi_version_cols_ = false;
-      // row_flag_.has_delete_row_ = ?;
+      // set parent params
+      row_flag_ = param.table_data_desc_.row_flag_;
       column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
@@ -334,7 +267,7 @@ int ObDirectLoadSSTableConflictCheck::init(
   return ret;
 }
 
-int ObDirectLoadSSTableConflictCheck::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadSSTableConflictCheck::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -361,7 +294,7 @@ ObDirectLoadMultipleSSTableConflictCheck::~ObDirectLoadMultipleSSTableConflictCh
 
 int ObDirectLoadMultipleSSTableConflictCheck::init(
     const ObDirectLoadConflictCheckParam &param,
-    const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array)
+    const ObDirectLoadTableHandleArray &sstable_array)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -382,9 +315,8 @@ int ObDirectLoadMultipleSSTableConflictCheck::init(
     } else if (OB_FAIL(conflict_check_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init conflict_check_", KR(ret));
     } else {
-      row_flag_.uncontain_hidden_pk_ = false;
-      row_flag_.has_multi_version_cols_ = false;
-      // row_flag_.has_delete_row_ = ?;
+      // set parent params
+      row_flag_ = param.table_data_desc_.row_flag_;
       column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
@@ -393,7 +325,7 @@ int ObDirectLoadMultipleSSTableConflictCheck::init(
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableConflictCheck::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadMultipleSSTableConflictCheck::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

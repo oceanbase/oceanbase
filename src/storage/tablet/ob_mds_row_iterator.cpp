@@ -10,16 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_mds_row_iterator.h"
 
-#include "lib/ob_errno.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/access/ob_table_scan_range.h"
+#include "ob_mds_row_iterator.h"
 #include "storage/access/ob_single_merge.h"
 #include "storage/access/ob_multiple_get_merge.h"
 #include "storage/access/ob_multiple_scan_merge.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_kv_wrapper.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet.h"
 

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_or_expansion.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/rewrite/ob_transformer_impl.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_log_set.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_join.h"
 
 namespace oceanbase
 {
@@ -3029,7 +3022,9 @@ int ObTransformOrExpansion::pre_classify_or_expr(const ObRawExpr *expr, int &cou
       if (OB_ISNULL(branch = expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (branch->has_flag(CNT_SUB_QUERY) || branch->get_relation_ids().is_empty()) {
+      } else if (branch->has_flag(CNT_SUB_QUERY) ||
+                 branch->get_relation_ids().is_empty() ||
+                 !branch->has_flag(CNT_COLUMN)) {
         // conditions with subqueries will be classfied separately
         // irrelevant conditions will be classfied separately
         ++count;

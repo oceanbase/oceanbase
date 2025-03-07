@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
-#include "storage/checkpoint/ob_freeze_checkpoint.h"
+#include "ob_freeze_checkpoint.h"
 #include "storage/checkpoint/ob_data_checkpoint.h"
 
 namespace oceanbase

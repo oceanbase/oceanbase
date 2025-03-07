@@ -11,16 +11,10 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/meta_store/ob_tenant_storage_meta_replayer.h"
-#include "storage/meta_store/ob_tenant_storage_meta_persister.h"
+#include "ob_tenant_storage_meta_replayer.h"
 #include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_dup_table_base.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/blocksstable/ob_object_manager.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/ob_file_manager.h"
 #endif
 
 namespace oceanbase

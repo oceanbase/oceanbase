@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include <string.h>
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/compaction/ob_extra_medium_info.h"

@@ -11,8 +11,6 @@
  */
 
 #include "lib/allocator/ob_libeasy_mem_pool.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "rpc/obrpc/ob_rpc_packet.h"

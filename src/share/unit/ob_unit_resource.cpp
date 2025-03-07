@@ -12,17 +12,11 @@
 
 #define USING_LOG_PREFIX    SHARE
 
-#include "lib/worker.h"           // LOG_USER_ERROR
-#include "lib/oblog/ob_log.h"     // LOG_USER_ERROR
-#include "share/ob_errno.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/config/ob_server_config.h"    // GCONF
+#include "ob_unit_resource.h"
 #include "share/ob_server_struct.h"
-#include "share/ob_cluster_version.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
-#include "share/unit/ob_unit_resource.h"
 
 namespace oceanbase
 {

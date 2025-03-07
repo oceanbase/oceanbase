@@ -13,14 +13,7 @@
 #define USING_LOG_PREFIX SHARE_PT
 
 #include "ob_persistent_ls_table.h"               // for ObPersistentLSTable's functions
-#include "share/config/ob_server_config.h"        // for ObServerConfig
 #include "observer/omt/ob_tenant_timezone_mgr.h"  // for OTTZ_MGR.get_tenant_tz
-#include "lib/ob_define.h"                        // for pure tenant related
-#include "share/ls/ob_ls_table.h"                 // for OB_ALL_LS_META_TABLE_TNAME
-#include "lib/mysqlclient/ob_isql_client.h"       // for ObISQLClient
-#include "logservice/palf/log_define.h"           // for INVALID_PROPOSAL_ID
-#include "observer/ob_server_struct.h"            // for GCTX
-#include "share/inner_table/ob_inner_table_schema_constants.h" // for xxx_TNAME
 
 namespace oceanbase
 {

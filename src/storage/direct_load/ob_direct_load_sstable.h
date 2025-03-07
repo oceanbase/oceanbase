@@ -134,7 +134,7 @@ public:
   common::ObArray<ObDirectLoadSSTableFragment> fragments_;
 };
 
-class ObDirectLoadSSTable : public ObIDirectLoadPartitionTable
+class ObDirectLoadSSTable : public ObDirectLoadITable
 {
 public:
   ObDirectLoadSSTable();
@@ -153,7 +153,6 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return meta_.tablet_id_; }
   bool is_empty() const { return 0 == meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
-  void release_data() override;
   int copy(const ObDirectLoadSSTable &other);
   const common::ObArray<ObDirectLoadSSTableFragment> &get_fragment_array() const
   {

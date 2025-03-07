@@ -11,9 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/number/ob_number_v2.h"
+#include "deps/oblib/src/lib/rc/context.h"
 
 using namespace oceanbase::common;
 

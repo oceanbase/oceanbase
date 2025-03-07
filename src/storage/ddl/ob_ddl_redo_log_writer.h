@@ -462,6 +462,7 @@ public:
       const int64_t row_count) override;
   int wait();
   virtual int64_t get_ddl_start_row_offset() const override { return row_id_offset_; }
+  void set_merge_slice_idx(const int64_t slice_idx) { merge_slice_idx_ = slice_idx; }
 private:
   bool is_column_group_info_valid() const;
   int inner_write(const ObDDLMacroBlockRedoInfo &redo_info);
@@ -490,6 +491,7 @@ private:
   ObSEArray<ObDDLMacroBlockRedoInfo, 2> redo_info_array_;
   bool with_cs_replica_;
   bool need_submit_io_;
+  int64_t merge_slice_idx_;
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE

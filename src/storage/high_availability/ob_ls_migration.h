@@ -49,7 +49,7 @@ public:
   uint64_t tenant_id_;
   ObMigrationOpArg arg_;
   share::SCN local_clog_checkpoint_scn_;
-  int64_t local_rebuild_seq_;
+  int64_t src_ls_rebuild_seq_;
 
   int64_t start_ts_;
   int64_t finish_ts_;
@@ -68,7 +68,7 @@ public:
       "ObIHADagNetCtx", ObIHADagNetCtx,
       K_(arg),
       K_(local_clog_checkpoint_scn),
-      K_(local_rebuild_seq),
+      K_(src_ls_rebuild_seq),
       K_(start_ts),
       K_(finish_ts),
       K_(task_id),

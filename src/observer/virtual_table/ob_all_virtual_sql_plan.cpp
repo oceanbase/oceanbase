@@ -10,16 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/monitor/ob_plan_info_manager.h"
-#include "observer/ob_req_time_service.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server_utils.h"
 #include "ob_all_virtual_sql_plan.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
-#include "sql/ob_sql.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

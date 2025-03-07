@@ -11,8 +11,8 @@
  */
 
 #include "ob_imicro_block_writer.h"
-#include "lib/utility/utility.h"
 #include  "ob_row_writer.h"
+#include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
 namespace oceanbase
 {
 namespace blocksstable
@@ -207,6 +207,13 @@ int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_de
     micro_header->set_header_checksum();
   }
   // do not reuse micro writer here
+  return ret;
+}
+
+int ObIMicroBlockWriter::get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const
+{
+  int ret = OB_NOT_SUPPORTED;
+  STORAGE_LOG(WARN, "unsupported get data from micro writer", K(ret));
   return ret;
 }
 

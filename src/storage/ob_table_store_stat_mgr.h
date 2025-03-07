@@ -68,38 +68,6 @@ public:
   bool is_valid() const;
   int add(const ObTableStoreStat& other);
   ObTableStoreStat &operator=(const ObTableStoreStat& other);
-  OB_INLINE bool enable_get_row_cache() const
-  {
-    return row_cache_miss_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
-           || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
-  }
-  OB_INLINE bool enable_put_row_cache() const
-  {
-    return row_cache_put_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
-  }
-  OB_INLINE bool enable_put_fuse_row_cache(const int64_t threshold) const
-  {
-    return fuse_row_cache_put_cnt_ < threshold;
-  }
-  OB_INLINE bool enable_get_fuse_row_cache(const int64_t threshold) const
-  {
-    return fuse_row_cache_miss_cnt_ < threshold
-           || fuse_row_cache_hit_cnt_ > fuse_row_cache_miss_cnt_ / 4;
-  }
-  OB_INLINE bool enable_bf_cache() const
-  {
-    return (bf_access_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
-           || bf_filter_cnt_ > (bf_access_cnt_ / 8));
-  }
-  OB_INLINE bool enable_sstable_bf_cache() const
-  {
-    return (sstable_bf_access_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM / 5
-           || sstable_bf_filter_cnt_ > sstable_bf_access_cnt_ / 4);
-  }
-  OB_INLINE int64_t get_empty_read_cnt() const
-  {
-    return exist_row_.empty_read_cnt_ + get_row_.empty_read_cnt_ + scan_row_.empty_read_cnt_;
-  }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(table_id),
                K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt),
                K_(bf_filter_cnt), K_(bf_empty_read_cnt), K_(bf_access_cnt),

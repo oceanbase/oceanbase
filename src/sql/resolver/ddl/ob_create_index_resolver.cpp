@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
-#include "share/ob_index_builder_util.h"
 #include "share/ob_fts_index_builder_util.h"
-#include "share/schema/ob_table_schema.h"
-#include "sql/resolver/ddl/ob_create_index_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 #include "share/ob_vec_index_builder_util.h"
-#include "share/vector_index/ob_plugin_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -232,9 +226,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
       if (OB_SUCC(ret)) {
         bool has_fts_index = false;
         bool has_vec_index = false;
-        if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_of_fts_index(
+        uint64_t tenant_data_version = 0;
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_of_fts_index(
             *tbl_schema, *(schema_checker_->get_schema_guard()), has_fts_index, has_vec_index))) {
           LOG_WARN("fail to check table has vec of fts index", K(ret));
+        } else if (tenant_data_version >= DATA_VERSION_4_3_5_1) {
+          // do nothing, support
         } else if ((index_keyname_ == FTS_KEY && has_vec_index) || (index_keyname_ == VEC_KEY && has_fts_index)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector and fts index in same main table is not support", K(ret));
@@ -351,7 +353,15 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
       }
     }
-
+    ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
+    if (OB_SUCC(ret) && is_vec_index && index_arg.index_columns_.count() > 0) {
+      const ObColumnSortItem &sort_item = index_arg.index_columns_.at(0);
+      if (OB_FAIL(set_vec_column_name(sort_item.column_name_))) {
+        LOG_WARN("fail to set vec column name", K(ret));
+      } else if (OB_FAIL(set_table_name(tbl_schema->get_table_name()))) {
+        LOG_WARN("fail to set data table name");
+      }
+    }
     if (OB_SUCC(ret) && lib::is_mysql_mode() && cnt_func_index) {
       uint64_t tenant_data_version = 0;
       if (OB_ISNULL(session_info_)) {
@@ -496,7 +506,7 @@ int ObCreateIndexResolver::resolve_index_option_node(
     if (has_index_using_type_) {
       crt_idx_stmt->set_index_using_type(index_using_type_);
     }
-    if (OB_FAIL(set_table_option_to_stmt(tbl_schema->get_table_id(), is_partitioned))) {
+    if (OB_FAIL(set_table_option_to_stmt(*tbl_schema, tbl_schema->get_table_id(), is_partitioned))) {
       LOG_WARN("fail to set table option to stmt", K(ret));
     } else if (tbl_schema->is_partitioned_table()
         && INDEX_TYPE_SPATIAL_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_) {
@@ -674,7 +684,6 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       crt_idx_stmt->set_name_generated_type(GENERATED_TYPE_USER);
     }
   }
-
   if (FAILEDx(resolve_index_name_node(parse_node.children_[0], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index name node", K(ret));
   } else if (OB_FAIL(resolve_index_column_node(parse_node.children_[2],
@@ -748,8 +757,12 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     char* buf = nullptr;
     int64_t pos = 0;
     if (is_vec_index(index_arg.index_type_)) {
-      index_arg.index_schema_.set_index_params(index_params_);
-      if (tbl_schema->is_view_table()) {
+      if (!is_vec_index(vec_index_type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index type", KR(ret), K(vec_index_type_));
+      } else if (FALSE_IT(index_arg.index_type_ = vec_index_type_)) {
+      } else if (FALSE_IT(index_arg.index_schema_.set_index_params(index_params_))) {
+      } else if (tbl_schema->is_view_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("create vector index on view table is not supported",
             KR(ret), K(tbl_schema->get_table_name()));
@@ -764,7 +777,12 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-
+  if (OB_SUCC(ret) &&
+      OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(
+          data_tbl_schema, &crt_idx_stmt->get_create_index_arg()))) {
+    LOG_WARN("fail to check supportability for building index",
+        K(data_tbl_schema), K(crt_idx_stmt->get_create_index_arg()));
+  }
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                             session_info_->get_priv_user_id(),
@@ -818,7 +836,10 @@ int ObCreateIndexResolver::add_sort_column(const ObColumnSortItem &sort_column)
   return ret;
 }
 
-int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id, bool is_partitioned)
+int ObCreateIndexResolver::set_table_option_to_stmt(
+    const share::schema::ObTableSchema &tbl_schema,
+    const uint64_t data_table_id,
+    bool is_partitioned)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexStmt *create_index_stmt = static_cast<ObCreateIndexStmt*>(stmt_);
@@ -881,6 +902,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
       } else if (global_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support global fts index now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
       } else {
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
@@ -926,6 +948,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
     index_arg.index_option_.progressive_merge_num_ = progressive_merge_num_;
     index_arg.index_option_.index_attributes_set_ = index_attributes_set_;
     index_arg.index_option_.parser_name_ = parser_name_;
+    index_arg.index_option_.parser_properties_ = parser_properties_;
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
@@ -939,7 +962,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
     } else if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
       LOG_WARN("fail to set encryption str", K(ret));
     } else if (FTS_KEY == index_keyname_ &&
-               OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(index_arg,
+               OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name_and_property(tbl_schema, index_arg,
                                                                        allocator_))) {
       LOG_WARN("generate fts parser name failed", K(ret), K(index_arg));
     }
@@ -974,10 +997,10 @@ int ObCreateIndexResolver::add_based_udt_info(const share::schema::ObTableSchema
         } else if (OB_ISNULL(udt_info)) {
           ret = OB_ERR_OBJECT_NOT_EXIST;
           LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
-        } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id, UDT_SCHEMA,
-                                                               udt_info->get_schema_version(),
-                                                               udt_info->get_tenant_id(),
-                                                               arg))) {
+        } else if (OB_FAIL(ob_add_ddl_dependency(udt_id, UDT_SCHEMA,
+                                                 udt_info->get_schema_version(),
+                                                 udt_info->get_tenant_id(),
+                                                 arg))) {
           LOG_WARN("fail to push back udt info", KR(ret), K(udt_id), K(tenant_id));
         }
       }

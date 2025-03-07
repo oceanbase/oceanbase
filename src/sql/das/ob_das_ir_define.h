@@ -97,7 +97,8 @@ public:
                        KPC_(match_filter),
                        KPC_(relevance_expr),
                        KPC_(relevance_proj_col),
-                       K_(estimated_total_doc_cnt));
+                       K_(estimated_total_doc_cnt),
+                       K_(mode_flag));
 
   ObExpr *search_text_;
   ObExpr *inv_scan_doc_id_col_;
@@ -125,7 +126,8 @@ struct ObDASIRScanRtDef : ObDASAttachRtDef
   OB_UNIS_VERSION(1);
 public:
   ObDASIRScanRtDef()
-    : ObDASAttachRtDef(DAS_OP_IR_SCAN) {}
+    : ObDASAttachRtDef(DAS_OP_IR_SCAN),
+      fts_idx_(OB_INVALID_INDEX) {}
 
   virtual ~ObDASIRScanRtDef() {}
 
@@ -169,6 +171,12 @@ public:
     }
     return fwd_idx_agg_rtdef;
   }
+
+  // currently a query could involve multiple fts indexes, such as index merge or func lookup,
+  // and fts_idx_ serves as a unique identifier for each fts index, such as locating the corresponding
+  // fts tablet ids in ObDASRelatedTabletID.
+  // fts_idx_ is dynamically generated during execution based on the rtdef tree and does not need to be serialized.
+  int64_t fts_idx_;
 };
 
 struct ObDASIRAuxLookupCtDef : ObDASAttachCtDef

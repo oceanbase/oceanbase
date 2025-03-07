@@ -12,9 +12,7 @@
 #define USING_LOG_PREFIX SQL
 
 #include "processor.h"
-#include "share/aggregate/iaggregate.h"
 #include "share/aggregate/single_row.h"
-#include "share/aggregate/aggr_extra.h"
 
 namespace oceanbase
 {
@@ -165,16 +163,10 @@ int Processor::advance_collect_result(const int64_t cur_group_id, const RowMeta 
                                       aggregate::AggrRowPtr group_row)
 {
   int ret = OB_SUCCESS;
-  int32_t batch_size =
-    min(1, static_cast<int32_t>(agg_ctx_.agg_rows_.count() - cur_group_id));
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     SQL_LOG(WARN, "not inited", K(ret));
-  } else if (OB_UNLIKELY(batch_size <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected batch size", K(ret), K(batch_size));
   } else {
-    int32_t output_size = batch_size;
     bool got_result = false;
     ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx_.eval_ctx_);
     guard.set_batch_size(1);
@@ -182,9 +174,8 @@ int Processor::advance_collect_result(const int64_t cur_group_id, const RowMeta 
       int32_t agg_col_idx = i;
       ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(agg_col_idx);
       if (helper::has_extra_info(aggr_info)) {
-        int32_t cur_batch_size = 0;
         char *curr_agg_cell = agg_ctx_.row_meta().locate_cell_payload(agg_col_idx, group_row);
-        VecExtraResult *&extra = agg_ctx_.get_extra(agg_col_idx, curr_agg_cell);
+        ExtraStores *&extra = agg_ctx_.get_extra_stores(agg_col_idx, curr_agg_cell);
         if (OB_ISNULL(extra)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "is null", K(extra), K(agg_col_idx));
@@ -202,15 +193,8 @@ int Processor::advance_collect_result(const int64_t cur_group_id, const RowMeta 
         } else if (OB_FAIL(aggregates_.at(agg_col_idx)
                              ->eval_group_extra_result(agg_ctx_, agg_col_idx,
                                                        static_cast<int32_t>(cur_group_id)))) {
-          SQL_LOG(WARN, "collect group results failed", K(ret), K(batch_size));
+          SQL_LOG(WARN, "collect group results failed", K(ret));
         } else {
-          if (!got_result) {
-            output_size = cur_batch_size;
-            got_result = true;
-          } else if (OB_UNLIKELY(output_size != cur_batch_size)) {
-            ret = OB_ERR_UNEXPECTED;
-            SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
-          }
           extra->set_is_evaluated();
           extra->reuse();
         }
@@ -226,16 +210,7 @@ int Processor::advance_collect_result(const int64_t cur_group_id, const RowMeta 
         } else if (OB_FAIL(aggregates_.at(agg_col_idx)
                              ->eval_group_extra_result(agg_ctx_, agg_col_idx,
                                                        static_cast<int32_t>(cur_group_id)))) {
-          SQL_LOG(WARN, "collect group results failed", K(ret), K(batch_size));
-        } else {
-          // real need ?
-          if (!got_result) {
-            output_size = cur_batch_size;
-            got_result = true;
-          } else if (OB_UNLIKELY(output_size != cur_batch_size)) {
-            ret = OB_ERR_UNEXPECTED;
-            SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
-          }
+          SQL_LOG(WARN, "collect group results failed", K(ret));
         }
       }
     }
@@ -492,7 +467,8 @@ int Processor::setup_rt_info(AggrRowPtr row,
     // oracle mode use ObNumber as result type for count aggregation
     // we use int64_t as result type for count aggregation in aggregate row
     // and cast int64_t to ObNumber during `collect_group_result`
-    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT) {
+    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT &&
+        agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_SUM_OPNSIZE) {
       ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
       // set zero number
       d.len_ = 0;
@@ -532,8 +508,8 @@ int Processor::setup_rt_info(AggrRowPtr row,
   return ret;
 }
 
-VecExtraResult *&Processor::get_extra(const int64_t agg_col_id, RuntimeContext &agg_ctx,
-                                      char *extra_array_buf)
+ExtraStores *&Processor::get_extra_stores(const int64_t agg_col_id, RuntimeContext &agg_ctx,
+                                          char *extra_array_buf)
 {
   OB_ASSERT(agg_col_id < agg_ctx.agg_row_meta_.col_cnt_);
   OB_ASSERT(agg_ctx.agg_row_meta_.extra_idxes_ != nullptr);
@@ -543,72 +519,144 @@ VecExtraResult *&Processor::get_extra(const int64_t agg_col_id, RuntimeContext &
   return ((AggregateExtras)extra_array_buf)[agg_extra_id];
 }
 
+HashBasedDistinctVecExtraResult *&Processor::get_distinct_store(const int64_t agg_col_id,
+                                                                  RuntimeContext &agg_ctx,
+                                                                  char *extra_array_buf)
+{
+  ExtraStores *extra = get_extra_stores(agg_col_id, agg_ctx, extra_array_buf);
+  return extra->distinct_extra_store;
+}
+
+DataStoreVecExtraResult *&Processor::get_extra_data_store(const int64_t agg_col_id,
+                                                                  RuntimeContext &agg_ctx,
+                                                                  char *extra_array_buf)
+{
+  ExtraStores *extra = get_extra_stores(agg_col_id, agg_ctx, extra_array_buf);
+  return extra->data_store;
+}
+
+int alloc_extra_stores(RuntimeContext &agg_ctx, ExtraStores *&extra)
+{
+  int ret = OB_SUCCESS;
+  if (extra == nullptr) {
+    void *tmp_buf = NULL;
+    if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(ExtraStores)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      extra = new (tmp_buf) ExtraStores();
+    }
+  } else {
+    ret = OB_INIT_TWICE;
+    SQL_LOG(WARN, "extra struct has been inited", K(ret));
+  }
+  return ret;
+}
+
+int alloc_extra_space_with_order_by(RuntimeContext &agg_ctx, DataStoreVecExtraResult *&extra,
+                                    ObIAllocator &extra_allocator, ObAggrInfo &aggr_info)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == extra) {
+    void *tmp_buf = NULL;
+    if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(DataStoreVecExtraResult)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      extra = new (tmp_buf) DataStoreVecExtraResult(extra_allocator, *agg_ctx.op_monitor_info_,
+                                                    aggr_info.has_order_by_);
+    }
+  }
+  return ret;
+}
+
 int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_array_buf,
                                         ObIAllocator &extra_allocator, const int64_t group_id /*=0*/)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
+    bool extra_store_inited = false;
     switch (aggr_info.get_expr_type()) {
-      case T_FUN_GROUP_CONCAT:
-      case T_FUN_GROUP_RANK:
-      case T_FUN_GROUP_DENSE_RANK:
-      case T_FUN_GROUP_PERCENT_RANK:
-      case T_FUN_GROUP_CUME_DIST:
-      case T_FUN_MEDIAN:
-      case T_FUN_GROUP_PERCENTILE_CONT:
-      case T_FUN_GROUP_PERCENTILE_DISC:
-      case T_FUN_KEEP_MAX:
-      case T_FUN_KEEP_MIN:
-      case T_FUN_KEEP_SUM:
-      case T_FUN_KEEP_COUNT:
-      case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_WM_CONCAT:
-      case T_FUN_PL_AGG_UDF:
-      case T_FUN_JSON_ARRAYAGG:
-      case T_FUN_ORA_JSON_ARRAYAGG:
-      case T_FUN_JSON_OBJECTAGG:
-      case T_FUN_ORA_JSON_OBJECTAGG:
-      case T_FUN_ORA_XMLAGG:
-      case T_FUN_HYBRID_HIST:
-      case T_FUN_TOP_FRE_HIST:
-      case T_FUN_AGG_UDF:
-      case T_FUNC_SYS_ARRAY_AGG: {
+    case T_FUN_GROUP_CONCAT: {
+      if (aggr_info.has_order_by_) {
         agg_ctx.need_advance_collect_ = true;
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("unsupported aggregate type", K(ret), K(aggr_info.get_expr_type()));
-        break;
+        ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+
+        if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+          SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+        } else {
+          DataStoreVecExtraResult *&data_store = extra->data_store;
+          if (OB_FAIL(alloc_extra_space_with_order_by(agg_ctx, data_store, extra_allocator,
+                                                      aggr_info))) {
+            SQL_LOG(WARN, "alloc extra space with order by failed", K(ret));
+          } else {
+            extra_store_inited = true;
+          }
+        }
       }
-      default: break;
+      break;
     }
+    case T_FUN_GROUP_RANK:
+    case T_FUN_GROUP_DENSE_RANK:
+    case T_FUN_GROUP_PERCENT_RANK:
+    case T_FUN_GROUP_CUME_DIST:
+    case T_FUN_MEDIAN:
+    case T_FUN_GROUP_PERCENTILE_CONT:
+    case T_FUN_GROUP_PERCENTILE_DISC:
+    case T_FUN_KEEP_MAX:
+    case T_FUN_KEEP_MIN:
+    case T_FUN_KEEP_SUM:
+    case T_FUN_KEEP_COUNT:
+    case T_FUN_KEEP_WM_CONCAT:
+    case T_FUN_WM_CONCAT:
+    case T_FUN_PL_AGG_UDF:
+    case T_FUN_JSON_ARRAYAGG:
+    case T_FUN_ORA_JSON_ARRAYAGG:
+    case T_FUN_JSON_OBJECTAGG:
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    case T_FUN_HYBRID_HIST:
+    case T_FUN_TOP_FRE_HIST:
+    case T_FUN_AGG_UDF:
+    case T_FUNC_SYS_ARRAY_AGG: {
+      agg_ctx.need_advance_collect_ = true;
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported aggregate type", K(ret), K(aggr_info.get_expr_type()));
+      break;
+    }
+    default: break;
+    }
+
     if (OB_SUCC(ret) && aggr_info.has_distinct_) {
       agg_ctx.need_advance_collect_ = true;
-      VecExtraResult *&extra = get_extra(i, agg_ctx, extra_array_buf);
-      if (nullptr == extra) {
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (!extra_store_inited && OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        HashBasedDistinctVecExtraResult *&distinct_extra_store = extra->distinct_extra_store;
+
         void *tmp_buf = NULL;
         if (OB_ISNULL(tmp_buf =
                         agg_ctx.allocator_.alloc(sizeof(HashBasedDistinctVecExtraResult)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
+        } else if (OB_FALSE_IT(distinct_extra_store = new (tmp_buf) HashBasedDistinctVecExtraResult(
+                                 extra_allocator, *agg_ctx.op_monitor_info_))) {
         } else {
-          extra = new (tmp_buf)
-            HashBasedDistinctVecExtraResult(extra_allocator, *agg_ctx.op_monitor_info_);
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        // In window function, get result will be called more than once, rewind is needed.
-        //
-        // The distinct set will iterate twice with rollup, for rollup processing and aggregation,
-        // rewind is needed for the second iteration.
-        //
-        // Rollup is supported and only supported in sort based group by with multi-groups,
-        // only groups with group id greater than zero need to rewind.
-        // The groupid of hash groupby also is greater then 0, then need rewind ???
-        const bool need_rewind = (agg_ctx.in_window_func_ || group_id > 0);
-        if (OB_FAIL(static_cast<HashBasedDistinctVecExtraResult *>(extra)->init_distinct_set(
-              aggr_info, need_rewind, *agg_ctx.hp_infras_mgr_, agg_ctx.eval_ctx_))) {
-          LOG_WARN("init_distinct_set failed", K(ret));
+          // In window function, get result will be called more than once, rewind is needed.
+          //
+          // The distinct set will iterate twice with rollup, for rollup processing and
+          // aggregation, rewind is needed for the second iteration.
+          //
+          // Rollup is supported and only supported in sort based group by with multi-groups,
+          // only groups with group id greater than zero need to rewind.
+          // The groupid of hash groupby also is greater then 0, then need rewind ???
+          const bool need_rewind = (agg_ctx.in_window_func_ || group_id > 0);
+          if (OB_FAIL(distinct_extra_store->init_distinct_set(
+                aggr_info, need_rewind, *agg_ctx.hp_infras_mgr_, agg_ctx.eval_ctx_))) {
+            LOG_WARN("init_distinct_set failed", K(ret));
+          }
         }
       }
     }
@@ -626,6 +674,17 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     SQL_LOG(WARN, "not inited", K(ret));
+  } else {
+    ObBatchRows tmp_brs;
+    tmp_brs.size_ = batch_size;
+    tmp_brs.skip_ = const_cast<ObBitVector *>(&skip);
+    tmp_brs.end_ = false;
+    tmp_brs.all_rows_active_ = (skip.accumulate_bit_cnt(batch_size) == 0);
+    if (OB_FAIL(eval_aggr_param_batch(tmp_brs))) {
+      SQL_LOG(WARN, "eval aggregate params failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(agg_rows)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "unexpected null aggregate rows", K(ret));
@@ -734,6 +793,9 @@ int Processor::collect_scalar_results(const RowMeta &row_meta, const ObCompactRo
       if (OB_ISNULL(aggr_info.expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null aggregate expr", K(ret));
+      } else if (helper::has_extra_info(const_cast<ObAggrInfo &>(aggr_info))
+                 && OB_FAIL(aggregates_.at(col_id)->eval_group_extra_result(agg_ctx_, col_id, 0))) {
+        LOG_WARN("collect batch group results failed", K(ret));
       } else if (OB_FAIL(aggregates_.at(col_id)->collect_batch_group_results(
                    agg_ctx_, col_id, 0, batch_size, rows, row_meta))) {
         LOG_WARN("collect batch group results failed", K(ret));
@@ -805,7 +867,8 @@ int Processor::collect_empty_set(bool collect_for_third_stage) const
       case T_FUN_COUNT_SUM:
       case T_FUN_APPROX_COUNT_DISTINCT:
       case T_FUN_KEEP_COUNT:
-      case T_FUN_GROUP_PERCENT_RANK: {
+      case T_FUN_GROUP_PERCENT_RANK:
+      case T_FUN_SUM_OPNSIZE: {
         if (lib::is_oracle_mode()) {
           number::ObNumber zero_nmb;
           zero_nmb.set_zero();
@@ -941,15 +1004,41 @@ int Processor::reuse_group(const int64_t group_id)
 {
   int ret = OB_SUCCESS;
   AggrRowPtr agg_row = agg_ctx_.agg_rows_.at(group_id);
+  const AggrRowMeta &row_meta = agg_ctx_.row_meta();
   int32_t extra_idx = 0;
-  // backup extra_idx
+  ObSEArray<char *, 5> group_concat_str_arr;
+  ObSEArray<int32_t, 5> group_concat_buffer_size_arr;
+  // backup extra_idx and group_concat_str_arr
   if (agg_ctx_.has_extra_) {
-    extra_idx = *reinterpret_cast<const int32_t *>(agg_row + agg_ctx_.row_meta().extra_idx_offset_);
+    extra_idx = *reinterpret_cast<const int32_t *>(agg_row + row_meta.extra_idx_offset_);
+  }
+  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
+    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
+    if (aggr_info.get_expr_type() != T_FUN_GROUP_CONCAT) {
+      continue;
+    }
+    char *agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
+    int32_t buffer_size = *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **));
+    char *string_ptr = *reinterpret_cast<char **>(agg_cell);
+    if (OB_FAIL(group_concat_str_arr.push_back(string_ptr))) {
+    } else if (OB_FAIL(group_concat_buffer_size_arr.push_back(buffer_size))) {
+    }
   }
   MEMSET(agg_row, 0, agg_ctx_.row_meta().row_size_);
-  // restore extra_idx
+  // restore extra_idx and group_concat_str_arr
   if (agg_ctx_.has_extra_) {
     *reinterpret_cast<int32_t *>(agg_row + agg_ctx_.row_meta().extra_idx_offset_) = extra_idx;
+  }
+  int idx = 0;
+  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
+    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
+    if (aggr_info.get_expr_type() != T_FUN_GROUP_CONCAT) {
+      continue;
+    }
+    char *agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
+    *reinterpret_cast<char **>(agg_cell) = group_concat_str_arr.at(idx);
+    *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **)) = group_concat_buffer_size_arr.at(idx);
+    idx += 1;
   }
   for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
     ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
@@ -957,26 +1046,38 @@ int Processor::reuse_group(const int64_t group_id)
     VecValueTypeClass res_tc = get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
     char *cell = nullptr;
     int32_t cell_len = 0;
-    if (res_tc == VEC_TC_NUMBER && aggr_info.get_expr_type() != T_FUN_COUNT) {
-      agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
-      ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
-      // set zero number
-      d.len_ = 0;
-      d.sign_ = number::ObNumber::POSITIVE;
-      d.exp_ = 0;
-    } else if (res_tc == VEC_TC_FLOAT) {
-      agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+    agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+    switch (res_tc) {
+    case VEC_TC_NUMBER: {
+      if (aggr_info.get_expr_type() != T_FUN_COUNT &&
+          aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
+        ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
+        // set zero number
+        d.len_ = 0;
+        d.sign_ = number::ObNumber::POSITIVE;
+        d.exp_ = 0;
+      }
+      break;
+    }
+    case VEC_TC_FLOAT: {
       *reinterpret_cast<float *>(cell) = float();
-    } else if (res_tc == VEC_TC_DOUBLE || res_tc == VEC_TC_FIXED_DOUBLE) {
-      agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+      break;
+    }
+    case VEC_TC_DOUBLE:
+    case VEC_TC_FIXED_DOUBLE: {
       *reinterpret_cast<double *>(cell) = double();
+      break;
+    }
+    default: {
+      break;
+    }
     }
     if (agg_ctx_.has_extra_ && helper::has_extra_info(aggr_info)) {
       char *curr_agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
-      VecExtraResult *&extra = agg_ctx_.get_extra(col_id, curr_agg_cell);
+      ExtraStores *&extra = agg_ctx_.get_extra_stores(col_id, curr_agg_cell);
       if (OB_ISNULL(extra)) {
         ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "is null", K(extra), K(col_id));
+        SQL_LOG(WARN, "is null", K(col_id));
       } else {
         extra->reuse();
       }

@@ -82,6 +82,11 @@ private:
   int init_das_scan_rtdef(const sql::ObDASScanCtDef &das_ctdef,
                           sql::ObDASScanRtDef &das_rtdef,
                           const sql::ObDASTableLocMeta *loc_meta);
+  int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef,
+                             ObDASBaseRtDef *&attach_rtdef);
+  int pushdown_normal_lookup_to_das(ObDASScanOp &target_op);
+  int pushdown_attach_task_to_das(ObDASScanOp &target_op);
+  int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);
   int do_init_before_get_row();
   int prepare_scan_range();
   int prepare_das_task();
@@ -90,11 +95,13 @@ private:
   int get_next_row_with_das();
   int check_filter(bool &filter);
   int get_next_row_for_tsc();
+  int gen_scan_ranges(ObIArray<ObNewRange> &scan_ranges);
   bool has_das_scan_task(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op)
   {
     das_op = static_cast<ObDASScanOp*>(das_ref_.find_das_task( tablet_loc, DAS_OP_TABLE_SCAN));
     return das_op != nullptr;
   }
+  int write_search_text_datum();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiScanExecutor);
 };

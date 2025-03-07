@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #include "storage/blocksstable/ob_macro_seq_generator.h"

@@ -424,7 +424,9 @@ private:
 };
 
 
-int enable_new_transfer(bool &enable);
+int enable_new_transfer(const share::ObLSID src_ls_id,
+                        const share::ObLSID dst_ls_id,
+                        bool &enable);
 
 }
 }

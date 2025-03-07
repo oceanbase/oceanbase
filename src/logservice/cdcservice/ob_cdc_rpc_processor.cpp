@@ -11,7 +11,6 @@
  */
 
 #include "ob_cdc_rpc_processor.h"
-#include "share/rc/ob_tenant_base.h"
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase

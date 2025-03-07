@@ -14,16 +14,10 @@
 
 #include "sql/engine/expr/ob_expr_replace.h"
 
-#include <limits.h>
-#include <string.h>
 
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_compatibility_control.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 namespace oceanbase
 {

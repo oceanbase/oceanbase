@@ -11,14 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <unistd.h>
-#include "lib/container/ob_bit_set.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "lib/ob_errno.h"
-#include "lib/thread/thread_pool.h"
 
 using namespace oceanbase;
 using namespace common;

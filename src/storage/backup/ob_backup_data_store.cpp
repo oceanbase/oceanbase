@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "storage/backup/ob_backup_data_store.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "lib/restore/ob_storage.h"
-#include "lib/oblog/ob_log_module.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif

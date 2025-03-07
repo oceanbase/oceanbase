@@ -58,6 +58,9 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
   virtual int resolve_impl(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg *crt_routine_arg) = 0;
 
+protected:
+  int resolve_sp_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
+
 private:
   int check_dup_routine_param(const common::ObIArray<share::schema::ObRoutineParam*> &params,
                               const common::ObString &param_name);
@@ -68,7 +71,6 @@ private:
   int analyze_router_sql(obrpc::ObCreateRoutineArg *crt_routine_arg);
   int resolve_sp_definer(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
   int resolve_sp_name(const ParseNode *parse_node, obrpc::ObCreateRoutineArg *crt_routine_arg);
-  int resolve_sp_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
   int resolve_ret_type(const ParseNode *ret_type_node, share::schema::ObRoutineInfo &func_info);
   int analyze_expr_type(ObRawExpr *&expr, share::schema::ObRoutineInfo &routine_info);
   int resolve_param_list(const ParseNode *param_list, share::schema::ObRoutineInfo &routine_info);

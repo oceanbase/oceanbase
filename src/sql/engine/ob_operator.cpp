@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "share/rc/ob_tenant_base.h"
 #include "ob_operator.h"
 #include "ob_operator_factory.h"
-#include "sql/engine/ob_exec_context.h"
-#include "common/ob_smart_call.h"
-#include "sql/engine/ob_exec_feedback_info.h"
 #include "observer/ob_server.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
@@ -436,6 +432,10 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
         op->get_monitor_info().set_tenant_id(GET_MY_SESSION(exec_ctx)->get_effective_tenant_id());
         op->get_monitor_info().open_time_ = oceanbase::common::ObClockGenerator::getClock();
         op->get_monitor_info().set_rich_format(use_rich_format_);
+        op->get_monitor_info().set_plan_hash_value(plan_->get_plan_hash_value());
+        if (OB_FAIL(op->get_monitor_info().set_sql_id(plan_->get_sql_id_string()))) {
+          LOG_WARN("Fail to set sql_id", K(ret));
+        }
       }
     }
 
@@ -1126,20 +1126,39 @@ int ObOperator::try_deregister_rt_monitor_node()
   }
   return ret;
 }
+
+int check_child_closed_helper(ObOperator *child, bool &closed)
+{
+  closed = true;
+  return child->close();
+}
+
 // copy from ob_phy_operator.cpp
 int ObOperator::close()
 {
   int ret = OB_SUCCESS;
-  int child_ret = OB_SUCCESS;
   OperatorOpenOrder open_order = get_operator_open_order();
   if (OPEN_SELF_ONLY != open_order) {
     //first call close of children
     for (int64_t i = 0; i < child_cnt_; ++i) {
-      // children_ pointer is checked before operator open, no need check again.
-      int tmp_ret = SMART_CALL(children_[i]->close());
-      if (OB_SUCCESS != tmp_ret) {
+      bool closed = false;
+      int tmp_ret = OB_SUCCESS;
+      // here retry SMART_CALL a few times, try to avoid child operator not calling close
+      // which maybe caused by error injection while allocing new stack in SMART_CALL
+      for (int64_t retry_cnt = 0; retry_cnt < SMART_CALL_CLOSE_RETRY_TIMES && !closed; retry_cnt++) {
+        // children_ pointer is checked before operator open, no need check again.
+        tmp_ret = SMART_CALL(check_child_closed_helper(children_[i], closed));
+      }
+      if (OB_UNLIKELY(!closed)) {
+        // SMART_CALL failed more than SMART_CALL_CLOSE_RETRY_TIMES, cannot alloc more memory for
+        // func stack, maybe caused wild ptr because child operator cannot revoke close(),
+        // so revoke right_to_die_or_duty_to_live here.
+        LOG_ERROR("failed to alloc new stack for child operator to close", K(tmp_ret),
+          "op_type", op_name());
+        right_to_die_or_duty_to_live();
+      } else if (OB_SUCCESS != tmp_ret) {
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("Close child operator failed", K(child_ret), "op_type", op_name());
+        LOG_WARN("failed to close child operator", K(ret), "op_type", op_name());
       }
     }
   }
@@ -1191,7 +1210,7 @@ int ObOperator::setup_op_feedback_info()
       node.output_row_count_ = op_monitor_info_.output_row_count_;
       node.worker_count_ = 1;
       if (spec_.is_pdml_operator()) {
-        node.pdml_op_write_rows_ = op_monitor_info_.otherstat_6_value_;
+        node.pdml_op_write_rows_ = op_monitor_info_.otherstat_5_value_;
       }
     }
   }
@@ -1339,6 +1358,56 @@ int ObOperator::get_next_row()
   return ret;
 }
 
+int ObOperator::pop_stash_rows(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  brs_.size_ = stash_brs_.size_;
+  brs_.skip_->set_all(stash_brs_.size_);
+  int64_t cur_row_cnt = 0;
+  while (stash_rows_idx_ < stash_brs_.size_ && cur_row_cnt < max_row_cnt) {
+    if (!stash_brs_.skip_->at(stash_rows_idx_)) {
+      brs_.skip_->unset(stash_rows_idx_);
+      ++cur_row_cnt;
+    }
+    ++stash_rows_idx_;
+  }
+  stash_rows_cnt_ -= cur_row_cnt;
+  if (stash_brs_.end_ && stash_rows_cnt_ == 0) {
+    brs_.end_ = true;
+  } else {
+    brs_.end_ = false;
+  }
+  brs_.all_rows_active_ = (cur_row_cnt == brs_.size_);
+  LOG_DEBUG("pop stash rows", K(max_row_cnt), K(stash_brs_),
+                              K(stash_rows_cnt_), K(stash_rows_idx_), K(brs_));
+  return ret;
+}
+
+int ObOperator::push_stash_rows(const int64_t max_row_cnt, const int64_t output_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == stash_brs_.skip_) {
+    void *mem = ctx_.get_allocator().alloc(ObBitVector::memory_size(get_spec().max_batch_size_));
+    if (OB_ISNULL(mem)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      stash_brs_.skip_ = to_bit_vector(mem);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    stash_brs_.skip_->deep_copy(*brs_.skip_, brs_.size_);
+    stash_brs_.size_ = brs_.size_;
+    stash_brs_.end_ = brs_.end_;
+    stash_rows_cnt_ = output_row_cnt;
+    stash_rows_idx_ = 0;
+    if (OB_FAIL(pop_stash_rows(max_row_cnt))) {
+      LOG_WARN("pop stash rows failed", K(ret), K(stash_brs_), K(stash_rows_cnt_), K(stash_rows_idx_));
+    }
+  }
+  return ret;
+}
+
 int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&batch_rows)
 {
   int ret = OB_SUCCESS;
@@ -1382,39 +1451,50 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           }
         }
       }
+      int64_t op_max_row_cnt = min(max_row_cnt, get_spec().max_batch_size_);
+      bool all_filtered = false;
       while (OB_SUCC(ret) && !brs_.end_) {
-        if (OB_FAIL(inner_get_next_batch(min(max_row_cnt, get_spec().max_batch_size_)))) {
-          LOG_WARN("get next batch failed", K(ret),  K_(eval_ctx), "id", spec_.get_id(), "op_name", op_name());
-        } else {
-          LOG_DEBUG("inner get next batch", "id", spec_.get_id(), "op_name", op_name(), K(brs_));
-        }
-        if (OB_SUCC(ret)) {
-          // FIXME bin.lb: accumulate bit count is CPU consuming, disable in perf mode?
-          skipped_rows_count = brs_.skip_->accumulate_bit_cnt(brs_.size_);
-          if (OB_UNLIKELY(brs_.size_ == skipped_rows_count)) {
-            reset_batchrows();
-            continue;
+        if (OB_UNLIKELY(stash_rows_cnt_ > 0)) {
+          if (OB_FAIL(pop_stash_rows(op_max_row_cnt))) {
+            LOG_WARN("get next batch from tmp failed", K(ret));
           }
-        }
-        if (OB_SUCC(ret) && (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_)) {
-          IGNORE_RETURN try_register_rt_monitor_node(brs_.size_);
-        }
-        bool all_filtered = false;
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(try_check_status_by_rows(brs_.size_))) {
-          LOG_WARN("check status failed", K(ret));
-        } else if (!spec_.filters_.empty()) {
-          if (OB_FAIL(filter_rows(spec_.filters_,
-                                  *brs_.skip_,
-                                  brs_.size_,
-                                  all_filtered,
-                                  brs_.all_rows_active_))) {
-            LOG_WARN("filter batch rows failed", K(ret), K_(eval_ctx));
-          } else if (all_filtered) {
-            brs_.skip_->reset(brs_.size_);
-            brs_.size_ = 0;
-            // keep brs_.end_ unchanged.
-            continue;
+        } else {
+          if (OB_FAIL(inner_get_next_batch(op_max_row_cnt))) {
+            LOG_WARN("get next batch failed", K(ret),  K_(eval_ctx), "id", spec_.get_id(), "op_name", op_name());
+          } else {
+            LOG_DEBUG("inner get next batch", "id", spec_.get_id(), "op_name", op_name(), K(brs_));
+          }
+          if (OB_SUCC(ret)) {
+            // FIXME bin.lb: accumulate bit count is CPU consuming, disable in perf mode?
+            skipped_rows_count = brs_.skip_->accumulate_bit_cnt(brs_.size_);
+            if (OB_UNLIKELY(brs_.size_ == skipped_rows_count)) {
+              reset_batchrows();
+              continue;
+            }
+          }
+          if (OB_SUCC(ret) && (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_)) {
+            IGNORE_RETURN try_register_rt_monitor_node(brs_.size_);
+          }
+          all_filtered = false;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(try_check_status_by_rows(brs_.size_))) {
+            LOG_WARN("check status failed", K(ret));
+          } else if (!spec_.filters_.empty()) {
+            if (OB_FAIL(filter_rows(spec_.filters_,
+                                    *brs_.skip_,
+                                    brs_.size_,
+                                    all_filtered,
+                                    brs_.all_rows_active_))) {
+              LOG_WARN("filter batch rows failed", K(ret), K_(eval_ctx));
+            } else if (all_filtered) {
+              brs_.skip_->reset(brs_.size_);
+              brs_.size_ = 0;
+              // keep brs_.end_ unchanged.
+              continue;
+            }
+          }
+          if (OB_SUCC(ret) && OB_FAIL(try_push_stash_rows(op_max_row_cnt))) {
+            LOG_WARN("try push stash rows failed", K(ret));
           }
         }
 #ifdef ENABLE_SANITY

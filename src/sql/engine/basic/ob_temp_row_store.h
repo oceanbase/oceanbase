@@ -279,6 +279,8 @@ public:
   int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx, const EvalBound &bound,
                 const ObBitVector &skip, int64_t &stored_rows_count,
                 ObCompactRow **stored_rows); // TODO
+  int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx, const uint16_t selector[],
+                const EvalBound &bound, const ObBitVector &skip, const int64_t size);
   int add_row(const common::ObIArray<ObExpr*> &exprs,
               ObEvalCtx &ctx,
               ObCompactRow *&stored_row);
@@ -454,6 +456,8 @@ public:
                 const IVectorPtrs &vectors,
                 const ObBatchRows &brs,
                 ObCompactRow **stored_rows);
+
+  int reset_part_cnt(const int64_t part_cnt);
 private:
   bool inited_;
   ObIAllocator *alloc_;

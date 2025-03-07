@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #include "share/compaction/ob_batch_exec_dag.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "share/compaction/ob_compaction_info_param.h"
 namespace oceanbase
 {
 namespace compaction

@@ -61,6 +61,10 @@ public:
       const common::ObIArray<uint64_t> &column_ids,
       const ObRelativeTable &table,
       ObColDescIArray &col_descs);
+  OB_INLINE bool is_main_table_rowkey_col(const int16_t col_idx)
+  {
+    return main_table_rowkey_col_flag_.count() > 0 && main_table_rowkey_col_flag_.at(col_idx);
+  }
 private:
   int prepare_column_info(const common::ObIArray<uint64_t> &column_ids);
   int prepare_relative_table(
@@ -95,7 +99,9 @@ public:
   bool is_old_row_valid_for_lob_;
   bool is_need_check_old_row_;
   bool is_udf_;
+  bool has_lob_rowkey_;
   ObLobTabletDmlCtx lob_dml_ctx_;
+  common::ObFixedArray<bool, common::ObIAllocator> main_table_rowkey_col_flag_;
 
 private:
   share::schema::ObSchemaGetterGuard schema_guard_;

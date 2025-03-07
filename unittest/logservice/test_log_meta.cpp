@@ -10,16 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "logservice/palf/log_define.h"
 #define private public
 #include "logservice/palf/log_meta.h"
-#include "logservice/palf/log_meta_entry_header.h"
 #undef private
 #include <gtest/gtest.h>
-#include <vector>
-#include <thread>
 
 char **global_argv = nullptr;
 namespace oceanbase

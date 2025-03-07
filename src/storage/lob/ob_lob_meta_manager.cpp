@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_lob_meta_manager.h"
-#include "storage/lob/ob_lob_meta.h"
 #include "storage/lob/ob_lob_persistent_iterator.h"
 
 namespace oceanbase

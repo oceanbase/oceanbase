@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_status.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

@@ -14,10 +14,7 @@
 
 #include "rootserver/mview/ob_mview_refresh_stats_maintenance_task.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_errno.h"
 #include "share/schema/ob_mview_info.h"
-#include "share/schema/ob_mview_refresh_stats.h"
 #include "share/schema/ob_mview_refresh_stats_params.h"
 #include "storage/mview/ob_mview_refresh_stats_purge.h"
 

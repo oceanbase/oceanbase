@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/inner_table/ob_inner_table_schema.h"
+#include "ob_virtual_table_iterator_factory.h"
 #include "observer/ob_server.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
 #include "observer/virtual_table/ob_tenant_show_tables.h"
@@ -74,14 +72,12 @@
 #include "observer/virtual_table/ob_all_virtual_tx_lock_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tx_scheduler_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tx_ctx_mgr_stat.h"
-#include "observer/virtual_table/ob_all_virtual_weak_read_stat.h"
 #include "observer/virtual_table/ob_tenant_virtual_statname.h"
 #include "observer/virtual_table/ob_tenant_virtual_event_name.h"
 #include "observer/virtual_table/ob_all_virtual_engine_table.h"
 #include "observer/virtual_table/ob_all_virtual_files_table.h"
 #include "observer/virtual_table/ob_all_virtual_ls_info.h"
 #include "observer/virtual_table/ob_all_virtual_ls_snapshot.h"
-#include "observer/virtual_table/ob_all_plan_cache_stat.h"
 #include "observer/virtual_table/ob_plan_cache_plan_explain.h"
 #include "observer/virtual_table/ob_all_virtual_ps_stat.h"
 #include "observer/virtual_table/ob_all_virtual_ps_item_info.h"
@@ -100,9 +96,6 @@
 #include "observer/virtual_table/ob_all_virtual_arbitration_member_info.h"
 #include "observer/virtual_table/ob_all_virtual_arbitration_service_status.h"
 #include "observer/virtual_table/ob_virtual_sql_monitor_statname.h"
-#include "observer/virtual_table/ob_virtual_sql_plan_statistics.h"
-#include "observer/virtual_table/ob_virtual_sql_monitor.h"
-#include "observer/virtual_table/ob_tenant_virtual_outline.h"
 #include "observer/virtual_table/ob_tenant_virtual_concurrent_limit_sql.h"
 #include "observer/virtual_table/ob_all_virtual_proxy_partition_info.h"
 #include "observer/virtual_table/ob_all_virtual_proxy_partition.h"
@@ -118,18 +111,14 @@
 #include "observer/virtual_table/ob_all_virtual_bad_block_table.h"
 #include "observer/virtual_table/ob_agent_virtual_table.h"
 #include "observer/virtual_table/ob_iterate_virtual_table.h"
-#include "observer/virtual_table/ob_iterate_private_virtual_table.h" // ObIteratePrivateVirtualTable
 #include "observer/virtual_table/ob_all_virtual_id_service.h"
 #include "observer/virtual_table/ob_all_virtual_timestamp_service.h"
-#include "rootserver/ob_root_service.h"
 #include "rootserver/virtual_table/ob_core_meta_table.h"
 #include "rootserver/virtual_table/ob_virtual_core_inner_table.h"
-#include "rootserver/ob_root_inspection.h"
 #include "observer/virtual_table/ob_tenant_virtual_charset.h"
 #include "observer/virtual_table/ob_tenant_virtual_collation.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_channel.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_memory.h"
-#include "observer/virtual_table/ob_all_virtual_dtl_first_cached_buffer.h"
 #include "observer/virtual_table/ob_tenant_virtual_get_object_definition.h"
 #include "observer/virtual_table/ob_all_virtual_sql_workarea_history_stat.h"
 #include "observer/virtual_table/ob_all_virtual_sql_workarea_active.h"
@@ -158,14 +147,6 @@
 #include "observer/virtual_table/ob_all_virtual_ddl_sim_point_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_pointer_status.h"
 #include "observer/virtual_table/ob_all_virtual_storage_meta_memory_status.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/table/ob_virtual_table_ctx.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_tenant_id_schema_version.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "storage/tx/ob_ts_mgr.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data_table.h"
 #include "observer/virtual_table/ob_all_virtual_transaction_freeze_checkpoint.h"
@@ -193,7 +174,6 @@
 #include "observer/virtual_table/ob_all_virtual_obj_lock.h"
 #include "rootserver/virtual_table/ob_all_virtual_backup_task_scheduler_stat.h"
 #include "observer/virtual_table/ob_all_virtual_ls_archive_stat.h"
-#include "observer/virtual_table/ob_all_virtual_dml_stats.h"
 #include "observer/virtual_table/ob_tenant_virtual_privilege.h"
 #include "observer/virtual_table/ob_all_virtual_kvcache_store_memblock.h"
 #include "observer/virtual_table/ob_information_query_response_time.h"
@@ -244,7 +224,10 @@
 #include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
+#include "observer/virtual_table/ob_all_virtual_plugin_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
+#include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
+#include "observer/virtual_table/ob_all_virtual_cs_replica_tablet_stats.h"
 
 namespace oceanbase
 {
@@ -664,10 +647,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualLSReplicaTaskPlan *task_plan = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLSReplicaTaskPlan, task_plan))) {
               SERVER_LOG(ERROR, "failed to init ObAllVirtualLSReplicaTaskPlan", KR(ret));
-            } else if (OB_FAIL(task_plan->init(
-                                   root_service_.get_schema_service(),
-                                   root_service_.get_root_balancer().get_disaster_recovery_worker()))) {
-              SERVER_LOG(WARN, "all_virtual_ls_replica_task_plan table init failed", KR(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(task_plan);
             }
@@ -1271,6 +1250,8 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               show_grants->set_user_id(session->get_user_id());
               if (OB_FAIL(session->get_session_priv_info(show_grants->get_session_priv()))) {
                 SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+              } else if (OB_FAIL(show_grants->get_role_id_array().assign(session->get_enable_role_array()))) {
+                SERVER_LOG(WARN, "fail to assign role id array", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
               }
@@ -1403,7 +1384,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_PROC_TID: {
+          case OB_ALL_VIRTUAL_PROC_OLD_TID: {
             ObMySQLProcTable *mysql_proc_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObMySQLProcTable, mysql_proc_table))) {
               mysql_proc_table->set_tenant_id(real_tenant_id);
@@ -2477,7 +2458,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
 
             if (OB_SUCC(ret)) {
-              if (OB_FAIL(ddl_diagnose_info->init())) {
+              if (OB_FAIL(ddl_diagnose_info->init(GCTX.sql_proxy_))) {
                 SERVER_LOG(WARN, "fail to init ddl diagnose info iterator, ", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(ddl_diagnose_info);
@@ -2946,6 +2927,28 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_TID:
+          {
+            ObAllVirtualCSReplicaTabletStats *all_virtual_cs_replica_tablet_stats = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCSReplicaTabletStats, all_virtual_cs_replica_tablet_stats))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCSReplicaTabletStats construct failed", K(ret));
+            } else if (OB_FAIL(all_virtual_cs_replica_tablet_stats->init(&allocator, addr_))) {
+              SERVER_LOG(WARN, "failed to init ObAllVirtualCSReplicaTabletStats", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cs_replica_tablet_stats);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_PLUGIN_INFO_TID:
+          {
+            ObAllVirtualPluginInfo *plugin_info_table = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualPluginInfo, plugin_info_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualPluginInfo construct failed", K(ret));
+            } else {
+              plugin_info_table->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(plugin_info_table);
+            }
+          } break;
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

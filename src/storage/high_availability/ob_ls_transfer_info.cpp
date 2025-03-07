@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_transfer_info.h"
-#include "common/ob_version_def.h"
 #include "share/ob_cluster_version.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
@@ -20,7 +19,7 @@ using namespace oceanbase;
 using namespace share;
 using namespace storage;
 
-
+ERRSIM_POINT_DEF(EN_LS_TRANSFER_INFO_DATA_VERSION);
 ObLSTransferInfo::ObLSTransferInfo()
   : ls_id_(TRANSFER_INIT_LS_ID),
     transfer_start_scn_(share::SCN::invalid_scn())
@@ -210,6 +209,9 @@ ObLSTransferMetaInfo::ObLSTransferMetaInfo()
     tablet_id_array_(),
     data_version_(DEFAULT_MIN_DATA_VERSION)
 {
+#ifdef ERRSIM
+  data_version_ = EN_LS_TRANSFER_INFO_DATA_VERSION ? DATA_CURRENT_VERSION : DEFAULT_MIN_DATA_VERSION;
+#endif
 }
 
 int ObLSTransferMetaInfo::set_transfer_info(

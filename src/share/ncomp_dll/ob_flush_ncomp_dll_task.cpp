@@ -13,9 +13,6 @@
 
 #include "ob_flush_ncomp_dll_task.h"
 
-#include "share/ob_version.h"
-#include "share/ob_tenant_info_proxy.h"
-#include "share/ob_define.h"
 #include "share/ob_all_server_tracer.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h" // ObDbmsStatsMaintenanceWindow
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h" // ObDBMSSchedTableOperator
@@ -253,16 +250,15 @@ int ObFlushNcompDll::create_flush_ncomp_dll_job_common(const ObSysVariableSchema
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
       job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
-      job_info.what_ = job_action.ptr();
       job_info.start_date_ = start_usec;
       job_info.end_date_ = 64060560000000000; // 4000-01-01 00:00:00.000000
-      job_info.interval_ = ObString();
       job_info.repeat_interval_ = ObString();
       job_info.enabled_ = is_enabled;
       job_info.auto_drop_ = true;
       job_info.max_run_duration_ = SECS_PER_HOUR * 2;
       job_info.exec_env_ = exec_env;
       job_info.comments_ = ObString("used to auto flush ncomp dll table expired data");
+      job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::FLUSH_NCOMP_DLL_JOB;
 
       if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(trans,
                                                                             tenant_id,

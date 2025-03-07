@@ -10,14 +10,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <errno.h>
 #include <gtest/gtest.h>
-#include <stdlib.h>
 #include <utility>
 #include <string>
 #include <cstring>
 #include <sstream>
-#include <iostream>
 #define protected public
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #define private public

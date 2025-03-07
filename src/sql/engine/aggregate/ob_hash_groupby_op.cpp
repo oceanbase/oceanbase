@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/charset/ob_charset.h"
-#include "src/sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {

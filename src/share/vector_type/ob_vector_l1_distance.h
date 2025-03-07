@@ -22,14 +22,41 @@ namespace oceanbase
 {
 namespace common
 {
+
+template <typename T>
 struct ObVectorL1Distance
 {
-  static int l1_distance_func(const float *a, const float *b, const int64_t len, double &distance);
+  static int l1_distance_func(const T *a, const T *b, const int64_t len, double &distance);
 
   // normal func
-  OB_INLINE static int l1_distance_normal(const float *a, const float *b, const int64_t len, double &distance);
+  OB_INLINE static int l1_distance_normal(const T *a, const T *b, const int64_t len, double &distance);
   // TODO(@jingshui) add simd func
 };
+
+template <typename T>
+int ObVectorL1Distance<T>::l1_distance_func(const T *a, const T *b, const int64_t len, double &distance)
+{
+return l1_distance_normal(a, b, len, distance);
+}
+
+template <typename T>
+OB_INLINE int ObVectorL1Distance<T>::l1_distance_normal(const T *a, const T *b, const int64_t len, double &distance)
+{
+  int ret = OB_SUCCESS;
+  double sum = 0;
+  double diff = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
+    sum += fabs(a[i] - b[i]);
+    if (OB_UNLIKELY(0 != ::isinf(sum))) {
+      ret = OB_NUMERIC_OVERFLOW;
+      LIB_LOG(WARN, "value is overflow", K(ret), K(diff), K(sum));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    distance = sum;
+  }
+  return ret;
+}
 } // common
 } // oceanbase
 #endif

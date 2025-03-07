@@ -14,7 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_uniform.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/json_type/ob_json_base.h"
 
 namespace oceanbase
 {

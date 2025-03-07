@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_mlog_builder.h"
-#include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
-#include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase
 {
@@ -50,13 +48,13 @@ int ObMLogBuilder::MLogColumnUtils::check_column_type(
     const ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  if (column_schema.get_meta_type().is_lob()) {
+  /* if (column_schema.get_meta_type().is_lob()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "create materialized view log on lob columns is");
     LOG_WARN("create materialized view log on lob columns is not supported",
         KR(ret), K(column_schema.get_column_name_str()));
-  } else if (column_schema.is_generated_column()) {
+  } else */ if (column_schema.is_generated_column()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "create materialized view log on generated columns is");
@@ -67,16 +65,16 @@ int ObMLogBuilder::MLogColumnUtils::check_column_type(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on xmltype columns is");
     LOG_WARN("create materialized view log on xmltype columns is not supported",
         KR(ret), K(column_schema.get_column_name_str()));
-  } else if (column_schema.is_json()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on json columns is");
-    LOG_WARN("create materialized view log on json columns is not supported",
-        KR(ret), K(column_schema.get_column_name_str()));
-  } else if (column_schema.is_geometry()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on geometry columns is");
-    LOG_WARN("create materialized view log on geometry columns is not supported",
-        KR(ret), K(column_schema.get_column_name_str()));
+  // } else if (column_schema.is_json()) {
+  //   ret = OB_NOT_SUPPORTED;
+  //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on json columns is");
+  //   LOG_WARN("create materialized view log on json columns is not supported",
+  //       KR(ret), K(column_schema.get_column_name_str()));
+  // } else if (column_schema.is_geometry()) {
+  //   ret = OB_NOT_SUPPORTED;
+  //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on geometry columns is");
+  //   LOG_WARN("create materialized view log on geometry columns is not supported",
+  //       KR(ret), K(column_schema.get_column_name_str()));
   } else if (column_schema.is_udt_related_column(lib::is_oracle_mode())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on udt columns is");
@@ -209,7 +207,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         ref_column->set_next_column_id(UINT64_MAX);
         ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                 rowkey_column->get_column_id()));
-        if (base_table_schema.is_heap_table()
+        if (base_table_schema.is_table_without_pk()
             && OB_FAIL(ref_column->set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
           LOG_WARN("failed to set column name", KR(ret));
         } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
@@ -607,6 +605,7 @@ int ObMLogBuilder::generate_mlog_schema(
       LOG_WARN("failed to set table options", KR(ret));
     } else {
       mlog_schema.set_micro_index_clustered(base_table_schema.get_micro_index_clustered());
+      mlog_schema.set_enable_macro_block_bloom_filter(base_table_schema.get_enable_macro_block_bloom_filter());
     }
   }
 
@@ -708,30 +707,42 @@ int ObMLogBuilder::set_table_columns(
     ObTableSchema &mlog_schema)
 {
   int ret = OB_SUCCESS;
+  bool is_table_with_logic_pk = false;
+  const uint64_t tenant_id = base_table_schema.get_tenant_id();
+  ObSchemaGetterGuard schema_guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogBuilder not init", KR(ret));
+  } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+    tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard in inner table failed", K(ret));
+  } else if (OB_FAIL(base_table_schema.is_table_with_logic_pk(schema_guard, is_table_with_logic_pk))) {
+    LOG_WARN("fail to get is table with logic pk", KR(ret));
   } else {
     HEAP_VAR(ObRowDesc, row_desc) {
-      if (base_table_schema.is_heap_table()) {
+      // There are 4 types of tables in OB: heap organized table with pk, heap organized table without pk,
+      // index organized table with pk, index organized table without pk. heap organized table with pk can have
+      // rowid and primary key option, index organized table without pk and heap organized table without pk only enables rowid option,
+      // and index organized table with pk only enables primary key option.
+      if (!is_table_with_logic_pk) {
         if (create_mlog_arg.with_primary_key_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on heap table cannot use with primary key option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_primary_key_));
         } else if (!create_mlog_arg.with_rowid_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on heap table should use with rowid option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_rowid_));
         }
       } else {
         if (create_mlog_arg.with_rowid_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on non-heap table cannot use with rowid option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_rowid_));
         } else if (!create_mlog_arg.with_primary_key_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on non-heap table should use with primary key option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_primary_key_));
         }
       }
 
@@ -772,6 +783,7 @@ int ObMLogBuilder::set_table_options(
     mlog_schema.set_dop(create_mlog_arg.mlog_schema_.get_dop());
     mlog_schema.set_tablespace_id(create_mlog_arg.mlog_schema_.get_tablespace_id());
     mlog_schema.set_comment(create_mlog_arg.mlog_schema_.get_comment());
+    mlog_schema.set_lob_inrow_threshold(create_mlog_arg.mlog_schema_.get_lob_inrow_threshold());
   }
   return ret;
 }

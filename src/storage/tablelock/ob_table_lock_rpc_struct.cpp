@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX TABLELOCK
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "ob_table_lock_rpc_struct.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

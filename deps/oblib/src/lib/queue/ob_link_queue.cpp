@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
 #include "lib/queue/ob_link_queue.h"
-#include "lib/atomic/ob_atomic.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

@@ -14,7 +14,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "share/ob_define.h"
 #include "ob_log_binlog_record_queue.h"
 #include "ob_log_utils.h"                 // get_timestamp
 

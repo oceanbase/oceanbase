@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "share/ob_errno.h"
 #include "ob_replica_safe_check_task.h"
-#include "observer/ob_server_struct.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "share/ls/ob_ls_status_operator.h"
 #include "share/ob_global_stat_proxy.h"
 
 namespace oceanbase

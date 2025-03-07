@@ -9,13 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "storage/memtable/mvcc/ob_tx_callback_list.h"
-#include "storage/memtable/mvcc/ob_mvcc_ctx.h"
-#include "share/config/ob_server_config.h"
-#include "storage/memtable/ob_memtable_key.h"
-#include "storage/tx/ob_trans_define.h"
+#include "ob_tx_callback_list.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_tx_stat.h"
 
 namespace oceanbase
 {

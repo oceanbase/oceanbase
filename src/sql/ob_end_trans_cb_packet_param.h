@@ -57,6 +57,12 @@ public:
                                       ObSQLSessionInfo &session,
                                       const common::ObCurTraceId::TraceId &trace_id);
 
+  const ObEndTransCbPacketParam &fill(const char *message,
+                                      int64_t affected_rows,
+                                      uint64_t last_insert_id_to_client,
+                                      bool is_partition_hit,
+                                      const ObCurTraceId::TraceId &trace_id);
+
   // 判断是否设置过本对象
   // 因为本对象会存储在session中，所以需要自己管理状态
   // 每次Callback用完后需要reset

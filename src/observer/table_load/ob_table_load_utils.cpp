@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_utils.h"
-#include "common/object/ob_object.h"
 #include "observer/ob_server.h"
-#include "observer/table/ob_table_rpc_processor.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "storage/blocksstable/ob_datum_range.h"
-#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {

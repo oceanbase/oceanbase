@@ -11,8 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/ls/ob_ls_transfer_status.h"
-#include "storage/tx_storage/ob_ls_service.h"
+#include "ob_ls_transfer_status.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {

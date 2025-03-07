@@ -10,13 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/ob_i_memtable_mgr.h"
-#include "share/ob_task_define.h"
-#include "storage/ls/ob_freezer.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_multi_source_data.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "ob_i_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::share;

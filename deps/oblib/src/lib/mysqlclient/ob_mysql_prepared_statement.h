@@ -466,7 +466,7 @@ private:
                          ObObjType obj_type,
                          bool is_out,
                          const ObTimeZoneInfo *tz_info);
-  int check_assoc_array(const pl::ObPLCollection *coll);
+  int check_assoc_array(pl::ObPLCollection *coll);
   int build_array_isnull(int64_t position,
                          bool is_in,
                          ObObj &param);

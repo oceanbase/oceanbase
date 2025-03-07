@@ -13,43 +13,17 @@
 #define USING_LOG_PREFIX RS
 #include "ob_recovery_ls_service.h"
 
-#include "lib/thread/threads.h"               //set_run_wrapper
-#include "lib/mysqlclient/ob_mysql_transaction.h"  //ObMySQLTransaction
-#include "lib/profile/ob_trace_id.h"
-#include "logservice/ob_log_base_header.h"          //ObLogBaseHeader
-#include "logservice/ob_log_handler.h"              //ObLogHandler
-#include "logservice/palf/log_entry.h"              //LogEntry
-#include "logservice/palf/log_define.h"
 #include "logservice/ob_log_service.h"//open_palf
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
 #include "logservice/ob_log_compression.h"
 #endif
-#include "share/scn.h"//SCN
-#include "logservice/ob_garbage_collector.h"//ObGCLSLog
-#include "observer/ob_server_struct.h"              //GCTX
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_ls_recovery_reportor.h" //ObLSRecoveryReportor
-#include "rootserver/ob_ls_service_helper.h"//ObTenantLSInfo, ObLSServiceHelper
-#include "rootserver/ob_balance_ls_primary_zone.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h"//DisasterRecoveryUtils
 #include "src/share/balance/ob_balance_task_helper_operator.h"//insert_new_ls
-#include "rootserver/ob_create_standby_from_net_actor.h" // ObCreateStandbyFromNetActor
 #include "share/ls/ob_ls_life_manager.h"            //ObLSLifeManger
-#include "share/ls/ob_ls_operator.h"                //ObLSAttr
-#include "share/ls/ob_ls_recovery_stat_operator.h"  //ObLSRecoveryLSStatOperator
-#include "share/ob_errno.h"
-#include "share/ob_share_util.h"                           //ObShareUtil
-#include "share/schema/ob_multi_version_schema_service.h"  //ObMultiSchemaService
-#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_upgrade_utils.h"  // ObUpgradeChecker
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
-#include "storage/tx/ob_tx_log.h"                          //ObTxLogHeader
-#include "storage/tx_storage/ob_ls_service.h"              //ObLSService
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
-#include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
-#include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
-#include "share/ob_occam_time_guard.h"//ObTimeGuard
-#include "src/rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 
 namespace oceanbase
@@ -1350,6 +1324,10 @@ int ObRecoveryLSService::try_do_ls_balance_task_(
       can_remove = true;
       if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
         LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
+      } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_local_service(gen_meta_tenant_id(tenant_id_)))) {
+        // dr service on leader of meta tenant 1 LS. it may not be local at the moment.
+        // to save resources, try to wake it up local, not guarante success.
+        LOG_WARN("fail to wake up", KR(ret));
       }
     } else if (ls_balance_task.get_task_op().is_transfer_end()) {
       if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(

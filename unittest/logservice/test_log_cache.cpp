@@ -10,15 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <string.h>
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/palf/log_cache.h"
 #undef private
 #include "logservice/common_util/ob_log_time_utils.h"
 #include "share/ob_tenant_mem_limit_getter.h"
-#include "share/rc/ob_tenant_base.h"
-#include "logservice/palf/log_reader_utils.h"
 #include "logservice/palf/palf_env_impl.h"
 
 namespace oceanbase

@@ -27,13 +27,13 @@ class SCN
 {
 public:
   SCN() : val_(OB_INVALID_SCN_VAL) {}
-  void reset();
-  bool is_valid() const;
-  bool is_valid_and_not_min() const;
-  bool is_max() const;
-  bool is_min() const;
-  bool is_base_scn() const;
-  void set_invalid();
+  void reset() { val_ = OB_INVALID_SCN_VAL; }
+  bool is_valid() const { return SCN_VERSION == v_; }
+  bool is_valid_and_not_min() const { return (SCN_VERSION == v_) && (OB_MIN_SCN_TS_NS != val_); }
+  bool is_max() const { return (v_ == SCN_VERSION && ts_ns_ == OB_MAX_SCN_TS_NS) ? true : false; }
+  bool is_min() const { return (v_ == SCN_VERSION && ts_ns_ == OB_MIN_SCN_TS_NS) ? true : false; }
+  bool is_base_scn() const { return (SCN_VERSION == v_) && (OB_BASE_SCN_TS_NS == ts_ns_); }
+  void set_invalid() { reset(); }
   void set_max();
   void set_min();
   void set_base();
@@ -86,27 +86,31 @@ public:
   // deserialization
 
   //only for filling inner_table fields
-  uint64_t get_val_for_inner_table_field() const;
+  uint64_t get_val_for_inner_table_field() const { return val_; }
 
   //only for gts use
-  uint64_t get_val_for_gts() const;
+  uint64_t get_val_for_gts() const { return val_; }
 
   //only for log service use
-  uint64_t get_val_for_logservice() const;
+  uint64_t get_val_for_logservice() const { return val_; }
   //only for sql use
-  uint64_t get_val_for_sql() const;
+  uint64_t get_val_for_sql() const { return val_; }
 
   //only for tx, include transform from SCN_MAX to INT64_MAX
   int64_t get_val_for_tx(const bool ignore_invalid_scn = false) const;
 
   // compare function
-  bool operator==(const SCN &scn) const;
-  bool operator!=(const SCN &scn) const;
+  bool operator==(const SCN &scn) const { return val_ == scn.val_; }
+  bool operator!=(const SCN &scn) const { return val_ != scn.val_; }
   bool operator<(const SCN &scn) const;
   bool operator<=(const SCN &scn) const;
   bool operator>(const SCN &scn) const;
   bool operator>=(const SCN &scn) const;
-  SCN &operator=(const SCN &scn);
+  SCN &operator=(const SCN &scn)
+  {
+    this->val_ = scn.val_;
+    return *this;
+  }
 
   //fixed length serialization
   int fixed_serialize(char* buf, const int64_t buf_len, int64_t& pos) const;

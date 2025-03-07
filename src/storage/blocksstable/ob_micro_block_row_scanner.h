@@ -93,6 +93,7 @@ public:
       common::ObIArray<ObSqlDatumInfo> &datums,
       const int64_t datum_offset,
       uint32_t *len_array,
+      const bool is_padding_mode,
       const bool init_vector_header = true);
   int get_aggregate_result(
       const int32_t col_offset,
@@ -113,6 +114,7 @@ public:
   int read_distinct(
       const int32_t group_by_col,
       const char **cell_datas,
+      const bool is_padding_mode,
       storage::ObGroupByCellBase &group_by_cell) const;
   int read_reference(
       const int32_t group_by_col,
@@ -135,7 +137,8 @@ public:
       const char **cell_datas,
       sql::ObExprPtrIArray &exprs,
       common::ObIArray<ObSqlDatumInfo> &datum_infos,
-      blocksstable::ObDatumRow *default_row);
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode);
   int get_rows_for_rich_format(
       const common::ObIArray<int32_t> &col_offsets,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -145,7 +148,8 @@ public:
       const char **cell_datas,
       uint32_t *len_array,
       sql::ObExprPtrIArray &exprs,
-      blocksstable::ObDatumRow *default_row,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
       const bool need_init_vector = true);
   int64_t get_current_pos() const
   { return current_; }

@@ -10,22 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 #define UNITTEST_DEBUG
-#include "lib/utility/utility.h"
-#include <atomic>
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
-#include "storage/multi_data_source/runtime_utility/common_define.h"
 
-#include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "common/ob_clock_generator.h"
-#include "storage/multi_data_source/mds_node.h"
-#include "common/meta_programming/ob_type_traits.h"
 #include "storage/multi_data_source/mds_row.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {

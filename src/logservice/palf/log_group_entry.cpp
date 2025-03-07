@@ -12,9 +12,6 @@
 
 #include "log_group_entry.h"
 #include "log_entry_header.h"
-#include "lib/oblog/ob_log_module.h"      // LOG*
-#include "lib/ob_errno.h"                 // ERROR NUMBER
-#include "lib/checksum/ob_crc64.h"        // ob_crc64
 
 namespace oceanbase
 {

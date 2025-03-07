@@ -12,13 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_ddl_executor_util.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/worker.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_srv_rpc_proxy.h"      //ObSrvRpcProxy
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase

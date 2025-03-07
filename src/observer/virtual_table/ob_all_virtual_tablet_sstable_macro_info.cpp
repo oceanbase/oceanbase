@@ -11,11 +11,8 @@
  */
 
 #include "ob_all_virtual_tablet_sstable_macro_info.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

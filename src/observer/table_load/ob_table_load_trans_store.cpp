@@ -13,17 +13,14 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/table_load/ob_table_load_autoinc_nextval.h"
-#include "observer/table_load/ob_table_load_data_row_handler.h"
+#include "observer/table_load/ob_table_load_data_row_insert_handler.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
-#include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_ctx.h"
-#include "observer/table_load/ob_table_load_utils.h"
-#include "share/ob_autoincrement_service.h"
+#include "src/pl/ob_pl.h"
 #include "share/sequence/ob_sequence_cache.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/ob_sql_utils.h"
@@ -87,12 +84,7 @@ void ObTableLoadTransStore::reset()
   for (int64_t i = 0; i < session_store_array_.count(); ++i) {
     SessionStore *session_store = session_store_array_.at(i);
     // free partition tables
-    for (int64_t j = 0; j < session_store->partition_table_array_.count(); ++j) {
-      ObIDirectLoadPartitionTable *table = session_store->partition_table_array_.at(j);
-      table->~ObIDirectLoadPartitionTable();
-      session_store->allocator_.free(table);
-    }
-    session_store->partition_table_array_.reset();
+    session_store->tables_handle_.reset();
     // free session_store
     session_store->~SessionStore();
     trans_ctx_->allocator_.free(session_store);
@@ -158,14 +150,13 @@ int ObTableLoadTransStoreWriter::StoreWriter::init(ObTableLoadStoreCtx *store_ct
   } else {
     if (OB_FAIL(table_builder_map_.create(64, "TLD_SW_Map", "TLD_SW_Map", MTL_ID()))) {
       LOG_WARN("fail to create hashmap", KR(ret));
-    } else if (OB_FAIL(datum_row_.init(
-                 store_ctx->data_store_table_ctx_->table_data_desc_.column_count_))) {
+    } else if (OB_FAIL(datum_row_.init(store_ctx->write_ctx_.table_data_desc_.column_count_))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
       store_ctx_ = store_ctx;
       trans_store_ = trans_store;
       session_id_ = session_id;
-      is_single_part_ = (store_ctx_->data_store_table_ctx_->is_multiple_mode_ ||
+      is_single_part_ = (store_ctx_->write_ctx_.is_multiple_mode_ ||
                          1 == store_ctx->data_store_table_ctx_->ls_partition_ids_.count());
       is_inited_ = true;
     }
@@ -175,21 +166,20 @@ int ObTableLoadTransStoreWriter::StoreWriter::init(ObTableLoadStoreCtx *store_ct
 
 int ObTableLoadTransStoreWriter::StoreWriter::inner_append_row(
   const ObTabletID &tablet_id,
-  const ObTableLoadSequenceNo &seq_no,
-  const ObDatumRow &datum_row)
+  const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   ObIDirectLoadPartitionTableBuilder *table_builder = nullptr;
   if (OB_FAIL(get_table_builder(tablet_id, table_builder))) {
     LOG_WARN("fail to get table builder", KR(ret), K(tablet_id));
-  } else if (OB_FAIL(table_builder->append_row(tablet_id, seq_no, datum_row))) {
+  } else if (OB_FAIL(table_builder->append_row(tablet_id, datum_row))) {
     LOG_WARN("fail to append row", KR(ret), K(datum_row));
   }
   if (OB_FAIL(ret)) {
     ObTableLoadErrorRowHandler *error_row_handler = store_ctx_->error_row_handler_;
-    ObDirectLoadDMLRowHandler *data_row_handler = store_ctx_->data_store_table_ctx_->row_handler_;
+    ObDirectLoadDMLRowHandler *dml_row_handler = store_ctx_->write_ctx_.dml_row_handler_;
     if (OB_LIKELY(OB_ERR_PRIMARY_KEY_DUPLICATE == ret)) {
-      if (OB_FAIL(data_row_handler->handle_update_row(datum_row))) {
+      if (OB_FAIL(dml_row_handler->handle_update_row(tablet_id, datum_row))) {
         LOG_WARN("fail to handle update row", KR(ret), K(datum_row));
       }
     } else if (OB_LIKELY(OB_ROWKEY_ORDER_ERROR == ret)) {
@@ -202,8 +192,7 @@ int ObTableLoadTransStoreWriter::StoreWriter::inner_append_row(
 }
 
 int ObTableLoadTransStoreWriter::StoreWriter::append_row(const ObTabletID &tablet_id,
-                                                         const ObTableLoadSequenceNo &seq_no,
-                                                         const ObDatumRow &datum_row)
+                                                         const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -212,7 +201,7 @@ int ObTableLoadTransStoreWriter::StoreWriter::append_row(const ObTabletID &table
   } else if (OB_UNLIKELY(is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected writer is closed", KR(ret));
-  } else if (OB_FAIL(inner_append_row(tablet_id, seq_no, datum_row))) {
+  } else if (OB_FAIL(inner_append_row(tablet_id, datum_row))) {
     LOG_WARN("fail to append row", KR(ret));
   }
   return ret;
@@ -240,7 +229,7 @@ int ObTableLoadTransStoreWriter::StoreWriter::append_batch(
     LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(vectors), K(batch_rows));
   } else {
     // TODO(suzhi.yt) 这一期只有px_write会走append_batch, 这里先写死seq_no
-    static const ObTableLoadSequenceNo seq_no(0);
+    datum_row_.seq_no_ = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_rows.size_; ++i) {
       if (!batch_rows.all_rows_active_ && batch_rows.skip_->at(i)) {
         continue;
@@ -251,7 +240,7 @@ int ObTableLoadTransStoreWriter::StoreWriter::append_batch(
                                                        datum_row_.storage_datums_,
                                                        datum_row_.count_))) {
           LOG_WARN("fail to transfer vectors to datums", KR(ret), K(i));
-        } else if (OB_FAIL(inner_append_row(tablet_id, seq_no, datum_row_))) {
+        } else if (OB_FAIL(inner_append_row(tablet_id, datum_row_))) {
           LOG_WARN("fail to append row", KR(ret));
         } else {
           ++affected_rows;
@@ -278,8 +267,8 @@ int ObTableLoadTransStoreWriter::StoreWriter::close()
       ObIDirectLoadPartitionTableBuilder *table_builder = table_builders_.at(i);
       if (OB_FAIL(table_builder->close())) {
         LOG_WARN("fail to close table store", KR(ret));
-      } else if (OB_FAIL(table_builder->get_tables(session_store->partition_table_array_,
-                                                   session_store->allocator_))) {
+      } else if (OB_FAIL(table_builder->get_tables(session_store->tables_handle_,
+                                                   store_ctx_->table_mgr_))) {
         LOG_WARN("fail to get tables", KR(ret));
       }
     }
@@ -296,11 +285,10 @@ int ObTableLoadTransStoreWriter::StoreWriter::new_table_builder(
 {
   int ret = OB_SUCCESS;
   table_builder = nullptr;
-  if (store_ctx_->data_store_table_ctx_->is_multiple_mode_) {
+  if (store_ctx_->write_ctx_.is_multiple_mode_) {
     // 排序路径
     ObDirectLoadExternalMultiPartitionTableBuildParam param;
-    param.table_data_desc_ = store_ctx_->data_store_table_ctx_->table_data_desc_;
-    param.datum_utils_ = &(store_ctx_->data_store_table_ctx_->schema_->datum_utils_);
+    param.table_data_desc_ = store_ctx_->write_ctx_.table_data_desc_;
     param.file_mgr_ = store_ctx_->tmp_file_mgr_;
     param.extra_buf_ = reinterpret_cast<char *>(1); // unuse, delete in future
     param.extra_buf_size_ = param.table_data_desc_.extra_buf_size_;
@@ -314,10 +302,10 @@ int ObTableLoadTransStoreWriter::StoreWriter::new_table_builder(
     }
   } else {
     // 有主键表不排序路径
-    abort_unless(!store_ctx_->data_store_table_ctx_->table_data_desc_.is_heap_table_);
+    abort_unless(!store_ctx_->data_store_table_ctx_->schema_->is_table_without_pk_);
     ObDirectLoadMultipleSSTableBuildParam param;
     param.tablet_id_ = tablet_id;
-    param.table_data_desc_ = store_ctx_->data_store_table_ctx_->table_data_desc_;
+    param.table_data_desc_ = store_ctx_->write_ctx_.table_data_desc_;
     param.datum_utils_ = &(store_ctx_->data_store_table_ctx_->schema_->datum_utils_);
     param.file_mgr_ = store_ctx_->tmp_file_mgr_;
     param.extra_buf_ = reinterpret_cast<char *>(1); // unuse, delete in future
@@ -448,10 +436,8 @@ int ObTableLoadTransStoreWriter::DirectWriter::init(ObTableLoadStoreCtx *store_c
 }
 
 int ObTableLoadTransStoreWriter::DirectWriter::append_row(const ObTabletID &tablet_id,
-                                                          const ObTableLoadSequenceNo &seq_no,
-                                                          const ObDatumRow &datum_row)
+                                                          const ObDirectLoadDatumRow &datum_row)
 {
-  UNUSED(seq_no);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -593,7 +579,7 @@ int ObTableLoadTransStoreWriter::DirectWriter::new_batch_writer(
     LOG_WARN("fail to new ObDirectLoadInsertTableBatchRowDirectWriter", KR(ret));
   } else if (OB_FAIL(batch_writer->init(insert_tablet_ctx,
                                         row_info,
-                                        store_ctx_->data_store_table_ctx_->row_handler_,
+                                        store_ctx_->write_ctx_.dml_row_handler_,
                                         &lob_allocator_))) {
     LOG_WARN("fail to init direct batch writer", KR(ret));
   }
@@ -713,7 +699,7 @@ int ObTableLoadTransStoreWriter::init()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(trans_store_));
   } else {
-    table_data_desc_ = &store_ctx_->data_store_table_ctx_->table_data_desc_;
+    table_data_desc_ = &store_ctx_->write_ctx_.table_data_desc_;
     collation_type_ = store_ctx_->data_store_table_ctx_->schema_->collation_type_;
     if (OB_FAIL(ObSQLUtils::get_default_cast_mode(store_ctx_->ctx_->session_info_, cast_mode_))) {
       LOG_WARN("fail to get_default_cast_mode", KR(ret));
@@ -740,7 +726,7 @@ int ObTableLoadTransStoreWriter::init_column_schemas_and_lob_info()
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
       table_schema->get_column_schema(column_descs.at(i).col_id_);
-    if (column_schema->is_hidden()) {
+    if (ObColumnSchemaV2::is_hidden_pk_column_id(column_schema->get_column_id())) {
     } else if (OB_FAIL(column_schemas_.push_back(column_schema))) {
       LOG_WARN("failed to push back column schema", K(ret), K(i), KPC(column_schema));
     }
@@ -771,7 +757,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
     // init writer_
-    if (store_ctx_->data_store_table_ctx_->is_fast_heap_table_) {
+    if (store_ctx_->write_ctx_.is_fast_heap_table_) {
       DirectWriter *direct_writer = nullptr;
       if (OB_ISNULL(session_ctx->writer_ = direct_writer = OB_NEWx(DirectWriter, &allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -792,9 +778,6 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(session_ctx->datum_row_.init(table_data_desc_->column_count_))) {
         LOG_WARN("fail to init datum row", KR(ret));
-      } else {
-        session_ctx->datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-        session_ctx->datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
       }
     }
   }
@@ -844,9 +827,8 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     SessionContext &session_ctx = session_ctx_array_[session_id - 1];
     for (int64_t i = 0; OB_SUCC(ret) && i < row_array.count(); ++i) {
       const ObTableLoadTabletObjRow &row = row_array.at(i);
-      ObNewRow new_row(row.obj_row_.cells_, row.obj_row_.count_);
-      if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_,
-                           new_row, session_ctx.datum_row_, session_id))) {
+      if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, row.obj_row_,
+                           session_ctx.datum_row_, session_id))) {
         ObTableLoadErrorRowHandler *error_row_handler =
           trans_ctx_->ctx_->store_ctx_->error_row_handler_;
         if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
@@ -855,7 +837,6 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
           ret = OB_SUCCESS;
         }
       } else if (OB_FAIL(session_ctx.writer_->append_row(row.tablet_id_,
-                                                         row.obj_row_.seq_no_,
                                                          session_ctx.datum_row_))) {
         LOG_WARN("fail to write row", KR(ret), K(session_id), K(row.tablet_id_), K(i));
       }
@@ -864,28 +845,6 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
     session_ctx.cast_allocator_.reuse();
-  }
-  return ret;
-}
-
-int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const blocksstable::ObDatumRow &row)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !row.is_valid() ||
-                         row.count_ != table_data_desc_->column_count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tablet_id), K(row), KPC(table_data_desc_));
-  } else {
-    static const ObTableLoadSequenceNo seq_no(0); // pdml导入的行目前不存在主键冲突，先都用一个默认的seq_no
-    SessionContext &session_ctx = session_ctx_array_[0];
-    if (OB_FAIL(session_ctx.writer_->append_row(tablet_id, seq_no, row))) {
-      LOG_WARN("fail to append row", KR(ret), K(tablet_id), K(row));
-    } else {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, 1);
-    }
   }
   return ret;
 }
@@ -947,17 +906,20 @@ int ObTableLoadTransStoreWriter::clean_up(int32_t session_id)
 }
 
 int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
-                                          ObDataTypeCastParams cast_params, const ObNewRow &row,
-                                          ObDatumRow &datum_row, int32_t session_id)
+                                          ObDataTypeCastParams cast_params,
+                                          const ObTableLoadObjRow &obj_row,
+                                          ObDirectLoadDatumRow &datum_row,
+                                          int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(row.count_ != table_data_desc_->column_count_)) {
+  if (OB_UNLIKELY(obj_row.count_ != table_data_desc_->column_count_)) {
     ret = OB_ERR_INVALID_COLUMN_NUM;
-    LOG_WARN("column count not match", KR(ret), K(row.count_), K(table_data_desc_->column_count_));
+    LOG_WARN("column count not match", KR(ret), K(obj_row.count_), K(table_data_desc_->column_count_));
   }
+  datum_row.seq_no_ = obj_row.seq_no_;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
-    const ObObj &obj = row.cells_[i];
+    const ObObj &obj = obj_row.cells_[i];
     ObStorageDatum &datum = datum_row.storage_datums_[i];
     if (OB_FAIL(cast_column(cast_allocator, cast_params, column_schema, obj, datum, session_id))) {
       LOG_WARN("fail to cast column", KR(ret), K(i), K(obj), KPC(column_schema));
@@ -967,14 +929,15 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
 }
 
 int ObTableLoadTransStoreWriter::cast_row(int32_t session_id,
-                                          const ObNewRow &new_row,
-                                          const ObDatumRow *&datum_row)
+                                          const ObTableLoadObjRow &obj_row,
+                                          const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   SessionContext &session_ctx = session_ctx_array_[session_id - 1];
   session_ctx.cast_allocator_.reuse();
-  if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, new_row, session_ctx.datum_row_,
-                        session_id))) {
+  if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, obj_row,
+                       session_ctx.datum_row_, session_id))) {
+    LOG_WARN("fail to cast row", KR(ret));
   } else {
     datum_row = &session_ctx.datum_row_;
   }
@@ -992,9 +955,14 @@ int ObTableLoadTransStoreWriter::cast_column(
   int ret = OB_SUCCESS;
   ObCastCtx cast_ctx(&cast_allocator, &cast_params, cast_mode_, column_schema->get_collation_type());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
+  cast_ctx.exec_ctx_ = trans_ctx_->ctx_->exec_ctx_;
   ObObj out_obj;
   if (column_schema->is_autoincrement()) {
-    if (obj.is_null() || obj.is_nop_value()) {
+    // mysql模式还不支持快速删列, 先加个拦截
+    if (OB_UNLIKELY(column_schema->is_unused())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+    } else if (obj.is_null() || obj.is_nop_value()) {
       out_obj = obj;
     } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
                                                       column_schema,
@@ -1008,7 +976,11 @@ int ObTableLoadTransStoreWriter::cast_column(
       }
     }
   } else if (column_schema->is_identity_column()) {
-    if (column_schema->is_tbl_part_key_column()) {
+    // identity列在快速删除的时候会抹去identity属性
+    if (OB_UNLIKELY(column_schema->is_unused())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+    } else if (column_schema->is_tbl_part_key_column()) {
       // 自增列是分区键, 在分区计算的时候就已经确定值了
       out_obj = obj;
     } else {

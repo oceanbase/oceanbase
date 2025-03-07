@@ -174,13 +174,13 @@ public:
   virtual ~ObDirectLoadSSTableBuilder() = default;
   int init(const ObDirectLoadSSTableBuildParam &param);
   int append_row(const common::ObTabletID &tablet_id,
-                const table::ObTableLoadSequenceNo &seq_no,
-                 const blocksstable::ObDatumRow &datum_row) override;
+                 const ObDirectLoadDatumRow &datum_row) override;
   int append_row(const ObDirectLoadExternalRow &external_row);
   int close() override;
   int64_t get_row_count() const override { return data_block_writer_.get_total_row_count(); }
-  int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                 common::ObIAllocator &allocator) override;
+  int get_tables(ObDirectLoadTableHandleArray &table_array,
+                 ObDirectLoadTableManager *table_manager) override;
+
 private:
   int check_rowkey_order(const blocksstable::ObDatumRowkey &rowkey);
 private:

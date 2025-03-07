@@ -146,6 +146,8 @@ public:
   uint32_t get_result_flag() const;
   inline ExprClass get_expr_class() {return expr_class_;}
   int get_length_for_meta_in_bytes(common::ObLength &length) const;
+  /* meta info for client */
+  int get_length_for_meta_in_bytes(common::ObLength &length, ObCollationType collation_type) const;
   void set_meta_type(const common::ObObjMeta &meta_type);
   void set_result_type(const sql::ObExprResType &result_type);
   void set_collation_level(common::ObCollationLevel cs_level);
@@ -257,6 +259,11 @@ inline uint32_t ObIRawExpr::get_result_flag() const
 inline int ObIRawExpr::get_length_for_meta_in_bytes(common::ObLength &length) const
 {
   return result_type_.get_length_for_meta_in_bytes(length);
+}
+
+inline int ObIRawExpr::get_length_for_meta_in_bytes(common::ObLength &length, ObCollationType collation_type) const
+{
+  return result_type_.get_length_for_meta_in_bytes(length, collation_type);
 }
 inline void ObIRawExpr::set_meta_type(const common::ObObjMeta &meta_type)
 {

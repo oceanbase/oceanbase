@@ -10,22 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/list/ob_dlist.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_occam_time_guard.h"
-#include "lib/guard/ob_unique_guard.h"
-#include "lib/net/ob_addr.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_time_fmt.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_ls_id.h"
-#include "share/ob_occam_timer.h"
-#include "common/ob_clock_generator.h"
-#include "util/easy_time.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "logservice/palf/election/interface/election.h"
-#include "logservice/palf/election/utils/election_common_define.h"
 #include "election_event_recorder.h"
 
 namespace oceanbase
@@ -35,7 +20,7 @@ namespace palf
 namespace election
 {
 
-static constexpr int INFO_MAX_LEN = 128;
+static constexpr int INFO_MAX_LEN = 1024;
 #define DO_IF_SUCC(stmt) if (OB_SUCC(ret) && CLICK_FAIL(stmt)) {}
 
 int64_t EventRecorder::to_string(char *buf, const int64_t len) const

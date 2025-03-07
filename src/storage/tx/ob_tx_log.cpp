@@ -11,12 +11,7 @@
  */
 
 #include "storage/tx/ob_tx_log.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_base_type.h"
 #include "storage/memtable/ob_memtable_mutator.h"
-#include "storage/blocksstable/ob_row_reader.h"
-#include "storage/tx/ob_multi_data_source_printer.h"
-#include "common/cell/ob_cell_reader.h"
 
 namespace oceanbase
 {
@@ -43,7 +38,8 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
         || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT
         || data_source_type == ObTxDataSourceType::TABLET_SPLIT
         || data_source_type == ObTxDataSourceType::TABLET_BINDING
-        || data_source_type == ObTxDataSourceType::MV_NOTICE_SAFE) {
+        || data_source_type == ObTxDataSourceType::MV_NOTICE_SAFE
+        || data_source_type == ObTxDataSourceType::UNBIND_LOB_TABLET) {
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
     } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN

@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_multi_mode_interface.h"
 #include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/xml/ob_xml_bin.h"
-#include "lib/alloc/malloc_hook.h"
 
 namespace oceanbase {
 namespace common {

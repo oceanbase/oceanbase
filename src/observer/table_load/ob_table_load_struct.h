@@ -92,6 +92,15 @@ enum class ObTableLoadExeMode {
   MAX_TYPE
 };
 
+enum class ObTableLoadMergerPhaseType
+{
+  INSERT = 0,
+  CONFLICT_RESOLVE = 1,
+  DELETE = 2,
+  ACK = 3,
+  MAX_TYPE
+};
+
 struct ObTableLoadParam
 {
 public:

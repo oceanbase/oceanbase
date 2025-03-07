@@ -81,7 +81,7 @@ public:
       { return join_filter_exprs_.push_back(filter_expr); }
   const common::ObIArray<ObRawExpr *> &get_join_filter_exprs()
       { return join_filter_exprs_; }
-common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
+  common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
       { return join_filter_exprs_; }
   int add_join_filter_cmp_funcs(const common::ObDatumCmpFuncType &cmp_fun)
       { return join_filter_cmp_funcs_.push_back(cmp_fun);}
@@ -151,6 +151,15 @@ common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
     rf_max_wait_time_ = rf_max_wait_time;
   }
 
+  const common::ObIArray<ObRawExpr *> &get_all_join_key_left_exprs()
+  {
+    return all_join_key_left_exprs_;
+  }
+  int set_all_join_key_left_exprs(const common::ObIArray<ObRawExpr *> &exprs)
+  {
+    return all_join_key_left_exprs_.assign(exprs);
+  }
+
 private:
   bool is_create_;   //判断是否是create算子
   int64_t filter_id_; //设置filter_id
@@ -178,6 +187,7 @@ private:
   int64_t range_column_cnt_;
   ObJoinFilterMaterialControlInfo jf_material_control_info_;
   int64_t rf_max_wait_time_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> all_join_key_left_exprs_;
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);
 };
 

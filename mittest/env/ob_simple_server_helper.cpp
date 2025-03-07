@@ -14,12 +14,9 @@
 #define private public
 #define protected public
 #include "ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "logservice/ob_log_service.h"
 #include "unittest/storage/init_basic_struct.h"
-#include "lib/profile/ob_trace_id.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_global_stat_proxy.h"
 

@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX TABLELOCK
 
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "ob_lock_inner_connection_util.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_result.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 
 

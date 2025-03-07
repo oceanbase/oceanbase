@@ -38,9 +38,17 @@ class ObPartitionExchange
 {
 public:
   typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletID;
-  explicit ObPartitionExchange(ObDDLService &ddl_service, const uint64_t data_version);
+  // 'is_part_id_exchanged = false' only happens in partition-level direct load
+  explicit ObPartitionExchange(ObDDLService &ddl_service,
+                               const uint64_t data_version,
+                               const bool is_part_id_exchanged = true);
   virtual ~ObPartitionExchange();
   int check_and_exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res, ObSchemaGetterGuard &schema_guard);
+
+  // direct load promise that the two tables of partition exchange are consistent
+  static int check_exchange_partition_for_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                      const ObTableSchema *table_schema,
+                                                      const uint64_t compat_version);
 
 protected:
   int check_partition_exchange_conditions_(const obrpc::ObExchangePartitionArg &arg, const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode, ObSchemaGetterGuard &schema_guard);
@@ -175,7 +183,7 @@ protected:
   int compare_column_extended_type_info_(const common::ObIArray<common::ObString> &l_extended_type_info,
                                          const common::ObIArray<common::ObString> &r_extended_type_info,
                                          bool &is_equal);
-  bool in_supported_table_type_white_list_(const ObTableSchema &table_schema);
+  static bool in_supported_table_type_white_list_(const ObTableSchema &table_schema);
   // generate corresponding auxiliary table mapping that need to exchange partitions
   bool in_find_same_aux_table_retry_white_list_(const int ret_code);
   int generate_auxiliary_table_mapping_(const ObTableSchema &base_data_table_schema,
@@ -337,6 +345,7 @@ private:
   common::hash::ObHashMap<uint64_t, ObArray<ObTabletID>> used_table_to_tablet_ids_map_;
   common::ObSArray<uint64_t> unused_pt_index_id_;
   common::ObSArray<uint64_t> unused_nt_index_id_;
+  bool is_part_id_exchanged_; // 'false' for direct-load, 'true' for other situations
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionExchange);

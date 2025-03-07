@@ -11,27 +11,7 @@
  */
 
 
-#include "share/ob_errno.h"
-#include "share/ob_occam_time_guard.h"
-#include "share/rc/ob_tenant_base.h"
 #include "table_accessor.h"
-#include "lib/hash/ob_hash.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/utility.h"
-#include "observer/ob_server_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_ls_id.h"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <unistd.h>
-#include "share/schema/ob_schema_utils.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -835,9 +815,9 @@ int TableAccessor::get_server_stop_status(bool &is_server_stopped)
   int64_t pos = 0;
   const char *columns[1] = {"stop_time"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  char svr_ip_string[16] = {0};
+  char svr_ip_string[MAX_IP_ADDR_LENGTH] = {0};
   int64_t stop_time = 0;
-  if (!GCTX.self_addr().ip_to_string(svr_ip_string, 16)) {
+  if (!GCTX.self_addr().ip_to_string(svr_ip_string, MAX_IP_ADDR_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(INFO, "self ip to string failed");
   } else if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where svr_ip='%s' and svr_port=%d", svr_ip_string, GCTX.self_addr().get_port()))) {

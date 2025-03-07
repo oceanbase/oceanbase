@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_inner_table_operator.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "common/ob_smart_var.h"
 
 using namespace oceanbase;
 using namespace common;

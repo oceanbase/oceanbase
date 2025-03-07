@@ -16,39 +16,23 @@
 #define USING_LOG_PREFIX LIB
 #include <boost/geometry.hpp>
 #define private public
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_ibin.h"
 #include "lib/geo/ob_geo_bin_traits.h"
-#include "lib/geo/ob_geo_tree.h"
 #include "lib/geo/ob_geo_tree_traits.h"
-#include "lib/json_type/ob_json_common.h"
 #include "lib/geo/ob_geo_wkb_visitor.h"
 #include "lib/geo/ob_geo_wkb_size_visitor.h"
-#include "lib/geo/ob_geo_coordinate_range_visitor.h"
 #include "lib/geo/ob_geo_longtitude_correct_visitor.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 #include "lib/geo/ob_geo_segment_collect_visitor.h"
 #include "lib/geo/ob_geo_vertex_collect_visitor.h"
-#include "lib/geo/ob_geo_cache.h"
-#include "lib/geo/ob_srs_info.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_sdo_geo_func_to_wkb.h"
-#include "lib/geo/ob_sdo_geo_object.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_3d.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "lib/random/ob_random.h"
-#include "lib/string/ob_hex_utils_base.h"
+#include "src/share/schema/ob_server_schema_service.h"
 #include "lib/geo/ob_wkb_to_json_visitor.h"
 #include "lib/geo/ob_wkb_byte_order_visitor.h"
 #include "lib/geo/ob_geo_interior_point_visitor.h"
-#include "lib/geo/ob_wkt_parser.h"
 #include "lib/geo/ob_geo_mvt_encode_visitor.h"
 #undef private
 
-#include <sys/time.h>
-#include <iostream>
 
 namespace oceanbase {
 

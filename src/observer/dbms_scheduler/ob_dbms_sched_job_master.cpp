@@ -14,22 +14,9 @@
 
 #include "ob_dbms_sched_job_master.h"
 #include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
-#include "lib/time/Time.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/alloc/alloc_struct.h"
-#include "lib/container/ob_array.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/profile/ob_trace_id.h"
 
-#include "share/partition_table/ob_partition_location.h"
-#include "share/ob_all_server_tracer.h"
-#include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
-#include "sql/session/ob_basic_session_info.h"
 #define TO_TS(second) (1000000L * second)
 #define IS_SPLIT_TENANT_DATA_VERSION ((GET_MIN_CLUSTER_VERSION() > MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0))
 namespace oceanbase
@@ -115,7 +102,7 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
 {
   int64_t ret = 0;
   int64_t next_date = 0;
-  if (job_info.is_date_expression_job_class()
+  if (job_info.is_mview_job()
       && !job_info.get_interval().empty()
       && (0 != job_info.get_interval().case_compare("null"))) {
     int64_t next_date_ts = 0;
@@ -150,7 +137,7 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
       job_key->get_job_name(),
       execute_addr,
       self_addr_,
-      job_info.is_olap_async_job_class() ? share::OBCG_OLAP_ASYNC_JOB : share::OBCG_DBMS_SCHED_JOB))) {
+      job_info.is_olap_async_job() ? share::OBCG_OLAP_ASYNC_JOB : share::OBCG_DBMS_SCHED_JOB))) {
     LOG_WARN("failed to run dbms sched job", K(ret), K(job_info), KPC(job_key));
     if (is_server_down_error(ret)) {
       int tmp = OB_SUCCESS;

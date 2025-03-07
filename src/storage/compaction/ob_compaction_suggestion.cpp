@@ -11,9 +11,7 @@
  */
 
 #include "ob_compaction_suggestion.h"
-#include "ob_partition_merge_progress.h"
-#include "ob_compaction_diagnose.h"
-#include "ob_tablet_merge_ctx.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {

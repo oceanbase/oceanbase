@@ -10,7 +10,6 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/storage/ob_i_pre_warmer.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "common/ob_tablet_id.h"
 namespace oceanbase
 {
 namespace share

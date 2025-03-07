@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "ob_transform_where_subquery_pullup.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/ob_sql_context.h"
-#include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 
 namespace oceanbase

@@ -13,19 +13,20 @@
 #include "ob_redis_list_cmd.h"
 #include "observer/table/redis/operator/ob_redis_list_operator.h"
 #include "lib/utility/ob_fast_convert.h"
+#include "share/table/redis/ob_redis_util.h"
+#include "share/table/redis/ob_redis_error.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 
-int Push::init(const ObIArray<ObString> &args)
+int Push::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
   } else if (OB_FAIL(values_.reserve(args.count() - 1))) {
     LOG_WARN("failed to reserve array", K(ret), K(args.count()));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else {
     for (int64_t i = 1; OB_SUCC(ret) && i < args.count(); ++i) {
       ObString value;
@@ -43,65 +44,68 @@ int Push::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LPush::apply(ObRedisCtx &redis_ctx)
+int LPush::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(key_, values_, true /*is_push_left*/, false /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, true /*is_push_left*/, false /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
 }
 
-int LPushX::apply(ObRedisCtx &redis_ctx)
+int LPushX::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(key_, values_, true /*is_push_left*/, true /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, true /*is_push_left*/, true /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
 }
 
-int RPush::apply(ObRedisCtx &redis_ctx)
+int RPush::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(key_, values_, false /*is_push_left*/, false /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, false /*is_push_left*/, false /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
 }
 
-int RPushX::apply(ObRedisCtx &redis_ctx)
+int RPushX::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(key_, values_, false /*is_push_left*/, true /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, false /*is_push_left*/, true /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
 }
 
-int Pop::init(const ObIArray<ObString> &args)
+int Pop::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_common(args))) {
+    if (is_pop_left_) {
+      RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::WRONG_ARGS_LPOP_ERR);
+    } else {
+      RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::WRONG_ARGS_RPOP_ERR);
+    }
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else {
     is_inited_ = true;
   }
@@ -109,48 +113,45 @@ int Pop::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LPop::apply(ObRedisCtx &redis_ctx)
+int LPop::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_pop(key_, true /*is_pop_left*/))) {
+  } else if (OB_FAIL(cmd_op.do_pop(redis_ctx.get_request_db(), key_, true /*is_pop_left*/))) {
     LOG_WARN("failed to do list lpop", K(ret), K(key_));
   }
   return ret;
 }
 
-int RPop::apply(ObRedisCtx &redis_ctx)
+int RPop::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_pop(key_, false /*is_pop_left*/))) {
+  } else if (OB_FAIL(cmd_op.do_pop(redis_ctx.get_request_db(), key_, false /*is_pop_left*/))) {
     LOG_WARN("failed to do list rpop", K(ret), K(key_));
   }
   return ret;
 }
 
-int LIndex::init(const ObIArray<ObString> &args)
+int LIndex::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString index_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, index_str))) {
     LOG_WARN("failed to get index", K(ret), K(args));
-  } else if (OB_FALSE_IT(
-                 offset_ = ObFastAtoi<int64_t>::atoi(index_str.ptr(), index_str.ptr() + index_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(index_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(index_str, offset_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisFmt::NULL_BULK_STRING);
+    LOG_WARN("fail to get int from str", K(ret), K(index_str));
   } else {
     is_inited_ = true;
   }
@@ -158,35 +159,32 @@ int LIndex::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LIndex::apply(ObRedisCtx &redis_ctx)
+int LIndex::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_index(key_, offset_))) {
+  } else if (OB_FAIL(cmd_op.do_index(redis_ctx.get_request_db(), key_, offset_))) {
     LOG_WARN("failed to do list lindex", K(ret), K(key_), K(offset_));
   }
   return ret;
 }
 
-int LSet::init(const ObIArray<ObString> &args)
+int LSet::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString index_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, index_str))) {
     LOG_WARN("failed to get index", K(ret), K(args));
-  } else if (OB_FALSE_IT(
-                 offset_ = ObFastAtoi<int64_t>::atoi(index_str.ptr(), index_str.ptr() + index_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(index_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(index_str, offset_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::NO_SUCH_KEY_ERR);
+    LOG_WARN("fail to get int from str", K(ret), K(index_str));
   } else if (OB_FAIL(args.at(2, value_))) {
     LOG_WARN("failed to get value", K(ret), K(args));
   } else {
@@ -196,43 +194,38 @@ int LSet::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LSet::apply(ObRedisCtx &redis_ctx)
+int LSet::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_set(key_, offset_, value_))) {
+  } else if (OB_FAIL(cmd_op.do_set(redis_ctx.get_request_db(), key_, offset_, value_))) {
     LOG_WARN("failed to do list lset", K(ret), K(key_), K(offset_), K(value_));
   }
   return ret;
 }
 
-int LRange::init(const ObIArray<ObString> &args)
+int LRange::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString start_str;
   ObString stop_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, start_str))) {
     LOG_WARN("failed to get start", K(ret), K(args));
-  } else if (OB_FALSE_IT(
-                 start_ = ObFastAtoi<int64_t>::atoi(start_str.ptr(), start_str.ptr() + start_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(start_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(start_str, start_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INTEGER_ERR);
+    LOG_WARN("fail to get int from str", K(ret), K(start_str));
   } else if (OB_FAIL(args.at(2, stop_str))) {
     LOG_WARN("failed to get end", K(ret), K(args));
-  } else if (OB_FALSE_IT(end_ =
-                             ObFastAtoi<int64_t>::atoi(stop_str.ptr(), stop_str.ptr() + stop_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(stop_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(stop_str, end_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INTEGER_ERR);
+    LOG_WARN("fail to get int from str", K(ret), K(stop_str));
   } else {
     is_inited_ = true;
   }
@@ -240,43 +233,38 @@ int LRange::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LRange::apply(ObRedisCtx &redis_ctx)
+int LRange::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_range(key_, start_, end_))) {
+  } else if (OB_FAIL(cmd_op.do_range(redis_ctx.get_request_db(), key_, start_, end_))) {
     LOG_WARN("failed to do list lrange", K(ret), K(key_), K(start_), K(end_));
   }
   return ret;
 }
 
-int LTrim::init(const ObIArray<ObString> &args)
+int LTrim::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString start_str;
   ObString stop_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, start_str))) {
     LOG_WARN("failed to get start", K(ret), K(args));
-  } else if (OB_FALSE_IT(
-                 start_ = ObFastAtoi<int64_t>::atoi(start_str.ptr(), start_str.ptr() + start_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(start_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(start_str, start_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INTEGER_ERR);
+    LOG_WARN("fail to get int from str", K(ret), K(start_str));
   } else if (OB_FAIL(args.at(2, stop_str))) {
     LOG_WARN("failed to get end", K(ret), K(args));
-  } else if (OB_FALSE_IT(end_ =
-                             ObFastAtoi<int64_t>::atoi(stop_str.ptr(), stop_str.ptr() + stop_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(stop_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(stop_str, end_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INTEGER_ERR);
+    LOG_WARN("fail to get int from str", K(ret), K(stop_str));
   } else {
     is_inited_ = true;
   }
@@ -284,27 +272,26 @@ int LTrim::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LTrim::apply(ObRedisCtx &redis_ctx)
+int LTrim::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_trim(key_, start_, end_))) {
+  } else if (OB_FAIL(cmd_op.do_trim(redis_ctx.get_request_db(), key_, start_, end_))) {
     LOG_WARN("failed to do list ltrim", K(ret), K(key_), K(start_), K(end_));
   }
   return ret;
 }
 
-int LInsert::init(const ObIArray<ObString> &args)
+int LInsert::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   ObString before_pivot_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, before_pivot_str))) {
     LOG_WARN("failed to get start", K(ret), K(args));
   } else if (OB_FAIL(args.at(2, pivot_))) {
@@ -321,7 +308,7 @@ int LInsert::init(const ObIArray<ObString> &args)
     } else if (up_str == ObString::make_string("AFTER")) {
       is_before_pivot_ = false;
     } else {
-      ret = OB_INVALID_ARGUMENT;
+      RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
       LOG_WARN("invalid position", K(ret), K(before_pivot_str));
     }
   }
@@ -333,28 +320,27 @@ int LInsert::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LInsert::apply(ObRedisCtx &redis_ctx)
+int LInsert::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_insert(key_, is_before_pivot_, pivot_, value_))) {
+  } else if (OB_FAIL(cmd_op.do_insert(redis_ctx.get_request_db(), key_, is_before_pivot_, pivot_, value_))) {
     LOG_WARN("failed to do list linsert", K(ret), K(key_), K(is_before_pivot_), K(pivot_), K(value_));
   }
   return ret;
 }
 
-int LLen::init(const ObIArray<ObString> &args)
+int LLen::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString before_pivot_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else {
     is_inited_ = true;
   }
@@ -362,35 +348,32 @@ int LLen::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LLen::apply(ObRedisCtx &redis_ctx)
+int LLen::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_get_len(key_))) {
+  } else if (OB_FAIL(cmd_op.do_get_len(redis_ctx.get_request_db(), key_))) {
     LOG_WARN("failed to do list linsert", K(ret), K(key_));
   }
   return ret;
 }
 
-int LRem::init(const ObIArray<ObString> &args)
+int LRem::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString count_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, count_str))) {
     LOG_WARN("failed to get count", K(ret), K(args));
-  } else if (OB_FALSE_IT(
-                 count_ = ObFastAtoi<int64_t>::atoi(count_str.ptr(), count_str.ptr() + count_str.length(), valid))) {
-  } else if (!valid) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(ret), K(count_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(count_str, count_))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INTEGER_ERR);
+    LOG_WARN("fail to get int from str", K(ret), K(count_str));
   } else if (OB_FAIL(args.at(2, value_))) {
     LOG_WARN("failed to get value", K(ret), K(args));
   } else {
@@ -400,28 +383,27 @@ int LRem::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int LRem::apply(ObRedisCtx &redis_ctx)
+int LRem::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_rem(key_, count_, value_))) {
+  } else if (OB_FAIL(cmd_op.do_rem(redis_ctx.get_request_db(), key_, count_, value_))) {
     LOG_WARN("failed to do list lrem", K(ret), K(key_), K(count_), K(value_));
   }
   return ret;
 }
 
-int RpopLpush::init(const ObIArray<ObString> &args)
+int RpopLpush::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   bool valid = false;
   ObString count_str;
   if (OB_FAIL(init_common(args))) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
   } else if (OB_FAIL(args.at(1, dest_key_))) {
     LOG_WARN("failed to get dest_key", K(ret), K(args));
   } else {
@@ -431,7 +413,7 @@ int RpopLpush::init(const ObIArray<ObString> &args)
   return ret;
 }
 
-int RpopLpush::apply(ObRedisCtx &redis_ctx)
+int RpopLpush::apply(ObRedisSingleCtx &redis_ctx)
 {
   int ret = OB_SUCCESS;
   ListCommandOperator cmd_op(redis_ctx);
@@ -442,35 +424,6 @@ int RpopLpush::apply(ObRedisCtx &redis_ctx)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("rpoplpush cmd not supported yet", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "rpoplpush");
-  }
-  return ret;
-}
-
-int LDel::init(const ObIArray<ObString> &args)
-{
-  int ret = OB_SUCCESS;
-  bool valid = false;
-  ObString before_pivot_str;
-  if (OB_FAIL(init_common(args))) {
-    LOG_WARN("fail to init cmd", K(ret));
-  } else if (OB_FAIL(args.at(0, key_))) {
-    LOG_WARN("failed to get key", K(ret), K(args));
-  } else {
-    is_inited_ = true;
-  }
-
-  return ret;
-}
-
-int LDel::apply(ObRedisCtx &redis_ctx)
-{
-  int ret = OB_SUCCESS;
-  ListCommandOperator cmd_op(redis_ctx);
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_del(key_))) {
-    LOG_WARN("failed to do list linsert", K(ret), K(key_));
   }
   return ret;
 }

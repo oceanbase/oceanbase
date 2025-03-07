@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "objit/expr/ob_iraw_expr.h"
-#include "lib/oblog/ob_log.h"
 namespace oceanbase {
 namespace jit {
 namespace expr {

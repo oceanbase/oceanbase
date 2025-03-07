@@ -12,18 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_create_standby_from_net_actor.h"
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "observer/ob_server_struct.h"        // GCTX
-#include "observer/ob_service.h" // ObService
-#include "share/rc/ob_tenant_base.h"    // MTL_ID
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
-#include "share/ob_rpc_struct.h" // ObCreateTenantEndArg
 #include "rootserver/restore/ob_restore_scheduler.h" //reset_schema_status
-#include "rootserver/ob_rs_async_rpc_proxy.h" // ObSwitchSchemaProxy
-#include "share/ob_common_rpc_proxy.h" // create_tenant_end
 #include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
-#include "share/ob_rpc_struct.h" // ObBroadcastSchemaArg
-#include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 
 #define STAT(level, fmt, args...) RS_LOG(level, "[NET_STANDBY_TNT_SERVICE] " fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)

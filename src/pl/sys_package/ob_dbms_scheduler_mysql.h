@@ -39,8 +39,6 @@ public:
 private:
   static int execute_sql(sql::ObExecContext &ctx, ObSqlString &sql, int64_t &affected_rows);
   static int _generate_job_id(int64_t tenant_id, int64_t &max_job_id);
-  static int _splice_insert_sql(sql::ObExecContext &ctx, sql::ParamStore &params,
-    int64_t tenant_id, int64_t job_id, ObSqlString &sql);
 };
 
 } // end of pl

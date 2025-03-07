@@ -12,38 +12,15 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "rootserver/ddl_task/ob_ddl_task.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_define.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/location_cache/ob_location_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_index_builder_util.h"
-#include "share/ob_thread_mgr.h"
-#include "share/ob_ddl_checksum.h"
+#include "ob_ddl_task.h"
 #include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_freeze_info_proxy.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ob_snapshot_info_manager.h"
 #include "storage/ob_common_id_utils.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ddl_task/ob_rebuild_index_task.h"
 #include "rootserver/ddl_task/ob_vec_index_build_task.h"
+#include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
 #include "rootserver/ddl_task/ob_fts_index_build_task.h"
 
 const bool OB_DDL_TASK_ENABLE_TRACING = false;
@@ -223,6 +200,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam()
     dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr),
     aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr), fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
+    vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false)
 {
 }
@@ -245,6 +223,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     ddl_arg_(ddl_arg), allocator_(allocator), aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr),
     fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
+    vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     tenant_data_version_(0),
     ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), fts_snapshot_version_(0)
 {
@@ -779,26 +758,6 @@ int ObDDLTask::cleanup()
   return ret;
 }
 
-ObDDLTaskStatInfo::ObDDLTaskStatInfo()
-  : start_time_(0), finish_time_(0), time_remaining_(0), percentage_(0), op_name_(), target_(), message_()
-{
-}
-
-int ObDDLTaskStatInfo::init(const char *&ddl_type_str, const uint64_t table_id)
-{
-  int ret = OB_SUCCESS;
-  MEMSET(op_name_, 0, common::MAX_LONG_OPS_NAME_LENGTH);
-  MEMSET(target_, 0, common::MAX_LONG_OPS_TARGET_LENGTH);
-  if (OB_FAIL(databuff_printf(op_name_, common::MAX_LONG_OPS_NAME_LENGTH, "%s", ddl_type_str))) {
-    LOG_WARN("failed to print ddl type str", K(ret));
-  } else if (OB_FAIL(databuff_printf(target_, common::MAX_LONG_OPS_TARGET_LENGTH, "%lu", table_id))) {
-    LOG_WARN("failed to print ddl table name", K(ret), K(table_id));
-  } else {
-    start_time_ = ObTimeUtility::current_time();
-  }
-  return ret;
-}
-
 int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_str)
 {
   int ret = OB_SUCCESS;
@@ -811,6 +770,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       ddl_type_str =  "create fts index";
       break;
     case DDL_CREATE_VEC_INDEX:
+    case DDL_CREATE_VEC_IVFFLAT_INDEX:
+    case DDL_CREATE_VEC_IVFSQ8_INDEX:
+    case DDL_CREATE_VEC_IVFPQ_INDEX:
       ddl_type_str =  "create vec index";
       break;
     case DDL_REBUILD_INDEX:
@@ -913,6 +875,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       ddl_type_str = "drop mulvalue index";
       break;
     case DDL_DROP_VEC_INDEX:
+    case DDL_DROP_VEC_IVFFLAT_INDEX:
+    case DDL_DROP_VEC_IVFSQ8_INDEX:
+    case DDL_DROP_VEC_IVFPQ_INDEX:
       ddl_type_str = "drop vec index";
       break;
     case DDL_ALTER_COLUMN_GROUP:
@@ -1107,7 +1072,10 @@ bool ObDDLTask::is_ddl_task_can_be_cancelled() const
   if (task_type_ == ObDDLType::DDL_DROP_INDEX ||
       task_type_ == ObDDLType::DDL_DROP_VEC_INDEX ||
       task_type_ == ObDDLType::DDL_DROP_FTS_INDEX ||
-      task_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX) {
+      task_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_IVFFLAT_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_IVFSQ8_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_IVFPQ_INDEX) {
     can_be_cancelled = false;
   }
   return can_be_cancelled;
@@ -1741,186 +1709,6 @@ int ObDDLTask::check_errsim_error()
   return ret;
 }
 #endif
-
-int ObDDLTask::gather_scanned_rows(
-    const uint64_t tenant_id,
-    const int64_t task_id,
-    ObMySQLProxy &sql_proxy,
-    int64_t &row_scanned)
-{
-  int ret = OB_SUCCESS;
-  row_scanned = 0;
-  char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
-  trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else {
-    ObSqlString scan_sql;
-    sqlclient::ObMySQLResult *scan_result = NULL;
-    SMART_VAR(ObMySQLProxy::MySQLResult, scan_res) {
-      if (OB_FAIL(scan_sql.assign_fmt(
-          "SELECT OUTPUT_ROWS FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SUBPLAN_SCAN' OR PLAN_OPERATION='PHY_VEC_SUBPLAN_SCAN') AND OTHERSTAT_5_VALUE='%ld'",
-          OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
-        LOG_WARN("failed to assign sql", K(ret));
-      } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
-        LOG_WARN("ddl sim failure: gather scan rows slow", K(ret), K(tenant_id), K(task_id));
-      } else if (OB_FAIL(sql_proxy.read(scan_res, tenant_id, scan_sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(ret));
-      } else if (OB_ISNULL(scan_result = scan_res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
-      } else {
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(scan_result->next())) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              break;
-            } else {
-              LOG_WARN("failed to get next row", K(ret));
-            }
-          } else {
-            int64_t row_scanned_tmp = 0;
-            EXTRACT_INT_FIELD_MYSQL(*scan_result, "OUTPUT_ROWS", row_scanned_tmp, int64_t);
-            row_scanned += row_scanned_tmp;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLTask::gather_sorted_rows(
-    const uint64_t tenant_id,
-    const int64_t task_id,
-    ObMySQLProxy &sql_proxy,
-    int64_t &row_sorted)
-{
-  int ret = OB_SUCCESS;
-  row_sorted = 0;
-  char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
-  trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else {
-    ObSqlString sort_sql;
-    sqlclient::ObMySQLResult *sort_result = NULL;
-    SMART_VAR(ObMySQLProxy::MySQLResult, sort_res) {
-      if (OB_FAIL(sort_sql.assign_fmt(
-          "SELECT OTHERSTAT_1_VALUE AS ROW_SORTED FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SORT' OR PLAN_OPERATION = 'PHY_VEC_SORT') AND OTHERSTAT_5_VALUE='%ld'",
-          OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
-        LOG_WARN("failed to assign sql", K(ret));
-      } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
-        LOG_WARN("ddl sim failure: gather sorted rows slow", K(ret), K(tenant_id), K(task_id));
-      } else if (OB_FAIL(sql_proxy.read(sort_res, tenant_id, sort_sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(ret));
-      } else if (OB_ISNULL(sort_result = sort_res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
-      }
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(sort_result->next())) {
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-            break;
-          } else {
-            LOG_WARN("failed to get next row", K(ret));
-          }
-        } else {
-          int64_t row_sorted_tmp = 0;
-          EXTRACT_INT_FIELD_MYSQL(*sort_result, "ROW_SORTED", row_sorted_tmp, int64_t);
-          row_sorted += row_sorted_tmp;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLTask::gather_inserted_rows(
-    const uint64_t tenant_id,
-    const int64_t task_id,
-    ObMySQLProxy &sql_proxy,
-    int64_t &row_inserted_cg,
-    int64_t &row_inserted_file)
-{
-  int ret = OB_SUCCESS;
-  row_inserted_cg = 0;
-  row_inserted_file = 0;
-  char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
-  trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else {
-    ObSqlString insert_sql;
-    sqlclient::ObMySQLResult *insert_result = NULL;
-    SMART_VAR(ObMySQLProxy::MySQLResult, insert_res) {
-      if (OB_FAIL(insert_sql.assign_fmt(
-          "SELECT OTHERSTAT_1_VALUE AS CG_ROW_INSERTED, OTHERSTAT_2_VALUE AS SSTABLE_ROW_INSERTED FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_PX_MULTI_PART_SSTABLE_INSERT' AND OTHERSTAT_5_VALUE='%ld'",
-          OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
-        LOG_WARN("failed to assign sql", K(ret));
-      } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
-        LOG_WARN("ddl sim failure: gather insert rows slow", K(ret), K(tenant_id), K(task_id));
-      } else if (OB_FAIL(sql_proxy.read(insert_res, tenant_id, insert_sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(ret), K(insert_sql));
-      } else if (OB_ISNULL(insert_result = insert_res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
-      }
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(insert_result->next())) {
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-            break;
-          } else {
-            LOG_WARN("failed to get next row", K(ret));
-          }
-        } else {
-          int64_t row_inserted_cg_tmp = 0;
-          EXTRACT_INT_FIELD_MYSQL(*insert_result, "CG_ROW_INSERTED", row_inserted_cg_tmp, int64_t);
-          row_inserted_cg += row_inserted_cg_tmp;
-
-          int64_t row_inserted_file_tmp = 0;
-          EXTRACT_INT_FIELD_MYSQL(*insert_result, "SSTABLE_ROW_INSERTED", row_inserted_file_tmp, int64_t);
-          row_inserted_file += row_inserted_file_tmp;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLTask::gather_redefinition_stats(const uint64_t tenant_id,
-                                         const int64_t task_id,
-                                         ObMySQLProxy &sql_proxy,
-                                         int64_t &row_scanned,
-                                         int64_t &row_sorted,
-                                         int64_t &row_inserted_cg,
-                                         int64_t &row_inserted_file)
-{
-  int ret = OB_SUCCESS;
-  row_scanned = 0;
-  row_sorted = 0;
-  row_inserted_cg = 0;
-  row_inserted_file = 0;
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(gather_scanned_rows(tenant_id, task_id, sql_proxy, row_scanned))) {
-    LOG_WARN("gather scanned rows failed", K(ret));
-  } else if (OB_FAIL(gather_sorted_rows(tenant_id, task_id, sql_proxy, row_sorted))) {
-    LOG_WARN("gather sorted rows failed", K(ret));
-  } else if (OB_FAIL(gather_inserted_rows(tenant_id, task_id, sql_proxy, row_inserted_cg, row_inserted_file))) {
-    LOG_WARN("gather inserted rows failed", K(ret));
-  }
-  return ret;
-}
 
 /******************           ObDDLWaitTransEndCtx         *************/
 
@@ -3175,6 +2963,55 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
             task.set_fts_index_aux_table_id(target_table_id);
             task.set_fts_index_aux_task_id(target_task_id);
             task.set_fts_index_aux_task_submitted(true);
+          }
+        } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
+          task.set_drop_index_task_id(target_task_id);
+          task.set_drop_index_task_submitted(true);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(task.update_task_message(proxy))) {
+        LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+      }
+    } else if (task_record.ddl_type_ == DDL_CREATE_VEC_IVFFLAT_INDEX ||
+               task_record.ddl_type_ == DDL_CREATE_VEC_IVFSQ8_INDEX ||
+               task_record.ddl_type_ == DDL_CREATE_VEC_IVFPQ_INDEX) {
+      SMART_VAR(ObVecIVFIndexBuildTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to init ObVecIndexBuildTask", K(ret), K(task_record));
+        } else if (UPDATE_CREATE_INDEX_ID == update_type) {
+          if (index_schema.is_vec_ivfflat_centroid_index() ||
+              index_schema.is_vec_ivfsq8_centroid_index() ||
+              index_schema.is_vec_ivfpq_centroid_index()) {
+            task.set_centroid_table_id(target_table_id);
+            task.set_centroid_table_task_id(target_task_id);
+            task.set_centroid_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfflat_cid_vector_index() ||
+                     index_schema.is_vec_ivfsq8_cid_vector_index()) {
+            task.set_cid_vector_table_id(target_table_id);
+            task.set_cid_vector_table_task_id(target_task_id);
+            task.set_cid_vector_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfflat_rowkey_cid_index() ||
+                     index_schema.is_vec_ivfsq8_rowkey_cid_index()) {
+            task.set_rowkey_cid_table_id(target_table_id);
+            task.set_rowkey_cid_table_task_id(target_task_id);
+            task.set_rowkey_cid_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfsq8_meta_index()) {
+            task.set_sq_meta_table_id(target_table_id);
+            task.set_sq_meta_table_task_id(target_task_id);
+            task.set_sq_meta_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfpq_pq_centroid_index()) {
+            task.set_pq_centroid_table_id(target_table_id);
+            task.set_pq_centroid_table_task_id(target_task_id);
+            task.set_pq_centroid_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfpq_code_index()) {
+            task.set_pq_code_table_id(target_table_id);
+            task.set_pq_code_table_task_id(target_task_id);
+            task.set_pq_code_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfpq_rowkey_cid_index()) {
+            task.set_pq_rowkey_cid_table_id(target_table_id);
+            task.set_pq_rowkey_cid_table_task_id(target_task_id);
+            task.set_pq_rowkey_cid_table_task_submitted(true);
           }
         } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
           task.set_drop_index_task_id(target_task_id);

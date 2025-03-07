@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/profile/ob_trace_id.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
+#include "deps/oblib/src/lib/thread/thread.h"
 
 using namespace oceanbase::common;
 class TestTraceID: public ::testing::Test

@@ -11,8 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/stat/ob_stat_template.h"
-#include "lib/stat/ob_session_stat.h"
+#include "deps/oblib/src/lib/stat/ob_di_cache.h"
 
 namespace oceanbase
 {

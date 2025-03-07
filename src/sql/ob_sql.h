@@ -444,7 +444,7 @@ private:
                                   ObBitSet<> &neg_param_index,
                                   ObBitSet<> &not_param_index,
                                   ObBitSet<> &must_be_positive_index,
-                                  ObBitSet<> &formalize_prec_index);
+                                  ObBitSet<> &fmt_int_or_ch_decint_idx);
 
   int resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
 

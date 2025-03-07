@@ -13,6 +13,7 @@
 
 #include "storage/direct_load/ob_direct_load_sstable_builder.h"
 #include "observer/table_load/ob_table_load_stat.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 
 namespace oceanbase
 {
@@ -82,7 +83,8 @@ int ObDirectLoadSSTableBuilder::init(const ObDirectLoadSSTableBuildParam &param)
   return ret;
 }
 
-int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const ObDatumRow &datum_row)
+int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id,
+                                           const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -101,8 +103,8 @@ int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id, const ta
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, simple_sstable_append_row_time_us);
     if (OB_FAIL(check_rowkey_order(key))) {
       LOG_WARN("fail to check rowkey order", KR(ret), K(datum_row));
-    } else if (OB_FAIL(external_row.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                                param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
+    } else if (OB_FAIL(external_row.from_datum_row(datum_row,
+                                                   param_.table_data_desc_.rowkey_column_num_))) {
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(data_block_writer_.append_row(external_row))) {
       LOG_WARN("fail to append row to data block writer", KR(ret), K(external_row));
@@ -169,8 +171,8 @@ int ObDirectLoadSSTableBuilder::close()
   return ret;
 }
 
-int ObDirectLoadSSTableBuilder::get_tables(ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                                           ObIAllocator &allocator)
+int ObDirectLoadSSTableBuilder::get_tables(ObDirectLoadTableHandleArray &table_array,
+                                           ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -178,7 +180,7 @@ int ObDirectLoadSSTableBuilder::get_tables(ObIArray<ObIDirectLoadPartitionTable 
     LOG_WARN("ObDirectLoadSSTableBuilder not init", KR(ret), KP(this));
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("direct load sstable not closed", KR(ret));
+    LOG_WARN("direct load sstable not closed", KR(ret), K(table_array));
   } else {
     const int64_t index_item_num_per_block = ObDirectLoadIndexBlock::get_item_num_per_block(
       param_.table_data_desc_.sstable_index_block_size_);
@@ -209,21 +211,15 @@ int ObDirectLoadSSTableBuilder::get_tables(ObIArray<ObIDirectLoadPartitionTable 
       }
     }
     if (OB_SUCC(ret)) {
+      ObDirectLoadTableHandle table_handle;
       ObDirectLoadSSTable *sstable = nullptr;
-      if (OB_ISNULL(sstable = OB_NEWx(ObDirectLoadSSTable, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadSSTable", KR(ret));
+      if (OB_FAIL(table_manager->alloc_sstable(table_handle))) {
+        LOG_WARN("fail to alloc sstable", KR(ret));
+      } else if (FALSE_IT(sstable = static_cast<ObDirectLoadSSTable *>(table_handle.get_table()))) {
       } else if (OB_FAIL(sstable->init(param))) {
         LOG_WARN("fail to init sstable", KR(ret));
-      } else if (OB_FAIL(table_array.push_back(sstable))) {
+      } else if (OB_FAIL(table_array.add(table_handle))) {
         LOG_WARN("fail to push back sstable", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != sstable) {
-          sstable->~ObDirectLoadSSTable();
-          allocator.free(sstable);
-          sstable = nullptr;
-        }
       }
     }
   }

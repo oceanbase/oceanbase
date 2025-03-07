@@ -195,10 +195,13 @@ private:
   int inner_cached_read_from_block_(const int64_t block_index,
                                     const int64_t begin_read_offset_in_block, const int64_t end_read_offset_in_block,
                                     ObTmpFileIOCtx &io_ctx,
-                                    int64_t &total_kv_cache_page_read_cnt,
-                                    int64_t &total_uncached_page_read_cnt,
-                                    int64_t &kv_cache_page_read_hits,
-                                    int64_t &uncached_page_read_hits);
+                                    ObTmpFileInfo::ObTmpFileReadInfo &read_stat);
+  int inner_cached_read_from_block_with_prefetch_(const int64_t block_index,
+                                                  const int64_t begin_read_offset_in_block,
+                                                  const int64_t end_offset_in_block,
+                                                  const int64_t user_read_size,
+                                                  ObTmpFileIOCtx &io_ctx,
+                                                  ObTmpFileInfo::ObTmpFileReadInfo &read_stat);
   int collect_pages_in_block_(const int64_t block_index,
                               const int64_t begin_page_idx_in_block,
                               const int64_t end_page_idx_in_block,
@@ -210,8 +213,9 @@ private:
                                           const int64_t start_array_idx,
                                           ObTmpFileIOCtx &io_ctx);
   int inner_read_continuous_uncached_pages_(const int64_t block_index,
-                                            const int64_t begin_read_offset_in_block,
-                                            const int64_t end_read_offset_in_block,
+                                            const int64_t begin_io_read_offset,
+                                            const int64_t end_io_read_offset,
+                                            const int64_t user_read_size,
                                             ObTmpFileIOCtx &io_ctx);
 
   virtual int swap_page_to_disk_(const ObTmpFileIOCtx &io_ctx) override;

@@ -13,14 +13,10 @@
  * This file defines interface of OBCDC
  */
 
+
 #include "libobcdc.h"
-
 #include <locale.h>
-#include <curl/curl.h>
-#include "lib/allocator/ob_malloc.h"    // ob_set_memory_size_limit
-#include "lib/utility/utility.h"        // get_phy_mem_size
 
-#include "ob_log_common.h"          // MAX_MEMORY_USAGE_PERCENT
 #include "ob_log_instance.h"        // ObLogInstance
 
 using namespace oceanbase::common;

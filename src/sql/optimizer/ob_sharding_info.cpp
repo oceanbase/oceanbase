@@ -11,17 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_sharding_info.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/optimizer/ob_logical_operator.h"
+#include "ob_sharding_info.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_opt_est_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_raw_expr_sets.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_pwj_comparer.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

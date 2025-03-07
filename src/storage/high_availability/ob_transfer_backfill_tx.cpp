@@ -13,19 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_transfer_backfill_tx.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet.h"
-#include "logservice/ob_log_service.h"
-#include "share/rc/ob_tenant_base.h"
 #include "ob_tablet_backfill_tx.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "ob_transfer_service.h"
-#include "observer/ob_server_event_history_table_operator.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "share/ob_debug_sync_point.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "storage/high_availability/ob_transfer_handler.h"
 
 namespace oceanbase
 {

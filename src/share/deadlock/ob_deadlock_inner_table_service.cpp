@@ -10,17 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_occam_time_guard.h"
 #include "ob_deadlock_inner_table_service.h"
-#include "observer/ob_server_struct.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_define.h"
-#include "lib/utility/utility.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "ob_deadlock_parameters.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "rootserver/ob_root_service.h"
 
 namespace oceanbase

@@ -12,17 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_distinct.h"
-#include "sql/optimizer/ob_log_exchange.h"
-#include "sql/optimizer/ob_log_sort.h"
-#include "sql/optimizer/ob_log_set.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "ob_opt_est_cost.h"
-#include "ob_select_log_plan.h"
-#include "ob_optimizer_util.h"
-#include "ob_opt_selectivity.h"
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase;

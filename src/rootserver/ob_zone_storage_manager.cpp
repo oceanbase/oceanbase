@@ -13,24 +13,12 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_zone_storage_manager.h"
+#include "deps/oblib/src/lib/container/ob_iarray.h"
 
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/time/ob_time_utility.h"
-#include "ob_rs_event_history_table_operator.h"
-#include "observer/ob_server_struct.h"
-#include "rootserver/ob_cluster_event.h"
 #include "rootserver/ob_root_service.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_global_stat_proxy.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_zone_info.h"
 #include "share/ob_zone_table_operation.h"
-#include "share/object_storage/ob_object_storage_struct.h"
 #include "share/object_storage/ob_zone_storage_table_operation.h"
-#include "storage/ob_file_system_router.h"
-#include "share/ob_all_server_tracer.h"
 #include "share/object_storage/ob_device_connectivity.h"
 
 namespace oceanbase

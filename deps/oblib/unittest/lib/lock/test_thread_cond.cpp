@@ -11,10 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <pthread.h>
 #include "lib/lock/ob_thread_cond.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/thread/thread_pool.h"
+#include "deps/oblib/src/lib/thread/threads.h"
 
 namespace oceanbase
 {

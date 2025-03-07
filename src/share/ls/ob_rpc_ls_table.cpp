@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX SHARE_PT
 
 #include "ob_rpc_ls_table.h"           // for declarations of functions in this cpp
-#include "share/config/ob_server_config.h"     // for ObServerConfig
-#include "share/ob_rs_mgr.h"                   // for ObRpcLSTable
 #include "share/ob_common_rpc_proxy.h"         // for ObCommonRpcProxy
 #include "rootserver/ob_rs_async_rpc_proxy.h"//async
-#include "share/ob_rpc_struct.h"//ObDetectMasterRsArg, ObRemoveSysLsArg
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/ob_srv_rpc_proxy.h"//ObSrvRpcProxy
-#include "lib/mysqlclient/ob_mysql_proxy.h"//ObMySQLProxy
-#include "share/ob_share_util.h" // ObShareUtil
-#include "share/resource_manager/ob_cgroup_ctrl.h" //CGID_DEF
 
 namespace oceanbase
 {

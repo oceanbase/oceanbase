@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
-#include "common/ob_tablet_id.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "storage/ddl/ob_direct_load_mgr_agent.h"
-#include "storage/ddl/ob_ddl_seq_generator.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -197,7 +194,10 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("Table not exist", K(MY_SPEC.plan_->get_ddl_table_id()), K(ret));
   } else if (OB_FALSE_IT(is_vec_gen_vid_ = table_schema->is_vec_rowkey_vid_type())) {
-  } else if (OB_FALSE_IT(is_vec_data_complement_ = table_schema->is_vec_index_snapshot_data_type())) {
+  } else if (OB_FALSE_IT(is_vec_data_complement_ = (table_schema->is_vec_index_snapshot_data_type() ||
+                                                    table_schema->is_vec_ivfflat_index() ||
+                                                    table_schema->is_vec_ivfsq8_index() ||
+                                                    table_schema->is_vec_ivfpq_index()))) {
   } else if (need_count_rows() && OB_FAIL(get_all_rows_and_count())) {
     LOG_WARN("fail to get all rows and count", K(ret));
   } else {
@@ -286,6 +286,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         }
       }
       int64_t parallel_idx = curr_tablet_seq_cache ? curr_tablet_seq_cache->task_id_ : MAX(tablet_slice_param.slice_idx_, 0);
+      slice_info.slice_idx_ = parallel_idx;
       FLOG_INFO("update ddl parallel id", K(ret), K(notify_tablet_id), K(slice_info), K(parallel_idx), K(tablet_slice_param), K(ctx_.get_px_task_id()), K(is_current_slice_empty),
           K(row_tablet_id), K(is_all_partition_finished_), K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
 
@@ -311,13 +312,14 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         }
         if (OB_SUCC(ret)) {
           ObDDLSliceRowIterator slice_row_iter(
-              this, notify_tablet_id, is_current_slice_empty, table_schema->get_rowkey_column_num(),
+              this, notify_tablet_id, is_current_slice_empty,
+              table_schema->is_index_table(), table_schema->get_rowkey_column_num(), table_schema->get_lob_inrow_threshold(),
               snapshot_version_, tablet_slice_param, need_idempotent_autoinc_val, table_all_slice_count_,
               table_level_slice_idx, autoinc_range_interval_);
           ObDDLInsertRowIterator row_iter;
           if (OB_FAIL(row_iter.init(tenant_id, ddl_agent, &slice_row_iter, notify_ls_id, notify_tablet_id,
-                                    slice_info.context_id_, tablet_slice_param,
-                                    table_schema->get_lob_columns_count(), slice_info.total_slice_cnt_, is_vec_data_complement_))) {
+                                    slice_info.context_id_, tablet_slice_param, table_schema->get_lob_columns_count(), slice_info.total_slice_cnt_,
+                                    is_vec_data_complement_ || table_schema->is_index_table()))) {
             LOG_WARN("init ddl insert rot iterator failed", K(ret));
           } else if (OB_FAIL(ddl_agent.fill_sstable_slice(slice_info, &row_iter, affected_rows,
                                                           &insert_monitor))) {

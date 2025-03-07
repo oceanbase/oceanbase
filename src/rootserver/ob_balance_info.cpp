@@ -11,28 +11,9 @@
  */
 
 #define USING_LOG_PREFIX RS_LB
-#include "ob_balance_info.h"
 
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_global_stat_proxy.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "ob_unit_manager.h"
-#include "ob_zone_manager.h"
-#include "ob_root_utils.h"
-#include "ob_root_service.h"
+#include "ob_balance_info.h"
 #include "ob_resource_weight_parser.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "storage/ob_file_system_router.h"
-#include "storage/tx/ob_i_ts_source.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;

@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/object_storage/ob_device_connectivity.h"
-#include <time.h>
-#include "lib/string/ob_sql_string.h"
-#include "common/storage/ob_io_device.h"
 #include "share/config/ob_server_config.h"
-#include "share/object_storage/ob_object_storage_struct.h"
-#include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_backup_io_adapter.h"
 
 namespace oceanbase

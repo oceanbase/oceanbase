@@ -88,6 +88,14 @@ public:
       common::ObIAllocator &allocator,
       bool &task_has_exist,
       ObDDLTaskRecord &task_record);
+  int submit_drop_vec_index_task(
+      common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &data_schema,
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const obrpc::ObDropIndexArg &arg,
+      common::ObIAllocator &allocator,
+      bool &task_has_exist,
+      ObDDLTaskRecord &task_record);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema *data_schema,
@@ -113,7 +121,7 @@ public:
                                 ObDDLTaskRecord &task_record);
   int drop_index_on_failed(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
 private:
-  int recognize_vec_index_schemas(
+  int recognize_vec_hnsw_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const bool is_vec_inner_drop,
       int64_t &index_ith,
@@ -122,6 +130,16 @@ private:
       int64_t &domain_index_ith,
       int64_t &index_id_ith,
       int64_t &snapshot_data_ith);
+  int recognize_vec_ivf_index_schemas(
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const bool is_vec_inner_drop,
+      int64_t &index_ith,
+      int64_t &centroid_ith,
+      int64_t &cid_vector_ith,
+      int64_t &rowkey_cid_ith,
+      int64_t &sq_meta_ith,
+      int64_t &pq_centroid_ith,
+      int64_t &pq_code_ith);
   int recognize_fts_or_multivalue_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const bool is_parent_task_dropping_fts,

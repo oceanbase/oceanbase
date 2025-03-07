@@ -13,20 +13,12 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_index_executor.h"
 
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/resolver/ddl/ob_drop_index_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
-#include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/ob_partition_pre_split.h"
 

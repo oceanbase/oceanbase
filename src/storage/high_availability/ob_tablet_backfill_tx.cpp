@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_backfill_tx.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
@@ -844,8 +838,6 @@ int ObTabletBackfillTXTask::check_major_sstable_(
   } else if (OB_ISNULL(tablet) || !table_store_wrapper.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check major sstable get invalid argument", K(ret), KP(tablet), K(table_store_wrapper));
-  } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-    //skip check tablet sstable when tablet in restore status
   } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
     // do nothing
   } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {

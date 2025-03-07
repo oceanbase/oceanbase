@@ -32,7 +32,6 @@ ObRootServiceUtilChecker::~ObRootServiceUtilChecker()
 
 int ObRootServiceUtilChecker::init(
     ObUnitManager &unit_mgr,
-    ObZoneManager &zone_mgr,
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
     common::ObAddr &self,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -45,7 +44,6 @@ int ObRootServiceUtilChecker::init(
     LOG_WARN("init twice", KR(ret));
   } else if (OB_FAIL(migrate_unit_finish_checker_.init(
           unit_mgr,
-          zone_mgr,
           schema_service,
           sql_proxy,
           lst_operator))) {
@@ -54,7 +52,6 @@ int ObRootServiceUtilChecker::init(
           schema_service,
           common_rpc_proxy,
           self,
-          zone_mgr,
           sql_proxy,
           lst_operator))) {
     LOG_WARN("fail to init alter locality finish checker", KR(ret));

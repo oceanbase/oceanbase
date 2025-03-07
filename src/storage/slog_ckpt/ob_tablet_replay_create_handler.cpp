@@ -14,17 +14,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tablet_replay_create_handler.h"
-#include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant.h"
-#include "share/scn.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
-#include "storage/high_availability/ob_tablet_transfer_info.h"
-#include "storage/high_availability/ob_storage_ha_struct.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
 
 namespace oceanbase
 {

@@ -12,8 +12,6 @@
 
 #include "storage/tx/ob_ctx_tx_data.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/tx/ob_tx_data_define.h"
-#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
 {

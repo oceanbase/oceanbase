@@ -11,34 +11,10 @@
  */
 #define USING_LOG_PREFIX SERVER
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
-#include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "share/rpc/ob_batch_processor.h"
-#include "share/rpc/ob_blacklist_req_processor.h"
-#include "share/rpc/ob_blacklist_resp_processor.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/cmd/ob_load_data_rpc.h"
-#include "sql/engine/px/ob_px_rpc_processor.h"
-#include "sql/dtl/ob_dtl_rpc_processor.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
-#include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_ts_response_handler.h"
-#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "observer/ob_rpc_processor_simple.h"
-#include "observer/ob_srv_task.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
-#include "observer/table/ob_table_execute_processor.h"
-#include "observer/table/ob_table_batch_execute_processor.h"
-#include "observer/table/ob_table_query_processor.h"
-#include "observer/table/ob_table_query_and_mutate_processor.h"
+#include "src/observer/table/ob_table_filter.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -74,6 +50,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcCheckServerEmptyWithResultP, gctx_);
     RPC_PROCESSOR(ObRpcPrepareServerForAddingServerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckServerMachineStatusP, gctx_);
+    RPC_PROCESSOR(ObAllServerTracerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(ObRpcWaitMasterKeyInSyncP, gctx_);
@@ -118,6 +95,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLIncCommitLogP, gctx_);
+    RPC_PROCESSOR(ObRpcDRTaskReplyToMetaP, gctx_);
     RPC_PROCESSOR(ObRpcLSCancelReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSMigrateReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSAddReplicaP, gctx_);
@@ -168,6 +146,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObDelSSTabletMicroP, gctx_);
     RPC_PROCESSOR(ObSetSSCkptCompressorP, gctx_);
 #endif
+    RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyLSRestoreFinishP, gctx_);
     RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);

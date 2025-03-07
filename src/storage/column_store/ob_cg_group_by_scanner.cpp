@@ -174,7 +174,7 @@ int ObCGGroupByScanner::read_distinct(const int32_t group_by_col)
 {
   const char **cell_data = group_by_cell_->get_cell_datas();
   return micro_scanner_->read_distinct(group_by_col,
-      nullptr == cell_data ? cell_data_ptrs_ : cell_data, *group_by_cell_);
+      nullptr == cell_data ? cell_data_ptrs_ : cell_data, is_padding_mode_, *group_by_cell_);
 }
 
 int ObCGGroupByScanner::read_reference(const int32_t group_by_col)

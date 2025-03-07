@@ -16,9 +16,6 @@
 #define protected public
 
 #include "storage/backup/ob_backup_index_compressor.h"
-#include "lib/allocator/page_arena.h"
-#include <cstdlib>
-#include <ctime>
 
 using namespace oceanbase;
 using namespace oceanbase::common;

@@ -10,24 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_store_format.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "ob_block_manager.h"
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_macro_block.h"
-#include "ob_micro_block_hash_index.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_encryption_util.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_task_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/compaction/ob_tenant_freeze_info_mgr.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/backup/ob_backup_data_struct.h"
-#include "index_block/ob_index_block_row_struct.h"
-#include "ob_macro_block_struct.h"
-#include "ob_macro_block_handle.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -154,7 +140,8 @@ ObMacroBlock::ObMacroBlock()
     macro_header_(),
     data_base_offset_(0),
     last_rowkey_(),
-    rowkey_allocator_("MacroBlkRowkey"),
+    allocator_("MacroBlock"),
+    macro_block_bf_(),
     is_dirty_(false),
     common_header_(),
     max_merged_trans_version_(0),
@@ -169,6 +156,7 @@ ObMacroBlock::ObMacroBlock()
 
 ObMacroBlock::~ObMacroBlock()
 {
+  reset();
 }
 
 
@@ -179,12 +167,27 @@ int ObMacroBlock::init(
 {
   int ret = OB_SUCCESS;
   reuse();
-  spec_ = &spec;
-  merge_block_info_ = &merge_block_info;
-  cur_macro_seq_ = cur_macro_seq;
-  data_base_offset_ = calc_basic_micro_block_data_offset(
-    spec.get_row_column_count(), spec.get_rowkey_column_count(), spec.get_fixed_header_version());
-  is_inited_ = true;
+  // Init macro block bloom filter.
+  if (spec.enable_macro_block_bloom_filter()) {
+    if (OB_UNLIKELY(spec.get_tablet_id().is_ls_inner_tablet())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument, cannot create macro block bloom filter for ls inner tablet",
+               K(ret), K(spec), K(spec.get_tablet_id()));
+    } else if (OB_FAIL(macro_block_bf_.alloc_bf(spec))) {
+      LOG_WARN("fail to allocate macro block bloom filter", K(ret), K(spec));
+    }
+  }
+  // Init macro block.
+  if (OB_FAIL(ret)) {
+  } else {
+    spec_ = &spec;
+    merge_block_info_ = &merge_block_info;
+    cur_macro_seq_ = cur_macro_seq;
+    data_base_offset_ = calc_basic_micro_block_data_offset(spec.get_row_column_count(),
+                                                           spec.get_rowkey_column_count(),
+                                                           spec.get_fixed_header_version());
+    is_inited_ = true;
+  }
   return ret;
 }
 
@@ -269,7 +272,7 @@ int ObMacroBlock::write_micro_block(const ObMicroBlockDesc &micro_block_desc, in
     if (OB_UNLIKELY(last_rowkey.get_datum_cnt() != spec_->get_rowkey_column_count())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "unexpected rowkey count", K(ret), K(last_rowkey), KPC_(spec));
-    } else if (OB_FAIL(last_rowkey.deep_copy(last_rowkey_, rowkey_allocator_))) {
+    } else if (OB_FAIL(last_rowkey.deep_copy(last_rowkey_, allocator_))) {
       STORAGE_LOG(WARN, "fail to deep copy last rowkey", K(ret), K(last_rowkey));
     }
   }
@@ -418,7 +421,8 @@ void ObMacroBlock::reset()
   data_size_ = 0;
   data_zsize_ = 0;
   last_rowkey_.reset();
-  rowkey_allocator_.reset();
+  macro_block_bf_.reset();
+  allocator_.reset();
   is_inited_ = false;
 }
 
@@ -434,7 +438,8 @@ void ObMacroBlock::reuse()
   data_size_ = 0;
   data_zsize_ = 0;
   last_rowkey_.reset();
-  rowkey_allocator_.reuse();
+  macro_block_bf_.reset();
+  allocator_.reuse();
   is_inited_ = false;
 }
 int ObMacroBlock::reserve_header(const ObDataStoreDesc &spec, const int64_t &cur_macro_seq)
@@ -529,7 +534,32 @@ int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta)
   macro_meta.val_.row_store_type_ = spec_->get_row_store_type();
   macro_meta.val_.schema_version_ = spec_->get_schema_version();
   macro_meta.val_.snapshot_version_ = spec_->get_snapshot_version();
-  if (OB_ISNULL(macro_header_.column_checksum_)) {
+
+  // Set macro block bloom filter.
+  macro_meta.val_.macro_block_bf_size_ = 0;
+  if (!macro_block_bf_.should_persist()) {
+    // do nothing.
+  } else {
+    int64_t serialized_bf_size = 0;
+    char * serialized_bf_buf = nullptr;
+    int64_t pos = 0;
+    if (OB_UNLIKELY(!spec_->enable_macro_block_bloom_filter())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to set bloom filter for macro meta", K(ret), K(spec_));
+    } else if (FALSE_IT(serialized_bf_size = macro_block_bf_.get_serialize_size())) {
+    } else if (FALSE_IT(macro_meta.val_.macro_block_bf_size_ = serialized_bf_size)) {
+    } else if (OB_ISNULL(serialized_bf_buf = static_cast<char *>(allocator_.alloc(serialized_bf_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate serialized macro block bloom filter buffer", K(ret), K(serialized_bf_size));
+    } else if (OB_FAIL(macro_block_bf_.serialize(serialized_bf_buf, serialized_bf_size, pos))) {
+      LOG_WARN("fail to serialize macro block bloom filter", K(ret), K(macro_block_bf_), K(serialized_bf_size));
+    } else {
+      macro_meta.val_.macro_block_bf_buf_ = serialized_bf_buf;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(macro_header_.column_checksum_)) {
   } else if (OB_FAIL(macro_meta.val_.column_checksums_.reserve(macro_meta.val_.column_count_))) {
     STORAGE_LOG(WARN, "fail to reserve checksum array", K(ret), K(macro_meta));
   } else {
@@ -541,7 +571,7 @@ int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta)
   }
   if (OB_SUCC(ret) && OB_UNLIKELY(!macro_meta.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "build invalid macro meta", K(ret), K(macro_meta));
+    STORAGE_LOG(WARN, "build invalid macro meta", K(ret), K(macro_meta), K(macro_meta.is_valid()));
   } else if (spec_->is_cg()) {
     macro_meta.val_.rowkey_count_ = 1;
   }

@@ -25,6 +25,8 @@ int obcharset_is_gb_charset_of_collation(ObCollationType collation_type, bool *i
     *is_gb = false;
     if (collation_type == CS_TYPE_GBK_CHINESE_CI ||
         collation_type == CS_TYPE_GBK_BIN ||
+        collation_type == CS_TYPE_GB2312_CHINESE_CI ||
+        collation_type == CS_TYPE_GB2312_BIN ||
         collation_type == CS_TYPE_GB18030_CHINESE_CI ||
         collation_type == CS_TYPE_GB18030_BIN ||
         collation_type == CS_TYPE_GB18030_CHINESE_CS ||
@@ -51,7 +53,15 @@ int obcharset_is_single_byte_charset_of_collation(ObCollationType collation_type
         collation_type == CS_TYPE_TIS620_BIN ||
         collation_type == CS_TYPE_TIS620_THAI_CI ||
         collation_type == CS_TYPE_DEC8_BIN ||
-        collation_type == CS_TYPE_DEC8_SWEDISH_CI) {
+        collation_type == CS_TYPE_DEC8_SWEDISH_CI ||
+        collation_type == CS_TYPE_CP850_GENERAL_CI ||
+        collation_type == CS_TYPE_CP850_BIN ||
+        collation_type == CS_TYPE_HP8_ENGLISH_CI ||
+        collation_type == CS_TYPE_HP8_BIN ||
+        collation_type == CS_TYPE_MACROMAN_GENERAL_CI ||
+        collation_type == CS_TYPE_MACROMAN_BIN ||
+        collation_type == CS_TYPE_SWE7_SWEDISH_CI ||
+        collation_type == CS_TYPE_SWE7_BIN) {
         *is_single_byte = true;
     }
     return ret;

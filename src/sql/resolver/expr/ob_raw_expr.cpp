@@ -12,14 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/resolver/expr/ob_expr_relation_analyzer.h"
+#include "sql/resolver/expr/ob_raw_expr_type_demotion.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
-#include "common/object/ob_object.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/expr/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
@@ -27,9 +26,6 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "sql/engine/expr/ob_expr_collection_construct.h"
 #include "sql/engine/expr/ob_expr_object_construct.h"
-#include "sql/engine/expr/ob_pl_expr_subquery.h"
-#include "share/config/ob_server_config.h"
-#include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 
@@ -305,6 +301,18 @@ int ObRawExpr::deep_copy(ObIRawExprCopier &copier,
       LOG_WARN("failed to assign other expr", K(ret));
     } else if (OB_FAIL(inner_deep_copy(copier))) {
       LOG_WARN("failed to deep copy new allocator", K(ret));
+    } else if (OB_UNLIKELY(other.get_attr_count() > 0) && get_attr_count() == 0) {
+      for (int64_t i = 0; i < other.get_attr_count() && OB_SUCC(ret); i++) {
+        ObRawExpr *attr_expr = NULL;
+        if (OB_FAIL(copier.copy(other.get_attr_expr(i), attr_expr))) {
+          LOG_WARN("failed to copy attr expr", K(ret));
+        } else if (OB_ISNULL(attr_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null expr", K(ret));
+        } else if (OB_FAIL(add_attr_expr(attr_expr))) {
+          LOG_WARN("fail to add attr expr", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -424,8 +432,9 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info,
 {
   //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   int ret = OB_SUCCESS;
-  ObRawExprDeduceType expr_deducer(session_info, solidify_session_vars, local_vars, local_var_id);
-  expr_deducer.set_expr_factory(expr_factory_);
+  ObRawExprTypeDemotion type_demotion(session_info, expr_factory_);
+  ObRawExprDeduceType expr_deducer(session_info, expr_factory_, solidify_session_vars, local_vars,
+                                   local_var_id, type_demotion);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
     if (OB_NOT_NULL(session_info) && session_info->is_varparams_sql_prepare() &&
         OB_ERR_INVALID_COLUMN_NUM != ret &&
@@ -1060,8 +1069,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_IS_FREE_LOCK == type_
       || T_FUN_SYS_IS_USED_LOCK == type_
       || T_FUN_SYS_RELEASE_LOCK == type_
-      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
-      || T_EXEC_VAR == type_) {
+      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_) {
      is_const_inherit = false;
   }
   if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
@@ -1458,9 +1466,7 @@ bool ObConstRawExpr::inner_same_as(
     //what are you doing ?
     if (NULL != check_context) {
       if (expr.is_const_raw_expr()) {
-        if (check_context->ora_numeric_compare_ && T_FUN_SYS_CAST == expr.get_expr_type() && lib::is_oracle_mode()) {
-          bool_ret = check_context->compare_ora_numeric_consts(*this, static_cast<const ObSysFunRawExpr&>(expr));
-        } else if (T_QUESTIONMARK == expr.get_expr_type()) {
+        if (T_QUESTIONMARK == expr.get_expr_type()) {
           bool_ret = true;
           const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr *>(&expr);
           int64_t param_idx = -1;
@@ -1570,57 +1576,6 @@ bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr &left,
   if (OB_SUCC(ret) && result && right.get_value().is_unknown()) {
     if (OB_FAIL(add_param_pair(right.get_value().get_unknown(), NULL))) {
       LOG_WARN("add param pair failed", K(ret));
-    }
-  }
-  return result;
-}
-
-bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObConstRawExpr &left,
-                                                         const ObSysFunRawExpr &right)
-{
-  int &ret = err_code_;
-  bool result = false;
-  if (OB_LIKELY(lib::is_oracle_mode() && right.is_const_expr() && right.get_expr_type() == T_FUN_SYS_CAST)) {
-    ObCastMode cm = right.get_extra();
-    const ObRawExpr *real_right = nullptr;
-    bool is_lossless = false;
-    if (CM_IS_IMPLICIT_CAST(cm) && !CM_IS_CONST_TO_DECIMAL_INT(cm)) {
-      if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(&right, is_lossless))) {
-        LOG_WARN("check lossless cast failed", K(ret));
-      } else if (is_lossless) {
-        real_right = right.get_param_expr(0);
-        if (OB_ISNULL(real_right)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid null param expr", K(ret));
-        } else {
-          result = left.same_as(*real_right, this);
-        }
-      }
-    }
-  }
-  return result;
-}
-
-bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObSysFunRawExpr &left, const ObConstRawExpr &right)
-{
-  int &ret = err_code_;
-  bool result = false;
-  if (OB_LIKELY(lib::is_oracle_mode() && left.get_expr_type()== T_FUN_SYS_CAST && left.is_const_expr())) {
-    ObCastMode cm = left.get_extra();
-    const ObRawExpr *real_left = nullptr;
-    bool is_lossless = false;
-    if (CM_IS_IMPLICIT_CAST(cm) && !CM_IS_CONST_TO_DECIMAL_INT(cm)) {
-      if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(&left, is_lossless))) {
-        LOG_WARN("check lossless cast failed", K(ret));
-      } else if (is_lossless) {
-        real_left = left.get_param_expr(0);
-        if (OB_ISNULL(real_left)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid null param expr", K(ret));
-        } else {
-          result = real_left->same_as(right, this);
-        }
-      }
     }
   }
   return result;
@@ -4684,9 +4639,6 @@ bool ObSysFunRawExpr::inner_same_as(
       bool_ret = inner_json_expr_same_as(*right_expr, check_context);
     } else if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
       bool_ret = inner_json_expr_same_as(expr, check_context);
-    } else if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
-        && T_FUN_SYS_CAST == get_expr_type() && lib::is_oracle_mode()) {
-      bool_ret = check_context->compare_ora_numeric_consts(*this, static_cast<const ObConstRawExpr &>(expr));
     }
   } else if (T_FUN_SYS_RAND == get_expr_type() ||
              T_FUN_SYS_RANDOM == get_expr_type() ||
@@ -4759,6 +4711,9 @@ bool ObSysFunRawExpr::inner_same_as(
            T_FUN_SYS_JSON_SET == get_expr_type() ||
            T_FUN_SYS_JSON_REMOVE == get_expr_type())) {
         bool_ret = false;
+      }
+      if (bool_ret && T_FUN_SYS_CALC_PARTITION_ID == get_expr_type()) {
+        bool_ret = get_partition_id_calc_type() == s_expr->get_partition_id_calc_type();
       }
     }
   } else if (expr.is_op_expr() && T_OP_CNN == expr.get_expr_type()) {
@@ -5006,6 +4961,10 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       if (OB_FAIL(BUF_PRINTF("%ld", get_mview_id()))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
+    } else if (IS_TYPE_DEMOTION_FUN(get_expr_type())) {
+      if (OB_FAIL(get_type_demotion_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get type demotion expr name", K(ret));
+      }
     } else {
       int64_t i = 0;
       if (get_param_count() > 1) {
@@ -5178,6 +5137,32 @@ int ObSysFunRawExpr::get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_
     if (OB_FAIL(BUF_PRINTF("%s.", autoinc_qualified_name.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObSysFunRawExpr::get_type_demotion_name(char *buf, int64_t buf_len, int64_t &pos,
+                                            ExplainType explain_type) const
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *const_expr = NULL;
+  if (OB_ISNULL(buf) || !IS_TYPE_DEMOTION_FUN(get_expr_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument",  K(ret), K(buf), K(get_expr_type()));
+  } else if (OB_UNLIKELY(2 != get_param_count())) {
+    ret = OB_INVALID_ARGUMENT_NUM;
+    LOG_WARN("invalid argument",  K(ret), K(get_param_count()));
+  } else if (OB_ISNULL(get_param_expr(0)) || OB_ISNULL(get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parm expr is NULL", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(get_param_expr(0), const_expr))) {
+    LOG_WARN("fail to get real expr without cast from args", K(ret));
+  } else if (OB_FAIL(const_expr->get_name(buf, buf_len, pos, explain_type))) {
+    LOG_WARN("fail to get_name", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(", "))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (OB_FAIL(get_cast_type_name(buf, buf_len, pos))) {
+    LOG_WARN("fail to get_cast_type_name", K(ret));
   }
   return ret;
 }

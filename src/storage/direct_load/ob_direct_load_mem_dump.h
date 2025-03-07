@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObIDirectLoadPartitionTable;
+class ObDirectLoadITable;
 
 class ObDirectLoadMemDump
 {
@@ -38,7 +38,7 @@ public:
     Context();
     ~Context();
     int add_table(const common::ObTabletID &tablet_id, int64_t range_idx,
-                  ObIDirectLoadPartitionTable *table);
+                  const ObDirectLoadTableHandle &table);
 
     int init()
     {
@@ -50,7 +50,7 @@ public:
   public:
     ObSafeArenaAllocator safe_allocator_;
     //注意，如果这个tables_会被多线程操作，必须加锁
-    ObDirectLoadMultiMap<common::ObTabletID, std::pair<int64_t, ObIDirectLoadPartitionTable *>>
+    ObDirectLoadMultiMap<common::ObTabletID, std::pair<int64_t, ObDirectLoadTableHandle>>
       tables_;
     common::ObArray<ChunkType *> mem_chunk_array_;
     int64_t finished_sub_dump_count_;
@@ -58,7 +58,7 @@ public:
 
   private:
     lib::ObMutex mutex_;
-    ObArray<ObIDirectLoadPartitionTable *> all_tables_;
+    ObDirectLoadTableHandleArray all_tables_;
   };
 
 public:

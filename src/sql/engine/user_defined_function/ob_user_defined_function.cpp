@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_user_defined_function.h"
 #include "sql/engine/user_defined_function/ob_udf_util.h"
-#include "share/ob_define.h"
 #include "share/ob_i_sql_expression.h"
 
 

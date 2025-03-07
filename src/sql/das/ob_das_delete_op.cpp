@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_delete_op.h"
-#include "share/ob_scanner.h"
-#include "sql/engine/px/ob_px_util.h"
+#include "sql/das/ob_das_domain_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "storage/tx_storage/ob_access_service.h"
 namespace oceanbase
 {
 namespace common
@@ -104,6 +102,8 @@ int ObDASDeleteOp::open_op()
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  common::ObSEArray<ObFTDocWordInfo, 4> doc_word_infos;
+  doc_word_infos.set_attr(lib::ObMemAttr(MTL_ID(), "FTDocWInfo"));
   ObDASDMLIterator dml_iter(del_ctdef_, write_buffer_, op_alloc_);
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator> del_adaptor;
   del_adaptor.tx_desc_ = trans_desc_;
@@ -117,7 +117,12 @@ int ObDASDeleteOp::open_op()
   del_adaptor.ls_id_ = ls_id_;
   del_adaptor.related_tablet_ids_ = &related_tablet_ids_;
   del_adaptor.das_allocator_ = &op_alloc_;
-  if (OB_FAIL(del_adaptor.write_tablet(dml_iter, affected_rows))) {
+  del_adaptor.ft_doc_word_infos_ = &doc_word_infos;
+  if (OB_FAIL(ObDASDomainUtils::build_ft_doc_word_infos(ls_id_, snapshot_, related_ctdefs_, related_tablet_ids_,
+          del_ctdef_->is_main_table_in_fts_ddl_, doc_word_infos))) {
+    LOG_WARN("fail to build fulltext doc word infos", K(ret), K(ls_id_), KPC(snapshot_), K(related_ctdefs_),
+        K(related_tablet_ids_));
+  } else if (OB_FAIL(del_adaptor.write_tablet(dml_iter, affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("delete row to partition storage failed", K(ret));
     }

@@ -13,18 +13,12 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_alter_routine_resolver.h"
 #include "ob_alter_routine_stmt.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_compile.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_router.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/parser/parse_stmt_item_type.h"
-#include "lib/utility/ob_defer.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/debug/ob_pl_debugger_manager.h"
+#include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
 #endif
 namespace oceanbase
 {
@@ -62,12 +56,9 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
                                               session_info_->get_enable_role_array()));
     }
     //Step2: create alter stmt
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(alter_routine_stmt = create_stmt<ObAlterRoutineStmt>())) {
+    if (OB_SUCC(ret) && OB_ISNULL(alter_routine_stmt = create_stmt<ObAlterRoutineStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for ObAlterRoutineStmt", K(ret));
-    } else {
-      crt_resolver_->set_basic_stmt(alter_routine_stmt);
     }
     //Step3: got standalone routine info 
     if (OB_FAIL(ret)) {
@@ -85,11 +76,20 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
                      db_name.length(), db_name.ptr(),
                      sp_name.length(), sp_name.ptr());
     }
+    // add schema check info
+    OZ (ob_add_ddl_dependency(routine_info->get_routine_id(),
+                              ROUTINE_SCHEMA,
+                              routine_info->get_schema_version(),
+                              routine_info->get_tenant_id(),
+                              alter_routine_stmt->get_routine_arg()));
     //Step4: do real alter resolve
     if (OB_FAIL(ret)) {
     } else if (lib::is_mysql_mode()) {
-      OX (alter_routine_stmt->get_routine_arg().routine_info_ = *routine_info);
-      OZ (resolve_clause_list(parse_tree.children_[1], alter_routine_stmt->get_routine_arg()));
+      if (OB_NOT_NULL(parse_tree.children_[1])) {
+        OZ (resolve_impl(alter_routine_stmt->get_routine_arg(), *routine_info, *(parse_tree.children_[1])));
+      } else {
+        OX (alter_routine_stmt->get_routine_arg().routine_info_ = *routine_info);
+      }
       OX (alter_routine_stmt->get_routine_arg().db_name_ = db_name);
       OX (alter_routine_stmt->get_routine_arg().routine_info_.set_tenant_id(routine_info->get_tenant_id()));
       OX (alter_routine_stmt->get_routine_arg().routine_info_.set_routine_id(routine_info->get_routine_id()));
@@ -102,7 +102,6 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
         .routine_info_.set_tenant_id(routine_info->get_tenant_id()));
       OX (alter_routine_stmt->get_routine_arg()
         .routine_info_.set_routine_id(routine_info->get_routine_id()));
-
     }
     //Step5: collection error info
     if (OB_SUCC(ret)) {
@@ -167,6 +166,9 @@ int ObAlterRoutineResolver::resolve_impl(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported yet!", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter editionable");
+  } else if (T_SP_CLAUSE_LIST == alter_clause_node.type_) {
+    OX (crt_routine_arg.routine_info_ = routine_info);
+    OZ (resolve_clause_list(&alter_clause_node, crt_routine_arg));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknow alter clause node type", K(ret), K(alter_clause_node.type_));
@@ -325,11 +327,20 @@ int ObAlterRoutineResolver::parse_routine(
   ObDataTypeCastParams dtc_params = session_info_->get_dtc_params();
   pl::ObPLParser parser(*(params_.allocator_), session_info_->get_charsets4parser(), session_info_->get_sql_mode());
   ParseResult parse_result;
-  ObString body = source;
+  ObString orig_body = source;
+  ObString body;
   MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                                   *(params_.allocator_), dtc_params, body));
-  OZ (parser.parse(body, body, parse_result));
+  if(lib::is_mysql_mode()) {
+    char * buf;
+    buf = static_cast<char *>(allocator_->alloc(orig_body.length() + 8));
+    snprintf(buf, orig_body.length() + 8, "create %s", orig_body.ptr());
+    body = ObString(orig_body.length() + 7, buf);
+  } else {
+    body= source;
+  }
+  OZ (parser.parse(body, orig_body, parse_result));
   CK (OB_NOT_NULL(parse_result.result_tree_));
   CK (T_STMT_LIST == parse_result.result_tree_->type_);
   CK (1 == parse_result.result_tree_->num_child_);
@@ -350,31 +361,105 @@ int ObAlterRoutineResolver::parse_routine(
   return ret;
 }
 
+int ObAlterRoutineResolver::mock_create_parse_node(const ParseNode *source_tree,
+                                                   const bool need_recreate,
+                                                   const bool is_noneditionable,
+                                                   ParseNode *&crt_tree)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *tmp_crt_tree = nullptr;
+  CK (T_SP_SOURCE == source_tree->type_
+      || T_SF_SOURCE == source_tree->type_
+      || T_SF_AGGREGATE_SOURCE == source_tree->type_);
+  if (OB_SUCC(ret)
+      && OB_ISNULL(tmp_crt_tree = new_non_terminal_node(
+                       params_.allocator_,
+                       T_SP_SOURCE == source_tree->type_ ? T_SP_CREATE : T_SF_CREATE,
+                       1,
+                       source_tree))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed alloc memory for create routine node", K(ret));
+  }
+  OX (tmp_crt_tree->int32_values_[0] = need_recreate ? 1 : 0);
+  OX (tmp_crt_tree->int32_values_[1] = is_noneditionable ? 1 : 0);
+  OX (crt_tree = tmp_crt_tree);
+  return ret;
+}
+
 int ObAlterRoutineResolver::resolve_routine(
   obrpc::ObCreateRoutineArg &crt_routine_arg,
   const share::schema::ObRoutineInfo &routine_info,
   bool need_recreate, const ParseNode *source_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode *crt_tree = NULL;
   CK (OB_NOT_NULL(source_tree));
-  CK (T_SP_SOURCE == source_tree->type_
-      || T_SF_SOURCE == source_tree->type_
-      || T_SF_AGGREGATE_SOURCE == source_tree->type_);
-  CK (lib::is_oracle_mode());
-  if (OB_SUCC(ret)
-      && OB_ISNULL(crt_tree = new_non_terminal_node(
-          params_.allocator_,
-          T_SP_SOURCE == source_tree->type_ ? T_SP_CREATE : T_SF_CREATE,
-          1,
-          source_tree))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed alloc memory for create routine node", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (lib::is_mysql_mode()) {
+    switch (source_tree->type_) {
+      case T_SP_CREATE: {
+        HEAP_VAR(ObCreateProcedureResolver, resolver, params_) {
+          OX (resolver.set_basic_stmt(get_basic_stmt()));
+          OZ (resolver.resolve_impl(*source_tree, &crt_routine_arg));
+        }
+        break;
+      }
+      case T_SF_CREATE: {
+        HEAP_VAR(ObCreateFunctionResolver, resolver, params_) {
+          OX (resolver.set_basic_stmt(get_basic_stmt()));
+          OZ (resolver.resolve_impl(*source_tree, &crt_routine_arg));
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected source tree type", K(ret), K(source_tree->type_));
+        break;
+    }
+  } else {
+    switch (source_tree->type_) {
+      case T_SP_SOURCE: {
+        ParseNode *crt_tree = nullptr;
+        HEAP_VAR(ObCreateProcedureResolver, resolver, params_) {
+          OX (resolver.set_basic_stmt(get_basic_stmt()));
+          OZ (mock_create_parse_node(
+                  source_tree, need_recreate, routine_info.is_noneditionable(), crt_tree));
+          OZ (resolver.resolve_impl(*crt_tree, &crt_routine_arg));
+        }
+        break;
+      }
+      case T_SF_SOURCE:
+      case T_SF_AGGREGATE_SOURCE: {
+        ParseNode *crt_tree = nullptr;
+        HEAP_VAR(ObCreateFunctionResolver, resolver, params_) {
+          OX (resolver.set_basic_stmt(get_basic_stmt()));
+          OZ (mock_create_parse_node(
+                  source_tree, need_recreate, routine_info.is_noneditionable(), crt_tree));
+          OZ (resolver.resolve_impl(*crt_tree, &crt_routine_arg));
+        }
+        break;
+      }
+#ifdef OB_BUILD_ORACLE_PL
+      case T_CREATE_WRAPPED_PROCEDURE: {
+        HEAP_VAR(ObCreateWrappedProcedureResolver, resolver, params_) {
+          OX (resolver.set_basic_stmt(get_basic_stmt()));
+          OZ (resolver.resolve(*source_tree));
+        }
+        break;
+      }
+      case T_CREATE_WRAPPED_FUNCTION: {
+        HEAP_VAR(ObCreateWrappedFunctionResolver, resolver, params_) {
+          OX (resolver.set_basic_stmt(get_basic_stmt()));
+          OZ (resolver.resolve(*source_tree));
+        }
+        break;
+      }
+#endif  // OB_BUILD_ORACLE_PL
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected source tree type", K(ret), K(source_tree->type_));
+        break;
+    }
   }
-  OX (crt_tree->int32_values_[0] = need_recreate ? 1 : 0);
-  OX (crt_tree->int32_values_[1] = routine_info.is_noneditionable() ? 1 : 0);
-  CK (OB_NOT_NULL(crt_resolver_));
-  OZ (crt_resolver_->resolve_impl(*crt_tree, &crt_routine_arg));
   return ret;
 }
 

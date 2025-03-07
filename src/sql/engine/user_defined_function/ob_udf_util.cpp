@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_udf_util.h"
 #include "observer/mysql/obsm_utils.h"
-#include "lib/file/file_directory_utils.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/user_defined_function/ob_user_defined_function.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_i_sql_expression.h"
 
 namespace oceanbase
 {

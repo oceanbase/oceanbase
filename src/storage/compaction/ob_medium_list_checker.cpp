@@ -10,7 +10,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
-#include "storage/compaction/ob_compaction_schedule_util.h"
 
 namespace oceanbase
 {

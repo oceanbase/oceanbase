@@ -1000,6 +1000,18 @@ typedef enum ObItemType
   T_FUN_URL_DECODE = 2058,
   T_FUN_SYS_DEMOTE_CAST = 2059,
   T_FUN_SYS_RANGE_PLACEMENT = 2060,
+  T_FUN_SYS_INNER_INFO_COLS_COLUMN_DEF_PRINTER = 2061,
+  T_FUN_SYS_INNER_INFO_COLS_CHAR_LEN_PRINTER = 2062,
+  T_FUN_SYS_INNER_INFO_COLS_CHAR_NAME_PRINTER = 2063,
+  T_FUN_SYS_INNER_INFO_COLS_COLL_NAME_PRINTER = 2064,
+  T_FUN_SYS_INNER_INFO_COLS_PRIV_PRINTER = 2065,
+  T_FUN_SYS_INNER_INFO_COLS_EXTRA_PRINTER = 2066,
+  T_FUN_SYS_INNER_INFO_COLS_DATA_TYPE_PRINTER = 2067,
+  T_FUN_SYS_INNER_INFO_COLS_COLUMN_TYPE_PRINTER = 2068,
+  T_FUN_SYS_RB_OR_CARDINALITY_AGG = 2069,
+  T_FUN_SYS_RB_AND_CARDINALITY_AGG = 2070,
+  T_FUN_SYS_RB_TO_ARRAY = 2071,
+  T_FUN_SYS_RB_CONTAINS = 2072,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2734,6 +2746,27 @@ typedef enum ObItemType
   T_ORGANIZATION = 4793,
   T_ORGANIZATION_INDEX = 4794,
   T_ORGANIZATION_HEAP = 4795,
+  T_PARSE_HEADER = 4796,
+  T_SP_OBJ_PERSISTABLE = 4797,
+  T_FLASHBACK_STANDBY_LOG = 4798,
+  T_BINARY_FORMAT = 4799,
+
+  // parser config: ik_mode
+  T_IK_MODE = 4800,
+  T_DML_PARALLEL = 4801,
+  //pl dbms scheduler calendar
+  T_SCHED_CALENDAR = 4802,
+  T_SCHED_CALENDAR_LIST = 4803,
+  T_SCHED_CALENDAR_FREQ = 4804,
+  T_SCHED_CALENDAR_INTERVAL = 4805,
+  T_SCHED_CALENDAR_BY = 4806,
+  T_SCHED_CALENDAR_BY_LIST = 4807,
+
+  T_LOAD_LICENSE = 4808,
+
+  // parser config: range ngram
+  T_PARSER_MIN_NGRAM_SIZE = 4809,
+  T_PARSER_MAX_NGRAM_SIZE = 4810,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2901,6 +2934,13 @@ extern const char *get_type_name(int type);
 #define IS_KEEP_AGGR_FUN(op) ((op) >= T_FUN_KEEP_MAX && (op) <= T_FUN_KEEP_STDDEV)
 
 #define IS_JSON_COMPATIBLE_OP(op) (IS_COMMON_COMPARISON_OP(op) || (op) == T_OP_ROW || (op) == T_OP_LIKE)
+#define IS_TYPE_DEMOTION_FUN(op) ((T_FUN_SYS_DEMOTE_CAST == (op) || \
+                                   T_FUN_SYS_RANGE_PLACEMENT == (op)))
+
+#define IS_ARRAY_MAP_OP(op) ((op) == T_FUNC_SYS_ARRAY_MAP || \
+                             (op) == T_FUNC_SYS_ARRAY_FIRST || \
+                             (op) == T_FUNC_SYS_ARRAY_FILTER || \
+                             (op) == T_FUNC_SYS_ARRAY_SORTBY)
 /**
  * @notice: 目前只支持IS_BASIC_CMP_OP这个宏里定义的op type，如果有在这之外的需求，请扩展这个接口的实现
  * */

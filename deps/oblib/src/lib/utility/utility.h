@@ -1371,6 +1371,9 @@ int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit = tr
 void get_glibc_version(int &major, int &minor);
 
 bool glibc_prereq(int major, int minor);
+
+const char *get_transparent_hugepage_status();
+int read_one_int(const char *file_name, int64_t &value);
 } // end namespace common
 } // end namespace oceanbase
 

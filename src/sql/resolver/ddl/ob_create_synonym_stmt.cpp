@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_create_synonym_stmt.h"
-#include "common/object/ob_obj_type.h"
-#include "share/schema/ob_column_schema.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

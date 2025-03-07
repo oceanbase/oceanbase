@@ -14,10 +14,9 @@
 
 #define USING_LOG_PREFIX OBLOG
 
+
+
 #include "ob_log_trans_ctx.h"
-
-#include "lib/allocator/ob_mod_define.h"        // ObModIds
-
 #include "ob_log_ls_mgr.h"                    // ObLogLSMgr
 #include "ob_log_trans_ctx_mgr.h"               // IObLogTransCtxMgr
 #include "ob_log_binlog_record.h"

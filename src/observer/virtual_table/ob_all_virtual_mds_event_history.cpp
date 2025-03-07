@@ -11,18 +11,7 @@
  */
 
 #include "ob_all_virtual_mds_event_history.h"
-#include "lib/container/ob_tuple.h"
-#include "lib/function/ob_function.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
-#include "share/ob_ls_id.h"
-#include "storage/multi_data_source/runtime_utility/common_define.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/ls/ob_ls.h"
-#include "ob_mds_event_buffer.h"
 
 namespace oceanbase
 {

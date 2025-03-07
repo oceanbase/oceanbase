@@ -13,43 +13,13 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_inner_sql_connection.h"
-#include "lib/worker.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "common/ob_timeout_ctx.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_debug_sync.h"
 #include "share/ob_time_utility2.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/config/ob_server_config.h"
-#include "sql/ob_sql.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/resolver/ddl/ob_ddl_stmt.h"
 #include "observer/ob_server.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "observer/mysql/obmp_base.h"
-#include "observer/ob_server_struct.h"
-#include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "ob_inner_sql_connection_pool.h"
 #include "ob_inner_sql_read_context.h"
-#include "ob_inner_sql_result.h"
-#include "storage/tx/ob_trans_define.h"      // ObTransIsolation
-#include "storage/tx/ob_trans_service.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "observer/ob_inner_sql_rpc_processor.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "storage/tx/ob_multi_data_source.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tablelock/ob_table_lock_service.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/monitor/ob_security_audit_utils.h"
 #endif
-#include "sql/plan_cache/ob_ps_cache.h"
 #include "observer/mysql/obmp_stmt_execute.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
@@ -162,7 +132,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       use_external_session_(false),
       group_id_(0),
       user_timeout_(0),
-      diagnostic_info_(nullptr)
+      diagnostic_info_(nullptr),
+      inner_sess_query_locked_(false)
 
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
@@ -252,6 +223,7 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
 int ObInnerSQLConnection::destroy()
 {
   int ret = OB_SUCCESS;
+  try_release_query_lock();
   // uninited connection can be destroy too
   if (inited_) {
     if (0 < ref_cnt_) {
@@ -311,6 +283,31 @@ void ObInnerSQLConnection::unref()
     } else {
       // see
       // extern_session_ = NULL;
+    }
+  }
+}
+
+int ObInnerSQLConnection::try_acquire_query_lock()
+{
+  int ret = OB_SUCCESS;
+  if (!inner_sess_query_locked_) {
+    if (OB_FAIL(inner_session_->get_query_lock().lock())) {
+      LOG_WARN("fail to acquire query lock", K(ret), KPC(inner_session_));
+    } else {
+      inner_sess_query_locked_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObInnerSQLConnection::try_release_query_lock()
+{
+  int ret = OB_SUCCESS;
+  if (inner_sess_query_locked_) {
+    if (OB_FAIL(inner_session_->get_query_lock().unlock())) {
+      LOG_WARN("fail to release query lock", K(ret), KPC(inner_session_));
+    } else {
+      inner_sess_query_locked_ = false;
     }
   }
 }
@@ -503,6 +500,9 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
           diagnostic_info_ = di;
         }
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(try_acquire_query_lock())) {
+      LOG_WARN("failed to acquire inner session query lock", K(ret));
     }
   } else {
     extern_session_ = extern_session;
@@ -2321,6 +2321,7 @@ int ObInnerSQLConnection::destroy_inner_session()
   int ret = OB_SUCCESS;
   LOG_DEBUG("begin destroying inner session", K(ret), KP(inner_session_), K(free_session_ctx_), K(lbt()));
   if (NULL != inner_session_) {
+    try_release_query_lock();
     if (INNER_SQL_SESS_ID == free_session_ctx_.sessid_) {
       inner_session_->set_session_sleep();
       inner_session_->~ObSQLSessionInfo();

@@ -11,14 +11,11 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/ob_object_manager.h"
+#include "ob_tenant_storage_meta_service.h"
 #include "storage/meta_store/ob_storage_meta_io_util.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "observer/omt/ob_tenant.h"
-#include "storage/tx_storage/ob_tablet_gc_service.h"
 #include "storage/ls/ob_ls.h"
 #ifdef OB_BUILD_SHARED_STORAGE
   #include "meta_store/ob_shared_storage_obj_meta.h"

@@ -10,28 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_occam_time_guard.h"
-#include "share/io/ob_io_struct.h"
-#include "lib/ob_define.h"
-#include "lib/function/ob_function.h"
-#include "lib/string/ob_string.h"
-#include "share/ob_occam_timer.h"
 #include "ob_failure_detector.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/rc/ob_tenant_base.h"
-#include "ob_leader_coordinator.h"
-#include <utility>
 #include "common_define.h"
-#include "ob_leader_coordinator.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {

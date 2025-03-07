@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_px_target_mgr.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

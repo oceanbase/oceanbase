@@ -14,51 +14,82 @@
 #define OCEANBASE_SRC_SQL_RESOLVER_DML_OB_STANDARD_GROUP_CHECKER_H_
 #include "lib/hash/ob_hashset.h"
 #include "lib/container/ob_array.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 namespace oceanbase
 {
 namespace sql
 {
-class ObRawExpr;
-class ObColumnRefRawExpr;
+class ObSelectStmt;
+class ObFdItemFactory;
 class ObStandardGroupChecker
 {
-  struct ObUnsettledExprItem
-  {
-    TO_STRING_KV(N_EXPR, PC(expr_),
-                 K_(start_idx),
-                 K_(dependent_column_cnt));
-
-    const ObRawExpr *expr_;
-    //the column start index of expr_ in dependent_columns_
-    int64_t start_idx_;
-    //the dependent column count of expr_ in dependent_columns_
-    int64_t dependent_column_cnt_;
-  };
 public:
   ObStandardGroupChecker()
-    : has_group_(false) {}
+    : has_group_(false),
+      is_scalar_aggr_(true) {}
   ~ObStandardGroupChecker() {}
+  friend class ObStandardGroupVisitor;
 
   void set_has_group(bool has_group) { has_group_ = has_group; }
-  int init() { return settled_columns_.create(SETTLED_COLUMN_BUCKETS); }
-  int add_group_by_expr(const ObRawExpr *expr);
-  int add_unsettled_column(const ObRawExpr *column_ref);
-  int add_unsettled_expr(const ObRawExpr *expr);
+  int init(const ObSelectStmt* select_stmt,
+           ObSQLSessionInfo *session_info,
+           ObSchemaChecker *schema_checker);
+  int add_group_by_expr(ObRawExpr *expr);
+  int add_unsettled_expr(ObRawExpr *expr);
   int check_only_full_group_by();
 private:
-  int check_unsettled_expr(const ObRawExpr *unsettled_expr, const ObColumnRefRawExpr &undefined_column);
-  int check_unsettled_column(const ObRawExpr *unsettled_column, const ObColumnRefRawExpr *&undefined_column);
+  int deduce_settled_exprs(ObArenaAllocator *alloc,
+                           ObRawExprFactory *expr_factory,
+                           ObFdItemFactory *fd_item_factory);
+  int expr_exists_in_group_by(ObRawExpr *expr, bool &is_existed);
+  int check_unsettled_column(const ObColumnRefRawExpr *unsettled_column);
 private:
-  static const int64_t SETTLED_COLUMN_BUCKETS = 64;
+  const ObSelectStmt *select_stmt_;
+  ObSQLSessionInfo *session_info_;
+  ObSchemaChecker *schema_checker_;
   bool has_group_;
+  bool is_scalar_aggr_;
   //all unsettled exprs that needed be check whether meet the only full group by semantic constraints in current stmt
-  common::ObArray<ObUnsettledExprItem> unsettled_exprs_;
-  //all columns in unsettled_exprs_
-  common::ObArray<const ObRawExpr*> dependent_columns_;
-  //all settled columns that meet the only full group by semantic constraints in current stmt
-  common::hash::ObHashSet<int64_t> settled_columns_;
-  //all settled exprs that meet the only full group by semantic constraints in current stmt
-  common::ObArray<const ObRawExpr*> settled_exprs_;
+  common::ObArray<ObRawExpr*> unsettled_exprs_;
+  //all exprs in the group by scope of current stmt
+  common::ObArray<ObRawExpr*> group_by_exprs_;
+  //exprs that meet the only full group by semantic constraints in current stmt
+  common::ObArray<ObRawExpr*> settled_exprs_;
+};
+
+class ObStandardGroupVisitor: public ObRawExprVisitor
+{
+public:
+  ObStandardGroupVisitor(ObStandardGroupChecker* checker,
+                         bool is_in_subquery = false)
+    : checker_(checker),
+      is_in_subquery_(is_in_subquery),
+      skip_expr_(NULL) {}
+  virtual ~ObStandardGroupVisitor() {}
+  /// interface of ObRawExprVisitor
+  virtual int visit(ObColumnRefRawExpr &expr);
+  virtual int visit(ObSysFunRawExpr &expr);
+  virtual int visit(ObAggFunRawExpr &expr);
+  virtual int visit(ObExecParamRawExpr &expr);
+  virtual int visit(ObQueryRefRawExpr &expr);
+  virtual int visit(ObConstRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObVarRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObOpPseudoColumnRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObOpRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObCaseOpRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObSetOpRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObAliasRefRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObWinFunRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObPseudoColumnRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObPlQueryRefRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObMatchFunRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual bool skip_child(ObRawExpr &expr);
+private:
+  ObStandardGroupChecker *checker_;
+  bool is_in_subquery_;
+  ObRawExpr *skip_expr_;
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObStandardGroupVisitor);
 };
 }  // namespace sql
 }  // namespace oceanbase

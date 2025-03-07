@@ -12,8 +12,6 @@
 
 #define private public
 #include "logservice/palf/log_meta_info.h"            // LogPrepareMeta...
-#include "logservice/palf/palf_options.h"
-#include "share/scn.h"
 #undef private
 #include <gtest/gtest.h>
 

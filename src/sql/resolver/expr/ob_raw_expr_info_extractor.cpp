@@ -70,6 +70,12 @@ int ObRawExprInfoExtractor::visit(ObConstRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObVarRawExpr &expr)
 {
   int ret = OB_SUCCESS;
+  // lambda param will set value in array_map function in execution
+  if (OB_FAIL(expr.add_flag(IS_CONST))) {
+    LOG_WARN("failed to add is const", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_DYNAMIC_PARAM))) {
+    LOG_WARN("failed to add is exec param", K(ret));
+  }
   return ret;
 }
 

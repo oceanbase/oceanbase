@@ -98,6 +98,12 @@ public:
   int get_package_expr(const ObPLResolveCtx &resolve_ctx, sql::ObRawExprFactory &expr_factory,
                        uint64_t package_id, int64_t expr_idx, sql::ObRawExpr *&expr);
 
+  int get_package_spec_cursor(const ObPLResolveCtx &resolve_ctx,
+                              uint64_t package_id,
+                              const ObString &cursor_name,
+                              const ObPLCursor *&cursor,
+                              int64_t &cursor_idx);
+
   int get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                          uint64_t package_id,
                          int64_t cursor_idx,
@@ -154,6 +160,7 @@ public:
                                          ObCompatibilityMode compa_mode,
                                          bool from_file);
   static int load_all_sys_package(common::ObMySQLProxy &sql_proxy);
+  static int load_all_special_sys_package(common::ObMySQLProxy &sql_proxy);
 
   static int add_package_to_plan_cache(const ObPLResolveCtx &resolve_ctx, ObPLPackage *package);
   static int get_package_from_plan_cache(const ObPLResolveCtx &resolve_ctx, 
@@ -165,7 +172,7 @@ public:
                                      const share::schema::ObPackageInfo *&package_body_info);
   static int destory_package_state(sql::ObSQLSessionInfo &session_info, uint64_t package_id);
   int check_version(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
-                    const ObPackageStateVersion &state_version, bool &match);
+                    const ObPackageStateVersion &state_version, bool old_encode_rule, bool &match);
   int get_cached_package(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                                 ObPLPackage *&package_spec,
                                 ObPLPackage *&package_body,
@@ -190,7 +197,6 @@ private:
                                    int sys_package_count,
                                    ObCompatibilityMode compa_mode,
                                    bool from_file);
-  static int load_all_special_sys_package(common::ObMySQLProxy &sql_proxy);
 
   int get_cached_package_spec(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                               ObPLPackage *&package_spec);
@@ -199,12 +205,8 @@ private:
                              sql::ObExecContext &exec_ctx,
                              ObPLPackage &package,
                              const ObPackageStateVersion &state_version,
-                             ObPLPackageState *&package_state);
-
-  int get_package_item_state(sql::ObSQLSessionInfo &session_info,
-                             int64_t package_id,
-                             const ObPackageStateVersion &state_version,
-                             ObPLPackageState *&package_state);
+                             ObPLPackageState *&package_state,
+                             const ObPLPackage *package_for_verify);
 
   int update_special_package_status(const ObPLResolveCtx &resolve_ctx,
                                     uint64_t package_id,

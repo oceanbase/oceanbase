@@ -321,8 +321,10 @@ protected:
           SQL_ENG_LOG(WARN, "copy row to row store failed");
         } else {
           stored_row_cnt++;
-          op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
-          op_monitor_info_.otherstat_1_value_ += 1;
+          if (level > 0) {
+            op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
+            op_monitor_info_.otherstat_1_value_ += 1;
+          }
         }
       }
 

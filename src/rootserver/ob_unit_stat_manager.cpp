@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX RS_LB
 
 #include "rootserver/ob_unit_stat_manager.h"
-#include "rootserver/ob_balance_info.h"
-#include "share/ob_unit_getter.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "rootserver/ob_unit_manager.h"
-#include "storage/ob_file_system_router.h"
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

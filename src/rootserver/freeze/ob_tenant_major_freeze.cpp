@@ -14,7 +14,6 @@
 
 #include "rootserver/freeze/ob_tenant_major_freeze.h"
 
-#include "share/ob_errno.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tenant_ls_merge_checker.h"

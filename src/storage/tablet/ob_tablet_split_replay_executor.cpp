@@ -11,7 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_split_replay_executor.h"
-#include "storage/multi_data_source/mds_ctx.h"
 
 #define USING_LOG_PREFIX STORAGE
 

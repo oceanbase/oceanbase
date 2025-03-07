@@ -10,22 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "storage/ob_i_store.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "lib/number/ob_number_v2.h"
 #include "ob_row_generate.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_simple_mem_limit_getter.h"
 
 
-#include "storage/blocksstable/ob_macro_block_writer.h"
-#include "storage/blocksstable/ob_row_writer.h"
-#include "storage/blocksstable/ob_row_reader.h"
 #include "ob_data_file_prepare.h"
-#include "storage/memtable/ob_nop_bitmap.h"
 #include "unittest/storage/mock_ob_table_read_info.h"
 
 #ifndef INT24_MIN

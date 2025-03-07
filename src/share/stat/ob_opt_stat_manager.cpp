@@ -11,18 +11,8 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_opt_stat_service.h"
-#include "share/stat/ob_opt_stat_sql_service.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "share/stat/ob_dbms_stats_utils.h"
-#include "share/stat/ob_basic_stats_estimator.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 
 namespace oceanbase
@@ -835,6 +825,14 @@ int ObOptStatManager::erase_ds_stat(const ObOptDSStat::Key &key)
 int ObOptStatManager::update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat)
 {
   return stat_service_.get_sql_service().update_opt_stat_gather_stat(gather_stat);
+}
+
+int ObOptStatManager::update_table_stat_failed_count(const uint64_t tenant_id,
+                        const uint64_t table_id,
+                        const ObIArray<int64_t> &part_ids,
+                        int64_t &affected_rows)
+{
+  return stat_service_.get_sql_service().update_table_stat_failed_count(tenant_id, table_id, part_ids, affected_rows);
 }
 
 int ObOptStatManager::update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info)

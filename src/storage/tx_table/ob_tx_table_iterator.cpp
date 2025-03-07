@@ -10,21 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_table_iterator.h"
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/serialization.h"
-#include "storage/blocksstable/ob_datum_range.h"
-#include "storage/tablet/ob_table_store_util.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
+#include "ob_tx_table_iterator.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_table/ob_tx_ctx_memtable.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include <cmath>
-#include "storage/tablet/ob_tablet.h"
+#include "src/storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -78,7 +67,8 @@ int ObTxDataMemtableScanIterator::TxData2DatumRowConverter::init(ObTxData *tx_da
       tx_op_guard.lock(tx_data->op_guard_->get_lock());
     }
     buffer_len_ = tx_data->get_serialize_size();
-    if (nullptr == (serialize_buffer_ = (char *)DEFAULT_TX_DATA_ALLOCATOR.alloc(buffer_len_))) {
+    (void)alloc_serialize_buffer_(buffer_len_);
+    if (OB_ISNULL(serialize_buffer_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to serialize tx data, cause buffer allocated failed",
                         KR(ret), K(*this));
@@ -89,13 +79,23 @@ int ObTxDataMemtableScanIterator::TxData2DatumRowConverter::init(ObTxData *tx_da
   return ret;
 }
 
+void ObTxDataMemtableScanIterator::TxData2DatumRowConverter::alloc_serialize_buffer_(const int64_t serialize_size)
+{
+  serialize_buffer_ = nullptr;
+  if (serialize_size <= DEFAULT_BUFFER_LEN) {
+    serialize_buffer_ = default_serialize_buffer_;
+  } else {
+    serialize_buffer_ = (char *)DEFAULT_TX_DATA_ALLOCATOR.alloc(buffer_len_);
+  }
+}
+
 void ObTxDataMemtableScanIterator::TxData2DatumRowConverter::reset()
 {
   buffer_len_ = 0;
-  if (OB_NOT_NULL(serialize_buffer_)) {
-    ob_free(serialize_buffer_);
-    serialize_buffer_ = nullptr;
+  if (OB_NOT_NULL(serialize_buffer_) && serialize_buffer_ != default_serialize_buffer_) {
+    DEFAULT_TX_DATA_ALLOCATOR.free(serialize_buffer_);
   }
+  serialize_buffer_ = nullptr;
   tx_data_ = nullptr;
   generate_size_ = 0;
   datum_row_.reset();

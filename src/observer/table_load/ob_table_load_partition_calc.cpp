@@ -13,14 +13,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_partition_calc.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/table_load/ob_table_load_obj_cast.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_stat.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -113,7 +108,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> column_descs;
   column_descs.set_tenant_id(MTL_ID());
-  if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
+  if (OB_FAIL(table_schema->get_column_ids(column_descs, true/*no_virtual*/))) {
     LOG_WARN("fail to get column ids", KR(ret));
   } else if (OB_UNLIKELY(column_descs.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -143,7 +138,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected rowkey position", KR(ret), KPC(column_schema), K(pos));
       } else {
-        if (table_schema->is_heap_table()) {
+        if (table_schema->is_table_with_hidden_pk_column()) {
           abort_unless(i > 0);
           part_key_obj_index_[pos - 1].index_ = i - 1;
         } else {

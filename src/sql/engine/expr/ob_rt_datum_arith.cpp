@@ -14,7 +14,6 @@
 
 #include "ob_rt_datum_arith.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

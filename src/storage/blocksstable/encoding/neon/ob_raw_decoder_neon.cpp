@@ -16,9 +16,7 @@
 #include <arm_neon.h>
 #endif
 
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/encoding/ob_raw_decoder.h"
-#include "ob_encoding_neon_util.h"
 
 namespace oceanbase {
 namespace blocksstable {

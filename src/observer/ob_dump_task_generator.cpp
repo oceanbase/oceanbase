@@ -15,11 +15,7 @@
 #include "observer/ob_dump_task_generator.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
 #include "sql/parser/ob_parser.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

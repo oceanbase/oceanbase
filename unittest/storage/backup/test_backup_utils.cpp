@@ -11,20 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include <thread>
-#include <vector>
-#include <gtest/gtest.h>
 #include "test_backup.h"
-#include "storage/backup/ob_backup_utils.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "storage/ob_parallel_external_sort.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/backup/ob_backup_ctx.h"
+#include "src/storage/backup/ob_backup_iterator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

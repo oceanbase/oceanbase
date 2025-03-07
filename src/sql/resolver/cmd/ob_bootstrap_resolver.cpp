@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_bootstrap_resolver.h"
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
-#include "objit/common/ob_item_type.h"
-#include "share/ob_zone_info.h"
 
 namespace oceanbase
 {

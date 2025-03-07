@@ -13,22 +13,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX STORAGE
-#include <unordered_map>
 
 #define protected public
 #define private public
 
-#include "storage/tablet/ob_tablet.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tablet/ob_tablet_persister.h"
 #include "mittest/mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
-#include "storage/blocksstable/ob_block_manager.h"
 
 namespace oceanbase
 {

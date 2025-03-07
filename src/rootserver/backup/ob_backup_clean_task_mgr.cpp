@@ -13,21 +13,12 @@
 #define USING_LOG_PREFIX RS
 #include "ob_backup_clean_task_mgr.h"
 #include "ob_backup_clean_ls_task_mgr.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "share/backup/ob_backup_path.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_backup_clean_struct.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_backup_clean_util.h"
-#include "lib/utility/utility.h"
-#include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "share/ob_debug_sync_point.h"
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase;
 using namespace rootserver;

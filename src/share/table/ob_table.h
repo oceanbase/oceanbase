@@ -56,6 +56,14 @@ using common::ObSEArray;
 ////////////////////////////////////////////////////////////////
 // structs of a table storage interface
 ////////////////////////////////////////////////////////////////
+enum class ObTableGroupRwMode
+{
+  ALL = 0,
+  READ = 1,
+  WRITE = 2
+};
+
+
 enum class ObTableEntityType
 {
   ET_DYNAMIC = 0,
@@ -207,6 +215,7 @@ public:
   virtual ~ObTableEntity();
   virtual ObTableEntityType get_entity_type() { return ObTableEntityType::ET_KV; }
   virtual int set_rowkey(const ObRowkey &rowkey) override;
+  virtual int set_rowkey(const ObString &prop_name, const ObObj &rowkey_obj);
   virtual int set_rowkey(const ObITableEntity &other) override;
   virtual int set_rowkey_value(int64_t idx, const ObObj &value) override;
   virtual int add_rowkey_value(const ObObj &value) override;
@@ -230,6 +239,7 @@ public:
   virtual void set_is_same_properties_names(bool is_same_properties_names) override;
   virtual void reset() override;
   virtual ObRowkey get_rowkey() const override;
+  OB_INLINE virtual const ObIArray<ObString>& get_rowkey_names() const { return rowkey_names_; }
   OB_INLINE virtual const ObIArray<ObString>& get_properties_names() const { return properties_names_; }
   OB_INLINE virtual const ObIArray<ObObj>& get_properties_values() const { return properties_values_; }
   OB_INLINE virtual const ObIArray<ObObj>& get_rowkey_objs() const { return rowkey_; };
@@ -252,6 +262,8 @@ public:
   ObTableEntityFactory(const char *label = common::ObModIds::TABLE_PROC, uint64_t tenant_id = OB_SERVER_TENANT_ID)
       :alloc_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id)
   {}
+  ObTableEntityFactory(ObIAllocator &allocator) : alloc_(allocator, OB_MALLOC_NORMAL_BLOCK_SIZE, true)
+  {}
   virtual ~ObTableEntityFactory();
   virtual ObITableEntity *alloc() override;
   virtual void free(ObITableEntity *obj) override;
@@ -260,6 +272,10 @@ public:
   virtual int64_t get_used_count() const { return used_list_.get_size(); }
   virtual int64_t get_used_mem() const { return alloc_.used(); }
   virtual int64_t get_total_mem() const { return alloc_.total(); }
+  void reset() {
+    free_all();
+    alloc_.reset();
+  }
 private:
   void free_all();
 private:
@@ -357,7 +373,7 @@ struct ObTableOperationType
   {
     return type == PUT || type == GET || type == INSERT ||
         type == DEL || type == UPDATE || type == INSERT_OR_UPDATE ||
-        type == REPLACE || type == INCREMENT || type == APPEND;
+        type == REPLACE || type == INCREMENT || type == APPEND || type == REDIS;
   }
 };
 
@@ -480,8 +496,7 @@ public:
   ~ObTableTTLOperation() {}
   bool is_valid() const
   {
-    return common::OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ &&
-           (!is_htable_ || max_version_ > 0 || time_to_live_ > 0) && del_row_limit_ > 0;
+    return common::OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ && del_row_limit_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(max_version),  K_(time_to_live), K_(is_htable), K_(del_row_limit), K_(start_rowkey));
 public:
@@ -495,8 +510,33 @@ public:
   uint64_t hbase_cur_version_;
 };
 
+enum ObTableResultType
+{
+  RESULT_TYPE_INVALID,
+  TABLE_OPERATION_RESULT,
+  REDIS_RESULT,
+  RESULT_TYPE_MAX,
+};
+
+class ObITableResult
+{
+public:
+  ObITableResult() {}
+  ~ObITableResult() {}
+  virtual int get_errno() const = 0;
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) = 0;
+  virtual void reset() = 0;
+  virtual ObTableResultType get_type() const
+  {
+    return ObTableResultType::TABLE_OPERATION_RESULT;
+  }
+  PURE_VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
+};
+
 /// common result for ObTable
-class ObTableResult
+class ObTableResult : public ObITableResult
 {
   OB_UNIS_VERSION(1);
 public:
@@ -517,10 +557,10 @@ public:
       }
     }
   }
-  void set_errno(int err) { errno_ = err; }
-  int get_errno() const { return errno_; }
+  void set_errno(int err);
+  virtual int get_errno() const override { return errno_; }
   int assign(const ObTableResult &other);
-  void reset()
+  virtual void reset() override
   {
     errno_ = common::OB_ERR_UNEXPECTED;
     sqlstate_[0] = '\0';
@@ -536,36 +576,49 @@ protected:
 };
 
 /// result for ObTableOperation
-class ObTableOperationResult final: public ObTableResult
+class ObTableOperationResult final : public ObTableResult
 {
   OB_UNIS_VERSION(1);
 public:
   ObTableOperationResult();
   ~ObTableOperationResult() = default;
-  void reset();
+  virtual void reset() override;
   ObTableOperationType::Type type() const { return operation_type_; }
   int get_entity(const ObITableEntity *&entity) const;
   int get_entity(ObITableEntity *&entity);
   ObITableEntity *get_entity() { return entity_; }
   const ObITableEntity *get_entity() const { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
-  int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
+  int get_return_rows() const { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
   OB_INLINE bool get_insertup_do_insert() { return is_insertup_do_insert_; }
   OB_INLINE bool get_is_insertup_do_put() { return is_insertup_do_put_; }
   OB_INLINE bool get_is_insertup_do_update() { return !is_insertup_do_put_ && !is_insertup_do_insert_; }
-
+  OB_INLINE const ObNewRow *get_insertup_old_row() {return insertup_old_row_;}
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }
   void set_entity(ObITableEntity *entity) { entity_ = entity; }
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   void set_insertup_do_insert(bool do_insert) { is_insertup_do_insert_ = do_insert;}
   void set_insertup_do_put(bool do_put) { is_insertup_do_put_ = do_put;}
+  void set_insertup_old_row(const ObNewRow *insertup_old_row)
+  {
+    insertup_old_row_ = insertup_old_row;
+  }
 
   int deep_copy(common::ObIAllocator &allocator, ObITableEntityFactory &entity_factory, const ObTableOperationResult &other);
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) override
+  {
+    entity_ = &result_entity;
+    operation_type_ = op_type;
+    errno_ = ret_code;
+  }
   DECLARE_TO_STRING;
 private:
   ObTableOperationType::Type operation_type_;
   ObITableEntity *entity_;
+  const ObNewRow *insertup_old_row_;
   int64_t affected_rows_;
   // for client compatibility, not serialize flags_ currently
   union {
@@ -661,7 +714,7 @@ class ObTableBatchOperation
   OB_UNIS_VERSION(1);
 public:
   static const int64_t MAX_BATCH_SIZE = 1000;
-  static const int64_t COMMON_BATCH_SIZE = 8;
+  static const int64_t COMMON_BATCH_SIZE = 32;
 public:
   ObTableBatchOperation()
       :table_operations_(common::ObModIds::TABLE_BATCH_OPERATION, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -720,7 +773,8 @@ private:
 
 /// result for ObTableBatchOperation
 typedef ObIArray<ObTableOperationResult> ObITableBatchOperationResult;
-class ObTableBatchOperationResult: public common::ObSEArrayImpl<ObTableOperationResult, ObTableBatchOperation::COMMON_BATCH_SIZE>
+class ObTableBatchOperationResult : public common::ObSEArrayImpl<ObTableOperationResult, ObTableBatchOperation::COMMON_BATCH_SIZE>,
+                                    public ObITableResult
 {
   OB_UNIS_VERSION(1);
 public:
@@ -730,10 +784,21 @@ public:
        alloc_(NULL)
   {}
   virtual ~ObTableBatchOperationResult() = default;
+  void reset() override
+  {
+    BaseType::reset();
+  }
   void set_entity_factory(ObITableEntityFactory *entity_factory) { entity_factory_ = entity_factory; }
   ObITableEntityFactory *get_entity_factory() { return entity_factory_; }
   void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
   common::ObIAllocator *get_allocator() { return alloc_; }
+  virtual int get_errno() const override { return OB_NOT_IMPLEMENT; }
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) override
+  {
+    UNUSEDx(ret_code, result_entity, op_type);
+  }
 private:
   typedef common::ObSEArrayImpl<ObTableOperationResult, ObTableBatchOperation::COMMON_BATCH_SIZE> BaseType;
   ObITableEntityFactory *entity_factory_;
@@ -752,16 +817,19 @@ public:
   static const char* const CQ_CNAME;
   static const char* const VERSION_CNAME;
   static const char* const VALUE_CNAME;
+  static const char* const TTL_CNAME;
   static const ObString ROWKEY_CNAME_STR;
   static const ObString CQ_CNAME_STR;
   static const ObString VERSION_CNAME_STR;
   static const ObString VALUE_CNAME_STR;
+  static const ObString TTL_CNAME_STR;
 
   // create table t1$cf1 (K varbinary(1024), Q varchar(256), T bigint, V varbinary(1024), primary key(K, Q, T));
   static const int64_t COL_IDX_K = 0;
   static const int64_t COL_IDX_Q = 1;
   static const int64_t COL_IDX_T = 2;
   static const int64_t COL_IDX_V = 3;
+  static const int64_t COL_IDX_TTL = 4;
   static const int64_t HTABLE_ROWKEY_SIZE = 3;
 private:
   ObHTableConstants() = delete;
@@ -864,7 +932,8 @@ private:
 
 enum class ParamType : int8_t {
     HBase = 0,
-    Redis = 1
+    Redis = 1,
+    FTS = 2,
 };
 
 class ObKVParamsBase
@@ -881,6 +950,27 @@ public:
   virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
 protected:
   ParamType param_type_;
+};
+
+class ObFTSParam : public ObKVParamsBase
+{
+public:
+  ObFTSParam()
+    : ObKVParamsBase()
+  {
+    param_type_ = ParamType::FTS;
+  }
+  virtual ~ObFTSParam() {}
+  virtual int deep_copy(ObIAllocator &allocator, ObKVParamsBase *ob_params) const override;
+  OB_INLINE int32_t get_caching() const { return 0; } // unused
+  OB_INLINE ParamType get_param_type() { return param_type_; }
+  OB_INLINE common::ObString &get_search_text() { return search_text_; }
+  NEED_SERIALIZE_AND_DESERIALIZE;
+
+  VIRTUAL_TO_STRING_KV(K_(param_type),
+                       K_(search_text));
+private:
+  ObString search_text_;
 };
 
 class ObHBaseParams : public ObKVParamsBase
@@ -945,6 +1035,12 @@ public:
     int ret = OB_SUCCESS;
     if (param_type == ParamType::HBase) {
       params = OB_NEWx(ObHBaseParams, allocator_);
+      if (params == nullptr) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        RPC_WARN("alloc params memory failed", K(ret));
+      }
+    } else if (param_type == ParamType::FTS) {
+      params = OB_NEWx(ObFTSParam, allocator_);
       if (params == nullptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         RPC_WARN("alloc params memory failed", K(ret));
@@ -1035,6 +1131,7 @@ public:
   uint64_t get_checksum() const;
   const ObString &get_filter_string() const { return filter_string_; }
   void clear_scan_range() { key_ranges_.reset(); }
+  void clear_select_columns() { select_columns_.reset(); }
   void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_allocator_ = allocator; }
   int deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const;
   const common::ObIArray<ObTableAggregation> &get_aggregations() const { return aggregations_; }
@@ -1109,6 +1206,7 @@ public:
   virtual bool return_affected_entity() const = 0;
   virtual bool is_check_and_execute() const = 0;
   virtual bool is_check_exists() const = 0;
+  virtual bool rollback_when_check_failed() const = 0;
 };
 
 /// query and mutate the selected rows.
@@ -1120,17 +1218,18 @@ public:
       : return_affected_entity_(true),
         flag_(0)
   {}
-  const ObTableQuery &get_query() const { return query_; }
-  ObTableQuery &get_query() { return query_; }
-  const ObTableBatchOperation &get_mutations() const { return mutations_; }
-  ObTableBatchOperation &get_mutations() { return mutations_; }
-  bool return_affected_entity() const { return return_affected_entity_; }
+  const ObTableQuery &get_query() const override { return query_; }
+  ObTableQuery &get_query() override { return query_; }
+  const ObTableBatchOperation &get_mutations() const override { return mutations_; }
+  ObTableBatchOperation &get_mutations() override { return mutations_; }
+  bool return_affected_entity() const override { return return_affected_entity_; }
 
   void set_deserialize_allocator(common::ObIAllocator *allocator);
   void set_entity_factory(ObITableEntityFactory *entity_factory);
 
-  bool is_check_and_execute() const { return is_check_and_execute_; }
-  bool is_check_exists() const { return is_check_and_execute_ && !is_check_no_exists_; }
+  bool is_check_and_execute() const override { return is_check_and_execute_; }
+  bool is_check_exists() const override { return is_check_and_execute_ && !is_check_no_exists_; }
+  bool rollback_when_check_failed() const override { return is_check_and_execute_ && rollback_when_check_failed_; }
   uint64_t get_checksum();
 
   TO_STRING_KV(K_(query),
@@ -1138,7 +1237,8 @@ public:
                K_(return_affected_entity),
                K_(flag),
                K_(is_check_and_execute),
-               K_(is_check_no_exists));
+               K_(is_check_no_exists),
+               K_(rollback_when_check_failed));
 private:
   ObTableQuery query_;
   ObTableBatchOperation mutations_;
@@ -1150,6 +1250,7 @@ private:
     {
       bool is_check_and_execute_ : 1;
       bool is_check_no_exists_ : 1;
+      bool rollback_when_check_failed_ : 1;
       int64_t reserved : 61;
     };
   };
@@ -1159,22 +1260,27 @@ class ObTableSingleOp;
 class ObTableSingleOpQAM : public ObITableQueryAndMutate
 {
 public:
-  ObTableSingleOpQAM(const ObTableQuery &query, bool is_check_and_execute, bool is_check_no_exists)
+  ObTableSingleOpQAM(const ObTableQuery &query,
+                     bool is_check_and_execute,
+                     bool is_check_no_exists,
+                     bool rollback_when_check_failed)
     : query_(query),
       return_affected_entity_(false),
       is_check_and_execute_(is_check_and_execute),
-      is_check_exists_(!is_check_no_exists)
+      is_check_exists_(!is_check_no_exists),
+      rollback_when_check_failed_(rollback_when_check_failed)
   {}
   ~ObTableSingleOpQAM() = default;
 
 public:
-  OB_INLINE const ObTableQuery &get_query() const { return query_; }
-  OB_INLINE ObTableQuery &get_query() { return const_cast<ObTableQuery &>(query_); }
-  OB_INLINE const ObTableBatchOperation &get_mutations() const { return mutations_; }
-  OB_INLINE ObTableBatchOperation &get_mutations() { return const_cast<ObTableBatchOperation &>(mutations_); }
-  OB_INLINE bool return_affected_entity() const { return return_affected_entity_; };
-  OB_INLINE bool is_check_and_execute() const { return is_check_and_execute_; }
-  OB_INLINE bool is_check_exists() const { return is_check_exists_; }
+  OB_INLINE const ObTableQuery &get_query() const override { return query_; }
+  OB_INLINE ObTableQuery &get_query() override { return const_cast<ObTableQuery &>(query_); }
+  OB_INLINE const ObTableBatchOperation &get_mutations() const override { return mutations_; }
+  OB_INLINE ObTableBatchOperation &get_mutations() override { return const_cast<ObTableBatchOperation &>(mutations_); }
+  OB_INLINE bool return_affected_entity() const override { return return_affected_entity_; };
+  OB_INLINE bool is_check_and_execute() const override { return is_check_and_execute_; }
+  OB_INLINE bool is_check_exists() const override { return is_check_exists_; }
+  OB_INLINE bool rollback_when_check_failed() const override { return rollback_when_check_failed_; }
   int set_mutations(const ObTableSingleOp &single_op);
 
 private:
@@ -1183,6 +1289,7 @@ private:
   bool return_affected_entity_;
   bool is_check_and_execute_;
   bool is_check_exists_;
+  bool rollback_when_check_failed_;
 };
 
 inline void ObTableQueryAndMutate::set_deserialize_allocator(common::ObIAllocator *allocator)
@@ -1199,12 +1306,13 @@ class ObTableQueryIterableResultBase
 {
 public:
   ObTableQueryIterableResultBase()
-    : allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    : allocator_("TblQryIterRes", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       row_count_(0)
   {};
   virtual ~ObTableQueryIterableResultBase() {}
   virtual int add_row(const common::ObNewRow &row, ObString family_name) { UNUSED(row); UNUSED(family_name); return OB_SUCCESS; }
   virtual int add_row(const common::ObIArray<ObObj> &row) { UNUSED(row); return OB_SUCCESS; }
+  virtual int add_row(const common::ObNewRow &row) { UNUSED(row); return OB_SUCCESS; };
   virtual int add_all_row(ObTableQueryIterableResultBase &other) { UNUSED(other); return OB_SUCCESS; };
   virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) { UNUSED(batch_count); UNUSED(max_result_size); return true; }
   virtual int get_row(ObNewRow &row) { UNUSED(row); return OB_SUCCESS; }
@@ -1238,6 +1346,7 @@ public:
   void reset_except_property();
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
+  virtual int get_htable_all_entity(ObIArray<ObITableEntity*> &entities);
   int add_property_name(const ObString &name);
   int assign_property_names(const common::ObIArray<common::ObString> &other);
   // for aggregation
@@ -1246,6 +1355,7 @@ public:
   virtual int add_row(const common::ObNewRow &row);
   virtual int add_row(const common::ObIArray<ObObj> &row);
   int add_all_property(const ObTableQueryResult &other);
+  int append_property_names(const ObIArray<ObString> &property_names);
   int add_all_row(const ObTableQueryResult &other);
   int add_all_row(ObTableQueryIterableResultBase &other);
   void save_row_count_only(const int row_count) { reset(); row_count_ += row_count; }
@@ -1294,6 +1404,7 @@ public:
   ObTableQueryDListResult();
   ~ObTableQueryDListResult();
   virtual int add_row(const common::ObNewRow &row, ObString family_name) override;
+  virtual int add_row(const common::ObNewRow &row) override;
   virtual int add_all_row(ObTableQueryIterableResultBase &other) override;
   virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) override;
   virtual int get_row(ObNewRow &row) override;
@@ -1310,13 +1421,13 @@ class ObTableQueryIterableResult: public ObTableQueryIterableResultBase
 public:
   ObTableQueryIterableResult();
   virtual int add_row(const common::ObNewRow &row, ObString family_name) override;
+  virtual int add_row(const common::ObNewRow &row) override;
   int add_all_row(ObTableQueryDListResult &other);
   virtual int add_row(const common::ObIArray<ObObj> &row) override;
   virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) override;
   void save_row_count_only(const int row_count) { reset_except_property(); row_count_ += row_count; }
   virtual int get_row(ObNewRow &row) override;
   void reset_except_property();
-
 private:
   int64_t current_ = 0;
 
@@ -1369,6 +1480,7 @@ public:
   uint64_t hash_val_;
 public:
   int hash(uint64_t &hash_val, uint64_t seed = 0) const;
+  void reset();
   TO_STRING_KV(K_(cluster_id),
                K_(tenant_id),
                K_(user_id),
@@ -1423,7 +1535,7 @@ public:
         schema_version_(common::OB_INVALID_VERSION),
         tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
         role_(common::ObRole::INVALID_ROLE),
-        replica_type_(common::ObReplicaType::REPLICA_TYPE_INVALID),
+        replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
         part_renew_time_(0),
         reserved_(0)
   {}
@@ -1436,6 +1548,16 @@ public:
                K_(role),
                K_(replica_type),
                K_(reserved));
+  void reset()
+  {
+    table_id_ = common::OB_INVALID_ID;
+    schema_version_ = common::OB_INVALID_VERSION;
+    tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
+    role_ = common::ObRole::INVALID_ROLE;
+    replica_type_ = common::ObReplicaType::REPLICA_TYPE_MAX;
+    part_renew_time_ = 0;
+    reserved_ = 0;
+  }
   OB_INLINE void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   OB_INLINE void set_schema_version(const uint64_t schema_version) { schema_version_ = schema_version; }
   OB_INLINE void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
@@ -1450,7 +1572,7 @@ public:
   uint64_t reserved_;
 };
 
-class ObTableMoveResult final
+class ObTableMoveResult final : public ObITableResult
 {
   OB_UNIS_VERSION(1);
 public:
@@ -1461,7 +1583,19 @@ public:
   TO_STRING_KV(K_(replica_info),
                K_(reserved));
 
+  void reset() override
+  {
+    replica_info_.reset();
+    reserved_ = 0;
+  }
   OB_INLINE ObTableMoveReplicaInfo& get_replica_info() { return replica_info_; }
+  virtual int get_errno() const override { return OB_NOT_IMPLEMENT; }
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) override
+  {
+    UNUSEDx(ret_code, result_entity, op_type);
+  }
 private:
   ObTableMoveReplicaInfo replica_info_;
   uint64_t reserved_;
@@ -1645,6 +1779,7 @@ public:
   }
 
   OB_INLINE bool is_check_no_exists() const { return is_check_no_exists_; }
+  OB_INLINE bool rollback_when_check_failed() const { return rollback_when_check_failed_; }
 
   OB_INLINE void set_dictionary(const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names) {
     all_rowkey_names_ = all_rowkey_names;
@@ -1655,7 +1790,7 @@ public:
     is_same_properties_names_ = is_same;
   }
 
-  OB_INLINE bool need_query() const { return op_type_ == ObTableOperationType::CHECK_AND_INSERT_UP; }
+  OB_INLINE bool need_query() const { return op_type_ == ObTableOperationType::CHECK_AND_INSERT_UP || op_type_ == ObTableOperationType::SCAN; }
   uint64_t get_checksum();
 
   OB_INLINE void set_operation_type(ObTableOperationType::Type type) { op_type_ = type; }
@@ -1674,7 +1809,8 @@ private:
     struct
     {
       bool is_check_no_exists_ : 1;
-      int64_t reserved : 63;
+      bool rollback_when_check_failed_ : 1;
+      int64_t reserved : 62;
     };
   };
   // Note: Only the HBase checkAndMutate operation may have multiple entities,
@@ -1745,6 +1881,16 @@ public:
 
   OB_INLINE int add_single_op(const ObTableSingleOp &single_op) { return single_ops_.push_back(single_op); }
 
+  OB_INLINE void reuse()
+  {
+    tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
+    option_flag_ = 0;
+    all_rowkey_names_ = nullptr;
+    all_properties_names_ = nullptr;
+    is_same_properties_names_ = false;
+    single_ops_.reuse();
+  }
+
   TO_STRING_KV(K_(tablet_id),
                K_(option_flag),
                K_(is_same_type),
@@ -1812,6 +1958,8 @@ public:
   OB_INLINE const ObString& get_table_name() const { return table_name_; }
   OB_INLINE const ObIArray<ObString>& get_all_rowkey_names() {return rowkey_names_; }
   OB_INLINE const ObIArray<ObString>& get_all_properties_names() {return properties_names_; }
+  OB_INLINE bool is_same_type() const { return is_same_type_; }
+  OB_INLINE bool is_same_properties_names() const { return is_same_properties_names_; }
   OB_INLINE bool return_one_result() const { return return_one_result_; }
   OB_INLINE bool need_all_prop_bitmap() const { return need_all_prop_bitmap_; }
 
@@ -1828,7 +1976,6 @@ public:
                K_(tablet_ops),
                K_(need_all_prop_bitmap));
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObTableLSOp);
   share::ObLSID ls_id_;
   common::ObString table_name_;
   uint64_t table_id_;
@@ -1850,6 +1997,49 @@ private:
   ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory_; // do not serialize
   common::ObIAllocator *deserialize_alloc_; // do not serialize
   ObSEArray<ObTableTabletOp, COMMON_BATCH_SIZE> tablet_ops_;
+};
+
+// result for OBKV Redis
+class ObRedisResult : public ObITableResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRedisResult(common::ObIAllocator *allocator = nullptr)
+      : ret_(common::OB_ERR_UNEXPECTED), allocator_(allocator), msg_()
+  {
+  }
+  ~ObRedisResult() = default;
+  int set_ret(int arg_ret, const ObString &redis_msg, bool need_deep_copy = true);
+  int set_err(int err);
+  int assign(const ObRedisResult &other);
+  virtual void reset() override
+  {
+    ret_ = common::OB_ERR_UNEXPECTED;
+    msg_.reset();
+  }
+
+  virtual int get_errno() const override { return ret_; }
+
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) override
+  {
+    UNUSEDx(result_entity, op_type);
+    set_err(ret_code);
+  }
+
+  int convert_to_table_op_result(ObTableOperationResult &result);
+
+  virtual ObTableResultType get_type() const override { return ObTableResultType::REDIS_RESULT; }
+
+  void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
+
+  TO_STRING_KV(K_(ret), KP(allocator_));
+
+private:
+  int ret_;
+  common::ObIAllocator *allocator_;
+  ObString msg_;
 };
 
 } // end namespace table

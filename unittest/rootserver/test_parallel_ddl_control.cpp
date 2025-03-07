@@ -11,7 +11,6 @@
  */
 
 #include "share/schema/ob_schema_utils.h"
-#include "lib/time/ob_time_utility.h"
 #include "share/parameter/ob_parameter_macro.h"
 #include <gtest/gtest.h>
 namespace oceanbase

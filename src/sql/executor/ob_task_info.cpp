@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/executor/ob_task_info.h"
+#include "ob_task_info.h"
 #include "sql/executor/ob_task_spliter.h"
 
 using namespace oceanbase::common;

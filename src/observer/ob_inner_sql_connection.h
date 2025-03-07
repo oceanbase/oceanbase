@@ -194,6 +194,8 @@ public:
   bool is_nested_conn();
   virtual void set_user_timeout(int64_t timeout) { user_timeout_ = timeout; }
   virtual int64_t get_user_timeout() const { return user_timeout_; }
+  int try_acquire_query_lock();
+  void try_release_query_lock();
   void ref();
   // when ref count decrease to zero, revert connection to connection pool.
   void unref();
@@ -434,6 +436,7 @@ private:
   int64_t user_timeout_;
   sql::ObFreeSessionCtx free_session_ctx_;
   ObDiagnosticInfo *diagnostic_info_;
+  bool inner_sess_query_locked_;
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };
 

@@ -11,19 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include <time.h>
 #include "ob_backup_struct.h"
-#include "lib/utility/ob_defer.h"
-#include "lib/alloc/alloc_assist.h"
-#include "lib/utility/utility.h"
-#include "common/ob_record_header.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_config.h"
-#include "storage/tx/ob_i_ts_source.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "share/backup/ob_archive_struct.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/tx/ob_ts_mgr.h"
 

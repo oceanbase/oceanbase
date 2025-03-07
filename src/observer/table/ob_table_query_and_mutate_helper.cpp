@@ -12,20 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_and_mutate_helper.h"
-#include "ob_table_rpc_processor_util.h"
-#include "observer/ob_service.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "ob_table_end_trans_cb.h"
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "ob_htable_utils.h"
-#include "ob_table_cg_service.h"
 #include "ob_htable_filter_operator.h"
-#include "ob_table_filter.h"
-#include "ob_table_op_wrapper.h"
-#include "ob_table_query_and_mutate_processor.h"
-#include "ob_table_ls_execute_processor.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -243,6 +230,9 @@ int QueryAndMutateHelper::execute_htable_put(const ObTableOperation &table_opera
       }
     } else {
       tb_ctx->set_entity(&entity);
+      if (OB_FAIL(tb_ctx->adjust_entity())) {
+        LOG_WARN("fail to adjust entity", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       ObTableOperationResult op_result;
@@ -330,80 +320,7 @@ int QueryAndMutateHelper::sort_qualifier(common::ObIArray<ColumnIdx> &columns,
   return ret;
 }
 
-int QueryAndMutateHelper::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
-{
-  int ret = OB_SUCCESS;
-  ObTableApiExecutor *executor = nullptr;
-  ObTableApiScanRowIterator row_iter;
-  OB_TABLE_START_AUDIT(credential_,
-                       *tb_ctx_.get_sess_guard(),
-                       tb_ctx_.get_table_name(),
-                       &audit_ctx_,
-                       query_and_mutate_.get_query());
-
-  if (OB_FAIL(scan_spec.create_executor(tb_ctx_, executor))) {
-    LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-  } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
-    LOG_WARN("fail to open scan row iterator", K(ret));
-  } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx_.get_allocator()))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next row", K(ret));
-    } else {
-      ret = OB_SUCCESS; // not exist
-    }
-  }
-
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-    LOG_WARN("fail to close row iter", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
-  }
-
-  if (OB_NOT_NULL(executor)) {
-    scan_spec.destroy_executor(executor);
-  }
-
-  OB_TABLE_END_AUDIT(ret_code, ret,
-                     snapshot, get_tx_snapshot(),
-                     stmt_type, StmtType::T_KV_QUERY,
-                     return_rows, OB_ISNULL(row) ? 0 : 1,
-                     has_table_scan, true);
-
-  return ret;
-}
-
-int QueryAndMutateHelper::refresh_query_range(const ObObj &new_q_obj)
-{
-  int ret = OB_SUCCESS;
-  const ObTableQuery &query = query_and_mutate_.get_query();
-  const ObIArray<common::ObNewRange> &ranges = query.get_scan_ranges();
-  if (ranges.count() != 1) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid range count", K(ret), K(ranges.count()));
-  } else {
-    ObIArray<common::ObNewRange> &ctx_ranges = tb_ctx_.get_key_ranges();
-    ctx_ranges.reset();
-    ObNewRange new_range = ranges.at(0); // shawdow copy
-    tb_ctx_.set_limit(1); // 设置limit 1，只获取最新版本的数据
-    ObObj &q_obj = const_cast<ObObj&>(new_q_obj); // 获取非const qualifier,为了varchar->varbinary
-    if (FALSE_IT(q_obj.set_varbinary(q_obj.get_varchar()))) {
-      // 将mutate的qualifier修改为varbinary
-    } else if (FALSE_IT(new_range.start_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_Q] = new_q_obj)) {
-      // 将mutate的qualifier作为新的扫描范围
-    } else if (FALSE_IT(new_range.end_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_Q] = new_q_obj)) {
-      // 将mutate的qualifier作为新的扫描范围
-    } else if (OB_FAIL(ctx_ranges.push_back(new_range))) {
-      LOG_WARN("fail to push back new range", K(ret));
-    }
-  }
-
-  return ret;
-}
-
-int QueryAndMutateHelper::add_to_results(const ObObj &rk,
-                                         const ObObj &cq,
-                                         const ObObj &ts,
-                                         const ObObj &value)
+int QueryAndMutateHelper::add_to_results(const ObTableEntity &new_entity)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_and_mutate_result_)) {
@@ -411,28 +328,28 @@ int QueryAndMutateHelper::add_to_results(const ObObj &rk,
     LOG_WARN("unexpected null query and mutate result", K(ret));
   } else {
     ObTableQueryResult &results = query_and_mutate_result_->affected_entity_;
+
     if (results.get_property_count() <= 0) {
-      if (OB_FAIL(results.add_property_name(ObHTableConstants::ROWKEY_CNAME_STR))) {
-        LOG_WARN("failed to copy name", K(ret));
-      } else if (OB_FAIL(results.add_property_name(ObHTableConstants::CQ_CNAME_STR))) {
-        LOG_WARN("failed to copy name", K(ret));
-      } else if (OB_FAIL(results.add_property_name(ObHTableConstants::VERSION_CNAME_STR))) {
-        LOG_WARN("failed to copy name", K(ret));
-      } else if (OB_FAIL(results.add_property_name(ObHTableConstants::VALUE_CNAME_STR))) {
-        LOG_WARN("failed to copy name", K(ret));
+      if (OB_FAIL(results.append_property_names(new_entity.get_rowkey_names()))) {
+        LOG_WARN("failed to deep copy name", K(ret), K(new_entity));
+      } else if (OB_FAIL(results.append_property_names(new_entity.get_properties_names()))) {
+        LOG_WARN("failed to deep copy name", K(ret), K(new_entity));
       }
     }
     if (OB_SUCC(ret)) {
-      ObObj objs[4];
-      objs[0] = rk;
-      objs[1] = cq;
-      objs[2] = ts;
-      int64_t timestamp = 0;
-      objs[2].get_int(timestamp);
-      objs[2].set_int(-timestamp);  // negate_htable_timestamp
-      objs[3] = value;
-      common::ObNewRow row(objs, 4);
-      if (OB_FAIL(results.add_row(row))) {  // deep copy
+      const ObIArray<ObObj> &rowkey_objs = new_entity.get_rowkey_objs();
+      const ObIArray<ObObj> &properties_objs = new_entity.get_properties_values();
+      int num = rowkey_objs.count() + properties_objs.count();
+      ObObj properties_values[num];
+      int i = 0;
+      for (; i < rowkey_objs.count(); i++) {
+        properties_values[i] = rowkey_objs.at(i);
+      }
+      for (; i < num; i++) {
+        properties_values[i] = properties_objs.at(i - rowkey_objs.count());
+      }
+      common::ObNewRow row(properties_values, num);
+      if (OB_FAIL(results.add_row(row))) {
         LOG_WARN("failed to add row to results", K(ret), K(row));
       }
     }
@@ -440,7 +357,7 @@ int QueryAndMutateHelper::add_to_results(const ObObj &rk,
   return ret;
 }
 
-int QueryAndMutateHelper::generate_new_value(const ObNewRow *old_row,
+int QueryAndMutateHelper::generate_new_value(const ObITableEntity *old_entity,
                                                const ObITableEntity &src_entity,
                                                bool is_increment,
                                                ObTableEntity &new_entity)
@@ -463,15 +380,15 @@ int QueryAndMutateHelper::generate_new_value(const ObNewRow *old_row,
     if (ObHTableConstants::LATEST_TIMESTAMP == new_ts) {
       new_ts = now_ms;
     }
-    if (OB_NOT_NULL(old_row)) { // 旧行存在，构造新值（base + delta）
-      if (ObHTableConstants::COL_IDX_V > old_row->count_) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid cell count", K(ret), K(old_row->count_));
+    if (OB_NOT_NULL(old_entity)) { // 旧行存在，构造新值（base + delta）
+      ObObj base_obj_t, base_obj_v;
+      if (OB_FAIL(old_entity->get_rowkey_value(ObHTableConstants::COL_IDX_T, base_obj_t))) {
+        LOG_WARN("failed to get timestamp", K(ret), K(old_entity));
+      } else if (OB_FAIL(old_entity->get_property(ObHTableConstants::VALUE_CNAME_STR, base_obj_v))) {
+        LOG_WARN("failed to get value", K(ret), K(old_entity));
       } else {
-        const ObObj &base_obj_t = old_row->get_cell(ObHTableConstants::COL_IDX_T);
-        const ObObj &base_obj_v = old_row->get_cell(ObHTableConstants::COL_IDX_V);
         orig_str = base_obj_v.get_varbinary();
-        int64_t orig_ts = base_obj_t.get_int();
+        int64_t orig_ts = -base_obj_t.get_int();
         new_ts = min(orig_ts - 1, now_ms); // adapt hbase
         if (is_increment) {
           int64_t orig_int = 0;
@@ -484,7 +401,7 @@ int QueryAndMutateHelper::generate_new_value(const ObNewRow *old_row,
       }
     }
     if (OB_SUCC(ret)) {
-      ObObj new_k, new_q, new_t, new_v;
+      ObObj new_k, new_q, new_t, new_v, new_ttl;
       // K
       new_k.set_varbinary(htable_cell.get_rowkey());
       // Q
@@ -521,19 +438,46 @@ int QueryAndMutateHelper::generate_new_value(const ObNewRow *old_row,
         }
       }
       if (OB_SUCC(ret)) { // generate new entity
-        if (OB_FAIL(new_entity.add_rowkey_value(new_k))) {
+        bool cell_ttl_exist = false;
+        int64_t ttl = INT64_MAX;
+        if (OB_FAIL(new_entity.set_rowkey(ObHTableConstants::ROWKEY_CNAME_STR, new_k))) {
           LOG_WARN("fail to add rowkey value", K(ret), K(new_k));
-        } else if (OB_FAIL(new_entity.add_rowkey_value(new_q))) {
+        } else if (OB_FAIL(new_entity.set_rowkey(ObHTableConstants::CQ_CNAME_STR, new_q))) {
           LOG_WARN("fail to add rowkey value", K(ret), K(new_q));
-        } else if (OB_FAIL(new_entity.add_rowkey_value(new_t))) {
+        } else if (OB_FAIL(new_entity.set_rowkey(ObHTableConstants::VERSION_CNAME_STR, new_t))) {
           LOG_WARN("fail to add rowkey value", K(ret), K(new_t));
         } else if (OB_FAIL(new_entity.set_property(ObHTableConstants::VALUE_CNAME_STR, new_v))) {
-          LOG_WARN("fail to set property", K(ret), K(new_v));
+          LOG_WARN("fail to set value property", K(ret), K(new_v));
+        } else if (OB_FAIL(schema_cache_guard_->has_hbase_ttl_column(cell_ttl_exist))) {
+          LOG_WARN("fail to check cell ttl", K(ret));
+        } else if (cell_ttl_exist) {
+          // TTL
+          if (OB_FAIL(htable_cell.get_ttl(ttl))) {
+            if (ret == OB_SEARCH_NOT_FOUND) {
+              ret = OB_SUCCESS;
+              if (OB_NOT_NULL(old_entity) &&
+                  OB_FAIL(old_entity->get_property(ObHTableConstants::TTL_CNAME_STR, new_ttl))) {
+                if (ret == OB_SEARCH_NOT_FOUND) {
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("failed to get cell ttl", K(ret), K(old_entity));
+                }
+              }
+            } else {
+              LOG_WARN("failed to get cell ttl", K(ret), K(htable_cell));
+            }
+          } else if (!htable_cell.last_get_is_null()) {
+            new_ttl.set_int(ttl);
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(new_entity.set_property(ObHTableConstants::TTL_CNAME_STR, new_ttl))) {
+            LOG_WARN("fail to set ttl property", K(ret), K(new_ttl));
+          }
         }
       }
       if (OB_SUCC(ret) && query_and_mutate_.return_affected_entity()) { // set return accected entity
-        if (OB_FAIL(add_to_results(new_k, new_q, new_t, new_v))) {
-          LOG_WARN("fail to add to results", K(ret), K(new_k), K(new_q), K(new_t), K(new_v));
+        if (OB_FAIL(add_to_results(new_entity))) {
+          LOG_WARN("fail to add to results", K(ret), K(new_k), K(new_q), K(new_t), K(new_v), K(new_ttl));
         }
       }
     }
@@ -544,29 +488,38 @@ int QueryAndMutateHelper::generate_new_value(const ObNewRow *old_row,
 
 // 1. 执行query获取到最新版本旧行的V
 // 2. 基于旧V执行mutate
-int QueryAndMutateHelper::execute_htable_increment(ObTableApiSpec &scan_spe)
+int QueryAndMutateHelper::execute_htable_inc_or_append(ObTableQueryResult *result)
 {
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
   int64_t N = mutations.count();
+  ObSEArray<ObITableEntity*, 8> entities;
   ObSEArray<ColumnIdx, OB_DEFAULT_SE_ARRAY_COUNT> columns;
   if (OB_FAIL(sort_qualifier(columns, mutations))) {
     LOG_WARN("fail to sort qualifier", K(ret), K(mutations));
+  } else if (OB_FAIL(result->get_htable_all_entity(entities))) {
+    LOG_WARN("fail to get all entity", K(ret));
   }
-
+  ObITableEntity *old_entity = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
-    ObNewRow *old_row = nullptr;
+    old_entity = nullptr;
     ObTableEntity new_entity;
     const ObTableOperation &op = mutations.at(columns.at(i).second);
     bool is_increment = ObTableOperationType::INCREMENT == op.type();
     const ObRowkey &rowkey = op.entity().get_rowkey();
     const ObObj &q_obj = rowkey.get_obj_ptr()[ObHTableConstants::COL_IDX_Q];  // column Q
-    if (OB_FAIL(refresh_query_range(q_obj))) {
-      LOG_WARN("fail to refresh query range", K(ret), K(q_obj));
-    } else if (OB_FAIL(get_old_row(scan_spe, old_row))) { // 获取旧行，存在/不存在
-      LOG_WARN("fail to get old row", K(ret));
-    } else if (OB_FAIL(generate_new_value(old_row, op.entity(), is_increment, new_entity))) {
-      LOG_WARN("fail to generate new value", K(ret), K(op.entity()), KP(old_row));
+    ObObj tmp_obj;
+    for (int j = 0; OB_SUCC(ret) && j < entities.count(); j++) {
+      if (OB_FAIL(entities.at(j)->get_rowkey_value(ObHTableConstants::COL_IDX_Q, tmp_obj))) {
+        LOG_WARN("fail to get properties", K(ret));
+      } else if (q_obj.get_string().compare(tmp_obj.get_string()) == 0) {
+        old_entity = entities.at(j);
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(generate_new_value(old_entity, op.entity(), is_increment, new_entity))) {
+      LOG_WARN("fail to generate new value", K(ret), K(op.entity()), KP(old_entity));
     } else if (OB_FAIL(execute_htable_insert(new_entity))) {
       LOG_WARN("fail to execute hatable insert", K(ret));
     }
@@ -621,71 +574,78 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
   ObTableQueryResult *one_result = nullptr;
   // htable queryAndXXX only check one row
   ret = result_iterator->get_next_result(one_result);
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                    snapshot, get_tx_snapshot(),
+                    stmt_type, StmtType::T_KV_QUERY,
+                    return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
+                    has_table_scan, true,
+                    filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
   if (OB_FAIL(ret) && OB_ITER_END != ret) {
     LOG_WARN("fail to get one result", K(ret));
   } else {
-    ret = OB_SUCCESS;
-    one_result = &one_result_;  // empty result is OK for APPEND and INCREMENT
-    bool expected_value_is_null = false;
-    bool result_value_is_null = false;
-    bool check_passed = false;
-    if (OB_FAIL(check_expected_value_is_null(result_iterator, expected_value_is_null))) {
-      LOG_WARN("fail to check whether expected value is null or not", K(ret));
-    } else if ((one_result->get_row_count() > 0 && !expected_value_is_null)
-                  || (one_result->get_row_count() == 0 && expected_value_is_null)) {
-      check_passed = true;
-    } else if (one_result->get_row_count() > 0 && expected_value_is_null) {
-      if (OB_FAIL(check_result_value_is_null(one_result, result_value_is_null))) {
-        LOG_WARN("fail to check whether result value is null or not", K(ret));
-      } else if (result_value_is_null) {
-        check_passed = true;
-      }
-    }
-    OB_TABLE_END_AUDIT(ret_code, ret,
-                       snapshot, get_tx_snapshot(),
-                       stmt_type, StmtType::T_KV_QUERY,
-                       return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
-                       has_table_scan, true,
-                       filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
-    if (OB_SUCC(ret) && check_passed) {
-      uint64_t N = mutations.count();
-      ObTableCtx *put_tb_ctx = nullptr;
-      ObTableCtx *del_tb_ctx = nullptr;
-      for (int i = 0; i < N && OB_SUCC(ret); i++) {
-        const ObTableOperation &op = mutations.at(i);
-        switch (op.type()) {
-          case ObTableOperationType::DEL: {  // checkAndDelete
-            if (OB_FAIL(execute_htable_delete(op, del_tb_ctx))) {
-              LOG_WARN("fail to execute hatable delete", K(ret), K(op), K(del_tb_ctx));
-            }
-            break;
-          }
-          case ObTableOperationType::INSERT_OR_UPDATE: {  // checkAndPut
-            if (OB_FAIL(execute_htable_put(op, put_tb_ctx))) {
-              LOG_WARN("fail to execute hatable insert", K(ret), K(op), K(del_tb_ctx));
-            }
-            break;
-          }
-          default: {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
-            LOG_WARN("not supported mutation type", K(ret), "type", op.type(), "index", i);
-            break;
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
+    ret = OB_SUCCESS;  // override ret
+    if (ObTableOperationType::INCREMENT == mutation.type() || ObTableOperationType::APPEND == mutation.type()) {
+      if (OB_FAIL(execute_htable_inc_or_append(one_result))) {
+        LOG_WARN("fail to execute hatable increment", K(ret));
+      } else {
         set_result_affected_rows(1);
       }
-      if (OB_NOT_NULL(put_tb_ctx)) {
-        put_tb_ctx->~ObTableCtx();
+    } else {
+      one_result = &one_result_;  // empty result is OK for APPEND and INCREMENT
+      bool expected_value_is_null = false;
+      bool result_value_is_null = false;
+      bool check_passed = false;
+      if (OB_FAIL(check_expected_value_is_null(result_iterator, expected_value_is_null))) {
+        LOG_WARN("fail to check whether expected value is null or not", K(ret));
+      } else if ((one_result->get_row_count() > 0 && !expected_value_is_null) ||
+                 (one_result->get_row_count() == 0 && expected_value_is_null)) {
+        check_passed = true;
+      } else if (one_result->get_row_count() > 0 && expected_value_is_null) {
+        if (OB_FAIL(check_result_value_is_null(one_result, result_value_is_null))) {
+          LOG_WARN("fail to check whether result value is null or not", K(ret));
+        } else if (result_value_is_null) {
+          check_passed = true;
+        }
       }
-      if (OB_NOT_NULL(del_tb_ctx)) {
-        del_tb_ctx->~ObTableCtx();
+      if (OB_SUCC(ret) && check_passed) {
+        uint64_t N = mutations.count();
+        ObTableCtx *put_tb_ctx = nullptr;
+        ObTableCtx *del_tb_ctx = nullptr;
+        for (int i = 0; i < N && OB_SUCC(ret); i++) {
+          const ObTableOperation &op = mutations.at(i);
+          switch (op.type()) {
+            case ObTableOperationType::DEL: {  // checkAndDelete
+              if (OB_FAIL(execute_htable_delete(op, del_tb_ctx))) {
+                LOG_WARN("fail to execute hatable delete", K(ret), K(op), K(del_tb_ctx));
+              }
+              break;
+            }
+            case ObTableOperationType::INSERT_OR_UPDATE: {  // checkAndPut
+              if (OB_FAIL(execute_htable_put(op, put_tb_ctx))) {
+                LOG_WARN("fail to execute hatable insert", K(ret), K(op), K(del_tb_ctx));
+              }
+              break;
+            }
+            default: {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
+              LOG_WARN("not supported mutation type", K(ret), "type", op.type(), "index", i);
+              break;
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          set_result_affected_rows(1);
+        }
+        if (OB_NOT_NULL(put_tb_ctx)) {
+          put_tb_ctx->~ObTableCtx();
+        }
+        if (OB_NOT_NULL(del_tb_ctx)) {
+          del_tb_ctx->~ObTableCtx();
+        }
       }
     }
   }
-
   return ret;
 }
 
@@ -933,27 +893,15 @@ int QueryAndMutateHelper::execute_query_and_mutate()
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, scan_spec))) {
     LOG_WARN("fail to get scan spec from cache", K(ret));
-  } else if (is_hkv_ && ObTableOperationType::INCREMENT == mutation.type()) {
-    if (OB_FAIL(execute_htable_increment(*scan_spec))) {
-      LOG_WARN("fail to execute hatable increment", K(ret));
-    } else {
-      // result_.affected_rows_ = 1;
-      set_result_affected_rows(1);
-    }
-  } else if (is_hkv_ && ObTableOperationType::APPEND == mutation.type()) {
-    if (OB_FAIL(execute_htable_increment(*scan_spec))) {
-      LOG_WARN("fail to execute hatable increment", K(ret));
-    } else {
-      // result_.affected_rows_ = 1;
-      set_result_affected_rows(1);
-    }
   } else {
     ObTableApiExecutor *executor = nullptr;
     ObTableQueryResultIterator *result_iterator = nullptr;
-    ObTableApiScanRowIterator row_iter;
-    if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
+    ObTableApiScanRowIterator *row_iter = nullptr;
+    if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx_, row_iter))) {
+      LOG_WARN("fail to get scan row iterator", K(ret));
+    } else if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
       LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-    } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
+    } else if (OB_FAIL(row_iter->open(static_cast<ObTableApiScanExecutor*>(executor)))) {
       LOG_WARN("fail to open scan row iterator", K(ret));
     } else if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(allocator_,
                                                                          query_and_mutate_.get_query(),
@@ -962,7 +910,7 @@ int QueryAndMutateHelper::execute_query_and_mutate()
                                                                          tb_ctx_,
                                                                          result_iterator))) {
       LOG_WARN("fail to generate query result iterator", K(ret));
-    } else if (FALSE_IT(result_iterator->set_scan_result(&row_iter))) {
+    } else if (FALSE_IT(result_iterator->set_scan_result(row_iter))) {
       // do nothing
     } else if (is_hkv_) {
       if (OB_FAIL(execute_htable_mutation(result_iterator))) {
@@ -980,10 +928,12 @@ int QueryAndMutateHelper::execute_query_and_mutate()
       }
     }
 
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-      LOG_WARN("fail to close row iter", K(tmp_ret));
-      ret = COVER_SUCC(tmp_ret);
+    if (OB_NOT_NULL(row_iter)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = row_iter->close())) {
+        LOG_WARN("fail to close row iter", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
     }
 
     if (OB_NOT_NULL(scan_spec)) {
@@ -1002,6 +952,7 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
   const ObITableEntity &mutate_entity = mutations.at(0).entity();
   ObTableQueryResult *one_result = nullptr;
   bool check_exists = query_and_mutate_.is_check_exists();
+  bool rollback_when_check_failed = query_and_mutate_.rollback_when_check_failed();
   bool check_passed = false;
   int64_t affected_rows = 0;
   OB_TABLE_START_AUDIT(credential_,
@@ -1035,16 +986,27 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
     // do nothing
   }
 
-  if (OB_SUCC(ret) && check_passed) {
-    switch (mutations.at(0).type()) {
-      case ObTableOperationType::INSERT_OR_UPDATE: {
-        ret = process_insert_up(mutate_entity, affected_rows);
-        break;
+  if (OB_SUCC(ret)) {
+    if (!check_passed) { // check failed
+      if (rollback_when_check_failed) {
+        ObString op = ObString::make_string("CheckAndInsUp");
+        ret = OB_KV_CHECK_FAILED;
+        LOG_WARN("check failed and rollback", K(ret));
+        LOG_USER_ERROR(OB_KV_CHECK_FAILED, op.length(), op.ptr());
+      } else {
+        // do nothing
       }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported mutation type", K(ret), "type", mutations.at(0).type());
-        break;
+    } else { // check passed
+      switch (mutations.at(0).type()) {
+        case ObTableOperationType::INSERT_OR_UPDATE: {
+          ret = process_insert_up(mutate_entity, affected_rows);
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported mutation type", K(ret), "type", mutations.at(0).type());
+          break;
+        }
       }
     }
   }

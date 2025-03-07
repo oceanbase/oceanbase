@@ -61,6 +61,7 @@ public:
   uint64_t get_db_id() { return db_id_; }
   const char *get_sql_id() const { return sql_id_; };
   ObSQLSessionInfo *get_my_session() { return my_session_; }
+  void reset_my_session() { my_session_ = nullptr; }
   bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
 
   TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(db_id), K_(sql_id), K_(disable_auto_mem_mgr));
@@ -90,8 +91,7 @@ public:
     active_time_(0), number_pass_(0),
     calc_count_(0), disable_auto_mem_mgr_(false)
   {
-    ObRandom rand;
-    random_id_ = rand.get();
+    random_id_ = (int64_t)rdtsc();
   }
 
   OB_INLINE int64_t get_row_count() const { return row_count_; }

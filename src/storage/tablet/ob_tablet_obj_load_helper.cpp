@@ -11,9 +11,7 @@
  */
 
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "lib/allocator/page_arena.h"
 #include "storage/blockstore/ob_shared_object_reader_writer.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
 
 #define USING_LOG_PREFIX STORAGE
 

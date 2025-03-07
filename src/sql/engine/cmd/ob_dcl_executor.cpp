@@ -14,13 +14,9 @@
 #include "sql/engine/cmd/ob_dcl_executor.h"
 
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/dcl/ob_grant_stmt.h"
 #include "sql/resolver/dcl/ob_revoke_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 
 namespace oceanbase

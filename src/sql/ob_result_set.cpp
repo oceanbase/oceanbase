@@ -11,48 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/ob_result_set.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "rpc/obmysql/ob_mysql_global.h"
+#include "ob_result_set.h"
 #include "rpc/obmysql/ob_mysql_field.h"
-#include "lib/oblog/ob_log_module.h"
-#include "engine/ob_physical_plan.h"
-#include "sql/parser/parse_malloc.h"
-#include "share/system_variable/ob_system_variable.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_cmd.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/executor/ob_executor.h"
-#include "sql/executor/ob_cmd_executor.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/profile/ob_perf_event.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "share/ob_cluster_version.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_event.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_stmt.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/wrs/ob_weak_read_service.h"       // ObWeakReadService
-#include "storage/tx/wrs/ob_i_weak_read_service.h"     // WRS_LEVEL_SERVER
-#include "storage/tx/wrs/ob_weak_read_util.h"          // ObWeakReadUtil
-#include "observer/ob_req_time_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
+#include "src/sql/plan_cache/ob_plan_cache.h"
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
-#include "sql/engine/dml/ob_link_op.h"
-#include <cctype>
-#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 using namespace oceanbase::sql;
@@ -151,10 +116,8 @@ OB_INLINE int ObResultSet::open_plan()
 int ObResultSet::open()
 {
   int ret = OB_SUCCESS;
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   my_session_.set_process_query_time(ObClockGenerator::getClock());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
-  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   FLTSpanGuard(open);
   if (lib::is_oracle_mode() &&
       get_exec_context().get_nested_level() >= OB_MAX_RECURSIVE_SQL_LEVELS) {
@@ -218,7 +181,7 @@ int ObResultSet::open_result()
       }
     } else if (OB_FAIL(drive_dml_query())) {
       LOG_WARN("fail to drive dml query", K(ret));
-    } else if (stmt::T_INSERT == get_stmt_type()) {
+    } else {
       ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
         ret = OB_ERR_UNEXPECTED;
@@ -303,16 +266,10 @@ int ObResultSet::implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_in
     }
     exec_ctx.set_need_disconnect(false);
   } else {
-    // implicit end transaction and start transaction will not clear next scope transaction settings by:
-    // a. set by `set transaction read only`
-    // b. set by `set transaction isolation level XXX`
-    bool keep_trans_variable = (cmd_type == stmt::T_START_TRANS);
-    if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false, NULL, !keep_trans_variable))) {
-      LOG_WARN("fail end implicit trans on cmd execute", K(ret));
-    } else if (session_info.need_recheck_txn_readonly() && session_info.get_tx_read_only()) {
-      ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
-      LOG_WARN("cmd can not execute because txn is read only", K(ret), K(cmd_type));
-    }
+    ret = ObSqlTransControl::end_trans_before_cmd_execute(session_info,
+                                                          exec_ctx.get_need_disconnect_for_update(),
+                                                          exec_ctx.get_trans_state(),
+                                                          cmd_type);
   }
   return ret;
 }
@@ -468,9 +425,7 @@ int ObResultSet::end_stmt(const bool is_rollback)
 //see the call reference in LinkExecCtxGuard
 int ObResultSet::get_next_row(const common::ObNewRow *&row)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
-  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   return inner_get_next_row(row);
 }
 
@@ -616,16 +571,13 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
                                                                            ctx.get_physical_plan_ctx()->get_last_refresh_scns())))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
-    // for insert /*+ append */ into select clause
-    if (stmt::T_INSERT == get_stmt_type()) {
-      ObPhysicalPlanCtx *plan_ctx = NULL;
-      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("physical plan ctx is null");
-      } else if (plan_ctx->get_is_direct_insert_plan()) {
-        if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
-          LOG_WARN("fail to start direct insert", KR(ret));
-        }
+    ObPhysicalPlanCtx *plan_ctx = NULL;
+    if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("physical plan ctx is null");
+    } else if (plan_ctx->get_is_direct_insert_plan()) {
+      if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
+        LOG_WARN("fail to start direct insert", KR(ret));
       }
     }
     /* 将exec_result_设置到executor的运行时环境中，用于返回数据 */
@@ -891,7 +843,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
     ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
-    if (stmt::T_INSERT == get_stmt_type() && plan_ctx->get_is_direct_insert_plan()) {
+    if (plan_ctx->get_is_direct_insert_plan()) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(
@@ -948,9 +900,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 int ObResultSet::do_close(int *client_ret)
 {
   int ret = OB_SUCCESS;
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
-  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
 
   FLTSpanGuard(close);
   const bool is_tx_active = my_session_.is_in_transaction();
@@ -1354,6 +1304,7 @@ bool ObResultSet::need_end_trans_callback() const
   } else if (my_session_.get_has_temp_table_flag()
              || my_session_.has_tx_level_temp_table()
              || (OB_NOT_NULL(physical_plan_) && physical_plan_->is_contain_oracle_trx_level_temporary_table())) {
+    // temporary table will be committed synchronously, and then drop_temp_tables will be called to delete the data.
     need = false;
   } else if (stmt::T_END_TRANS == get_stmt_type()) {
     need = true;

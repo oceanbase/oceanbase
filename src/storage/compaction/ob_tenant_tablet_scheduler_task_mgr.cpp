@@ -8,11 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_tenant_tablet_scheduler_task_mgr.h"
+#include "ob_tenant_tablet_scheduler_task_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "observer/report/ob_tablet_table_updater.h"
-#include "storage/compaction/ob_compaction_schedule_util.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tenant_compaction_obj_mgr.h"
 #include "storage/compaction/ob_tenant_ls_merge_scheduler.h"

@@ -210,7 +210,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t1, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t1, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -251,7 +251,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t2, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t2, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -292,7 +292,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t3, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t3, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -333,7 +333,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t4, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t4, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -374,7 +374,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t5, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t5, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -415,7 +415,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t6, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t6, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -456,7 +456,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t7, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t7, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -497,7 +497,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t8, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t8, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -538,7 +538,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t9, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t9, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -579,7 +579,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t10, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t10, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -620,7 +620,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t11, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t11, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -661,7 +661,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t12, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t12, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -702,7 +702,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t13, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t13, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -743,7 +743,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t14, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t14, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -784,7 +784,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t15, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t15, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -825,7 +825,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t16, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t16, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -866,7 +866,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t17, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t17, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -907,7 +907,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t18, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t18, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -948,7 +948,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t19, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t19, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -989,7 +989,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t20, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t20, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1030,7 +1030,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t21, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t21, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1071,7 +1071,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), t.t22)]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), t.t22)]), filter(nil), rowset=16
       access([t.t22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1112,7 +1112,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t23, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t23, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t23]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1153,7 +1153,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t24, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t24, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t24]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1194,7 +1194,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t25, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t25, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t25]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1235,7 +1235,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t26, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t26, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t26]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1276,7 +1276,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t27, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t27, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t27]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1317,7 +1317,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t28, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t28, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t28]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1358,7 +1358,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t29, VARCHAR(1048576)))]), filter(nil), rowset=16
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(20, 0)), cast(t.t29, VARCHAR(1048576)))]), filter(nil), rowset=16
       access([t.t29]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true

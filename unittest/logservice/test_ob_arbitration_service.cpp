@@ -11,10 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
-#include "rpc/obrpc/ob_net_keepalive.h"
 #define private public
-#include "logservice/palf/log_config_mgr.h"
 #include "logservice/ob_arbitration_service.h"
 #include "logservice/ob_net_keepalive_adapter.h"
 #undef private

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_sstable_macro_block_header.h"
-#include "ob_macro_block.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 
 using namespace oceanbase::share;

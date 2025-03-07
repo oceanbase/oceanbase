@@ -10,7 +10,6 @@
  */
 
 #include "sql/engine/join/ob_join_filter_material_control_info.h"
-#include "lib/utility/ob_unify_serialize.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase;

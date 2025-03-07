@@ -12,30 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_ls_service_helper.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_errno.h"
 #include "share/ob_max_id_fetcher.h"
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
-#include "share/schema/ob_schema_service.h"//ObMultiSchemaService
-#include "share/ls/ob_ls_creator.h" //ObLSCreator
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ls/ob_ls_table_operator.h"//ObLSTableOpertor
 #include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
-#include "share/ob_unit_table_operator.h"//ObUnitTableOperator
-#include "share/ob_zone_table_operation.h" //ObZoneTableOperation
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/restore/ob_physical_restore_table_operator.h"//ObTenantRestoreTableOperator
-#include "share/ob_standby_upgrade.h"//ObStandbyUpgrade
-#include "share/ob_upgrade_utils.h"//ObUpgradeChecker
-#include "share/rc/ob_tenant_base.h"//MTL_SWITCH
-#include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSHelper
-#include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
-#include "rootserver/standby/ob_tenant_role_transition_service.h"//get_checkpoint_by_rpc
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/ob_log_service.h"//ObLogService
 
 namespace oceanbase
@@ -790,7 +770,9 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
     // update ls group id in status
     int64_t unit_group_index = OB_INVALID_INDEX_INT64;
     ObLSGroupInfo ls_group_info;
-    if (OB_SUCC(tenant_info.get_ls_group_info(new_ls_group_id, ls_group_info))) {
+    if (0 == new_ls_group_id) { // for dup ls
+      unit_group_id = 0;
+    } else if (OB_SUCC(tenant_info.get_ls_group_info(new_ls_group_id, ls_group_info))) {
        unit_group_id = ls_group_info.unit_group_id_;
     } else if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get ls group info", KR(ret), K(new_ls_group_id));
@@ -1305,7 +1287,7 @@ int ObTenantLSInfo::add_ls_to_ls_group_(const share::ObLSStatusInfo &info)
       } else if (OB_FAIL(ls_group_array_.push_back(group))) {
         LOG_WARN("failed to pushback group", KR(ret), K(group));
       } else if (0 == info.ls_group_id_) {
-        //duplate ls, no need to set to unit group
+        //duplate ls with ls_group_id = 0, no need to set to unit group
       } else if (OB_FAIL(add_ls_group_to_unit_group_(group))) {
         LOG_WARN("failed to add ls group to unit group", KR(ret), K(group));
       }

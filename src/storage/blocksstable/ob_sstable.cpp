@@ -12,24 +12,13 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/ob_force_print_log.h"
+#include "ob_sstable.h"
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
 #include "storage/access/ob_sstable_row_exister.h"
 #include "storage/access/ob_sstable_row_lock_checker.h"
 #include "storage/access/ob_sstable_row_multi_exister.h"
-#include "storage/access/ob_sstable_row_multi_getter.h"
-#include "storage/access/ob_sstable_row_scanner.h"
 #include "storage/access/ob_sstable_row_whole_scanner.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/ob_sstable.h"
 #include "storage/ob_all_micro_block_range_iterator.h"
-#include "storage/tablet/ob_tablet_create_sstable_param.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 

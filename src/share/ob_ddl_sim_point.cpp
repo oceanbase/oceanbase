@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/random/ob_random.h"
 #include "share/ob_ddl_sim_point.h"
-#include "share/config/ob_server_config.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

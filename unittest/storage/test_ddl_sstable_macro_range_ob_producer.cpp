@@ -10,13 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <errno.h>
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "storage/high_availability/ob_storage_ha_reader.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
-#include "storage/high_availability/ob_physical_copy_task.h"
+#include "src/storage/high_availability/ob_storage_ha_macro_block_writer.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase

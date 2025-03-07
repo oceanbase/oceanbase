@@ -36,21 +36,26 @@ public:
   OB_INLINE void set_count_flag(const bool t_count) { t_count_ = t_count; }
   OB_INLINE void set_minmax_flag(const bool t_minmax) { t_minmax_ = t_minmax; }
   OB_INLINE void set_sum_flag(const bool t_sum) { t_sum_ = t_sum; }
+  OB_INLINE void set_hll_flag(const bool t_hll) { t_hll_ = t_hll; }
+  OB_INLINE void set_sum_op_nsize_flag(const bool t_sum_op_nsize) { t_sum_op_nsize_ = t_sum_op_nsize; }
   OB_INLINE void set_has_rb_build_agg(const bool t_rb_build_agg) { t_rb_build_agg_ = t_rb_build_agg; }
   OB_INLINE bool has_count() const { return t_count_; }
   OB_INLINE bool has_minmax() const { return t_minmax_; }
   OB_INLINE bool has_sum() const { return t_sum_; }
+  OB_INLINE bool has_hll() const { return t_hll_; }
+  OB_INLINE bool has_sum_op_nsize() const { return t_sum_op_nsize_; }
   OB_INLINE bool has_rb_build_agg() const { return t_rb_build_agg_; }
-  OB_INLINE bool only_count() const { return t_flag_ == 1; }
   TO_STRING_KV(K_(t_flag));
 
   union {
     struct {
-      int16_t t_count_  : 1;
-      int16_t t_minmax_ : 1;
-      int16_t t_sum_    : 1;
+      int16_t t_count_        : 1;
+      int16_t t_minmax_       : 1;
+      int16_t t_sum_          : 1;
       int16_t t_rb_build_agg_ : 1;
-      int16_t reserved_ : 12;
+      int16_t t_hll_          : 1;
+      int16_t t_sum_op_nsize_ : 1;
+      int16_t reserved_ : 10;
     };
     int16_t t_flag_;
   };
@@ -86,10 +91,14 @@ public:
     bool bret = false;
     if (agg_type_flag_.has_sum() || agg_type_flag_.has_rb_build_agg()) {
       bret = true;
-    } else if (agg_type_flag_.has_minmax()) {
+    } else {
       for (int64_t i = 0; !bret && i < agg_cells_.count(); ++i) {
         const ObAggCellVec *agg_cell = agg_cells_.at(i);
-        bret |= !agg_cell->can_pushdown_decoder(reader, col_offset, row_ids, row_count);
+        if (PD_COUNT == agg_cell->get_type() || PD_SUM_OP_SIZE == agg_cell->get_type()) {
+          bret |= agg_cell->need_access_data();
+        } else { // min/max/hyperloglog
+          bret |= !agg_cell->can_pushdown_decoder(reader, col_offset, row_ids, row_count);
+        }
       }
     }
     return bret;

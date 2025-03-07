@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/ob_storage_schema.h"
+#include "storage/tablet/ob_tablet_persister.h"
+#include "src/storage/ls/ob_ls.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/tablet/ob_tablet_block_aggregated_info.h"
 #include "storage/tablet/ob_tablet_block_header.h"
@@ -27,7 +25,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h" // for ObRefreshTabletUtil::get_shared_tablet_meta
-#include "storage/shared_storage/ob_file_manager.h"
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
 

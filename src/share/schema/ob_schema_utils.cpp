@@ -11,19 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_schema_utils.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "share/ob_cluster_role.h"
-#include "share/ob_get_compat_mode.h"
+#include "ob_schema_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/ob_server_struct.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "share/ob_fts_index_builder_util.h"
 namespace oceanbase
@@ -122,6 +111,22 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
       if (OB_FAIL(ObResolverUtils::resolve_generated_column_info(col_def, allocator,
           root_expr_type, columns_names))) {
         LOG_WARN("get generated column expr failed", K(ret));
+      } else if (T_FUN_SYS_VEC_IVF_CENTER_ID == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_IVF_CENTER_VECTOR == root_expr_type ||
+                 T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_CENTER_VECTOR_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR == root_expr_type ||
+                 T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_DATA_VECTOR_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_IVF_META_ID == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_META_ID_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_IVF_META_VECTOR == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_META_VECTOR_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_IVF_PQ_CENTER_ID == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_PQ_CENTER_ID_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG);
       } else if (T_FUN_SYS_VEC_VID == root_expr_type) {
         column.add_column_flag(GENERATED_VEC_VID_COLUMN_FLAG);
       } else if (T_FUN_SYS_VEC_TYPE == root_expr_type) {
@@ -239,40 +244,82 @@ bool ObSchemaUtils::is_default_expr_v2_column(uint64_t flag)
 /* vector index */
 bool ObSchemaUtils::is_vec_index_column(const uint64_t flag)
 {
-  return is_vec_vid_column(flag)
-      || is_vec_type_column(flag)
-      || is_vec_vector_column(flag)
-      || is_vec_scn_column(flag)
-      || is_vec_key_column(flag)
-      || is_vec_data_column(flag);
+  return is_vec_hnsw_vid_column(flag)
+      || is_vec_hnsw_type_column(flag)
+      || is_vec_hnsw_vector_column(flag)
+      || is_vec_hnsw_scn_column(flag)
+      || is_vec_hnsw_key_column(flag)
+      || is_vec_hnsw_data_column(flag)
+      || is_vec_ivf_center_id_column(flag)
+      || is_vec_ivf_center_vector_column(flag)
+      || is_vec_ivf_data_vector_column(flag)
+      || is_vec_ivf_pq_center_id_column(flag)
+      || is_vec_ivf_pq_center_ids_column(flag)
+      || is_vec_ivf_meta_id_column(flag)
+      || is_vec_ivf_meta_vector_column(flag);
 }
 
-bool ObSchemaUtils::is_vec_vid_column(const uint64_t flag)
+bool ObSchemaUtils::is_vec_ivf_center_id_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_ivf_center_vector_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_CENTER_VECTOR_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_ivf_data_vector_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_DATA_VECTOR_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_ivf_meta_id_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_META_ID_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_ivf_meta_vector_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_META_VECTOR_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_ivf_pq_center_id_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_PQ_CENTER_ID_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_ivf_pq_center_ids_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_hnsw_vid_column(const uint64_t flag)
 {
   return flag & GENERATED_VEC_VID_COLUMN_FLAG;
 }
 
-bool ObSchemaUtils::is_vec_type_column(const uint64_t flag)
+bool ObSchemaUtils::is_vec_hnsw_type_column(const uint64_t flag)
 {
   return flag & GENERATED_VEC_TYPE_COLUMN_FLAG;
 }
 
-bool ObSchemaUtils::is_vec_vector_column(const uint64_t flag)
+bool ObSchemaUtils::is_vec_hnsw_vector_column(const uint64_t flag)
 {
   return flag & GENERATED_VEC_VECTOR_COLUMN_FLAG;
 }
 
-bool ObSchemaUtils::is_vec_scn_column(const uint64_t flag)
+bool ObSchemaUtils::is_vec_hnsw_scn_column(const uint64_t flag)
 {
   return flag & GENERATED_VEC_SCN_COLUMN_FLAG;
 }
 
-bool ObSchemaUtils::is_vec_key_column(const uint64_t flag)
+bool ObSchemaUtils::is_vec_hnsw_key_column(const uint64_t flag)
 {
   return flag & GENERATED_VEC_KEY_COLUMN_FLAG;
 }
 
-bool ObSchemaUtils::is_vec_data_column(const uint64_t flag)
+bool ObSchemaUtils::is_vec_hnsw_data_column(const uint64_t flag)
 {
   return flag & GENERATED_VEC_DATA_COLUMN_FLAG;
 }
@@ -542,58 +589,55 @@ int ObSchemaUtils::construct_inner_table_schemas(
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (is_sys_tenant(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else {
-    const schema_create_func *creator_ptr_arrays[] = {
-      all_core_table_schema_creator,
-      core_table_schema_creators,
-      sys_table_schema_creators,
-      virtual_table_schema_creators,
-      sys_view_schema_creators
-    };
-    int64_t capacity = 0;
+  const schema_create_func *creator_ptr_arrays[] = {
+    all_core_table_schema_creator,
+    core_table_schema_creators,
+    sys_table_schema_creators,
+    virtual_table_schema_creators,
+    sys_view_schema_creators
+  };
+  int64_t capacity = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
+    for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
+        OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
+      ++capacity;
+    }
+  }
+  if (FAILEDx(tables.prepare_allocate_and_keep_count(capacity, &allocator))) {
+    LOG_WARN("fail to prepare allocate table schemas", KR(ret), K(tenant_id), K(capacity));
+  }
+  HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
       for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-           OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
-        ++capacity;
-      }
-    }
-    if (FAILEDx(tables.prepare_allocate_and_keep_count(capacity, &allocator))) {
-      LOG_WARN("fail to prepare allocate table schemas", KR(ret), K(tenant_id), K(capacity));
-    }
-    HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
-        for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-             OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
-          table_schema.reset();
-          bool exist = false;
-          if (OB_FAIL((*creator_ptr)(table_schema))) {
-            LOG_WARN("fail to gen sys table schema", KR(ret));
-          } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
-                     tenant_id, table_schema))) {
-            LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
-          } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
-                     tenant_id, table_schema, exist))) {
-            LOG_WARN("fail to check inner table exist",
-                     KR(ret), K(tenant_id), K(table_schema));
-          } else if (!exist) {
-            // skip
-          } else if (OB_FAIL(tables.push_back(table_schema))) {
-            LOG_WARN("fail to push back table schema", KR(ret), K(table_schema));
-          } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-                     tenant_id, table_schema.get_table_id(), tables))) {
-            LOG_WARN("fail to append sys table index schemas",
-                     KR(ret), K(tenant_id), "table_id", table_schema.get_table_id());
-          }
-          const int64_t data_table_id = table_schema.get_table_id();
-          if (OB_SUCC(ret) && exist) {
-            if (OB_FAIL(add_sys_table_lob_aux_table(tenant_id, data_table_id, tables))) {
-              LOG_WARN("fail to add lob table to sys table", KR(ret), K(data_table_id));
-            }
-          } // end lob aux table
+          OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
+        table_schema.reset();
+        bool exist = false;
+        if (OB_FAIL((*creator_ptr)(table_schema))) {
+          LOG_WARN("fail to gen sys table schema", KR(ret));
+        } else if (is_sys_tenant(tenant_id) && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
+          // sys tenant's __all_core_table's schema is built separately in bootstrap
+        } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
+                tenant_id, table_schema))) {
+          LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
+                tenant_id, table_schema, exist))) {
+          LOG_WARN("fail to check inner table exist",
+              KR(ret), K(tenant_id), K(table_schema));
+        } else if (!exist) {
+          // skip
+        } else if (OB_FAIL(tables.push_back(table_schema))) {
+          LOG_WARN("fail to push back table schema", KR(ret), K(table_schema));
+        } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
+                tenant_id, table_schema.get_table_id(), tables))) {
+          LOG_WARN("fail to append sys table index schemas",
+              KR(ret), K(tenant_id), "table_id", table_schema.get_table_id());
         }
+        const int64_t data_table_id = table_schema.get_table_id();
+        if (OB_SUCC(ret) && exist) {
+          if (OB_FAIL(add_sys_table_lob_aux_table(tenant_id, data_table_id, tables))) {
+            LOG_WARN("fail to add lob table to sys table", KR(ret), K(data_table_id));
+          }
+        } // end lob aux table
       }
     }
   }

@@ -132,7 +132,7 @@ int ObMinMaxEstimator::estimate(const ObOptStatGatherParam &param,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("ObMinMaxEst", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
-  ObString no_rewrite("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
+  ObString no_rewrite("NO_REWRITE DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
   ObSqlString raw_sql;
   int64_t duration_time = -1;
   ObSEArray<ObOptStat, 1> tmp_opt_stats;
@@ -142,7 +142,7 @@ int ObMinMaxEstimator::estimate(const ObOptStatGatherParam &param,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
   } else if (!param.partition_infos_.empty() &&
-             OB_FAIL(fill_partition_info(allocator, param.partition_infos_.at(0).part_name_))) {
+             OB_FAIL(fill_partition_info(allocator, param, param.partition_infos_.at(0)))) {
     LOG_WARN("failed to add partition info", K(ret));
   } else if (OB_FAIL(add_min_max_stat_items(allocator,
                                             param,

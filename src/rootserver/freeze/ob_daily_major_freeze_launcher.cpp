@@ -15,14 +15,8 @@
 #include "rootserver/freeze/ob_daily_major_freeze_launcher.h"
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "share/ob_freeze_info_manager.h"
-#include "rootserver/freeze/ob_major_merge_info_manager.h"
-#include "share/ob_debug_sync.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_tablet_checksum_operator.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {

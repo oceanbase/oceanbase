@@ -11,25 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 #define protected public
 
-#include "lib/allocator/page_arena.h"
-#include "storage/ob_i_table.h"
 #include "storage/schema_utils.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/tablet/ob_table_store_util.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/ob_storage_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/io/ob_io_struct.h"
 
 
 namespace oceanbase

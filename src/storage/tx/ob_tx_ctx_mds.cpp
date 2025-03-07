@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_ctx_mds.h"
+#include "ob_tx_ctx_mds.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase

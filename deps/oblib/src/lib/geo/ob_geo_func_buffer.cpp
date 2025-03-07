@@ -13,20 +13,9 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_dispatcher.h"
-#include "lib/geo/ob_geo_func_buffer.h"
-#include "lib/geo/ob_geo_func_union.h"
-#include "lib/geo/ob_geo_func_transform.h"
+#include "ob_geo_func_buffer.h"
 #include "lib/geo/ob_geo_func_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/geo/ob_geo_tree.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_longtitude_correct_visitor.h"
-#include "lib/geo/ob_geo_wkb_visitor.h"
-#include "lib/geo/ob_geo_wkb_size_visitor.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

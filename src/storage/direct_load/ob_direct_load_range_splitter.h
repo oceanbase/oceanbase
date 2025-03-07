@@ -15,6 +15,7 @@
 #include "storage/direct_load/ob_direct_load_compare.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_rowkey_merger.h"
+#include "storage/direct_load/ob_direct_load_i_table.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,7 @@ public:
   ~ObDirectLoadMergeRangeSplitter();
   int init(const common::ObTabletID &tablet_id,
            ObDirectLoadOriginTable *origin_table,
-           const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+           const ObDirectLoadTableHandleArray &sstable_array,
            const ObDirectLoadTableDataDesc &table_data_desc,
            const blocksstable::ObStorageDatumUtils *datum_utils,
            const common::ObIArray<share::schema::ObColDesc> &col_descs);
@@ -94,7 +95,7 @@ public:
                   int64_t max_range_count, common::ObIAllocator &allocator);
 private:
   int construct_sstable_rowkey_iters(
-    const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+    const ObDirectLoadTableHandleArray &sstable_array,
     const ObDirectLoadTableDataDesc &table_data_desc,
     const blocksstable::ObStorageDatumUtils *datum_utils);
 private:
@@ -118,7 +119,7 @@ class ObDirectLoadMultipleMergeRangeSplitter
 public:
   ObDirectLoadMultipleMergeRangeSplitter();
   ~ObDirectLoadMultipleMergeRangeSplitter();
-  int init(const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  int init(const ObDirectLoadTableHandleArray &sstable_array,
            const ObDirectLoadTableDataDesc &table_data_desc,
            const blocksstable::ObStorageDatumUtils *datum_utils,
            const common::ObIArray<share::schema::ObColDesc> &col_descs);
@@ -127,7 +128,7 @@ public:
                   common::ObIArray<blocksstable::ObDatumRange> &range_array,
                   common::ObIAllocator &allocator);
 private:
-  int construct_rowkey_iters(const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  int construct_rowkey_iters(const ObDirectLoadTableHandleArray &sstable_array,
                              const ObDirectLoadTableDataDesc &table_data_desc,
                              const blocksstable::ObStorageDatumUtils *datum_utils);
   int prepare_range_memtable_readable(blocksstable::ObDatumRange &range,
@@ -163,13 +164,13 @@ class ObDirectLoadMultipleSSTableRangeSplitter
 public:
   ObDirectLoadMultipleSSTableRangeSplitter();
   ~ObDirectLoadMultipleSSTableRangeSplitter();
-  int init(const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  int init(const ObDirectLoadTableHandleArray &sstable_array,
            const ObDirectLoadTableDataDesc &table_data_desc,
            const blocksstable::ObStorageDatumUtils *datum_utils);
   int split_range(common::ObIArray<ObDirectLoadMultipleDatumRange> &range_array,
                   int64_t max_range_count, common::ObIAllocator &allocator);
 private:
-  int construct_rowkey_iters(const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  int construct_rowkey_iters(const ObDirectLoadTableHandleArray &sstable_array,
                              const ObDirectLoadTableDataDesc &table_data_desc,
                              const blocksstable::ObStorageDatumUtils *datum_utils);
 private:

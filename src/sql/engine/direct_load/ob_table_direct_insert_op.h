@@ -104,7 +104,6 @@ private:
                   const sql::ObBatchRows &batch_rows);
   int write_row(const common::ObTabletID *tablet_id_ptr,
                 const sql::ExprFixedArray &expr_array);
-  int process_insert_batch();
 protected:
   ObInsRtDef ins_rtdef_;
   common::ObArenaAllocator allocator_;

@@ -9,22 +9,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/future/ob_future.h"
-#include <algorithm>
-#include <chrono>
-#include <condition_variable>
-#include <thread>
-#include <vector>
 #include <gtest/gtest.h>
 #define UNITTEST_DEBUG
 #define private public
 #define protected public
-#include "storage/multi_data_source/runtime_utility/common_define.h"
-#include "storage/multi_data_source/mds_table_base.h"
-#include "storage/multi_data_source/mds_table_mgr.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/multi_data_source/mds_table_order_flusher.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {
 namespace storage {

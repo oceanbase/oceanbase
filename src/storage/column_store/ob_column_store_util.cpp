@@ -12,8 +12,6 @@
 
 #include "ob_column_store_util.h"
 #include "storage/memtable/ob_memtable.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/access/ob_table_access_param.h"
 
 namespace oceanbase
 {

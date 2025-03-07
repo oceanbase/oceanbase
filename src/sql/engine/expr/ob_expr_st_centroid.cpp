@@ -14,12 +14,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_func_centroid.h"
 #include "ob_expr_st_centroid.h"
-#include "lib/geo/ob_srs_info.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

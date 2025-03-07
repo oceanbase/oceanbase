@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX PL_STORAGEROUTINE
 #include "ob_pl_persistent.h"
-#include "lib/oblog/ob_log_module.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "observer/ob_inner_sql_result.h"
 #include "ob_pl_code_generator.h"
 #include "ob_pl_compile.h"
 #include "share/ob_version.h"
@@ -461,10 +457,11 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
   }
   return ret;
 }
+template<typename DependencyTable>
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
-                                          const ObPLDependencyTable &dep_schema_objs,
-                                          int64_t merge_version,
-                                          bool &match)
+                                              const DependencyTable &dep_schema_objs,
+                                              int64_t merge_version,
+                                              bool &match)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
@@ -506,13 +503,23 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         match = false;
       }
     }
-  }
-  if (OB_SUCC(ret) && !match) {
-    LOG_INFO("not match schema", K(merge_version), K(dep_schema_objs));
+    if (OB_SUCC(ret) && !match) {
+      LOG_INFO("not match schema", K(merge_version), K(dep_schema_objs.at(i)));
+    }
   }
 
   return ret;
 }
+
+template int ObRoutinePersistentInfo::check_dep_schema<ObPLDependencyTable>(ObSchemaGetterGuard &schema_guard,
+                                          const ObPLDependencyTable &dep_schema_objs,
+                                          int64_t merge_version,
+                                          bool &match);
+
+template int ObRoutinePersistentInfo::check_dep_schema<sql::DependenyTableStore>(ObSchemaGetterGuard &schema_guard,
+                                          const sql::DependenyTableStore &dep_schema_objs,
+                                          int64_t merge_version,
+                                          bool &match);
 
 int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                                             schema::ObSchemaGetterGuard &schema_guard,
@@ -633,7 +640,10 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
     ObDMLSqlSplicer dml;
     int64_t tenant_schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
+    if (OB_INVALID_ID == tenant_id_belongs_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tenant id", K(ret));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
       LOG_WARN("fail to get schema version");
     } else if (OB_FAIL(gen_routine_storage_dml(exec_tenant_id, dml, tenant_schema_version, binary))) {
       LOG_WARN("gen table dml failed", K(ret));

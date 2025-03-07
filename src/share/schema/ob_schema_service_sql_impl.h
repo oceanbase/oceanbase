@@ -1088,13 +1088,13 @@ private:
                                                       common::ObArray<ObSimpleTableSchemaV2 *> &table_schema_array,
                                                       const uint64_t *table_ids,
                                                       const int64_t table_ids_size);
-
+  template <typename T>
   int fetch_trigger_list(const ObRefreshSchemaStatus &schema_status,
                          const uint64_t tenant_id,
                          const uint64_t table_id,
                          const int64_t schema_version,
                          common::ObISQLClient &sql_client,
-                         ObTableSchema &table_schema);
+                         T &schema);
 
   int fetch_rls_object_list(const ObRefreshSchemaStatus &schema_status,
                             const uint64_t tenant_id,

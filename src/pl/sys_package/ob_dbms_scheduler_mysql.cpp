@@ -12,21 +12,10 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
 #include "ob_dbms_scheduler_mysql.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
-#include "storage/ob_common_id_utils.h"
 namespace oceanbase
 {
 
@@ -154,7 +143,11 @@ int ObDBMSSchedulerMysql::set_attribute(
                                                       K(params.at(1).get_string()),
                                                       K(params.at(2).get_string()));
       } else if (0 == attr_name.case_compare("max_run_duration")) { // set max run duration
-        OZ (dml.add_column("max_run_duration", atoi(attr_val.ptr())));
+        const int MAX_RUN_DURATION_LEN = 16;
+        char max_run_duration_buf[MAX_RUN_DURATION_LEN];
+        int64_t pos = attr_val.to_string(max_run_duration_buf, MAX_RUN_DURATION_LEN);
+        int64_t max_run_duration = atoll(max_run_duration_buf);
+        OZ (dml.add_column("max_run_duration", max_run_duration));
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "the job set attribute");
@@ -191,62 +184,6 @@ int ObDBMSSchedulerMysql::_generate_job_id(int64_t tenant_id, int64_t &max_job_i
   } else {
     max_job_id = raw_id.id() + ObDBMSSchedTableOperator::JOB_ID_OFFSET;
   }
-  return ret;
-}
-
-int ObDBMSSchedulerMysql::_splice_insert_sql(
-    sql::ObExecContext &ctx,
-    sql::ParamStore &params,
-    int64_t tenant_id,
-    int64_t job_id,
-    ObSqlString &sql)
-{
-  int ret = OB_SUCCESS;
-  ObDMLSqlSplicer dml;
-  char buf[OB_MAX_PROC_ENV_LENGTH];
-  const int64_t now = ObTimeUtility::current_time();
-  int64_t pos = 0;
-
-  OZ (dml.add_gmt_create(now));
-  OZ (dml.add_gmt_modified(now));
-  OZ (dml.add_pk_column("tenant_id",
-    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_column("lowner", ObHexEscapeSqlStr(params.at(1).get_string())));
-  OZ (dml.add_column("powner", ObHexEscapeSqlStr(params.at(2).get_string())));
-  OZ (dml.add_column("cowner", ObHexEscapeSqlStr(params.at(3).get_string())));
-  OZ (dml.add_raw_time_column("next_date", params.at(4).get_int()));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`",
-    ObHexEscapeSqlStr(params.at(5).is_null() ? ObString("null") : params.at(5).get_string())));
-  OZ (dml.add_column("flag", params.at(6).get_int32()));
-  OZ (dml.add_column("what", ObHexEscapeSqlStr(params.at(7).get_string())));
-  OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(params.at(8).get_string())));
-  OZ (sql::ObExecEnv::gen_exec_env(*(ctx.get_my_session()), buf, OB_MAX_PROC_ENV_LENGTH, pos));
-  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(ObString(pos, buf))));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(params.at(10).get_string())));
-  OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("job_type", ObHexEscapeSqlStr(params.at(11).get_string())));
-  OZ (dml.add_column("job_action", ObHexEscapeSqlStr(params.at(12).get_string())));
-  OZ (dml.add_column("number_of_argument", params.at(13).get_int()));
-  OZ (dml.add_raw_time_column("start_date", params.at(14).get_int()));
-  OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(params.at(15).get_string())));
-  OZ (dml.add_raw_time_column("end_date", params.at(16).get_int()));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(params.at(17).get_string())));
-  OZ (dml.add_column("enabled", params.at(18).get_bool()));
-  OZ (dml.add_column("auto_drop", params.at(19).get_bool()));
-  OZ (dml.add_column("comments", ObHexEscapeSqlStr(params.at(20).get_string())));
-  OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(params.at(21).get_string())));
-  OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(params.at(22).get_string())));
-  OZ (dml.add_column("field1", ObHexEscapeSqlStr(params.at(23).get_string())));
-  OZ (dml.add_column("program_name", ObHexEscapeSqlStr(params.at(24).get_string())));
-  OZ (dml.add_column("job_style", ObHexEscapeSqlStr(params.at(25).get_string())));
-  OZ (dml.add_column("interval_ts", params.at(26).get_int() * 1000000));
-  OZ (dml.add_column("max_run_duration", params.at(27).get_int()));
-  if (0 == params.at(17).get_string().compare(DATE_EXPRESSION_JOB_CLASS)) {
-    int64_t scheduler_flags = ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS;
-    dml.add_column("scheduler_flags", scheduler_flags);
-  }
-  OZ (dml.splice_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   return ret;
 }
 

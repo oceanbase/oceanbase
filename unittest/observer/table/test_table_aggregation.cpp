@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #define private public  // 获取private成员
 #define protected public  // 获取protect成员
-#include "common/row/ob_row.h"
 #include "observer/table/ob_table_aggregation.h"
 
 using namespace oceanbase::common;

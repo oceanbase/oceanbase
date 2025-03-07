@@ -13,9 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_row_lock_checker.h"
 #include "storage/access/ob_rows_info.h"
+#include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/tx_table/ob_tx_table.h"
 
 namespace oceanbase {
 namespace blocksstable {
@@ -36,16 +35,17 @@ ObMicroBlockRowLockChecker::~ObMicroBlockRowLockChecker()
 {
 }
 
-void ObMicroBlockRowLockChecker::inc_empty_read(int64_t empty_read_prefix)
+void ObMicroBlockRowLockChecker::inc_empty_read(ObSSTableReadHandle &read_handle)
 {
-  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) &&
-       !context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() &&
-       !sstable_->is_small_sstable()) {
-     (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
-              MTL_ID(),
-              param_->table_id_,
-              macro_id_,
-              empty_read_prefix);
+  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) && !context_->query_flag_.is_index_back()
+      && context_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable()) {
+    (void)OB_STORE_CACHE.get_bf_cache().inc_empty_read(MTL_ID(),
+                                                       param_->table_id_,
+                                                       param_->ls_id_,
+                                                       sstable_->get_key(),
+                                                       macro_id_,
+                                                       read_handle.get_rowkey_datum_cnt(),
+                                                       &read_handle);
   }
 }
 
@@ -132,7 +132,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
     const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
-    const bool is_major_sstable = sstable_->is_major_sstable();
+    const bool is_major_sstable = sstable_->is_major_sstable() || sstable_->is_ddl_sstable();
     int64_t trans_version = INT64_MAX;
     int64_t current;
     row = &row_;
@@ -231,17 +231,19 @@ int ObMicroBlockRowLockMultiChecker::open(
   return ret;
 }
 
-void ObMicroBlockRowLockMultiChecker::inc_empty_read()
+void ObMicroBlockRowLockMultiChecker::inc_empty_read(ObSSTableReadHandle &read_handle)
 {
-  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) &&
-      !context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() &&
-      !sstable_->is_small_sstable() && empty_read_cnt_ > 0) {
-    (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
-             MTL_ID(),
-             param_->table_id_,
-             macro_id_,
-             rows_info_->get_datum_cnt(),
-             empty_read_cnt_);
+  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) && !context_->query_flag_.is_index_back()
+      && context_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable() && empty_read_cnt_ > 0) {
+    read_handle.current_rows_info_idx_ = rowkey_begin_idx_;
+    (void)OB_STORE_CACHE.get_bf_cache().inc_empty_read(MTL_ID(),
+                                                       param_->table_id_,
+                                                       param_->ls_id_,
+                                                       sstable_->get_key(),
+                                                       macro_id_,
+                                                       rows_info_->get_datum_cnt(),
+                                                       &read_handle,
+                                                       empty_read_cnt_);
   }
 }
 

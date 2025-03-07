@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_temp_block_store.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/config/ob_server_config.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
-#include "sql/engine/ob_io_event_observer.h"
 
 
 namespace oceanbase
@@ -66,7 +60,8 @@ int ObTempBlockStore::init(int64_t mem_limit,
                            int64_t mem_ctx_id,
                            const char *label,
                            common::ObCompressorType compress_type,
-                           const bool enable_trunc)
+                           const bool enable_trunc,
+                           const bool sequential_read)
 {
   int ret = OB_SUCCESS;
   mem_limit_ = mem_limit;
@@ -82,6 +77,7 @@ int ObTempBlockStore::init(int64_t mem_limit,
   inited_ = true;
   compressor_.init(compress_type);
   enable_trunc_ = enable_trunc;
+  sequential_read_ = sequential_read;
   return ret;
 }
 
@@ -346,7 +342,7 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
     LOG_WARN("invalid of row_id", K(ret), K(block_id), K_(block_id_cnt));
   } else {
     if (reader.file_size_ != file_size_) {
-      reader.reset_cursor(file_size_);
+      reader.reset_cursor(file_size_, false);
       blk = NULL;
     }
     if (NULL != blk && blk->contain(block_id)) {
@@ -854,7 +850,7 @@ int ObTempBlockStore::load_block(BlockReader &reader, const int64_t block_id,
         } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
           LOG_WARN("get read io handler failed", K(ret));
         } else if (OB_FAIL(read_file(reader.aio_buf_[aio_buf_idx].data(), bi->length_, bi->offset_,
-                            *read_io_handler_ptr, reader.is_async()))) {
+                            *read_io_handler_ptr, reader.is_async(), sequential_read_))) {
           LOG_WARN("read block from file failed", K(ret), K(bi));
         }
       } else {
@@ -863,7 +859,7 @@ int ObTempBlockStore::load_block(BlockReader &reader, const int64_t block_id,
         } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
           LOG_WARN("get read io handler failed", K(ret));
         } else if (OB_FAIL(read_file(reader.buf_.data(), bi->length_, bi->offset_,
-                            *read_io_handler_ptr, reader.is_async()))) {
+                            *read_io_handler_ptr, reader.is_async(), sequential_read_))) {
           LOG_WARN("read block from file failed", K(ret), K(bi));
         }
       }
@@ -977,7 +973,7 @@ int ObTempBlockStore::load_idx_block(BlockReader &reader, IndexBlock *&ib, const
       } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
           LOG_WARN("get read io handler failed", K(ret));
       } else if (OB_FAIL(read_file(
-          reader.idx_buf_.data(), bi.length_, bi.offset_, *read_io_handler_ptr, false))) {
+          reader.idx_buf_.data(), bi.length_, bi.offset_, *read_io_handler_ptr, false, false/*prefetch*/))) {
         LOG_WARN("read block index from file failed", K(ret), K(bi));
       } else {
         ib = reinterpret_cast<IndexBlock *>(reader.idx_buf_.data());
@@ -1137,7 +1133,7 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
 }
 
 int ObTempBlockStore::read_file(void *buf, const int64_t size, const int64_t offset,
-                                tmp_file::ObTmpFileIOHandle &handle, const bool is_async)
+                                tmp_file::ObTmpFileIOHandle &handle, const bool is_async, const bool prefetch)
 {
   int ret = OB_SUCCESS;
   int64_t timeout_ms = 0;
@@ -1152,6 +1148,7 @@ int ObTempBlockStore::read_file(void *buf, const int64_t size, const int64_t off
 
   if (OB_SUCC(ret) && size > 0) {
     tmp_file::ObTmpFileIOInfo tmp_read_id = io_;
+    tmp_read_id.prefetch_ = prefetch;
     tmp_read_id.buf_ = static_cast<char *>(buf);
     tmp_read_id.size_ = size;
     tmp_read_id.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);

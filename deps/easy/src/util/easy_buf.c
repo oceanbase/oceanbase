@@ -1,10 +1,5 @@
-#include <stdarg.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include "util/easy_buf.h"
-#include "util/easy_string.h"
+#include "easy_buf.h"
 #include "io/easy_log.h"
-#include "easy_define.h"
 #include "io/easy_connection.h"
 
 

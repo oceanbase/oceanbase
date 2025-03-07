@@ -1659,31 +1659,6 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_lock_wait_stat runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
-desc mysql.proc;
-Field	Type	Null	Key	Default	Extra
-db	varchar(128)	NO		NULL	
-name	varchar(128)	NO		NULL	
-type	varchar(10)	NO		NULL	
-specific_name	varchar(64)	NO		NULL	
-language	varchar(4)	NO		SQL	
-sql_data_access	varchar(32)	NO		CONTAINS_SQL	
-is_deterministic	varchar(4)	NO		NO	
-security_type	varchar(10)	NO		DEFINER	
-param_list	longblob	YES		NULL	
-returns	longblob	YES		NULL	
-body	varchar(1048576)	NO			
-definer	varchar(77)	NO			
-created	timestamp(6)	NO		NULL	
-modified	timestamp(6)	NO		NULL	
-sql_mode	varchar(1048576)	NO			
-comment	varchar(1048576)	NO			
-character_set_client	varchar(128)	NO		NULL	
-collation_connection	varchar(128)	NO		NULL	
-db_collation	varchar(128)	NO		NULL	
-body_utf8	varchar(1048576)	NO		NULL	
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from mysql.proc;
-IF(count(*) >= 0, 1, 0)
-1
 desc oceanbase.__tenant_virtual_collation;
 Field	Type	Null	Key	Default	Extra
 collation_type	bigint(20)	NO		0	
@@ -3948,7 +3923,7 @@ tenant_id	bigint(20)	NO		NULL
 tid	bigint(20)	NO		NULL	
 tname	varchar(16)	NO		NULL	
 status	varchar(32)	NO		NULL	
-wait_event	varchar(64)	NO		NULL	
+wait_event	varchar(96)	NO		NULL	
 latch_wait	varchar(16)	NO		NULL	
 latch_hold	varchar(256)	NO		NULL	
 trace_id	varchar(40)	NO		NULL	
@@ -5648,6 +5623,23 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_temp_file runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_cs_replica_tablet_stats;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+macro_block_cnt	bigint(20)	NO		NULL	
+is_cs	tinyint(4)	NO		NULL	
+is_cs_replica	tinyint(4)	NO		NULL	
+available	tinyint(4)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_cs_replica_tablet_stats;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_cs_replica_tablet_stats runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_ddl_diagnose_info;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
@@ -5658,5 +5650,25 @@ create_time	timestamp(6)	NO		NULL
 finish_time	timestamp(6)	NO		NULL	
 diagnose_info	varchar(1024)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_diagnose_info;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_plugin_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+name	varchar(64)	YES		NULL	
+status	varchar(64)	YES		NULL	
+type	varchar(80)	YES		NULL	
+library	varchar(128)	YES		NULL	
+library_version	varchar(80)	YES		NULL	
+library_revision	varchar(80)	YES		NULL	
+interface_version	varchar(80)	YES		NULL	
+author	varchar(64)	YES		NULL	
+license	varchar(64)	YES		NULL	
+description	varchar(65535)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_plugin_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_plugin_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1

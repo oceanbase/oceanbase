@@ -369,7 +369,8 @@ public:
            int64_t mem_ctx_id,
            const char *label,
            common::ObCompressorType compressor_type,
-           const bool enable_trunc = false);
+           const bool enable_trunc = false,
+           const bool sequential_read = false);
   void reset();
   void reuse();
   void reset_block_cnt();
@@ -429,6 +430,10 @@ public:
   void set_enable_truncate(bool enable_trunc)
   {
     enable_trunc_ = enable_trunc;
+  }
+  void set_sequential_read(bool sequential_read)
+  {
+    sequential_read_ = sequential_read;
   }
   inline ShrinkBuffer &get_blk_buf() { return blk_buf_; }
   bool is_truncate() { return enable_trunc_; }
@@ -531,7 +536,7 @@ private:
   int ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &buf, const int64_t size);
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset,
-                tmp_file::ObTmpFileIOHandle &handle, const bool is_async);
+                tmp_file::ObTmpFileIOHandle &handle, const bool is_async, const bool prefetch);
   bool need_dump(const int64_t extra_size);
   int write_compressed_block(Block *blk, BlockIndex *bi);
   int dump_block(Block *blk, int64_t &dumped_size);
@@ -583,6 +588,7 @@ protected:
   bool enable_dump_;
   bool backup_enable_dump_;
   bool enable_trunc_; // if true, the read contents of tmp file we be removed from disk.
+  bool sequential_read_;
   int64_t last_trunc_offset_;
 
 private:

@@ -39,6 +39,9 @@ public:
         counts_(allocator_),
         deep_copy_buffers_(allocator_)
   {
+    // support later
+    // is_count_all_ = (size_ == 1 && query_aggs_.at(0).is_agg_all_column());
+    is_count_all_ = false;
   }
   virtual ~ObTableAggCalculator() {}
 public:
@@ -137,6 +140,7 @@ private:
   };
 private:
   common::ObArenaAllocator allocator_;
+  bool is_count_all_;
   int64_t size_;
   const common::ObIArray<table::ObTableAggregation> &query_aggs_; // agg info from user
   const common::ObIArray<uint64_t> *projs_; // agg cell index in schema

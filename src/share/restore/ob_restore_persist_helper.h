@@ -362,6 +362,9 @@ struct ObHisRestoreJobPersistInfo final : public ObIInnerTableRow
   {
     return status_ == SUCCESS;
   }
+  const ObRestoreType &get_restore_type() const {
+    return restore_type_;
+  }
   const char *get_status_str() const;
 
   int get_status(const ObString &str_str) const;

@@ -1454,7 +1454,6 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(false),
     ignore_param_(false),
-    ora_numeric_compare_(false),
     error_code_(0)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
@@ -1468,7 +1467,6 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
     ignore_param_(false),
-    ora_numeric_compare_(false),
     error_code_(0)
   { }
   virtual ~ObExprEqualCheckContext() {}
@@ -1501,10 +1499,6 @@ struct ObExprEqualCheckContext
 
   virtual bool compare_set_op_expr(const ObSetOpRawExpr& left,
                                    const ObSetOpRawExpr& right);
-
-  virtual bool compare_ora_numeric_consts(const ObConstRawExpr &left, const ObSysFunRawExpr &right);
-
-  virtual bool compare_ora_numeric_consts(const ObSysFunRawExpr &right, const ObConstRawExpr &left);
   void reset() {
     override_const_compare_ = false;
     override_column_compare_ = false;
@@ -1529,7 +1523,6 @@ struct ObExprEqualCheckContext
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
-  bool ora_numeric_compare_;
   int64_t error_code_; //error code to return
 
 private:
@@ -2804,11 +2797,20 @@ public:
   inline bool is_default_on_null_identity_column() const { return share::schema::ObSchemaUtils::is_default_on_null_identity_column(column_flags_); }
   inline bool is_fulltext_column() const { return share::schema::ObSchemaUtils::is_fulltext_column(column_flags_); }
   inline bool is_doc_id_column() const { return share::schema::ObSchemaUtils::is_doc_id_column(column_flags_); }
-  inline bool is_vec_vid_column() const { return share::schema::ObSchemaUtils::is_vec_vid_column(column_flags_); }
-  inline bool is_vec_vector_column() const { return share::schema::ObSchemaUtils::is_vec_vector_column(column_flags_); }
-  inline bool is_vec_type_column() const { return share::schema::ObSchemaUtils::is_vec_type_column(column_flags_); }
-  inline bool is_vec_scn_column() const { return share::schema::ObSchemaUtils::is_vec_scn_column(column_flags_); }
+  inline bool is_vec_hnsw_vid_column() const { return share::schema::ObSchemaUtils::is_vec_hnsw_vid_column(column_flags_); }
+  inline bool is_vec_hnsw_vector_column() const { return share::schema::ObSchemaUtils::is_vec_hnsw_vector_column(column_flags_); }
+  inline bool is_vec_hnsw_type_column() const { return share::schema::ObSchemaUtils::is_vec_hnsw_type_column(column_flags_); }
+  inline bool is_vec_hnsw_scn_column() const { return share::schema::ObSchemaUtils::is_vec_hnsw_scn_column(column_flags_); }
   inline bool is_vec_index_column() const {return share::schema::ObSchemaUtils::is_vec_index_column(column_flags_);}
+  inline bool is_vec_cid_column() const { return share::schema::ObSchemaUtils::is_vec_ivf_center_id_column(column_flags_); }
+  inline bool is_vec_pq_cids_column() const { return share::schema::ObSchemaUtils::is_vec_ivf_pq_center_ids_column(column_flags_); }
+  inline bool is_domain_id_column() const
+  {
+    return share::schema::ObSchemaUtils::is_doc_id_column(column_flags_) ||
+           share::schema::ObSchemaUtils::is_vec_hnsw_vid_column(column_flags_) ||
+           share::schema::ObSchemaUtils::is_vec_ivf_center_id_column(column_flags_) ||
+           share::schema::ObSchemaUtils::is_vec_ivf_pq_center_ids_column(column_flags_);
+  }
   inline bool is_word_segment_column() const { return column_name_.prefix_match(OB_WORD_SEGMENT_COLUMN_NAME_PREFIX); }
   inline bool is_word_count_column() const { return column_name_.prefix_match(OB_WORD_COUNT_COLUMN_NAME_PREFIX); }
   inline bool is_spatial_generated_column() const { return share::schema::ObSchemaUtils::is_spatial_generated_column(column_flags_); }
@@ -2824,6 +2826,7 @@ public:
   void set_table_alias_name() { column_flags_ |= TABLE_ALIAS_NAME_FLAG; }
   void set_table_part_key_column() { column_flags_ |= TABLE_PART_KEY_COLUMN_FLAG; }
   void set_table_part_key_org_column() { column_flags_ |= TABLE_PART_KEY_COLUMN_ORG_FLAG; }
+  void set_vec_pq_cids_column() { column_flags_ |= GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG; }
   inline uint64_t get_column_flags() const { return column_flags_; }
   inline const ObRawExpr *get_dependant_expr() const { return dependant_expr_; }
   inline ObRawExpr *&get_dependant_expr() { return dependant_expr_; }
@@ -3736,6 +3739,7 @@ public:
   void set_dblink_id(int64_t dblink_id) { dblink_id_ = dblink_id; }
   int64_t get_dblink_id() const { return dblink_id_; }
   bool is_dblink_sys_func() const { return common::OB_INVALID_ID != dblink_id_; }
+  int get_type_demotion_name(char *buf, int64_t buf_len, int64_t &pos, ExplainType type) const;
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
@@ -5030,14 +5034,17 @@ public:
       is_called_sql_(true),
       proxy_(nullptr),
       try_check_tick_(0),
-      worker_check_status_times_(0)
+      worker_check_status_times_(0),
+      query_ctx_(NULL)
   {
   }
   ObRawExprFactory(ObRawExprFactory &expr_factory) : allocator_(expr_factory.allocator_),
                                                      expr_store_(allocator_),
                                                      proxy_(&expr_factory),
                                                      try_check_tick_(0),
-                                                     worker_check_status_times_(0)
+                                                     worker_check_status_times_(0),
+                                                     query_ctx_(NULL)
+
   {
   }
   ~ObRawExprFactory() {
@@ -5130,12 +5137,15 @@ public:
       }
       expr_store_.destroy();
     }
+    query_ctx_ = NULL;
   }
 
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> &get_expr_store() { return expr_store_; }
   void set_is_called_sql(const bool is_called_sql) { is_called_sql_ = is_called_sql; }
   inline uint64_t inc_worker_check_status_times() { return ++worker_check_status_times_; }
+  void set_query_ctx(ObQueryCtx *query_ctx) { query_ctx_ = query_ctx; }
+  ObQueryCtx *get_query_ctx() { return query_ctx_; }
   TO_STRING_KV("", "");
 private:
   common::ObIAllocator &allocator_;
@@ -5145,6 +5155,7 @@ private:
   ObRawExprFactory *proxy_;
   int64_t try_check_tick_;
   mutable uint64_t worker_check_status_times_;
+  ObQueryCtx *query_ctx_; // used for type demotion add constraint, may remove it later.
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };

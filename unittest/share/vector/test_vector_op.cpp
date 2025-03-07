@@ -11,15 +11,10 @@
  */
 
 #include <gtest/gtest.h>
-#include <random>
-#include <time.h>
 #include <vector>
 
-#include "share/vector/vector_basic_op.h"
 #include "share/vector/ob_fixed_length_vector.h"
 #include "share/vector/ob_discrete_vector.h"
-#include "share/vector/vector_op_util.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "share/vector/expr_cmp_func.h"
 #include "unittest/share/vector/util.h"

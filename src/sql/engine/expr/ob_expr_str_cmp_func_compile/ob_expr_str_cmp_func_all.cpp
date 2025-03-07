@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/charset/ob_charset.h"
 namespace oceanbase
 {
 namespace sql
@@ -163,6 +162,24 @@ extern void __init_str_expr_cmp_func145();
 extern void __init_str_expr_cmp_func146();
 extern void __init_str_expr_cmp_func147();
 extern void __init_str_expr_cmp_func148();
+extern void __init_str_expr_cmp_func149();
+extern void __init_str_expr_cmp_func150();
+extern void __init_str_expr_cmp_func151();
+extern void __init_str_expr_cmp_func152();
+extern void __init_str_expr_cmp_func153();
+extern void __init_str_expr_cmp_func154();
+extern void __init_str_expr_cmp_func155();
+extern void __init_str_expr_cmp_func156();
+extern void __init_str_expr_cmp_func157();
+extern void __init_str_expr_cmp_func158();
+extern void __init_str_expr_cmp_func159();
+extern void __init_str_expr_cmp_func160();
+extern void __init_str_expr_cmp_func161();
+extern void __init_str_expr_cmp_func162();
+extern void __init_str_expr_cmp_func163();
+extern void __init_str_expr_cmp_func164();
+extern void __init_str_expr_cmp_func165();
+extern void __init_str_expr_cmp_func166();
 void __init_all_str_expr_cmp_func() {
   __init_str_expr_cmp_func0();
   __init_str_expr_cmp_func1();
@@ -313,6 +330,24 @@ void __init_all_str_expr_cmp_func() {
   __init_str_expr_cmp_func146();
   __init_str_expr_cmp_func147();
   __init_str_expr_cmp_func148();
+  __init_str_expr_cmp_func149();
+  __init_str_expr_cmp_func150();
+  __init_str_expr_cmp_func151();
+  __init_str_expr_cmp_func152();
+  __init_str_expr_cmp_func153();
+  __init_str_expr_cmp_func154();
+  __init_str_expr_cmp_func155();
+  __init_str_expr_cmp_func156();
+  __init_str_expr_cmp_func157();
+  __init_str_expr_cmp_func158();
+  __init_str_expr_cmp_func159();
+  __init_str_expr_cmp_func160();
+  __init_str_expr_cmp_func161();
+  __init_str_expr_cmp_func162();
+  __init_str_expr_cmp_func163();
+  __init_str_expr_cmp_func164();
+  __init_str_expr_cmp_func165();
+  __init_str_expr_cmp_func166();
 }
 } // end sql
 } // end oceanbase

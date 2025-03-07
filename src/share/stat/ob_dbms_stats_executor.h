@@ -46,6 +46,7 @@ struct GatherHelper
   ObOptStatRunningMonitor &running_monitor_;
   bool use_column_store_;
   bool use_split_part_;
+
   TO_STRING_KV(K(is_split_gather_),
                K(maximum_gather_part_cnt_),
                K(maximum_gather_col_cnt_),
@@ -122,7 +123,7 @@ private:
                                           const ObTableStatParam &param,
                                           StatLevel stat_level,
                                           const PartitionIdBlockMap *partition_id_block_map,
-                                          const GatherHelper &gather_helper);
+                                          GatherHelper &gather_helper);
 
   static int split_gather_global_stats(ObExecContext &ctx,
                                        ObMySQLTransaction &trans,
@@ -136,6 +137,7 @@ private:
                              const ObIArray<PartInfo> &gather_partition_infos,
                              const ObIArray<ObColumnStatParam> &gather_column_params,
                              bool is_all_columns_gather,
+                             ObOptStatGatherAudit &audit,
                              ObIArray<ObOptStat> &opt_stats,
                              ObIArray<ObOptTableStat *> &all_tstats,
                              ObIArray<ObOptColumnStat *> &all_cstats);
@@ -211,6 +213,7 @@ private:
 
   static int adjust_auto_gather_param(const PartitionIdBlockMap &partition_id_block_map,
                                       const ObTableStatParam &param,
+                                      bool use_column_store,
                                       bool &need_split_part);
 
 

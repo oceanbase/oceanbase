@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE_REDO
 
 #include "ob_storage_log_replayer.h"
-#include "share/ob_force_print_log.h"
-#include "share/redolog/ob_log_file_handler.h"
-#include "storage/slog/ob_storage_log_entry.h"
 #include "storage/slog/ob_storage_log_reader.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {

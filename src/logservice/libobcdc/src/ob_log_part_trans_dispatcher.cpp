@@ -20,7 +20,6 @@
 #include "lib/utility/ob_macro_utils.h"     // OB_UNLIKELY
 #include "lib/oblog/ob_log_module.h"        // LOG_ERROR
 
-#include "ob_log_fetcher_dispatcher.h"      // IObLogFetcherDispatcher
 #include "ob_log_utils.h"
 
 using namespace oceanbase::common;

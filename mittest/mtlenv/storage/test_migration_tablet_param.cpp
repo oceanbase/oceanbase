@@ -18,15 +18,9 @@
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/oblog/ob_log.h"
-#include "share/rc/ob_tenant_base.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "mtlenv/storage/medium_info_helper.h"
 #include "unittest/storage/test_tablet_helper.h"
 #include "unittest/storage/test_dml_common.h"
-#include "storage/tablet/ob_tablet.h"
 
 #define USING_LOG_PREFIX STORAGE
 

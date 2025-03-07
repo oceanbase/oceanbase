@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_udf_ctx_mgr.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
-#include "sql/engine/user_defined_function/ob_udf_util.h"
 
 namespace oceanbase
 {

@@ -139,7 +139,8 @@ public:
         is_mds_query_(false),
         is_thread_scope_(true),
         tx_seq_base_(-1),
-        need_update_tablet_param_(false)
+        need_update_tablet_param_(false),
+        in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -174,6 +175,7 @@ public:
   ObRangeArray ss_key_ranges_;  // used for index skip scan, use as postfix range for ObVTableScanParam::key_ranges_
   int64_t tx_seq_base_;  // used by lob when main table is read_latest
   bool need_update_tablet_param_; // whether need to update tablet-level param, such as split filter param
+  int64_t in_row_cache_threshold_;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:

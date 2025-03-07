@@ -14,15 +14,10 @@
 
 #include "sql/engine/expr/ob_expr_func_ceil.h"
 
-#include <string.h>
 
-#include "share/object/ob_obj_cast.h"
 
-#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_truncate.h"
-#include "sql/engine/expr/ob_expr_func_round.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase

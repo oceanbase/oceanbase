@@ -51,7 +51,7 @@ protected:
 private:
   int init_tb_ctx();
   int init_group_ctx(table::ObTableGroupCtx &ctx, share::ObLSID ls_id);
-  ObTableProccessType get_stat_event_type();
+  ObTableProccessType get_stat_process_type();
   int check_arg2() const;
   int process_group_commit();
   int init_group_key();
@@ -110,6 +110,7 @@ private:
     return ret;
   }
   int process_incr_or_append_op();
+  bool is_group_commit_enable(table::ObTableOperationType::Type op_type) const;
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;
@@ -117,7 +118,7 @@ private:
   table::ObTableCtx tb_ctx_;
   bool is_group_commit_;
   bool is_group_trigger_;
-  table::ObTableGroupCommitSingleOp *group_single_op_;
+  table::ObTableOp *group_single_op_;
 };
 
 

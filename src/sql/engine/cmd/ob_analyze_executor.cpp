@@ -11,15 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_dbms_stats_executor.h"
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "sql/engine/cmd/ob_analyze_executor.h"
-#include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/observer/virtual_table/ob_all_virtual_dml_stats.h"
 
 //#define COMPUTE_FREQUENCY_HISTOGRAM
 //   "SELECT /*+NO_USE_PX*/ col, sum(val) over (order by col rows between unbounded preceding and current row) "
@@ -110,7 +107,8 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
             start_time = ObTimeUtility::current_time();
             ObOptStatGatherStat gather_stat(task_info);
             ObOptStatGatherStatList::instance().push(gather_stat);
-            ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat);
+            ObOptStatGatherAudit audit(tmp_alloc);
+            ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat, audit);
             if (OB_FAIL(running_monitor.add_monitor_info(ObOptStatRunningPhase::GATHER_PREPARE))) {
               LOG_WARN("failed to add add monitor info", K(ret));
             } else if (OB_FAIL(pl::ObDbmsStats::get_stats_consumer_group_id(param))) {
@@ -127,6 +125,14 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
               LOG_WARN("failed to update stat cache", K(ret));
             } else {
               LOG_TRACE("succeed to gather table stats", K(param));
+            }
+            if (ret == OB_SUCCESS || ret == OB_TIMEOUT) {
+              int tmp_ret = ret;
+              if (OB_FAIL(running_monitor.flush_gather_audit())) {
+                LOG_WARN("failed to flush gather audit", K(ret));
+              } else {
+                ret = tmp_ret;
+              }
             }
             running_monitor.set_monitor_result(ret, ObTimeUtility::current_time(), param.allocator_->used());
             pl::ObDbmsStats::update_optimizer_gather_stat_info(NULL, &gather_stat);

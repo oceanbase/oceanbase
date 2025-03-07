@@ -12,28 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_rpc_processor.h"
-#include "observer/ob_service.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/ob_end_trans_callback.h"
-#include "ob_table_end_trans_cb.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "ob_htable_utils.h"
-#include "sql/ob_sql.h"
-#include "share/table/ob_table_rpc_proxy.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "ob_table_rpc_processor_util.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "share/ob_define.h"
-#include "storage/tx/ob_trans_service.h"
-#include "ob_table_session_pool.h"
-#include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_table_move_response.h"
 #include "ob_table_connection_mgr.h"
-#include "share/table/ob_table_util.h"
-#include "observer/mysql/obmp_base.h"
-#include "lib/stat/ob_session_stat.h"
 #include "ob_table_mode_control.h"
 #include "ob_table_client_info_mgr.h"
 
@@ -43,6 +23,15 @@ using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::sql;
+
+void __attribute__((weak)) request_finish_callback();
+
+bool ObTableLoginP::can_use_redis_v2()
+{
+  uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+  return (min_ver >= MOCK_CLUSTER_VERSION_4_2_5_2 && min_ver < CLUSTER_VERSION_4_3_0_0)
+    || (min_ver >= CLUSTER_VERSION_4_3_5_1);
+}
 
 int ObTableLoginP::process()
 {
@@ -97,7 +86,7 @@ int ObTableLoginP::process()
           LOG_WARN("failed to record login client info", K(ret), K(login));
         }
       }
-      result_.reserved1_ = 0;
+      result_.reserved1_ = can_use_redis_v2() ? ObTableLoginFlag::REDIS_PROTOCOL_V2 : ObTableLoginFlag::LOGIN_FLAG_NONE;
       result_.reserved2_ = 0;
       result_.server_version_ = ObString::make_string(PACKAGE_STRING);
     }
@@ -191,6 +180,7 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
     login_info.passwd_ = pass_secret;
     SSL *ssl_st = NULL;//TODO::@yanhua not support ssl now for table-api
     share::schema::ObSessionPrivInfo session_priv;
+    EnableRoleIdArray enable_role_id_array;
     const share::schema::ObUserInfo *user_info = nullptr;
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
       LOG_WARN("get_schema_guard failed", K(ret));
@@ -198,7 +188,7 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
       LOG_WARN("fail to get tenant_id", KR(ret), K(tenant));
     } else if (gctx_.schema_service_->get_tenant_schema_guard(tenant_id, guard)) {
       LOG_WARN("fail to get tenant guard", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
+    } else if (OB_FAIL(guard.check_user_access(login_info, session_priv, enable_role_id_array, ssl_st, user_info))) {
       if (ret == OB_PASSWORD_WRONG) {
         LOG_USER_ERROR(OB_PASSWORD_WRONG, user.length(), user.ptr(), tenant.length(), tenant.ptr(), "YES"/*using password*/);
       }
@@ -251,7 +241,7 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      simple_table_schema_(nullptr),
      req_timeinfo_guard_(),
      schema_cache_guard_(),
-     stat_event_type_(-1),
+     stat_process_type_(-1),
      enable_query_response_time_stats_(true),
      stat_row_count_(0),
      need_retry_in_queue_(false),
@@ -362,7 +352,7 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id, const ObString 
     LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
   } else if (OB_FAIL(schema_guard_.get_simple_table_schema(credential_.tenant_id_, table_id, simple_table_schema_))) {
     LOG_WARN("fail to get table schema", K(ret), K(credential_.tenant_id_), K(table_id));
-  } else if (OB_ISNULL(simple_table_schema_)) {
+  } else if (OB_ISNULL(simple_table_schema_) || !simple_table_schema_->is_valid()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(ret), K(credential_), K(table_id));
   } else if (simple_table_schema_->is_in_recyclebin()) {
@@ -370,7 +360,7 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id, const ObString 
     LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
     LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
                 K(credential_.database_id_), K(table_id));
-  } else if (arg_table_name.case_compare(simple_table_schema_->get_table_name()) != 0) {
+  } else if (!arg_table_name.empty() && arg_table_name.case_compare(simple_table_schema_->get_table_name()) != 0) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
             K(simple_table_schema_->get_table_name()));
@@ -416,19 +406,19 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(*sess_credetial));
-  } else if (OB_FAIL(check_mode(sess_guard_.get_sess_info()))) {
+  } else if (OB_FAIL(check_mode())) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
-    enable_query_response_time_stats_ = sess_guard_.get_sess_info().enable_query_response_time_stats();
+    enable_query_response_time_stats_ = TABLEAPI_SESS_POOL_MGR->is_enable_query_response_time_stats();
     LOG_DEBUG("user can access", K_(credential));
   }
   return ret;
 }
 
-int ObTableApiProcessorBase::check_mode(const ObSQLSessionInfo &sess_info)
+int ObTableApiProcessorBase::check_mode()
 {
   int ret = OB_SUCCESS;
-  int64_t sess_mode_val = 0;
+  ObKvModeType tenant_kv_mode = TABLEAPI_SESS_POOL_MGR->get_kv_mode();
 
   if (!is_kv_processor()) {
     // do nothing
@@ -436,10 +426,8 @@ int ObTableApiProcessorBase::check_mode(const ObSQLSessionInfo &sess_info)
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBKV running in oracle mode");
     LOG_WARN("OBKV running in oracle mode is not supported", K(ret));
-  } else if (OB_FAIL(sess_info.get_sys_variable(SYS_VAR_OB_KV_MODE, sess_mode_val))) {
-    LOG_WARN("fail to get ob_kv_mode variable", K(ret));
-  } else if (OB_FAIL(ObTableModeCtrl::check_mode(static_cast<ObKvModeType>(sess_mode_val), get_entity_type()))) {
-    LOG_WARN("fail to check mode", K(ret), K(sess_mode_val), K(get_entity_type()));
+  } else if (OB_FAIL(ObTableModeCtrl::check_mode(tenant_kv_mode, get_entity_type()))) {
+    LOG_WARN("fail to check mode", K(ret), K(tenant_kv_mode), K(get_entity_type()));
   }
 
   return ret;
@@ -686,6 +674,7 @@ template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<O
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_DIRECT_LOAD> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_LS_EXECUTE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_REDIS_EXECUTE> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_REDIS_EXECUTE_V2> >;
 
 
 template<class T>
@@ -724,11 +713,11 @@ int ObTableRpcProcessor<T>::process()
   if (OB_FAIL(process_with_retry(RpcProcessor::arg_.credential_, get_timeout_ts()))) {
     if (OB_NOT_NULL(audit_ctx_.req_buf_)) { // req_buf_ has been generated if enable sql_audit
       ObString request(audit_ctx_.req_buf_len_, audit_ctx_.req_buf_);
-      LOG_WARN("fail to process table_api request", K(ret), K_(stat_event_type), K(request), K(audit_ctx_.exec_timestamp_));
+      LOG_WARN("fail to process table_api request", K(ret), K_(stat_process_type), K(request), K(audit_ctx_.exec_timestamp_));
     } else if (had_do_response()) { // req_ may be freed
-      LOG_INFO("request had processed failed", K(ret), K_(stat_event_type), K(audit_ctx_.exec_timestamp_));
+      LOG_INFO("fail to process table_api request", K(ret), K_(stat_process_type), K(audit_ctx_.exec_timestamp_));
     } else {
-      LOG_INFO("request had processed failed", K(ret), K_(stat_event_type), "request", RpcProcessor::arg_, K(audit_ctx_.exec_timestamp_));
+      LOG_INFO("fail to process table_api request", K(ret), K_(stat_process_type), "request", RpcProcessor::arg_, K(audit_ctx_.exec_timestamp_));
     }
     // whether the client should refresh location cache and retry
     if (ObTableRpcProcessorUtil::is_require_rerouting_err(ret)) {
@@ -743,7 +732,8 @@ template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
   const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
-  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
+  ObTableRpcProcessorUtil::record_stat(stat_process_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
+  request_finish_callback(); // clear thread local variables used to wait in queue
   return RpcProcessor::before_response(error_code);
 }
 
@@ -829,4 +819,68 @@ int ObTableApiProcessorBase::get_tablet_id(const share::schema::ObSimpleTableSch
     }
   }
   return ret;
+}
+
+ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_readonly,
+                                                                   bool is_same_type,
+                                                                   bool is_same_properties_names,
+                                                                   ObTableOperationType::Type op_type)
+{
+  ObTableEntityType entity_type = get_entity_type();
+  ObTableProccessType process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+  if (is_readonly) {
+    if (is_same_properties_names) {
+      process_type = ObTableProccessType::TABLE_API_MULTI_GET;
+    } else {
+      process_type = ObTableProccessType::TABLE_API_BATCH_RETRIVE;
+    }
+  } else if (is_same_type) {
+    switch(op_type) {
+      case ObTableOperationType::INSERT:
+        process_type = ObTableProccessType::TABLE_API_MULTI_INSERT;
+        break;
+      case ObTableOperationType::DEL:
+        if (ObTableEntityType::ET_HKV == entity_type) {
+          process_type = ObTableProccessType::TABLE_API_HBASE_DELETE;
+        } else {
+          process_type = ObTableProccessType::TABLE_API_MULTI_DELETE;
+        }
+        break;
+      case ObTableOperationType::UPDATE:
+        process_type = ObTableProccessType::TABLE_API_MULTI_UPDATE;
+        break;
+      case ObTableOperationType::INSERT_OR_UPDATE:
+        if (ObTableEntityType::ET_HKV == entity_type) {
+          process_type = ObTableProccessType::TABLE_API_HBASE_PUT;
+        } else {
+          process_type = ObTableProccessType::TABLE_API_MULTI_INSERT_OR_UPDATE;
+        }
+        break;
+      case ObTableOperationType::REPLACE:
+        process_type = ObTableProccessType::TABLE_API_MULTI_REPLACE;
+        break;
+      case ObTableOperationType::PUT:
+        process_type = ObTableProccessType::TABLE_API_MULTI_PUT;
+        break;
+      case ObTableOperationType::APPEND:
+        process_type = ObTableProccessType::TABLE_API_MULTI_APPEND;
+        break;
+      case ObTableOperationType::INCREMENT:
+        process_type = ObTableProccessType::TABLE_API_MULTI_INCREMENT;
+        break;
+      case ObTableOperationType::CHECK_AND_INSERT_UP:
+        process_type = ObTableProccessType::TABLE_API_MULTI_CHECK_AND_INSERT_UP;
+        break;
+      default:
+        process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+        break;
+    }
+  } else {
+    if (ObTableEntityType::ET_HKV == entity_type) {
+      process_type = ObTableProccessType::TABLE_API_HBASE_HYBRID;
+    } else {
+      process_type = ObTableProccessType::TABLE_API_BATCH_HYBRID;
+    }
+  }
+  return process_type;
 }

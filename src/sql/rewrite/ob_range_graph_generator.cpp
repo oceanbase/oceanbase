@@ -15,6 +15,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/code_generator/ob_column_index_provider.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1042,7 +1043,7 @@ int ObRangeGraphGenerator::inner_get_max_precise_pos(const ObRangeNode *range_no
  * 2. key alignment
  * 3. key has equal condition
 */
-int ObRangeGraphGenerator::is_strict_equal_graph(const ObRangeNode *range_node,
+int ObRangeGraphGenerator::is_strict_equal_graph(ObRangeNode *range_node,
                                                  bool &is_strict_equal,
                                                  bool &is_get) const
 {
@@ -1059,9 +1060,87 @@ int ObRangeGraphGenerator::is_strict_equal_graph(const ObRangeNode *range_node,
                                                        max_node_offset, is_strict_equal)))) {
       LOG_WARN("failed to check inner is strict equal graph");
     } else if (is_strict_equal) {
-      is_get = max_offset == ctx_.column_cnt_;
+      if (OB_UNLIKELY(ctx_.unique_index_column_num_ > 0 && max_offset == ctx_.unique_index_column_num_)) {
+        if (OB_FAIL(check_and_set_get_for_unique_index(range_node, is_get))) {
+          LOG_WARN("failed to set is_get for unique index");
+        }
+      } else {
+        is_get = max_offset == ctx_.column_cnt_;
+      }
     }
   }
+  return ret;
+}
+
+int ObRangeGraphGenerator::check_and_set_get_for_unique_index(ObRangeNode *range_node,
+                                                              bool &is_get) const
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (OB_FAIL(check_unique_index_range_valid(range_node, is_valid))) {
+    LOG_WARN("failed to check unique index range valid");
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(transform_unique_index_graph(range_node))) {
+    LOG_WARN("failed to transform ranges for unique index");
+  } else {
+    is_get = true;
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::check_unique_index_range_valid(const ObRangeNode *range_node,
+                                                          bool &is_valid) const
+{
+  int ret = OB_SUCCESS;
+  for (const ObRangeNode *cur_node = range_node;
+       OB_SUCC(ret) && cur_node != nullptr && is_valid;
+       cur_node = cur_node->or_next_) {
+    if (cur_node->min_offset_ >= 0) {
+      for (int64_t i = cur_node->min_offset_; i <= cur_node->max_offset_; ++i) {
+        if (cur_node->start_keys_[i] == cur_node->end_keys_[i]) {
+          int64_t key_idx = cur_node->start_keys_[i];
+          if (key_idx == OB_RANGE_NULL_VALUE ||
+              (key_idx >= 0 && key_idx < OB_RANGE_EXTEND_VALUE && ObOptimizerUtil::find_item(ctx_.null_safe_value_idxs_, key_idx))) {
+            // only handle range without null
+            is_valid = false;
+          }
+        } else {
+          // If the range node does not correspond to an equality condition in the predicates,
+          // do not transform it.
+          is_valid = false;
+        }
+      }
+    }
+
+    if (is_valid && cur_node->and_next_ != nullptr &&
+        OB_FAIL(SMART_CALL(check_unique_index_range_valid(cur_node->and_next_, is_valid)))) {
+      LOG_WARN("failed to check unique index range valid");
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::transform_unique_index_graph(ObRangeNode *range_node) const
+{
+  int ret = OB_SUCCESS;
+
+  for (ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
+    if (cur_node->max_offset_ + 1 == ctx_.unique_index_column_num_) {
+      for (int64_t i = ctx_.unique_index_column_num_; i < ctx_.column_cnt_; i++) {
+        cur_node->start_keys_[i] = OB_RANGE_NULL_VALUE;
+        cur_node->end_keys_[i] = OB_RANGE_NULL_VALUE;
+      }
+      cur_node->max_offset_ = ctx_.column_cnt_ - 1;
+      cur_node->include_start_ = true;
+      cur_node->include_end_ = true;
+    }
+
+    if (cur_node->and_next_ != nullptr && OB_FAIL(SMART_CALL(transform_unique_index_graph(cur_node->and_next_)))) {
+      LOG_WARN("failed to transform ranges for unique index");
+    }
+  }
+
   return ret;
 }
 

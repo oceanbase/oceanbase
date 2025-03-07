@@ -59,8 +59,10 @@ struct ObTableApiCacheKey: public ObILibCacheKey
     uint64_t flags_;
     struct {
       bool is_ttl_table_          : 1;
+      bool need_dist_das_         : 1;
+      bool is_count_all_          : 1;
       bool is_total_quantity_log_ : 1;
-      uint64_t reserved_          : 62;
+      uint64_t reserved_          : 60;
     };
   };
 };

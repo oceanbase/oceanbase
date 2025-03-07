@@ -23,11 +23,8 @@
 #include "ob_log_meta_manager.h"        // IObLogMetaManager
 #include "ob_log_utils.h"               // obj2str
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter, DBSchemaInfo
-#include "ob_log_instance.h"            // IObLogErrHandler, TCTX
 #include "ob_obj2str_helper.h"          // ObObj2strHelper
-#include "ob_log_trans_ctx_mgr.h"       // IObLogTransCtxMgr
 #include "ob_log_binlog_record_pool.h"  // IObLogBRPool
-#include "ob_log_storager.h"            // IObLogStorager
 #include "ob_log_tenant.h"              // ObLogTenantGuard, ObLogTenant
 #include "ob_log_config.h"              // TCONF
 #include "ob_log_resource_collector.h"  // IObLogResourceCollector

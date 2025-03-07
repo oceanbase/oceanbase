@@ -10,17 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/deadlock/ob_deadlock_key_wrapper.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "src/share/deadlock/ob_deadlock_detector_common_define.h"
 #include "share/deadlock/test/test_key.h"
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <string>
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <algorithm>
 
 namespace oceanbase {
 namespace unittest {

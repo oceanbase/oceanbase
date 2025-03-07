@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "rpc/obmysql/ob_mysql_row.h"
-#include "rpc/obmysql/ob_mysql_global.h"
-#include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;

@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "ob_backup_config.h"
 #include "ob_log_restore_config.h"
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 #include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil

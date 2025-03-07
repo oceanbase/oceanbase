@@ -11,12 +11,6 @@
  */
 
 #include "palf_handle.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "palf_callback.h"
-#include "palf_callback_wrapper.h"
-#include "palf_iterator.h"
-#include "palf_handle_impl.h"
 
 namespace oceanbase
 {
@@ -355,6 +349,11 @@ int PalfHandle::force_set_as_single_replica()
 {
   CHECK_VALID;
   return palf_handle_impl_->force_set_as_single_replica();
+}
+int PalfHandle::force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->force_set_member_list(new_member_list, new_replica_num);
 }
 int PalfHandle::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                    common::GlobalLearnerList &degraded_list) const

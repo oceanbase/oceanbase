@@ -11,10 +11,6 @@
  */
 
 #include "ob_multiple_get_merge.h"
-#include "storage/ob_row_fuse.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {

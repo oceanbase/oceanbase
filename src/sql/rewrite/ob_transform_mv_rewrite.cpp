@@ -14,12 +14,6 @@
 #include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
-#include "sql/rewrite/ob_equal_analysis.h"
-#include "sql/rewrite/ob_expand_aggregate_utils.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/schema/ob_table_schema.h"
 #include "src/sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
@@ -659,6 +653,7 @@ int ObTransformMVRewrite::check_join_compatibility(MvRewriteHelper &helper,
                                           ctx_->session_info_,
                                           NULL,  /* onetime_copier */
                                           true,  /* should_deduce_conds */
+                                          false, /* should_pushdown_const_filters */
                                           fake_depend_info,
                                           bushy_tree_infos,
                                           new_or_quals);

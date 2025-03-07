@@ -18,6 +18,7 @@
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
+#include "lib/udt/ob_array_type.h"
 #include "common/object/ob_object.h"
 
 namespace oceanbase
@@ -709,11 +710,25 @@ DEF_DOUBLE_FUNCS(ObUDoubleType, udouble, double, double);
   }                                                                     \
   template <>                                                           \
   inline int obj_print_plain_str<ObBitType>(const ObObj &obj, char *buffer, int64_t length, \
-                                            int64_t &pos, const ObObjPrintParams &params) \
-  {                                                                     \
-    UNUSED(params);                                                    \
-    return databuff_printf(buffer, length, pos, "%lu", obj.get_bit()); \
-  }                                                                     \
+                                            int64_t &pos, const ObObjPrintParams &params)   \
+  {                                                                                         \
+    if (params.binary_string_print_hex_) {                                                  \
+      return databuff_printf(buffer, length, pos, "%lX", obj.get_bit());                    \
+    } else if (params.binary_string_print_base64_) {                                        \
+      const uint64_t v = obj.get_bit();                                                     \
+      int8_t scale = obj.get_meta().get_scale();                                            \
+      if (scale < 1 || scale > 64) {                                                        \
+        /* defense code*/                                                                   \
+        scale = 64;                                                                         \
+      }                                                                                     \
+      /* bit 类型最大长度是 64，所以其最多只需要占用 8bytes 空间 */                                \
+      /* bit_bytes 向上取整 */                                                                \
+      const uint8_t bit_bytes = (scale + 8 - 1) / 8;                                         \
+      return ObBase64Encoder::encode(reinterpret_cast<const uint8_t*>(&v), bit_bytes, buffer, length, pos); \
+    } else {                                                                                 \
+      return databuff_printf(buffer, length, pos, "%lu", obj.get_bit());                     \
+    }                                                                                        \
+  }                                                                                          \
   template <>                                                           \
   inline int obj_print_json<ObBitType>(const ObObj &obj, char *buf, const int64_t buf_len, \
                                       int64_t &pos, const ObObjPrintParams &params) \
@@ -1272,6 +1287,8 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     if (src_type == CHARSET_BINARY || src_type == dst_type || src_type == CHARSET_INVALID) {\
       if (obj.get_collation_type() == CS_TYPE_BINARY && params.binary_string_print_hex_) {  \
         ret = hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos);   \
+      } else if (obj.get_collation_type() == CS_TYPE_BINARY && params.binary_string_print_base64_) { \
+        ret = ObBase64Encoder::encode(reinterpret_cast<const uint8_t*>(obj.get_string_ptr()), obj.get_string_len(), buffer, length, pos);  \
       } else if (params.use_memcpy_) {                                                      \
         ret = databuff_memcpy(buffer, length, pos, obj.get_string_len(), obj.get_string_ptr());         \
       } else {                                                                              \
@@ -3519,6 +3536,26 @@ inline int obj_print_plain_str<ObCollectionSQLType>(const ObObj &obj, char *buff
   ObObj tmp_obj = obj;
   ObString udt_data;
   if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+  } else if (params.coll_meta_ != NULL) {
+    // array
+    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(params.coll_meta_->collection_meta_);
+    ObString res_str;
+    ObIArrayType *arr_obj = nullptr;
+    ObArenaAllocator tmp_allocator;
+    ObStringBuffer buf(&tmp_allocator);
+    if (OB_FAIL(ObArrayTypeObjFactory::construct(tmp_allocator, *arr_type, arr_obj, true))) {
+      COMMON_LOG(WARN, "construct array obj failed", K(ret),  K(*params.coll_meta_));
+    } else if (OB_FAIL(arr_obj->init(udt_data))) {
+      COMMON_LOG(WARN, "failed to init array", K(ret));
+    } else if (OB_FAIL(arr_obj->print(buf))) {
+      COMMON_LOG(WARN, "failed to format array", K(ret));
+    } else if (params.use_memcpy_) {
+      ret = databuff_memcpy(buffer, length, pos, buf.length(), buf.ptr());
+    } else {
+      ret = databuff_printf(buffer, length, pos, "%.*s",
+                            static_cast<int>(MIN(buf.length(), length - pos)),
+                            buf.ptr());
+    }
   } else {
     tmp_obj.set_string(obj.get_type(), udt_data);
     tmp_obj.set_collation_type(CS_TYPE_BINARY);

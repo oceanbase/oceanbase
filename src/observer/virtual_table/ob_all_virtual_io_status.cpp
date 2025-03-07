@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_all_virtual_io_status.h"
-#include "src/share/io/ob_io_define.h"
 #include "src/share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 

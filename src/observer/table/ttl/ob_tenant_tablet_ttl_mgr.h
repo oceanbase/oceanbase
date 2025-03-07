@@ -74,7 +74,9 @@ class OBTTLTimerPeriodicTask : public common::ObTimerTask {
 public:
   OBTTLTimerPeriodicTask(ObTabletTTLScheduler &tablet_ttl_mgr)
   : tablet_ttl_mgr_(tablet_ttl_mgr)
-  {}
+  {
+    disable_timeout_check();
+  }
   virtual ~OBTTLTimerPeriodicTask() {}
   virtual void runTimerTask() override;
 private:
@@ -167,7 +169,6 @@ public:
   {
     return ObTTLUtil::check_is_ttl_table(table_schema, is_ttl_table);
   }
-
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;

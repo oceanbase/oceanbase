@@ -15,7 +15,6 @@
 #include "share/ash/ob_di_util.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/common/ob_ss_common_info.h"
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 

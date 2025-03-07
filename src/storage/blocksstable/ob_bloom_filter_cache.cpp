@@ -10,14 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_bloom_filter_cache.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/rc/ob_tenant_base.h"
+#include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "lib/atomic/ob_atomic.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/access/ob_rows_info.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "ob_datum_rowkey.h"
 #include "storage/access/ob_empty_read_bucket.h"
 
 namespace oceanbase
@@ -71,7 +70,6 @@ int ObBloomFilter::deep_copy(const ObBloomFilter &other, char *buffer)
   return ret;
 }
 
-
 int64_t ObBloomFilter::get_deep_copy_size() const
 {
   return calc_nbyte(nbit_);
@@ -82,7 +80,12 @@ int64_t ObBloomFilter::calc_nbyte(const int64_t nbit) const
   return (nbit / CHAR_BIT + (nbit % CHAR_BIT ? 1 : 0));
 }
 
-int ObBloomFilter::init(const int64_t element_count, const double false_positive_prob)
+double ObBloomFilter::calc_nhash(const double false_positive_prob) const
+{
+  return -std::log(false_positive_prob) / std::log(2);
+}
+
+int ObBloomFilter::init_by_row_count(const int64_t element_count, const double false_positive_prob)
 {
   int ret = OB_SUCCESS;
   if (element_count <= 0) {
@@ -92,7 +95,7 @@ int ObBloomFilter::init(const int64_t element_count, const double false_positive
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "bloom filter false_positive_prob should be < 1.0 and > 0.0", K(false_positive_prob), K(ret));
   } else {
-    double num_hashes = -std::log(false_positive_prob) / std::log(2);
+    double num_hashes = calc_nhash(false_positive_prob);
     int64_t num_bits = static_cast<int64_t>((static_cast<double>(element_count)
                                              * num_hashes / static_cast<double>(std::log(2))));
     int64_t num_bytes = calc_nbyte(num_bits);
@@ -393,11 +396,29 @@ int ObBloomFilterCacheValue::init(const int64_t rowkey_column_cnt, const int64_t
   } else if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "The bloom filter cache value has been inited, ", K(ret));
-  } else if (OB_FAIL(bloom_filter_.init(row_cnt))) {
+  } else if (OB_FAIL(bloom_filter_.init_by_row_count(row_cnt))) {
     STORAGE_LOG(WARN, "Fail to init bloom filter, ", K(ret));
   } else {
     rowkey_column_cnt_ = static_cast<int16_t>(rowkey_column_cnt);
     row_count_ = 0;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBloomFilterCacheValue::init(const ObBloomFilter &bloom_filter, const int64_t rowkey_column_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("fail to init bloom filter cache value, init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(rowkey_column_cnt <= 0 || rowkey_column_cnt > OB_USER_MAX_ROWKEY_COLUMN_NUMBER)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to init bloom filter cache value, invalid argument", K(ret), K(rowkey_column_cnt));
+  } else if (OB_FAIL(bloom_filter_.deep_copy(bloom_filter))) {
+    LOG_WARN("fail to deep copy bloom filter", K(ret), K(bloom_filter));
+  } else {
+    rowkey_column_cnt_ = static_cast<int16_t>(rowkey_column_cnt);
     is_inited_ = true;
   }
   return ret;
@@ -777,15 +798,20 @@ int ObBloomFilterCache::get_sstable_bloom_filter(const uint64_t tenant_id,
 int ObBloomFilterCache::inc_empty_read(
     const uint64_t tenant_id,
     const uint64_t table_id,
+    const share::ObLSID &ls_id,
+    const storage::ObITable::TableKey &sstable_key,
     const MacroBlockId &macro_id,
     const int64_t empty_read_prefix,
+    const ObSSTableReadHandle * read_handle,
     const int64_t empty_read_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || empty_read_prefix <= 0)) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !macro_id.is_valid()
+                  || (table_id == OB_INVALID_ID || table_id < 0)
+                  || !(empty_read_prefix > 0
+                       && empty_read_prefix <= OB_USER_MAX_ROWKEY_COLUMN_NUMBER /* max rowkey column count */))) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument, ",
-        K(ret), K(tenant_id), K(macro_id), K(empty_read_prefix));
+    LOG_WARN("Invalid argument", K(ret), K(tenant_id), K(macro_id), K(table_id), K(empty_read_prefix));
   } else if (0 == bf_cache_miss_count_threshold_) {
     // bf cache is disabled, do nothing
   } else {
@@ -795,42 +821,66 @@ int ObBloomFilterCache::inc_empty_read(
     storage::ObEmptyReadCell *cell = nullptr;
     if (OB_UNLIKELY(!bfc_key.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "Invalid argument, ", K(bfc_key), K(ret));
+      LOG_WARN("Invalid argument", K(bfc_key), K(ret));
     } else if (OB_UNLIKELY(tenant_id != MTL_ID())) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "mtl id not match, ", K(ret), K(tenant_id), K(MTL_ID()));
+      LOG_ERROR("mtl id not match", K(ret), K(tenant_id), K(MTL_ID()));
     } else if (OB_FAIL(MTL(ObEmptyReadBucket *)->get_cell(key_hash, cell))) {
-      STORAGE_LOG(WARN, "get_bucket_cell fail, ", K(ret));
+      LOG_WARN("get_bucket_cell fail", K(ret));
     } else if (OB_ISNULL(cell)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected error, the cell value is NULL, ", K(ret));
+      LOG_WARN("Unexpected error, the cell value is NULL", K(ret));
     } else if (OB_FAIL(cell->inc_and_fetch(key_hash, empty_read_cnt, cur_cnt))) {
-      STORAGE_LOG(WARN, "Fail to increase empty read count in bucket, ", K(ret));
+      LOG_WARN("Fail to increase empty read count in bucket", K(ret));
+    } else if (cell->check_timeout()) {
+      // do nothing
     } else if (cur_cnt > bf_cache_miss_count_threshold_) {
-      if (cell->check_timeout()) {
-      } else if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->schedule_build_bloomfilter(
-          table_id, macro_id, empty_read_prefix))) {
-        STORAGE_LOG(WARN, "Fail to schedule build bloom filter, ", K(ret), K(bfc_key),
-                    K(cur_cnt), K_(bf_cache_miss_count_threshold));
+      if (ls_id.is_valid() && sstable_key.is_valid() && (nullptr != read_handle) && read_handle->has_macro_block_bf_) {
+        bool need_load = false;
+        const ObDatumRowkey *rowkey = nullptr;
+        if (OB_UNLIKELY(!read_handle->is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("fail to inc empty read", K(ret), KPC(read_handle), K(common::lbt()));
+        } else if (!read_handle->is_get_) {
+          rowkey = &(read_handle->rows_info_->get_rowkey(read_handle->current_rows_info_idx_));
+        } else {
+          rowkey = &(read_handle->get_rowkey());
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(rowkey)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected rowkey", K(ret), KP(rowkey), KPC(read_handle));
+        } else if (OB_FAIL(check_need_load(bfc_key, need_load))) {
+          LOG_WARN("fail to check need load", K(bfc_key));
+        } else if (!need_load) {
+          // already loaded, do nothing.
+        } else if (OB_FAIL(MTL(storage::ObTenantMetaMemMgr *)
+                        ->schedule_load_bloomfilter(sstable_key, ls_id, macro_id, *rowkey))) {
+          LOG_WARN("fail to schedule load bf", K(ret), K(sstable_key), K(macro_id));
+        } else {
+          cell->reset();
+        }
       } else {
-        cell->reset();
+        if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)
+                        ->schedule_build_bloomfilter(table_id, macro_id, empty_read_prefix))) {
+          LOG_WARN("fail to schedule build bf", K(ret), K(bfc_key), K(cur_cnt), K_(bf_cache_miss_count_threshold));
+        } else {
+          cell->reset();
+        }
       }
     }
-    STORAGE_LOG(DEBUG, "inc_empty_read", K(tenant_id), K(table_id), K(macro_id), K(empty_read_cnt),
-                 K(cur_cnt), K(bf_cache_miss_count_threshold_));
   }
   return ret;
 }
 
-int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key,
-    bool &need_build)
+int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key, bool &need_build)
 {
   int ret = OB_SUCCESS;
   const ObBloomFilterCacheValue *bf_value = NULL;
   ObKVCacheHandle handle;
   need_build = false;
   if (!bf_key.is_valid()) {
-    //do nothing;
+    // do nothing
   } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "Fail to get bloom filter cache, ", K(ret));
@@ -844,13 +894,32 @@ int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key,
   return ret;
 }
 
+int ObBloomFilterCache::check_need_load(const ObBloomFilterCacheKey &bf_key, bool &need_load)
+{
+  int ret = OB_SUCCESS;
+  const ObBloomFilterCacheValue *bf_value = NULL;
+  ObKVCacheHandle handle;
+  need_load = false;
+  if (!bf_key.is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("Fail to get bloom filter cache", K(ret), K(bf_key));
+    } else {
+      need_load = true;
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObBloomFilterCache::init(const char *cache_name, const int64_t priority)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
-  //size must be 2^n, for fast mod
+  // size must be 2^n, for fast mod
   if (OB_FAIL((common::ObKVCache<ObBloomFilterCacheKey, ObBloomFilterCacheValue>::init(cache_name, priority)))) {
-    STORAGE_LOG(WARN, "Fail to init kv cache, ", K(ret));
+    LOG_WARN("Fail to init kv cache, ", K(ret));
   }
   return ret;
 }

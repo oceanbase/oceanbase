@@ -11,18 +11,8 @@
  */
 
 #define USING_LOG_PREFIX TABLELOCK
-#include "common/ob_tablet_id.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 
-#include "observer/ob_server_struct.h"
-#include "observer/ob_srv_network_frame.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_tenant_schema_service.h"
-#include "storage/ob_common_id_utils.h"
-#include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "storage/tx_storage/ob_ls_service.h"

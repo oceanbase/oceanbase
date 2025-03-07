@@ -286,12 +286,7 @@ protected:
   int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
   int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
   int select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk);
-  int build_doc_id_function_expr(
-      const ObInsertTableInfo& table_info,
-      const ObColumnSchemaV2 &col_schema,
-      const ObColumnRefRawExpr &column,
-      ObRawExpr *&func_expr);
-  int build_vec_vid_function_expr(
+  int build_domain_id_function_expr(
       const ObInsertTableInfo& table_info,
       const ObColumnSchemaV2 &col_schema,
       const ObColumnRefRawExpr &column,

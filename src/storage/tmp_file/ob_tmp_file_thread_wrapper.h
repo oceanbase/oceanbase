@@ -124,7 +124,7 @@ public:
   void destroy();
   void run1() override;
   int64_t cal_idle_time();
-  int try_work();
+  int swap();
   int swap_job_enqueue(ObTmpFileSwapJob *swap_job);
   int swap_job_dequeue(ObTmpFileSwapJob *&swap_job);
   // wake up swap thread to do work

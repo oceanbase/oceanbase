@@ -333,7 +333,7 @@ public:
   inline const ObRefCursorType &get_sys_refcursor_type() const { return sys_refcursor_type_; }
 #endif
   const common::ObIArray<const ObUserDefinedType *> &get_types() const { return user_types_; }
-  int add_type(ObUserDefinedType *user_defined_type);
+  int add_type(const ObUserDefinedType *user_defined_type);
   const ObUserDefinedType *get_type(const common::ObString &type_name) const;
   const ObUserDefinedType *get_type(uint64_t type_id) const;
   const ObUserDefinedType *get_type(int64_t idx) const;
@@ -1179,12 +1179,7 @@ public:
                       int64_t &var_idx,
                       const ObString &synonym_name,
                       const uint64_t cur_db_id,
-                      const pl::ObPLDependencyTable *&dep_table) const;
-  int add_dependency_obj(const ObSchemaType schema_type,
-                        const uint64_t schema_id,
-                        const ObDependencyTableType table_type,
-                        bool is_db_expilicit,
-                        const pl::ObPLDependencyTable *&dep_table) const;
+                      const pl::ObPLDependencyTable *dep_table) const;
   int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
                               uint64_t &parent_id, int64_t &var_idx) const;
   int resolve_external_type_by_name(const ObString &db_name,
@@ -1213,11 +1208,9 @@ public:
                                  int64_t &var_idx) const;
   inline const ObPLBlockNS *get_parent_ns() const { return parent_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
-  inline const ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
+  inline ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
 
-  inline ObPLDependencyTable *get_dependency_table() { return dependency_table_; }
   inline void set_dependency_table(ObPLDependencyTable *dependency_table) { dependency_table_ = dependency_table; }
-  int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version) const;
 
 private:
   const ObPLResolveCtx &resolve_ctx_;
@@ -1654,13 +1647,7 @@ public:
   inline const ObPLDependencyTable &get_dependency_table() const { return dependency_table_; }
   inline ObPLDependencyTable &get_dependency_table() { return dependency_table_; }
   inline pl::ObPLEnumSetCtx &get_enum_set_ctx() { return enum_set_ctx_; }
-  int add_dependency_objects(
-                  const common::ObIArray<share::schema::ObSchemaObjVersion> &dependency_objects);
-  int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version);
-  static int add_dependency_object_impl(const ObPLDependencyTable &dep_tbl,
-                                        const share::schema::ObSchemaObjVersion &obj_version);
-  static int add_dependency_object_impl(ObPLDependencyTable &dep_tbl,
-                             const share::schema::ObSchemaObjVersion &obj_version);
+
   inline bool get_can_cached() const { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
   int add_sql_exprs(common::ObIArray<sql::ObRawExpr*> &exprs);
@@ -1773,7 +1760,8 @@ public:
       subprogram_path_(allocator),
       is_all_sql_stmt_(true),
       is_pipelined_(false),
-      has_return_(false) {}
+      has_return_(false),
+      has_incomplete_rt_dep_error_(false) {}
   virtual ~ObPLFunctionAST() {}
 
   inline void set_db_name(const common::ObString &db_name) { db_name_ = db_name; }
@@ -1812,6 +1800,8 @@ public:
 
   inline void set_return() { has_return_ = true; }
   inline bool has_return() { return has_return_; }
+  inline void set_has_incomplete_rt_dep_error(bool has_incomplete_rt_dep_error) { has_incomplete_rt_dep_error_ = has_incomplete_rt_dep_error; }
+  inline bool has_incomplete_rt_dep_error() { return has_incomplete_rt_dep_error_; }
 
   INHERIT_TO_STRING_KV("compile", ObPLCompileUnitAST, K(NULL));
 private:
@@ -1826,6 +1816,7 @@ private:
   bool is_all_sql_stmt_;
   bool is_pipelined_;
   bool has_return_;
+  bool has_incomplete_rt_dep_error_;
 };
 
 enum ObPLStmtType

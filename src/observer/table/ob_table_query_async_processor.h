@@ -17,9 +17,11 @@
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
 #include "ob_table_context.h"
+#include "ob_table_cache.h"
 #include "ob_table_scan_executor.h"
 #include "ob_table_query_common.h"
 #include "ob_table_merge_filter.h"
+#include "ob_table_batch_service.h"
 
 namespace oceanbase
 {
@@ -35,34 +37,29 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
   explicit ObTableSingleQueryInfo(common::ObIAllocator &allocator):
     tb_ctx_(allocator),
     row_iter_(),
-    executor_(nullptr),
-    spec_(nullptr),
-    expr_frame_info_(allocator),
     result_(),
-    query_() {}
+    query_(),
+    table_cache_guard_() {}
 
-  ~ObTableSingleQueryInfo() {
+  ~ObTableSingleQueryInfo()
+  {
+    // TODO: It's unsuitable to get and destruct executor row iter and destruct
+    // the scan executor should be released after row iter destructed
+    table::ObTableApiScanExecutor *scan_exexcutor = row_iter_.get_scan_executor();
     row_iter_.close();
-    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
-      spec_->destroy_executor(executor_);
-      spec_->~ObTableApiSpec();
+    if (OB_NOT_NULL(scan_exexcutor)) {
+      scan_exexcutor->~ObTableApiScanExecutor();
     }
   }
 
   int64_t to_string(char *buf, const int64_t len) const {
     return OB_SUCCESS;
   }
-
-  OB_INLINE int iter_open() {
-    return row_iter_.open(executor_);
-  }
   table::ObTableCtx tb_ctx_;
   table::ObTableApiScanRowIterator row_iter_;
-  table::ObTableApiScanExecutor *executor_;
-  table::ObTableApiSpec *spec_;
-  ObExprFrameInfo expr_frame_info_;
   table::ObTableQueryIterableResult result_;
   table::ObTableQuery query_;
+  table::ObTableApiCacheGuard table_cache_guard_;
 };
 
 class ObTableMergeFilterCompare {
@@ -79,36 +76,17 @@ protected:
   int result_code_ = OB_SUCCESS;
 };
 
-class ObTableHbaseRowKeyDefaultCompare final : public ObTableMergeFilterCompare {
-public:
-  ObTableHbaseRowKeyDefaultCompare() = default;
-  ~ObTableHbaseRowKeyDefaultCompare() override = default;
-
-  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
-  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
-};
-
-class ObTableHbaseRowKeyReverseCompare final : public ObTableMergeFilterCompare {
-public:
-  ObTableHbaseRowKeyReverseCompare() = default;
-  ~ObTableHbaseRowKeyReverseCompare() override = default;
-
-  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
-  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
-};
-
 /**
  * ---------------------------------------- ObTableQueryAsyncCtx ----------------------------------------
  */
-struct ObTableQueryAsyncCtx
+struct ObTableQueryAsyncCtx : public table::ObTableQueryBatchCtx
 {
   explicit ObTableQueryAsyncCtx(common::ObIAllocator &allocator)
-      : table_id_(OB_INVALID_ID),
+      : table::ObTableQueryBatchCtx(),
         part_idx_(OB_INVALID_ID),
         subpart_idx_(OB_INVALID_ID),
         schema_version_(OB_INVALID_SCHEMA_VERSION),
-        sess_guard_(),
-        tb_ctx_(allocator),
+        sess_guard_(nullptr),
         expr_frame_info_(allocator),
         spec_(nullptr),
         executor_(nullptr)
@@ -126,20 +104,47 @@ struct ObTableQueryAsyncCtx
     }
   }
 
-  uint64_t table_id_;
-
   // Computes the real tablet ID on the server side during multi-table queries
   int64_t part_idx_;
   int64_t subpart_idx_;
   int64_t schema_version_;
-  table::ObTableApiSessGuard sess_guard_;
-  table::ObTableCtx tb_ctx_;
+  table::ObTableApiSessGuard *sess_guard_;
   ObExprFrameInfo expr_frame_info_;
   table::ObTableApiSpec *spec_;
   table::ObTableApiScanExecutor *executor_;
   table::ObTableApiScanRowIterator row_iter_;
   common::ObArray<ObTableSingleQueryInfo*> multi_cf_infos_;
+  // record table_id and tablet_id pass by client, especially for global index:
+  // - index_table_id is the id of index table
+  // - index_tablet_id is the query index tablet
+  uint64_t index_table_id_;
+  ObTabletID index_tablet_id_;
 };
+
+/**
+ * ---------------------------------------- ObHTableLSGetCtx ----------------------------------------
+ */
+ struct ObHTableLSGetCtx
+ {
+  ObHTableLSGetCtx(table::ObTableQuery &query, ObString &arg_table_name, table::ObTableApiCredential &credential)
+      : query_(query),
+        arg_table_name_(arg_table_name),
+        outer_credential_(credential)
+  {}
+  ~ObHTableLSGetCtx() {}
+
+  common::ObArenaAllocator *allocator_;
+  ObTableQueryAsyncCtx *query_ctx_;
+  table::ObTableQuery &query_;
+  share::schema::ObSchemaGetterGuard *schema_guard_;
+  ObString &arg_table_name_;
+  bool get_is_tablegroup_;
+  table::ObTableTransParam *trans_param_;
+  uint64_t table_id_;
+  ObTabletID tablet_id_;
+  table::ObTableApiCredential &outer_credential_;
+  table::ObTableQueryIterableResult *iterable_result_;
+ };
 
 /**
  * ---------------------------------------- ObTableQueryAsyncEntifyDestroyGuard ----------------------------------------
@@ -179,9 +184,25 @@ public:
       result_iterator_(nullptr),
       query_ctx_(allocator_),
       lease_timeout_period_(60 * 1000 * 1000),
-      row_count_(0)
+      trans_desc_(nullptr),
+      row_count_(0),
+      req_timeinfo_(nullptr)
   {}
-  ~ObTableQueryAsyncSession() {}
+  ~ObTableQueryAsyncSession() {
+    if (OB_NOT_NULL(query_ctx_.sess_guard_)) {
+      query_ctx_.sess_guard_->~ObTableApiSessGuard();
+      query_ctx_.sess_guard_ = nullptr;
+    }
+    if (OB_NOT_NULL(req_timeinfo_)) {
+      // before update_end_time:
+      //  start time > end time, end time == 0, reentrant cnt == 1
+      // after update_end_time:
+      //  start time < end time, end time != 0, reentrant cnt == 0
+      req_timeinfo_->update_end_time();
+      req_timeinfo_->~ObReqTimeInfo();
+      req_timeinfo_ = nullptr;
+    }
+  }
 
   void set_result_iterator(table::ObTableQueryResultIterator* iter);
   table::ObTableQueryResultIterator *& get_result_iter() { return result_iterator_; };
@@ -208,6 +229,9 @@ public:
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
   int64_t &get_row_count() { return row_count_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
+  void set_req_start_time(int64_t start_time) { start_time_ = start_time; }
+  void update_req_timeinfo_start_time() const { req_timeinfo_->start_time_ = start_time_; req_timeinfo_->reentrant_cnt_++; }
+  int alloc_req_timeinfo();
 private:
   bool in_use_;
   uint64_t timeout_ts_;
@@ -227,6 +251,11 @@ private:
   uint64_t lease_timeout_period_;
   transaction::ObTxDesc *trans_desc_;
   int64_t row_count_;
+
+  // start time for req_timeinfo_
+  int64_t start_time_;
+  // req time info
+  ObReqTimeInfo *req_timeinfo_;
 };
 
 /**
@@ -303,69 +332,117 @@ public:
   virtual ~ObTableQueryAsyncP() {}
   virtual int deserialize() override;
   virtual int before_process() override;
+public:
+  static int init_query_async_ctx(ObIAllocator *allocator,
+                                  table::ObTableQuery &arg_query,
+                                  schema::ObSchemaGetterGuard& schema_guard,
+                                  const ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> &table_schemas,
+                                  uint64_t arg_tenant_id,
+                                  uint64_t arg_table_id,
+                                  const ObTabletID &arg_tablet_id,
+                                  ObTableQueryAsyncCtx *query_ctx);
+  static int generate_table_query_info(ObIAllocator *allocator,
+                                        schema::ObSchemaGetterGuard &schema_guard,
+                                        const schema::ObSimpleTableSchemaV2* table_schema,
+                                        uint64_t arg_tenant_id,
+                                        uint64_t arg_table_id,
+                                        const ObTabletID &arg_tablet_id,
+                                        table::ObTableQuery &arg_query,
+                                        ObTableQueryAsyncCtx *query_ctx,
+                                        ObTableSingleQueryInfo *&info);
+  static int init_tb_ctx(ObIAllocator* allocator,
+                        ObTableConsistencyLevel level,
+                        const table::ObTableEntityType &entity_type,
+                        schema::ObSchemaGetterGuard& schema_guard,
+                        table::ObTableApiCredential &credential,
+                        bool tablegroup_req,
+                        ObTableQueryAsyncCtx &query_ctx,
+                        ObTableSingleQueryInfo& info,
+                        const int64_t &timeout_ts,
+                        table::ObTableCtx &ctx);
+  static int get_table_result_iterator(ObIAllocator *allocator,
+                                    ObTableQueryAsyncCtx &query_ctx,
+                                    const ObString &arg_table_name,
+                                    table::ObTableEntityType entity_type,
+                                    table::ObTableQuery &query,
+                                    transaction::ObTxDesc *txn_desc,
+                                    transaction::ObTxReadSnapshot &tx_snapshot,
+                                    table::ObTableQueryResult &result,
+                                    table::ObTableQueryResultIterator*& result_iterator);
+  template <typename ResultType>
+  static int get_inner_htable_result_iterator(ObIAllocator *allocator,
+                                        table::ObTableEntityType entity_type,
+                                        const ObString& arg_table_name,
+                                        ObTableQueryAsyncCtx &query_ctx,
+                                        table::ObTableQuery &query,
+                                        transaction::ObTxDesc *txn_desc,
+                                        transaction::ObTxReadSnapshot &tx_snapshot,
+                                        ResultType &out_result,
+                                        common::ObIArray<table::ObTableQueryResultIterator*>& iterators_array);
+  template <typename ResultType>
+  static int generate_merge_result_iterator(ObIAllocator *allocator,
+                                            table::ObTableQuery &query,
+                                            common::ObIArray<table::ObTableQueryResultIterator *> &iterators_array,
+                                            ResultType &result,
+                                            table::ObTableQueryResultIterator*& result_iterator /* merge result iterator */);
+  template <typename ResultType>
+  static int get_htable_result_iterator(ObIAllocator *allocator,
+                          ObTableQueryAsyncCtx &query_ctx,
+                          const ObString &arg_table_name,
+                          table::ObTableEntityType entity_type,
+                          table::ObTableQuery &query,
+                          transaction::ObTxDesc *txn_desc,
+                          transaction::ObTxReadSnapshot &tx_snapshot,
+                          ResultType &result,
+                          table::ObTableQueryResultIterator*& result_iterator);
 protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
   virtual uint64_t get_request_checksum() override;
-  int init_query_ctx(const ObString &arg_table_name);
   int64_t get_trans_timeout_ts();
-  int init_multi_cf_query_ctx(const ObString &arg_tablegroup_name);
+  // int init_query_ctx(ObIAllocator* allocator, const ObString &arg_table_name, bool is_tablegroup_req, table::ObTableQuery &arg_query, uint64_t table_id, ObTabletID tablet_id, ObTableQueryAsyncCtx *query_ctx);
   virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
   virtual bool is_kv_processor() override { return true; }
+
 private:
   int process_query_start();
-  int process_multi_cf_query_start();
   int process_query_next();
-  int process_multi_cf_query_next();
   int process_query_end();
   int destory_query_session(bool need_rollback_trans);
-  int init_schema_cache_guard();
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 
 private:
   int get_session_id(uint64_t &real_sessid, uint64_t arg_sessid);
   int get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_session);
-  int query_scan_with_init();
-
-  int query_scan_multi_cf_with_init();
+  int query_scan_with_init(ObIAllocator* allocator, ObTableQueryAsyncCtx &query_ctx, table::ObTableQuery &origin_query);
   int query_scan_without_init(table::ObTableCtx &tb_ctx);
-  int query_scan_multi_cf_without_init();
 
 private:
   int check_query_type();
-  int init_tb_ctx(table::ObTableCtx &ctx);
-
-  int init_tb_ctx(table::ObTableCtx &ctx, ObTableSingleQueryInfo& info);
-  int init_tb_ctx(table::ObTableCtx &ctx, uint64_t table_id);
-
-  int create_result_iterator(ObTableQueryAsyncSession* query_session, table::ObTableQueryResultIterator*& result_iter, uint64_t table_id);
-
-  int generate_multi_result_iterator(ResultMergeIterator *merge_result_iter);
-
-  int generate_merge_result_iterator();
-
-  int execute_multi_cf_query();
   int execute_query();
-  int start_trans(bool is_readonly,
-                  const table::ObTableConsistencyLevel consistency_level,
-                  const share::ObLSID &ls_id,
-                  int64_t timeout_ts,
-                  bool need_global_snapshot,
-                  sql::TransState *trans_state);
+  int init_read_trans(const table::ObTableConsistencyLevel consistency_level,
+                      const share::ObLSID &ls_id,
+                      int64_t timeout_ts,
+                      bool need_global_snapshot,
+                      sql::TransState *trans_state);
 
-  int process_columns(const ObIArray<ObString>& columns,
+  static int process_columns(const ObIArray<ObString>& columns,
                       ObArray<std::pair<ObString, bool>>& familys,
                       ObArray<ObString>& real_columns);
 
-  int update_table_info_columns(ObTableSingleQueryInfo* table_info,
+  static int update_table_info_columns(ObTableSingleQueryInfo* table_info,
                             const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
                             const ObArray<ObString>& real_columns,
                             const std::pair<ObString, bool>& family_addfamily_flag);
 
-  bool found_family(const ObString& table_name, const ObArray<std::pair<ObString, bool>>& family_clear_flags, std::pair<ObString, bool>& flag);
+  static int check_family_existence_with_base_name(const ObString& table_name,
+                                                    const ObString& base_tablegroup_name,
+                                                    table::ObTableEntityType entity_type,
+                                                    const ObArray<std::pair<ObString, bool>>& family_clear_flags,
+                                                    std::pair<ObString, bool> &flag, bool &exist);
 
-  int process_table_info(ObTableSingleQueryInfo* table_info,
+  static int process_table_info(ObTableSingleQueryInfo* table_info,
                       const ObArray<std::pair<ObString, bool>>& family_clear_flags,
                       const ObArray<ObString>& real_columns,
                       const std::pair<ObString, bool>& family_with_flag);

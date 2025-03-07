@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 
-#include "sql/resolver/dcl/ob_grant_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
-#include "share/schema/ob_obj_priv_type.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::sql;

@@ -10,9 +10,6 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
@@ -626,6 +623,9 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     EXPECT_GT(remove_e_barrier, leader.palf_handle_impl_->sw_.committed_end_lsn_) << \
     remove_e_barrier.val_ << leader.palf_handle_impl_->sw_.committed_end_lsn_.val_;
 
+    // wait until d has received newest config log
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_,
+        d_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_);
     // D has been elected to be the leader
     for (auto srv: get_cluster()) {
       srv->set_leader(id, d_addr);

@@ -13,23 +13,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <stdexcept>
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
 #undef protected
-#include "logservice/palf/log_reader_utils.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry_header.h"
-#include "logservice/palf/log_io_worker.h"
-#include "logservice/palf/lsn.h"
-#include "log/ob_shared_log_service.h"
 
 const std::string TEST_NAME = "log_shared_storage_upload";
 

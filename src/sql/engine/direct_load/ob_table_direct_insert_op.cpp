@@ -175,8 +175,9 @@ int ObTableDirectInsertOp::next_vector(const int64_t max_row_cnt)
     }
 
     if (OB_SUCC(ret) && !brs_.end_) {
-      if (OB_FAIL(process_insert_batch())) {
-        LOG_WARN("failed to process insert batch", KR(ret));
+      if (OB_FAIL(ObDMLService::process_insert_batch(
+          MY_SPEC.ins_ctdef_, *this, MY_SPEC.use_rich_format_))) {
+        LOG_WARN("failed to process insert batch", KR(ret), K_(MY_SPEC.ins_ctdef), K_(MY_SPEC.use_rich_format));
       } else {
         const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
         const ExprFixedArray &expr_array = child_->get_spec().output_;
@@ -221,8 +222,9 @@ int ObTableDirectInsertOp::next_batch(const int64_t max_row_cnt)
     }
 
     if (OB_SUCC(ret) && !brs_.end_) {
-      if (OB_FAIL(process_insert_batch())) {
-        LOG_WARN("failed to process insert batch", KR(ret));
+      if (OB_FAIL(ObDMLService::process_insert_batch(
+          MY_SPEC.ins_ctdef_, *this, MY_SPEC.use_rich_format_))) {
+        LOG_WARN("failed to process insert batch", KR(ret), K_(MY_SPEC.ins_ctdef), K_(MY_SPEC.use_rich_format));
       } else {
         const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
         const ExprFixedArray &expr_array = child_->get_spec().output_;
@@ -400,61 +402,6 @@ int ObTableDirectInsertOp::init_px_writer()
   return ret;
 }
 
-int ObTableDirectInsertOp::process_insert_batch()
-{
-  int ret = OB_SUCCESS;
-  ObEvalCtx &eval_ctx = get_eval_ctx();
-  const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
-  const ObIArray<ColumnContent> &column_infos = MY_SPEC.ins_ctdef_.column_infos_;
-  const int64_t column_offset = MY_SPEC.ins_ctdef_.is_heap_table_ ? 1: 0;
-  const int64_t row_num = 0; // no sense
-  ObUserLoggingCtx::Guard logging_ctx_guard(*(ctx_.get_user_logging_ctx()));
-  ctx_.set_cur_rownum(row_num);
-  CK (dml_expr_array.count() == column_infos.count() + column_offset);
-  for (int64_t i = 0; OB_SUCC(ret) && (i < dml_expr_array.count()); ++i) {
-    if (MY_SPEC.ins_ctdef_.is_heap_table_ && (0 == i)) {
-      continue; // skip hidden table pk column
-    } else {
-      const ColumnContent &column_info = column_infos.at(i - column_offset);
-      common::ObString column_name = column_info.column_name_;
-      ctx_.set_cur_column_name(&column_name);
-      ObExpr *expr = dml_expr_array.at(column_info.projector_index_);
-      if (MY_SPEC.use_rich_format_) {
-        if (OB_FAIL(expr->eval_vector(eval_ctx, brs_))) {
-          LOG_WARN("failed to eval vector", KR(ret));
-        }
-      } else {
-        if (OB_FAIL(expr->eval_batch(eval_ctx, *(brs_.skip_), brs_.size_))) {
-          LOG_WARN("failed to eval batch", KR(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-        ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
-    batch_info_guard.set_batch_size(brs_.size_);
-    batch_info_guard.set_batch_idx(0);
-    for (int64_t i = 0; OB_SUCC(ret) && (i < brs_.size_); ++i) {
-      bool is_skipped = brs_.skip_->at(i);
-      batch_info_guard.set_batch_idx(i);
-      if (!is_skipped) {
-        if (OB_FAIL(ObDMLService::process_insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, *this, is_skipped))) {
-          LOG_WARN("failed to process insert row", KR(ret), K(ins_rtdef_.cur_row_num_));
-        } else if (is_skipped) {
-          brs_.skip_->set(i);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ins_rtdef_.cur_row_num_++;
-      }
-    }
-  }
-  return ret;
-}
 
 } // namespace sql
 } // namespace oceanbase

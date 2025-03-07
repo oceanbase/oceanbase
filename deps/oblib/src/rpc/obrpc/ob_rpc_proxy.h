@@ -292,7 +292,6 @@ class Handle {
 
 public:
   Handle();
-  ~Handle();
   const common::ObAddr &get_dst_addr() const { return dst_; }
   void reset_timeout();
 
@@ -323,7 +322,7 @@ public:
   int get_more(typename pcodeStruct::Response &result);
   int abort();
   const ObRpcResultCode &get_result_code() const;
-
+  ~SSHandle();
 protected:
   ObRpcResultCode rcode_;
 };

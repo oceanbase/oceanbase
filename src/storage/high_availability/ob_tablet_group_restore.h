@@ -364,6 +364,7 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int inner_reset_status_for_retry() override;
   virtual int generate_next_dag(share::ObIDag *&dag);
+  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_strategy) override;
 
   int init(const ObInitTabletRestoreParam &param);
   ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }

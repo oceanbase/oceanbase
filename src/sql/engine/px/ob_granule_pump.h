@@ -139,6 +139,7 @@ public:
                  int64_t idx) :
         tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0) {}
     TO_STRING_KV(KPC(tablet_loc_),
+                 KP(tablet_loc_),
                  K(range_),
                  K(ss_range_),
                  K(idx_),
@@ -351,143 +352,6 @@ class ObGranulePump
 private:
   static const int64_t OB_GRANULE_SHARED_POOL_POS = 0;
 
-  //
-  // 《PX的GI详细实现》
-  enum ObGranuleSplitterType
-  {
-    GIT_UNINITIALIZED,
-
-    /**
-     *           [Hash Join]
-     *                |
-     *        ----------------
-     *        |              |
-     *        EX(PKEY)      GI (GIT_AFFINITY)
-     *        |              |
-     *        GI            TSC2
-     *        |
-     *       TSC1
-     */
-    /*
-     * Here is an example of "partition + affinitized" within table B
-     * for each row from C, it can only flow to certain workers dealing
-     * with coresponding partitions of B.
-     *
-     * |   PX COORDINATOR                |          |
-     * |    EXCHANGE OUT DISTR           |:EX20001  |
-     * |      NESTED-LOOP JOIN           |          |
-     * |       EXCHANGE IN DISTR         |          |
-     * |        EXCHANGE OUT DISTR (PKEY)|:EX20000  |
-     * |         PX PARTITION ITERATOR   |          |
-     * |          TABLE SCAN             |C         |
-     * |       PX PARTITION ITERATOR     |          |
-     * |        TABLE SCAN               |B         |
-     */
-    GIT_AFFINITY,
-
-    /**
-     *        [Nested Loop Join]
-     *                |
-     *        ----------------
-     *        |              |
-     *        EX(BC2HOST)    GI (GIT_ACCESS_ALL)
-     *        |              |
-     *        GI            TSC2
-     *        |
-     *       TSC1
-     */
-    /*
-     * Each worker must have full access with table B's data
-     *
-     * |   PX COORDINATOR                     |          |
-     * |    EXCHANGE OUT DISTR                |:EX20001  |
-     * |      NESTED-LOOP JOIN                |          |
-     * |       EXCHANGE IN DISTR              |          |
-     * |        EXCHANGE OUT DISTR (B2HOST)   |:EX20000  |
-     * |         PX PARTITION ITERATOR        |          |
-     * |          TABLE SCAN                  |C         |
-     * |       PX PARTITION ITERATOR          |          |
-     * |        TABLE SCAN                    |B         |
-     */
-    GIT_ACCESS_ALL,
-
-    /**
-     *                GI (GIT_PARTITION_WISE)
-     *                |
-     *            [Hash Join]
-     *                |
-     *        ----------------
-     *        |              |
-     *        TSC1           TSC2
-     */
-    /*
-     * If two tables can do join in full partition wise way, it will
-     * be the most efficient way.
-     *
-     * |      PX PARTITION ITERATOR      |          |
-     * |       HASH JOIN                 |          |
-     * |        TABLE SCAN               |A         |
-     * |        TABLE SCAN               |B         |
-     */
-    GIT_FULL_PARTITION_WISE,
-
-    /* consist of full/partial partition wise affinity
-     *
-     *                      [Hash Join]
-     *                           |
-     *                ---------------------
-     *                |                   |
-     *           [Hash Join]              GI(partial partition wise with affinity)
-     *                |                   |
-     *        ----------------            TSC3
-     *        |              |
-     *        EX(PKEY)      GI(partial partition wise with affinity)
-     *        |              |
-     *        GI            TSC2
-     *        |
-     *       TSC
-     */
-    /*
-     * Here is an example of "pwj_gi + affinitized" within table B and A
-     *
-     * |   PX COORDINATOR                |          |
-     * |    EXCHANGE OUT DISTR           |:EX20001  |
-     * |     NESTED-LOOP JOIN            |          |
-     * |      NESTED-LOOP JOIN           |          |
-     * |       EXCHANGE IN DISTR         |          |
-     * |        EXCHANGE OUT DISTR (PKEY)|:EX20000  |
-     * |         PX PARTITION ITERATOR   |          |
-     * |          TABLE SCAN             |C         |
-     * |       PX PARTITION ITERATOR     |          |
-     * |        TABLE GET                |B         |
-     * |      PX PARTITION ITERATOR      |          |
-     * |       TABLE GET                 |A         |
-
-     *
-     *                      [Hash Join]
-     *                           |
-     *                ---------------------
-     *                |                   |
-     *             EX(PKEY)              GI(full partition wise with affinity)
-     *                |                   |
-     *               TSC             [Hash Join]
-     *                                    |
-     *                             ----------------
-     *                             |              |
-     *                            TSC2           TSC3
-     */
-    GIT_PARTITION_WISE_WITH_AFFINITY,
-    /*
-     * This is the most commonly used GI
-     *
-     * |      PX BLOCK ITERATOR          |          |
-     * |       TABLE SCAN                |A         |
-     * or
-     * |      PX PARTITION ITERATOR      |          |
-     * |       TABLE SCAN                |A         |
-     */
-    GIT_RANDOM,
-  };
 public:
   ObGranulePump() :
   lock_(common::ObLatchIds::SQL_GI_SHARE_POOL_LOCK),
@@ -543,11 +407,13 @@ public:
                          int64_t &pos,
                          int64_t worker_id,
                          uint64_t tsc_op_id,
-                         uint64_t fetched_task_cnt);
+                         uint64_t fetched_task_cnt,
+                         ObGranuleSplitterType splitter_type);
   // 通过phy op ids获得其对应的gi tasks
   int try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo> &infos,
                           const ObIArray<int64_t> &op_ids,
-                          int64_t worker_id);
+                          int64_t worker_id,
+                          ObGranuleSplitterType splitter_type);
 
   int64_t get_pump_version() const { return pump_version_; }
   bool is_taskset_reset() const { return is_taskset_reset_; }
@@ -608,10 +474,12 @@ private:
 
   int fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &infos,
                                     const ObIArray<int64_t> &op_ids,
-                                    int64_t thread_id);
+                                    int64_t thread_id,
+                                    ObGranuleSplitterType splitter_type);
 
   int fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo> &infos,
-                                        const ObIArray<int64_t> &op_ids);
+                                        const ObIArray<int64_t> &op_ids,
+                                        ObGranuleSplitterType splitter_type);
   int check_pw_end(int64_t end_tsc_count, int64_t op_count, int64_t task_count);
 
   int find_taskset_by_tsc_id(uint64_t op_id, ObGITaskArray *&taskset_array);

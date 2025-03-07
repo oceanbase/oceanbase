@@ -15,8 +15,6 @@
 #include "lib/function/ob_function.h"
 #include "lib/container/ob_array.h"
 #include <gtest/gtest.h>
-#include <iostream>
-#include <vector>
 
 namespace oceanbase {
 namespace unittest {

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "lib/signal/ob_signal_struct.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
 #include "sql/executor/ob_remote_task_executor.h"
-#include "sql/executor/ob_task.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "storage/tx/ob_trans_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -156,6 +149,7 @@ int ObRemoteTaskExecutor::build_task(ObExecContext &query_ctx,
    */
   ObOpSpec *root_spec = NULL;
   const ObPhysicalPlan *phy_plan = NULL;
+  share::ObLSArray ls_list;
 
   if (OB_ISNULL(root_spec = job.get_root_spec())) {
     ret = OB_NOT_INIT;
@@ -165,6 +159,10 @@ int ObRemoteTaskExecutor::build_task(ObExecContext &query_ctx,
     LOG_WARN("physical plan is NULL", K(ret));
   } else if (OB_FAIL(build_task_op_input(query_ctx, task_info, *root_spec))) {
     LOG_WARN("fail build op inputs", K(ret));
+  } else if (OB_FAIL(DAS_CTX(query_ctx).get_all_lsid(ls_list))) {
+    LOG_WARN("get ls ids failed.", K(ret));
+  } else if (OB_FAIL(query_ctx.get_my_session()->get_trans_result().add_touched_ls(ls_list))) {
+    LOG_WARN("add touched ls failed.", K(ret));
   } else {
     const ObTaskInfo::ObRangeLocation &range_loc = task_info.get_range_location();
     for (int64_t i = 0; OB_SUCC(ret) && i < range_loc.part_locs_.count(); ++i) {
