@@ -2424,6 +2424,7 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
   } else if (OB_FAIL(sql_printer.do_print(allocator, sql))) {
     LOG_WARN("failed to print sql", K(ret));
   }
+  LOG_TRACE("succeed to reconstruct sql", K(sql), KPC(stmt));
   return ret;
 }
 

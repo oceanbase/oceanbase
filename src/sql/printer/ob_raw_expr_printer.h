@@ -70,6 +70,13 @@ class ObRawExprPrinter
     }                                                     \
   } while(0)                                               \
 
+#define PRINT_BOOL_EXPR(expr)                              \
+  do {                                                 \
+    if (OB_SUCCESS == ret && OB_FAIL(SMART_CALL(print_bool_expr(expr)))) {    \
+      LOG_WARN("fail to print expr", K(ret));            \
+    }                                                     \
+  } while(0)                                               \
+
 #define SET_SYMBOL_IF_EMPTY(str)  \
   do {                             \
     if (0 == symbol.length()) {     \
@@ -116,6 +123,8 @@ public:
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool print_cte = false);
   int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
 private:
+  int print_bool_expr(ObRawExpr *expr);
+  int print_select_expr(ObRawExpr *expr);
   int print(ObRawExpr *expr);
 
   int print(ObConstRawExpr *expr);

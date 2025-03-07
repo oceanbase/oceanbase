@@ -628,6 +628,27 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
     LOG_WARN("failed to check stmt has invalid link expr", K(ret));
   } else if (has_special_expr) {
     all_table_from_one_dblink = false;
+  } else {
+    bool group_cnt_subquery = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !group_cnt_subquery && i < sel_stmt->get_group_expr_size(); i ++) {
+      ObRawExpr *expr = nullptr;
+      if (OB_ISNULL(expr = sel_stmt->get_group_exprs().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (expr->has_flag(CNT_SUB_QUERY)) {
+        group_cnt_subquery = true;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !group_cnt_subquery && i < sel_stmt->get_rollup_expr_size(); i ++) {
+      ObRawExpr *expr = nullptr;
+      if (OB_ISNULL(expr = sel_stmt->get_rollup_exprs().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (expr->has_flag(CNT_SUB_QUERY)) {
+        group_cnt_subquery = true;
+      }
+    }
+    all_table_from_one_dblink &= !group_cnt_subquery;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_info_size(); ++i) {
     TableItem *table = NULL;
@@ -1465,8 +1486,6 @@ int ObTransformDBlink::formalize_link_table(ObDMLStmt *stmt)
     LOG_WARN("failed to formalize table name", K(ret));
   } else if (OB_FAIL(formalize_select_item(stmt))) {
     LOG_WARN("failed to formalize select item", K(ret));
-  } else if (OB_FAIL(formalize_bool_select_expr(stmt))) {
-    LOG_WARN("failed to formalize bool select item", K(ret));
   } else if (OB_FAIL(formalize_column_item(stmt))) {
     LOG_WARN("failed to formalize column item", K(ret));
   }
@@ -1637,76 +1656,6 @@ int ObTransformDBlink::formalize_select_item(ObDMLStmt *stmt)
           if (OB_FAIL(ob_write_string(*ctx_->allocator_, generate_name, select_item.alias_name_))) {
             LOG_WARN("failed to write string", K(ret));
           }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformDBlink::formalize_bool_select_expr(ObDMLStmt *stmt)
-{
-  int ret = OB_SUCCESS;
-  if (!lib::is_oracle_mode()) {
-    // do nothing
-  } else if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (stmt->is_select_stmt()) {
-    // formalize bool select expr p like `a > b` as
-    // case when p then 1 when not p then 0 else null
-    ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(stmt);
-    ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
-      SelectItem &select_item = select_items.at(i);
-      ObCaseOpRawExpr *case_when_expr = NULL;
-      ObRawExpr *bool_expr = select_item.expr_;
-      ObRawExpr *not_expr = NULL;
-      ObConstRawExpr *one_expr = NULL;
-      ObConstRawExpr *zero_expr = NULL;
-      ObRawExpr *null_expr = NULL;
-      bool is_bool_expr = false;
-      if (OB_ISNULL(select_item.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected select item", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(select_item.expr_, is_bool_expr))) {
-        LOG_WARN("failed to check is bool expr", K(ret));
-      } else if (!is_bool_expr) {
-        // do nothing
-      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
-                                                              ObIntType,
-                                                              1,
-                                                              one_expr))) {
-        LOG_WARN("failed to build const number expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_not_expr(*ctx_->expr_factory_,
-                                                        bool_expr,
-                                                        not_expr))) {
-        LOG_WARN("failed to build not expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
-                                                              ObIntType,
-                                                              0,
-                                                              zero_expr))) {
-        LOG_WARN("failed to build const number expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_, null_expr))) {
-        LOG_WARN("faile to build null expr", K(ret));
-      } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_CASE, case_when_expr))) {
-        LOG_WARN("create case expr failed", K(ret));
-      } else if (OB_ISNULL(case_when_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(case_when_expr));
-      } else if (OB_FAIL(case_when_expr->add_when_param_expr(bool_expr))) {
-        LOG_WARN("failed to add when param expr", K(ret));
-      } else if (OB_FAIL(case_when_expr->add_then_param_expr(one_expr))) {
-        LOG_WARN("failed to add then expr", K(ret));
-      } else if (OB_FAIL(case_when_expr->add_when_param_expr(not_expr))) {
-        LOG_WARN("failed to add when param expr", K(ret));
-      } else if (OB_FAIL(case_when_expr->add_then_param_expr(zero_expr))) {
-        LOG_WARN("failed to add then expr", K(ret));
-      } else {
-        case_when_expr->set_default_param_expr(null_expr);
-        select_item.expr_ = case_when_expr;
-        if (OB_FAIL(case_when_expr->formalize(ctx_->session_info_))) {
-          LOG_WARN("failed to formalize expr", K(ret));
         }
       }
     }

@@ -546,7 +546,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
                   DATA_PRINTF(" on ");
                   for (int64_t i = 0; OB_SUCC(ret) && i < join_conditions_size;
                        ++i) {
-                    if (OB_FAIL(expr_printer_.do_print(join_conditions.at(i), T_NONE_SCOPE))) {
+                    if (OB_FAIL(expr_printer_.do_print(join_conditions.at(i), T_ON_SCOPE))) {
                       LOG_WARN("fail to print join condition", K(ret));
                     }
                     DATA_PRINTF(" and ");
@@ -1824,7 +1824,7 @@ int ObDMLStmtPrinter::print_semi_join()
           if (join_conditions_size > 0) {
             DATA_PRINTF(" on ");
             for (int64_t i = 0; OB_SUCC(ret) && i < join_conditions_size; ++i) {
-              if (OB_FAIL(expr_printer_.do_print(join_conditions.at(i), T_NONE_SCOPE))) {
+              if (OB_FAIL(expr_printer_.do_print(join_conditions.at(i), T_ON_SCOPE))) {
                 LOG_WARN("fail to print join condition", K(ret));
               }
               DATA_PRINTF(" and ");
@@ -1889,7 +1889,7 @@ int ObDMLStmtPrinter::print_semi_info_to_subquery()
           if (join_conditions_size > 0) {
             DATA_PRINTF(" where ");
             for (int64_t i = 0; OB_SUCC(ret) && i < join_conditions_size; ++i) {
-              if (OB_FAIL(expr_printer_.do_print(join_conditions.at(i), T_NONE_SCOPE))) {
+              if (OB_FAIL(expr_printer_.do_print(join_conditions.at(i), T_WHERE_SCOPE))) {
                 LOG_WARN("fail to print join condition", K(ret));
               }
               DATA_PRINTF(" and ");
