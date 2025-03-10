@@ -20630,6 +20630,7 @@ int ObDMLResolver::resolve_match_index(
   uint64_t column_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+  const ObTableSchema *doc_rowkey_schema = nullptr;
   const ObTableSchema *inv_idx_schema = nullptr;
   const ObTableSchema *fwd_idx_schema = nullptr;
 
@@ -20646,6 +20647,15 @@ int ObDMLResolver::resolve_match_index(
     if (OB_UNLIKELY(OB_INVALID_ID == doc_rowkey_tid)) {
       ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
       LOG_WARN("No matched fulltext index exists", K(ret));
+    } else if (OB_FAIL(schema_checker_->get_table_schema(
+          session_info_->get_effective_tenant_id(), doc_rowkey_tid, doc_rowkey_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(doc_rowkey_schema)) {
+      ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+      LOG_WARN("unexpected index schema", K(ret));
+    } else if (!doc_rowkey_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
+      ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+      LOG_WARN("unexpected index schema", K(ret), KPC(doc_rowkey_schema));
     }
   }
   bool found_matched_index = false;
@@ -20660,7 +20670,7 @@ int ObDMLResolver::resolve_match_index(
     } else if (OB_ISNULL(inv_idx_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index schema", K(ret), KPC(inv_idx_schema));
-    } else if (!inv_idx_schema->can_read_index()) {
+    } else if (!inv_idx_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
       // index unavailable
     } else if (OB_FAIL(ObTransformUtils::check_fulltext_index_match_column(match_column_set,
                                                                            &table_schema,
@@ -20688,9 +20698,13 @@ int ObDMLResolver::resolve_match_index(
           session_info_->get_effective_tenant_id(), index_info.table_id_, fwd_idx_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(fwd_idx_schema)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
         LOG_WARN("unexpecter nullptr to fwd idx schema", K(ret));
-      } else if (fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
+      } else if (!fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
+        // skip
+      } else if (!inv_idx_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
+        // index unavailable
+      } else {
         found_fwd_idx = true;
         fwd_idx_tid = fwd_idx_schema->get_table_id();
       }
@@ -20698,7 +20712,7 @@ int ObDMLResolver::resolve_match_index(
 
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(!found_fwd_idx)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
         LOG_WARN("found matched inverted index table, but corresponding forward index table not found",
             K(ret), K(inv_idx_tid), K(index_infos));
       }
