@@ -596,6 +596,13 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         }
       } else {}
     }
+    if (OB_SUCC(ret) &&
+      (expr.get_expr_type() == T_FUN_PL_COLLECTION_CONSTRUCT ||
+       expr.get_expr_type() == T_FUN_PL_OBJECT_CONSTRUCT)) {
+    if (OB_FAIL(expr.add_flag(CNT_PL_UDT_CONSTRUCT))) {
+      LOG_WARN("failed to add flag IS_OR", K(ret));
+    }
+  }
   }
   if (OB_SUCC(ret) && OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));

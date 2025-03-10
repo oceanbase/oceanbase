@@ -774,7 +774,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
           LOG_WARN("push dynamic filter to store non-pushdown filter failed", K(ret), K(i));
         }
       } else if (filters.at(i)->has_flag(CNT_PL_UDF) ||
-                 filters.at(i)->has_flag(CNT_OBJ_ACCESS_EXPR)) {
+                 filters.at(i)->has_flag(CNT_OBJ_ACCESS_EXPR) ||
+                 filters.at(i)->has_flag(CNT_PL_UDT_CONSTRUCT)) {
         //User Define Function/obj access expr filter do not push down to storage
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push UDF/obj access filter store non-pushdown filter failed", K(ret), K(i));
