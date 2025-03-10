@@ -2120,6 +2120,9 @@ DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "", common::ObTT
     "ttl background task working time duration"
     "begin_time or end_time in Range, e.g., [23:00:00, 24:00:00]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(vector_index_optimize_duty_time, OB_TENANT_PARAMETER, "", common::ObVecIndexOptDutyTimeChecker,
+    "A runtime range bounded by start time and end time for vector index background task, e.g., [23:00:00, 24:00:00]",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]",
     "the time to recycle ttl history. Range: [1d, 180d]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

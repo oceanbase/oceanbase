@@ -616,6 +616,11 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
   return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
+bool ObVecIndexOptDutyTimeChecker::check(const ObConfigItem& t) const
+{
+  return OB_SUCCESS;// TODO@xiajin: completed in 435bp2
+}
+
 bool ObMySQLVersionLengthChecker::check(const ObConfigItem& t) const
 {
   return STRLEN(t.str()) < 16; // length of MySQL version is less then 16

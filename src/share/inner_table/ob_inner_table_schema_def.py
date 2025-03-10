@@ -7948,6 +7948,8 @@ def_table_schema(
 # 542: __sslog_table
 # 543: __all_license
 # 544: __all_pl_recompile_objinfo
+# 545: __all_vector_index_task
+# 546: __all_vector_index_task_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15869,6 +15871,8 @@ def_table_schema(
 
 # 12522: __all_virtual_tenant_flashback_log_scn
 # 12523: __all_virtual_pl_recompile_objinfo
+# 12524: __all_virtual_vector_index_task
+# 12525: __all_virtual_vector_index_task_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -40900,6 +40904,11 @@ def_table_schema(
 # 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
 # 21639: DBA_OB_LICENSE
+# 21640: DBA_OB_VECTOR_INDEX_TASKS
+# 21641: CDB_OB_VECTOR_INDEX_TASKS
+# 21642: DBA_OB_VECTOR_INDEX_TASK_HISTORY
+# 21643: CDB_OB_VECTOR_INDEX_TASK_HISTORY
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

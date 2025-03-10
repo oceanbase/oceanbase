@@ -659,6 +659,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObVecIndexOptDutyTimeChecker : public ObConfigChecker {
+public:
+  ObVecIndexOptDutyTimeChecker()
+  {}
+  virtual ~ObVecIndexOptDutyTimeChecker(){};
+  bool check(const ObConfigItem& t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObVecIndexOptDutyTimeChecker);
+};
+
 class ObMySQLVersionLengthChecker : public ObConfigChecker {
 public:
   ObMySQLVersionLengthChecker()
