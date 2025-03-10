@@ -53,22 +53,16 @@ int ObTableBatchExecuteP::deserialize()
 int ObTableBatchExecuteP::init_batch_ctx()
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(batch_ctx_.tablet_ids_.push_back(arg_.tablet_id_))) {
-    LOG_WARN("fail to push back tablet id", K(ret));
-  } else {
-    batch_ctx_.trans_param_ = &trans_param_;
-    batch_ctx_.is_atomic_ = arg_.batch_operation_as_atomic_;
-    batch_ctx_.is_readonly_ = arg_.batch_operation_.is_readonly();
-    batch_ctx_.is_same_type_ = arg_.batch_operation_.is_same_type();
-    batch_ctx_.is_same_properties_names_ = arg_.batch_operation_.is_same_properties_names();
-    batch_ctx_.use_put_ = arg_.use_put();
-    batch_ctx_.returning_affected_entity_ = arg_.returning_affected_entity();
-    batch_ctx_.returning_rowkey_ = arg_.returning_rowkey();
-    batch_ctx_.consistency_level_ = arg_.consistency_level_;
-    batch_ctx_.credential_ = &credential_;
-  }
-
+  batch_ctx_.trans_param_ = &trans_param_;
+  batch_ctx_.is_atomic_ = arg_.batch_operation_as_atomic_;
+  batch_ctx_.is_readonly_ = arg_.batch_operation_.is_readonly();
+  batch_ctx_.is_same_type_ = arg_.batch_operation_.is_same_type();
+  batch_ctx_.is_same_properties_names_ = arg_.batch_operation_.is_same_properties_names();
+  batch_ctx_.use_put_ = arg_.use_put();
+  batch_ctx_.returning_affected_entity_ = arg_.returning_affected_entity();
+  batch_ctx_.returning_rowkey_ = arg_.returning_rowkey();
+  batch_ctx_.consistency_level_ = arg_.consistency_level_;
+  batch_ctx_.credential_ = &credential_;
   return ret;
 }
 
@@ -224,6 +218,8 @@ int ObTableBatchExecuteP::try_process()
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(init_single_op_tb_ctx(batch_ctx_.tb_ctx_, ops.at(0)))) {
     LOG_WARN("fail to init table ctx", K(ret));
+  } else if (OB_FAIL(batch_ctx_.tablet_ids_.push_back(batch_ctx_.tb_ctx_.get_tablet_id()))) {
+    LOG_WARN("fail to push back tablet id", K(ret));
   } else if (OB_FAIL(start_trans())) {
     LOG_WARN("fail to start trans", K(ret));
   } else if (OB_FAIL(batch_ctx_.tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
