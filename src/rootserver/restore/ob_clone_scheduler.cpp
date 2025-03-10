@@ -354,6 +354,7 @@ int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
 }
 
 ERRSIM_POINT_DEF(ERRSIM_CLONE_RESOURCE_POOL_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_CLONE_RESOURCE_POOL_DO_NOTHING_ERROR);
 int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -366,6 +367,9 @@ int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
   if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_ERROR)) {
     ret = ERRSIM_CLONE_RESOURCE_POOL_ERROR;
     LOG_WARN("mock clone resource pool failed", KR(ret), K(job));
+  } else if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_DO_NOTHING_ERROR)) {
+    // do nothing
+    LOG_INFO("errsim here, do nothing, let clone job hang");
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));

@@ -502,6 +502,7 @@ int DisasterRecoveryUtils::lock_service_epoch(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLEAN_TASK_FROM_DRTASK_TABLE_ERROR);
 int DisasterRecoveryUtils::record_history_and_clean_task(
     ObDRTask &task,
     const int ret_code,
@@ -515,7 +516,11 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
   ObLSReplicaTaskTableOperator task_table_operator;
   const uint64_t task_tenant_id = task.get_tenant_id();
   const uint64_t sql_tenant_id = gen_meta_tenant_id(task_tenant_id);
-  if (OB_UNLIKELY(!task.is_valid())) {
+  if (OB_UNLIKELY(ERRSIM_CLEAN_TASK_FROM_DRTASK_TABLE_ERROR)) {
+    // errsim here, do nothing
+    ret = ERRSIM_CLEAN_TASK_FROM_DRTASK_TABLE_ERROR;
+    LOG_INFO("errsim here, do not clean task from task table", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
