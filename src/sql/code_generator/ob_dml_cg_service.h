@@ -407,7 +407,8 @@ private:
                                    uint64_t domain_tid,
                                    ObDASAttachSpec &attach_spec,
                                    ObDASScanCtDef *&rowkey_domain_scan_ctdef);
-  int generate_rowkey_domain_access_expr(const common::ObIArray<ObColumnRefRawExpr *> &columns,
+  int generate_rowkey_domain_access_expr(ObLogInsert &op,
+                                         const common::ObIArray<ObColumnRefRawExpr *> &columns,
                                          const ObTableSchema &rowkey_domain,
                                          ObDASScanCtDef *ctdef);
   int check_need_domain_id_merge_iter(ObLogicalOperator &op,
