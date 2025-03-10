@@ -76,6 +76,8 @@ const char *ObPrivMgr::priv_names_[] = {
     "DECRYPT",                    // index 47
     "PROXY",                      // index 48
     "EVENT",                      // index 49
+    "CREATE CATALOG",             // index 50
+    "USE CATALOG",                // index 51
 };
 
 ObPrivMgr::ObPrivMgr()

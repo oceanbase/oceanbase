@@ -5482,6 +5482,7 @@ int ObGrantArg::assign(const ObGrantArg &other)
   is_inner_ = other.is_inner_;
   grantor_ = other.grantor_;
   grantor_host_ = other.grantor_host_;
+  catalog_ = other.catalog_;
 
   if (OB_FAIL(ObDDLArg::assign(other))) {
     SHARE_LOG(WARN, "fail to assign ddl arg", K(ret));
@@ -5538,7 +5539,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               sel_col_ids_,
               column_names_priv_,
               grantor_,
-              grantor_host_);
+              grantor_host_,
+              catalog_);
 return ret;
 }
 
@@ -5571,7 +5573,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               sel_col_ids_,
               column_names_priv_,
               grantor_,
-              grantor_host_);
+              grantor_host_,
+              catalog_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5614,7 +5617,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               sel_col_ids_,
               column_names_priv_,
               grantor_,
-              grantor_host_);
+              grantor_host_,
+              catalog_);
   return len;
 }
 

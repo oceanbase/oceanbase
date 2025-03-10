@@ -908,7 +908,6 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_UNION = 1780,
   T_FUNC_SYS_ARRAY_REPLACE = 1781,
   T_FUNC_SYS_ARRAY_POPFRONT = 1782,
-  ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
   T_FUN_SYS_GENERATOR = 1802,
@@ -948,6 +947,9 @@ typedef enum ObItemType
   T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS = 1913,
   T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR = 1914,
   T_FUN_SYS_CURRENT_CATALOG = 1915,
+  T_FUN_SYS_CHECK_CATALOG_ACCESS = 1916,
+
+  ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
   T_FUN_SYS_INNER_ROW_CMP_VALUE = 2011,
@@ -2780,6 +2782,8 @@ typedef enum ObItemType
   T_INDEX_ALTER_STORAGE_CACHE_POLICY = 4819,
   T_ALTER_PARTITION_STORAGE_CACHE_POLICY = 4820,
   T_ALTER_SUBPARTITION_STORAGE_CACHE_POLICY = 4821,
+  // external catalog
+  T_SHOW_CREATE_CATALOG = 4822,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

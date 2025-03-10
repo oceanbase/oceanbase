@@ -1966,6 +1966,9 @@ constexpr int OB_PLUGIN_ERROR = -11078;
 constexpr int OB_CATALOG_EXIST = -11079;
 constexpr int OB_CATALOG_NOT_EXIST = -11080;
 constexpr int OB_SKIP_PARSE_HEADER_CONFLICT = -11081;
+constexpr int OB_CATALOG_DDL_ON_INTERNAL = -11082;
+constexpr int OB_ERR_NO_CATALOG_PRIVILEGE = -11083;
+constexpr int OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS = -11084;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4375,6 +4378,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CATALOG_EXIST__USER_ERROR_MSG "Can't create catalog '%.*s'; catalog exists"
 #define OB_CATALOG_NOT_EXIST__USER_ERROR_MSG "Catalog '%.*s' doesn\'t exist"
 #define OB_SKIP_PARSE_HEADER_CONFLICT__USER_ERROR_MSG "skip_header and parse_header cannot be used at the same time"
+#define OB_CATALOG_DDL_ON_INTERNAL__USER_ERROR_MSG "DDL operations on the internal catalog are not allowed"
+#define OB_ERR_NO_CATALOG_PRIVILEGE__USER_ERROR_MSG "Command denied to user '%.*s'@'%.*s' for catalog '%.*s'"
+#define OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS__USER_ERROR_MSG "Privilege not allowed for catalogs"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9182,6 +9188,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CATALOG_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11080, Catalog '%.*s' doesn\'t exist"
 #define OB_SKIP_PARSE_HEADER_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11081, skip_header and parse_header cannot be used at the same time"
 #define OB_SKIP_PARSE_HEADER_CONFLICT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11081, skip_header and parse_header cannot be used at the same time"
+#define OB_CATALOG_DDL_ON_INTERNAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11082, DDL operations on the internal catalog are not allowed"
+#define OB_CATALOG_DDL_ON_INTERNAL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11082, DDL operations on the internal catalog are not allowed"
+#define OB_ERR_NO_CATALOG_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11083, Command denied to user '%.*s'@'%.*s' for catalog '%.*s'"
+#define OB_ERR_NO_CATALOG_PRIVILEGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11083, Command denied to user '%.*s'@'%.*s' for catalog '%.*s'"
+#define OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11084, Privilege not allowed for catalogs"
+#define OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11084, Privilege not allowed for catalogs"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9201,7 +9213,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2405];
+extern int g_all_ob_errnos[2408];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

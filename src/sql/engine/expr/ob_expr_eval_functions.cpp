@@ -1376,6 +1376,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbAndCardinalityAggregate::eval_rb_and_cardinality_aggregate, /* 838 */
   NULL, // ObExprRbToArray::eval_rb_to_array, /* 839 */
   NULL, // ObExprRbContains::eval_rb_contains, /* 840 */
+  NULL, // ObExprCurrentCatalog::eval_current_catalog,                 /* 841 */
+  NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
 
 };
 

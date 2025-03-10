@@ -353,6 +353,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_ALTER_CATALOG, = 2083)                              \
   ACT(OB_DDL_DROP_CATALOG, = 2084)                               \
   ACT(OB_DDL_CATALOG_OPERATION_END, = 2090)                      \
+  ACT(OB_DDL_CATALOG_PRIV_OPERATION_BEGIN, = 2091)               \
+  ACT(OB_DDL_GRANT_REVOKE_CATALOG, = 2092)                       \
+  ACT(OB_DDL_DEL_CATALOG_PRIV, = 2093)                           \
+  ACT(OB_DDL_CATALOG_PRIV_OPERATION_END, = 2100)                 \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -457,6 +461,7 @@ public:
     common::ObString context_name_;
     common::ObString mock_fk_parent_table_name_;
     common::ObString routine_name_;
+    common::ObString catalog_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;

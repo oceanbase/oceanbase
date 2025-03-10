@@ -15873,6 +15873,9 @@ def_table_schema(
 # 12523: __all_virtual_pl_recompile_objinfo
 # 12524: __all_virtual_vector_index_task
 # 12525: __all_virtual_vector_index_task_history
+# 12526: __tenant_virtual_show_create_catalog
+# 12527: __tenant_virtual_show_catalog_databases
+# 12528: __tenant_virtual_show_catalog_tables
 
 # 12524: __all_virtual_storage_cache_task
 # 12525: __all_virtual_tablet_local_cache
@@ -16417,6 +16420,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 # 15502: __all_virtual_tenant_flashback_log_scn
 # 15503: __all_virtual_pl_recompile_objinfo
+# 15504: __tenant_virtual_show_create_catalog
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
