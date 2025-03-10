@@ -560,7 +560,6 @@ ob_set_subtarget(ob_storage lock_wait_mgr
 
 ob_set_subtarget(ob_storage memtable
   memtable/deadlock_adapter/ob_local_execution_deadlock_callback.cpp
-  memtable/hash_holder/ob_row_hash_holder_info.cpp
   memtable/hash_holder/ob_row_hash_holder_map.cpp
   memtable/ob_memtable.cpp
   memtable/ob_memtable_key.cpp
@@ -584,6 +583,7 @@ ob_set_subtarget(ob_storage memtable_mvcc
   memtable/mvcc/ob_mvcc_row.cpp
   memtable/mvcc/ob_mvcc_trans_ctx.cpp
   memtable/mvcc/ob_tx_callback_list.cpp
+  memtable/mvcc/ob_tx_callback_hash_holder_helper.cpp
   memtable/mvcc/ob_query_engine.cpp
   memtable/mvcc/ob_row_data.cpp
   memtable/mvcc/ob_mvcc_define.cpp

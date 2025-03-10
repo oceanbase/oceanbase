@@ -14,6 +14,7 @@
 #define OCEANBASE_MEMTABLE_MVCC_OB_MVCC_
 
 #include "storage/blocksstable/ob_datum_row.h"
+#include "ob_tx_callback_hash_holder_helper.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,7 @@ struct TxChecksum : public common::ObBatchChecksum {
 };
 class ObITransCallback
 {
+  friend class ObTxCallbackHashHolderLinker;
   friend class ObTransCallbackList;
   friend class ObITransCallbackIterator;
 public:
@@ -45,7 +47,8 @@ public:
     scn_(share::SCN::max_scn()),
     epoch_(0),
     prev_(NULL),
-    next_(NULL) {}
+    next_(NULL),
+    hash_holder_linker_() {}
   virtual ~ObITransCallback() {}
 
   virtual bool is_table_lock_callback() const { return false; }
@@ -89,13 +92,14 @@ public:
   }
   virtual blocksstable::ObDmlFlag get_dml_flag() const { return blocksstable::ObDmlFlag::DF_NOT_EXIST; }
   virtual void set_not_calc_checksum(const bool not_calc_checksum) { UNUSED(not_calc_checksum); }
+  virtual int get_holder_info(RowHolderInfo &holder_info) const;
+  ObTxCallbackHashHolderLinker &get_hash_holder_linker() { return hash_holder_linker_; }
   ObITransCallback *get_next() const { return ATOMIC_LOAD(&next_); }
   ObITransCallback *get_prev() const { return ATOMIC_LOAD(&prev_); }
   void set_next(ObITransCallback *node) { ATOMIC_STORE(&next_, node); }
   void set_prev(ObITransCallback *node) { ATOMIC_STORE(&prev_, node); }
   void append(ObITransCallback *node);
   void append(ObITransCallback *head, ObITransCallback *tail);
-
 public:
   // trans_commit is called when txn commit. And you need to let the data know
   // it has been durable. For example, we fulfill the version and state into tnode for
@@ -170,6 +174,7 @@ public:
 private:
   ObITransCallback *prev_;
   ObITransCallback *next_;
+  ObTxCallbackHashHolderLinker hash_holder_linker_;
 };
 
 }; // namespace memtable

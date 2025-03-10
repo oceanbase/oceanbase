@@ -48,12 +48,6 @@ class ObMemtableKey;
 class ObMvccRowCallback;
 class ObMvccTransNode;
 
-class DummyHashHolderOp {
-public:
-  DummyHashHolderOp() = default;
-  void operator()() {}
-};
-
 #define ATOMIC_ADD_TAG(tag)                           \
   while (true) {                                      \
     const uint8_t old = ATOMIC_LOAD(&(flag_));        \
@@ -186,47 +180,27 @@ public:
 
   // trans_commit/abort commit/abort the tx node
   // fill in the version and set committed flag
-  template <typename Fn>
   void trans_commit(const share::SCN commit_version,
-                    const share::SCN tx_end_scn,
-                    Fn &change_hash_holder_op) {
-    if (!flag_.is_delayed_cleanout() &&
-        !flag_.is_elr()) {
-      change_hash_holder_op();
-    }
+                    const share::SCN tx_end_scn) {
     fill_trans_version(commit_version);
     flag_.set_committed();
     set_tx_end_scn(tx_end_scn);
   }
   // set aborted flag with tx_end_log_ts
-  template <typename Fn>
-  void trans_abort(const share::SCN tx_end_scn,
-                   Fn &change_hash_holder_op) {
-    if (!flag_.is_delayed_cleanout() &&
-        !flag_.is_elr()) {
-      change_hash_holder_op();
-    }
+  void trans_abort(const share::SCN tx_end_scn) {
     flag_.set_aborted();
     set_tx_end_scn(tx_end_scn);
   }
   // set aborted flag without tx_end_log_ts
   // and there must be callbacks existed
-  template <typename Fn>
-  void trans_rollback(Fn &change_hash_holder_op) {
-    change_hash_holder_op();
+  void trans_rollback() {
     flag_.set_aborted();
   }
-  template <typename Fn>
-  void trans_elr(Fn &change_hash_holder_op) {
-    if (!flag_.is_delayed_cleanout()) {
-      change_hash_holder_op();
-    }
+  void trans_elr() {
     flag_.set_elr();
   }
   void clear_elr() { flag_.clear_elr(); }
-  template <typename Fn>
-  void set_delayed_cleanout(Fn &change_hash_holder_op) {
-    change_hash_holder_op();
+  void set_delayed_cleanout() {
     flag_.set_delayed_cleanout();
   }
   TransNodeFlag get_flag() const { return flag_; }

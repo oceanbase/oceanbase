@@ -14,7 +14,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "storage/memtable/hash_holder/ob_row_hash_holder_info.h"
+#include "storage/memtable/hash_holder/ob_row_holder_info.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/memtable/hash_holder/ob_row_hash_holder_map.h"
 

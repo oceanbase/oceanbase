@@ -273,8 +273,7 @@ public:
          iter != (ObMvccRowCallback *)(cb_list.get_guard());
          iter = (ObMvccRowCallback *)(iter->get_next())) {
       if (iter->seq_no_ > to) {
-        DummyHashHolderOp op;
-        iter->tnode_->set_delayed_cleanout(op);
+        iter->tnode_->set_delayed_cleanout();
       }
     }
   }
@@ -287,8 +286,7 @@ public:
     for (ObMvccRowCallback *iter = (ObMvccRowCallback *)(cb_list.get_guard()->get_next());
          iter != (ObMvccRowCallback *)(cb_list.get_guard()); iter = next) {
       next = (ObMvccRowCallback *)(iter->get_next());
-      DummyHashHolderOp op;
-      iter->tnode_->set_delayed_cleanout(op);
+      iter->tnode_->set_delayed_cleanout();
       iter->remove();
     }
   }
@@ -326,8 +324,7 @@ public:
       for (ObMvccRowCallback *iter = (ObMvccRowCallback *)(cb_list.get_guard()->get_next());
            iter != (ObMvccRowCallback *)(cb_list.get_guard());
            iter = (ObMvccRowCallback *)(iter->get_next())) {
-        DummyHashHolderOp op;
-        iter->tnode_->set_delayed_cleanout(op);
+        iter->tnode_->set_delayed_cleanout();
       }
     }
   }
@@ -349,8 +346,7 @@ public:
       for (ObMvccRowCallback *iter = (ObMvccRowCallback *)(cb_list.get_guard()->get_next());
            iter != (ObMvccRowCallback *)(cb_list.get_guard());
            iter = (ObMvccRowCallback *)(iter->get_next())) {
-        DummyHashHolderOp op;
-        iter->tnode_->set_delayed_cleanout(op);
+        iter->tnode_->set_delayed_cleanout();
       }
     }
   }

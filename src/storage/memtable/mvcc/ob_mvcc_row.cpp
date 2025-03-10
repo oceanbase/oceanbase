@@ -571,15 +571,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
         TRANS_LOG(ERROR, "unexected transaction version", K(*iter), K(elr_commit_version));
       } else {
         iter->trans_version_ = elr_commit_version;
-        if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb)) {
-          CorrectHashHolderOp op(LockHashHelper::hash_rowkey(tablet_id, *key),
-                                  *iter,
-                                  MTL(lockwaitmgr::ObLockWaitMgr*)->get_row_holder());
-          iter->trans_elr(op);
-        } else {
-          DummyHashHolderOp op;
-          iter->trans_elr(op);
-        }
+        iter->trans_elr();
         iter = iter->prev_;
       }
     }
@@ -887,8 +879,7 @@ void ObMvccRow::mvcc_undo()
   if (OB_ISNULL(iter)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mvcc undo with no mvcc data");
   } else {
-    DummyHashHolderOp op;
-    iter->trans_rollback(op);
+    iter->trans_rollback();
     ATOMIC_STORE(&(list_head_), iter->prev_);
     if (NULL != iter->prev_) {
       ATOMIC_STORE(&(iter->prev_->next_), NULL);

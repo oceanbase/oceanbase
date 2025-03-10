@@ -101,11 +101,10 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
       } else {
         if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
           ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
-          MTL(ObLockWaitMgr*)->insert_or_replace_hash_holder(
+          MTL(ObLockWaitMgr*)->insert_hash_holder(
             LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
-            node->tx_id_,
-            node->seq_no_,
-            share::SCN());
+            cb->get_hash_holder_linker(),
+            false);
         }
       }
     }
@@ -174,6 +173,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
           tail->set_next(cb);
           tail = cb;
         }
+        res.tx_callback_ = cb;
         length++;
       }
     }
@@ -206,11 +206,10 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
         if (res.has_insert()) {
           const ObMemtableKey *stored_key = &res.mtk_;
           ObMvccTransNode *node = res.tx_node_;
-          MTL(ObLockWaitMgr*)->insert_or_replace_hash_holder(
+          MTL(ObLockWaitMgr*)->insert_hash_holder(
             LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
-            node->tx_id_,
-            node->seq_no_,
-            share::SCN());
+            res.tx_callback_->get_hash_holder_linker(),
+            false);
         }
       }
     }
@@ -268,11 +267,10 @@ int ObIMvccCtx::register_row_replay_cb(
       TRANS_LOG(WARN, "append callback failed", K(ret));
     } else {
       if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && OB_NOT_NULL(MTL(ObLockWaitMgr*))) {
-        MTL(ObLockWaitMgr*)->insert_or_replace_hash_holder(
+        MTL(ObLockWaitMgr*)->insert_hash_holder(
           LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
-          node->tx_id_,
-          node->seq_no_,
-          node->scn_);
+          cb->get_hash_holder_linker(),
+          false);
       }
     }
   }

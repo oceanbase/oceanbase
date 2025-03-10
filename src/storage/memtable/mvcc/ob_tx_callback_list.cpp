@@ -11,6 +11,7 @@
  */
 
 #include "storage/memtable/mvcc/ob_tx_callback_list.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
 #include "share/config/ob_server_config.h"
 #include "storage/memtable/ob_memtable_key.h"
@@ -343,6 +344,12 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
       if (OB_FAIL(functor(iter))) {
         // don't print log, print it in functor
       } else if (OB_UNLIKELY(functor.need_remove_callback())) {
+        // if callback removed, means hash holder no need be maintained
+        if (iter->get_hash_holder_linker().is_registerd()) {
+          MTL(lockwaitmgr::ObLockWaitMgr*)->erase_hash_holder_record(iter->get_hash_holder_linker().get_hash_key(),
+                                                                     iter->get_hash_holder_linker(),
+                                                                     is_reverse);
+        }
         // sanity check before remove:
         // should not remove parallel replayed callback before serial replay finished
         const share::SCN iter_scn = iter->get_scn();

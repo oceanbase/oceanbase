@@ -37,10 +37,6 @@ using namespace lockwaitmgr;
 namespace memtable
 {
 
-void CorrectHashHolderOp::operator()() {
-  row_holder_.erase_hash_holder_record(hash_, node_.tx_id_, node_.seq_no_);
-}
-
 void RedoDataNode::set(const ObMemtableKey *key,
                        const ObRowData &old_row,
                        const ObRowData &new_row,
@@ -190,6 +186,14 @@ int ObITransCallback::remove()
     prev->set_next(next);
     next->set_prev(prev);
   }
+  return ret;
+}
+
+int ObITransCallback::get_holder_info(RowHolderInfo &holder_info) const
+{
+  int ret = OB_ERR_UNEXPECTED;
+  DETECT_LOG(WARN, "this callback should not be called", KP(this), K(lbt()));
+  ob_abort();
   return ret;
 }
 
@@ -2045,45 +2049,6 @@ int ObMvccRowCallback::calc_checksum(const SCN checksum_scn,
   return OB_SUCCESS;
 }
 
-struct BeforeSetDelayCleanOutOp {
-  BeforeSetDelayCleanOutOp(ObTabletID tablet_id,
-                           const memtable::ObMemtableKey &memtable_key,
-                           memtable::ObMvccTransNode &trans_node,
-                           ObPartTransCtx *trans_ctx,
-                           bool is_non_unique_local_index_cb)
-  : tablet_id_(tablet_id),
-  memtable_key_(memtable_key),
-  trans_node_(trans_node),
-  trans_ctx_(trans_ctx),
-  is_non_unique_local_index_cb_(is_non_unique_local_index_cb) {}
-  void operator()() {
-    ObAddr tx_scheduler;
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(trans_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "trans ctx is null", KR(ret), KPC(this));
-    } else {
-      tx_scheduler = trans_ctx_->get_scheduler();
-      (void) MTL(ObLockWaitMgr*)->transform_row_lock_to_tx_lock(tablet_id_,
-                                                                memtable_key_,
-                                                                trans_node_.tx_id_,
-                                                                tx_scheduler);
-      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb_)) {
-        CorrectHashHolderOp correct_hash_hodler_op(LockHashHelper::hash_rowkey(tablet_id_, memtable_key_),
-                                                   trans_node_,
-                                                   MTL(ObLockWaitMgr*)->get_row_holder());
-        correct_hash_hodler_op();
-      }
-    }
-  }
-  TO_STRING_KV(K_(tablet_id), K_(memtable_key), K_(trans_node), KPC_(trans_ctx));
-private:
-  ObTabletID tablet_id_;
-  const memtable::ObMemtableKey &memtable_key_;
-  memtable::ObMvccTransNode &trans_node_;
-  ObPartTransCtx *trans_ctx_;
-  bool is_non_unique_local_index_cb_;
-};
 int ObMvccRowCallback::checkpoint_callback()
 {
   int ret = OB_SUCCESS;
@@ -2094,12 +2059,12 @@ int ObMvccRowCallback::checkpoint_callback()
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "checkpoint never called on submitted callback", KPC(this));
   } else if (OB_NOT_NULL(tnode_)) {
-    BeforeSetDelayCleanOutOp op(get_tablet_id(),
-                                *get_key(),
-                                *get_trans_node(),
-                                get_trans_ctx(),
-                                is_non_unique_local_index_cb_);
-    tnode_->set_delayed_cleanout(op);
+    ObAddr tx_scheduler = get_trans_ctx()->get_scheduler();
+    (void) MTL(ObLockWaitMgr*)->transform_row_lock_to_tx_lock(get_tablet_id(),
+                                                              *get_key(),
+                                                              tnode_->tx_id_,
+                                                              tx_scheduler);
+    tnode_->set_delayed_cleanout();
     (void)value_.update_dml_flag_(get_dml_flag(), tnode_->get_scn());
   }
 
@@ -2114,6 +2079,13 @@ void ObMvccRowCallback::after_append_fail(const bool is_replay)
   }
 }
 
+int ObMvccRowCallback::get_holder_info(RowHolderInfo &holder_info) const
+{
+  holder_info.scn_ = get_scn();
+  holder_info.seq_ = get_seq_no();
+  return get_trans_id(holder_info.tx_id_);
+}
+
 static blocksstable::ObDmlFlag get_dml_flag(ObMvccTransNode *node)
 {
   return NULL == node ? blocksstable::ObDmlFlag::DF_NOT_EXIST : reinterpret_cast<ObMemtableDataHeader *>(node->buf_)->dml_flag_;
@@ -2125,15 +2097,7 @@ blocksstable::ObDmlFlag ObMvccRowCallback::get_dml_flag() const
 }
 
 void ObMvccRowCallback::commit_trans_node_() {
-  if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb_)) {
-    CorrectHashHolderOp op(LockHashHelper::hash_rowkey(get_tablet_id(), key_),
-                           *tnode_,
-                           MTL(ObLockWaitMgr*)->get_row_holder());
-    tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn(), op);
-  } else {
-    DummyHashHolderOp op;
-    tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn(), op);
-  }
+  tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn());
 }
 int ObMvccRowCallback::trans_commit()
 {
@@ -2274,15 +2238,7 @@ int ObMvccRowCallback::trans_abort()
 
   if (NULL != tnode_) {
     if (!(tnode_->is_committed() || tnode_->is_aborted())) {
-      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb_)) {
-        CorrectHashHolderOp op(LockHashHelper::hash_rowkey(get_tablet_id(), key_),
-                              *tnode_,
-                              MTL(ObLockWaitMgr*)->get_row_holder());
-        tnode_->trans_abort(ctx_.get_tx_end_scn(), op);
-      } else {
-        DummyHashHolderOp op;
-        tnode_->trans_abort(ctx_.get_tx_end_scn(), op);
-      }
+      tnode_->trans_abort(ctx_.get_tx_end_scn());
       wakeup_row_waiter_if_need_();
       unlink_trans_node();
     } else if (tnode_->is_committed()) {
@@ -2297,15 +2253,7 @@ int ObMvccRowCallback::rollback_callback()
   ObRowLatchGuard guard(value_.latch_);
 
   if (NULL != tnode_) {
-    if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb_)) {
-      CorrectHashHolderOp op(LockHashHelper::hash_rowkey(get_tablet_id(), key_),
-                             *tnode_,
-                             MTL(ObLockWaitMgr*)->get_row_holder());
-      tnode_->trans_rollback(op);
-    } else {
-      DummyHashHolderOp op;
-      tnode_->trans_rollback(op);
-    }
+    tnode_->trans_rollback();
     wakeup_row_waiter_if_need_();
     unlink_trans_node();
   }

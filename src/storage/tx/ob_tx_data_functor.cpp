@@ -566,7 +566,6 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
   const SCN commit_version = tx_data.commit_version_;
   const SCN end_scn = tx_data.end_scn_;
   const bool is_rollback = tx_data.is_rollback_;
-  memtable::DummyHashHolderOp dummy_hash_holder_op;
 
   if (ObTxData::RUNNING == state && !is_rollback) {
     // Case 1: data is during execution, so we donot need write back
@@ -582,7 +581,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
         if (OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
         } else {
-          (void)tnode_.trans_abort(end_scn, dummy_hash_holder_op);
+          (void)tnode_.trans_abort(end_scn);
         }
       } else if (ObTxData::RUNNING == state) {
       } else if (ObTxData::ELR_COMMIT == state) {
@@ -592,7 +591,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
         // Case 4: data is committed, so we should write back the commit state
         if (OB_FAIL(value_.trans_commit(commit_version, tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
-        } else if (FALSE_IT(tnode_.trans_commit(commit_version, end_scn, dummy_hash_holder_op))) {
+        } else if (FALSE_IT(tnode_.trans_commit(commit_version, end_scn))) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == tnode_.get_dml_flag()
                    && OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "unlink lock node failed", K(ret), K(value_), K(tnode_));
@@ -602,7 +601,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
         if (OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
         } else {
-          (void)tnode_.trans_abort(end_scn, dummy_hash_holder_op);
+          (void)tnode_.trans_abort(end_scn);
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

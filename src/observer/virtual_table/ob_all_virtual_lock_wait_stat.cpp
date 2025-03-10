@@ -11,7 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_lock_wait_stat.h"
-
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/ob_server_utils.h"
 

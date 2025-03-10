@@ -50,23 +50,6 @@ class RedoLogEpoch;
 class ObCallbackListLogGuard;
 class ObTxCallbackListStat;
 class ObITransCallback;
-
-class CorrectHashHolderOp {
-public:
-  CorrectHashHolderOp() = delete;
-  CorrectHashHolderOp(const uint64_t hash,
-                      const ObMvccTransNode &node,
-                      memtable::RowHolderMapper &row_holder)
-  : hash_(hash),
-  node_(node),
-  row_holder_(row_holder) {}
-  void operator()();
-private:
-  const uint64_t hash_;
-  const ObMvccTransNode &node_;
-  memtable::RowHolderMapper &row_holder_;
-};
-
 struct RedoDataNode
 {
   void set(const ObMemtableKey *key,
@@ -534,6 +517,7 @@ public:
   virtual int before_append(const bool is_replay) override;
   virtual int log_submitted() override;
   virtual void after_append_fail(const bool is_replay) override;
+  virtual int get_holder_info(RowHolderInfo &holder_info) const override final;
 
   int64_t get_data_size()
   {

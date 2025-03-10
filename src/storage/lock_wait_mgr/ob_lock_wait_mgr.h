@@ -203,7 +203,7 @@ public:
 
   // for deadlock
   RowHolderMapper &get_row_holder() { return row_holder_mapper_; }
-  DELEGATE_WITH_RET(row_holder_mapper_, insert_or_replace_hash_holder, void);
+  DELEGATE_WITH_RET(row_holder_mapper_, insert_hash_holder, void);
   DELEGATE_WITH_RET(row_holder_mapper_, get_hash_holder, int);
   DELEGATE_WITH_RET(row_holder_mapper_, erase_hash_holder_record, void);
   int notify_deadlocked_session(const uint32_t sess_id);
