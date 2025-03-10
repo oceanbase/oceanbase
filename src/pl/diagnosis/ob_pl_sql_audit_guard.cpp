@@ -30,7 +30,8 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     int &ret,
     ObString ps_sql,
     observer::ObQueryRetryCtrl &retry_ctrl,
-    ObPLSPITraceIdGuard &traceid_guard)
+    ObPLSPITraceIdGuard &traceid_guard,
+    stmt::StmtType stmt_type)
   : exec_ctx_(exec_ctx),
     session_info_(session_info),
     spi_result_(spi_result),
@@ -39,6 +40,7 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     ps_sql_(ps_sql),
     retry_ctrl_(retry_ctrl),
     traceid_guard_(traceid_guard),
+    stmt_type_(stmt_type),
     sql_used_memory_size_(0),
     pmcb_(0, sql_used_memory_size_),
     memory_guard_(pmcb_)
@@ -83,6 +85,9 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   LOG_TRACE("Start PL/Sql Audit Record"/*, KPC(this)*/ );
 
   if (OB_NOT_NULL(spi_result_.get_result_set())) {
+    if (ObStmt::is_execute_stmt(stmt_type_)) {
+      ps_sql_ = session_info_.get_current_query_string();
+    }
     if (spi_result_.get_result_set()->is_inited()) {
       int64_t try_cnt = session_info_.get_raw_audit_record().try_cnt_;
       ObExecRecord record_bak = session_info_.get_raw_audit_record().exec_record_;

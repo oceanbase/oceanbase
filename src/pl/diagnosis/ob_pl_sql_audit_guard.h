@@ -99,7 +99,8 @@ public:
                     int &ret,
                     ObString ps_sql,
                     observer::ObQueryRetryCtrl &retry_ctrl,
-                    sql::ObPLSPITraceIdGuard &traceid_guard);
+                    sql::ObPLSPITraceIdGuard &traceid_guard,
+                    sql::stmt::StmtType stmt_type);
 
   ~ObPLSqlAuditGuard();
 
@@ -123,6 +124,7 @@ private:
   ObString ps_sql_;
   observer::ObQueryRetryCtrl &retry_ctrl_;
   sql::ObPLSPITraceIdGuard &traceid_guard_;
+  sql::stmt::StmtType stmt_type_;
   int64_t sql_used_memory_size_;
   observer::ObProcessMallocCallback pmcb_;
   lib::ObMallocCallbackGuard memory_guard_;
