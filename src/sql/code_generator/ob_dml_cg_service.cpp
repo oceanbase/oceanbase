@@ -4336,7 +4336,8 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
     LOG_WARN("failed to get rowkey domain schema", K(ret), K(rowkey_domain_tid));
   } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_TABLE_SCAN, cg_.phy_plan_->get_allocator(), scan_ctdef))) {
     LOG_WARN("alloc das ctdef failed", K(ret));
-  } else if (OB_FAIL(generate_rowkey_domain_access_expr(index_dml_info.column_exprs_,
+  } else if (OB_FAIL(generate_rowkey_domain_access_expr(op,
+                                                        index_dml_info.column_exprs_,
                                                         *rowkey_domain_schema,
                                                         scan_ctdef))) {
     LOG_WARN("fail to generate rowkey domain access expr", K(ret), K(index_dml_info));
@@ -4378,6 +4379,7 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
 }
 
 int ObDmlCgService::generate_rowkey_domain_access_expr(
+    ObLogInsert &op,
     const common::ObIArray<ObColumnRefRawExpr *> &columns,
     const ObTableSchema &rowkey_domain,
     ObDASScanCtDef *ctdef)
@@ -4385,7 +4387,11 @@ int ObDmlCgService::generate_rowkey_domain_access_expr(
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> access_exprs;
   ObArray<uint64_t> rowkey_domain_column_ids;
-  if (OB_ISNULL(ctdef) || OB_UNLIKELY(columns.count() <= 0)) {
+  const ObDMLStmt *stmt = op.get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (OB_ISNULL(ctdef) || OB_UNLIKELY(columns.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(ctdef), K(columns));
   } else if (OB_FAIL(rowkey_domain.get_column_ids(rowkey_domain_column_ids))) {
@@ -4395,14 +4401,32 @@ int ObDmlCgService::generate_rowkey_domain_access_expr(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
       ObColumnRefRawExpr *expr = columns.at(i);
+      uint64_t base_column_id = OB_INVALID_ID;
+      const TableItem *table_item = nullptr;
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), K(columns));
-      } else if (has_exist_in_array(rowkey_domain_column_ids, expr->get_column_id())) {
-        if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr *>(expr)))) {
-          LOG_WARN("failed to add param expr", K(ret));
-        } else if (OB_FAIL(ctdef->access_column_ids_.push_back(expr->get_column_id()))) {
-          LOG_WARN("fail to push back column id", K(ret));
+      } else if (OB_NOT_NULL(table_item = stmt->get_table_item_by_id(expr->get_table_id()))) {
+        if (table_item->is_generated_table()) {
+          // For situations such as updatable view, column_id from column expr is the offset of selected items
+          // we need to use column id on base table to find corresponding rowkey and domain_id columns.
+          const ObColumnRefRawExpr *column_expr = expr;
+          if (OB_FAIL(cg_.recursive_get_column_expr(column_expr, *table_item))) {
+            LOG_WARN("failed to get column expr", K(ret));
+          } else {
+            base_column_id = column_expr->get_column_id();
+          }
+        } else {
+          base_column_id = expr->get_column_id();
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (has_exist_in_array(rowkey_domain_column_ids, base_column_id)) {
+          if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr *>(expr)))) {
+            LOG_WARN("failed to add param expr", K(ret));
+          } else if (OB_FAIL(ctdef->access_column_ids_.push_back(base_column_id))) {
+            LOG_WARN("fail to push back column id", K(ret));
+          }
         }
       }
     }
