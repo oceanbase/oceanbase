@@ -26,6 +26,8 @@ enum class ObTableLoadBackupVersion
   INVALID = 0,
   V_1_4,
   V_3_X,
+  V_2_X_LOG,
+  V_2_X_PHY,
   MAX_VERSION
 };
 
