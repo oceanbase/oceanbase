@@ -28,23 +28,28 @@ public:
   ObSortFieldCollation(uint32_t field_idx,
       common::ObCollationType cs_type,
       bool is_ascending,
-      common::ObCmpNullPos null_pos)
+      common::ObCmpNullPos null_pos,
+      bool is_not_null = false)
     : field_idx_(field_idx),
     cs_type_(cs_type),
     is_ascending_(is_ascending),
-    null_pos_(null_pos)
+    null_pos_(null_pos),
+    is_not_null_(is_not_null)
   {}
   ObSortFieldCollation()
     : field_idx_(UINT32_MAX),
     cs_type_(common::CS_TYPE_INVALID),
     is_ascending_(true),
-    null_pos_(common::NULL_LAST)
+    null_pos_(common::NULL_LAST),
+    is_not_null_(false)
   {}
-  TO_STRING_KV(K_(field_idx), K_(cs_type), K_(is_ascending), K_(null_pos));
+  TO_STRING_KV(K_(field_idx), K_(cs_type), K_(is_ascending), K_(null_pos), K_(is_not_null));
   uint32_t field_idx_;
   common::ObCollationType cs_type_;
   bool is_ascending_;
   common::ObCmpNullPos null_pos_;
+  // if is_not_null_ is true, the sort key must not be null
+  bool is_not_null_;
 };
 
 typedef common::ObCmpFunc ObSortCmpFunc;

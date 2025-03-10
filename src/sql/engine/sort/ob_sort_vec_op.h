@@ -38,7 +38,7 @@ public:
                        K_(topk_offset_expr), K_(prefix_pos), K_(minimum_row_count),
                        K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
                        K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(has_addon),
-                       K_(part_cnt), K_(compress_type), K_(pd_topn_filter_info));
+                       K_(part_cnt), K_(compress_type), K_(pd_topn_filter_info), K_(enable_single_col_compare_opt));
 
 public:
   ObExpr *topn_expr_;
@@ -62,6 +62,8 @@ public:
   int64_t part_cnt_;
   // pushdown topn filter: pushdown the heap top data to table scan for filtering out data early.
   ObPushDownTopNFilterInfo pd_topn_filter_info_;
+  // opt for one sort key and not has addon expr
+  bool enable_single_col_compare_opt_;
 };
 
 class ObSortVecOp : public ObOperator
