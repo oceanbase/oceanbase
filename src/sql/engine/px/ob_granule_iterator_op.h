@@ -139,6 +139,8 @@ public:
   int64_t repart_pruning_tsc_idx_;
   // for runtime filter extract query range
   ObPxRFStaticInfo px_rf_info_;
+  bool hash_part_;
+  bool enable_adaptive_task_splitting_;
 };
 
 class ObGranuleIteratorOp : public ObOperator

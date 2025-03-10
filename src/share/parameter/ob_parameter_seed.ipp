@@ -2534,3 +2534,10 @@ DEF_BOOL(_enable_topn_runtime_filter, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_parallel_tenant_creation, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable parallel create meta and user tenants.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "True",
+         "Enable or disable px task rebalance.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h]",
+         "Control the trigger time of px task rebalance. Range: [1us, 1h]",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

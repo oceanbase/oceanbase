@@ -138,7 +138,9 @@ OB_SERIALIZE_MEMBER((ObGranuleIteratorSpec, ObOpSpec),
                     tablet_id_expr_,
                     pw_dml_tsc_ids_,
                     repart_pruning_tsc_idx_,
-                    px_rf_info_);
+                    px_rf_info_,
+                    hash_part_,
+                    enable_adaptive_task_splitting_);
 
 ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
 : ObOpSpec(alloc, type),
@@ -156,7 +158,9 @@ ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOpe
   hash_func_(),
   tablet_id_expr_(NULL),
   repart_pruning_tsc_idx_(OB_INVALID_ID),
-  px_rf_info_()
+  px_rf_info_(),
+  hash_part_(false),
+  enable_adaptive_task_splitting_(false)
 {}
 
 ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)

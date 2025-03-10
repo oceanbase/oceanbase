@@ -395,6 +395,7 @@ _enable_protocol_diagnose
 _enable_px_batch_rescan
 _enable_px_fast_reclaim
 _enable_px_ordered_coord
+_enable_px_task_rebalance
 _enable_range_extraction_for_not_in
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
@@ -522,6 +523,7 @@ _px_max_message_pool_pct
 _px_max_pipeline_depth
 _px_message_compression
 _px_object_sampling
+_px_task_rebalance_trigger_time
 _query_record_size_limit
 _rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency

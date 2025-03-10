@@ -463,7 +463,8 @@ public:
       uint64_t is_fts_ddl_                      : 1; // mark if ddl table is the fts index or fts doc word aux table.
       uint64_t is_fts_index_aux_                : 1; // mark if ddl table is the fts index aux table.
       uint64_t is_multivalue_ddl_               : 1;
-      uint64_t reserved_                        : 50;
+      uint64_t can_be_paused_                   : 1;
+      uint64_t reserved_                        : 49;
     };
   };
   int64_t tenant_id_col_idx_;
