@@ -105,6 +105,8 @@ enum ObDDLType
   DDL_TRUNCATE_SUB_PARTITION = 507,
   DDL_RENAME_PARTITION = 508,
   DDL_RENAME_SUB_PARTITION = 509,
+  DDL_ALTER_PARTITION_POLICY = 510,
+  DDL_ALTER_SUBPARTITION_POLICY = 511,
   ///< @note add new double table long running ddl type before this line  
   DDL_DOUBLE_TABLE_OFFLINE = 1000,
   DDL_MODIFY_COLUMN = 1001, // only modify columns

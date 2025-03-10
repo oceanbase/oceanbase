@@ -367,6 +367,7 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_batch_exec_dag.cpp
   compaction/ob_new_micro_info.cpp
   storage/ob_i_pre_warmer.cpp
+  storage/ob_storage_cache_common.cpp
   partition_table/ob_partition_location.cpp
   longops_mgr/ob_ddl_longops.cpp
   longops_mgr/ob_i_longops.cpp

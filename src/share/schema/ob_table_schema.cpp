@@ -195,6 +195,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       object_status_ = other.object_status_;
       is_force_view_ = other.is_force_view_;
       truncate_version_ = other.truncate_version_;
+      storage_cache_policy_type_ = other.storage_cache_policy_type_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -256,7 +257,8 @@ bool ObSimpleTableSchemaV2::operator ==(const ObSimpleTableSchemaV2 &other) cons
      link_schema_version_ == other.link_schema_version_ &&
      link_database_name_ == other.link_database_name_ &&
      object_status_ == other.object_status_ &&
-     truncate_version_ == other.truncate_version_) {
+     truncate_version_ == other.truncate_version_ &&
+     storage_cache_policy_type_ == other.storage_cache_policy_type_) {
      ret = true;
      if (true == ret) {
        if (simple_foreign_key_info_array_.count() == other.simple_foreign_key_info_array_.count()) {
@@ -333,6 +335,7 @@ void ObSimpleTableSchemaV2::reset()
   master_key_id_ = OB_INVALID_ID;
   truncate_version_ = OB_INVALID_VERSION;
   ObPartitionSchema::reset();
+  storage_cache_policy_type_ = ObStorageCachePolicyType::MAX_POLICY;
 }
 
 bool ObSimpleTableSchemaV2::has_tablet() const
@@ -620,6 +623,7 @@ int64_t ObSimpleTableSchemaV2::get_convert_size() const
   convert_size += link_database_name_.length() + 1;
   convert_size += transition_point_.get_deep_copy_size();
   convert_size += interval_range_.get_deep_copy_size();
+  convert_size += sizeof(storage_cache_policy_type_);
   return convert_size;
 }
 
@@ -969,7 +973,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(object_status),
     K_(is_force_view),
     K_(truncate_version),
-    K_(duplicate_read_consistency)
+    K_(duplicate_read_consistency),
+    K_(storage_cache_policy_type)
 );
   J_OBJ_END();
 
@@ -1640,7 +1645,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     enable_macro_block_bloom_filter_(false),
     local_session_vars_(allocator),
     index_params_(),
-    exec_env_()
+    exec_env_(),
+    storage_cache_policy_()
 {
   reset();
 }
@@ -1898,6 +1904,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.exec_env_, exec_env_))) {
     LOG_WARN("deep copy vector exec_env failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.storage_cache_policy_, storage_cache_policy_))) {
+    LOG_WARN("deep copy storage cache policy failed", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -3735,6 +3745,7 @@ int64_t ObTableSchema::get_convert_size() const
   }
   convert_size += local_session_vars_.get_deep_copy_size();
   convert_size += external_properties_.length() + 1;
+  convert_size += storage_cache_policy_.length() + 1;
   return convert_size;
 }
 
@@ -3838,6 +3849,7 @@ void ObTableSchema::reset()
   mlog_tid_ = OB_INVALID_ID;
   local_session_vars_.reset();
   mv_mode_.reset();
+  storage_cache_policy_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -7082,7 +7094,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(auto_increment_cache_size),
     K_(local_session_vars),
     K_(index_params),
-    K_(exec_env));
+    K_(exec_env),
+    K_(storage_cache_policy));
   J_OBJ_END();
 
   return pos;
@@ -7278,6 +7291,8 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(mv_mode_);
   OB_UNIS_ENCODE(enable_macro_block_bloom_filter_);
   OB_UNIS_ENCODE(parser_properties_);
+  OB_UNIS_ENCODE(storage_cache_policy_type_);
+  OB_UNIS_ENCODE(storage_cache_policy_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7519,6 +7534,8 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(mv_mode_);
   OB_UNIS_DECODE(enable_macro_block_bloom_filter_);
   OB_UNIS_DECODE_AND_FUNC(parser_properties_, deep_copy_str);
+  OB_UNIS_DECODE(storage_cache_policy_type_);
+  OB_UNIS_DECODE_AND_FUNC(storage_cache_policy_, deep_copy_str);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7660,6 +7677,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(mv_mode_);
   OB_UNIS_ADD_LEN(enable_macro_block_bloom_filter_);
   OB_UNIS_ADD_LEN(parser_properties_);
+  OB_UNIS_ADD_LEN(storage_cache_policy_type_);
+  OB_UNIS_ADD_LEN(storage_cache_policy_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

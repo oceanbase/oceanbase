@@ -1002,6 +1002,7 @@ micro_index_clustered	tinyint(4)	NO		0
 mv_mode	bigint(20)	NO		0	
 parser_properties	longtext	NO			
 enable_macro_block_bloom_filter	tinyint(4)	NO		0	
+storage_cache_policy	varchar(1048576)	NO		{"GLOBAL":"AUTO"}	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2833,6 +2834,7 @@ micro_index_clustered	tinyint(4)	NO		0
 mv_mode	bigint(20)	NO		0	
 parser_properties	longtext	NO			
 enable_macro_block_bloom_filter	tinyint(4)	NO		0	
+storage_cache_policy	varchar(1048576)	NO		{"GLOBAL":"AUTO"}	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2932,6 +2934,7 @@ micro_index_clustered	tinyint(4)	YES		0
 mv_mode	bigint(20)	YES		0	
 parser_properties	longtext	YES			
 enable_macro_block_bloom_filter	tinyint(4)	YES		0	
+storage_cache_policy	varchar(1048576)	YES		{"GLOBAL":"AUTO"}	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3052,6 +3055,7 @@ tablespace_id	bigint(20)	NO		-1
 partition_type	bigint(20)	NO		0	
 tablet_id	bigint(20)	NO		0	
 external_location	varbinary(65536)	YES		NULL	
+storage_cache_policy	varchar(1048576)	NO		NONE	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_part;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3090,6 +3094,7 @@ tablespace_id	bigint(20)	YES		-1
 partition_type	bigint(20)	YES		0	
 tablet_id	bigint(20)	YES		0	
 external_location	varbinary(65536)	YES		NULL	
+storage_cache_policy	varchar(1048576)	YES		NONE	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_part_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3238,6 +3243,7 @@ sub_part_idx	bigint(20)	NO		-1
 source_partition_id	varchar(4096)	NO			
 partition_type	bigint(20)	NO		0	
 tablet_id	bigint(20)	NO		0	
+storage_cache_policy	varchar(1048576)	NO		NONE	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sub_part;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3269,6 +3275,7 @@ sub_part_idx	bigint(20)	YES		-1
 source_partition_id	varchar(4096)	YES			
 partition_type	bigint(20)	YES		0	
 tablet_id	bigint(20)	YES		0	
+storage_cache_policy	varchar(1048576)	YES		NONE	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sub_part_history;
 IF(count(*) >= 0, 1, 0)
 1

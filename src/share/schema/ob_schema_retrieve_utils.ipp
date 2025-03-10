@@ -15,6 +15,8 @@
 #include "share/schema/ob_udf_mgr.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "rootserver/ob_locality_util.h"
+#include "share/storage/ob_storage_cache_common.h"
+
 
 #include "pl/ob_pl_stmt.h"
 
@@ -1507,6 +1509,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, ttl_definition, table_schema, true, ignore_column_error, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, kv_attributes, table_schema, true, ignore_column_error, "");
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, storage_cache_policy, table_schema, true/*skip null*/, true/*ignore column error*/, OB_DEFAULT_STORAGE_CACHE_POLICY_STR);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, name_generated_type, table_schema, ObNameGeneratedType, true/*skip null*/, true/*ignore column error*/, GENERATED_TYPE_UNKNOWN);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, lob_inrow_threshold, table_schema,
         int64_t, true/*skip null error*/, ignore_column_error, OB_DEFAULT_LOB_INROW_THRESHOLD);
@@ -4555,6 +4559,19 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ignore_column_error = true;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, object_status, table_schema, int64_t, true, ignore_column_error, ObObjectStatus::VALID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, truncate_version, table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
+
+    ObString tmp_storage_cache_policy;
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+      result, "storage_cache_policy", tmp_storage_cache_policy, true/*skip null*/, true/*ignore column error*/, OB_DEFAULT_STORAGE_CACHE_POLICY_STR);
+
+    if (OB_SUCC(ret)) {
+      ObStorageCachePolicyType policy_type = ObStorageCachePolicyType::MAX_POLICY;
+      if (OB_FAIL(get_storage_cache_policy_type_from_str(tmp_storage_cache_policy, policy_type))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to get storage cache policy type", K(ret), K(tmp_storage_cache_policy));
+      } else {
+        table_schema.set_storage_cache_policy_type(policy_type);
+      }
+    }
   }
   return ret;
 }
@@ -5005,6 +5022,20 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
       ObString empty_str("");
       EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
         result, external_location, partition, true, /* skip null error*/ true,/*skip column error*/ empty_str);
+    }
+    if (OB_SUCC(ret)) {
+      ObStorageCachePolicyType part_storage_cache_policy_type = ObStorageCachePolicyType::MAX_POLICY;
+      ObString tmp_part_storage_cache_policy;
+      EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+        result, "storage_cache_policy", tmp_part_storage_cache_policy, true, /* skip null error*/ true,/*skip column error*/ OB_DEFAULT_PART_STORAGE_CACHE_POLICY_STR);
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(storage::get_storage_cache_policy_type_from_part_str(tmp_part_storage_cache_policy, part_storage_cache_policy_type))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to get storage cache policy type from str", K(ret));
+        } else {
+          partition.set_part_storage_cache_policy_type(part_storage_cache_policy_type);
+        }
+      }
     }
   } else { }//do nothing
   return ret;

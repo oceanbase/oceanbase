@@ -313,6 +313,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSTScredentialChecker);
 };
 
+class ObConfigStorageCachePolicyChecker : public ObConfigChecker
+{
+public:
+  ObConfigStorageCachePolicyChecker() {}
+  virtual ~ObConfigStorageCachePolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigStorageCachePolicyChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {

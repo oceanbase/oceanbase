@@ -33,7 +33,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "lib/compress/ob_compress_util.h"
-
+#include "share/storage/ob_storage_cache_common.h"
 namespace oceanbase
 {
 
@@ -906,6 +906,11 @@ public:
   inline uint64_t get_session_id() const { return session_id_; }
   inline void set_truncate_version(const int64_t truncate_version ) { truncate_version_ = truncate_version; }
   inline int64_t get_truncate_version() const {return truncate_version_; }
+
+  inline void set_storage_cache_policy_type(const storage::ObStorageCachePolicyType &storage_cache_policy_type)
+  { storage_cache_policy_type_ = storage_cache_policy_type;}
+  inline const storage::ObStorageCachePolicyType &get_storage_cache_policy_type() const { return storage_cache_policy_type_; }
+
   virtual int get_zone_list(
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObIArray<common::ObZone> &zone_list) const override;
@@ -1272,6 +1277,9 @@ protected:
   ObTabletID tablet_id_;
   ObObjectStatus object_status_;
   bool is_force_view_; // only record in create view path, do not persist to disk
+
+  // storage cache policy type
+  storage::ObStorageCachePolicyType storage_cache_policy_type_;
 };
 
 class ObTableSchema : public ObSimpleTableSchemaV2
@@ -2046,6 +2054,11 @@ public:
   inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
   inline void set_mv_mode(const int64_t mv_mode) { mv_mode_.mode_ = mv_mode; }
   inline int64_t get_mv_mode() const { return mv_mode_.mode_; }
+
+  // storage cache policy
+  inline int set_storage_cache_policy(const common::ObString &storage_cache_policy)
+  {return deep_copy_str(storage_cache_policy, storage_cache_policy_);}
+  inline const common::ObString &get_storage_cache_policy() const { return storage_cache_policy_; }
   virtual int get_mv_mode_struct(ObMvMode &mv_mode) const override
   {
     mv_mode = mv_mode_;
@@ -2254,7 +2267,6 @@ protected:
   common::ObString ttl_definition_;
   // kv attributes
   common::ObString kv_attributes_;
-
   ObNameGeneratedType name_generated_type_;
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
@@ -2276,6 +2288,7 @@ protected:
   // exec_env
   common::ObString exec_env_;
   ObMvMode mv_mode_;
+  common::ObString storage_cache_policy_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

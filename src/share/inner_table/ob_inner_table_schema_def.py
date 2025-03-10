@@ -322,7 +322,8 @@ all_table_def = dict(
       ('micro_index_clustered', 'bool', 'false', 'false'),
       ('mv_mode', 'int', 'false', '0'),
       ('parser_properties', 'longtext', 'false', ''),
-      ('enable_macro_block_bloom_filter', 'bool', 'false', 'false')
+      ('enable_macro_block_bloom_filter', 'bool', 'false', 'false'),
+      ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', r'{\"GLOBAL\":\"AUTO\"}'),
     ],
 )
 
@@ -1123,6 +1124,7 @@ all_part_def = dict(
       ('partition_type', 'int', 'false', '0'),
       ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID'),
       ('external_location', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
+      ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'NONE'),
     ],
 )
 
@@ -1162,7 +1164,8 @@ all_sub_part_def = dict(
       ('sub_part_idx', 'int', 'false', '-1'),
       ('source_partition_id', 'varchar:MAX_VALUE_LENGTH', 'false', ''),
       ('partition_type', 'int', 'false', '0'),
-      ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID')
+      ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID'),
+      ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'NONE'),
     ],
 )
 

@@ -5184,7 +5184,8 @@ ObBasePartition::ObBasePartition()
     low_bound_val_(),
     tablet_id_(),
     external_location_(),
-    split_source_tablet_id_()
+    split_source_tablet_id_(),
+    part_storage_cache_policy_type_(storage::ObStorageCachePolicyType::MAX_POLICY)
 { }
 
 ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
@@ -5206,7 +5207,8 @@ ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
     low_bound_val_(),
     tablet_id_(),
     external_location_(),
-    split_source_tablet_id_()
+    split_source_tablet_id_(),
+    part_storage_cache_policy_type_()
 { }
 
 void ObBasePartition::reset()
@@ -5231,6 +5233,7 @@ void ObBasePartition::reset()
   name_.reset();
   ObSchema::reset();
   external_location_.reset();
+  part_storage_cache_policy_type_ = storage::ObStorageCachePolicyType::MAX_POLICY;
 }
 
 int ObBasePartition::assign(const ObBasePartition & src_part)
@@ -5249,6 +5252,7 @@ int ObBasePartition::assign(const ObBasePartition & src_part)
     is_empty_partition_name_ = src_part.is_empty_partition_name_;
     tablespace_id_ = src_part.tablespace_id_;
     partition_type_ = src_part.partition_type_;
+    part_storage_cache_policy_type_ = src_part.part_storage_cache_policy_type_;
     if (OB_FAIL(deep_copy_str(src_part.name_, name_))) {
       LOG_WARN("Fail to deep copy name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_part.external_location_, external_location_))) {
@@ -5525,7 +5529,8 @@ OB_DEF_SERIALIZE(ObBasePartition)
               low_bound_val_,
               tablet_id_,
               external_location_,
-              split_source_tablet_id_);
+              split_source_tablet_id_,
+              part_storage_cache_policy_type_);
   return ret;
 }
 
@@ -5608,7 +5613,11 @@ OB_DEF_DESERIALIZE(ObBasePartition)
     LOG_WARN("fail to deserialze low_bound_val", KR(ret));
   }
   ObString external_location;
-  LST_DO_CODE(OB_UNIS_DECODE, tablet_id_, external_location, split_source_tablet_id_);
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tablet_id_,
+              external_location,
+              split_source_tablet_id_,
+              part_storage_cache_policy_type_);
   if (OB_SUCC(ret) && OB_FAIL(set_low_bound_val(low_bound_val))) {
     LOG_WARN("Fail to deep copy low_bound_val", K(ret), K(low_bound_val));
   } else if (OB_FAIL(deep_copy_str(external_location, external_location_))) {
@@ -5623,7 +5632,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasePartition)
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, table_id_, part_id_,
       schema_version_, name_, high_bound_val_, status_,
       part_idx_, is_empty_partition_name_,
-      tablespace_id_, partition_type_, low_bound_val_, tablet_id_, external_location_, split_source_tablet_id_);
+      tablespace_id_, partition_type_, low_bound_val_, tablet_id_,
+      external_location_, split_source_tablet_id_, part_storage_cache_policy_type_);
   len += serialization::encoded_length_vi64(list_row_values_.count());
   for (int64_t i = 0; i < list_row_values_.count(); i ++) {
     len += list_row_values_.at(i).get_serialize_size();
@@ -5642,6 +5652,7 @@ int64_t ObBasePartition::get_deep_copy_size() const
   }
   deep_copy_size += list_row_size * 2 - 1;
   deep_copy_size += external_location_.length() + 1;
+  deep_copy_size += sizeof(part_storage_cache_policy_type_);
   return deep_copy_size;
 }
 

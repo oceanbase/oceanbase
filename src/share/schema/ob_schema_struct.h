@@ -36,6 +36,7 @@
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "lib/string/ob_sql_string.h"
 #include "sql/session/ob_local_session_var.h"
+#include "share/storage/ob_storage_cache_common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -2489,6 +2490,12 @@ public:
   const common::ObString &get_part_name() const
   { return name_; }
 
+  void set_part_storage_cache_policy_type(const storage::ObStorageCachePolicyType &part_storage_cache_policy_type)
+  { part_storage_cache_policy_type_ = part_storage_cache_policy_type; }
+
+  storage::ObStorageCachePolicyType get_part_storage_cache_policy_type() const
+  { return part_storage_cache_policy_type_; }
+
   void set_tablespace_id(const int64_t tablespace_id)
   { tablespace_id_ = tablespace_id; }
   int64_t get_tablespace_id() const
@@ -2555,7 +2562,8 @@ public:
   { return external_location_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
-                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location), K_(split_source_tablet_id));
+                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location),
+                       K_(split_source_tablet_id), K_(part_storage_cache_policy_type));
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -2589,6 +2597,7 @@ protected:
   // split_source_tablet_id_ will not be persisted in inner_table.
   // it is only used when attempting to split partition.
   ObTabletID split_source_tablet_id_;
+  storage::ObStorageCachePolicyType part_storage_cache_policy_type_;
 };
 
 class ObSubPartition;

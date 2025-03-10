@@ -891,6 +891,18 @@ bool ObConfigSTScredentialChecker::check(const ObConfigItem &t) const
   return flag;
 }
 
+bool ObConfigStorageCachePolicyChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  ObString str(t.str());
+  if (0 == str.case_compare("auto")) {
+    is_valid = true;
+  } else if (0 == str.case_compare("hot")) {
+    is_valid = true;
+  }
+  return is_valid;
+}
+
 bool ObConfigUseLargePagesChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;

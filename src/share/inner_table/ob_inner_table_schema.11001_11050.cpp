@@ -14852,6 +14852,25 @@ int ObInnerTableSchema::all_virtual_core_all_table_schema(ObTableSchema &table_s
       enable_macro_block_bloom_filter_default,
       enable_macro_block_bloom_filter_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj storage_cache_policy_default;
+    storage_cache_policy_default.set_varchar(ObString::make_string("{\"GLOBAL\":\"AUTO\"}"));
+    ADD_COLUMN_SCHEMA_T("storage_cache_policy", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_VARCHAR_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      storage_cache_policy_default,
+      storage_cache_policy_default); //default_value
+  }
   table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

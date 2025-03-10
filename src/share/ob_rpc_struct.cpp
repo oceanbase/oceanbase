@@ -3224,7 +3224,8 @@ DEF_TO_STRING(ObTableOption)
        K_(primary_zone),
        K_(row_store_type),
        K_(store_format),
-       K_(enable_macro_block_bloom_filter));
+       K_(enable_macro_block_bloom_filter),
+       K_(storage_cache_policy));
   J_OBJ_END();
   return pos;
 }
@@ -3239,7 +3240,8 @@ OB_SERIALIZE_MEMBER(ObTableOption,
                     progressive_merge_num_,
                     row_store_type_,
                     store_format_,
-                    enable_macro_block_bloom_filter_);
+                    enable_macro_block_bloom_filter_,
+                    storage_cache_policy_);
 
 DEF_TO_STRING(ObIndexOption)
 {
@@ -3259,7 +3261,8 @@ DEF_TO_STRING(ObIndexOption)
        K_(index_attributes_set),
        K_(row_store_type),
        K_(store_format),
-       K_(enable_macro_block_bloom_filter));
+       K_(enable_macro_block_bloom_filter),
+       K_(storage_cache_policy));
   J_OBJ_END();
   return pos;
 }
@@ -3289,7 +3292,8 @@ DEF_TO_STRING(ObIndexArg)
        K_(table_name),
        K_(database_name),
        K_(index_action_type),
-       K_(compact_level));
+       K_(compact_level),
+       K_(storage_cache_policy));
   J_OBJ_END();
   return pos;
 }
@@ -3301,7 +3305,8 @@ OB_SERIALIZE_MEMBER((ObIndexArg, ObDDLArg),
                     database_name_,
                     index_action_type_,
                     session_id_,
-                    compact_level_);
+                    compact_level_,
+                    storage_cache_policy_);
 
 bool ObCreateIndexArg::is_valid() const
 {

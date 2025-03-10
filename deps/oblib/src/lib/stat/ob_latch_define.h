@@ -384,8 +384,9 @@ LATCH_DEF(SSWRITER_CTX_LOCK, 348, "sswriter ctx lock", LATCH_FIFO, 2000, 0, true
 LATCH_DEF(MABLK_BF_LOAD_TASKL_LOCK, 349, "macro block bloom filter load task lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(PS_CURSOR_LOCK, 350, "ps cursor lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DAG_EXECUTOR_LOCK, 351, "dag executor lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 352, "latch end", LATCH_FIFO, 2000, 0, true)
-
+LATCH_DEF(STORAGE_CACHE_POLICY_MGR_LOCK, 353, "storage cache policy lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(STORAGE_CACHE_POLICY_TASK_LOCK, 354, "storage cache policy task lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(LATCH_END, 355, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

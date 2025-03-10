@@ -1283,6 +1283,8 @@ public:
   common::ObString database_name_;
   IndexActionType index_action_type_;
   share::SortCompactLevel compact_level_;
+  common::ObString storage_cache_policy_;
+
 
   ObIndexArg():
       ObDDLArg(),
@@ -1292,7 +1294,8 @@ public:
       table_name_(),
       database_name_(),
       index_action_type_(INVALID_ACTION),
-      compact_level_(share::SORT_COMPACT_LEVEL)
+      compact_level_(share::SORT_COMPACT_LEVEL),
+      storage_cache_policy_()
   {}
   virtual ~ObIndexArg() {}
   void reset()
@@ -1304,6 +1307,7 @@ public:
     database_name_.reset();
     index_action_type_ = INVALID_ACTION;
     compact_level_ = share::SORT_COMPACT_LEVEL;
+    storage_cache_policy_.reset();
     ObDDLArg::reset();
   }
   bool is_valid() const;
@@ -1320,6 +1324,7 @@ public:
       database_name_ = other.database_name_;
       index_action_type_ = other.index_action_type_;
       compact_level_ = other.compact_level_;
+      storage_cache_policy_ = other.storage_cache_policy_;
     }
     return ret;
   }
@@ -2235,6 +2240,7 @@ public:
        LOB_INROW_THRESHOLD,
        INCREMENT_CACHE_SIZE,
        ENABLE_MACRO_BLOCK_BLOOM_FILTER,
+       STORAGE_CACHE_POLICY,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2259,6 +2265,8 @@ public:
     RENAME_SUB_PARTITION,
     AUTO_SPLIT_PARTITION,
     EXCHANGE_PARTITION,
+    ALTER_PARTITION_STORAGE_CACHE_POLICY,
+    ALTER_SUBPARTITION_STORAGE_CACHE_POLICY,
     NO_OPERATION = 1000
   };
   enum AlterConstraintType
@@ -2678,7 +2686,8 @@ public:
     store_format_(common::OB_STORE_FORMAT_INVALID),
     progressive_merge_round_(0),
     storage_format_version_(common::OB_STORAGE_FORMAT_VERSION_INVALID),
-    enable_macro_block_bloom_filter_(false)
+    enable_macro_block_bloom_filter_(false),
+    storage_cache_policy_()
   {}
   virtual void reset()
   {
@@ -2696,6 +2705,7 @@ public:
     progressive_merge_round_ = 0;
     storage_format_version_ = common::OB_STORAGE_FORMAT_VERSION_INVALID;
     enable_macro_block_bloom_filter_ = false;
+    storage_cache_policy_.reset();
   }
   bool is_valid() const;
   DECLARE_TO_STRING;
@@ -2714,6 +2724,7 @@ public:
   int64_t progressive_merge_round_;
   int64_t storage_format_version_;
   bool enable_macro_block_bloom_filter_;
+  common::ObString storage_cache_policy_;
 };
 
 struct ObIndexOption : public ObTableOption
