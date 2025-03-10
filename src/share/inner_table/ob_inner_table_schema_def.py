@@ -7944,6 +7944,7 @@ def_table_schema(
 # 541: __all_tenant_flashback_log_scn
 # 542: __sslog_table
 # 543: __all_license
+# 544: __all_pl_recompile_objinfo
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15864,6 +15865,7 @@ def_table_schema(
 # 12521: __all_virtual_sswriter_lease_mgr
 
 # 12522: __all_virtual_tenant_flashback_log_scn
+# 12523: __all_virtual_pl_recompile_objinfo
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16404,6 +16406,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15500: __idx_15494_idx_catalog_name_real_agent
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 # 15502: __all_virtual_tenant_flashback_log_scn
+# 15503: __all_virtual_pl_recompile_objinfo
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
