@@ -106,7 +106,9 @@ public:
               arrow::MemoryPool *pool, ObFilePrefetchBuffer &file_prefetch_buffer) :
     file_reader_(file_reader),
     file_name_(file_name), pool_(pool), file_prefetch_buffer_(file_prefetch_buffer)
-  {}
+  {
+    file_prefetch_buffer_.clear();
+  }
   ~ObArrowFile() override {
     file_reader_.close();
   }
