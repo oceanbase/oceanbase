@@ -1770,6 +1770,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayPopfront::eval_array_popfront_vector,              /* 206 */
   NULL, // ObExprColumnConv::column_convert_vector,                      /* 207 */
   NULL, // ObExprColumnConv::column_convert_vector_fast,                 /* 208 */
+  NULL, // ObExprConcat::eval_concat_vector,                             /* 209 */
+  NULL, // ObExprLpad::calc_mysql_lpad_expr_vector,                      /* 210 */
+  NULL, // ObExprRpad::calc_mysql_rpad_expr_vector,                      /* 211 */
+  NULL, // ObExprOracleLpad::calc_oracle_lpad_expr_vector,               /* 212 */
+  NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 213 */
+  NULL, // ObExprFindInSet::calc_find_in_set_vector,                     /* 214 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
