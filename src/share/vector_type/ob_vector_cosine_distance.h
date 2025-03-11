@@ -157,9 +157,6 @@ OB_INLINE static int cosine_calculate_simd4_avx128(const float *a, const float *
   abs_dist_a += tmp_abs_dist_a;
   abs_dist_b += tmp_abs_dist_b;
 
-  if (abs_dist_a == 0 || abs_dist_b == 0) {
-    ret = OB_ERR_UNEXPECTED;
-  }
   return ret;
 }
 
@@ -254,9 +251,6 @@ OB_INLINE static int cosine_calculate_simd8_avx256(const float *a, const float *
   abs_dist_a += tmp_abs_dist_a;
   abs_dist_b += tmp_abs_dist_b;
 
-  if (abs_dist_a == 0 || abs_dist_b == 0) {
-    ret = OB_ERR_UNEXPECTED;
-  }
   return ret;
 }
 
@@ -342,9 +336,6 @@ OB_INLINE static int cosine_calculate_simd16_avx512(const float *a, const float 
   abs_dist_a += tmp_abs_dist_a;
   abs_dist_b += tmp_abs_dist_b;
 
-  if (abs_dist_a == 0 || abs_dist_b == 0) {
-    ret = OB_ERR_UNEXPECTED;
-  }
   return ret;
 }
 
