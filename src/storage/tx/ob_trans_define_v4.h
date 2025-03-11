@@ -184,6 +184,17 @@ extern ObTxIsolationLevel tx_isolation_from_str(const ObString &s);
 
 extern const ObString &get_tx_isolation_str(const ObTxIsolationLevel isolation);
 
+inline bool is_RR_or_SERIAL_isolevel(const ObTxIsolationLevel isolation)
+{
+  return (isolation == ObTxIsolationLevel::RR ||
+          isolation == ObTxIsolationLevel::SERIAL);
+}
+
+inline bool is_RC_isolevel(const ObTxIsolationLevel isolation)
+{
+  return isolation == ObTxIsolationLevel::RC;
+}
+
 enum class ObTxAccessMode
 {
   INVL = -1, RW = 0, RD_ONLY = 1, STANDBY_RD_ONLY = 2
@@ -557,7 +568,10 @@ protected:
   common::ObAddr xa_start_addr_;       // the xa start's address
   ObTxIsolationLevel isolation_;       // isolation level
   ObTxAccessMode access_mode_;         // READ_ONLY | READ_WRITE
-  share::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
+  // for RR/SERIALIZABLE, the transaction level snapshot
+  share::SCN snapshot_version_;
+  // for RC, last acquired snapshot
+  share::SCN last_rc_snapshot_version_;
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   ObTxSEQ snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id of txn start, for XA it is XA_START session id
@@ -781,6 +795,7 @@ public:
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
                K_(modified_tables),
+               K_(last_rc_snapshot_version),
                K_(ref));
   bool support_branch() const { return seq_base_ > 0; }
   // used by SQL alloc branch_id refer the min branch_id allowed
@@ -804,6 +819,15 @@ public:
   uint64_t get_cluster_version() const { return cluster_version_; }
   ObTxConsistencyType get_tx_consistency_type() const { return tx_consistency_type_; }
   ObTxIsolationLevel get_isolation_level() const { return isolation_; }
+  bool is_RR_or_SERIAL_isolevel() const {
+    return ::oceanbase::transaction::is_RR_or_SERIAL_isolevel(isolation_);
+  }
+  bool is_RC_isolevel() const {
+    return ::oceanbase::transaction::is_RC_isolevel(isolation_);
+  }
+  bool with_tx_snapshot() const {
+    return is_RR_or_SERIAL_isolevel() && snapshot_version_.is_valid();
+  }
   const ObTransID &tid() const { return tx_id_; }
   bool is_valid() const { return !is_in_tx() || tx_id_.is_valid(); }
   ObTxAccessMode get_tx_access_mode() const { return access_mode_; }
@@ -892,7 +916,13 @@ public:
   { global_tx_type_ = global_tx_type; }
   bool need_rollback() { return state_ == State::ABORTED; }
   int64_t get_timeout_us() const { return timeout_us_; }
-  share::SCN get_snapshot_version() { return snapshot_version_; }
+  share::SCN get_tx_snapshot_version() {
+    if (is_RR_or_SERIAL_isolevel()) {
+      return snapshot_version_;
+    } else {
+      return share::SCN::invalid_scn();
+    }
+  }
   ObITxCallback *cancel_commit_cb();
   int get_parts_copy(ObTxPartList &copy_parts);
   int get_savepoints_copy(ObTxSavePointList &copy_savepoints);

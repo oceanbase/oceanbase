@@ -4066,5 +4066,19 @@ void ObTransService::force_release_tx_when_session_destroy(ObTxDesc &tx)
   }
   ObTxDescMgr::force_release(tx);
 }
+
+void ObTransService::adjust_tx_snapshot_(ObTxDesc &tx, ObTxReadSnapshot &snapshot)
+{
+  // ensure snapshot won't go backward
+  if (tx.is_RC_isolevel()) {
+    if (tx.last_rc_snapshot_version_ > snapshot.core_.version_) {
+      snapshot.core_.version_ = tx.last_rc_snapshot_version_;
+      snapshot.uncertain_bound_ = 0;
+    } else if (tx.last_rc_snapshot_version_ < snapshot.core_.version_) {
+      tx.last_rc_snapshot_version_ = snapshot.core_.version_;
+    }
+  }
+}
+
 } // transaction
 } // ocenabase

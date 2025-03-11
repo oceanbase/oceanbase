@@ -17,10 +17,12 @@ namespace transaction {
   // override this.flags_, because different on each node
   // override can_elr_ because it is useless and not synced between node
   // override abort_cause_ because may be updated by async msg from TxCtx
-#define PRE_ENCODE_DYNAMIC_FOR_VERIFY \
-  FLAG flags_ = { .v_ = 0 };          \
-  bool unused_can_elr_ = false;       \
-  int abort_cause_ = 0;
+  // skip verify last_rc_snapshot_version_, because read-only snapshot will not be synced
+#define PRE_ENCODE_DYNAMIC_FOR_VERIFY                           \
+  FLAG flags_ = { .v_ = 0 };                                    \
+  bool unused_can_elr_ = false;                                 \
+  int abort_cause_ = 0;                                         \
+  share::SCN last_rc_snapshot_version_ = share::SCN::min_scn();
 
 // only serialize isolation_ when Repeatable Read or SERIALIZABLE
 #define PRE_ENCODE_EXTRA_FOR_VERIFY                             \
@@ -149,7 +151,8 @@ TXN_FREE_ROUTE_MEMBERS(dynamic, PRE_ENCODE_DYNAMIC_FOR_VERIFY, PRE_DYNAMIC_DECOD
                        active_scn_,
                        abort_cause_,
                        unused_can_elr_,
-                       flags_.for_serialize_v_);
+                       flags_.for_serialize_v_,
+                       last_rc_snapshot_version_);
 TXN_FREE_ROUTE_MEMBERS(parts,,,,
                        parts_,
                        modified_tables_);

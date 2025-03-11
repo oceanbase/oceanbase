@@ -421,6 +421,7 @@ ObTxDesc::ObTxDesc()
     isolation_(ObTxIsolationLevel::RC), // default is RC
     access_mode_(ObTxAccessMode::INVL),   // default is INVL
     snapshot_version_(),
+    last_rc_snapshot_version_(share::SCN::min_scn()),
     snapshot_uncertain_bound_(0),
     snapshot_scn_(),
     sess_id_(0),
@@ -570,6 +571,7 @@ void ObTxDesc::reset()
   isolation_ = ObTxIsolationLevel::INVALID;
   access_mode_ = ObTxAccessMode::INVL;
   snapshot_version_.reset();
+  last_rc_snapshot_version_.set_min();
   snapshot_uncertain_bound_ = 0;
   snapshot_scn_.reset();
   global_tx_type_ = ObGlobalTxType::PLAIN;
@@ -700,7 +702,7 @@ bool ObTxDesc::in_tx_or_has_extra_state_() const
 
 bool ObTxDesc::has_extra_state_() const
 {
-  if (snapshot_version_.is_valid()) {
+  if (with_tx_snapshot()) {
     return true;
   }
   // TODO(yunxing.cyx): refine this iter for performance
@@ -1117,7 +1119,7 @@ void ObTxDesc::release_implicit_savepoint(const ObTxSEQ savepoint)
     min_implicit_savepoint_.reset();
   }
   // invalid txn snapshot if it was created after the savepoint
-  if (snapshot_version_.is_valid() && savepoint < snapshot_scn_) {
+  if (with_tx_snapshot() && savepoint < snapshot_scn_) {
     TRANS_LOG(INFO, "release txn snapshot_version", K_(snapshot_version),
               K(savepoint), K_(snapshot_scn), K_(tx_id));
     snapshot_version_.reset();
@@ -1916,7 +1918,7 @@ int ObTxDesc::clear_state_for_autocommit_retry()
   ObSpinLockGuard guard(lock_);
   if (tx_id_.is_valid()) {
     savepoints_.reset();
-    if (isolation_ == ObTxIsolationLevel::RR || isolation_ == ObTxIsolationLevel::SERIAL) {
+    if (with_tx_snapshot()) {
       snapshot_version_.reset();
       snapshot_scn_.reset();
       snapshot_uncertain_bound_ = 0;
