@@ -35,6 +35,7 @@ flag_dict["ORACLE_ONLY"] = "ORACLE_ONLY"
 flag_dict["WITH_CREATE"] = "WITH_CREATE"
 flag_dict["WITH_UPGRADE"] = "WITH_UPGRADE"
 flag_dict["MYSQL_ONLY"] = "MYSQL_ONLY"
+flag_dict["INFLUENCE_PL"] = "INFLUENCE_PL"
 
 flag_value_dict = {}
 flag_value_dict["GLOBAL"] = 1L
@@ -51,6 +52,7 @@ flag_value_dict["ORACLE_ONLY"] = (1L << 9)
 flag_value_dict["WITH_CREATE"] = (1L << 10)
 flag_value_dict["WITH_UPGRADE"] = (1L << 11)
 flag_value_dict["MYSQL_ONLY"] = (1L << 12)
+flag_value_dict["INFLUENCE_PL"] = (1L << 13)
 
 type_dict = {}
 type_dict["tinyint"] = "ObTinyIntType"
@@ -163,6 +165,7 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  const static int64_t WITH_CREATE = (1LL << 10);\n");
   head_file.write("  const static int64_t WITH_UPGRADE = (1LL << 11);\n");
   head_file.write("  const static int64_t MYSQL_ONLY = (1LL << 12);\n");
+  head_file.write("  const static int64_t INFLUENCE_PL = (1LL << 13);\n");
   head_file.write("};\n");
   head_file.write("struct ObSysVarFromJson{\n");
   head_file.write("  ObSysVarClassType id_;\n");
