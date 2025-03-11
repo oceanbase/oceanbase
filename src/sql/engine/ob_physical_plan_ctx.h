@@ -444,6 +444,8 @@ public:
   bool is_error_ignored() const { return is_error_ignored_; }
   void set_select_into(bool is_select_into) { is_select_into_  = is_select_into; }
   bool is_select_into() const { return is_select_into_; }
+  void set_diagnosis(bool is_diagnosis) { is_diagnosis_  = is_diagnosis; }
+  bool is_diagnosis() const { return is_diagnosis_; }
   void set_is_result_accurate(bool is_accurate) { is_result_accurate_ = is_accurate; }
   bool is_result_accurate() const { return is_result_accurate_; }
   void set_foreign_key_checks(bool foreign_key_checks) { foreign_key_checks_ = foreign_key_checks; }
@@ -711,6 +713,7 @@ private:
   int64_t total_ssstore_read_row_count_;
   bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
   bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
+  bool is_diagnosis_;
 };
 
 }
