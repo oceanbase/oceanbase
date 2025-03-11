@@ -141,7 +141,7 @@ int ObRpcProcessorBase::check_cluster_id()
             && ObRpcNetHandler::CLUSTER_ID != rpc_pkt_->get_src_cluster_id())) { // the rpc is from another cluster
       ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
       if (REACH_TIME_INTERVAL(500 * 1000)) {
-        LOG_ERROR("packet dst_cluster_id not match", "self.dst_cluster_id", ObRpcNetHandler::CLUSTER_ID,
+        LOG_WARN("packet dst_cluster_id not match", "self.dst_cluster_id", ObRpcNetHandler::CLUSTER_ID,
                 "pkt.dst_cluster_id", rpc_pkt_->get_dst_cluster_id(), "pkt.src_cluster_id", rpc_pkt_->get_src_cluster_id(), "pkt", *rpc_pkt_,
                 "peer", get_peer());
       }
