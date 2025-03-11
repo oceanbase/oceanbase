@@ -342,7 +342,7 @@ int DataStoreVecExtraResult::add_batch(const common::ObIArray<ObExpr *> &exprs, 
     pvt_skip->deep_copy(skip, bound.start(), bound.end());
 
     ObBatchRows brs = ObBatchRows(const_cast<ObBitVector &>(*pvt_skip), bound.batch_size(),
-                                  bound.get_all_rows_active());
+                                  pvt_skip->accumulate_bit_cnt(bound.batch_size()) == 0);
 
     if (need_sort_) {
       bool need_dump = true;
