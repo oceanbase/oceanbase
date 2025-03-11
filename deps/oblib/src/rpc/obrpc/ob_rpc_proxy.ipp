@@ -31,6 +31,15 @@ namespace obrpc
 {
 
 template <class pcodeStruct>
+SSHandle<pcodeStruct>::~SSHandle()
+{
+  if (true == has_more_ && first_pkt_id_ != INVALID_RPC_PKT_ID) {
+    RPC_OBRPC_LOG_RET(WARN, OB_ERROR, "stream rpc is forgotten to abort", K_(pcode), K_(first_pkt_id));
+    this->abort();
+  }
+}
+
+template <class pcodeStruct>
 bool SSHandle<pcodeStruct>::has_more() const
 {
   return has_more_;

@@ -316,6 +316,7 @@ public:
   int get_more(typename pcodeStruct::Response &result);
   int abort();
   const ObRpcResultCode &get_result_code() const;
+  ~SSHandle();
 
 protected:
   ObRpcResultCode rcode_;
