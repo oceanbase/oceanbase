@@ -15880,6 +15880,9 @@ def_table_schema(
 # 12529: __all_virtual_storage_cache_task
 # 12530: __all_virtual_tablet_local_cache
 
+# 12531: __tenant_virtual_catalog_table_column
+# 12532: __tenant_virtual_show_create_catalog_table
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
