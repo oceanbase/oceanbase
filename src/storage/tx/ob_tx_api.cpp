@@ -624,8 +624,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (isolation == ObTxIsolationLevel::SERIAL ||
-             isolation == ObTxIsolationLevel::RR) {
+  } else if (is_RR_or_SERIAL_isolevel(isolation)) {
       // only acquire snapshot once in these isolation level
     if (tx.isolation_ != isolation /*change isolation*/ ||
         !tx.snapshot_version_.is_valid()/*version invalid*/) {
@@ -655,14 +654,17 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
       snapshot.core_.version_ = tx.snapshot_version_;
       snapshot.uncertain_bound_ = tx.snapshot_uncertain_bound_;
     }
-  } else if (OB_FAIL(sync_acquire_global_snapshot_(tx,
-                                                   expire_ts,
-                                                   snapshot.core_.version_,
-                                                   snapshot.uncertain_bound_))) {
-    TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
-  } else {
-    // do nothing
+  } else { // RC isolation level
+    if (OB_FAIL(sync_acquire_global_snapshot_(tx,
+                                              expire_ts,
+                                              snapshot.core_.version_,
+                                              snapshot.uncertain_bound_))) {
+      TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
+    } else {
+      adjust_tx_snapshot_(tx, snapshot);
+    }
   }
+
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;
     snapshot.parts_.reset();
@@ -712,8 +714,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
   ObRole role = common::ObRole::INVALID_ROLE;
   // if txn is active use txn's isolation instead
   ObTxIsolationLevel isolation = tx.is_in_tx() ? tx.isolation_ : iso_level;
-  if (isolation == ObTxIsolationLevel::SERIAL ||
-      isolation == ObTxIsolationLevel::RR) {
+  if (is_RR_or_SERIAL_isolevel(isolation)) {
     ret = get_read_snapshot(tx, isolation, expire_ts, snapshot);
   } else if (!lsid.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -725,6 +726,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
                                              snapshot.core_.version_,
                                              true /*is_read_only*/,
                                              role))) {
+      adjust_tx_snapshot_(tx, snapshot);
       snapshot.source_ = ObTxReadSnapshot::SRC::LS;
       snapshot.snapshot_lsid_ = lsid;
       snapshot.uncertain_bound_ = 0;
@@ -856,13 +858,10 @@ int ObTransService::release_snapshot(ObTxDesc &tx)
   tx.inc_op_sn();
   if (tx.state_ != ObTxDesc::State::IDLE) {
     ret = OB_NOT_SUPPORTED;
-  } else if (ObTxIsolationLevel::SERIAL == tx.isolation_ ||
-             ObTxIsolationLevel::RR == tx.isolation_) {
+  } else if (tx.with_tx_snapshot()) {
     snapshot = tx.snapshot_version_;
-    if (snapshot.is_valid()) {
-      tx.snapshot_version_.reset();
-      tx.snapshot_uncertain_bound_ = 0;
-    }
+    tx.snapshot_version_.reset();
+    tx.snapshot_uncertain_bound_ = 0;
   }
   TRANS_LOG(TRACE, "release snapshot", K(tx), K(snapshot));
   ObTransTraceLog &tlog = tx.get_tlog();

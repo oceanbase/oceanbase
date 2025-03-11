@@ -1368,9 +1368,8 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
       if (OB_ISNULL(tx_desc = sess_info->get_tx_desc())) {
         ret = OB_ERR_UNEXPECTED;
         MVCC_LOG(ERROR, "tx desc is nullptr", K(ret), KPC(sess_info));
-      } else if (FALSE_IT(desc_snapshot = tx_desc->get_snapshot_version())) {
-      } else if (transaction::ObTxIsolationLevel::SERIAL == tx_desc->get_isolation_level() ||
-                 transaction::ObTxIsolationLevel::RR == tx_desc->get_isolation_level()) {
+      } else if (FALSE_IT(desc_snapshot = tx_desc->get_tx_snapshot_version())) {
+      } else if (tx_desc->is_RR_or_SERIAL_isolevel()) {
         // Case 1: RR/SI with tx desc exists, it means the snapshot is get from
         // scheduler and must maintained in the session and tx desc
         if (desc_snapshot.is_valid()) {
@@ -1379,7 +1378,7 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
         MVCC_LOG(DEBUG, "RR/SI txn with tx_desc", K(MTL_ID()), KPC(sess_info),
                  K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot),
                  K(sess_snapshot), K(desc_snapshot));
-      } else if (transaction::ObTxIsolationLevel::RC == tx_desc->get_isolation_level()) {
+      } else if (tx_desc->is_RC_isolevel()) {
         // Case 2: RC with tx desc exists, it may exists that snapshot is get from
         // the executor and not maintained in the session and tx desc. So we need
         // use session query start time carefully

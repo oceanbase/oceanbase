@@ -841,8 +841,7 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
     // check isolation with consistency type
     ObTxIsolationLevel iso = session->get_tx_desc()->get_isolation_level();
     ObConsistencyLevel cl = plan_ctx->get_consistency_level();
-    if (ObConsistencyLevel::WEAK == cl &&
-      (iso == ObTxIsolationLevel::SERIAL || iso == ObTxIsolationLevel::RR)) {
+    if (ObConsistencyLevel::WEAK == cl && is_isolation_RR_or_SE(iso)) {
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(ERROR, "statement of weak consistency is not allowed under SERIALIZABLE isolation",
                 KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
@@ -1799,15 +1798,15 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream service is NULL", K(ret));
     } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
-      LOG_WARN("get id service log stream failed");
+      LOG_WARN("get ls handle failed", K(ret));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("id service log stream not exist");
+      LOG_WARN("ls handle is null", K(ret));
     } else if (ObTimeUtility::current_time() - max_stale_time_us
          < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
       can_read = true;
     } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      LOG_WARN("log stream unreadable", K(ls_id), K(addr), K(max_stale_time_us));
+      LOG_WARN("log stream weak read ts too stale", K(ls_id), K(addr), K(max_stale_time_us));
     }
   } else {
     ObBLKey blk;
