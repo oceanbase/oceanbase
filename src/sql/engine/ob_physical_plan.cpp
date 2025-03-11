@@ -137,7 +137,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     insertup_can_do_gts_opt_(false),
     px_node_policy_(ObPxNodePolicy::INVALID),
     px_node_addrs_(&allocator_),
-    px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT)
+    px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT),
+    px_worker_share_plan_enabled_(false)
 {
 }
 
@@ -252,6 +253,7 @@ void ObPhysicalPlan::reset()
   px_node_policy_ = ObPxNodePolicy::INVALID;
   px_node_count_ = ObPxNodeHint::UNSET_PX_NODE_COUNT;
   px_node_addrs_.reset();
+  px_worker_share_plan_enabled_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -898,7 +900,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     px_parallel_rule_,
                     px_node_policy_,
                     px_node_addrs_,
-                    px_node_count_);
+                    px_node_count_,
+                    px_worker_share_plan_enabled_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

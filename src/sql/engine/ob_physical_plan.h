@@ -782,6 +782,7 @@ private:
   ObPxNodePolicy px_node_policy_;
   common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
   int64_t px_node_count_;
+  int64_t px_worker_share_plan_enabled_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
