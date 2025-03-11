@@ -15877,8 +15877,8 @@ def_table_schema(
 # 12527: __tenant_virtual_show_catalog_databases
 # 12528: __tenant_virtual_show_catalog_tables
 
-# 12524: __all_virtual_storage_cache_task
-# 12525: __all_virtual_tablet_local_cache
+# 12529: __all_virtual_storage_cache_task
+# 12530: __all_virtual_tablet_local_cache
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -40917,10 +40917,10 @@ def_table_schema(
 # 21643: CDB_OB_VECTOR_INDEX_TASK_HISTORY
 
 
-# 21640: GV$OB_STORAGE_CACHE_TASKS
-# 21641: V$OB_STORAGE_CACHE_TASKS
-# 21642: GV$OB_TABLET_LOCAL_CACHE
-# 21643: V$OB_TABLET_LOCAL_CACHE
+# 21644: GV$OB_STORAGE_CACHE_TASKS
+# 21645: V$OB_STORAGE_CACHE_TASKS
+# 21646: GV$OB_TABLET_LOCAL_CACHE
+# 21647: V$OB_TABLET_LOCAL_CACHE
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
