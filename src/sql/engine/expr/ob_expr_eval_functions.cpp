@@ -1778,6 +1778,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprOracleLpad::calc_oracle_lpad_expr_vector,               /* 212 */
   NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 213 */
   NULL, // ObExprFindInSet::calc_find_in_set_vector,                     /* 214 */
+  NULL, // ObExprSubstringIndex::eval_substring_index_vector,            /* 215 */
+  NULL, // ObExprConcatWs::calc_concat_ws_expr_vector,                   /* 216 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
