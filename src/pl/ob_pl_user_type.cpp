@@ -2538,6 +2538,7 @@ int ObCollectionType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, i
           elem_desc.set_field_count(1); \
         } \
         OX (table->set_element_desc(elem_desc));       \
+        OX (table->set_count(is_associative_array_type() ? 0 : OB_INVALID_COUNT)); \
       } \
       OX (ptr = reinterpret_cast<int64_t>(table)); \
       if (OB_FAIL(ret)) {    \
