@@ -294,8 +294,9 @@ enum DomainIndexType
 enum ObVecIndexType : uint8_t
 {
   VEC_INDEX_INVALID = 0,
-  VEC_INDEX_POST = 1,
-  VEC_INDEX_PRE = 2
+  VEC_INDEX_POST_WITHOUT_FILTER = 1,
+  VEC_INDEX_PRE = 2,
+  VEC_INDEX_POST_ITERATIVE_FILTER = 3,
 };
 
 struct ObVecIdxExtraInfo
@@ -320,10 +321,10 @@ static constexpr double DEFAULT_SELECTIVITY_RATE = 0.7;
   bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST; }
+  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
   bool is_specify_vec_plan() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_INVALID; }
   bool is_force_pre_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_force_post_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_POST; }
+  bool is_force_post_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
   void set_force_vec_index_type(ObVecIndexType force_index_type) { force_index_type_ = force_index_type; }
   TO_STRING_KV(K_(vec_idx_type), K_(selectivity), K_(row_count));
 

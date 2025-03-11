@@ -236,7 +236,7 @@ struct ObVecIndexInfo
   inline bool is_ivf_sq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8; }
   inline bool is_ivf_pq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
   inline bool is_pre_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  inline bool is_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST; }
+  inline bool is_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
   inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan();}
   uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
   ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
@@ -900,7 +900,7 @@ public:
   inline bool is_primary_vec_idx_scan() const { return is_pre_vec_idx_scan() && ref_table_id_ == index_table_id_; }
   inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }
   inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  inline bool is_post_vec_idx_scan() const { return is_index_scan() && vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST; }
+  inline bool is_post_vec_idx_scan() const { return is_index_scan() && vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
   inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
   inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }
 

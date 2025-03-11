@@ -1833,7 +1833,7 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
       if (index_schema->is_spatial_index()) {
         access_path.domain_idx_info_.vec_extra_info_.set_force_vec_index_type(ObVecIndexType::VEC_INDEX_PRE);
       } else if (index_schema->is_multivalue_index()) {
-        access_path.domain_idx_info_.vec_extra_info_.set_force_vec_index_type(ObVecIndexType::VEC_INDEX_POST);
+        access_path.domain_idx_info_.vec_extra_info_.set_force_vec_index_type(ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER);
       } else if (index_schema->is_fts_index()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, full-text index is");
@@ -1850,7 +1850,7 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     }
   } else {
     vec_index_schema = index_schema;
-    access_path.domain_idx_info_.vec_extra_info_.set_vec_idx_type(ObVecIndexType::VEC_INDEX_POST);
+    access_path.domain_idx_info_.vec_extra_info_.set_vec_idx_type(ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER);
     vector_index_match = true;
   }
 
