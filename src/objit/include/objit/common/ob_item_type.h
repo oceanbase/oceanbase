@@ -2784,6 +2784,11 @@ typedef enum ObItemType
   T_ALTER_SUBPARTITION_STORAGE_CACHE_POLICY = 4821,
   // external catalog
   T_SHOW_CREATE_CATALOG = 4822,
+
+  // optimizer hint
+  T_PUSH_SUBQ = 4823,
+  T_NO_PUSH_SUBQ = 4824,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
