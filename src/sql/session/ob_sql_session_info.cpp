@@ -533,13 +533,13 @@ bool ObSQLSessionInfo::is_in_range_optimization_enabled() const
 
 int64_t ObSQLSessionInfo::get_inlist_rewrite_threshold() const
 {
-  int64_t thredhold = INT64_MAX;
+  int64_t threshold = 1000;
   int64_t tenant_id = get_effective_tenant_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
-    thredhold = tenant_config->_inlist_rewrite_threshold;
+    threshold = tenant_config->_inlist_rewrite_threshold;
   }
-  return thredhold;
+  return threshold;
 }
 
 int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
