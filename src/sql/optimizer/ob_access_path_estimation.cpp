@@ -695,7 +695,9 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         tmp_plan_ctx.set_cur_time(cur_time, *ctx.get_session_info());
         tmp_plan_ctx.set_rich_format(ctx.get_session_info()->use_rich_format());
         OPT_TRACE("Process index", ap->index_id_, "ref table", table_part_info->get_ref_table_id());
-        if (OB_FAIL(tmp_plan_ctx.get_param_store_for_update().assign(plan_ctx->get_param_store()))) {
+        if (OB_FAIL(tmp_plan_ctx.set_subschema_ctx(plan_ctx->get_subschema_ctx()))) {
+          LOG_WARN("failed to set subschema ctx", K(ret));
+        } else if (OB_FAIL(tmp_plan_ctx.get_param_store_for_update().assign(plan_ctx->get_param_store()))) {
           LOG_WARN("failed to assign phy plan ctx");
         } else if (OB_FAIL(tmp_plan_ctx.init_datum_param_store())) {
           LOG_WARN("failed to init datum store", K(ret));
