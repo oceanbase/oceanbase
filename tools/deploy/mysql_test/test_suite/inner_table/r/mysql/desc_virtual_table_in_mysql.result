@@ -801,6 +801,8 @@ format_sql_id	varchar(32)	NO		NULL
 user_client_port	bigint(20)	NO		NULL	
 trans_status	varchar(256)	NO		NULL	
 plsql_compile_time	bigint(20)	NO		NULL	
+ccl_rule_id	bigint(20)	YES		NULL	
+ccl_match_time	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1

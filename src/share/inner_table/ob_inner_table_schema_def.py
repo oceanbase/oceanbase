@@ -7951,6 +7951,8 @@ def_table_schema(
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
 
+# 547: __all_ccl_rule
+# 548: __all_ccl_rule_history
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -9277,7 +9279,9 @@ def_table_schema(
     ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
     ('user_client_port', 'int'),
     ('trans_status', 'varchar:256'),
-    ('plsql_compile_time', 'int')
+    ('plsql_compile_time', 'int'),
+    ('ccl_rule_id', 'int', 'true'),
+    ('ccl_match_time', 'int', 'true')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -15883,6 +15887,9 @@ def_table_schema(
 # 12531: __tenant_virtual_catalog_table_column
 # 12532: __tenant_virtual_show_create_catalog_table
 
+# 12533: __all_virtual_ccl_rule
+# 12534: __all_virtual_ccl_status
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16425,6 +16432,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15503: __all_virtual_pl_recompile_objinfo
 # 15504: __tenant_virtual_show_create_catalog
 
+# 15505: __all_ccl_rule
+# 15506: __all_virtual_ccl_status
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -40925,6 +40934,10 @@ def_table_schema(
 # 21646: GV$OB_TABLET_LOCAL_CACHE
 # 21647: V$OB_TABLET_LOCAL_CACHE
 
+# 21644: DBA_OB_CCL_RULE
+# 21645: CDB_OB_CCL_RULE
+# 21646: GV$OB_SQL_CCL_STATUS
+# 21647: V$OB_SQL_CCL_STATUS
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -62516,6 +62529,7 @@ def_table_schema(
 
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 
+# 25307: DBA_OB_CCL_RULE
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -73801,6 +73815,9 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
+# 28272: GV$OB_SQL_CCL_STATUS
+# 28273: V$OB_SQL_CCL_STATUS
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -74795,6 +74812,7 @@ def_sys_index_table(
 # 101113: __idx_537_idx_catalog_name
 # 101114: __idx_539_idx_catalog_priv_catalog_name
 
+# 101115: __all_ccl_rule
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################

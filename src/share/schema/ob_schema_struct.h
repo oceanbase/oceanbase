@@ -1199,6 +1199,7 @@ typedef enum {
   ROUTINE_PRIV = 41,
   COLUMN_PRIV = 42,
   CATALOG_SCHEMA = 43,
+  CCL_RULE_SCHEMA = 44,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;

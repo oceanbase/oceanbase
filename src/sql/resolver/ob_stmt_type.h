@@ -379,6 +379,8 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REBUILD_TABLET, get_sys_tenant_alter_system_priv, 
 //378 for T_LOAD_LICENSE
 //379 for T_SHOW_CREATE_CATALOG
 
+//380 for T_CREATE_CCL_RULE
+//381 for T_DROP_CCL_RULE
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 
