@@ -104,6 +104,10 @@ int ObExprCase::calc_result_typeN(ObExprResType &type,
           types_stack[i].set_calc_meta(types_stack[i].get_obj_meta());
         } else {
           types_stack[i].set_calc_meta(type.get_obj_meta());
+          if (ObNumberType == type.get_obj_meta().get_type()
+              || ob_is_double_type(type.get_obj_meta().get_type())) {
+            types_stack[i].set_calc_accuracy(type.get_accuracy());
+          }
         }
       }
     }
