@@ -1422,7 +1422,7 @@ int ObAdaptiveMergePolicy::get_meta_merge_tables(
   } else if (FALSE_IT(result.create_snapshot_version_ = base_meta_hdl.get_sstable_meta().get_create_snapshot_version())) {
   } else if (OB_FAIL(find_adaptive_merge_tables(tablet,
                                                 base_table->get_snapshot_version(),
-                                                base_meta_hdl.get_sstable_meta().get_create_snapshot_version(),
+                                                base_meta_hdl.get_sstable_meta().get_row_count(),
                                                 result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("Failed to find minor merge tables", K(ret));
