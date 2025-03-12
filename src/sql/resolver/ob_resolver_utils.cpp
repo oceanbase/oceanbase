@@ -120,6 +120,7 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
   if (OB_SUCC(ret)
       && !coll_type->get_element_type().is_obj_type()
       && !coll_type->get_element_type().is_record_type()
+      && !coll_type->get_element_type().is_collection_type()
       && !(coll_type->get_element_type().is_opaque_type()
             && coll_type->get_element_type().get_user_type_id() == T_OBJ_XML)) {
     ret = OB_NOT_SUPPORTED;
@@ -130,7 +131,8 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
     LOG_USER_ERROR(OB_NOT_SUPPORTED, err.ptr());
   }
   if (OB_SUCC(ret) && (coll_type->get_element_type().is_obj_type()
-                      || coll_type->get_element_type().is_opaque_type())) {
+                      || coll_type->get_element_type().is_opaque_type()
+                      || coll_type->get_element_type().is_collection_type())) {
     OZ (column_names.push_back(ObString("COLUMN_VALUE")));
   }
   if (OB_SUCC(ret) && coll_type->get_element_type().is_record_type()) {
