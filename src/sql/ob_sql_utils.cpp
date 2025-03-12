@@ -6029,7 +6029,7 @@ int ObSQLUtils::check_column_with_res_mapping_rule(const ObResolverParams *resol
         tenant_id, col_expr->get_database_name(), db_id))) {
     LOG_WARN("get database id failed", K(ret));
   } else if (OB_FAIL(session_info->get_name_case_mode(case_mode))) {
-    LOG_WARN("get name case mode faield", K(ret));
+    LOG_WARN("get name case mode failed", K(ret));
   } else if (FALSE_IT(table_item = static_cast<const ObDMLStmt*>(stmt)->get_table_item_by_id(col_expr->get_table_id()))) {
   } else if (OB_NOT_NULL(table_item)) {
     uint64_t rule_id = col_rule_mgr.get_column_mapping_rule_id(

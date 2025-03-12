@@ -5186,7 +5186,7 @@ int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_rang
         val = ObCharset::strntoullrnd(data, length, is_unsigned, &endptr, &err);
         if (ERANGE == err && (UINT64_MAX == val || 0 == val)) {
           ret = OB_DATA_OUT_OF_RANGE;
-          LOG_WARN("faild to cast string to uint, cause data is out of range", K(ret), K(is_unsigned),
+          LOG_WARN("failed to cast string to uint, cause data is out of range", K(ret), K(is_unsigned),
                                                                                KP(data), K(length));
         } else {
           // check_convert_str_err
@@ -5296,7 +5296,7 @@ int ObIJsonBase::to_double(double &value) const
         val = ObCharset::strntod(buf, pos, &endptr, &err);
         if (EOVERFLOW == err && (-DBL_MAX == value || DBL_MAX == value)) {
           ret = OB_DATA_OUT_OF_RANGE;
-          LOG_WARN("faild to cast string to double, cause data is out of range",
+          LOG_WARN("failed to cast string to double, cause data is out of range",
               K(ret), K(val), K(pos), K(num_val));
         }
       }
@@ -5315,7 +5315,7 @@ int ObIJsonBase::to_double(double &value) const
         val = ObCharset::strntodv2(data, length, &endptr, &err);
         if (EOVERFLOW == err && (-DBL_MAX == value || DBL_MAX == value)) {
           ret = OB_DATA_OUT_OF_RANGE;
-          LOG_WARN("faild to cast string to double, cause data is out of range", K(ret), K(length),
+          LOG_WARN("failed to cast string to double, cause data is out of range", K(ret), K(length),
                                                                                  KP(data), K(val));
         } else {
           ObString tmp_str(length, data);

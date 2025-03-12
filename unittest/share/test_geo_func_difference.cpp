@@ -1295,7 +1295,7 @@ int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObS
 
     ObSpatialReferenceSystemBase *srs_info;
     if (OB_FAIL(ObSpatialReferenceSystemBase::create_geographic_srs(&allocator, srs_id, &rs, srs_info))) {
-        printf("faild to create geographical srs, ret=%d", ret);
+        printf("failed to create geographical srs, ret=%d", ret);
     }
     ObSrsItem *tmp_srs_item = NULL;
     if (OB_ISNULL(tmp_srs_item = OB_NEWx(ObSrsItem, (&allocator), srs_info))) {

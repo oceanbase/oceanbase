@@ -650,7 +650,7 @@ int ObAutoincrementService::lock_autoinc_row(const uint64_t &tenant_id,
                                     column_id))) {
       LOG_WARN("failed to assign sql", KR(ret));
     } else if (OB_FAIL(trans.read(res, tenant_id, lock_sql.ptr()))) {
-      LOG_WARN("failded to execute sql", KR(ret), K(lock_sql));
+      LOG_WARN("failed to execute sql", KR(ret), K(lock_sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get result, result is NULL", KR(ret));
@@ -738,7 +738,7 @@ int ObAutoincrementService::try_lock_autoinc_row(const uint64_t &tenant_id,
                                     column_id))) {
       LOG_WARN("failed to assign sql", KR(ret));
     } else if (OB_FAIL(trans.read(res, tenant_id, lock_sql.ptr()))) {
-      LOG_WARN("failded to execute sql", KR(ret), K(lock_sql));
+      LOG_WARN("failed to execute sql", KR(ret), K(lock_sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get result, result is NULL", KR(ret));

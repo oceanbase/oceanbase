@@ -283,7 +283,7 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
         const ObRawExpr *left_param = NULL;
         const ObRawExpr *right_param = NULL;
         if (OB_FAIL(get_calc_expr(left.get_value().get_unknown(), left_param))) {
-          LOG_WARN("faield to get calculable expr", K(ret));
+          LOG_WARN("failed to get calculable expr", K(ret));
         } else if (OB_FAIL(get_calc_expr(right.get_value().get_unknown(), right_param))) {
           LOG_WARN("failed to get calculable expr", K(ret));
         } else if (OB_ISNULL(left_param) || OB_ISNULL(right_param)) {

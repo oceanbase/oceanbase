@@ -446,7 +446,7 @@ void OSDQResourceLimitedScene::inner_limit_memory_(
   if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_holder))) {
     OB_LOG(WARN, "failed get tenant io manager", KR(ret));
   } else if (OB_FAIL(tenant_holder.get_ptr()->update_memory_pool(limit_memory_size))) {
-    OB_LOG(WARN, "faield to update memory limit", KR(ret));
+    OB_LOG(WARN, "failed to update memory limit", KR(ret));
     OSDQLogEntry::print_log("LIMIT MEMORY", "failed to update memory limit", RED_COLOR_PREFIX);
   } else if (OB_FAIL(ObMallocAllocator::get_instance()->set_tenant_limit(OB_SERVER_TENANT_ID, limit_memory_size))) {
     OB_LOG(ERROR, "failed set tenant memory limit", KR(ret), K(limit_memory_size));
@@ -479,7 +479,7 @@ void OSDQResourceLimitedScene::inner_limit_memory_(
     lib::set_tenant_memory_limit(500, MEMORY_LIMITED_SIZE);
     if (OB_NOT_NULL(tenant_holder.get_ptr())) {
       if (FAILEDx(tenant_holder.get_ptr()->update_memory_pool(MEMORY_LIMITED_SIZE))) {
-        OB_LOG(WARN, "faield to restore memory", KR(ret));
+        OB_LOG(WARN, "failed to restore memory", KR(ret));
         OSDQLogEntry::print_log("LIMIT MEMORY", "failed to restore memory", RED_COLOR_PREFIX);
       }
     }

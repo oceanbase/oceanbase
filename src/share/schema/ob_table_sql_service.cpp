@@ -2433,7 +2433,7 @@ int ObTableSqlService::create_table(ObTableSchema &table,
     if (OB_FAIL(add_sequence(sql_client, tenant_id, table.get_table_id(),
                              table.get_autoinc_column_id(), table.get_auto_increment(),
                              table.get_truncate_version()))) {
-      LOG_WARN("insert sequence record faild", K(ret), K(table));
+      LOG_WARN("insert sequence record failed", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
     cost_usec = end_usec - start_usec;

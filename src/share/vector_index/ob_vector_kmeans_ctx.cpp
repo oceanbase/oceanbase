@@ -446,7 +446,7 @@ int ObElkanKmeansAlgo::calc_kmeans_distance(const float* a, const float* b, cons
   int ret = OB_SUCCESS;
   // only use l2_distance
   if (OB_FAIL(ObVectorL2Distance<float>::l2_distance_func(a, b, len, distance))) {
-    SHARE_LOG(WARN, "faild to calc l2 distance", K(ret));
+    SHARE_LOG(WARN, "failed to calc l2 distance", K(ret));
   }
   return ret;
 }

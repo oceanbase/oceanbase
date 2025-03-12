@@ -142,7 +142,7 @@ int ObHashExceptVecOp::get_next_batch_from_hashtable(const int64_t batch_size)
       if (OB_FAIL(hp_infras_.finish_insert_row())) {
         LOG_WARN("failed to finish insert row", K(ret));
       } else if (OB_FAIL(hp_infras_.end_round())) {
-        LOG_WARN("faild to end round", K(ret));
+        LOG_WARN("failed to end round", K(ret));
       } else if (OB_FAIL(hp_infras_.start_round())) {
         LOG_WARN("failed to start round", K(ret));
       } else if (OB_FAIL(build_hash_table_by_part(batch_size))) {

@@ -5952,7 +5952,7 @@ int ObDbmsStats::get_table_stale_percent(sql::ObExecContext &ctx,
     if (OB_FAIL(get_user_partition_table_stale_percent(ctx, tenant_id, table_schema,
                                                        stale_percent_threshold,
                                                        stat_table))) {
-      LOG_WARN("faild to get user partition table stale percent", K(ret));
+      LOG_WARN("failed to get user partition table stale percent", K(ret));
     } else {/*do nothing*/}
   } else if (OB_FAIL(get_common_table_stale_percent(ctx, tenant_id, table_schema, stat_table))) {
     LOG_WARN("failed to get common table stale percent", K(ret));

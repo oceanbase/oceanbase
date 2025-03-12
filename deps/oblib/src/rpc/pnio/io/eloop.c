@@ -77,13 +77,13 @@ static void sock_destroy(sock_t* s) {
   if (s->ep_fd >= 0) {
     err = epoll_ctl(s->ep_fd, EPOLL_CTL_DEL, s->fd, NULL);
     if (0 != err) {
-      rk_warn("epoll_ctl delete fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+      rk_warn("epoll_ctl delete fd failed, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
     }
   }
   if (s->fd >= 0) {
     err = ussl_close(s->fd);
     if (0 != err) {
-      rk_warn("close sock fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+      rk_warn("close sock fd failed, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
     }
   }
   if (s->fty) {

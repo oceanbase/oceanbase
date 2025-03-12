@@ -95,7 +95,7 @@ int JVMFunctionHelper::get_env(JNIEnv *&env) {
     // Because of the jni_env_ is thread local variables, so should handled cross
     // thread scenes.
     if (OB_FAIL(init_jni_env())) {
-      LOG_WARN("faild to get cross thread, and init env failed", K(ret));
+      LOG_WARN("failed to get cross thread, and init env failed", K(ret));
     } else if (nullptr == jni_env_) {
       ret = OB_JNI_ENV_ERROR;
       LOG_WARN("failed to init jni env in get_env method", K(ret));

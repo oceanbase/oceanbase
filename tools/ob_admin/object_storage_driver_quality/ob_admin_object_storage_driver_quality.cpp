@@ -505,7 +505,7 @@ int OSDQMetric::init()
   } else if (OB_FAIL(get_metric_csv_path(metric_csv_path_, OB_MAX_FILE_NAME_LENGTH))) {
     OB_LOG(WARN, "failed get metric csv path", KR(ret));
   } else if (OB_FAIL(print_csv_title_())) {
-    OB_LOG(WARN, "faild print title to metric csv file", KR(ret), KP(metric_csv_path_));
+    OB_LOG(WARN, "failed print title to metric csv file", KR(ret), KP(metric_csv_path_));
   } else {
     getrusage(RUSAGE_SELF, &start_usage_);
     last_usage_ = start_usage_;
@@ -596,7 +596,7 @@ int OSDQMetric::get_memory_usage(MemInfo &mem_info)
    if (line.find("VmPeak:") == 0) {
      if (OB_UNLIKELY(sscanf(line.c_str(), "VmPeak: %lf kB", &mem_info.vm_peak_kb_) != 1)) {
        ret = OB_ERR_UNEXPECTED;
-       OB_LOG(WARN, "faield to get VmPeak", KR(ret), K(line.c_str()));
+       OB_LOG(WARN, "failed to get VmPeak", KR(ret), K(line.c_str()));
      } else {
        write_state |= 1 << 0;
      }

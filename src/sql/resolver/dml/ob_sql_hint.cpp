@@ -117,7 +117,7 @@ int ObQueryHint::set_outline_data_hints(const ObGlobalHint &global_hint,
         LOG_WARN("unexpected NULL.", K(ret), K(cur_hint));
       } else if (cur_hint->is_transform_outline_hint()
                  && OB_FAIL(trans_list_.push_back(cur_hint))) {
-        LOG_WARN("faild to push back hint.", K(ret));
+        LOG_WARN("failed to push back hint.", K(ret));
       }
     }
     LOG_DEBUG("finish add outline data hints");
@@ -156,7 +156,7 @@ int ObQueryHint::append_hints(int64_t stmt_id,
     }
 
     if (OB_SUCC(ret) && OB_FAIL(qb_hints->hints_.push_back(cur_hint))) {
-      LOG_WARN("faild to push back hint.", K(ret));
+      LOG_WARN("failed to push back hint.", K(ret));
     }
   }
   return ret;
@@ -321,7 +321,7 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
   } else if (OB_FAIL(generate_orig_stmt_qb_name(*allocator, 0))) {
     LOG_WARN("failed to generate stmt name after resolve", K(ret));
   } else if (OB_FAIL(distribute_hint_to_orig_stmt(stmt))) {
-    LOG_WARN("faild to distribute hint to orig stmt", K(ret));
+    LOG_WARN("failed to distribute hint to orig stmt", K(ret));
   } else {
     LOG_TRACE("finish init query hint", K(*this));
   }

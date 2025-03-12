@@ -244,7 +244,7 @@ OB_DEF_DESERIALIZE(ObRangeMap)
       void *ptr = allocator_.alloc(sizeof(ObObj));
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to allocate memeory for ObObj");
+        LOG_ERROR("failed to allocate memory for ObObj");
       } else {
         obj_val = new(ptr)ObObj();
         OB_UNIS_DECODE(*obj_val);
@@ -257,7 +257,7 @@ OB_DEF_DESERIALIZE(ObRangeMap)
       void *ptr = allocator_.alloc(sizeof(ObTempExpr));
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to allocate memeory for temp expr");
+        LOG_ERROR("failed to allocate memory for temp expr");
       } else {
         temp_expr = new(ptr)ObTempExpr(allocator_);
         OB_UNIS_DECODE(*temp_expr);
@@ -279,7 +279,7 @@ OB_DEF_DESERIALIZE(ObRangeMap)
     void *ptr = allocator_.alloc(sizeof(InParam));
     if (OB_ISNULL(ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to allocate memeory for in param");
+      LOG_ERROR("failed to allocate memory for in param");
     } else {
       param = new(ptr)InParam(allocator_);
       in_params_.at(i) = param;
@@ -524,7 +524,7 @@ int ObPreRangeGraph::deep_copy_column_metas(const ObIArray<ObRangeColumnMeta*> &
       LOG_WARN("get null column meta");
     } else if (OB_ISNULL(ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to allocate memeory for ObRangeColumnMeta");
+      LOG_ERROR("failed to allocate memory for ObRangeColumnMeta");
     } else {
       column_meta = new(ptr)ObRangeColumnMeta();
       column_meta->column_type_ = src_meta->column_type_;
@@ -554,7 +554,7 @@ int ObPreRangeGraph::deep_copy_range_map(const ObRangeMap &src_range_map)
         LOG_WARN("get null const val");
       } else if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to allocate memeory for ObObj");
+        LOG_ERROR("failed to allocate memory for ObObj");
       } else {
         obj_val = new(ptr)ObObj();
         if (OB_FAIL(ob_write_obj(allocator_, *src_range_map.expr_final_infos_.at(i).const_val_, *obj_val))) {
@@ -569,7 +569,7 @@ int ObPreRangeGraph::deep_copy_range_map(const ObRangeMap &src_range_map)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null temp expr");
       } else if (OB_FAIL(src_range_map.expr_final_infos_.at(i).temp_expr_->deep_copy(allocator_, temp_expr))) {
-        LOG_WARN("faield to deep copy temp expr");
+        LOG_WARN("failed to deep copy temp expr");
       } else {
         range_map_.expr_final_infos_.at(i).temp_expr_ = temp_expr;
       }
@@ -589,7 +589,7 @@ int ObPreRangeGraph::deep_copy_range_map(const ObRangeMap &src_range_map)
         LOG_WARN("get null in param");
       } else if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to allocate memeory for in param");
+        LOG_ERROR("failed to allocate memory for in param");
       } else {
         param = new(ptr)InParam(allocator_);
         if (OB_FAIL(param->assign(*src_range_map.in_params_.at(i)))) {
@@ -757,7 +757,7 @@ int ObPreRangeGraph::fill_column_metas(const ObIArray<ColumnItem> &range_columns
       LOG_WARN("get null expr");
     } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObRangeColumnMeta)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memeory for ObRangeColumnMeta");
+      LOG_WARN("failed to allocate memory for ObRangeColumnMeta");
     } else {
       ObRangeColumnMeta *column_meta = new(ptr)ObRangeColumnMeta(column_expr->get_result_type());
       if (column_meta->column_type_.is_lob_locator()) {
@@ -905,7 +905,7 @@ int ObPreRangeGraph::deserialize_range_graph(ObRangeNode *&range_node,
     void *ptr = allocator_.alloc(sizeof(ObRangeNode));
     if (OB_ISNULL(ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to allocate memeory for ObRangeNode");
+      LOG_ERROR("failed to allocate memory for ObRangeNode");
     } else {
       node = new(ptr)ObRangeNode(allocator_);
       OB_UNIS_DECODE(*node);
@@ -1026,7 +1026,7 @@ OB_DEF_DESERIALIZE(ObPreRangeGraph)
       void *ptr = allocator_.alloc(sizeof(ObRangeColumnMeta));
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to allocate memeory for ObRangeColumnMeta");
+        LOG_ERROR("failed to allocate memory for ObRangeColumnMeta");
       } else {
         column_meta = new(ptr)ObRangeColumnMeta();
         OB_UNIS_DECODE(*column_meta);

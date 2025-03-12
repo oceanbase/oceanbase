@@ -4538,7 +4538,7 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       col_vector_batch->notNull[row_offset] = true;
       if (OB_FAIL(get_data_from_expr_vector(expr_vector, row_idx, datum_meta.type_,
                             long_batch->data[row_offset], is_strict_mode, date_sql_mode))) {
-        LOG_WARN("faild to get data from expr vector", K(ret), K(col_idx), K(row_idx), K(datum_meta.type_));
+        LOG_WARN("failed to get data from expr vector", K(ret), K(col_idx), K(row_idx), K(datum_meta.type_));
       }
     }
   } else if (ob_is_number_or_decimal_int_tc(datum_meta.type_)) {

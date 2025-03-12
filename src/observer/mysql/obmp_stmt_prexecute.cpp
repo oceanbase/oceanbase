@@ -172,7 +172,7 @@ int ObMPStmtPrexecute::before_process()
           retry_ctrl_.set_tenant_global_schema_version(tenant_version);
           retry_ctrl_.set_sys_global_schema_version(sys_version);
           if (OB_FAIL(init_process_var(get_ctx(), ObMultiStmtItem(false, 0, ObString()), *session))) {
-            LOG_WARN("init process var faield.", K(ret));
+            LOG_WARN("init process var failed.", K(ret));
           } else if (OB_FAIL(check_and_refresh_schema(session->get_login_tenant_id(),
                                                       session->get_effective_tenant_id()))) {
             LOG_WARN("failed to check_and_refresh_schema", K(ret));
@@ -467,7 +467,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
 #endif
           OB_FAIL(ObSPIService::dbms_dynamic_open(
                      &pl_ctx, *cursor, false, orc_max_ret_rows))) {
-        LOG_WARN("cursor open faild.", K(cursor->get_id()));
+        LOG_WARN("cursor open failed.", K(cursor->get_id()));
         // select do not support arraybinding
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
@@ -501,7 +501,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
           LOG_WARN("fail to get autocommit", K(ret));
         } else if (OB_FAIL(response_param_query_header(session, &cursor->get_field_columns(),
                                           get_params(), stmt_id_, has_result, 0))) {
-          LOG_WARN("send header packet faild.", K(ret));
+          LOG_WARN("send header packet failed.", K(ret));
         } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get tenant schema guard failed ", K(ret), K(session.get_effective_tenant_id()));
         }

@@ -208,7 +208,7 @@ public:
         const int64_t buf_size = PALF_BLOCK_SIZE - lsn_2_offset(lsn, PALF_BLOCK_SIZE);
         generate_data(write_buf, buf, buf_size, lsn, pid, log_ts);
         if (OB_FAIL(log_engine_.append_log(lsn, write_buf, log_ts))) {
-          PALF_LOG(WARN, "append_log faild", K(ret), K(lsn), K(write_buf));
+          PALF_LOG(WARN, "append_log failed", K(ret), K(lsn), K(write_buf));
         } else {
           lsn = lsn + write_buf.get_total_size();
           log_ts++;
@@ -220,7 +220,7 @@ public:
       if (OB_SUCCESS != ret) {
         PALF_LOG(WARN, "generate padding failed", K(ret), K(lsn), K(curr_write_size));
       } else if (OB_FAIL(log_engine_.append_log(lsn, write_buf, log_ts))) {
-        PALF_LOG(WARN, "append_log faild", K(ret), K(lsn), K(write_buf));
+        PALF_LOG(WARN, "append_log failed", K(ret), K(lsn), K(write_buf));
       } else {
         remain_size -= curr_write_size;
         lsn = lsn + write_buf.get_total_size();

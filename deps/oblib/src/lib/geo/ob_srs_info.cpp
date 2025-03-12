@@ -47,23 +47,23 @@ int ObSrsUtils::check_is_wgs84(const ObGeographicRs *rs, bool &is_wgs84)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_authority(rs->authority, "EPSG", 4326, false, is_wgs84))) {
-    LOG_WARN("faild to check authority is wgs84 or not", K(ret));
+    LOG_WARN("failed to check authority is wgs84 or not", K(ret));
   } else if (is_wgs84 && (rs->axis.x.direction != ObAxisDirection::NORTH ||
                           rs->axis.y.direction != ObAxisDirection::EAST)) {
     is_wgs84 = false;
   } else if (is_wgs84 && OB_FAIL(check_authority(rs->datum_info.spheroid.authority, "EPSG", 7030, true, is_wgs84))) {
-    LOG_WARN("faild to check authority is wgs84 or not", K(ret));
+    LOG_WARN("failed to check authority is wgs84 or not", K(ret));
   } else if (is_wgs84 && (rs->datum_info.spheroid.semi_major_axis != WGS_SEMI_MAJOR_AXIS ||
              rs->datum_info.spheroid.inverse_flattening != WGS_INVERSE_FLATTENING)) {
     is_wgs84 = false;
   } else if (is_wgs84 && OB_FAIL(check_authority(rs->datum_info.authority, "EPSG", 6326, true, is_wgs84))) {
-    LOG_WARN("faild to check authority is wgs84 or not", K(ret), K(is_wgs84));
+    LOG_WARN("failed to check authority is wgs84 or not", K(ret), K(is_wgs84));
   } else if (is_wgs84 && OB_FAIL(check_authority(rs->primem.authority, "EPSG", 8901, true, is_wgs84))) {
-    LOG_WARN("faild to check authority is wgs84 or not", K(ret), K(is_wgs84));
+    LOG_WARN("failed to check authority is wgs84 or not", K(ret), K(is_wgs84));
   } else if (is_wgs84 && rs->primem.longtitude != WGS_PRIMEM_LONG) {
     is_wgs84 = false;
   } else if (is_wgs84 && OB_FAIL(check_authority(rs->unit.authority, "EPSG", 9122, true, is_wgs84))) {
-    LOG_WARN("faild to check authority is wgs84 or not", K(ret), K(is_wgs84));
+    LOG_WARN("failed to check authority is wgs84 or not", K(ret), K(is_wgs84));
   } else if (is_wgs84 && rs->unit.conversion_factor != WGS_CONVERSION_FACTOR) {
     is_wgs84 = false;
   } else if (rs->datum_info.towgs84.is_valid) {

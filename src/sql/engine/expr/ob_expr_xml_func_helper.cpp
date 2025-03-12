@@ -1907,7 +1907,7 @@ int ObXMLExprHelper::concat_xml_type_nodes(
       ObIMulModeBase *xml_doc = NULL;
       ObXmlBin *xml_bin = NULL;
       if (OB_FAIL(ObXmlUtil::xml_bin_type(xml_bin_str_vec[i], node_type))) {
-        LOG_WARN("faild to xml_bin_type", K(ret), K(i), K(xml_bin_str_vec[i]));
+        LOG_WARN("failed to xml_bin_type", K(ret), K(i), K(xml_bin_str_vec[i]));
       } else if (OB_FAIL(common::ObMulModeFactory::get_xml_base(
                             mem_ctx, xml_bin_str_vec[i],
                             ObNodeMemType::BINARY_TYPE,

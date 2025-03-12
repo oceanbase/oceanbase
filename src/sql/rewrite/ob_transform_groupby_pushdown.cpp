@@ -1095,7 +1095,7 @@ int ObTransformGroupByPushdown::get_tables_from_params(ObDMLStmt &stmt,
           LOG_WARN("table index is invalid", K(ret), K(table_indexes));
         } else if (disassemble_join) {
           if (OB_FAIL(ObTransformUtils::construct_trans_table(&stmt, table_item, table_items))) {
-            LOG_WARN("construct tans tables faield", K(ret));
+            LOG_WARN("construct tans tables failed", K(ret));
           }
         } else if (OB_FAIL(table_items.push_back(table_item))) {
           LOG_WARN("push back failed", K(ret));
@@ -1239,7 +1239,7 @@ int ObTransformGroupByPushdown::check_group_by_subset(ObRawExpr *expr,
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && bret && i < expr->get_param_count(); i++) {
           if (OB_FAIL(SMART_CALL(check_group_by_subset(expr->get_param_expr(i), group_exprs, bret)))) {
-            LOG_WARN("check group by subset faield", K(ret));
+            LOG_WARN("check group by subset failed", K(ret));
           }
         }
       }
@@ -1669,7 +1669,7 @@ int ObTransformGroupByPushdown::do_groupby_push_down_into_join(ObSelectStmt *stm
   if (OB_SUCC(ret)) {
     bool is_valid = true;
     if (OB_FAIL(distribute_group_aggr(trans_stmt, params))) {
-      LOG_WARN("faield to distribute expr into view", K(ret));
+      LOG_WARN("failed to distribute expr into view", K(ret));
     } else if (get_valid_eager_aggr_num(params) <= 0) {
       is_valid = false;
     }
@@ -1783,7 +1783,7 @@ int ObTransformGroupByPushdown::distribute_group_aggr(ObSelectStmt *stmt,
           if (NULL == (joined_table = param.correlated_joined_tables_.at(i))) {
             // NULL means this filter from where condition, do nothing
           } else if (OB_FAIL(joined_table->join_conditions_.push_back(param.filter_exprs_.at(i)))) {
-            LOG_WARN("faield to push back expr", K(ret));
+            LOG_WARN("failed to push back expr", K(ret));
           }
         }
         param.reset();

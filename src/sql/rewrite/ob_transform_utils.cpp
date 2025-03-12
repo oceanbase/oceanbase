@@ -8788,7 +8788,7 @@ int ObTransformUtils::merge_limit_as_zero(ObTransformerCtx &ctx,
                                                         upper_offset))) {
     LOG_WARN("failed to create double op expr", K(ret));
   } else if (OB_FAIL(compare_const_expr_result(&ctx, minus_expr, T_OP_GE, 1, is_not_neg))) {
-    LOG_WARN("get expr int value faield", K(ret));
+    LOG_WARN("get expr int value failed", K(ret));
   } else if (!is_not_neg) {
     ObRawExpr *cmp_expr = NULL;
     if (one_expr == NULL && OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx.expr_factory_,
@@ -12562,7 +12562,7 @@ int ObTransformUtils::get_condition_from_joined_table(ObDMLStmt &stmt,
     } else if (!ObOptimizerUtil::find_item(joined_table->single_table_ids_, target_table->table_id_)) {
       // do nothing
     } else if (OB_FAIL(extract_joined_table_condition(joined_table, target_table, conditions, add_on_condition))) {
-      LOG_WARN("faield to extract joined table condition", K(ret));
+      LOG_WARN("failed to extract joined table condition", K(ret));
     }
   }
   return ret;
@@ -14188,7 +14188,7 @@ int ObTransformUtils::check_group_by_subset(ObRawExpr *expr,
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && bret && i < expr->get_param_count(); i++) {
           if (OB_FAIL(SMART_CALL(check_group_by_subset(expr->get_param_expr(i), group_exprs, bret)))) {
-            LOG_WARN("check group by subset faield", K(ret));
+            LOG_WARN("check group by subset failed", K(ret));
           }
         }
       }
@@ -14502,7 +14502,7 @@ int ObTransformUtils::generate_view_stmt_from_query_string(const ObString &query
   } else if (OB_FAIL(query_hint.generate_orig_stmt_qb_name(*ctx->allocator_, stmt_count))) {
     LOG_WARN("failed to generate stmt name after resolve", K(ret));
   } else if (OB_FAIL(query_hint.distribute_hint_to_orig_stmt(dml_stmt))) {
-    LOG_WARN("faild to distribute hint to orig stmt", K(ret));
+    LOG_WARN("failed to distribute hint to orig stmt", K(ret));
   } else if (OB_FAIL(trans.transform(dml_stmt, dummy_value))) {
     LOG_WARN("failed to do transform pre processing", K(ret));
   } else {
@@ -16799,7 +16799,7 @@ int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
         } else if (OB_FAIL(ObTransformUtils::has_null_reject_condition(all_conditions,
                                                                        col,
                                                                        has_null_reject))) {
-          LOG_WARN("faield to check has null reject condition", K(ret));
+          LOG_WARN("failed to check has null reject condition", K(ret));
         } else if (has_null_reject && OB_FAIL(conditions.push_back(select_expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }

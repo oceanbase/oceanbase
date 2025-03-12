@@ -140,7 +140,7 @@ int ObRedisExecuteV2P::try_process()
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_redis_ctx())) {
-    LOG_WARN("faild init redis ctx", K(ret));
+    LOG_WARN("failed init redis ctx", K(ret));
   } else if (OB_FALSE_IT(init_redis_common(redis_ctx_))) {
   } else if (OB_FAIL(ObRedisService::execute(redis_ctx_))) {
     LOG_WARN("fail to execute redis service", K(ret));

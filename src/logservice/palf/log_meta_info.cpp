@@ -984,7 +984,7 @@ DEFINE_SERIALIZE(LogConfigMeta)
   } else if (buf_len - new_pos < get_serialize_size()) {
     ret = OB_BUF_NOT_ENOUGH;
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_))) {
-      PALF_LOG(ERROR, "LogConfigMeta faild to serialize version_", K(ret), K(new_pos), K(buf_len), K(pos));
+      PALF_LOG(ERROR, "LogConfigMeta failed to serialize version_", K(ret), K(new_pos), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, proposal_id_))) {
       PALF_LOG(ERROR, "LogConfigMeta failed to serialize proposal_id_", K(ret), K(new_pos), K(buf_len), K(pos));
   } else if (LOG_CONFIG_META_VERSION_INC >= version_) {

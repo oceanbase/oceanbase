@@ -897,7 +897,7 @@ static OB_INLINE int common_int_number(const ObExpr &expr,
   int warning = OB_SUCCESS;
   ObObjType out_type = expr.datum_meta_.type_;
   if ((ObUNumberType == out_type) && CAST_FAIL(numeric_negative_check(in_val))) {
-    LOG_WARN("numeric_negative_check faield", K(ret), K(in_val));
+    LOG_WARN("numeric_negative_check failed", K(ret), K(in_val));
   } else if (OB_FAIL(nmb.from(in_val, alloc))) {
     LOG_WARN("nmb.from failed", K(ret), K(in_val));
   }
@@ -13279,7 +13279,7 @@ int padding_char_for_cast(int64_t padding_cnt, const ObCollationType &padding_cs
                                                      padding_res,
                                                      padding_cs_type,
                                                      alloc))) {
-      LOG_WARN("convert padding str collation faield", K(ret), K(padding_str),
+      LOG_WARN("convert padding str collation failed", K(ret), K(padding_str),
                 K(padding_cs_type));
     }
   }

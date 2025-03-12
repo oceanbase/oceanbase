@@ -2426,7 +2426,7 @@ int ObGeoTypeUtil::number_to_double(const number::ObNumber &num_val, double &res
     double val = ObCharset::strntod(buf, pos, &endptr, &err);
     if (EOVERFLOW == err && (-DBL_MAX == res || DBL_MAX == res)) {
       ret = OB_DATA_OUT_OF_RANGE;
-      LOG_WARN("faild to cast string to double, cause data is out of range",
+      LOG_WARN("failed to cast string to double, cause data is out of range",
           K(ret), K(val), K(pos), K(num_val));
     } else {
       res = val;

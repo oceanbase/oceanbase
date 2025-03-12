@@ -361,7 +361,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     if (expr.arg_cnt_ < 5) {
       if (OB_FAIL(path_str.append("$"))) {
-        LOG_WARN("faild to append '$' to path str.", K(ret));
+        LOG_WARN("failed to append '$' to path str.", K(ret));
       } else if (OB_FAIL(find_matches(&temp_allocator, j_base, path_str, hits, duplicates,
           target, one_flag, escape_wc))) {
         LOG_WARN("failed to find matches for path.", K(ret), K(one_flag), K(escape_wc));

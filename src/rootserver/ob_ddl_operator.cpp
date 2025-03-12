@@ -9379,7 +9379,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, ori_table_schema))) {
-    LOG_WARN("get table schema faield", K(ret), K(tenant_id), K(table_id));
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(ori_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(table_id), K(tenant_id));
@@ -9485,7 +9485,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
         new_table_schema.set_schema_version(new_schema_version);
         if (OB_FAIL(schema_service->get_table_sql_service().update_table_attribute(
             trans, new_table_schema, OB_DDL_ADD_CONSTRAINT, update_object_status_ignore_version))) {
-          LOG_WARN("update table attribute faield", K(ret));
+          LOG_WARN("update table attribute failed", K(ret));
         }
       }
     }

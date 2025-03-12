@@ -30,7 +30,7 @@ int ObRawExprSetUtils::to_expr_set(common::ObIAllocator *allocator,
     if (OB_FAIL(expr_set.init(exprs.count()))) {
       LOG_WARN("failed to init expr set", K(ret));
     } else if (OB_FAIL(common::append(expr_set, exprs))) {
-      LOG_WARN("faield to append expr", K(ret));
+      LOG_WARN("failed to append expr", K(ret));
     }
   }
   return ret;

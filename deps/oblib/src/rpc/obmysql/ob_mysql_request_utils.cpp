@@ -252,7 +252,7 @@ static int send_compressed_buffer(bool pkt_has_completed, ObCompressionContext &
 
   if (OB_SUCC(ret) && !is_last_flush) {
     if (OB_FAIL(reuse_compress_buffer(comp_context, orig_send_buf, buf_size, req))) {
-      SERVER_LOG(WARN, "faild to reuse_compressed_buffer_sql_nio", K(ret));
+      SERVER_LOG(WARN, "failed to reuse_compressed_buffer_sql_nio", K(ret));
     }
   }
 
@@ -649,7 +649,7 @@ int ObMySQLRequestUtils::flush_compressed_buffer(bool pkt_has_completed, ObCompr
         SERVER_LOG(WARN, "failed to build_compressed_buffer", K(ret));
         break;
       } else if (OB_FAIL(send_compressed_buffer(pkt_has_completed, comp_context, orig_send_buf, req))) {
-        SERVER_LOG(WARN, "faild to send compressed response", K(ret));
+        SERVER_LOG(WARN, "failed to send compressed response", K(ret));
         break;
       }
     }

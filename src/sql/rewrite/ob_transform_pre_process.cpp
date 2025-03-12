@@ -119,7 +119,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(add_all_rowkey_columns_to_stmt(stmt, is_happened))) {
-        LOG_WARN("faield to add all rowkey columns", K(ret));
+        LOG_WARN("failed to add all rowkey columns", K(ret));
       } else {
         trans_happened |= is_happened;
         OPT_TRACE("add all rowkey columns:", is_happened);
@@ -4218,7 +4218,7 @@ int ObTransformPreProcess::calc_policy_function(ObDMLStmt &stmt,
       LOG_WARN("failed to formalize", K(ret));
     } else if (OB_FAIL(ObSQLUtils::calc_const_expr(*ctx_->exec_ctx_, udf_expr, result_obj,
                 *ctx_->allocator_, ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store()))){
-      LOG_WARN("faild to calc const epxr", K(ret));
+      LOG_WARN("failed to calc const epxr", K(ret));
     } else if (OB_UNLIKELY(!result_obj.is_varchar())) {
       ret = OB_ERR_POLICY_PREDICATE;
       LOG_WARN("invalid policy function result", K(result_obj), K(ret));

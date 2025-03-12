@@ -814,7 +814,7 @@ int ObPLResolver::resolve_root(const ObStmtNodeTree *parse_tree, ObPLFunctionAST
   } else if (OB_FAIL(resolve_goto_stmts(func))) {
     LOG_WARN("failed to resolve goto stmts", K(ret));
   } else if (OB_FAIL(check_subprogram(func))) {
-    LOG_WARN("faield to check subprogram", K(ret));
+    LOG_WARN("failed to check subprogram", K(ret));
   }
   return ret;
 }
@@ -9830,7 +9830,7 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
   if (OB_SUCC(ret) && op_exprs.count() > 0) {
     if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(expr_factory_,
                                         &resolve_ctx_.session_info_, op_exprs))) {
-      LOG_WARN("implicit cast faild", K(ret));
+      LOG_WARN("implicit cast failed", K(ret));
     }
   }
 

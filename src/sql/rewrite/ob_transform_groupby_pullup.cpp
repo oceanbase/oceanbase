@@ -155,7 +155,7 @@ int ObTransformGroupByPullup::check_group_by_subset(ObRawExpr *expr,
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && bret && i < expr->get_param_count(); i++) {
           if (OB_FAIL(SMART_CALL(check_group_by_subset(expr->get_param_expr(i), group_exprs, bret)))) {
-            LOG_WARN("check group by subset faield", K(ret));
+            LOG_WARN("check group by subset failed", K(ret));
           }
         }
       }
@@ -1339,7 +1339,7 @@ int ObTransformGroupByPullup::get_group_by_subset(ObRawExpr *expr,
     } else if (idx == -1) { //not found
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
         if (OB_FAIL(SMART_CALL(get_group_by_subset(expr->get_param_expr(i), group_exprs, subset_group_exprs)))) {
-          LOG_WARN("check group by subset faield", K(ret));
+          LOG_WARN("check group by subset failed", K(ret));
         }
       }
     } else if (OB_FAIL(add_var_to_array_no_dup(subset_group_exprs, expr))) {

@@ -519,7 +519,7 @@ int ObReverseLink::read(const ObString &sql, ObISQLClient::ReadResult &res)
     ret = OB_NOT_INIT;
     LOG_WARN("reverse link connection is closed", K(ret));
   } else if (OB_FAIL(reverse_conn_.execute_read(OB_INVALID_TENANT_ID, sql, res))) {
-    LOG_WARN("faild to read by reverse link connection", K(ret), K(sql));
+    LOG_WARN("failed to read by reverse link connection", K(ret), K(sql));
   } else {
     LOG_DEBUG("succ to read by reverse link connection", K(ret), K(sql));
   }
@@ -533,7 +533,7 @@ int ObReverseLink::ping()
     ret = OB_NOT_INIT;
     LOG_WARN("reverse link connection is closed", K(ret));
   } else if (OB_FAIL(reverse_conn_.ping())) {
-    LOG_WARN("faild to ping reverse link connection", K(ret));
+    LOG_WARN("failed to ping reverse link connection", K(ret));
   }
   return ret;
 }

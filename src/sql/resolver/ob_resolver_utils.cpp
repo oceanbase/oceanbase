@@ -3396,7 +3396,7 @@ int ObResolverUtils::resolve_const_expr(ObResolverParams &params,
       LOG_WARN("impicit cast for oracle", K(ret));
       if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(ctx.expr_factory_,
                                                                   ctx.session_info_, op_exprs))) {
-        LOG_WARN("impicit cast faild", K(ret));
+        LOG_WARN("impicit cast failed", K(ret));
       }
     }
 
@@ -4477,7 +4477,7 @@ int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObRawExpr *&
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
-        LOG_WARN("faield to check param num", K(ret));
+        LOG_WARN("failed to check param num", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr,
                                                             q_name.ref_expr_,
                                                             real_ref_expr))) {
@@ -4488,7 +4488,7 @@ int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObRawExpr *&
       }
     } else {
       if (OB_FAIL(log_err_msg_for_partition_value(q_name))) {
-        LOG_WARN("log error msg for range value expr faield", K(ret));
+        LOG_WARN("log error msg for range value expr failed", K(ret));
       }
     }
   }

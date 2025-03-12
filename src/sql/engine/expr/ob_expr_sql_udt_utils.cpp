@@ -993,7 +993,7 @@ int ObSqlUdtUtils::cast_pl_record_to_sql_record(common::ObIAllocator &tmp_alloca
       LOG_WARN("get reserve len is invalid", K(ret), K(sql_udt_total_len), K(buf_len));
     } else if (OB_FAIL(ob_udt_convert_sorted_objs_array_to_udf_format(sorted_objs, buf,
                                                                       buf_len, buf_pos, sql_udt))) {
-      LOG_WARN("faild to convert pl extend to sql udt", K(ret), K(sql_udt.get_udt_meta().udt_id_));
+      LOG_WARN("failed to convert pl extend to sql udt", K(ret), K(sql_udt.get_udt_meta().udt_id_));
     } else if (OB_FAIL(blob_res.lseek(buf_pos, 0))) {
       LOG_WARN("temp lob lseek failed", K(ret), K(blob_res), K(buf_pos));
     } else {

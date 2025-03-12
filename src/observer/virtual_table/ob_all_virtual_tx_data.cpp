@@ -132,7 +132,7 @@ int ObAllVirtualTxData::get_primary_key_()
                  "size of end key",
                  key_range.get_end_key().get_obj_cnt());
     } else if (OB_FAIL(handle_key_range_(key_range))) {
-      SERVER_LOG(WARN, "handle key range faield", KR(ret));
+      SERVER_LOG(WARN, "handle key range failed", KR(ret));
     }
   }
   return ret;

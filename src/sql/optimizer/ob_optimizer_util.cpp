@@ -4340,7 +4340,7 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
               // do nothing
             } else if (OB_FAIL(is_exprs_contain_fd_parent(extend_exprs, *fd_item,
                                                           equal_sets, const_exprs, is_contain))) {
-              LOG_WARN("faield to check is order unique", K(ret));
+              LOG_WARN("failed to check is order unique", K(ret));
             } else if (!is_contain) {
               // do nothing
             } else if (fd_item->is_unique()) {

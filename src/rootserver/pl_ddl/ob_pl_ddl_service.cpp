@@ -178,7 +178,7 @@ int ObPLDDLService::create_routine(ObRoutineInfo &routine_info,
                                                  error_info,
                                                  dep_infos,
                                                  ddl_stmt_str))) {
-          LOG_WARN("replace routine failded", K(routine_info), K(ret));
+          LOG_WARN("replace routine failed", K(routine_info), K(ret));
         }
       } else {
         if (OB_FAIL(pl_operator.create_routine(routine_info,
@@ -792,7 +792,7 @@ int ObPLDDLService::create_udt(ObUDTTypeInfo &udt_info,
                                                   schema_guard,
                                                   dep_infos,
                                                   ddl_stmt_str))) {
-        LOG_WARN("replace udt failded", K(udt_info), K(ret));
+        LOG_WARN("replace udt failed", K(udt_info), K(ret));
       }
     } else {
       if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) && exist_valid_udt) {

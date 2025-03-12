@@ -284,7 +284,7 @@ int ObDropLobTask::check_switch_succ_()
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema_ptr))) {
-    LOG_WARN("faild to get_table_schema", KR(ret), K(tenant_id_), K(object_id_));
+    LOG_WARN("failed to get_table_schema", KR(ret), K(tenant_id_), K(object_id_));
   } else if (OB_ISNULL(data_table_schema_ptr)) {
     // drop lob task may retry because rpc timeout, and data table dropped before retry, so we should ignore this situation
     task_status_ = ObDDLTaskStatus::SUCCESS;

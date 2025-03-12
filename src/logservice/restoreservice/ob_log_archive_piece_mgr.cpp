@@ -1673,7 +1673,7 @@ int ObLogArchivePieceContext::get_ls_meta_in_piece_(
     } else if (OB_FAIL(get_ls_meta_file_in_array_(timestamp, fuzzy_match, file_id, array))) {
       // only in precise match mode, OB_ENTRY_NOT_EXIST can return
       if (OB_ENTRY_NOT_EXIST != ret) {
-        CLOG_LOG(WARN, "faild to get_ls_meta_file_in_array_", K(ret), K(prefix), K_(id), K(timestamp), K(array));
+        CLOG_LOG(WARN, "failed to get_ls_meta_file_in_array_", K(ret), K(prefix), K_(id), K(timestamp), K(array));
       }
     } else {
       done = true;

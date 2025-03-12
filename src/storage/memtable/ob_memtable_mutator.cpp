@@ -888,7 +888,7 @@ int ObMutatorWriter::append_row_kv(
   if (OB_ISNULL(redo.callback_)) {
     is_with_head = false;
   } else if (OB_FAIL(redo.callback_->get_cluster_version(cluster_version))) {
-    TRANS_LOG(WARN, "get cluster version faild.", K(ret));
+    TRANS_LOG(WARN, "get cluster version failed.", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(mtk)) {

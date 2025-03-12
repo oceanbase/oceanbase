@@ -3117,7 +3117,7 @@ int ObPLExecState::final(int ret)
           tmp_ret = session->close_cursor(cursor_id);
         }
         if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("faild close cursor. ", K(tmp_ret), K(cursor_id));
+          LOG_WARN("failed close cursor. ", K(tmp_ret), K(cursor_id));
         }
       }
     }

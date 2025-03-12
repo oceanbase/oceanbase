@@ -256,7 +256,7 @@ int ObSMUtils::cell_str(
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "udt info is null", K(ret));
           } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
-            OB_LOG(WARN, "faild to transform to pl type", K(ret));
+            OB_LOG(WARN, "failed to transform to pl type", K(ret));
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "user type is null", K(ret));
@@ -372,7 +372,7 @@ int ObSMUtils::cell_str(
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
-            OB_LOG(WARN, "faild to transform to pl type", K(ret));
+            OB_LOG(WARN, "failed to transform to pl type", K(ret));
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "user type is null", K(ret));
@@ -665,12 +665,12 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
     OB_LOG(WARN, "get user type fail.", K(type_id), K(ret));
   } else if (NULL == udt_info) {
     ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "faild to get udt info.", K(ret));
+    OB_LOG(WARN, "failed to get udt info.", K(ret));
   } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
-    OB_LOG(WARN, "faild to transform to pl type", K(ret));
+    OB_LOG(WARN, "failed to transform to pl type", K(ret));
   } else if (NULL == user_type) {
     ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "faild to get user type.", K(ret));
+    OB_LOG(WARN, "failed to get user type.", K(ret));
   } else if (len - pos < user_type->get_name().length() + 12) {
     // 12 is the length of string length and '(' and ')'
     // string length is reserve a const value of 10

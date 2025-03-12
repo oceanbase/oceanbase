@@ -1117,7 +1117,7 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
   //determine type, get calc ob_time from input_value
   if (OB_SUCC(ret)) {
     if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-      LOG_WARN("faild to get local timezone info", K(ret));
+      LOG_WARN("failed to get local timezone info", K(ret));
     } else if (OB_FAIL(convert_to_ob_time(ctx, input, input_meta.type_, tz_info, ob_time))) {
       LOG_WARN("fail to convert to ob time", K(ret));
     }

@@ -484,7 +484,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     } else if (OB_FAIL(deep_copy_fixed_raw_params(other.raw_params_idx_, other.raw_params_))) {
       LOG_WARN("deep copy fixed raw params failed", K(other), K(ret));
     } else if (OB_FAIL(ps_sql_meta_.deep_copy(other.get_ps_sql_meta()))) {
-      LOG_WARN("deep copy ps sql meta faield", K(ret));
+      LOG_WARN("deep copy ps sql meta failed", K(ret));
     }
   }
   return ret;
@@ -660,7 +660,7 @@ ObPsStmtInfoGuard::~ObPsStmtInfoGuard()
   if (NULL != ps_cache_) {
     if (NULL != stmt_info_) {
       if (OB_FAIL(ps_cache_->deref_stmt_info(stmt_id_))) {
-        LOG_WARN("deref stmt item faield", K(ret), K(*stmt_info_), K_(stmt_id));
+        LOG_WARN("deref stmt item failed", K(ret), K(*stmt_info_), K_(stmt_id));
       }
       LOG_TRACE("destroy PsStmtInfo Guard", K_(stmt_id));
     } else {

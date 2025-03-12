@@ -722,7 +722,7 @@ int ObXmlUtil::to_number(const char *in, const uint64_t length, double &out)
     ret_val = ObCharset::strntodv2(in, length, &endptr, &err);
     if (EOVERFLOW == err && (-DBL_MAX == ret_val || DBL_MAX == ret_val)) {
       ret = OB_DATA_OUT_OF_RANGE;
-      LOG_WARN("faild to cast string to double, cause in is out of range", K(ret), K(length),
+      LOG_WARN("failed to cast string to double, cause in is out of range", K(ret), K(length),
                                                                              KP(in), K(ret_val));
     } else {
       ObString tmp_str(length, in);

@@ -2469,7 +2469,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
   } else if (FALSE_IT(logical_plan->set_nonrecursive_plan_for_fake_cte(get_nonrecursive_plan_for_fake_cte()))) {
     // never reach
   } else if (OB_FAIL(subquery->has_ref_assign_user_var(has_ref_assign_user_var))) {
-    LOG_WARN("faield to check stmt has assignment ref user var", K(ret));
+    LOG_WARN("failed to check stmt has assignment ref user var", K(ret));
   } else if (OB_FALSE_IT(is_initplan = !query_ref->has_exec_param() && !has_ref_assign_user_var)) {
   } else if (OB_FAIL(logical_plan->init_rescan_info_for_query_ref(*this, !is_initplan))) {
     LOG_WARN("failed to init rescan info", K(ret));

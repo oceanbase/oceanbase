@@ -38,7 +38,7 @@ int ObAllVirtualHADiagnose::inner_get_next_row(common::ObNewRow *&row)
       } else if (OB_FAIL(insert_stat_(diagnose_info))) {
         SERVER_LOG(WARN, "insert stat failed", K(ret), K(diagnose_info));
       } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-        SERVER_LOG(WARN, "iter diagnose info faild", KR(ret), K(diagnose_info));
+        SERVER_LOG(WARN, "iter diagnose info failed", KR(ret), K(diagnose_info));
       } else {
         SERVER_LOG(INFO, "iter diagnose info succ", K(diagnose_info));
       }

@@ -1787,7 +1787,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
                                                                                   ctx.expr_factory_,
                                                                                   ctx.session_info_,
                                                                                   op_exprs))) {
-        LOG_WARN("implicit cast faild", K(ret));
+        LOG_WARN("implicit cast failed", K(ret));
       }
     }
     if (OB_SUCC(ret) && aggr_exprs.count() > 0) {
@@ -6592,7 +6592,7 @@ int ObDMLResolver::create_rb_iterate_table_item(TableItem *&table_item, ObString
     LOG_WARN("stmt is null", K(stmt), K(ret));
   } else if (OB_ISNULL(table_def = static_cast<ObJsonTableDef*>(allocator_->alloc(sizeof(ObJsonTableDef))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("faield to allocate memory json table def buffer", K(ret));
+    LOG_WARN("failed to allocate memory json table def buffer", K(ret));
   } else if (OB_FALSE_IT(table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef()))) {
   } else if (OB_FALSE_IT(table_def->table_type_ = MulModeTableType::OB_RB_ITERATE_TABLE_TYPE)) {
   } else if (OB_ISNULL(table_item = stmt->create_table_item(*allocator_))) {
@@ -6678,7 +6678,7 @@ int ObDMLResolver::create_unnest_table_item(TableItem *&table_item, ObItemType i
     LOG_WARN("failed to create table table_item", K(ret));
   } else if (OB_ISNULL(table_def = static_cast<ObJsonTableDef*>(allocator_->alloc(sizeof(ObJsonTableDef))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("faield to allocate memory json table def buffer", K(ret));
+    LOG_WARN("failed to allocate memory json table def buffer", K(ret));
   } else {
     table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef());
     if (item_type == T_RB_ITERATE_EXPRESSION) {
@@ -6939,7 +6939,7 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
     char* table_buf = static_cast<char*>(allocator_->alloc(sizeof(ObJsonTableDef)));
     if (OB_ISNULL(table_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("faield to allocate memory json table def buffer", K(ret));
+      LOG_WARN("failed to allocate memory json table def buffer", K(ret));
     } else {
       table_def = static_cast<ObJsonTableDef*>(new (table_buf) ObJsonTableDef());
       if (OB_FAIL(table_def->doc_exprs_.push_back(json_doc_expr))) {
@@ -19199,7 +19199,7 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
     */
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObValuesTableDef)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("faield to allocate memory table def buffer", K(ret));
+      LOG_WARN("failed to allocate memory table def buffer", K(ret));
     } else if (FALSE_IT(new_table_item->values_table_def_ = new (buf) ObValuesTableDef())) {
     } else if ((upper_insert_resolver_ == NULL || is_mock) &&
                OB_FAIL(resolve_values_table_for_select(table_node, *new_table_item->values_table_def_))) {

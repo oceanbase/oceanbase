@@ -245,7 +245,7 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
                 if (OB_FAIL(next_wait_map_.get_refactored(sessid, wait_object))) {
                   LOG_ERROR("wait object has been released", K(sessid), K(ret));
                 } else if (OB_ISNULL(wait_object.req_)) {
-                  // keepalive faild and the req is null, set the error and break
+                  // keepalive failed and the req is null, set the error and break
                   ret = tmp_ret;
                 } else {
                   req = wait_object.req_;

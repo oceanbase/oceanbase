@@ -82,7 +82,7 @@ int ObIncrementalStatEstimator::derive_global_stat_by_direct_load(ObExecContext 
                                           global_opt_stat))) {
           LOG_WARN("Failed to derive global stat from part stat", K(ret));
         } else if (OB_FAIL(all_derive_opt_stats.push_back(global_opt_stat))) {
-          LOG_WARN("faield to push back", K(ret));
+          LOG_WARN("failed to push back", K(ret));
         }
       }
       //write all stat
@@ -297,7 +297,7 @@ int ObIncrementalStatEstimator::derive_split_gather_stats(ObExecContext &ctx,
                                         global_opt_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(derive_opt_stats.push_back(global_opt_stat))) {
-        LOG_WARN("faield to push back", K(ret));
+        LOG_WARN("failed to push back", K(ret));
       }
     }
     //write all stat
@@ -388,7 +388,7 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
                                                opt_part_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
-        LOG_WARN("faield to push back", K(ret));
+        LOG_WARN("failed to push back", K(ret));
       } else {/*do nothing*/}
     }
   }
@@ -1305,7 +1305,7 @@ int ObIncrementalStatEstimator::derive_part_index_column_stat_by_subpart_index(O
                                                opt_part_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
-        LOG_WARN("faield to push back", K(ret));
+        LOG_WARN("failed to push back", K(ret));
       }  else {/*do nothing*/}
     }
   }

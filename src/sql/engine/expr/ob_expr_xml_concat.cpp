@@ -100,9 +100,9 @@ int ObExprXmlConcat::eval_xml_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (!ob_is_xml_sql_type(expr.args_[i]->datum_meta_.type_, expr.args_[i]->obj_meta_.get_subschema_id())) {
       LOG_WARN("input is not xmltype, skip");
     } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[i], ctx, xml_datum))) {
-      LOG_WARN("faild to get_xmltype_from_expr", K(ret), K(i), K(expr.args_[i]));
+      LOG_WARN("failed to get_xmltype_from_expr", K(ret), K(i), K(expr.args_[i]));
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *xml_datum, xml_meta, true, xml_bin_str))) {
-      LOG_WARN("faild to read_real_string_data", K(ret), K(i), K(xml_datum));
+      LOG_WARN("failed to read_real_string_data", K(ret), K(i), K(xml_datum));
     } else if (xml_bin_str.length() == 0) {
       // input is empty, skip
     } else if (OB_FAIL(xml_bin_str_vec.push_back(xml_bin_str))) {

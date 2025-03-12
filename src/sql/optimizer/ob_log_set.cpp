@@ -530,7 +530,7 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected cost infos count", K(ret), K(cost_infos.count()));
     } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
-      LOG_WARN("faield to get select exprs", K(ret));
+      LOG_WARN("failed to get select exprs", K(ret));
     } else {
       ObCostHashSetInfo hash_cost_info(cost_infos.at(0).rows_, cost_infos.at(0).width_,
                                        cost_infos.at(1).rows_, cost_infos.at(1).width_,

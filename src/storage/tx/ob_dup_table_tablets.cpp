@@ -235,7 +235,7 @@ int DupTabletChangeMap::serialize(char *buf, const int64_t buf_len, int64_t &pos
   if (OB_SUCC(ret)) {
     TabletsSerCallBack ser_cb(buf, buf_len, tmp_pos);
     if (OB_FAIL(hash_for_each_serialize(*this, ser_cb))) {
-      DUP_TABLE_LOG(WARN, "serialize dup tablet hash map faild", K(ret));
+      DUP_TABLE_LOG(WARN, "serialize dup tablet hash map failed", K(ret));
     } else {
       tmp_pos = ser_cb.get_pos();
     }
@@ -268,9 +268,9 @@ int DupTabletChangeMap::deserialize(const char *buf, const int64_t data_len, int
   if (OB_SUCC(ret)) {
     TabletsDeSerCallBack deser_cb(buf, data_len, tmp_pos, deser_time);
     if (OB_FAIL(this->clear())) {
-      DUP_TABLE_LOG(WARN, "clear dup tablet hash map faild", K(ret));
+      DUP_TABLE_LOG(WARN, "clear dup tablet hash map failed", K(ret));
     } else if (OB_FAIL(hash_for_each_deserialize(*this, deser_cb))) {
-      DUP_TABLE_LOG(WARN, "deserialize dup tablet hash map faild", K(ret));
+      DUP_TABLE_LOG(WARN, "deserialize dup tablet hash map failed", K(ret));
     } else {
       tmp_pos = deser_cb.get_pos();
     }
@@ -3235,7 +3235,7 @@ int ObTenantDupTabletSchemaHelper::get_all_dup_tablet_set_(TabletIDSet &tablet_s
         } else {
           for (int j = 0; OB_SUCCESS == ret && j < tablet_id_arr.size(); j++) {
             if (OB_FAIL(tablet_set.set_refactored(tablet_id_arr[j]))) {
-              DUP_TABLE_LOG(WARN, "insert into dup tablet set faild", K(ret));
+              DUP_TABLE_LOG(WARN, "insert into dup tablet set failed", K(ret));
             }
           }
         }
@@ -3254,7 +3254,7 @@ int ObTenantDupTabletSchemaHelper::refresh_and_get_tablet_set(TabletIDSet &tenan
   tenant_dup_tablet_set.reuse();
 
   if (OB_FAIL(get_all_dup_tablet_set_(tenant_dup_tablet_set))) {
-    DUP_TABLE_LOG(WARN, "get tenant dup tablet set faild", K(ret));
+    DUP_TABLE_LOG(WARN, "get tenant dup tablet set failed", K(ret));
   }
 
   DUP_TABLE_LOG(DEBUG, "get all dup tablet ids", K(tenant_dup_tablet_set.size()));

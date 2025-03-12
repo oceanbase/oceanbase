@@ -166,7 +166,7 @@ easy_session_t *easy_session_create(int64_t asize)
                     s->tx_buf = easy_pool_realloc(NULL, asize);
                     if (NULL == s->tx_buf) {
                         s = NULL;
-                        easy_warn_log("faild to create easy_session.");
+                        easy_warn_log("failed to create easy_session.");
                     }
                 }
             }    

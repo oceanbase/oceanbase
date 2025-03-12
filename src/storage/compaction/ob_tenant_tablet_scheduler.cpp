@@ -514,7 +514,7 @@ int ObTenantTabletScheduler::try_update_upper_trans_version_and_gc_sstable(
       UpdateUpperTransParam upper_trans_param;
       upper_trans_param.new_upper_trans_ = &new_upper_trans;
       if (OB_TMP_FAIL(ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(ls, *tablet, multi_version_start, upper_trans_param, need_update))) {
-        LOG_WARN("faild to check need gc or update", K(tmp_ret), K(ls_id), K(tablet_id));
+        LOG_WARN("failed to check need gc or update", K(tmp_ret), K(ls_id), K(tablet_id));
       } else if (need_update) {
         ObArenaAllocator tmp_arena("RmOldTblTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObStorageSchema *storage_schema = nullptr;

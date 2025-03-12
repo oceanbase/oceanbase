@@ -219,7 +219,7 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
       RESPONSE_REDIS_ERROR(ctx.response_, fmt_err_msg.ptr());
     }
     LOG_WARN(
-        "gen command faild",
+        "gen command failed",
         K(ret),
         K(ctx.request_.get_cmd_name()),
         K(ctx.request_.get_args()));
@@ -306,7 +306,7 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
       RESPONSE_REDIS_ERROR(ctx.response_, fmt_err_msg.ptr());
     }
     LOG_WARN(
-        "gen command faild",
+        "gen command failed",
         K(ret),
         K(ctx.request_.get_cmd_name()),
         K(ctx.request_.get_args()));

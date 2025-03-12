@@ -592,7 +592,7 @@ int JniScanner::get_odps_partition_specs(
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
-      LOG_WARN("faild to get the column names method", K(ret));
+      LOG_WARN("failed to get the column names method", K(ret));
     } else {
       jobject partition_specs_list =
           env->CallObjectMethod(jni_scanner_obj_, mid);
@@ -659,7 +659,7 @@ int JniScanner::get_odps_partition_row_count(
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
-      LOG_WARN("faild to get the partition row count method", K(ret));
+      LOG_WARN("failed to get the partition row count method", K(ret));
     } else {
       ObString temp_str;
       jstring j_partition_spec;
@@ -757,7 +757,7 @@ int JniScanner::get_odps_mirror_columns(ObIAllocator &allocator,
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
-      LOG_WARN("faild to get the column names method", K(ret));
+      LOG_WARN("failed to get the column names method", K(ret));
     } else {
       jobject mirror_column_list = env->CallObjectMethod(jni_scanner_obj_, mid);
       if (OB_FAIL(check_jni_exception_(env))) {

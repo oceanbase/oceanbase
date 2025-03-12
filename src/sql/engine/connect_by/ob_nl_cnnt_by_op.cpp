@@ -557,7 +557,7 @@ int ObNLConnectByOp::read_output_func_going()
   int ret = OB_SUCCESS;
   ObConnectByOpPump::PumpNode *top_node = NULL;
   if (OB_FAIL(try_check_status())) {
-    LOG_WARN("check physical plan status faild", K(ret));
+    LOG_WARN("check physical plan status failed", K(ret));
   } else if (OB_FAIL(connect_by_pump_.get_top_pump_node(top_node))) {
     LOG_WARN("connect by pump get top node failed", K(ret));
   } else if (OB_ISNULL(top_node->output_row_)) {

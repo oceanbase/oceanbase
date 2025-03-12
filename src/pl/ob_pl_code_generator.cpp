@@ -3405,7 +3405,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCaseStmt &s)
     if (OB_SUCC(ret)) {
       if (OB_FAIL(generator_.get_helper().create_block(
               ObString("continue"), generator_.get_func(), continue_branch))) {
-        LOG_WARN("faild to create continue branch for case stmt", K(ret));
+        LOG_WARN("failed to create continue branch for case stmt", K(ret));
       } else {
         const ObPLCaseStmt::WhenClauses &when = s.get_when_clauses();
         for (int64_t i = 0; OB_SUCC(ret) && i < when.count(); ++i) {
@@ -10422,7 +10422,7 @@ int ObPLCGBufferGuard::get_objparam_buffer(ObLLVMValue &result)
   if (OB_FAIL(check_guard_valid())) {
     LOG_WARN("failed to check_guard_valid", K(ret));
   } else if OB_FAIL(generator_.get_objparam_buffer(result)) {
-    LOG_WARN("faild to get_objparam_buffer", K(ret));
+    LOG_WARN("failed to get_objparam_buffer", K(ret));
   } else if (OB_FAIL(generator_.generate_reset_objparam(result))) {
     LOG_WARN("failed to reset objparam", K(ret));
   } else {

@@ -810,13 +810,13 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
   } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, right_tables))) {
-    LOG_WARN("faield to get table rel ids", K(ret), K(*right_table));
+    LOG_WARN("failed to get table rel ids", K(ret), K(*right_table));
   } else if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_, stmt, right_tables,
                                                              left_unique_exprs))) {
-    LOG_WARN("faield to get table rel ids", K(ret), K(*right_table));
+    LOG_WARN("failed to get table rel ids", K(ret), K(*right_table));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
+    LOG_WARN("failed to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (flag_table->is_generated_table() || flag_table->is_temp_table()) {
     // add const to generate table select
     ObSelectStmt *view_stmt = NULL;
@@ -908,7 +908,7 @@ int ObTransformOrExpansion::recover_flag_temp_table(ObSelectStmt *stmt,
     LOG_WARN("unexpect null", K(ret), K(stmt));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
+    LOG_WARN("failed to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (!flag_table->is_temp_table()) {
     // do nothing
   } else if (OB_ISNULL(view_stmt = flag_table->ref_query_) || OB_ISNULL(orig_flag_stmt)) {

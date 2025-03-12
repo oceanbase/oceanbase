@@ -623,7 +623,7 @@ int ObTableCtx::adjust_rowkey()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is invalid", K(ret), KP(schema_cache_guard_));
   } else if (OB_FAIL(schema_cache_guard_->get_rowkey_column_num(schema_rowkey_cnt))) {
-    LOG_WARN("faild to get rowkey column num", K(ret));
+    LOG_WARN("failed to get rowkey column num", K(ret));
   } else {
     const int64_t entity_rowkey_cnt = rowkey.get_obj_cnt();
     bool has_auto_inc = false; // only one auto increment column in a table

@@ -55,7 +55,7 @@ int ObCreateMLogExecutor::execute(ObExecContext &ctx, ObCreateMLogStmt &stmt)
     ret = OB_NOT_INIT;
     LOG_WARN("failed to get task executor context", KR(ret));
   } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    LOG_WARN("faild to get common rpc proxy", KR(ret));
+    LOG_WARN("failed to get common rpc proxy", KR(ret));
   } else if (OB_ISNULL(common_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", KR(ret));
