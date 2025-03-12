@@ -71,6 +71,12 @@ char *alloc_failed_msg()
                afc.alloc_size_);
       break;
     }
+  case INVALID_ALLOC_SIZE: {
+      snprintf(msg, len,
+               "allocating 0 bytes or a negative number of bytes is not allowed(alloc_size: %ld)",
+               afc.alloc_size_);
+      break;
+    }
   case SINGLE_ALLOC_SIZE_OVERFLOW: {
       snprintf(msg, len,
                "single alloc size large than 4G is not allowed(alloc_size: %ld)",
