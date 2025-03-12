@@ -2036,7 +2036,7 @@ int ObSchemaServiceSQLImpl::fetch_all_part_info(
         } else {
           if (NULL != table_ids && table_ids_size > 0) {
             if (OB_FAIL(sql.append_fmt(" AND table_id IN "))) {
-              LOG_WARN("append sql faield", KR(ret), K(tenant_id));
+              LOG_WARN("append sql failed", KR(ret), K(tenant_id));
             } else if (OB_FAIL(sql_append_pure_ids(schema_status, table_ids, table_ids_size, sql))) {
               LOG_WARN("sql append table is failed", KR(ret), K(tenant_id));
             }
@@ -3016,7 +3016,7 @@ int ObSchemaServiceSQLImpl::fetch_new_tenant_id(uint64_t &new_tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(fetch_new_schema_id_(OB_SYS_TENANT_ID, OB_MAX_USED_TENANT_ID_TYPE, new_tenant_id))) {
-    LOG_WARN("fetch_new_tenant_id faild", K(ret));
+    LOG_WARN("fetch_new_tenant_id failed", K(ret));
   }
   return ret;
 }

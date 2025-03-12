@@ -8000,7 +8000,7 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
       } else if (OB_FAIL(func_params.push_back(n_expr))) {
         LOG_WARN("fail to add param expr", K(ret));
       } else if (OB_FAIL(n_expr->extract_info())) {
-        LOG_WARN("faield to extract info", K(ret));
+        LOG_WARN("failed to extract info", K(ret));
       } else if (OB_UNLIKELY(lib::is_mysql_mode() && !n_expr->is_const_expr())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid arguments to nth_value", K(ret));

@@ -673,7 +673,7 @@ int ObJsonUtil::padding_char_for_cast(int64_t padding_cnt,
                                                      padding_res,
                                                      padding_cs_type,
                                                      alloc))) {
-      LOG_WARN("convert padding str collation faield", K(ret), K(padding_str),
+      LOG_WARN("convert padding str collation failed", K(ret), K(padding_str),
                 K(padding_cs_type));
     }
   }

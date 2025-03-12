@@ -1981,7 +1981,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
         if (OB_FAIL(tablet_mapper.get_partition_id_map(partition_ids.at(i), first_level_part_id))) {
           LOG_WARN("failed to get partition id map", K(i), K(partition_ids.at(i)));
         } else if (OB_FAIL(first_level_part_ids.push_back(first_level_part_id))) {
-          LOG_WARN("faield to push back log part id");
+          LOG_WARN("failed to push back log part id");
         }
       }
     }
@@ -2822,7 +2822,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
     bool list_value_always_true = false;
     if (OB_FAIL(get_list_value_node(part_level, partition_columns, filter_exprs,
                                    list_value_always_true, list_value_node, exec_ctx))) {
-      LOG_WARN("faield to get list part node");
+      LOG_WARN("failed to get list part node");
     } else if (list_value_always_true) {
       // do nothing
     } else if (OB_FAIL(add_and_node(list_value_node, res_node))) {

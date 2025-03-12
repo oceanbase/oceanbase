@@ -12919,7 +12919,7 @@ int ObDDLService::gen_inc_table_schema_for_rename_subpart_(
     } else if (OB_FAIL(inc_subpart_content.assign(*subpart))) {
       LOG_WARN("failed to assign subpartition", KR(ret), KPC(part), K(inc_subpart_content));
     } else if (OB_FAIL(inc_subpart_content.set_part_name(new_part_name))) {
-      LOG_WARN("set inc subpart name faild", KR(ret), K(inc_subpart_content), K(new_part_name));
+      LOG_WARN("set inc subpart name failed", KR(ret), K(inc_subpart_content), K(new_part_name));
     } else if (OB_FAIL(inc_part->ObBasePartition::assign(*part))) {
       LOG_WARN("failed to assign inc part", KR(ret), KPC(inc_part), KPC(part));
     } else if (OB_FAIL(inc_part->add_partition(inc_subpart_content))) {
@@ -38495,7 +38495,7 @@ int ObDDLService::drop_lob(const ObDropLobArg &arg)
       }
       // 1. get data table schema
       else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema_ptr))) {
-        LOG_WARN("faild to get_table_schema", KR(ret), K(tenant_id), K(data_table_id));
+        LOG_WARN("failed to get_table_schema", KR(ret), K(tenant_id), K(data_table_id));
       } else if (OB_ISNULL(data_table_schema_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
@@ -38534,7 +38534,7 @@ int ObDDLService::drop_lob(const ObDropLobArg &arg)
       } else if (OB_FAIL(tmp_lob_table_schema.assign(*tmp_lob_table_schema_ptr))) {
         LOG_WARN("failed to assign table schema", KR(ret));
       } else if (OB_FAIL(ddl_operator.drop_table(tmp_lob_table_schema, trans))) {
-        LOG_WARN("faild to drop lob meta table", KR(ret), K(tmp_lob_table_schema));
+        LOG_WARN("failed to drop lob meta table", KR(ret), K(tmp_lob_table_schema));
       }
       // 5. drop clear data_tablet binding_info
       else if (OB_FAIL(unbind_lob_tablets(*data_table_schema_ptr, trans))) {

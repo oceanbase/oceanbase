@@ -228,7 +228,7 @@ int ObRsMgr::get_master_root_server(const int64_t cluster_id, ObAddr &addr) cons
   int ret = OB_SUCCESS;
   const int64_t local_cluster_id = GCONF.cluster_id;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cluster id is invalid", KR(ret), K(cluster_id));
@@ -247,7 +247,7 @@ int ObRsMgr::get_master_root_server(ObAddr &addr) const
   int ret = OB_SUCCESS;
   const int64_t local_cluster_id = GCONF.cluster_id;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_FAIL(get_master_root_server(local_cluster_id, addr))) {
     LOG_WARN("failed to get root server", KR(ret), K(local_cluster_id));
   }
@@ -259,7 +259,7 @@ int ObRsMgr::force_set_master_rs(const ObAddr &master_rs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_UNLIKELY(!master_rs.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(master_rs));
@@ -280,7 +280,7 @@ int ObRsMgr::get_all_rs_list_from_configure_(common::ObIArray<common::ObAddr> &s
   ObSEArray<ObRootAddr, OB_MAX_MEMBER_NUMBER> rs_list;
   ObSEArray<ObRootAddr, OB_MAX_MEMBER_NUMBER> readonly_list; // not used
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_FAIL(addr_agent_.fetch(
              rs_list,
              readonly_list))) {
@@ -298,7 +298,7 @@ int ObRsMgr::renew_master_rootserver()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_FAIL(renew_master_rootserver(GCONF.cluster_id))) {
     LOG_WARN("failed to renew master rootserver", KR(ret));
   }
@@ -316,7 +316,7 @@ int ObRsMgr::renew_master_rootserver(const int64_t cluster_id)
     ObCurTraceId::init(GCONF.self_addr_);
   }
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cluster id is invalid", KR(ret), K(cluster_id));
@@ -452,7 +452,7 @@ int ObRsMgr::remove_unused_remote_master_rs_(const ObIArray<int64_t> &remote_clu
   int ret = OB_SUCCESS;
   ObRemoteClusterIdGetter getter;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_FAIL(remote_master_rs_map_.foreach_refactored(getter))) {
     LOG_WARN("fail to get cluster id list", KR(ret));
   } else {

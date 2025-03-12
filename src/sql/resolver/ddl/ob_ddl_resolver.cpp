@@ -6659,7 +6659,7 @@ int ObDDLResolver::check_dup_gen_col(const ObString &expr,
   for (int i = 0; OB_SUCC(ret) && i < gen_col_expr_arr.count(); i++) {
     if (expr == gen_col_expr_arr.at(i)) {
       ret = OB_ERR_DUPLICATE_COLUMN_EXPRESSION_WAS_SPECIFIED;
-      LOG_WARN("check dup generated columns faild", K(ret));
+      LOG_WARN("check dup generated columns failed", K(ret));
     }
   }
   return ret;
@@ -12906,7 +12906,7 @@ int ObDDLResolver::generate_default_hash_subpart(
                                                   name_buf,
                                                   common::OB_MAX_PARTITION_NAME_LENGTH,
                                                   NULL))) {
-        LOG_WARN("faield to gen hash part name", K(ret));
+        LOG_WARN("failed to gen hash part name", K(ret));
       } else if (!is_template &&
                  OB_FAIL(ObPartitionSchema::gen_hash_part_name(subpartition.get_sub_part_idx(),
                                                          ObHashNameType::INDIVIDUAL_SUB_PART,
@@ -12915,7 +12915,7 @@ int ObDDLResolver::generate_default_hash_subpart(
                                                          common::OB_MAX_PARTITION_NAME_LENGTH,
                                                          NULL,
                                                          partition))) {
-        LOG_WARN("faield to gen hash part name", K(ret));
+        LOG_WARN("failed to gen hash part name", K(ret));
       } else if (FALSE_IT(subpart_name = ObString(strlen(name_buf), name_buf))) {
       } else if (OB_FAIL(subpartition.set_part_name(subpart_name))) {
         LOG_WARN("fail to set part name", K(ret));

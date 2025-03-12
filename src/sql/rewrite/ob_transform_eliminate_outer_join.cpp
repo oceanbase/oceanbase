@@ -327,7 +327,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt *stmt,
         if (OB_FAIL(from_item_list.push_back(from_item))) {
           LOG_WARN("faled to push back origin from item", K(ret));
         } else if (OB_FAIL(joined_table_list.push_back(cur_joined_table))) {
-          LOG_WARN("faield to push back origin joined item", K(ret));
+          LOG_WARN("failed to push back origin joined item", K(ret));
         } else {
           /* do nothing. */
         }

@@ -435,7 +435,7 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
     char *tmp_buff = static_cast<char*>(allocator.alloc(buf_len));
     if (OB_ISNULL(tmp_buff)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc tmp_buff faild", KR(ret));
+      LOG_WARN("alloc tmp_buff failed", KR(ret));
     } else {
       TCRLockGuard guard(lock_);
       cached_slot_num = max_cached_num_;
@@ -462,7 +462,7 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
             LOG_WARN("fail to build mode_ref_cnt to string", KR(ret), K(tenant_id), K(schema_version));
           //deep copy string
           } else if (OB_FAIL(ob_write_string(allocator, tmp_str, ref_infos))) {
-            LOG_WARN("set mod_ref_infos string faild", K(tmp_str));
+            LOG_WARN("set mod_ref_infos string failed", K(tmp_str));
           }
           if (OB_SUCC(ret)) {
             schema_slot.init(tenant_id, slot_id, schema_version,

@@ -1366,7 +1366,7 @@ int ObTableQueryAsyncP::try_process()
         LOG_WARN("query execution failed, need rollback", K(ret));
         int tmp_ret = ret;
         if (OB_FAIL(destory_query_session(true))) {
-          LOG_WARN("faild to destory query session", K(ret));
+          LOG_WARN("failed to destory query session", K(ret));
         }
         ret = tmp_ret;
       } else if (result_.is_end_) {

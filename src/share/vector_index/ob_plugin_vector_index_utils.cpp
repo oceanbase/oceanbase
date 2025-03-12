@@ -1170,7 +1170,7 @@ int ObPluginVectorIndexUtils::get_shared_table_rowkey_colum_count(schema::ObInde
   } else {
     const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
     if (OB_FAIL(rowkey_info.get_column_ids(column_ids))) {
-      LOG_WARN("get rowkey_info from  table schema faild", KR(ret), KR(table_id), KPC(table_schema));
+      LOG_WARN("get rowkey_info from  table schema failed", KR(ret), KR(table_id), KPC(table_schema));
     } else {
       col_cnt = column_ids.count();
     }

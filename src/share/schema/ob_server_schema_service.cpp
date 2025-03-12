@@ -4443,7 +4443,7 @@ int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
       } else if (OB_FAIL(apply_increment_schema_to_cache(all_keys, simple_incre_schemas, schema_mgr))) {
         LOG_WARN("apply increment schema to cache failed", K(ret));
       } else if (OB_FAIL(update_non_sys_schemas_in_cache_(schema_mgr, simple_incre_schemas.non_sys_tables_))) {
-        LOG_WARN("update non sys schemas in cache faield", KR(ret));
+        LOG_WARN("update non sys schemas in cache failed", KR(ret));
       }
     }
   }
@@ -6594,7 +6594,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
                  allocator, non_sys_tables))) {
         LOG_WARN("get non core table schemas failed", KR(ret), K(schema_status), K(schema_version));
       } else if (OB_FAIL(update_non_sys_schemas_in_cache_(*schema_mgr_for_cache, non_sys_tables))) {
-        LOG_WARN("update core and sys schemas in cache faield", KR(ret), K(schema_status));
+        LOG_WARN("update core and sys schemas in cache failed", KR(ret), K(schema_status));
       }
     }
   }

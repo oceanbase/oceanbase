@@ -587,7 +587,7 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
       }
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = stmt.terminate())) {
-        LOG_WARN("faild to terminate oci stmt", K(tmp_ret));
+        LOG_WARN("failed to terminate oci stmt", K(tmp_ret));
         if (OB_SUCC(ret)) {
           ret = tmp_ret;
         }

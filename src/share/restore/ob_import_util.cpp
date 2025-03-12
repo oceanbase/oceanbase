@@ -58,7 +58,7 @@ int ObImportTableUtil::get_tenant_schema_guard(share::schema::ObMultiVersionSche
   int ret = OB_SUCCESS;
   schema::ObTenantStatus status;
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("faield to get tenant schema guard", K(ret));
+    LOG_WARN("failed to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_tenant_status(tenant_id, status))) {
     LOG_WARN("failed to get tenant status", K(ret));
   } else if (schema::ObTenantStatus::TENANT_STATUS_NORMAL != status) {
@@ -74,7 +74,7 @@ int ObImportTableUtil::check_database_schema_exist(share::schema::ObMultiVersion
   int ret = OB_SUCCESS;
   schema::ObSchemaGetterGuard guard;
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("faield to get tenant schema guard", K(ret));
+    LOG_WARN("failed to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.check_database_exist(tenant_id, db_name, is_exist))) {
     LOG_WARN("failed to check database exist", K(ret), K(tenant_id), K(db_name));
   }
@@ -89,7 +89,7 @@ int ObImportTableUtil::check_table_schema_exist(share::schema::ObMultiVersionSch
   uint64_t database_id = OB_INVALID_ID;
   is_exist = false;
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("faield to get tenant schema guard", K(ret));
+    LOG_WARN("failed to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_database_id(tenant_id, db_name, database_id))) {
     LOG_WARN("failed to get database id", K(ret), K(tenant_id));
   } else if (OB_INVALID_ID == database_id) {
@@ -109,7 +109,7 @@ int ObImportTableUtil::check_tablegroup_exist(share::schema::ObMultiVersionSchem
   uint64_t table_group_id = OB_INVALID_ID;
   is_exist = false;
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("faield to get tenant schema guard", K(ret));
+    LOG_WARN("failed to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_tablegroup_id(tenant_id, tablegroup, table_group_id))) {
     LOG_WARN("failed to get tablegroup id", K(ret), K(tenant_id));
   } else if (OB_INVALID_ID == table_group_id) {
@@ -128,7 +128,7 @@ int ObImportTableUtil::check_tablespace_exist(share::schema::ObMultiVersionSchem
   const schema::ObTablespaceSchema *schema = nullptr;
   is_exist = false;
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("faield to get tenant schema guard", K(ret));
+    LOG_WARN("failed to get tenant schema guard", K(ret));
   } else if (OB_FAIL(guard.get_tablespace_schema_with_name(tenant_id, tablespace, schema))) {
     LOG_WARN("failed to get tablespace id", K(ret), K(tenant_id));
   } else if (OB_ISNULL(schema)) {
@@ -154,7 +154,7 @@ int ObImportTableUtil::get_tenant_name_case_mode(const uint64_t tenant_id, ObNam
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("wait schema refreshed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_tenant_name_case_mode(tenant_id, name_case_mode))) {
-    LOG_WARN("faield to get tenant schema guard", K(ret), K(tenant_id));
+    LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
   }
   return ret;
 }

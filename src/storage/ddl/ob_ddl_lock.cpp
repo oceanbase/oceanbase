@@ -416,7 +416,7 @@ int ObDDLLock::replace_table_lock_for_split(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < unlock_req_list.count(); ++i) {
       if (OB_FAIL(rep_all_lock_req.unlock_req_list_.push_back(&unlock_req_list.at(i)))) {
-        LOG_WARN("faild to push back unlock_req_list_", K(ret), K(i));
+        LOG_WARN("failed to push back unlock_req_list_", K(ret), K(i));
       }
     }
 

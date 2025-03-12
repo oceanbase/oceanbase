@@ -516,7 +516,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_response_impl_(const int64_t 
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       if (OB_FAIL(try_enter_pre_commit_state())) {
-        TRANS_LOG(WARN, "try enter pre commit state faild", K(ret));
+        TRANS_LOG(WARN, "try enter pre commit state failed", K(ret));
       }
       break;
     }

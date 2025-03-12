@@ -56,7 +56,7 @@ void ObDtlRpcChannel::SendMsgCB::on_timeout()
 int ObDtlRpcChannel::SendMsgCB::process()
 {
   const ObDtlRpcDataResponse &resp = result_;
-  // if request queue is full or serialize faild, then rcode is set, and rpc process is not called
+  // if request queue is full or serialize failed, then rcode is set, and rpc process is not called
   int tmp_ret = OB_SUCCESS != rcode_.rcode_ ? rcode_.rcode_ : resp.recode_;
   int ret = response_.on_finish(resp.is_block_, tmp_ret);
   if (OB_FAIL(ret)) {
@@ -122,7 +122,7 @@ int ObDtlRpcChannel::SendBCMsgCB::process()
     LOG_WARN("unexpected status: response count is not match",
       K(resps.count()), K(responses_.count()));
   }
-  // if request queue is full or serialize faild, then rcode is set, and rpc process is not called
+  // if request queue is full or serialize failed, then rcode is set, and rpc process is not called
   for (int64_t i = 0; i < responses_.count(); ++i) {
     bool is_block = i < resps.count() ? resps.at(i).is_block_ : false;
     int ret_code = (OB_SUCCESS != rcode_.rcode_)

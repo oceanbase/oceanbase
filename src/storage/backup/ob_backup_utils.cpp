@@ -2488,7 +2488,7 @@ int ObBackupTabletProvider::prepare_tablet_logic_id_reader_(const common::ObTabl
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_tablet_logic_macro_id_reader(type, param_.tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("faild to alloc memory", K(ret));
+    LOG_WARN("failed to alloc memory", K(ret));
   } else if (OB_FAIL(tmp_reader->init(tablet_id, tablet_handle, table_key, sstable, BATCH_SIZE))) {
     LOG_WARN("failed to init reader", K(ret), K(tablet_id), K(tablet_handle), K(table_key));
   } else {

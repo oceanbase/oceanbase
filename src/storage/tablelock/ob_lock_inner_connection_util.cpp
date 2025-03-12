@@ -33,7 +33,7 @@ namespace tablelock
     T lock_arg;                                                                        \
     if (GET_MIN_CLUSTER_VERSION() < v) {                                               \
       ret = OB_NOT_SUPPORTED;                                                          \
-      LOG_WARN("cluster version check faild", KR(ret), K(v), K(GET_MIN_CLUSTER_VERSION())); \
+      LOG_WARN("cluster version check failed", KR(ret), K(v), K(GET_MIN_CLUSTER_VERSION())); \
     } else if (OB_FAIL(lock_arg.deserialize(arg.get_inner_sql().ptr(),                 \
                                             arg.get_inner_sql().length(),              \
                                             pos))) {                                   \
@@ -254,7 +254,7 @@ int ObInnerConnectionLockUtil::process_replace_lock_(
   int64_t tmp_pos = 0;
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_4_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cluster version check faild", KR(ret), K(GET_MIN_CLUSTER_VERSION()));
+    LOG_WARN("cluster version check failed", KR(ret), K(GET_MIN_CLUSTER_VERSION()));
   } else if (OB_FAIL(replace_req.deserialize_and_check_header(buf, data_len, pos))) {
     LOG_WARN("deserialize and check header of ObReplaceLockRequest failed", K(ret), K(arg), K(pos));
   } else if (OB_FAIL(replace_req.deserialize_new_lock_mode_and_owner(buf, data_len, pos))) {
@@ -301,7 +301,7 @@ int ObInnerConnectionLockUtil::process_replace_all_locks_(
   int64_t pos = 0;
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_4_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cluster version check faild", KR(ret), K(GET_MIN_CLUSTER_VERSION()));
+    LOG_WARN("cluster version check failed", KR(ret), K(GET_MIN_CLUSTER_VERSION()));
   } else if (OB_FAIL(replace_req.deserialize(buf, data_len, pos))) {
     LOG_WARN("deserialize and check header of ObReplaceLockRequest failed", K(ret), K(arg), K(pos));
   } else if (OB_FAIL(replace_lock(arg.get_tenant_id(), replace_req, conn))) {

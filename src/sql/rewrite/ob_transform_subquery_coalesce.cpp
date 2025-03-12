@@ -64,7 +64,7 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
   if (OB_SUCC(ret)) {
     /* 将能够合并的尽量合并,如:select * from t1 where t1.c1 in (select 1 from t2 where t2.c2 = t1.c2) 
     * and c1 not in (select 1 from t2 where t2.c2 = t1.c2 and t2.c2 > 3) and c1 in (select 1 from t2 where t2.c2 = t1.c2);
-    * 本来这条语句可以为恒fasle,但是第一次合并可能无法判断出，因此需要第二次合并才能判断出。
+    * 本来这条语句可以为恒false,但是第一次合并可能无法判断出，因此需要第二次合并才能判断出。
     */
     ObSEArray<ObPCParamEqualInfo, 4> rule_based_equal_infos;
     ObSEArray<ObPCParamEqualInfo, 4> cost_based_equal_infos;
@@ -1068,7 +1068,7 @@ int ObTransformSubqueryCoalesce::merge_exists_subqueries(TransformParam &trans_p
       LOG_WARN("sum expr is null", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
                          *expr_factory, ObIntType, 0L, equal_value))) {
-      LOG_WARN("faield to build const int expr", K(ret));
+      LOG_WARN("failed to build const int expr", K(ret));
     } else if (OB_FAIL(sum_expr->add_real_param_expr(case_expr))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(

@@ -121,7 +121,7 @@ int deep_copy_str_array(
     if (OB_FAIL(deep_copy_str(src_str, dst_str, allocator))) {
       DDLOG(WARN, "deep copy obstring failed", KR(ret), K(src_str), K(src_arr_size), K(i));
     } else if (OB_FAIL(dest_arr.push_back(dst_str))) {
-      DDLOG(WARN, "dest str arr push back dst_str failded", KR(ret), K(src_str), K(dst_str), K(i));
+      DDLOG(WARN, "dest str arr push back dst_str failed", KR(ret), K(src_str), K(dst_str), K(i));
     }
   }
   return ret;

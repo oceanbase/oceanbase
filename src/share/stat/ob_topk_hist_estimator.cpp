@@ -382,7 +382,7 @@ int ObTopKFrequencyHistograms::remove_entry(ObTopkBaseItem *item)
              OB_FAIL(topk_map_.erase_refactored(static_cast<ObTopkDatumItem*>(item)->datum_hash_))) {
     LOG_WARN("failed to erase item", K(ret));
   } else if (OB_FAIL(free_list_.push_back(item))) {
-    LOG_WARN("faild to push back item", K(ret));
+    LOG_WARN("failed to push back item", K(ret));
   }
   return ret;
 }

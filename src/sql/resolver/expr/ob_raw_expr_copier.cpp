@@ -97,7 +97,7 @@ int ObRawExprCopier::check_need_copy(const ObRawExpr *old_expr,
   int ret = OB_SUCCESS;
   new_expr = NULL;
   if (OB_FAIL(find_in_copy_context(old_expr, new_expr))) {
-    LOG_WARN("faild to find in copy context", K(ret));
+    LOG_WARN("failed to find in copy context", K(ret));
   } else if (OB_ISNULL(new_expr) &&
              old_expr->is_exec_param_expr() &&
              !static_cast<const ObExecParamRawExpr *>(old_expr)->is_onetime()) {
@@ -205,7 +205,7 @@ int ObRawExprCopier::add_expr(const ObRawExpr *from,
   } else if (OB_SUCCESS != (ret = copied_exprs_.set_refactored(reinterpret_cast<uint64_t>(from),
                                                                reinterpret_cast<uint64_t>(to)))) {
     if (OB_UNLIKELY(ret != OB_HASH_EXIST)) {
-      LOG_WARN("faield to add copied expr into map", K(ret));
+      LOG_WARN("failed to add copied expr into map", K(ret));
     } else {
       ret = OB_SUCCESS;
       uint64_t val = 0;

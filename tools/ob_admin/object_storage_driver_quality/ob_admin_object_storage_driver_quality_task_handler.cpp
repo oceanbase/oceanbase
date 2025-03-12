@@ -81,7 +81,7 @@ int OSDQTaskHandler::start()
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "task handler not init", KR(ret), K(is_inited_));
   } else if (OB_FAIL(TG_START(tg_id_))) {
-    OB_LOG(WARN, "start thread pool faield", KR(ret));
+    OB_LOG(WARN, "start thread pool failed", KR(ret));
   } else {
     is_stopped_ = false;
     op_type_random_boundaries_[0] = op_type_weights_[0];

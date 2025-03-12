@@ -815,7 +815,7 @@ int ObTableReplaceOp::do_delete(ObConflictRowMap *primary_map)
       //baseline row is not empty, delete it
       if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr(
           get_primary_table_old_row(), eval_ctx_))) {
-        LOG_WARN("stored row to expr faild", K(ret));
+        LOG_WARN("stored row to expr failed", K(ret));
       } else if (OB_FAIL(delete_row_to_das(false))) {
         LOG_WARN("shuffle delete row failed", K(ret), K(constraint_value));
       } else {
@@ -839,7 +839,7 @@ int ObTableReplaceOp::do_insert(ObConflictRowMap *primary_map)
       //current row is not empty, insert new row
       if (OB_FAIL(constraint_value.current_datum_row_->to_expr(
           get_primary_table_new_row(), eval_ctx_))) {
-        LOG_WARN("stored row to expr faild", K(ret));
+        LOG_WARN("stored row to expr failed", K(ret));
       } else if (OB_FAIL(final_insert_row_to_das())) {
         LOG_WARN("shuffle insert row failed", K(ret), K(constraint_value));
       } else {

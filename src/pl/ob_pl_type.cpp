@@ -2419,7 +2419,7 @@ int ObPLCursorInfo::set_rowcount(int64_t rowcount)
   } else {
     if (in_forall_) {
       if (OB_FAIL(add_bulk_row_count(rowcount))) {
-        LOG_WARN("faield to add bulk rowcount", K(ret), K(rowcount));
+        LOG_WARN("failed to add bulk rowcount", K(ret), K(rowcount));
       } else {
         rowcount_ += rowcount;
       }

@@ -1410,7 +1410,7 @@ int ObPLExternalNS::search_in_standard_package(const common::ObString &name,
           type = ObPLExternalNS::INVALID_VAR;
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("faild to get standard package type!", K(ret), K(standard_package_id), K(name));
+          LOG_WARN("failed to get standard package type!", K(ret), K(standard_package_id), K(name));
         }
       } else if (OB_ISNULL(user_type)) {
         type = ObPLExternalNS::INVALID_VAR;

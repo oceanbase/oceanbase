@@ -4829,7 +4829,7 @@ int ObDelUpdResolver::prune_columns_for_ddl(const TableItem &table_item,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(column));
         } else if (OB_FAIL(ddl_table_schema->has_column(column->get_column_id(), has_column))) {
-          LOG_WARN("faild to check schema has column", K(ret));
+          LOG_WARN("failed to check schema has column", K(ret));
         } else if (!has_column) {
           // do nothing
         } else if (OB_FAIL(column_exprs.push_back(column))) {

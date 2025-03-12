@@ -30,7 +30,7 @@ int ObAllVirtualApplyStat::inner_get_next_row(common::ObNewRow *&row)
       } else if (OB_FAIL(insert_stat_(apply_stat))) {
         SERVER_LOG(WARN, "insert stat failed", K(ret), K(apply_stat));
       } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-        SERVER_LOG(WARN, "iter apply stat faild", KR(ret), K(apply_stat));
+        SERVER_LOG(WARN, "iter apply stat failed", KR(ret), K(apply_stat));
       } else {
         SERVER_LOG(INFO, "iter apply stat succ", K(apply_stat));
       }

@@ -430,7 +430,7 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
   desc.backup_set_id_ = backup_set_info_.backup_set_id_;
   desc.backup_type_ = backup_set_info_.backup_type_;
   if (OB_FAIL(store.init(backup_dest_, desc))) {
-    LOG_WARN("faield to init backup data extern mgr", K(ret));
+    LOG_WARN("failed to init backup data extern mgr", K(ret));
   } else if (OB_FAIL(store.read_ls_attr_info(ls_attr))) {
     if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(get_set_ls_ids_from_traverse_(ls_ids))) {

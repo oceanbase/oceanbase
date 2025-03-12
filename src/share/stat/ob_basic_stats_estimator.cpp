@@ -205,7 +205,7 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
                                           block_num_stat->cg_micro_cnt_arr_,
                                           block_num_stat->sstable_row_cnt_,
                                           block_num_stat->memtable_row_cnt_))) {
-            LOG_WARN("faild to add", K(ret));
+            LOG_WARN("failed to add", K(ret));
           }
         } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO) {
           int64_t cur_part_id = -1;
@@ -220,7 +220,7 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
                                             block_num_stat->cg_micro_cnt_arr_,
                                             block_num_stat->sstable_row_cnt_,
                                             block_num_stat->memtable_row_cnt_))) {
-              LOG_WARN("faild to add", K(ret));
+              LOG_WARN("failed to add", K(ret));
             } else {
               int64_t idx = 0;
               if (OB_FAIL(first_part_idx_map.get_refactored(cur_part_id, idx))) {
@@ -236,7 +236,7 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
                                                                   block_num_stat->cg_micro_cnt_arr_,
                                                                   block_num_stat->sstable_row_cnt_,
                                                                   block_num_stat->memtable_row_cnt_))) {
-                LOG_WARN("faild to add", K(ret));
+                LOG_WARN("failed to add", K(ret));
               }
             }
           }

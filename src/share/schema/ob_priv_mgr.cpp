@@ -1415,7 +1415,7 @@ int ObPrivMgr::get_db_privs_in_tenant(const uint64_t tenant_id,
     } else if (tenant_id != db_priv->get_tenant_id()) {
       is_stop = true;
     } else if (OB_FAIL(db_privs.push_back(db_priv))) {
-      LOG_WARN("push back db priv faield", K(ret));
+      LOG_WARN("push back db priv failed", K(ret));
     }
   }
 

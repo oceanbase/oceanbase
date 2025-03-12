@@ -214,7 +214,7 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
                                                       trans_stmt))) {
     LOG_WARN("deep copy stmt failed", K(ret)); 
   } else if (OB_FAIL(construct_trans_tables(stmt, trans_stmt, trans_basic_tables, trans_tables))) {
-    LOG_WARN("construct tans tables faield", K(ret));
+    LOG_WARN("construct tans tables failed", K(ret));
   } else if (OB_FAIL(do_transform_from_type(trans_stmt, drill_down_idx, roll_up_idx, 
                                             context, map_info))) {
     LOG_WARN("win magic do transform from type failed", K(ret));
@@ -293,7 +293,7 @@ int ObTransformWinMagic::do_transform_from_type(ObDMLStmt *&stmt,
     if (OB_FAIL(adjust_column_and_table(main_stmt, drill_down_table, map_info))) {
       LOG_WARN("adjust column and table failed");
     } else if (OB_FAIL(adjust_agg_to_win(drill_down_stmt))) {
-      LOG_WARN("adjust agg to win faield", K(ret));
+      LOG_WARN("adjust agg to win failed", K(ret));
     }
   } else {
     TableItem *transed_view_table = NULL;
@@ -730,7 +730,7 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
     } else if (OB_FAIL(tables_id.add_member(map_info.table_map_.at(k) + 1))) {
       LOG_WARN("push back item failed", K(ret));
     } else if (OB_FAIL(check_hint_valid(*stmt, *table, is_valid))) {
-      LOG_WARN("check table valid faield", K(ret));
+      LOG_WARN("check table valid failed", K(ret));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_condition_exprs().count(); i++) {
@@ -822,11 +822,11 @@ int ObTransformWinMagic::check_view_and_view(ObDMLStmt *main_stmt,
   } else if (!is_valid) {
     //do nothing
   } else if (OB_FAIL(check_hint_valid(*main_stmt, *drill_down_table, is_valid))) {
-    LOG_WARN("check table valid faield", K(ret));
+    LOG_WARN("check table valid failed", K(ret));
   } else if (!is_valid) {
     //do nothing
   } else if (OB_FAIL(check_hint_valid(*main_stmt, *roll_up_table, is_valid))) {
-    LOG_WARN("check table valid faield", K(ret));
+    LOG_WARN("check table valid failed", K(ret));
   } else if (!is_valid) {
     //do nothing
   } else if (OB_FAIL(ObStmtComparer::compute_semi_infos_map(drill_down_view, roll_up_view,
@@ -1608,7 +1608,7 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
         found = true;
         int64_t idx = -1;
         if (OB_FAIL(ObTransformUtils::get_expr_idx(drill_select_exprs, group_expr_in_drill, idx))) {
-          LOG_WARN("get expr idx faield", K(ret));
+          LOG_WARN("get expr idx failed", K(ret));
         } else if (idx == -1) {
           // do nothing
         } else if (OB_FAIL(partition_exprs.push_back(transed_stmt->get_column_expr_by_id(
@@ -1995,7 +1995,7 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
   } else if (OB_FAIL(main_stmt->remove_table_item(push_down_table))) {
     LOG_WARN("remove tbale item failed", K(ret));
   } else if (OB_FAIL(main_stmt->remove_from_item(push_down_table->table_id_))) {
-    LOG_WARN("remove from item faield", K(ret));
+    LOG_WARN("remove from item failed", K(ret));
   } else if (OB_FAIL(view_stmt->add_from_item(push_down_table->table_id_))) {
     LOG_WARN("add from item failed", K(ret));
   } else if (OB_FAIL(main_stmt->get_part_expr_items(push_down_table->table_id_, part_exprs))) {

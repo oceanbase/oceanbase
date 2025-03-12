@@ -1293,7 +1293,7 @@ int ObDASHNSWScanIter::get_rowkey_from_vid_rowkey_table(ObIAllocator &allocator,
       LOG_WARN("failed to scan vid rowkey iter", K(vid), K(ret));
     }
   } else if (OB_FAIL(get_rowkey(allocator, rowkey))) {
-    LOG_WARN("faild to get rowkey");
+    LOG_WARN("failed to get rowkey");
   }
 
   int tmp_ret = ret;

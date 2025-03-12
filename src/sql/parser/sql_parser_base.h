@@ -1274,7 +1274,7 @@ do {\
     } else { \
       ret_node = adjust_inner_join_inner(&result->extra_errno_, inner_join, table_node); \
       if (OB_PARSER_SUCCESS != result->extra_errno_) { \
-        yyerror(NULL, result, "failde to adjust inner join inside\n"); \
+        yyerror(NULL, result, "failed to adjust inner join inside\n"); \
         YYABORT; \
       } else if (OB_ISNULL(ret_node)) { \
         result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \

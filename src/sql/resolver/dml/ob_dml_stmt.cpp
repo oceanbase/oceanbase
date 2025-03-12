@@ -513,9 +513,9 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
   } else if (OB_FAIL(user_var_exprs_.assign(other.user_var_exprs_))) {
     LOG_WARN("assign user var exprs fail", K(ret));
   } else if (OB_FAIL(check_constraint_items_.assign(other.check_constraint_items_))) {
-    LOG_WARN("faield to assign check constraint items", K(ret));
+    LOG_WARN("failed to assign check constraint items", K(ret));
   } else if (OB_FAIL(match_exprs_.assign(other.match_exprs_))) {
-    LOG_WARN("faield to assign fulltext search exprs", K(ret));
+    LOG_WARN("failed to assign fulltext search exprs", K(ret));
   } else {
     limit_count_expr_ = other.limit_count_expr_;
     limit_offset_expr_ = other.limit_offset_expr_;
@@ -1032,7 +1032,7 @@ int ObDMLStmt::deep_copy_join_tables(ObIAllocator &allocator,
     } else {
       table = new (ptr) JoinedTable();
       if (OB_FAIL(table->deep_copy(allocator, expr_copier, *other.joined_tables_.at(i)))) {
-        LOG_WARN("faield to deep copy joined table", K(ret));
+        LOG_WARN("failed to deep copy joined table", K(ret));
       } else if (OB_FAIL(construct_join_table(other, *other.joined_tables_.at(i), *table))) {
         LOG_WARN("failed to construct joined table", K(ret));
       } else if (OB_FAIL(joined_tables_.push_back(table))) {

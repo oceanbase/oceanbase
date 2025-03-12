@@ -246,7 +246,7 @@ int ObRecoverTableInitiator::fill_aux_tenant_restore_info_(
   } else if (OB_FAIL(job.set_backup_passwd(physical_restore_job.get_passwd_array()))) {
     LOG_WARN("failed to set backup passwd", K(ret));
   } else if (OB_FAIL(job.get_multi_restore_path_list().assign(physical_restore_job.get_multi_restore_path_list()))) {
-    LOG_WARN("faield to assign multi restore path", K(ret));
+    LOG_WARN("failed to assign multi restore path", K(ret));
   }
   return ret;
 }

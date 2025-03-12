@@ -94,7 +94,7 @@ int ObLogSubPlanFilter::extract_exist_style_subquery_exprs(ObRawExpr *expr,
     LOG_WARN("failed to check whether expr contains op row subquery", K(ret));
   } else if (contains) {
     if (OB_FAIL(exist_style_exprs.push_back(expr))) {
-      LOG_WARN("faield to push back exprs", K(ret));
+      LOG_WARN("failed to push back exprs", K(ret));
     } else { /*do nothing*/ }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
@@ -517,7 +517,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
     } else if (OB_FAIL(ObOptimizerUtil::check_can_batch_rescan(child, exec_params_, false, can_batch))) {
       LOG_WARN("failed to check plan can batch rescan", K(ret));
     } else if (OB_FAIL(stmt->has_ref_assign_user_var(has_ref_assign_user_var))) {
-      LOG_WARN("faield to check stmt has assignment ref user var", K(ret));
+      LOG_WARN("failed to check stmt has assignment ref user var", K(ret));
     } else {
       can_batch &= !has_ref_assign_user_var;
       has_rescan_subquery = true;
@@ -572,7 +572,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan_compat(bool &can_batch)
       } else if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
         /* do nothing */
       } else if (OB_FAIL(stmt->has_ref_assign_user_var(has_ref_assign_user_var))) {
-        LOG_WARN("faield to check stmt has assignment ref user var", K(ret));
+        LOG_WARN("failed to check stmt has assignment ref user var", K(ret));
       } else {
         can_batch &= !has_ref_assign_user_var;
       }

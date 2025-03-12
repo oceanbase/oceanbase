@@ -142,7 +142,7 @@ int ObExprOrahash::eval_orahash(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
   int ret = OB_SUCCESS;
   // ora_hash(expr, bucket, seed);
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("eval param faield", K(ret));
+    LOG_WARN("eval param failed", K(ret));
   } else {
     bool has_null = false;
     for (int64_t i = 0; !has_null && i < expr.arg_cnt_; ++i) {

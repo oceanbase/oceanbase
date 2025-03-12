@@ -177,7 +177,7 @@ struct ToNumberCastImpl
           IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec_->get_payload(idx));
           if (std::is_same<IN_TYPE, int64_t>::value && (ObUNumberType == out_type_)
               && CAST_FAIL(numeric_negative_check(in_val))) {
-            SQL_LOG(WARN, "numeric_negative_check faield", K(ret), K(in_val));
+            SQL_LOG(WARN, "numeric_negative_check failed", K(ret), K(in_val));
           } else if (OB_FAIL(nmb.from(in_val, tmp_alloc))) {
             SQL_LOG(WARN, "nmb.from failed", K(ret), K(in_val));
           } else {

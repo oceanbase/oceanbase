@@ -271,7 +271,7 @@ int ObPluginVectorIndexMgr::create_partial_adapter(ObTabletID idx_tablet_id,
     if (OB_SUCC(ret)) {
       WLockGuard lock_guard(adapter_map_rwlock_);
       if (OB_FAIL(set_partial_adapter_(idx_tablet_id, tmp_vec_idx_adpt))) {
-        LOG_WARN("set vector index adapter faild", K(idx_tablet_id), KR(ret));
+        LOG_WARN("set vector index adapter failed", K(idx_tablet_id), KR(ret));
       } // other thread set already, need get again ?
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(tmp_vec_idx_adpt)) {
@@ -359,7 +359,7 @@ int ObPluginVectorIndexMgr::create_ivf_build_helper(
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(set_ivf_build_helper_(idx_tablet_id, tmp_ivf_build_helper))) {
-      LOG_WARN("set ivf index build helper faild", K(idx_tablet_id), KR(ret));
+      LOG_WARN("set ivf index build helper failed", K(idx_tablet_id), KR(ret));
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(tmp_ivf_build_helper)) {
@@ -809,14 +809,14 @@ int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id, ObPluginV
       void *mgr_buff = allocator_.alloc(sizeof(ObPluginVectorIndexMgr));
       if (OB_ISNULL(mgr_buff)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memeory for new vector index mgr", KR(ret));
+        LOG_WARN("failed to allocate memory for new vector index mgr", KR(ret));
       } else {
         ObPluginVectorIndexMgr *new_ls_index_mgr = new(mgr_buff)ObPluginVectorIndexMgr(memory_context_, tenant_id_);
         if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, &all_vsag_use_mem_))) {
           LOG_WARN("failed to init ls vector index mgr", K(ls_id), KR(ret));
         } else if (OB_FAIL(get_ls_index_mgr_map().set_refactored(ls_id, new_ls_index_mgr))) {
           if (ret != OB_HASH_EXIST) {
-            LOG_WARN("set vector index mgr map faild", K(ls_id), KR(ret));
+            LOG_WARN("set vector index mgr map failed", K(ls_id), KR(ret));
           }
         }
         if (OB_FAIL(ret)) {
@@ -865,7 +865,7 @@ int ObPluginVectorIndexService::create_partial_adapter(ObLSID ls_id,
                                                           index_table_id,
                                                           vec_index_param,
                                                           dim))) {
-    LOG_WARN("set vector index adapter faild", K(ls_id), K(idx_tablet_id), KR(ret));
+    LOG_WARN("set vector index adapter failed", K(ls_id), K(idx_tablet_id), KR(ret));
   }
 
   return ret;

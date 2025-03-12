@@ -194,7 +194,7 @@ int64_t ObZlibLiteAdaptor::compress(const char* src_buffer,
   int64_t compress_ret_size = dst_buffer_size;
   zlib_errno = zlib_compress(dst_buffer, &compress_ret_size, src_buffer, src_data_size);
   if (Z_OK != zlib_errno) {
-    // LIB_LOG(WARN, "Compress data by zlib in zlib_lite algorithm faild, ", K(ret), K(zlib_errno));
+    // LIB_LOG(WARN, "Compress data by zlib in zlib_lite algorithm failed, ", K(ret), K(zlib_errno));
     return -1;
   }
 
@@ -219,7 +219,7 @@ int64_t ObZlibLiteAdaptor::decompress(const char* src_buffer,
   int zlib_errno = Z_OK;
   zlib_errno = zlib_decompress(dst_buffer, &decompress_ret_size, src_buffer, src_data_size);
   if (Z_OK != zlib_errno) {
-    // LIB_LOG(WARN, "Decompress data by zlib in zlib_lite algorithm faild, ",K(ret), K(zlib_errno));
+    // LIB_LOG(WARN, "Decompress data by zlib in zlib_lite algorithm failed, ",K(ret), K(zlib_errno));
     return -1;
   }
   return decompress_ret_size;

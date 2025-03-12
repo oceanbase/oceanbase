@@ -628,7 +628,7 @@ int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "udt info is null.", K(type_id), K(ret));
   } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, schema_guard, user_type))) {
-    OB_LOG(WARN, "faild to transform to pl type", K(ret));
+    OB_LOG(WARN, "failed to transform to pl type", K(ret));
   } else if (NULL == user_type) {
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "user type is null.", K(type_id), K(ret));
@@ -1052,7 +1052,7 @@ int ObSql::fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo &stmt_in
       //ret = OB_ERR_UNEXPECTED;
       //LOG_WARN("param iter is null", K(ret), K(param_iter));
     //} else if (OB_FAIL(result.add_param_column(**param_iter))) {
-      //LOG_WARN("add param field faield", K(ret));
+      //LOG_WARN("add param field failed", K(ret));
     //}
   //}
   return ret;
@@ -1086,7 +1086,7 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
     if (OB_FAIL(ps_cache->get_or_add_stmt_item(ps_key,
                                                is_contain_tmp_tbl,
                                                ps_stmt_item))) {
-      LOG_WARN("get or create stmt item faield", K(ret), K(db_id), K(info_ctx.normalized_sql_));
+      LOG_WARN("get or create stmt item failed", K(ret), K(db_id), K(info_ctx.normalized_sql_));
     } else if (OB_FAIL(ps_cache->get_or_add_stmt_info(info_ctx,
                                                       result,
                                                       schema_guard,

@@ -455,7 +455,7 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
       LOG_WARN("preare full direct load sstable param failed", K(ret));
     } else if (merge_param_.is_commit_ && OB_FAIL(wait_lob_tablet_major_exist(ls_handle, tablet))) {
       if (OB_EAGAIN != ret) {
-        LOG_WARN("wait lob tablet major sstable exist faild", K(ret), K(merge_param_));
+        LOG_WARN("wait lob tablet major sstable exist failed", K(ret), K(merge_param_));
       } else {
         LOG_INFO("need wait lob tablet major sstable exist", K(ret), K(merge_param_));
       }

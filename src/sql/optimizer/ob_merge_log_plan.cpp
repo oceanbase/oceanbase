@@ -911,7 +911,7 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
         LOG_WARN("failed to init assignment info", K(ret));
       } else if (!merge_info.is_link_table_ &&
                  OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {
-        LOG_WARN("faield to check update part key", K(ret));
+        LOG_WARN("failed to check update part key", K(ret));
       } else if (!merge_info.is_link_table_ &&
                  OB_FAIL(check_update_primary_key(index_schema, index_dml_info))) {
         LOG_WARN("fail to check update primary key", K(ret), KPC(index_dml_info));

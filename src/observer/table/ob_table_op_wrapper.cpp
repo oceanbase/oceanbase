@@ -137,7 +137,7 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("faild to alloc memory for objs", K(ret), K(assigns.count()));
+      LOG_WARN("failed to alloc memory for objs", K(ret), K(assigns.count()));
     } else if (OB_ISNULL(new_row_exprs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert exprs is null", K(ret));

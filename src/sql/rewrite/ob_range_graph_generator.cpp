@@ -45,7 +45,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr");
     } else if (OB_FAIL(generate_range_node(expr, range_node_generator, range_node, 0, is_precise, max_offset))) {
-      LOG_WARN("faield to generate range node", K(ret));
+      LOG_WARN("failed to generate range node", K(ret));
     } else if (!range_node->always_true_ &&
                OB_FAIL(range_nodes.push_back(range_node))) {
       LOG_WARN("failed to push back range node");
@@ -1360,7 +1360,7 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       void *ptr = exec_ctx->get_allocator().alloc(sizeof(ObObj));
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memeory for ObObj");
+        LOG_WARN("failed to allocate memory for ObObj");
       } else {
         expr_info.const_val_ = new(ptr)ObObj();
         expr_info.is_const_ = true;

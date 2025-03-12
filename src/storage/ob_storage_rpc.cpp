@@ -2043,7 +2043,7 @@ int ObFetchLSInfoP::process()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("faield to get log stream", K(ret), K(arg_));
+      LOG_WARN("failed to get log stream", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(arg_));
@@ -2104,7 +2104,7 @@ int ObFetchLSMetaInfoP::process()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("faield to get log stream", K(ret), K(arg_));
+      LOG_WARN("failed to get log stream", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(arg_));

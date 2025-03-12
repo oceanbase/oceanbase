@@ -3718,7 +3718,7 @@ int ObLogicalOperator::try_add_remove_const_exprs()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
         } else if (OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(remove_const_expr))) {
-          LOG_WARN("faield to append exprs", K(ret));
+          LOG_WARN("failed to append exprs", K(ret));
         } else {
           *e = remove_const_expr;
         }

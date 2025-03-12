@@ -214,7 +214,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
   int ret = OB_SUCCESS;
   ObArray<ObAddr> server_list;
   if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (initial_server_list.empty()) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("empty rootservice list", KR(ret));
@@ -260,7 +260,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
   if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else if (start_idx < 0 || start_idx > end_idx || end_idx >= server_list.count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("start_idx/end_idx is invalid", KR(ret),
@@ -330,7 +330,7 @@ int ObRpcLSTable::deal_with_result_ls_(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check inner stat faild", KR(ret));
+    LOG_WARN("check inner stat failed", KR(ret));
   } else {// try expand server_list
     const ObAddr &master_rs = result.get_master_rs();
     const ObRole role = result.get_role();

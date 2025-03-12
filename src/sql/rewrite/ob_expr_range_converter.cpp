@@ -425,7 +425,7 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(always_true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(always_true));
+      LOG_WARN("failed to generate always true or false node", K(always_true));
     }
   }
   return ret;
@@ -628,7 +628,7 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObIArray<const ObColumnR
   if (OB_SUCC(ret) && OB_UNLIKELY(nullptr == range_node)) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(always_true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(always_true));
+      LOG_WARN("failed to generate always true or false node", K(always_true));
     }
   }
   return ret;
@@ -655,7 +655,7 @@ int ObExprRangeConverter::convert_is_expr(const ObRawExpr *expr, int64_t expr_de
   }
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   }
   return ret;
@@ -689,7 +689,7 @@ int ObExprRangeConverter::gen_is_null_range_node(const ObRawExpr *l_expr, int64_
 
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   }
   return ret;
@@ -791,7 +791,7 @@ int ObExprRangeConverter::convert_not_equal_expr(const ObRawExpr *expr, int64_t 
   } else  if (T_OP_ROW == l_expr->get_expr_type()) {
     // do not convert row not equal expr
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   } else if (OB_FAIL(get_basic_range_node(l_expr, r_expr, T_OP_LT, expr->get_result_type(), expr_depth, tmp_node))) {
     LOG_WARN("failed tp get basic range node", K(ret));
@@ -881,7 +881,7 @@ int ObExprRangeConverter::convert_like_expr(const ObRawExpr *expr, int64_t expr_
   }
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(always_true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   }
   return ret;
@@ -1053,7 +1053,7 @@ int ObExprRangeConverter::convert_in_expr(const ObRawExpr *expr, int64_t expr_de
 
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   }
   return ret;
@@ -1126,7 +1126,7 @@ int ObExprRangeConverter::get_single_in_range_node(const ObColumnRefRawExpr *col
     if (val_idxs.empty()) {
       // c1 in (null, null, null)
       if (OB_FAIL(generate_always_true_or_false_node(false, range_node))) {
-        LOG_WARN("failed to generate always fasle node");
+        LOG_WARN("failed to generate always false node");
       }
     } else if (OB_FAIL(alloc_range_node(range_node))) {
       LOG_WARN("failed to alloc common range node");
@@ -1385,7 +1385,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(always_true_or_false, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   }
   return ret;
@@ -1464,7 +1464,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
       } else if (all_valid_exprs.empty()) {
         // rowid in (null, null, null)
         if (OB_FAIL(generate_always_true_or_false_node(false, range_node))) {
-          LOG_WARN("failed to generate always fasle node");
+          LOG_WARN("failed to generate always false node");
         }
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < key_idxs.count(); ++i) {
@@ -1546,7 +1546,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
       if (val_idxs.empty()) {
         // c1 in (null, null, null)
         if (OB_FAIL(generate_always_true_or_false_node(false, range_node))) {
-          LOG_WARN("failed to generate always fasle node");
+          LOG_WARN("failed to generate always false node");
         }
       } else if (OB_FAIL(alloc_range_node(range_node))) {
         LOG_WARN("failed to alloc common range node");
@@ -1644,7 +1644,7 @@ int ObExprRangeConverter::convert_not_in_expr(const ObRawExpr *expr, int64_t exp
 
   if (OB_SUCC(ret) && nullptr == range_node) {
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node");
+      LOG_WARN("failed to generate always true or false node");
     }
   }
   return ret;
@@ -1712,7 +1712,7 @@ int ObExprRangeConverter::get_single_not_in_range_node(const ObColumnRefRawExpr 
     if (OB_FAIL(ret)) {
     } else if (always_false) {
       if (OB_FAIL(generate_always_true_or_false_node(always_false, range_node))) {
-        LOG_WARN("failed to generate always true or fasle node");
+        LOG_WARN("failed to generate always true or false node");
       }
     } else if (!val_idxs.empty()) {
       InParam *in_param = nullptr;
@@ -2493,7 +2493,7 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(always_true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(always_true));
+      LOG_WARN("failed to generate always true or false node", K(always_true));
     }
   }
   return ret;
@@ -2501,24 +2501,24 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
 
 int64_t ObExprRangeConverter::get_expr_category(ObItemType type)
 {
-  int64_t catagory = RANGE_EXPR_OTHER;
+  int64_t category = RANGE_EXPR_OTHER;
   if (T_OP_EQ == type ||
       T_OP_NSEQ == type ||
       T_OP_IS == type) {
-    catagory = RANGE_EXPR_EQUAL;
+    category = RANGE_EXPR_EQUAL;
   } else if (IS_BASIC_CMP_OP(type)) {
-    catagory = RANGE_EXPR_CMP;
+    category = RANGE_EXPR_CMP;
   } else if (T_OP_IN  == type) {
-    catagory = RANGE_EXPR_IN;
+    category = RANGE_EXPR_IN;
   } else if (T_OP_NE == type ||
               T_OP_NOT_BTW == type) {
-    catagory = RANGE_EXPR_NO_EQUAL;
+    category = RANGE_EXPR_NO_EQUAL;
   } else if (T_OP_NOT_IN == type) {
-    catagory = RANGE_EXPR_NOT_IN;
+    category = RANGE_EXPR_NOT_IN;
   } else {
-    catagory = RANGE_EXPR_OTHER;
+    category = RANGE_EXPR_OTHER;
   }
-  return catagory;
+  return category;
 }
 
 struct RangeExprCategoryCmp
@@ -2528,18 +2528,18 @@ struct RangeExprCategoryCmp
   {
     bool bret = false;
     if (left != nullptr && right != nullptr) {
-      int64_t l_catagory = ObExprRangeConverter::get_expr_category(left->get_expr_type());
-      int64_t r_catagory = ObExprRangeConverter::get_expr_category(right->get_expr_type());
-      if (l_catagory == r_catagory &&
-          (l_catagory == RANGE_EXPR_IN ||
-           r_catagory == RANGE_EXPR_NOT_IN)) {
+      int64_t l_category = ObExprRangeConverter::get_expr_category(left->get_expr_type());
+      int64_t r_category = ObExprRangeConverter::get_expr_category(right->get_expr_type());
+      if (l_category == r_category &&
+          (l_category == RANGE_EXPR_IN ||
+           r_category == RANGE_EXPR_NOT_IN)) {
         if (left->get_param_expr(1) != nullptr &
             right->get_param_expr(1) != nullptr) {
           bret = left->get_param_expr(1)->get_param_count() <
                  right->get_param_expr(1)->get_param_count();
         }
       } else {
-        bret = l_catagory < r_catagory;
+        bret = l_category < r_category;
       }
     }
     return bret;
@@ -2612,12 +2612,12 @@ int ObExprRangeConverter::try_wrap_lob_with_substr(const ObRawExpr *expr,
 int ObExprRangeConverter::set_column_flags(int64_t key_idx, ObItemType type)
 {
   int ret = OB_SUCCESS;
-  int64_t catagory = get_expr_category(type);
+  int64_t category = get_expr_category(type);
   if (OB_UNLIKELY(key_idx >= ctx_.column_flags_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected key idx", K(ret));
   } else {
-    ctx_.column_flags_[key_idx] |= catagory;
+    ctx_.column_flags_[key_idx] |= category;
   }
   return ret;
 }
@@ -2738,7 +2738,7 @@ int ObExprRangeConverter::convert_geo_expr(const ObRawExpr *geo_expr,
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(ret));
+      LOG_WARN("failed to generate always true or false node", K(ret));
     }
   }
   return ret;
@@ -2880,7 +2880,7 @@ int ObExprRangeConverter::get_implicit_cast_range(const ObRawExpr &l_expr,
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(ret));
+      LOG_WARN("failed to generate always true or false node", K(ret));
     }
   }
   return ret;
@@ -3402,7 +3402,7 @@ int ObExprRangeConverter::gen_row_implicit_cast_range(const ObIArray<const ObCol
                                                         row_dim,
                                                         false,
                                                         range_node))) {
-      LOG_WARN("faield to gen row column cmp node", K(ret));
+      LOG_WARN("failed to gen row column cmp node", K(ret));
     } else {
       ctx_.cur_is_precise_ = false;
     }
@@ -3416,7 +3416,7 @@ int ObExprRangeConverter::gen_row_implicit_cast_range(const ObIArray<const ObCol
   if (OB_SUCC(ret) && OB_UNLIKELY(nullptr == range_node)) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(ret));
+      LOG_WARN("failed to generate always true or false node", K(ret));
     }
   }
   return ret;
@@ -3658,7 +3658,7 @@ int ObExprRangeConverter::convert_domain_expr(const ObRawExpr *domain_expr,
   if (OB_SUCC(ret) && nullptr == range_node) {
     ctx_.cur_is_precise_ = false;
     if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
-      LOG_WARN("failed to generate always true or fasle node", K(ret));
+      LOG_WARN("failed to generate always true or false node", K(ret));
     }
   }
   return ret;

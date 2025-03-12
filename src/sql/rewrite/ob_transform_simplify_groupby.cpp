@@ -2076,7 +2076,7 @@ int ObTransformSimplifyGroupby::get_valid_having_exprs_contain_aggr(
     } else if (having_exprs.at(i)->has_flag(CNT_AGG)) {
       //do nothing
     } else if (OB_FAIL(vaild_having_exprs.push_back(having_exprs.at(i)))) {
-      LOG_WARN("faield to push back", K(ret));
+      LOG_WARN("failed to push back", K(ret));
     } else {/*do nothing*/}
   }
   return ret;

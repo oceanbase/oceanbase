@@ -308,7 +308,7 @@ int ObTableApiReplaceExecutor::do_insert()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("insert row is null", K(ret));
   } else if (OB_FAIL(stored_row_to_exprs(*insert_row_, get_primary_table_new_row(), eval_ctx_))) {
-    LOG_WARN("stored row to exprs faild", K(ret));
+    LOG_WARN("stored row to exprs failed", K(ret));
   } else if (OB_FAIL(insert_row_to_das())) {
     LOG_WARN("shuffle insert row failed", K(ret));
   } else {

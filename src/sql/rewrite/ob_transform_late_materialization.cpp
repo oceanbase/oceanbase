@@ -928,7 +928,7 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
       } else if (OB_FAIL(join_hint->get_tables().push_back(table_in_hint))) {
-        LOG_WARN("failde to push back", K(ret));
+        LOG_WARN("failed to push back", K(ret));
       } else {
         join_hint->set_qb_name(parent_qb_name);
         join_hint->set_trans_added(true);

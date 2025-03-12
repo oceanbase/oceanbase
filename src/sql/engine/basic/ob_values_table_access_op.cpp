@@ -109,7 +109,7 @@ int ObValuesTableAccessOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(try_check_status())) {
-    LOG_WARN("check physical plan status faild", K(ret));
+    LOG_WARN("check physical plan status failed", K(ret));
   } else {
     do {
       clear_evaluated_flag();

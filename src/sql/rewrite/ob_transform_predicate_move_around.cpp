@@ -3334,7 +3334,7 @@ int ObTransformPredicateMoveAround::transform_predicates(
         // do nothing
       } else if (OB_FAIL(deducer.deduce_aggr_bound_predicates(
                            *ctx_, target_exprs, aggr_bound_preds))) {
-        LOG_WARN("faield to deduce semantic predicates", K(ret));
+        LOG_WARN("failed to deduce semantic predicates", K(ret));
       }
     }
   }

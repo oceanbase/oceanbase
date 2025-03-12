@@ -288,7 +288,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   setup_wb(session);
 
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
-    LOG_WARN("init process var faield.", K(ret), K(multi_stmt_item));
+    LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
     ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),

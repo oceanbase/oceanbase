@@ -2728,7 +2728,7 @@ int ObWindowFunctionOp::parallel_winbuf_process()
       LOG_WARN("fail to get whole msg", K(ret));
     }
   } else if (OB_FAIL(wf_cell.res_.cur_->get_row(0, res_row))) {
-    LOG_WARN("get row faild", K(ret), K(res_row));
+    LOG_WARN("get row failed", K(ret), K(res_row));
   } else if (OB_FAIL(get_whole_msg(false, whole, res_row))) {
     LOG_WARN("fail to get whole msg", K(ret));
   } else if (whole.is_empty_) {

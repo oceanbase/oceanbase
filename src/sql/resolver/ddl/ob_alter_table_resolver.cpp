@@ -2987,7 +2987,7 @@ int ObAlterTableResolver::resolve_drop_constraint(const ParseNode &node)
           } else if (OB_FAIL(alter_column_schema.assign(*origin_col_schema))) {
             LOG_WARN("copy column schema failed", K(ret));
           } else if (OB_FAIL(alter_column_schema.set_origin_column_name(alter_column_schema.get_column_name_str()))) {
-            LOG_WARN("set origin column name faield", K(ret));
+            LOG_WARN("set origin column name failed", K(ret));
           } else {
             alter_column_schema.drop_not_null_cst();
             alter_column_schema.alter_type_ = OB_DDL_MODIFY_COLUMN;
@@ -4807,7 +4807,7 @@ int ObAlterTableResolver::resolve_modify_check_constraint_state_oracle(const Par
             LOG_WARN("copy column schema failed", K(ret));
           } else if (OB_FAIL(alter_column_schema.set_origin_column_name(
                         alter_column_schema.get_column_name_str()))) {
-            LOG_WARN("set origin column name faield", K(ret));
+            LOG_WARN("set origin column name failed", K(ret));
           } else {
             // need to add alter_column_schema when modify not null constraint,
             // in order to modify column_flags.

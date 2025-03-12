@@ -662,7 +662,7 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_write want read", K(fd));
         } else {
           errno = EIO;
-          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "ssl write faild", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "ssl write failed", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
         }
       }
     }

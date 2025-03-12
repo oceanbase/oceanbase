@@ -2741,7 +2741,7 @@ int ObDDLUtil::get_ddl_tx_timeout(const int64_t tablet_count, int64_t &ddl_tx_ti
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_ddl_rpc_timeout(tablet_count, ddl_tx_timeout_us))) {
-    LOG_WARN("get ddl rpc timeout faild", K(ret));
+    LOG_WARN("get ddl rpc timeout failed", K(ret));
   }
   return ret;
 }
@@ -2749,7 +2749,7 @@ int ObDDLUtil::get_ddl_tx_timeout(const int64_t tenant_id, const int64_t table_i
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_ddl_rpc_timeout(tenant_id, table_id, ddl_tx_timeout_us))) {
-    LOG_WARN("get ddl rpc timeout faild", K(ret));
+    LOG_WARN("get ddl rpc timeout failed", K(ret));
   }
   return ret;
 }

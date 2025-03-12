@@ -207,7 +207,7 @@ int ObExprAtLocal::calc_at_local(ObSQLSessionInfo *session, ObOTimestampData &ti
     if (tz_info_wrap.is_position_class()) {
       const ObTimeZoneInfoPos &tz_info_pos = tz_info_wrap.get_tz_info_pos();
       if (OB_FAIL(ObExprAtTimeZoneBase::calc(timestamp_data, tz_info_pos))) {
-        LOG_WARN("calc faild", K(ret), K(timestamp_data));
+        LOG_WARN("calc failed", K(ret), K(timestamp_data));
       }
     } else {
       const ObTimeZoneInfo &tz_info = tz_info_wrap.get_tz_info_offset();

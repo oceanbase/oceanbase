@@ -149,7 +149,7 @@ public:
   int get_mds_table_rec_scn(share::SCN &rec_scn);
   int mds_table_flush(const share::SCN &recycle_scn);
   // get tablet status from MDS, and check whether state is TRANSFER_IN and redo scn is valid.
-  // @param [in] written : if current tablet status is TRANSFER_IN, set true if redo_scn is valid, otherwise set fasle
+  // @param [in] written : if current tablet status is TRANSFER_IN, set true if redo_scn is valid, otherwise set false
   // @return OB_STATE_NOT_MATCH : tablet status is not TRANSFER_IN.
   //         OB_EMPTY_RESULT : never has tablet status written.
   //         OB_LS_OFFLINE : read meet ls offline

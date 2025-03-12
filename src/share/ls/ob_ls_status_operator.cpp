@@ -491,7 +491,7 @@ int ObLSStatusOperator::update_init_member_list(
     if (OB_FAIL(get_visible_member_list_str_(member_list, allocator, visible_member_list, arb_member))) {
       LOG_WARN("failed to get visible member list", KR(ret), K(member_list));
     } else if (OB_FAIL(get_list_hex_(member_list, allocator, hex_member_list, arb_member))) {
-      LOG_WARN("faield to get member list hex", KR(ret), K(member_list));
+      LOG_WARN("failed to get member list hex", KR(ret), K(member_list));
     } else if (learner_list.is_valid()) {
       if (!is_compatible_with_readonly_replica) {
         ret = OB_STATE_NOT_MATCH;

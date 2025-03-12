@@ -128,7 +128,7 @@ int ObLogMinerDataManager::get_logminer_record(ObLogMinerRecord *&logminer_rec)
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("get logminer record faild, data manager is not inited", K(is_inited_));
+    LOG_ERROR("get logminer record failed, data manager is not inited", K(is_inited_));
   } else {
     if (OB_ISNULL(logminer_rec = op_alloc_args(ObLogMinerRecord, &logminer_record_alloc_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -145,7 +145,7 @@ int ObLogMinerDataManager::release_log_miner_record(ObLogMinerRecord *logminer_r
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("release logminer record faield, data manager is not inited", K(is_inited_));
+    LOG_ERROR("release logminer record failed, data manager is not inited", K(is_inited_));
   } else {
     logminer_rec->destroy();
     op_free(logminer_rec);
@@ -159,7 +159,7 @@ int ObLogMinerDataManager::get_logminer_batch_record(ObLogMinerBatchRecord *&log
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("get logminer record faield, data manager is not inited", K(is_inited_));
+    LOG_ERROR("get logminer record failed, data manager is not inited", K(is_inited_));
   } else {
     ILogMinerRecordConverter *converter = ILogMinerRecordConverter::get_converter_instance(format_);
     if (OB_ISNULL(converter)) {
@@ -181,7 +181,7 @@ int ObLogMinerDataManager::release_logminer_batch_record(ObLogMinerBatchRecord *
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("get logminer record faield, data manager is not inited", K(is_inited_));
+    LOG_ERROR("get logminer record failed, data manager is not inited", K(is_inited_));
   } else if (OB_ISNULL(logminer_batch_rec)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("cannot release a null logminer batch rec", K(logminer_batch_rec));

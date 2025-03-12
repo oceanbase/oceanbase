@@ -324,7 +324,7 @@ int ObSchemaRetrieveUtils::retrieve_def_subpart_info(
                                           is_subpart_template,
                                           result,
                                           table_schema_array)))) {
-    SHARE_SCHEMA_LOG(WARN, "retrieve subpart info faield", K(ret));
+    SHARE_SCHEMA_LOG(WARN, "retrieve subpart info failed", K(ret));
   }
   return ret;
 }
@@ -344,7 +344,7 @@ int ObSchemaRetrieveUtils::retrieve_subpart_info(
                                           is_subpart_template,
                                           result,
                                           table_schema_array)))) {
-    SHARE_SCHEMA_LOG(WARN, "retrieve subpart info faield", K(ret));
+    SHARE_SCHEMA_LOG(WARN, "retrieve subpart info failed", K(ret));
   }
   return ret;
 }

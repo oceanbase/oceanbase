@@ -1742,7 +1742,7 @@ int ObDbmsStatsExecutor::fetch_gather_table_snapshot_read(common::sqlclient::ObI
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(conn));
     } else if (OB_FAIL(conn->execute_read(tenant_id, sql_str_fmt, res))) {
-      LOG_WARN("faield to exec read", K(ret));
+      LOG_WARN("failed to exec read", K(ret));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to execute sql", K(ret));

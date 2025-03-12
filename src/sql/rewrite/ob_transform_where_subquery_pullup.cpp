@@ -843,7 +843,7 @@ int ObWhereSubQueryPullup::generate_anti_condition(ObDMLStmt *stmt,
   }
   if (OB_SUCC(ret) && !right_is_not_null) {
     if (OB_FAIL(make_null_test(stmt, right_arg, right_null))) {
-      LOG_WARN("faield to make null test", K(ret));
+      LOG_WARN("failed to make null test", K(ret));
     } else if (OB_FAIL(new_cond_expr->add_param_expr(right_null))) {
       LOG_WARN("failed to add param expr", K(ret));
     }

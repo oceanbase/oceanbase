@@ -626,7 +626,7 @@ int ObSimpleThreadPoolDynamicMgr::bind(ObSimpleDynamicThreadPool *pool)
 
   SpinWLockGuard guard(simple_thread_pool_list_lock_);
   if (OB_FAIL(simple_thread_pool_list_.push_back(pool_stat))) {
-    COMMON_LOG(WARN, "bind simple thread pool faild", KP(pool));
+    COMMON_LOG(WARN, "bind simple thread pool failed", KP(pool));
   } else {
     pool->has_bind_ = true;
     COMMON_LOG(INFO, "bind simple thread pool success", K(*pool));

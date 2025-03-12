@@ -48,7 +48,7 @@ int ObAdvanceLSCkptTask::try_advance_ls_ckpt_ts()
     if (OB_SUCCESS == ret) {
       ret = OB_INVALID_ARGUMENT;
     }
-    TRANS_LOG(WARN, "get ls faild", K(ret), K(MTL(ObLSService *)));
+    TRANS_LOG(WARN, "get ls failed", K(ret), K(MTL(ObLSService *)));
   } else if (OB_FAIL(ls_handle.get_ls()->advance_checkpoint_by_flush(
                        target_ckpt_ts_,
                        INT64_MAX, /*timeout*/
@@ -249,7 +249,7 @@ int ObTxRetainCtxMgr::force_gc_retain_ctx()
   while (retain_ctx_list_.get_size() > 0) {
     const int64_t before_remove_count = retain_ctx_list_.get_size();
     if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr, INT64_MAX))) {
-      TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx faild", K(ret));
+      TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx failed", K(ret));
     }
     TRANS_LOG(INFO, "[RetainCtxMgr] try to force gc all retain ctx", K(ret),
               K(retry_force_gc_times), K(before_remove_count), KPC(this));
