@@ -29,7 +29,9 @@ enum class IntoFileLocation {
   SERVER_DISK,
   REMOTE_OSS,
   REMOTE_COS,
-  REMOTE_S3
+  REMOTE_S3,
+  REMOTE_HDFS,
+  REMOTE_UNKNOWN
 };
 struct ObStorageAppender
 {
