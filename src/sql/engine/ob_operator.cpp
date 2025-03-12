@@ -1945,7 +1945,7 @@ bool ObOperator::enable_get_next_row() const
     ret = true;
   } else {
     // if new operator is registered, please update this check and phy operator lists below
-    static_assert(PHY_END == PHY_TABLE_DIRECT_INSERT + 1, "");
+    static_assert(PHY_END == PHY_UNPIVOT_V2 + 1, "");
     switch (spec_.type_) {
     case PHY_TABLE_SCAN: // table scan with multi value index/geometry type
     case PHY_BLOCK_SAMPLE_SCAN: // sample scan with geometry type
