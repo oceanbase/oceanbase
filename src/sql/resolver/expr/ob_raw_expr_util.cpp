@@ -7849,7 +7849,7 @@ int ObRawExprUtils::check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_
 int ObRawExprUtils::check_is_bool_expr(const ObRawExpr *expr, bool &is_bool_expr)
 {
   int ret = OB_SUCCESS;
-  is_bool_expr = true;
+  is_bool_expr = false;
   bool is_implicit_cast = true;
   while (OB_SUCC(ret) && is_implicit_cast) {
     if (OB_ISNULL(expr)) {
@@ -7863,7 +7863,10 @@ int ObRawExprUtils::check_is_bool_expr(const ObRawExpr *expr, bool &is_bool_expr
       is_implicit_cast = false;
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && expr->is_const_expr()) {
+    is_bool_expr = (T_BOOL == expr->get_expr_type());
+  }
+  if (OB_SUCC(ret) && !is_bool_expr) {
     ObItemType expr_type = expr->get_expr_type();
     switch (expr_type) {
       case T_OP_EQ:

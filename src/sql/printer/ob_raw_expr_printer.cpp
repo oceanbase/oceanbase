@@ -285,34 +285,12 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else if (print_params_.for_dblink_ && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
-    bool is_bool_expr = false;
-    if (expr->is_exec_param_expr()) {
-      ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
-      if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(exec_expr->get_ref_expr(), is_bool_expr))) {
-        LOG_WARN("failed to check is bool expr", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (is_bool_expr && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "(1 = "))) {
-      /**
-       * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
-       * because the where clause is always false,
-       * the optimizer will replace the filter with startup_filter.
-       * Therefore, dblink needs to handle this special case
-       * by rewriting startup_filter as "0 = 1" or "1 = 1".
-       *
-       */
-      LOG_WARN("fail to print 1 =", K(ret));
-    } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
+    if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
       OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
     } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_,
                                               expr->get_value().get_unknown(),
                                               expr->get_data_type()))) {
       LOG_WARN("fail to write param to buf", K(expr->get_value().get_unknown()), K(expr->get_expr_obj_meta()), K(ret));
-    }
-    if (is_bool_expr){
-      DATA_PRINTF(")");
     }
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
@@ -352,6 +330,18 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
     } else if (expr->get_expr_type() == T_DATE &&
                OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "date "))) {
       LOG_WARN("fail to print date string", K(ret));
+    } else if (T_BOOL == expr->get_expr_type()) {
+      /**
+       * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
+       * because the where clause is always false,
+       * the optimizer will replace the filter with startup_filter.
+       * Therefore, dblink needs to handle this special case
+       * by rewriting startup_filter as "0 = 1" or "1 = 1".
+       *
+       */
+      if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, expr->get_value().get_bool() ? "(1 = 1)" : "(0 = 1)"))) {
+        LOG_WARN("fail to print startup filter", K(ret));
+      }
     } else if (OB_FAIL(expr->get_value().print_sql_literal(buf_, buf_len_, *pos_, print_params_))) {
       LOG_WARN("fail to print sql literal", K(ret));
     }
@@ -1017,7 +1007,7 @@ int ObRawExprPrinter::print(ObCaseOpRawExpr *expr)
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_when_expr_size(); ++i) {
         DATA_PRINTF(" when ");
-        PRINT_EXPR(expr->get_when_param_expr(i));
+        PRINT_BOOL_EXPR(expr->get_when_param_expr(i));
         DATA_PRINTF(" then ");
         PRINT_EXPR(expr->get_then_param_expr(i));
       }
