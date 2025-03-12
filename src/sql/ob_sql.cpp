@@ -5179,7 +5179,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
         LOG_WARN("fail to add plan to plan cache", K(ret));
       } else if (!plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
         if (spm_ctx.evolution_task_in_two_plan_set_) {
-          // now baseline plan and evolving plan may be added to differnet plan set due to different
+          // now baseline plan and evolving plan may be added to different plan set due to different
           // constrain. In this situation, we can't compare two plan. So just keep try next baseline.
           spm_ctx.evolution_task_in_two_plan_set_ = false;
           need_get_baseline = true;

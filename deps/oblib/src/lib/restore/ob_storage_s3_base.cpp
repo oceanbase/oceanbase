@@ -856,7 +856,7 @@ static int set_request_checkusum_algorithm(RequestType &request,
     if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
       request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
     } else {
-      // defaut md5
+      // default md5
     }
   }
   return ret;

@@ -7872,7 +7872,7 @@ int ObTransformPreProcess::check_can_gen_rowid_on_this_table(ObSelectStmt *selec
         K(select_stmt->has_group_by()), K(select_stmt->has_distinct()));
     LOG_USER_ERROR(OB_ROWID_VIEW_HAS_DISTINCT_ETC);
   } else if (is_ora_sys_view_table(this_table->ref_id_)) {
-    // Because the implementation of these views is differnet from oracle,
+    // Because the implementation of these views is different from oracle,
     // therefore, the check is added to prevent these views from trying to build rowid expr
     // v$sesstat,v$session_wait,v$sysstat
     ret = OB_NOT_SUPPORTED;
