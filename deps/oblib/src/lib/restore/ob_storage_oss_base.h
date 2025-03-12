@@ -55,7 +55,7 @@ const static int64_t MAX_ELEMENT_COUNT = 10000;//oss limit element count
 const static int64_t MULTI_BASE_BUFFER_SIZE = 16 * 1024 * 1024L;//the buf size of upload data
 static constexpr char OB_STORAGE_OSS_ALLOCATOR[] = "StorageOSS";
 
-// Before using oss, you need to initialize oss enviroment.
+// Before using oss, you need to initialize oss environment.
 // Thread safe guaranteed by user.
 int init_oss_env();
 

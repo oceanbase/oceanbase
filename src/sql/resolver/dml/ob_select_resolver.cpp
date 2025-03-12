@@ -2775,7 +2775,7 @@ int ObSelectResolver::find_joined_table_group_for_table(
 //  are producted by the rule above. Skip tables in current joined group for looping.
 //
 // words:
-// table group: seperated by ','
+// table group: separated by ','
 // joined table group: tree of joined table in one table group
 // join group: short of joined table group
 //
@@ -2962,7 +2962,7 @@ int ObSelectResolver::resolve_all_generated_table_columns(
 // rules:
 // table name can not same in same level, including alias
 // specified columns are ahead of star
-// columns are append by table group, seperated by ','.
+// columns are append by table group, separated by ','.
 // each group containers the mixtrue of based/joined/generated table.
 int ObSelectResolver::resolve_star(const ParseNode *node)
 {
