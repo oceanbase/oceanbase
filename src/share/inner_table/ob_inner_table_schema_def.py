@@ -40934,10 +40934,10 @@ def_table_schema(
 # 21646: GV$OB_TABLET_LOCAL_CACHE
 # 21647: V$OB_TABLET_LOCAL_CACHE
 
-# 21644: DBA_OB_CCL_RULE
-# 21645: CDB_OB_CCL_RULE
-# 21646: GV$OB_SQL_CCL_STATUS
-# 21647: V$OB_SQL_CCL_STATUS
+# 21648: DBA_OB_CCL_RULE
+# 21649: CDB_OB_CCL_RULE
+# 21650: GV$OB_SQL_CCL_STATUS
+# 21651: V$OB_SQL_CCL_STATUS
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
