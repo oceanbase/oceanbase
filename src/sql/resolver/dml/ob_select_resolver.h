@@ -270,6 +270,7 @@ protected:
   int resolve_fetch_clause(const ParseNode *node);
   int resolve_check_option_clause(const ParseNode *node);
   int check_set_child_stmt_pullup(const ObSelectStmt &child_stmt, bool &enable_pullup);
+  int check_set_child_into_pullup(ObSelectStmt &select_stmt, ObSelectStmt &child_stmt, bool is_first_child);
 private:
   int parameterize_fields_name(const ParseNode *project_node,
                                const ObString &org_alias_name,

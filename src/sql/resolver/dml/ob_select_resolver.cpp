@@ -430,6 +430,8 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
       } else if (OB_FAIL(do_resolve_set_query(*child_node, child_stmt, i == 0))) {
         // SQL_CALC_FOUND_ROWS is valid in first branch of union only
         LOG_WARN("failed to do resolve set query", K(ret));
+      } else if (OB_FAIL(check_set_child_into_pullup(*select_stmt, *child_stmt, i == 0))) {
+        LOG_WARN("failed to check set child into pullup", K(ret));
       } else if (OB_FAIL(check_set_child_stmt_pullup(*child_stmt, enable_pullup))) {
         LOG_WARN("failed to check set child_stmt pullup", K(ret));
       } else if (!enable_pullup) {
@@ -516,6 +518,23 @@ int ObSelectResolver::check_set_child_stmt_pullup(const ObSelectStmt &child_stmt
     enable_pullup = true;
   } else {
     enable_pullup = false;
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_set_child_into_pullup(ObSelectStmt &select_stmt,
+                                                  ObSelectStmt &child_stmt,
+                                                  bool is_first_child)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != child_stmt.get_select_into()) {
+    if (is_first_child && NULL == select_stmt.get_select_into()) {  //only the first set query can have select into
+      select_stmt.set_select_into(child_stmt.get_select_into());
+      child_stmt.set_select_into(NULL);
+    } else {
+      ret = OB_INAPPROPRIATE_INTO;
+      LOG_WARN("check set child into pullup failed", K(ret), K(is_first_child), K(select_stmt.get_select_into()));
+    }
   }
   return ret;
 }
@@ -5082,7 +5101,7 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
     } else if (OB_UNLIKELY(is_sub_stmt_)) { //in subquery
       ret = OB_INAPPROPRIATE_INTO;
       LOG_WARN("select into can not in subquery", K(ret));
-    } else if (OB_UNLIKELY(is_in_set_query())) {
+    } else if (OB_UNLIKELY(is_mysql_mode() && is_in_set_query())) {
       ret = OB_INAPPROPRIATE_INTO;
       LOG_WARN("select into can not in set query", K(ret));
     } else if (is_mysql_mode() && params_.is_from_create_view_) {
