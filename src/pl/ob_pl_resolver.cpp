@@ -15156,7 +15156,11 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
         label_symbol = true;
       }
       if (!label_symbol) {
-        parent_id = access_idxs.at(cnt - 1).var_index_;
+        if (access_idxs.at(cnt - 1).var_index_ != OB_INVALID_INDEX) {
+          parent_id = access_idxs.at(cnt - 1).var_index_;
+        } else {
+          parent_id = access_idxs.at(cnt - 1).elem_type_.get_user_type_id();
+        }
       }
     }
     if (label_symbol) {
