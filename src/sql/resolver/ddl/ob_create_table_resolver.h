@@ -93,7 +93,7 @@ private:
   int resolve_external_table_format_early(const ParseNode *node);
   //index
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column);
-  int generate_index_arg();
+  int generate_index_arg(const bool process_heap_table_primary_key);
   int set_index_name();
   int set_index_option_to_arg();
   int set_storing_column();
@@ -137,6 +137,11 @@ private:
   int check_max_row_data_length(const ObTableSchema &table_schema);
   int create_default_partition_for_table(ObTableSchema &table_schema);
   int set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema);
+  int resolve_primary_key_node_in_heap_table(const ParseNode *element, common::ObArray<ObColumnResolveStat> &stats,
+                                             ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols);
+  int resolve_single_column_primary_key_node(const ParseNode *column_list_node, ObTableSchema &tbl_schema, bool &process_heap_table_primary_key, ObString &first_column_name);
+  int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index);  int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
+  int check_building_domain_index_legal();
 
 private:
   // data members
@@ -148,7 +153,7 @@ private:
   bool is_temp_table_pk_added_;
   obrpc::ObCreateIndexArg index_arg_;
   IndexNameSet current_index_name_set_;
-
+  common::hash::ObHashSet<share::schema::ObIndexNameHashWrapper> index_aux_name_set_;
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
 
@@ -156,6 +161,7 @@ private:
   common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
   bool has_vec_index_;
   bool has_fts_index_;
+  bool has_multivalue_index_;
 };
 
 } // end namespace sql

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ls/ob_ls.h"
 #include "storage/slog_ckpt/ob_tenant_meta_snapshot_handler.h"
 #include "storage/tenant_snapshot/ob_ls_snapshot_defs.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_meta_table.h"

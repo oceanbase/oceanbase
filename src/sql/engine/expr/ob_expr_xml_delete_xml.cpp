@@ -12,12 +12,7 @@
  */
 
 #include "ob_expr_xml_delete_xml.h"
-#include "ob_expr_lob_utils.h"
-#include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "lib/utility/utility.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 #define USING_LOG_PREFIX SQL_ENG

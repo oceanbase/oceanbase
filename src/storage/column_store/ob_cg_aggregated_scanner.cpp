@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_aggregated_scanner.h"
-#include "storage/access/ob_aggregate_base.h"
 #include "storage/access/ob_aggregated_store.h"
 #include "storage/access/ob_aggregated_store_vec.h"
 
@@ -156,13 +155,12 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
 {
   UNUSED(datum_offset);
   int ret = OB_SUCCESS;
-  bool projected = true;
-  if (access_ctx_->block_row_store_->is_vec2()) {
+  bool need_projected = true;
+  if (iter_param_->use_new_format()) {
     micro_scanner_->reserve_reader_memory(false);
     ObAggGroupVec *agg_group_vec = static_cast<ObAggGroupVec *>(agg_group_);
-    projected = agg_group_vec->check_need_project(micro_scanner_->get_reader(), 0/*col_offset*/, row_ids_, row_cap);
-    if (!projected) {
-      LOG_DEBUG("check whether need project in aggregate", K_(need_access_data), K_(need_get_row_ids));
+    need_projected = agg_group_vec->check_need_project(micro_scanner_->get_reader(), 0/*col_offset*/, row_ids_, row_cap);
+    if (!need_projected) {
     } else if (OB_FAIL(micro_scanner_->get_next_rows(*iter_param_->out_cols_project_,
                                                      col_params_,
                                                      row_ids_,
@@ -171,13 +169,15 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
                                                      datum_infos_,
                                                      0, /*datum offset*/
                                                      len_array_,
+                                                     is_padding_mode_,
                                                      !access_ctx_->block_row_store_->filter_is_null()))) {
       LOG_WARN("Fail to get next rows", K(ret));
     }
+    LOG_DEBUG("check whether need project in aggregate", K(need_projected), K_(need_access_data), K_(need_get_row_ids));
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_offset*/, row_ids_, row_cap, projected/*reserve_memory*/, *agg_group_))) {
+  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_offset*/, row_ids_, row_cap, need_projected/*reserve_memory*/, *agg_group_))) {
     LOG_WARN("Fail to get aggregate result", K(ret));
   }
   return ret;
@@ -191,7 +191,7 @@ int ObCGAggregatedScanner::check_need_access_data(const ObTableIterParam &iter_p
                   0 == iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (access_ctx.block_row_store_->is_vec2()) {
+  } else if (iter_param.use_new_format()) {
     const sql::ObExpr *output_expr = nullptr;
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;

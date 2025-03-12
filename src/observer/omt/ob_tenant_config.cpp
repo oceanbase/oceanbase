@@ -13,18 +13,8 @@
 #define USING_LOG_PREFIX SERVER_OMT
 
 #include "ob_tenant_config.h"
-#include "common/ob_common_utility.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/oblog/ob_log.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "share/errsim_module/ob_errsim_module_interface_imp.h"
-#include "src/sql/ob_optimizer_trace_impl.h"
 
 using namespace oceanbase::common;
 

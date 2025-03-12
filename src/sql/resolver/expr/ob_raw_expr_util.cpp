@@ -11,39 +11,19 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/json/ob_json.h"
+#include "ob_raw_expr_util.h"
 #include "lib/json/ob_json_print_utils.h"
-#include "lib/udt/ob_array_type.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "sql/parser/ob_parser.h"
 #include "sql/parser/ob_sql_parser.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_to_type.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "common/ob_smart_call.h"
 #include "pl/ob_pl_resolver.h"
-#include "pl/ob_pl_type.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "lib/enumset/ob_enum_set_meta.h"
+#include "src/sql/resolver/dml/ob_inlist_resolver.h"
 
 namespace oceanbase
 {
@@ -6776,6 +6756,7 @@ int ObRawExprUtils::build_get_package_var(ObRawExprFactory &expr_factory,
                                           ObSchemaGetterGuard &schema_guard,
                                           uint64_t package_id,
                                           int64_t var_idx,
+                                          const ObString &var_name,
                                           ObExprResType *result_type,
                                           ObRawExpr *&expr,
                                           const ObSQLSessionInfo *session_info)
@@ -6806,7 +6787,25 @@ int ObRawExprUtils::build_get_package_var(ObRawExprFactory &expr_factory,
   OZ (build_const_int_expr(expr_factory, ObIntType,
     body_info != NULL ? body_info->get_schema_version() : OB_INVALID_VERSION, c_expr5));
   OZ (f_expr->add_param_expr(c_expr5));
-  OX (f_expr->set_func_name(ObString::make_string(N_GET_PACKAGE_VAR)));
+  if (OB_NOT_NULL(spec_info)) {
+    ObSqlString func_name;
+    ObString copy_func_name;
+    if (is_sys_tenant(spec_info->get_tenant_id())) {
+      OZ (func_name.append_fmt("%.*s.%.*s",
+        spec_info->get_package_name().length(), spec_info->get_package_name().ptr(), var_name.length(), var_name.ptr()));
+    } else {
+      const ObSimpleDatabaseSchema *db_info = NULL;
+      OZ (schema_guard.get_database_schema(spec_info->get_tenant_id(), spec_info->get_database_id(), db_info));
+      CK (OB_NOT_NULL(db_info));
+      OZ (func_name.append_fmt("%.*s.%.*s.%.*s",
+        db_info->get_database_name_str().length(), db_info->get_database_name_str().ptr(),
+        spec_info->get_package_name().length(), spec_info->get_package_name().ptr(), var_name.length(), var_name.ptr()));
+    }
+    OZ (ob_write_string(expr_factory.get_allocator(), func_name.string(), copy_func_name));
+    OX (f_expr->set_func_name(copy_func_name));
+  } else {
+    OX (f_expr->set_func_name(ObString::make_string(N_GET_PACKAGE_VAR)));
+  }
   OX (expr = f_expr);
   CK (OB_NOT_NULL(session_info));
   OZ (expr->formalize(session_info));
@@ -9179,7 +9178,7 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
       OZ(calc_urowid_expr->add_param_expr(rowkey_exprs.at(i)));
     }
-    if (OB_SUCC(ret) && !table_schema.is_external_table() && table_schema.is_heap_table()) {
+    if (OB_SUCC(ret) && !table_schema.is_external_table() && table_schema.is_table_without_pk()) {
       //set calc tablet id for heap table calc_urowid expr
       ObRawExpr *calc_tablet_id_expr = nullptr;
       OZ(build_calc_tablet_id_expr(expr_factory,
@@ -9923,6 +9922,39 @@ int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("failed to extract expr info", K(ret));
   } else {
     expr = count_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_demote_cast_expr(ObRawExprFactory &expr_factory,
+                                           const ObSQLSessionInfo *session_info,
+                                           const ObItemType expr_type,
+                                           const ObConstRawExpr *const_expr,
+                                           const ObExprResType &column_type,
+                                           ObSysFunRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *column_type_expr = NULL;
+  if (OB_ISNULL(session_info) || OB_ISNULL(const_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), KP(session_info), KP(const_expr));
+  } else if (!IS_TYPE_DEMOTION_FUN(expr_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected expr type", K(ret), K(expr_type));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(expr_type, new_expr))) {
+    LOG_WARN("create inner row cmp value expr failed", K(ret));
+  } else if (OB_FAIL(create_type_expr(expr_factory, column_type_expr, column_type))) {
+    LOG_WARN("create type expr failed", K(ret), K(column_type));
+  } else if (OB_FAIL(new_expr->add_param_expr(const_cast<ObConstRawExpr*>(const_expr)))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(column_type_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->formalize(session_info))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  } else {
+    new_expr->set_func_name((T_FUN_SYS_DEMOTE_CAST == expr_type) ?
+                              N_DEMOTE_CAST : N_RANGE_PLACEMENT);
+    new_expr->add_flag(IS_INNER_ADDED_EXPR);
   }
   return ret;
 }

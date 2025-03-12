@@ -12,14 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_mview_compaction_util.h"
-#include "ob_tablet_merge_task.h"
 #include "ob_basic_tablet_merge_ctx.h"
-#include "observer/ob_server_struct.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_result.h"
+#include "ob_tenant_tablet_scheduler.h"
 
 ERRSIM_POINT_DEF(EN_VALIDATE_COLLECT_MV_REFRESH, "validate collect mv refresh");
 
@@ -130,6 +127,7 @@ int64_t ObMviewMergeParameter::to_string(char *buf, const int64_t buf_len) const
 ObMviewCompactionValidation::ObMviewCompactionValidation()
   : first_validated_(false),
     second_validated_(false),
+    force_validated_(false),
     merge_version_(0)
 {
 }
@@ -140,20 +138,23 @@ void ObMviewCompactionValidation::refresh(const int64_t new_version)
     merge_version_ = new_version;
     ATOMIC_STORE(&first_validated_, false);
     ATOMIC_STORE(&second_validated_, false);
+    force_validated_ = false;
   }
 }
 
 bool ObMviewCompactionValidation::need_do_validation()
 {
-  bool need = false;
-  if (false == ATOMIC_VCAS(&first_validated_, false, true)) {
-    need = true;
-    LOG_INFO("[MVIEW COMPACTION]: need do validation for first task");
-  } else {
-    bool choice = rand() % RANDOM_SELECT_BASE == 0;
-    if (choice && false == ATOMIC_VCAS(&second_validated_, false, true)) {
+  bool need = force_validated_;
+  if (!need) {
+    if (false == ATOMIC_VCAS(&first_validated_, false, true)) {
       need = true;
-      LOG_INFO("[MVIEW COMPACTION]: need do validation for second random task");
+      LOG_INFO("[MVIEW COMPACTION]: need do validation for first task");
+    } else {
+      bool choice = rand() % RANDOM_SELECT_BASE == 0;
+      if (choice && false == ATOMIC_VCAS(&second_validated_, false, true)) {
+        need = true;
+        LOG_INFO("[MVIEW COMPACTION]: need do validation for second random task");
+      }
     }
   }
   if (!need && EN_VALIDATE_COLLECT_MV_REFRESH) {
@@ -432,6 +433,7 @@ int ObMviewCompactionHelper::validate_row_count(const ObMergeParameter &merge_pa
   if (OB_SUCC(ret) && major_row_count != join_row_count) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("MV major row count is not equal with join row count", K(ret), K(major_row_count), K(join_row_count));
+    MTL(ObTenantTabletScheduler*)->get_mview_validation().set_force_do_validation();
   }
   read_result.~ReadResult();
   ObMviewCompactionHelper::release_inner_connection(conn);

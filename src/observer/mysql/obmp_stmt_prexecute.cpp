@@ -14,42 +14,11 @@
 
 
 #include "observer/mysql/obmp_stmt_prexecute.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/encode/ob_base64_encode.h"
-#include "observer/mysql/obsm_utils.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/packet/ompk_prepare.h"
 #include "rpc/obmysql/packet/ompk_prexecute.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/packet/ompk_resheader.h"
 #include "rpc/obmysql/packet/ompk_field.h"
-#include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/mysql/obsm_row.h"
 #include "observer/mysql/obmp_stmt_prepare.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_time_utility2.h"
 #include "sql/ob_sql.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
-#include "observer/omt/ob_tenant.h"
-#include "observer/mysql/ob_sync_plan_driver.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
-#include "observer/mysql/ob_async_cmd_driver.h"
-#include "observer/mysql/ob_async_plan_driver.h"
-#include "observer/mysql/obmp_stmt_send_piece_data.h"
-#include "observer/ob_req_time_service.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
-#include "pl/ob_pl_exception_handling.h"
-#include "rpc/obmysql/ob_mysql_field.h"
 
 namespace oceanbase
 {
@@ -152,28 +121,37 @@ int ObMPStmtPrexecute::before_process()
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
       uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
+      bool need_response_error = false;
       session->set_current_trace_id(ObCurTraceId::get_trace_id());
       session->init_use_rich_format();
       session->set_proxy_version(get_proxy_version());
-      int64_t packet_len = (reinterpret_cast<const ObMySQLRawPacket &>
-                                (req_->get_packet())).get_clen();
       ObReqTimeGuard req_timeinfo_guard;
-      if (sql_len_ > 0 && 0 == stmt_id_) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(!session->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid session", K_(sql), K(ret));
+      } else if (OB_FAIL(process_kill_client_session(*session))) {
+        LOG_WARN("client session has been killed", K(ret));
+      } else if (OB_UNLIKELY(session->is_zombie())) {
+        ret = OB_ERR_SESSION_INTERRUPTED;
+        LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
+                K(session->get_sessid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
+      } else if (pkt.exist_trace_info()
+                 && OB_FAIL(session->update_sys_variable(SYS_VAR_OB_TRACE_INFO,
+                                                         pkt.get_trace_info()))) {
+        LOG_WARN("fail to update trace info", K(ret));
+      } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+      } else if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
+        LOG_WARN("fail get process extra info", K(ret));
+      } else if (FALSE_IT(session->post_sync_session_info())) {
+      } else if (sql_len_ > 0 && 0 == stmt_id_) {
         int64_t query_timeout = 0;
         int64_t tenant_version = 0;
         int64_t sys_version = 0;
         bool force_sync_resp = false;
-        bool need_response_error = false;
-        if (OB_UNLIKELY(!session->is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid session", K_(sql), K(ret));
-        } else if (OB_FAIL(process_kill_client_session(*session))) {
-          LOG_WARN("client session has been killed", K(ret));
-        } else if (OB_UNLIKELY(session->is_zombie())) {
-          ret = OB_ERR_SESSION_INTERRUPTED;
-          LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
-                  K(session->get_sessid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
-        } else if (OB_UNLIKELY(packet_len > session->get_max_packet_size())) {
+        int64_t packet_len =
+            (reinterpret_cast<const ObMySQLRawPacket &>(req_->get_packet())).get_clen();
+        if (OB_UNLIKELY(packet_len > session->get_max_packet_size())) {
           ret = OB_ERR_NET_PACKET_TOO_LARGE;
           LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
         } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {

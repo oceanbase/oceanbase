@@ -75,7 +75,6 @@ class ObTenantChecker: public ObInspectionTask
     virtual const char* get_task_name() const { return "tenant_checker"; };
   private:
     int alter_tenant_primary_zone_();
-    int check_create_tenant_end_();
     int check_garbage_tenant_(bool &passed);
   private:
     share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -110,7 +109,7 @@ private:
 class ObInspector: public common::ObAsyncTimerTask
 {
 public:
-  const static int64_t INSPECT_INTERVAL = 600L * 1000L * 1000L;  //600s
+  const static int64_t INSPECT_INTERVAL = 1500L * 1000L * 1000L;  //1500s
   explicit ObInspector(ObRootService &rs);
   virtual ~ObInspector() {}
 

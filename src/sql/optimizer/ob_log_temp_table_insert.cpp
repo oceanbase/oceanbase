@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "sql/optimizer/ob_log_temp_table_insert.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase::sql;

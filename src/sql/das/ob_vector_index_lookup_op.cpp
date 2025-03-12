@@ -10,17 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_ir_define.h"
 #include "sql/das/ob_das_vec_define.h"
 #include "sql/das/ob_vector_index_lookup_op.h"
 #include "sql/das/ob_das_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "storage/access/ob_dml_param.h"
 #include "src/sql/engine/expr/ob_expr_lob_utils.h"
-#include "src/share/vector_index/ob_vector_index_util.h"
 #include "src/storage/access/ob_table_scan_iterator.h"
-#include "src/share/schema/ob_tenant_schema_service.h"
 
 namespace oceanbase
 {

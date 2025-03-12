@@ -11,7 +11,6 @@
  */
 
 #include "rpc/obrpc/ob_poc_rpc_server.h"
-#include "lib/oblog/ob_log_module.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 
 #define rk_log_macro(level, ret, format, ...) _OB_LOG_RET(level, ret, "PNIO " format, ##__VA_ARGS__)

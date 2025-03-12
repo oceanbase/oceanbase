@@ -11,19 +11,12 @@
  */
 #define USING_LOG_PREFIX SHARE
 #include <gtest/gtest.h>
-#include <iostream>
 #include <memory>
-#include <thread>
-#include <unordered_map>
 #include <mutex>
+#include <unordered_map>
 #define private public
 #include "test_xml_utils.h"
-#include "lib/xml/ob_xpath.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/allocator/page_arena.h"
 #include "libxml2/libxml/xmlmemory.h"
-#include "lib/xml/ob_xml_util.h"
 #undef private
 
 namespace oceanbase {

@@ -11,12 +11,8 @@
  */
 
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
-#include "lib/ob_errno.h"
-#include "storage/compaction/ob_medium_compaction_info.h"
-#include "storage/tablet/ob_mds_scan_param_helper.h"
-#include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_mds_data.h"
+#include "storage/tablet/ob_mds_scan_param_helper.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -144,6 +140,40 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
     }
   }
 
+  return ret;
+}
+
+int ObTabletMediumInfoReader::get_medium_info_with_merge_version(
+    const int64_t merge_version,
+    const ObTablet &tablet,
+    common::ObIAllocator &allocator,
+    compaction::ObMediumCompactionInfo *&medium_info)
+{
+  int ret = OB_SUCCESS;
+  medium_info = nullptr;
+  const share::ObLSID &ls_id = tablet.get_ls_id();
+  const common::ObTabletID &tablet_id = tablet.get_tablet_id();
+  compaction::ObMediumCompactionInfoKey medium_info_key(merge_version);
+  if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info))) {
+    LOG_WARN("fail to alloc and new", K(ret));
+  } else {
+    SMART_VARS_2((ObTableScanParam, scan_param), (ObTabletMediumInfoReader, medium_info_reader)) {
+      if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(
+          allocator,
+          ls_id,
+          tablet_id,
+          scan_param))) {
+        LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(medium_info_reader.init(tablet, scan_param))) {
+        LOG_WARN("fail to init medium info reader", K(ret));
+      } else if (OB_FAIL(medium_info_reader.get_specified_medium_info(allocator, medium_info_key, *medium_info))) {
+        LOG_WARN("fail to get specified scn info", K(ret), K(medium_info_key));
+      } else if (OB_ISNULL(medium_info) || OB_UNLIKELY(!medium_info->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("medium info is invalid", K(ret), K(medium_info));
+      }
+    }
+  }
   return ret;
 }
 

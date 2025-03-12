@@ -11,17 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE
+#include "ob_get_compat_mode.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

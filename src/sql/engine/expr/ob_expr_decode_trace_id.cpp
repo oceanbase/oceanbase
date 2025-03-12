@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_decode_trace_id.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/ob_name_def.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 namespace oceanbase
 {
 using namespace common;

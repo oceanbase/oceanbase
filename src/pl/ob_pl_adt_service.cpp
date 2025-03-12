@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_adt_service.h"
-#include "common/ob_field.h"
-#include "ob_pl_type.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "lib/container/ob_2d_array.h"
-#include "lib/utility/ob_template_utils.h"
 
 namespace oceanbase
 {

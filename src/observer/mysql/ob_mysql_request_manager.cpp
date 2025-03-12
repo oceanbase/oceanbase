@@ -13,24 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_mysql_request_manager.h"
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/thread/thread_mgr.h"
 #include "lib/rc/ob_rc.h"
-#include "common/ob_clock_generator.h"
-#include "share/rc/ob_context.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/ob_server.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_callback.h"
-#include "sql/plan_cache/ob_plan_cache_value.h"
-#include "sql/session/ob_basic_session_info.h"
 #include "observer/mysql/ob_query_response_time.h"
 #include "ob_dl_queue.h"
 
@@ -320,7 +304,9 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
 int ObMySQLRequestManager::release_record(int64_t release_cnt, bool is_destroyed) {
   int ret = OB_SUCCESS;
   LockGuard lock_guard(destroy_second_level_mutex_);
-  if (OB_FAIL(queue_.release_record(release_cnt, std::move(this), is_destroyed))) {
+  std::function<void(void*)> free_callback = std::bind(&ObMySQLRequestManager::freeCallback,
+                            this, std::placeholders::_1);
+  if (OB_FAIL(queue_.release_record(release_cnt, free_callback, is_destroyed))) {
     SERVER_LOG(WARN, "fail to release record",
           K(release_cnt), K(ret));
   }

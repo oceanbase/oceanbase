@@ -36,7 +36,7 @@ ObTableLoadStoreTransPXWriter::ObTableLoadStoreTransPXWriter()
     store_ctx_(nullptr),
     trans_(nullptr),
     writer_(nullptr),
-    is_heap_table_(false),
+    is_table_without_pk_(false),
     column_count_(0),
     store_column_count_(0),
     non_partitioned_tablet_id_vector_(nullptr),
@@ -71,10 +71,10 @@ void ObTableLoadStoreTransPXWriter::reset()
       store_ctx_->put_trans(trans_);
       trans_ = nullptr;
     }
-    ATOMIC_AAF(&store_ctx_->px_writer_count_, -1);
+    ATOMIC_AAF(&store_ctx_->write_ctx_.px_writer_cnt_, -1);
     store_ctx_ = nullptr;
   }
-  is_heap_table_ = false;
+  is_table_without_pk_ = false;
   column_count_ = 0;
   store_column_count_ = 0;
   non_partitioned_tablet_id_vector_ = nullptr;
@@ -114,25 +114,24 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
     writer_ = writer;
     trans_->inc_ref_count();
     writer_->inc_ref_count();
-    ATOMIC_AAF(&store_ctx_->px_writer_count_, 1);
+    ATOMIC_AAF(&store_ctx_->write_ctx_.px_writer_cnt_, 1);
 
-    is_heap_table_ = store_ctx_->ctx_->schema_.is_heap_table_;
+    is_table_without_pk_ = store_ctx_->ctx_->schema_.is_table_without_pk_;
     column_count_ = store_ctx_->ctx_->schema_.store_column_count_;
-    store_column_count_ = (is_heap_table_ ? column_count_ - 1 : column_count_);
+    store_column_count_ = (is_table_without_pk_ ? column_count_ - 1 : column_count_);
     if (!store_ctx_->ctx_->schema_.is_partitioned_table_) {
       non_partitioned_tablet_id_vector_ =
         store_ctx_->ctx_->schema_.non_partitioned_tablet_id_vector_;
     }
     if (OB_FAIL(init_tablet_id_set())) {
       LOG_WARN("fail to init tablet id set", KR(ret));
-    } else if (store_ctx_->enable_pre_sort_) {
+    } else if (store_ctx_->write_ctx_.enable_pre_sort_) {
       if (OB_ISNULL(pre_sort_writer_ = OB_NEWx(ObTableLoadPreSortWriter, &allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObTableLoadPreSortWriter", KR(ret));
-      } else if (OB_FAIL(pre_sort_writer_->init(store_ctx_->pre_sorter_,
+      } else if (OB_FAIL(pre_sort_writer_->init(store_ctx_->write_ctx_.pre_sorter_,
                                                 writer_,
-                                                store_ctx_->error_row_handler_,
-                                                &(store_ctx_->data_store_table_ctx_->table_data_desc_)))) {
+                                                store_ctx_->error_row_handler_))) {
         LOG_WARN("fail to init pre sort wirter", KR(ret));
       }
     }
@@ -216,7 +215,7 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
     batch_ctx_->heap_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
     // non-vectorized
     if (!is_vectorized) {
-      batch_ctx_->row_flag_.uncontain_hidden_pk_ = is_heap_table_;
+      batch_ctx_->row_flag_.uncontain_hidden_pk_ = is_table_without_pk_;
       if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_FIXED,
                                                       ObDirectLoadVectorUtils::tablet_id_value_tc,
                                                       allocator_,
@@ -344,7 +343,7 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_heap_table_ &&
+      if (is_table_without_pk_ &&
           OB_FAIL(batch_ctx_->heap_vectors_.prepare_allocate(store_column_count_))) {
         LOG_WARN("fail to prepare allocate", KR(ret), K(store_column_count_));
       }
@@ -618,12 +617,13 @@ int ObTableLoadStoreTransPXWriter::write_row(const ObTabletID &tablet_id, const 
   } else {
     bool is_full = false;
     const int64_t batch_idx = batch_ctx_->batch_buffer_.get_row_count();
+    batch_ctx_->datum_row_.storage_datums_ = is_table_without_pk_ ? row.storage_datums_ + 1 : row.storage_datums_;
+    batch_ctx_->datum_row_.count_ = is_table_without_pk_ ? row.count_ - 1 : row.count_;
     if (OB_FAIL(ObDirectLoadVectorUtils::set_tablet_id(batch_ctx_->tablet_id_batch_vector_,
                                                        batch_idx,
                                                        tablet_id))) {
       LOG_WARN("fail to set tablet id", KR(ret));
-    } else if (OB_FAIL(batch_ctx_->batch_buffer_.append_row(is_heap_table_ ? row.storage_datums_ + 1 : row.storage_datums_,
-                                                            is_heap_table_ ? row.count_ - 1 : row.count_,
+    } else if (OB_FAIL(batch_ctx_->batch_buffer_.append_row(batch_ctx_->datum_row_,
                                                             batch_ctx_->row_flag_,
                                                             is_full))) {
       LOG_WARN("fail to append row", KR(ret));
@@ -671,7 +671,7 @@ int ObTableLoadStoreTransPXWriter::flush_batch(ObIVector *tablet_id_vector,
              K(batch_rows));
   } else {
     const ObIArray<ObIVector *> *append_vectors = nullptr;
-    if (is_heap_table_) {
+    if (is_table_without_pk_) {
       for (int64_t i = 0; i < store_column_count_; ++i) {
         batch_ctx_->heap_vectors_.at(i) = vectors.at(i + 1);
       }
@@ -679,7 +679,7 @@ int ObTableLoadStoreTransPXWriter::flush_batch(ObIVector *tablet_id_vector,
     } else {
       append_vectors = &vectors;
     }
-    if (store_ctx_->enable_pre_sort_) {
+    if (nullptr != pre_sort_writer_) {
       if (OB_FAIL(pre_sort_writer_->px_write(tablet_id_vector, *append_vectors, batch_rows, affected_rows))) {
         LOG_WARN("fail to px write", KR(ret));
       }

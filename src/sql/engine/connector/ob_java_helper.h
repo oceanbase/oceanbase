@@ -18,6 +18,8 @@
 #include <vector>
 
 #include <jni.h>
+#include <hdfs/hdfs.h>
+#include <hdfs/hdfs.h>
 
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
@@ -89,12 +91,64 @@ typedef JNIEnv* (*GETJNIENV)(void);
 typedef jint (*DETACHCURRENTTHREAD)(void);
 typedef jint (*DESTROYJNIENV)(void);
 
+// hdfs related symbols
+typedef hdfsFileInfo* (*HdfsGetPathInfoFunc)(hdfsFS, const char*);
+typedef void (*HdfsFreeFileInfoFunc)(hdfsFileInfo *, int);
+typedef int (*HdfsDeleteFunc)(hdfsFS, const char*, int);
+typedef char* (*HdfsGetLastExceptionRootCauseFunc)();
+typedef int (*HdfsCreateDirectoryFunc)(hdfsFS, const char*);
+typedef hdfsFileInfo* (*HdfsListDirectoryFunc)(hdfsFS, const char*, int*);
+typedef int (*HdfsCloseFileFunc)(hdfsFS, hdfsFile);
+typedef hdfsFile (*HdfsOpenFileFunc)(hdfsFS, const char*, int, int, short, tSize);
+typedef int (*HdfsFileIsOpenForReadFunc)(hdfsFile);
+typedef int (*HdfsFileIsOpenForWriteFunc)(hdfsFile);
+typedef tSize (*HdfsPreadFunc)(hdfsFS, hdfsFile, tOffset, void*, tSize);
+typedef struct hdfsBuilder* (*HdfsNewBuilderFunc)(void);
+typedef void (*HdfsBuilderSetNameNodeFunc)(struct hdfsBuilder *, const char *);
+typedef void (*HdfsBuilderSetUserNameFunc)(struct hdfsBuilder *, const char *);
+typedef void (*HdfsBuilderSetForceNewInstanceFunc)(struct hdfsBuilder *);
+typedef hdfsFS (*HdfsBuilderConnectFunc)(struct hdfsBuilder *);
+typedef void (*HdfsFreeBuilderFunc)(struct hdfsBuilder *);
+typedef int (*HdfsDisconnectFunc)(hdfsFS);
+
+// extra added for kerberos auth
+typedef int (*HdfsBuilderConfSetStrFunc)(struct hdfsBuilder *, const char *, const char *);
+typedef void (*HdfsBuilderSetPrincipalFunc)(struct hdfsBuilder *, const char *);
+typedef void (*HdfsBuilderSetKerb5ConfFunc)(struct hdfsBuilder *, const char *);
+typedef void (*HdfsBuilderSetKeyTabFileFunc)(struct hdfsBuilder *, const char *);
+typedef void (*HdfsBuilderSetKerbTicketCachePathFunc)(struct hdfsBuilder *, const char *);
+
 // desclare function
-extern "C" {
-  static GETJNIENV getJNIEnv = NULL;
-  static DETACHCURRENTTHREAD detachCurrentThread = NULL;
-  static DESTROYJNIENV destroyJNIEnv = NULL;
-}
+extern "C" GETJNIENV getJNIEnv;
+extern "C" DETACHCURRENTTHREAD detachCurrentThread;
+extern "C" DESTROYJNIENV destroyJNIEnv;
+
+// declare hdfs functions
+extern "C" HdfsGetPathInfoFunc obHdfsGetPathInfo;
+extern "C" HdfsFreeFileInfoFunc obHdfsFreeFileInfo;
+extern "C" HdfsDeleteFunc obHdfsDelete;
+extern "C" HdfsGetLastExceptionRootCauseFunc obHdfsGetLastExceptionRootCause;
+extern "C" HdfsCreateDirectoryFunc obHdfsCreateDirectory;
+extern "C" HdfsListDirectoryFunc obHdfsListDirectory;
+extern "C" HdfsCloseFileFunc obHdfsCloseFile;
+extern "C" HdfsOpenFileFunc obHdfsOpenFile;
+extern "C" HdfsFileIsOpenForReadFunc obHdfsFileIsOpenForRead;
+extern "C" HdfsFileIsOpenForWriteFunc obHdfsFileIsOpenForWrite;
+extern "C" HdfsPreadFunc obHdfsPread;
+extern "C" HdfsNewBuilderFunc obHdfsNewBuilder;
+extern "C" HdfsBuilderSetNameNodeFunc obHdfsBuilderSetNameNode;
+extern "C" HdfsBuilderSetUserNameFunc obHdfsBuilderSetUserName;
+extern "C" HdfsBuilderSetForceNewInstanceFunc obHdfsBuilderSetForceNewInstance;
+extern "C" HdfsBuilderConnectFunc obHdfsBuilderConnect;
+extern "C" HdfsFreeBuilderFunc obHdfsFreeBuilder;
+extern "C" HdfsDisconnectFunc obHdfsDisconnect;
+
+// extra added for kerberos auth
+extern "C" HdfsBuilderConfSetStrFunc obHdfsBuilderConfSetStr;
+extern "C" HdfsBuilderSetPrincipalFunc obHdfsBuilderSetPrincipal;
+extern "C" HdfsBuilderSetKerb5ConfFunc obHdfsBuilderSetKerb5Conf;
+extern "C" HdfsBuilderSetKeyTabFileFunc obHdfsBuilderSetKeyTabFile;
+extern "C" HdfsBuilderSetKerbTicketCachePathFunc obHdfsBuilderSetKerbTicketCachePath;
 
 namespace oceanbase
 {
@@ -224,7 +278,6 @@ private:
       // do nothing
     } else if (OB_FAIL(do_init_())) {
       is_inited_ = false;
-      LOG_WARN("failed to init jvm function helper", K(ret));
     } else {
       is_inited_ = true;
     }

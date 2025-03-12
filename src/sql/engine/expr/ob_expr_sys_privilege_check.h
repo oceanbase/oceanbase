@@ -38,7 +38,8 @@ private:
                              const common::ObString &level,
                              const uint64_t tenant_id,
                              const common::ObString &db_name,
-                             const common::ObString &table_name);
+                             const common::ObString &obj_name,
+                             const int64_t routine_type = 0);
   DISALLOW_COPY_AND_ASSIGN(ObExprSysPrivilegeCheck);
 };
 }

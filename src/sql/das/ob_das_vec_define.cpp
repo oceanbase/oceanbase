@@ -19,7 +19,7 @@ namespace sql
 {
 
 OB_SERIALIZE_MEMBER((ObDASVecAuxScanCtDef, ObDASAttachCtDef),
-                    inv_scan_vec_id_col_, vec_index_param_, dim_, vec_type_, algorithm_type_, selectivity_, row_count_, access_pk_);
+                    inv_scan_vec_id_col_, vec_index_param_, dim_, vec_type_, algorithm_type_, selectivity_, row_count_, access_pk_, can_use_vec_pri_opt_);
 OB_SERIALIZE_MEMBER(ObDASVecAuxScanRtDef);
 
 } // sql

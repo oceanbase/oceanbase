@@ -11,25 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "lib/utility/ob_tracepoint.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_optimizer.h"
+#include "ob_optimizer.h"
 #include "sql/optimizer/ob_explain_note.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_select_log_plan.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_logical_operator.h"
-#include "common/ob_smart_call.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/optimizer/ob_log_temp_table_insert.h"
-#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
-#include "share/stat/ob_opt_system_stat.h"
 #include "sql/optimizer/ob_opt_cost_model_parameter.h"
 #include "src/share/stat/ob_opt_stat_manager.h"
+#include "src/sql/engine/px/ob_dfo_scheduler.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -386,6 +374,9 @@ int ObOptimizer::check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
     // not user request
     can_use_parallel_das_dml = false;
     LOG_TRACE("not user request, can't support parallel_das_dml");
+  } else if (!is_strict_mode(session.get_sql_mode())) {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("not strict mode, can't support parallel_das_dml");
   } else if (OB_FAIL(check_parallel_das_dml_supported_feature(static_cast<const ObDelUpdStmt&>(stmt),
                                                               session,
                                                               can_use_parallel_das_dml))) {
@@ -479,6 +470,9 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   } else if (!can_use_pdml || ctx_.is_online_ddl() ||
              (stmt::T_INSERT == stmt.get_stmt_type() && static_cast< const ObInsertStmt &>(stmt).is_normal_table_overwrite())) {
     // do nothing
+  } else if (!is_strict_mode(session.get_sql_mode())) {
+    can_use_pdml = false;
+    LOG_TRACE("not strict mode, can't support PDML");
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
     // 1. enable parallel dml by hint
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE
@@ -491,7 +485,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     LOG_WARN("failed to get sys variable for parallel degree policy", K(ret));
   } else if (enable_auto_dop && !ctx_.get_global_hint().has_parallel_hint()) {
     // 2.2 enable parallel dml by auto dop
-  } else if (!session.is_user_session()) {
+  } else if (!session.is_user_session() && !session.get_ddl_info().is_refreshing_mview()) {
     can_use_pdml = false;
   } else if (OB_FAIL(session.get_enable_parallel_dml(session_enable_pdml))
              || OB_FAIL(session.get_force_parallel_dml_dop(session_pdml_dop))) {
@@ -628,7 +622,7 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
                                                     dml_table_infos.at(0)->ref_table_id_,
                                                     table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if(OB_NOT_NULL(table_schema) && table_schema->is_heap_table()) {
+  } else if(OB_NOT_NULL(table_schema) && table_schema->is_table_without_pk()) {
     ctx_.set_is_pdml_heap_table(true);
   }
   return ret;
@@ -669,6 +663,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
                                                  rowgoal_type))) {
     LOG_WARN("failed to get hint param", K(ret));
   } else if (FALSE_IT(ctx_.set_enable_opt_row_goal(rowgoal_type))) {
+  } else if (OB_FAIL(check_enable_topn_runtime_filter())) {
+    LOG_WARN("failed to check_enable_topn_runtime_filter");
   } else { /*do nothing*/ }
   return ret;
 }
@@ -736,6 +732,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to check hash join enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::OPTIMIZER_SORTMERGE_JOIN_ENABLED, optimizer_sortmerge_join_enabled))) {
     LOG_WARN("failed to check merge join enabled", K(ret));
+  } else if (OB_FALSE_IT(nested_loop_join_enabled |= query_ctx->is_contain_inner_table_)) {
+    //ignore tenant config for inner table
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED, nested_loop_join_enabled))) {
     LOG_WARN("failed to check nested loop join enabled", K(ret));
   } else if (OB_FAIL(session.is_adj_index_cost_enabled(enable_adj_index_cost, optimizer_index_cost_adj))) {
@@ -881,10 +879,42 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   if (OB_FAIL(ret)) {
   } else if (ctx_.is_use_auto_dop() && OB_FAIL(set_auto_dop_params(session))) {
     LOG_WARN("failed to set auto dop params", K(ret));
+  } else if (OB_FAIL(init_px_node_opt_info(session.get_effective_tenant_id()))) {
+    LOG_WARN("failed to init px node opt info", K(ret));
   } else {
     LOG_TRACE("succeed to init parallel policy", K(session.is_user_session()),
                         K(ctx_.can_use_pdml()), K(ctx_.get_parallel_rule()), K(ctx_.get_parallel()),
                         K(ctx_.get_auto_dop_params()));
+  }
+  return ret;
+}
+
+int ObOptimizer::init_px_node_opt_info(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const ObGlobalHint &global_hint = ctx_.get_global_hint();
+  // PX_NODE_ADDRS has a higher priority than PX_NODE_COUNT and PX_NODE_POLICY.
+  if (!global_hint.px_node_hint_.px_node_addrs_.empty()) {
+    ctx_.set_px_node_selection_mode(ObPxNodeSelectionMode::SPECIFY_NODE);
+  } else {
+    if (global_hint.px_node_hint_.px_node_count_ != ObPxNodeHint::UNSET_PX_NODE_COUNT) {
+      ctx_.set_px_node_selection_mode(ObPxNodeSelectionMode::SPECIFY_COUNT);
+    } else {
+      ctx_.set_px_node_selection_mode(ObPxNodeSelectionMode::DEFAULT);
+    }
+    // For PX_NODE_POLICY,
+    // the priority of hints is higher than that of tenant configuration settings.
+    if (global_hint.px_node_hint_.px_node_policy_ != ObPxNodePolicy::INVALID) {
+      ctx_.set_px_node_policy(global_hint.px_node_hint_.px_node_policy_);
+    } else {
+      ObPxNodePolicy tenant_config_px_node_policy;
+      if (OB_FAIL(ObPxNodePool::get_tenant_config_px_node_policy(tenant_id,
+                          tenant_config_px_node_policy))) {
+        LOG_WARN("Failed to get tenant config px_node_policy", K(ret));
+      } else {
+        ctx_.set_px_node_policy(tenant_config_px_node_policy);
+      }
+    }
   }
   return ret;
 }
@@ -1376,6 +1406,38 @@ int ObOptimizer::init_system_stat()
     if (meta.get_network_speed() <= 0) {
       meta.set_network_speed(DEFAULT_NETWORK_SPEED);
     }
+  }
+  return ret;
+}
+
+int ObOptimizer::check_enable_topn_runtime_filter()
+{
+  int ret = OB_SUCCESS;
+  bool enable_topn_runtime_filter = false;
+  ObSQLSessionInfo *session_info = nullptr;
+  if (OB_ISNULL(session_info = ctx_.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr");
+  } else {
+    bool hint_enable = false;
+    bool config_enable = false;
+    int64_t tenant_id = session_info->get_effective_tenant_id();
+    bool hint_exist = false;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      config_enable = tenant_config->_enable_topn_runtime_filter;
+    }
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(
+            ObOptParamHint::ENABLE_TOPN_RUNTIME_FILTER, hint_enable, hint_exist))) {
+      LOG_WARN("fail to get hint", K(ret));
+    } else if (hint_exist) {
+      enable_topn_runtime_filter = hint_enable;
+    } else {
+      enable_topn_runtime_filter = config_enable;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ctx_.set_enable_topn_runtime_filter(enable_topn_runtime_filter);
   }
   return ret;
 }

@@ -1,5 +1,3 @@
-#include "util/easy_hash.h"
-#include "util/easy_buf.h"
 #include <easy_test.h>
 
 /**

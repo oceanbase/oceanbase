@@ -8,7 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_medium_loop.h"
+#include "ob_medium_loop.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"

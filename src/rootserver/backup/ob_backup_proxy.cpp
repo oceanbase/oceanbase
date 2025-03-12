@@ -15,7 +15,6 @@
 #include "ob_backup_proxy.h"
 #include "ob_backup_service.h"
 #include "ob_archive_scheduler_service.h"
-#include "share/ob_rpc_struct.h"
 
 using namespace oceanbase;
 using namespace rootserver;

@@ -12,15 +12,7 @@
 
 #include "ob_deadlock_detector_mgr.h"
 #include "ob_deadlock_detector_rpc.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/deadlock/ob_lcl_scheme/ob_lcl_batch_sender_thread.h"
 #include "share/deadlock/ob_lcl_scheme/ob_lcl_node.h"
-#include "share/deadlock/ob_lcl_scheme/ob_lcl_parameters.h"
-#include "ob_deadlock_arg_checker.h"
 #include "ob_deadlock_inner_table_service.h"
 #include "observer/ob_server.h"
 

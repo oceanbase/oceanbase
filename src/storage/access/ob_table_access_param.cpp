@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_table_access_param.h"
-#include "ob_dml_param.h"
 #include "storage/ob_relative_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase
 {
@@ -196,6 +194,7 @@ DEF_TO_STRING(ObTableIterParam)
   J_OBJ_START();
   J_KV(K_(table_id),
        K_(tablet_id),
+       K_(ls_id),
        K_(cg_idx),
        KPC_(read_info),
        KPC_(rowkey_read_info),
@@ -282,6 +281,7 @@ int ObTableAccessParam::init(
     const share::schema::ObTableParam &table_param = *scan_param.table_param_;
     iter_param_.table_id_ = table_param.get_table_id();
     iter_param_.tablet_id_ = scan_param.tablet_id_;
+    iter_param_.ls_id_ = scan_param.ls_id_;
     iter_param_.read_info_ = &table_param.get_read_info();
 
     if (nullptr == tablet_handle) {
@@ -448,6 +448,9 @@ int ObTableAccessParam::init_dml_access_param(
   } else {
     iter_param_.table_id_ = table.get_table_id();
     iter_param_.tablet_id_ = table.get_tablet_id();
+    if (nullptr != table.tablet_iter_.get_tablet()) {
+      iter_param_.ls_id_ = table.tablet_iter_.get_tablet()->get_tablet_meta().ls_id_;
+    }
     iter_param_.read_info_ = &schema_param.get_read_info();
     iter_param_.rowkey_read_info_ = &rowkey_read_info;
     iter_param_.cg_read_infos_ = schema_param.get_cg_read_infos();

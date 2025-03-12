@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "objit/common/ob_item_type.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/aggregate/ob_merge_distinct_vec_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <chrono>
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/oblog/ob_log_module.h"
 #include "storage/blocksstable/ob_datum_rowkey_vector.h"
 #include "src/share/schema/ob_table_param.h"
 namespace oceanbase

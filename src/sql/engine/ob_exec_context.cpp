@@ -11,19 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/ob_sql.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "common/ob_smart_call.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
+#include "ob_exec_context.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "lib/profile/ob_perf_event.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "ob_operator.h"
 #include "observer/ob_server.h"
 #include "storage/lob/ob_lob_persistent_reader.h"
 #include "sql/executor/ob_memory_tracker.h"
@@ -794,10 +784,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       } else {
         consistency = STRONG;
       }
-      if (stmt::T_INSERT == plan.get_stmt_type()) {
-        bool is_direct_load = plan.get_enable_append();
-        phy_plan_ctx_->set_is_direct_insert_plan(is_direct_load);
-      }
+      phy_plan_ctx_->set_is_direct_insert_plan(plan.get_enable_append());
       phy_plan_ctx_->set_consistency_level(consistency);
       phy_plan_ctx_->set_timeout_timestamp(start_time + plan_timeout);
       phy_plan_ctx_->set_rich_format(my_session_->use_rich_format());

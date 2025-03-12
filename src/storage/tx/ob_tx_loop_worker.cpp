@@ -10,12 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_handler.h"
 #include "storage/tx/ob_tx_loop_worker.h"
-#include "storage/tx/ob_tx_retain_ctx_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_leak_checker.h"
 
@@ -83,6 +78,7 @@ void ObTxLoopWorker::reset()
   last_tx_gc_ts_ = 0;
   last_retain_ctx_gc_ts_ = 0;
   last_check_start_working_retry_ts_ = 0;
+  last_tenant_config_refresh_ts_ = 0;
 }
 
 void ObTxLoopWorker::run1()
@@ -120,6 +116,13 @@ void ObTxLoopWorker::run1()
       TRANS_LOG(INFO, "try to retry start_working");
       last_check_start_working_retry_ts_ = common::ObClockGenerator::getClock();
       can_check_and_retry_start_working = true;
+    }
+
+    // refresh tx tenant config
+    if (common::ObClockGenerator::getClock() -
+          last_tenant_config_refresh_ts_ > LOOP_INTERVAL * 50 /*5s*/) {
+      refresh_tenant_config_();
+      last_tenant_config_refresh_ts_ = common::ObClockGenerator::getClock();
     }
 
     (void)scan_all_ls_(can_gc_tx, can_gc_retain_ctx, can_check_and_retry_start_working);
@@ -272,6 +275,18 @@ void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr, SCN &min_start_scn, MinStartScnStat
   }
 
   UNUSED(ret);
+}
+
+void ObTxLoopWorker::refresh_tenant_config_()
+{
+  int ret = OB_SUCCESS;
+  ObTransService *txs = NULL;
+  if (OB_ISNULL(txs = MTL(ObTransService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected transaction service", K(ret), KP(txs));
+  } else {
+    txs->get_tx_elr_util().check_and_update_tx_elr_info();
+  }
 }
 
 void ObTxLoopWorker::update_max_commit_ts_()

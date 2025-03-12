@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "common/ob_common_utility.h"
+#include "ob_common_utility.h"
 #include "lib/alloc/malloc_hook.h"
-#include "lib/string/ob_string.h"
-#include "lib/utility/ob_sort.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_sort.h"
 using namespace oceanbase::lib;
 

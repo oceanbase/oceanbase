@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_tablet_autoincrement_param.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

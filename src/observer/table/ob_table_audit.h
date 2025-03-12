@@ -50,23 +50,23 @@ public:
   {
     int ret = OB_SUCCESS;
     if (need_audit_) {
-      ObCStringHelper helper;
-      const char *request_str = helper.convert(request);
-      if (OB_ISNULL(request_str)) {
-        ret = OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "fail to alloc request to string", K(ret), K(request));
-      } else {
-        const int64_t request_str_len = strlen(request_str);
-        const int64_t buf_size = request_str_len + 1;
-        char *buf = reinterpret_cast<char *>(allocator_.alloc(buf_size));
-        if (NULL == buf) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          COMMON_LOG(WARN, "fail to alloc request string memory", K(ret), K(buf_size));
+      //static thread_local char request_str[32L<<10];
+      SMART_VAR(char[16L<<10], request_str) {
+        int64_t pos = 0;
+        if (OB_FAIL(databuff_print_obj(request_str, sizeof(request_str), pos, request))) {
+          COMMON_LOG(WARN, "fail to format request", K(ret));
         } else {
-          MEMSET(buf, 0, buf_size);
-          MEMCPY(buf, request_str, request_str_len);
-          req_buf_ = buf;
-          req_buf_len_ = buf_size;
+          const int64_t request_str_len = pos;
+          const int64_t buf_size = request_str_len;
+          char *buf = reinterpret_cast<char *>(allocator_.alloc(request_str_len));
+          if (NULL == buf) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            COMMON_LOG(WARN, "fail to alloc request string memory", K(ret), K(buf_size));
+          } else {
+            MEMCPY(buf, request_str, request_str_len);
+            req_buf_ = buf;
+            req_buf_len_ = buf_size;
+          }
         }
       }
     }
@@ -253,7 +253,7 @@ public:
 
       if (OB_SUCC(ret)) {
         const bool enable_stats = false; // stats has been recorded in record_stat
-        const int64_t record_limit = sess_guard_.get_sess_info().get_tenant_query_record_size_limit();
+        const int64_t record_limit = TABLEAPI_SESS_POOL_MGR->get_query_record_size_limit();
         MTL_SWITCH(record_.tenant_id_) {
           obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
           if (OB_ISNULL(req_manager)) {

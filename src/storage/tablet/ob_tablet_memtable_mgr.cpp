@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_multi_source_data.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ls/ob_freezer.h"
+#include "ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {

@@ -24,18 +24,19 @@ public:
   ListCommand()
   {
     // almost all list cmd include query_and_mutate operations
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
+    attr_.cmd_group_ = ObRedisCmdGroup::LIST_CMD;
   }
   virtual ~ListCommand() = default;
 
-protected:
-  common::ObString key_;
 };
 
 class Push : public ListCommand
 {
 public:
-  explicit Push(ObIAllocator &allocator) : values_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisPUSH"))
+  explicit Push(ObIAllocator &allocator, bool is_push_left, bool need_exist)
+      : is_push_left_(is_push_left),
+        need_exist_(need_exist),
+        values_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisPUSH"))
   {
     attr_.arity_ = -3;
     attr_.need_snapshot_ = false;
@@ -43,12 +44,29 @@ public:
   virtual ~Push()
   {}
   // set and check args here
-  int init(const common::ObIArray<common::ObString> &args) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+
+public:
+  OB_INLINE const common::ObIArray<common::ObString> &get_values() const
+  {
+    return values_;
+  }
+
+  OB_INLINE bool is_push_left() const
+  {
+    return is_push_left_;
+  }
+
+  OB_INLINE bool need_exist() const
+  {
+    return need_exist_;
+  }
 
 protected:
   // args
+  bool is_push_left_;
+  bool need_exist_;
   ObSEArray<common::ObString, 2> values_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(Push);
 };
@@ -56,14 +74,12 @@ private:
 class LPush : public Push
 {
 public:
-  explicit LPush(ObIAllocator &allocator) : Push(allocator)
-  {
-    attr_.cmd_name_ = "LPUSH";
-  }
+  explicit LPush(ObIAllocator &allocator) : Push(allocator, true /*is_push_left*/, false /*need_exist*/)
+  {}
   virtual ~LPush()
   {}
 
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LPush);
@@ -72,13 +88,11 @@ private:
 class LPushX : public Push
 {
 public:
-  explicit LPushX(ObIAllocator &allocator) : Push(allocator)
-  {
-    attr_.cmd_name_ = "LPUSHX";
-  }
+  explicit LPushX(ObIAllocator &allocator) : Push(allocator, true /*is_push_left*/, true /*need_exist*/)
+  {}
   virtual ~LPushX()
   {}
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LPushX);
@@ -87,14 +101,12 @@ private:
 class RPush : public Push
 {
 public:
-  explicit RPush(ObIAllocator &allocator) : Push(allocator)
-  {
-    attr_.cmd_name_ = "RPUSH";
-  }
+  explicit RPush(ObIAllocator &allocator) : Push(allocator, false /*is_push_left*/, false /*need_exist*/)
+  {}
   virtual ~RPush()
   {}
 
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RPush);
@@ -103,13 +115,11 @@ private:
 class RPushX : public Push
 {
 public:
-  explicit RPushX(ObIAllocator &allocator) : Push(allocator)
-  {
-    attr_.cmd_name_ = "RPUSHX";
-  }
+  explicit RPushX(ObIAllocator &allocator) : Push(allocator, false /*is_push_left*/, true /*need_exist*/)
+  {}
   virtual ~RPushX()
   {}
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RPushX);
@@ -118,7 +128,7 @@ private:
 class Pop : public ListCommand
 {
 public:
-  explicit Pop()
+  explicit Pop(bool is_pop_left) : is_pop_left_(is_pop_left)
   {
     attr_.arity_ = 2;
     attr_.need_snapshot_ = false;
@@ -126,22 +136,25 @@ public:
   virtual ~Pop()
   {}
   // set and check args here
-  int init(const common::ObIArray<common::ObString> &args) override;
-
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  OB_INLINE bool is_pop_left() const
+  {
+    return is_pop_left_;
+  }
 private:
+  bool is_pop_left_;
   DISALLOW_COPY_AND_ASSIGN(Pop);
 };
 
 class LPop : public Pop
 {
 public:
-  explicit LPop(ObIAllocator &allocator)
+  explicit LPop(ObIAllocator &allocator) : Pop(true /*is_pop_left*/)
   {
-    attr_.cmd_name_ = "LPOP";
   }
   virtual ~LPop()
   {}
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LPop);
@@ -150,13 +163,11 @@ private:
 class RPop : public Pop
 {
 public:
-  explicit RPop(ObIAllocator &allocator)
-  {
-    attr_.cmd_name_ = "RPOP";
-  }
+  explicit RPop(ObIAllocator &allocator) : Pop(false /*is_pop_left*/)
+  {}
   virtual ~RPop()
   {}
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RPop);
@@ -167,14 +178,13 @@ class LIndex : public ListCommand
 public:
   explicit LIndex(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LINDEX";
     attr_.arity_ = 3;
     attr_.need_snapshot_ = false;
   }
   virtual ~LIndex()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   int64_t offset_;
@@ -186,14 +196,13 @@ class LSet : public ListCommand
 public:
   explicit LSet(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LSET";
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
   }
   virtual ~LSet()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   int64_t offset_;
@@ -206,14 +215,13 @@ class LRange : public ListCommand
 public:
   explicit LRange(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LRANGE";
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
   }
   virtual ~LRange()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   int64_t start_;
@@ -226,14 +234,13 @@ class LTrim : public ListCommand
 public:
   explicit LTrim(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LTRIM";
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
   }
   virtual ~LTrim()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   int64_t start_;
@@ -246,14 +253,13 @@ class LInsert : public ListCommand
 public:
   explicit LInsert(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LINSERT";
     attr_.arity_ = 5;
     attr_.need_snapshot_ = false;
   }
   virtual ~LInsert()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   bool is_before_pivot_;
@@ -267,15 +273,13 @@ class LLen : public ListCommand
 public:
   explicit LLen(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LLEN";
     attr_.arity_ = 2;
     attr_.need_snapshot_ = true;
-    attr_.lock_mode_ = REDIS_LOCK_MODE::LOCK_FREE;
   }
   virtual ~LLen()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LLen);
@@ -286,14 +290,13 @@ class LRem : public ListCommand
 public:
   explicit LRem(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "LREM";
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
   }
   virtual ~LRem()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   int64_t count_;
@@ -306,36 +309,17 @@ class RpopLpush : public ListCommand
 public:
   explicit RpopLpush(ObIAllocator &allocator)
   {
-    attr_.cmd_name_ = "RPOPLPUSH";
     attr_.arity_ = 3;
     attr_.need_snapshot_ = false;
   }
   virtual ~RpopLpush()
   {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   ObString dest_key_;
   DISALLOW_COPY_AND_ASSIGN(RpopLpush);
-};
-
-class LDel : public ListCommand
-{
-public:
-  explicit LDel(ObIAllocator &allocator)
-  {
-    attr_.cmd_name_ = "LDEL";
-    attr_.arity_ = 2;
-    attr_.need_snapshot_ = false;
-  }
-  virtual ~LDel()
-  {}
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(LDel);
 };
 
 }  // namespace table

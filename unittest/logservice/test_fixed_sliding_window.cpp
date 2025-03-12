@@ -10,13 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <string.h>
 #include <gtest/gtest.h>
-#include <pthread.h>
 #define private public
 #include "logservice/palf/fixed_sliding_window.h"
 #undef private
-#include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 
 

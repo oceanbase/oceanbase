@@ -16,16 +16,8 @@
 #define private public
 #define UNITTEST
 
-#include <vector>
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx_table/ob_tx_ctx_memtable_mgr.h"
-#include "storage/tx/ob_tx_log_adapter.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
 #include "storage/mock_ob_log_handler.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/ls/ob_ls.h"
 #include "logservice/ob_log_handler.h"
 
 namespace oceanbase
@@ -139,7 +131,7 @@ protected:
                                   ls_id_,
                                   &ls_.tx_table_,
                                   ls_.get_lock_table(),
-                                  (ObITsMgr *)(0x01),
+                                  (ObTsMgr *)(0x01),
                                   MTL(transaction::ObTransService*),
                                   &palf_param,
                                   nullptr));
@@ -148,7 +140,7 @@ protected:
                                   ls_id_,
                                   &ls_.tx_table_,
                                   ls_.get_lock_table(),
-                                  (ObITsMgr *)(0x01),
+                                  (ObTsMgr *)(0x01),
                                   MTL(transaction::ObTransService*),
                                   &palf_param,
                                   nullptr));
@@ -326,7 +318,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
                                           TestTxCtxTable::ls_id_,
                                           &ls_.tx_table_,
                                           &ls_.lock_table_,
-                                          (ObITsMgr *)(0x01),
+                                          (ObTsMgr *)(0x01),
                                           MTL(transaction::ObTransService*),
                                           &palf_param,
                                           nullptr));
@@ -406,7 +398,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
                        const ObLSID &ls_id,
                        ObTxTable *tx_table,
                        ObLockTable *lock_table,
-                       ObITsMgr *ts_mgr,
+                       ObTsMgr *ts_mgr,
                        ObTransService *txs,
                        ObITxLogParam *param,
                        ObITxLogAdapter *log_adapter)

@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdlib.h>
 
 #define protected public
 #define private public
@@ -19,8 +18,6 @@
 #include "ob_simple_server_restart_helper.h"
 
 #include "ob_simple_cluster_test_base.h"
-#include "lib/oblog/ob_log.h"
-#include "share/config/ob_server_config.h"
 
 #undef private
 #undef protected

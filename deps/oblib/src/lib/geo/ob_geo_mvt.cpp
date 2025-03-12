@@ -17,7 +17,6 @@
 #include "share/rc/ob_tenant_base.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_mvt_encode_visitor.h"
-#include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
 
 namespace oceanbase {

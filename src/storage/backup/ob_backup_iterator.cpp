@@ -14,11 +14,7 @@
 
 #include "storage/backup/ob_backup_iterator.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 
-#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

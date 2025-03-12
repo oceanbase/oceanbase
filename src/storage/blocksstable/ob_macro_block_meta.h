@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MACRO_BLOCK_META_H_
 
 #include "lib/compress/ob_compress_util.h"
+#include "storage/blocksstable/ob_bloom_filter_cache.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "share/schema/ob_table_param.h"
@@ -37,6 +38,7 @@ class ObDataBlockMetaVal final
 public:
   static const int32_t DATA_BLOCK_META_VAL_VERSION = 1;
   static const int32_t DATA_BLOCK_META_VAL_VERSION_V2 = 2;
+
 public:
   ObDataBlockMetaVal();
   explicit ObDataBlockMetaVal(ObIAllocator &allocator);
@@ -44,11 +46,11 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObDataBlockMetaVal &val);
-  int build_value(ObStorageDatum &datum, ObIAllocator &allocator) const;
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int build_value(ObStorageDatum &datum, ObIAllocator &allocator, const int64_t data_version) const;
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos, const int64_t data_version) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
-  int64_t get_serialize_size() const;
-  int64_t get_max_serialize_size() const;
+  int64_t get_serialize_size(const int64_t data_version) const;
+  int64_t get_max_serialize_size(const int64_t data_version) const;
   TO_STRING_KV(K_(version), K_(length), K_(data_checksum), K_(rowkey_count),
         K_(column_count), K_(micro_block_count), K_(occupy_size), K_(data_size),
         K_(data_zsize), K_(original_size), K_(progressive_merge_round), K_(block_offset), K_(block_size), K_(row_count),
@@ -57,7 +59,11 @@ public:
         K_(master_key_id), K_(encrypt_id), K_(encrypt_key), K_(row_store_type),
         K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag),
         K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row),
-          K_(agg_row_len), KP_(agg_row_buf), K_(ddl_end_row_offset));
+        K_(agg_row_len), KP_(agg_row_buf), K_(ddl_end_row_offset), K_(macro_block_bf_size), KP_(macro_block_bf_buf));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
+
 public:
   int32_t version_;
   int32_t length_;
@@ -96,8 +102,9 @@ public:
   // used for ddl sstable migration & backup rebuild sstable
   // eg: if only one macro block with 100 rows, ddl_end_row_offset_ is 99.
   int64_t ddl_end_row_offset_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
+  /* -------------------------------- 4_3_5_1 -------------------------------- */
+  int64_t macro_block_bf_size_;
+  const char * macro_block_bf_buf_;
 };
 
 class ObDataMacroBlockMeta final
@@ -108,8 +115,10 @@ public:
   ~ObDataMacroBlockMeta();
   int assign(const ObDataMacroBlockMeta &meta);
   int deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &allocator) const;
-  int build_row(ObDatumRow &row, ObIAllocator &allocator) const;
-  int build_estimate_row(ObDatumRow &row, ObIAllocator &allocator) const;
+  int build_row(ObDatumRow &row, ObIAllocator &allocator, const uint64_t data_version) const;
+  int build_estimate_row(ObDatumRow &row,
+                         ObIAllocator &allocator,
+                         const uint64_t data_version) const;
   int parse_row(ObDatumRow &row);
   OB_INLINE const ObDataBlockMetaVal &get_meta_val() const { return val_; }
   OB_INLINE const MacroBlockId &get_macro_id() const

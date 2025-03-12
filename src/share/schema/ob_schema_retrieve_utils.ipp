@@ -1083,7 +1083,8 @@ int ObSchemaRetrieveUtils::retrieve_column_group_mapping(
             }
             if (FAILEDx(column_group->add_column_id(last_column_id))) {
               LOG_WARN("fail to add column_id", KR(ret), K(last_column_group_id), K(last_column_id),
-                K(table_id), KPC(column_group));
+                                                         K(curr_column_group_id), K(curr_column_id),
+                                                         K(table_id), KPC(column_group), KPC(table_schema));
             }
           }
         }
@@ -1335,6 +1336,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ObString parser_name_default_val;
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, parser_name, table_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, parser_name_default_val);
+    ObString parser_properties_default_val;
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, parser_properties, table_schema,  true/*skip null error*/, true/*ignore_column_error*/, parser_properties_default_val);
     int64_t tablet_size_default = OB_DEFAULT_TABLET_SIZE;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, tablet_size, table_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, tablet_size_default);
     int64_t pctfree_default = OB_DEFAULT_PCTFREE;
@@ -1515,6 +1519,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         int64_t, true, true, 0);
     // filed for micro_index_clustered
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, micro_index_clustered, table_schema,
+        true/*skip null error*/, true/*ignore_column_error*/, false);
+    // fill macro block bloom filter
+    EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, enable_macro_block_bloom_filter, table_schema,
         true/*skip null error*/, true/*ignore_column_error*/, false);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_properties, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
@@ -5224,7 +5231,7 @@ int ObSchemaRetrieveUtils::fill_foreign_key_info(
       EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, rely_flag, foreign_key_info, true, ObSchemaService::g_ignore_column_retrieve_error_, default_rely_flag);
       EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, enable_flag, foreign_key_info, true, ObSchemaService::g_ignore_column_retrieve_error_, default_enable_flag);
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, validate_flag, foreign_key_info, ObCstFkValidateFlag, true, ObSchemaService::g_ignore_column_retrieve_error_, default_validate_flag);
-      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ref_cst_type, foreign_key_info, ObConstraintType, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "ref_cst_type", foreign_key_info.fk_ref_type_, ObForeignKeyRefType, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ref_cst_id, foreign_key_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, -1);
       EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, is_parent_table_mock, foreign_key_info, true, ObSchemaService::g_ignore_column_retrieve_error_, default_is_parent_table_mock);
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, name_generated_type, foreign_key_info, ObNameGeneratedType, true/*skip null*/, true/*ignore column error*/, GENERATED_TYPE_UNKNOWN);

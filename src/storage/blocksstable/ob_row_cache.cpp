@@ -11,7 +11,6 @@
  */
 
 #include "ob_row_cache.h"
-#include "lib/stat/ob_diagnose_info.h"
 namespace oceanbase
 {
 using namespace common;

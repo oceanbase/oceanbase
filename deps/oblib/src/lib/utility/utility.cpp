@@ -12,21 +12,12 @@
 
 #define USING_LOG_PREFIX LIB
 
+#include "utility.h"
 #include "dirent.h"
-#include <dlfcn.h>
 #include <gnu/libc-version.h>
-#include "lib/utility/utility.h"
-#include "lib/ob_define.h"
-#include "util/easy_inet.h"
-#include "common/rowkey/ob_rowkey.h"
-#include "lib/time/ob_time_utility.h"
 #include "lib/file/file_directory_utils.h"
-#include "common/ob_range.h"
+#include "deps/oblib/src/common/ob_string_buf.h"
 #include "lib/string/ob_sql_string.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "common/object/ob_object.h"
-#include "lib/net/ob_addr.h"
-#include "lib/json/ob_yson.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
@@ -2011,6 +2002,44 @@ bool glibc_prereq(int major, int minor)
   int cur_minor = 0;
   get_glibc_version(cur_major, cur_minor);
   return (cur_major > major) || (cur_major == major && cur_minor >= minor);
+}
+
+const char *get_transparent_hugepage_status()
+{
+  char buf[32];
+  const char *status = "unknown";
+  FILE *file = fopen("/sys/kernel/mm/transparent_hugepage/enabled", "r");
+  if (NULL != file) {
+    if (NULL != fgets(buf, sizeof(buf), file)) {
+      if (NULL != STRSTR(buf, "[never]")) {
+        status = "never";
+      } else if (NULL != STRSTR(buf, "[always]")) {
+        status = "always";
+      } else if (NULL != STRSTR(buf, "[madvise]")) {
+        status = "madvise";
+      }
+    }
+    fclose(file);
+  }
+
+  return status;
+}
+
+int read_one_int(const char *file_name, int64_t &value)
+{
+  int ret = OB_SUCCESS;
+  FILE *fp = fopen(file_name, "r");
+  if (fp != nullptr) {
+    if (1 != fscanf(fp, "%ld", &value)) {
+      ret = OB_IO_ERROR;
+      LOG_ERROR("Failed to read integer from file", K(ret));
+    }
+    fclose(fp);
+  } else {
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("File does not exist", K(ret));
+  }
+  return ret;
 }
 
 } // end namespace common

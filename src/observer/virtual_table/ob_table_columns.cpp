@@ -12,14 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_table_columns.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
-#include "share/ob_get_compat_mode.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -90,6 +82,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
         ObStmtNeedPrivs stmt_need_privs;
         stmt_need_privs.need_privs_.set_allocator(allocator_);
         ObSessionPrivInfo session_priv;
+        const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
         session_->get_session_priv_info(session_priv);
         const ObSimpleDatabaseSchema *db_schema = NULL;
         if (OB_UNLIKELY(!session_priv.is_valid())) {
@@ -132,12 +125,12 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(schema_guard_->check_priv_or(session_priv, stmt_need_privs))) {
+          } else if (OB_FAIL(schema_guard_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
             if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
               ret = OB_SUCCESS;
               bool pass = false;
               if (OB_FAIL(schema_guard_->check_priv_any_column_priv(
-                            session_priv, db_schema->get_database_name_str(),
+                            session_priv, enable_role_id_array, db_schema->get_database_name_str(),
                             table_schema->get_table_name_str(), pass))) {
                 LOG_WARN("fail to collect privs in roles", K(ret));
               } else if (!pass) {
@@ -204,7 +197,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version_) && col->is_hidden()) {
               // version lower than 4.3.1 does not support SHOW EXTENDED,
               // should not output hidden columns.
-            } else if (col->is_invisible_column()) { // 忽略 invisible 列
+            } else if (col->is_invisible_column() && lib::is_oracle_mode()) { // 忽略 invisible 列
               // mysql 8.0.23 has supported invisivle column, we should not ignore them
               // for mysql
             } else if (OB_FAIL(fill_row_cells(*table_schema, *col, has_column_priv))) {
@@ -283,7 +276,8 @@ int ObTableColumns::get_type_str(
   int64_t pos = 0;
 
   if (OB_FAIL(ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, sub_type))) {
+                              column_type_str_, column_type_str_len_, pos, sub_type,
+                              column_schema.is_string_lob()))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       if (OB_UNLIKELY(NULL == (column_type_str_ = static_cast<char *>(allocator_->alloc(
                                OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
@@ -293,7 +287,8 @@ int ObTableColumns::get_type_str(
         pos = 0;
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, sub_type);
+                              column_type_str_, column_type_str_len_, pos, sub_type,
+                              column_schema.is_string_lob());
       }
     }
   }
@@ -305,7 +300,8 @@ int ObTableColumns::get_type_str(
 }
 
 int ObTableColumns::fill_col_privs(
-    ObSessionPrivInfo &session_priv,
+    const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
     ObNeedPriv &need_priv, 
     ObPrivSet priv_set, 
     const char *priv_str,
@@ -316,7 +312,7 @@ int ObTableColumns::fill_col_privs(
   int ret = OB_SUCCESS;
 
   need_priv.priv_set_ = priv_set;
-  if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, need_priv))) {
+  if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv))) {
     ret = databuff_printf(buf, buf_len, pos, "%s", priv_str);
   } else if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
     ret = OB_SUCCESS;
@@ -373,8 +369,10 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         K(session_->get_effective_tenant_id()), K(table_schema.get_database_id()));
     }
   }
+  const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
   if (OB_SUCC(ret) && !is_oracle_mode) {
     if (OB_FAIL(schema_guard_->collect_all_priv_for_column(session_priv,
+                                                           enable_role_id_array,
                                                            db_schema->get_database_name_str(),
                                                            table_schema.get_table_name_str(),
                                                            column_schema.get_column_name_str(),
@@ -629,6 +627,32 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           }
         }
 
+        if (OB_SUCC(ret) && lib::is_mysql_mode() && column_schema.is_invisible_column()) {
+          int64_t append_len = sizeof("INVISIBLE");
+          int64_t cur_len = extra_val.length();
+
+          if (cur_len > 0) {
+            append_len += 1;
+          }
+
+          int64_t buf_len = cur_len + append_len;
+
+          char *buf = NULL;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SERVER_LOG(WARN, "fail to allocate memory", K(ret));
+          } else if (FALSE_IT(MEMCPY(buf, extra_val.ptr(), cur_len))) {
+          } else if (cur_len > 0
+                     && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", " INVISIBLE"))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
+          } else if (cur_len == 0
+                     && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", "INVISIBLE"))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
+          } else {
+            extra_val = ObString(buf_len, buf);
+          }
+        }
+
         cur_row_.cells_[cell_idx].set_varchar(extra_val);
         cur_row_.cells_[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -649,15 +673,15 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           ObNeedPriv need_priv(db_schema->get_database_name(), 
                                table_schema.get_table_name(),
                                OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_SELECT, "SELECT,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_SELECT, "SELECT,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_INSERT, "INSERT,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_INSERT, "INSERT,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_UPDATE, "UPDATE,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_UPDATE, "UPDATE,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_DELETE, "DELETE,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_DELETE, "DELETE,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_REFERENCES, "REFERENCES,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_REFERENCES, "REFERENCES,",
                              buf, buf_len, pos));
           
         } else {
@@ -667,25 +691,25 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
 
           need_priv.priv_set_ = OB_PRIV_SELECT;
           if (0 != (col_priv_set & OB_PRIV_SELECT)
-              || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "SELECT,");
           }
           need_priv.priv_set_ = OB_PRIV_INSERT;
           if (OB_FAIL(ret)) {
           } else if (0 != (col_priv_set & OB_PRIV_INSERT)
-                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "INSERT,");
           }
           need_priv.priv_set_ = OB_PRIV_UPDATE;
           if (OB_FAIL(ret)) {
           } else if (0 != (col_priv_set & OB_PRIV_UPDATE)
-                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "UPDATE,");
           }
           need_priv.priv_set_ = OB_PRIV_REFERENCES;
           if (OB_FAIL(ret)) {
           } else if (0 != (col_priv_set & OB_PRIV_REFERENCES)
-                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "REFERENCES,");
           }
         }
@@ -883,6 +907,8 @@ int ObTableColumns::deduce_column_attributes(
   // default = NULL: other cases
   //TODO: default = 0 case
   bool has_default = true;
+  // whether the mediumtext column is string.
+  bool is_string_lob = false;
   ObSqlString priv;
   ObRawExpr *&item_expr = const_cast<SelectItem &>(select_item).expr_;
   // In static engine the scale not idempotent in type deducing,
@@ -904,9 +930,9 @@ int ObTableColumns::deduce_column_attributes(
     }
     if (OB_FAIL(ret)) {
     } else if (ObRawExpr::EXPR_COLUMN_REF == expr->get_expr_class()) {
-      if (OB_FAIL(set_null_and_default_according_binary_expr(session->get_effective_tenant_id(),
-                                                             select_stmt, expr, schema_guard,
-                                                             nullable, has_default))) {
+      if (OB_FAIL(set_col_attrs_according_binary_expr(session->get_effective_tenant_id(),
+                                                      select_stmt, expr, schema_guard,
+                                                      nullable, has_default, is_string_lob))) {
         LOG_WARN("fail to get null and default for binary expr", K(ret));
       }
     } else if (expr->is_json_expr()
@@ -924,9 +950,9 @@ int ObTableColumns::deduce_column_attributes(
         } else {
           switch (t_expr->get_expr_class()) {
           case ObRawExpr::EXPR_COLUMN_REF:
-            if (OB_FAIL(set_null_and_default_according_binary_expr(session->get_effective_tenant_id(),
-                                                                   select_stmt, t_expr, schema_guard,
-                                                                   nullable, has_default))) {
+            if (OB_FAIL(set_col_attrs_according_binary_expr(session->get_effective_tenant_id(),
+                                                            select_stmt, t_expr, schema_guard,
+                                                            nullable, has_default, is_string_lob))) {
               LOG_WARN("fail to get null and default for binary expr", K(ret));
             }
             break;
@@ -988,6 +1014,8 @@ int ObTableColumns::deduce_column_attributes(
           LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
         }
       }
+    } else if (result_type.is_enum_or_set() && OB_FAIL(extend_type_info.assign(select_item.expr_->get_enum_set_values()))) {
+      LOG_WARN("failed to assign enum values", K(ret));
     }
     if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
@@ -1000,7 +1028,8 @@ int ObTableColumns::deduce_column_attributes(
                                   result_type.get_scale(),
                                   result_type.get_collation_type(),
                                   extend_type_info,
-                                  sub_type))) {
+                                  sub_type,
+                                  is_string_lob))) {
         LOG_WARN("fail to get data type str", K(ret));
       } else {
         LOG_DEBUG("succ to ob_sql_type_str", K(ret), K(result_type), K(select_stmt), KPC(select_item.expr_), K(precision_or_length_semantics));
@@ -1011,6 +1040,7 @@ int ObTableColumns::deduce_column_attributes(
   if (OB_SUCC(ret)) {
     if (!is_oracle_mode) {
       ObSessionPrivInfo session_priv;
+      const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
       session->get_session_priv_info(session_priv);
       const ObSimpleDatabaseSchema *db_schema = NULL;
       const ObColumnPriv *column_priv = NULL;
@@ -1044,7 +1074,7 @@ int ObTableColumns::deduce_column_attributes(
           col_priv_set = column_priv->get_priv_set();
         }
         if (0 != (col_priv_set & OB_PRIV_SELECT)
-            || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+            || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
           if (OB_FAIL(priv.append("SELECT,"))) {
             LOG_WARN("append failed", K(ret));
           }
@@ -1052,7 +1082,7 @@ int ObTableColumns::deduce_column_attributes(
         need_priv.priv_set_ = OB_PRIV_INSERT;
         if (OB_SUCC(ret)) {
           if (0 != (col_priv_set & OB_PRIV_INSERT)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             if (OB_FAIL(priv.append("INSERT,"))) {
               LOG_WARN("append failed", K(ret));
             }
@@ -1061,7 +1091,7 @@ int ObTableColumns::deduce_column_attributes(
         need_priv.priv_set_ = OB_PRIV_UPDATE;
         if (OB_SUCC(ret)) {
           if (0 != (col_priv_set & OB_PRIV_UPDATE)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             if (OB_FAIL(priv.append("UPDATE,"))) {
               LOG_WARN("append failed", K(ret));
             }
@@ -1070,7 +1100,7 @@ int ObTableColumns::deduce_column_attributes(
         need_priv.priv_set_ = OB_PRIV_REFERENCES;
         if (OB_SUCC(ret)) {
           if (0 != (col_priv_set & OB_PRIV_REFERENCES)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             if (OB_FAIL(priv.append("REFERENCES,"))) {
               LOG_WARN("append failed", K(ret));
             }
@@ -1097,6 +1127,7 @@ int ObTableColumns::deduce_column_attributes(
     OZ (ob_write_string(allocator, priv.string(), column_attributes.privileges_));
     column_attributes.result_type_ = select_item.expr_->get_result_type();
     column_attributes.is_hidden_ = 0;
+    column_attributes.is_string_lob_ = is_string_lob;
     //TODO:
     //ObObj default;
     //view_column.set_cur_default_value(default);
@@ -1105,13 +1136,14 @@ int ObTableColumns::deduce_column_attributes(
   return ret;
 }
 
-int ObTableColumns::set_null_and_default_according_binary_expr(
+int ObTableColumns::set_col_attrs_according_binary_expr(
     const uint64_t tenant_id,
     const ObSelectStmt *select_stmt,
     const ObRawExpr *expr,
     share::schema::ObSchemaGetterGuard *schema_guard,
     bool &nullable,
-    bool &has_default)
+    bool &has_default,
+    bool &is_string_lob)
 {
   int ret = OB_SUCCESS;
   const ObColumnRefRawExpr *bexpr = NULL;
@@ -1145,8 +1177,11 @@ int ObTableColumns::set_null_and_default_according_binary_expr(
                 && column_schema->is_nullable()) {
         nullable = true;
       } else {/*do nothing*/}
-      if (OB_SUCC(ret) && has_default && column_schema->get_cur_default_value().is_null()) {
-        has_default = false;
+      if (OB_SUCC(ret)) {
+        if (has_default && column_schema->get_cur_default_value().is_null()) {
+          has_default = false;
+        }
+        is_string_lob = column_schema->is_string_lob();
       }
     }
   }

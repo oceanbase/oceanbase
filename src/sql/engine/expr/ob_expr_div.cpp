@@ -12,14 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_div.h"
-#include "lib/oblog/ob_log.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -742,12 +738,12 @@ int ObExprDiv::div_double_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 int ObExprDiv::div_vec(EVAL_FUNC_ARG_DECL)
 {
   ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
-  return def_arith_eval_func<ObVectorFloatArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+  return def_arith_eval_func<ObVectorElemArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 int ObExprDiv::div_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
 {
   ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
-  return def_batch_arith_op_by_datum_func<ObVectorFloatArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+  return def_batch_arith_op_by_datum_func<ObVectorElemArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 
 struct ObNumberDivFunc

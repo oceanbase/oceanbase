@@ -14,7 +14,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include <algorithm>
 
 #include "ob_cdc_malloc_sample_info.h"
 #include "ob_log_utils.h"

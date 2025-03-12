@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/basic/chunk_store/ob_compact_store.h"
-#include "sql/engine/basic/chunk_store/ob_block_ireader.h"
-#include "sql/engine/basic/chunk_store/ob_default_block_writer.h"
-#include "sql/engine/basic/chunk_store/ob_default_block_reader.h"
-#include "sql/engine/basic/chunk_store/ob_compact_block_reader.h"
+#include "ob_compact_store.h"
 #include "sql/engine/basic/chunk_store/ob_compact_block_writer.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 

@@ -27,14 +27,14 @@ ob_set_subtarget(ob_rootserver backup
 ob_set_subtarget(ob_rootserver common
   ob_bootstrap.cpp
   ob_admin_drtask_util.cpp
-  ob_disaster_recovery_task_table_updater.cpp
   ob_disaster_recovery_task_table_operator.cpp
   ob_balance_group_ls_stat_operator.cpp
   ob_disaster_recovery_info.cpp
   ob_disaster_recovery_worker.cpp
+  ob_disaster_recovery_service.cpp
   ob_disaster_recovery_task.cpp
   ob_disaster_recovery_task_mgr.cpp
-  ob_disaster_recovery_task_executor.cpp
+  ob_disaster_recovery_task_utils.cpp
   ob_migrate_unit_finish_checker.cpp
   ob_rootservice_util_checker.cpp
   ob_alter_primary_zone_checker.cpp
@@ -106,6 +106,10 @@ ob_set_subtarget(ob_rootserver common
   ob_transfer_partition_command.cpp
   ob_partition_exchange.cpp
   ob_service_name_command.cpp
+  ob_tenant_ddl_service.cpp
+  ob_tenant_parallel_create_executor.cpp
+  ob_load_sys_package_task.cpp
+  ob_root_rebuild_tablet.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
@@ -115,6 +119,7 @@ ob_set_subtarget(ob_rootserver balance
   balance/ob_ls_balance_group_info.cpp
   balance/ob_tenant_ls_balance_group_info.cpp
   balance/ob_ls_all_part_builder.cpp
+  balance/ob_partition_balance_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task
@@ -136,8 +141,11 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_partition_split_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
   ddl_task/ob_ddl_tablet_scheduler.cpp
+  ddl_task/ob_drop_vec_ivf_index_task.cpp
   ddl_task/ob_rebuild_index_task.cpp
   ddl_task/ob_vec_index_build_task.cpp
+  ddl_task/ob_vec_ivf_index_build_task.cpp
+  ddl_task/ob_drop_lob_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl
@@ -209,6 +217,8 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_collect_mv_merge_info_task.cpp
   mview/ob_mview_clean_snapshot_task.cpp
   mview/ob_mview_update_cache_task.cpp
+  mview/ob_mview_mds_op_task.cpp
+  mview/ob_mview_alter_service.cpp
 )
 
 ob_set_subtarget(ob_rootserver direct_load
@@ -219,6 +229,11 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_standby_service.cpp
   standby/ob_recovery_ls_service.cpp
   standby/ob_tenant_role_transition_service.cpp
+)
+
+ob_set_subtarget(ob_rootserver pl_ddl
+  pl_ddl/ob_pl_ddl_service.cpp
+  pl_ddl/ob_pl_ddl_operator.cpp
 )
 
 ob_server_add_target(ob_rootserver)

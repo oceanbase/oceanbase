@@ -18,7 +18,7 @@
 #include "share/balance/ob_transfer_partition_task_table_operator.h"//ObTransferPartitionTask
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/allocator/page_arena.h"//allocator
-#include "rootserver/ob_partition_balance.h"//logical task
+#include "rootserver/balance/ob_partition_balance_helper.h" // ObPartTransferJobGenerator
 
 namespace oceanbase
 {
@@ -43,7 +43,7 @@ public:
   ~ObTransferPartitionInfo() {}
   int init(share::ObTransferPartitionTask &task,
          const ObTabletID &tablet_id);
-  int set_src_ls(const ObLSID &ls_id);
+  int set_src_ls(const share::ObLSID &ls_id);
   int assign(const ObTransferPartitionInfo &other);
   bool is_valid() const
   {
@@ -54,7 +54,7 @@ public:
   {
     return tablet_id_;
   }
-  const ObLSID& get_ls_id() const
+  const share::ObLSID& get_ls_id() const
   {
     return src_ls_;
   }
@@ -66,7 +66,7 @@ public:
 private:
   share::ObTransferPartitionTask* task_;
   ObTabletID tablet_id_;
-  ObLSID src_ls_;
+  share::ObLSID src_ls_;
 };
 
 class ObTransferPartitionHelper
@@ -78,9 +78,7 @@ public:
     allocator_("TRANFER_PART", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
     task_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "TrPTaskArray")),
     part_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "PartInfoArray")),
-    transfer_logical_tasks_(), balance_job_(),
-    balance_tasks_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_, "BalanceArray")),
-    max_task_id_() {}
+    max_task_id_(), job_generator_() {}
   ~ObTransferPartitionHelper()
   {
     destroy();
@@ -89,11 +87,11 @@ public:
 
   share::ObBalanceJob& get_balance_job()
   {
-    return balance_job_;
+    return job_generator_.get_balance_job();
   }
   ObArray<share::ObBalanceTask>& get_balance_tasks()
   {
-    return balance_tasks_;
+    return job_generator_.get_balance_tasks();
   }
   //构造好每个任务所需要的源端日志流信息
   int build(bool &has_job);
@@ -118,7 +116,7 @@ public:
   * */
   static int get_tablet_in_order_array(
       const ObArray<share::schema::ObSimpleTableSchemaV2*> &table_schema_array,
-      const ObTransferPartInfo &part_info,
+      const share::ObTransferPartInfo &part_info,
       int64_t &table_index,
       ObTabletID &tablet_id);
 private:
@@ -129,17 +127,13 @@ private:
       int64_t& task_cnt);
   int try_process_object_not_exist_task_();
   int set_task_src_ls_();
-  int try_finish_failed_task_(const ObTransferPartList &part_list,
+  int try_finish_failed_task_(const share::ObTransferPartList &part_list,
       const ObString &comment);
-  int construct_logical_task_(const ObArray<share::ObTransferPartitionTask> &task_array);
-  static int get_ls_group_id(
-      const ObLSStatusInfoIArray &status_info_array,
-      const ObLSID &src_ls, const ObLSID &dest_ls,
-      uint64_t &src_ls_group, uint64_t &dest_ls_group);
   //通过按照tablet_id,object_id排查的part_list或者按照table_id排查过的table_schema
- int batch_get_table_schema_in_order_(
+  int batch_get_table_schema_in_order_(
       common::ObArenaAllocator &allocator,
       ObArray<share::schema::ObSimpleTableSchemaV2*> &table_schema_array);
+  int construct_logical_task_(const ObArray<share::ObTransferPartitionTask> &task_array);
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -149,10 +143,8 @@ private:
   //part_info_中的task指针使用了task_array的内存
   //在初始化part_info_后，task_array不能在发生变化
   ObArray<ObTransferPartitionInfo> part_info_;
-  hash::ObHashMap<ObPartitionBalance::ObTransferTaskKey, ObTransferPartList> transfer_logical_tasks_;
-  ObBalanceJob balance_job_;
-  ObArray<ObBalanceTask> balance_tasks_;
   share::ObTransferPartitionTaskID max_task_id_;
+  ObPartTransferJobGenerator job_generator_;
 };
 }
 }

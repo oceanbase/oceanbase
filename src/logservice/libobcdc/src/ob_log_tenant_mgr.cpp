@@ -15,9 +15,7 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include <algorithm>                  // std::min
-#include "ob_log_tenant_mgr.h"        // ObLogTenantMgr
-#include "ob_log_instance.h"          // TCTX
+#include "ob_log_tenant_mgr.h"
 #include "ob_log_schema_getter.h"     // IObLogSchemaGetter, ObLogSchemaGuard
 #include "ob_log_table_matcher.h"     // IObLogTableMatcher
 #include "ob_log_trans_stat_mgr.h"    // IObLogTransStatMgr

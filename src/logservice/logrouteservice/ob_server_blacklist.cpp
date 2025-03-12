@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_server_blacklist.h"
-#include "share/ob_errno.h"                   // KR
 
 namespace oceanbase
 {

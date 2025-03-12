@@ -11,16 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "ob_external_table_access_service.h"
 
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
+#include "ob_external_table_access_service.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_device_manager.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "sql/engine/table/ob_odps_table_row_iter.h"
@@ -40,6 +35,11 @@ namespace common {
 extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
 }
 
+namespace share
+{
+struct ObPartitionIdRowPair;
+class ObPartitionIdRowPairArray;
+}
 using namespace share::schema;
 using namespace common;
 using namespace share;
@@ -283,19 +283,33 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     LOG_WARN("fail to init filter", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, path, path_cstring, true/*c_style*/))) {
     LOG_WARN("fail to copy string", KR(ret), K(path));
-  } else if (get_storage_type() == OB_STORAGE_FILE) {
+  } else if (get_storage_type() == OB_STORAGE_FILE ||
+             get_storage_type() == OB_STORAGE_HDFS) {
     ObSEArray<ObString, 4> file_dirs;
     bool is_dir = false;
-    ObString path_without_prifix;
-    path_without_prifix = path_cstring;
-    path_without_prifix += strlen(OB_FILE_PREFIX);
 
-    OZ (FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
-    if (!is_dir) {
-      LOG_WARN("external location is not a directory", K(path_without_prifix));
+    if (get_storage_type() == OB_STORAGE_FILE) {
+      ObString path_without_prifix;
+      path_without_prifix = path_cstring;
+      path_without_prifix += strlen(OB_FILE_PREFIX);
+
+      OZ(FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
+      if (!is_dir) {
+        LOG_INFO("external location is not a directory",
+                 K(path_without_prifix));
+      } else {
+        OZ(file_dirs.push_back(path_cstring));
+      }
     } else {
-      OZ (file_dirs.push_back(path_cstring));
+      // OB_STORAGE_HDFS
+      OZ(ObBackupIoAdapter::is_directory(path_cstring, &access_info_, is_dir));
+      if (!is_dir) {
+        LOG_INFO("external location is not a directory", K(path_cstring));
+      } else {
+        OZ(file_dirs.push_back(path_cstring));
+      }
     }
+
     ObArray<int64_t> useless_size;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
@@ -675,9 +689,6 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
 
 int ObExternalTableAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   UNUSED(switch_param);
   iter->reset();
   return OB_SUCCESS;
@@ -685,9 +696,6 @@ int ObExternalTableAccessService::reuse_scan_iter(const bool switch_param, ObNew
 
 int ObExternalTableAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter)) {
     ret = OB_ERR_UNEXPECTED;
@@ -810,6 +818,49 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
         LOG_WARN("allocate mem failed", K(ret));
       }
       OZ (value.deep_copy(partition->get_list_row_values().at(0), buf, size, pos));
+    }
+  }
+  return ret;
+}
+int ObExternalTableRowIterator::calc_file_part_list_value_by_array(const int64_t part_id,
+                                                                  ObIAllocator &allocator,
+                                                                  const share::ObPartitionIdRowPairArray *partition_array,
+                                                                  ObNewRow &value)
+{
+  int ret = OB_SUCCESS;
+  int64_t partition_index = OB_INVALID_INDEX;
+  share::ObPartitionIdRowPair partition;
+
+  int64_t partition_num = partition_array->count();
+  if (OB_ISNULL(partition_array) || partition_num <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition array", K(ret), K(part_id), K(partition_num));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
+    if (part_id == partition_array->at(i).part_id_) {
+      partition_index = i;
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret) && partition_index != OB_INVALID_INDEX) {
+    partition = partition_array->at(partition_index);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (partition_index == OB_INVALID_INDEX || partition.part_id_ != part_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition", K(ret), K(partition), K(part_id));
+    } else {
+      int64_t pos = 0;
+      int64_t size = partition.list_row_value_.get_deep_copy_size();
+      char *buf = (char *)allocator.alloc(size);
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate mem failed", K(ret));
+      }
+      OZ (value.deep_copy(partition.list_row_value_, buf, size, pos));
     }
   }
   return ret;

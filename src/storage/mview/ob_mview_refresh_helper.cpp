@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_refresh_helper.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_transaction.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"

@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "lib/container/ob_array_serialization.h"
 #include "ob_error_info.h"
-#include "ob_schema_getter_guard.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase

@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
-#include "lib/utility/utility.h"
 #include "share/restore/ob_physical_restore_table_operator.h"
-#include "share/restore/ob_restore_persist_helper.h"
-#include "share/restore/ob_physical_restore_info.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "rootserver/ob_tenant_info_loader.h"
 
 using namespace oceanbase::share;

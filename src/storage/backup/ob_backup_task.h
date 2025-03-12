@@ -490,16 +490,15 @@ private:
   int prepare_macro_block_readers_(ObMultiMacroBlockBackupReader *&macro_reader,
                                    ObMultiMacroBlockBackupReader *&ddl_macro_reader,
                                    common::ObIArray<ObIODevice *> &device_handle_array);
-  int do_iterate_backup_items_(common::ObIArray<ObIODevice *> &device_handle);
-  int do_prepare_sstable_builders_(const ObBackupProviderItem &item);
+  int deal_with_backup_data_(common::ObIArray<ObIODevice *> &device_handle);
+  int deal_with_backup_meta_(common::ObIArray<ObIODevice *> &device_handle);
   int do_backup_single_ddl_other_block_(ObMultiMacroBlockBackupReader *reader, const ObBackupProviderItem &item);
   int do_wait_index_builder_ready_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int do_backup_single_macro_block_data_(ObMultiMacroBlockBackupReader *macro_reader,
       const ObBackupProviderItem &item, common::ObIArray<ObIODevice *> &device_handle);
+  int check_and_prepare_sstable_index_builders_(const common::ObTabletID &tablet_id);
   int do_backup_single_meta_data_(const ObBackupProviderItem &item, ObIODevice *device_handle);
   int do_wait_sstable_index_builder_ready_(ObTabletHandle &tablet_handle);
-  int prepare_tablet_sstable_index_builders_(const common::ObTabletID &tablet_id,
-      const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   int open_tablet_sstable_index_builder_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable);
   int do_backup_tablet_meta_(const ObTabletMetaReaderType reader_type, const ObBackupMetaType meta_type,

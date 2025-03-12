@@ -11,11 +11,8 @@
  */
 
 #include "storage/ob_locality_manager.h"
-#include "share/ob_locality_priority.h"
 #include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "rpc/obmysql/obsm_struct.h"                // easy_connection_str
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "deps/easy/src/io/easy_io.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_info.h"
 #endif

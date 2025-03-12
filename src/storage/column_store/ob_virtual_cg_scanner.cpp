@@ -11,14 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_virtual_cg_scanner.h"
-#include "storage/access/ob_table_access_context.h"
-#include "storage/access/ob_aggregate_base.h"
 #include "storage/access/ob_aggregated_store.h"
 #include "storage/access/ob_aggregated_store_vec.h"
-#include "storage/access/ob_vector_store.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {
@@ -188,7 +182,7 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
                   1 != iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (access_ctx.block_row_store_->is_vec2()) {
+  } else if (iter_param.use_new_format()) {
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;
     if (OB_FAIL(agg_store_vec->get_agg_group(nullptr, agg_group_vec))){
@@ -307,7 +301,7 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
                   0 == iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (access_ctx.block_row_store_->is_vec2()) {
+  } else if (iter_param.use_new_format()) {
     const sql::ObExpr *output_expr = nullptr;
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;

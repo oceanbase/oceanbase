@@ -15,7 +15,6 @@
 
 #include "ob_data_dict_utils.h"
 
-#include "lib/allocator/ob_malloc.h"          // ob_malloc
 #include "logservice/ob_log_handler.h"        // ObLogHandler
 
 using namespace oceanbase::common;

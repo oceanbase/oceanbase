@@ -11,23 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "share/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_task_define.h"
-#include "share/ob_force_print_log.h"
 #include "ob_storage_rpc.h"
 #include "storage/high_availability/ob_storage_ha_reader.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/ob_log_handler.h"
-#include "storage/restore/ob_ls_restore_handler.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "lib/thread/thread.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
 #endif
@@ -141,6 +131,27 @@ int ObCopyMacroBlockListArg::assign(const ObCopyMacroBlockListArg &arg)
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockListArg, tenant_id_, ls_id_, table_key_, arg_list_);
 
+ObCopyMacroBlockInfo::ObCopyMacroBlockInfo()
+  : logical_id_(),
+    data_type_(ObCopyMacroBlockDataType::MAX)
+{
+}
+
+void ObCopyMacroBlockInfo::reset()
+{
+  logical_id_.reset();
+  data_type_ = ObCopyMacroBlockDataType::MAX;
+}
+
+bool ObCopyMacroBlockInfo::is_valid() const
+{
+  return logical_id_.is_valid()
+      && data_type_ >= ObCopyMacroBlockDataType::MACRO_DATA
+      && data_type_ < ObCopyMacroBlockDataType::MAX;
+}
+
+OB_SERIALIZE_MEMBER(ObCopyMacroBlockInfo, logical_id_, data_type_);
+
 ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_(),
@@ -197,7 +208,7 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, data_version_,
-    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_);
+    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_, copy_macro_block_infos_);
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
@@ -1222,6 +1233,39 @@ int ObUpdateTransferMetaInfoArg::assign(const ObUpdateTransferMetaInfoArg &other
 
 OB_SERIALIZE_MEMBER(ObUpdateTransferMetaInfoArg, tenant_id_, dest_ls_id_, transfer_meta_info_);
 
+ObRebuildTabletSSTableInfoArg::ObRebuildTabletSSTableInfoArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    tablet_id_(),
+    dest_major_sstable_snapshot_(0),
+    version_(OB_INVALID_ID)
+{
+}
+
+ObRebuildTabletSSTableInfoArg::~ObRebuildTabletSSTableInfoArg()
+{
+}
+
+void ObRebuildTabletSSTableInfoArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  tablet_id_.reset();
+  dest_major_sstable_snapshot_ = 0;
+  version_ = OB_INVALID_ID;
+}
+
+bool ObRebuildTabletSSTableInfoArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ls_id_.is_valid()
+      && tablet_id_.is_valid()
+      && dest_major_sstable_snapshot_ > 0
+      && version_ != OB_INVALID_ID;
+}
+
+OB_SERIALIZE_MEMBER(ObRebuildTabletSSTableInfoArg,
+    tenant_id_, ls_id_, tablet_id_, dest_major_sstable_snapshot_, version_);
 
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
@@ -2903,6 +2947,20 @@ ObLobQueryP::ObLobQueryP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
   set_preserve_recv_data();
 }
 
+int64_t ObLobQueryP::get_timeout() const
+{
+  int64_t timeout = 0;
+  const int64_t rpc_timeout = rpc_pkt_->get_timeout();
+  const int64_t send_timestamp = get_send_timestamp();
+  // oversize int64_t if rpc_timeout + send_timestamp > INT64_MAX
+  if (INT64_MAX - rpc_timeout - send_timestamp < 0) {
+    timeout = INT64_MAX;
+  } else {
+    timeout = rpc_timeout + send_timestamp;
+  }
+  return timeout;
+}
+
 int ObLobQueryP::process_read()
 {
   int ret = OB_SUCCESS;
@@ -2920,7 +2978,7 @@ int ObLobQueryP::process_read()
     param.scan_backward_ = arg_.scan_backward_;
     param.from_rpc_ = true;
     ObLobQueryIter *iter = nullptr;
-    int64_t timeout = rpc_pkt_->get_timeout() + get_send_timestamp();
+    int64_t timeout = get_timeout();
     if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
         arg_.len_, timeout, arg_.lob_locator_))) {
       LOG_WARN("failed to build lob param", K(ret));
@@ -2967,7 +3025,7 @@ int ObLobQueryP::process_getlength()
   param.from_rpc_ = true;
   header.reset();
   uint64_t len = 0;
-  int64_t timeout = rpc_pkt_->get_timeout() + get_send_timestamp();
+  int64_t timeout = get_timeout();
   if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
       arg_.len_, timeout, arg_.lob_locator_))) {
     LOG_WARN("failed to build lob param", K(ret));
@@ -4218,6 +4276,95 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
 
 #endif
 
+ObRebuildTabletSSTableInfoP::ObRebuildTabletSSTableInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObRebuildTabletSSTableInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = nullptr;
+    char * buf = NULL;
+    ObCopyTabletSSTableInfo sstable_info;
+    ObMigrationStatus migration_status;
+    ObLS *ls = nullptr;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
+    LOG_INFO("start to fetch tablet sstable info", K(arg_));
+
+    last_send_time_ = this->get_receive_timestamp();
+
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc rebuild tablet data buffer.", K(ret));
+    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed set data to result", K(ret));
+    } else if (OB_ISNULL(bandwidth_throttle_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
+                  KP_(bandwidth_throttle));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      LOG_WARN("failed to get migration status", K(ret), K(arg_));
+    } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+      ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+      STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
+    } else if (OB_FAIL(build_sstable_info_(ls))) {
+      LOG_WARN("failed to build sstable info", K(ret), K(arg_));
+    }
+    LOG_INFO("finish fetch sstable info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts);
+  }
+  return ret;
+}
+
+int ObRebuildTabletSSTableInfoP::build_sstable_info_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObRebuildTabletSSTableProducer producer;
+  obrpc::ObCopyTabletSSTableInfo sstable_info;
+  obrpc::ObCopyTabletSSTableHeader tablet_sstable_header;
+
+  if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build sstable info get invalid argument", K(ret), K(arg_), KP(ls));
+  } else if (OB_FAIL(producer.init(arg_, ls))) {
+    LOG_WARN("failed to init copy sstable info ob producer", K(ret), K(arg_));
+  } else if (OB_FAIL(producer.get_copy_tablet_sstable_header(tablet_sstable_header))) {
+    LOG_WARN("failed to get copy tablet sstable header", K(ret), K(arg_));
+  } else if (OB_FAIL(fill_data(tablet_sstable_header))) {
+    LOG_WARN("failed to fill tablet sstable header", K(ret), K(arg_));
+  } else if (0 == tablet_sstable_header.sstable_count_) {
+    //do nothing
+  } else {
+    while (OB_SUCC(ret)) {
+      sstable_info.reset();
+      if (OB_FAIL(producer.get_next_sstable_info(sstable_info))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next sstable info", K(ret), K(arg_));
+        }
+      } else if (OB_FAIL(fill_data(sstable_info))) {
+        STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(sstable_info));
+      }
+    }
+  }
+  return ret;
+}
+
 } //namespace obrpc
 
 namespace storage
@@ -4357,24 +4504,6 @@ int ObStorageRpc::post_ls_member_list_request(
     } else {
       FLOG_INFO("fetch ls member list successfully", K(member_info));
     }
-  }
-  return ret;
-}
-
-int ObStorageRpc::post_ls_disaster_recovery_res(const common::ObAddr &server,
-                         const obrpc::ObDRTaskReplyResult &res)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (!server.is_valid() || !res.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(server), K(res));
-  } else if (OB_FAIL(rs_rpc_proxy_->to(server).disaster_recovery_task_reply(res))) {
-    STORAGE_LOG(WARN, "post ls migration result failed", K(ret), K(res), K(server));
-  } else {
-    STORAGE_LOG(TRACE, "post_ls_disaster_recovery_res successfully", K(res), K(server));
   }
   return ret;
 }

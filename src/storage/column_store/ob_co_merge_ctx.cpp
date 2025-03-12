@@ -8,10 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/column_store/ob_co_merge_ctx.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "ob_co_merge_ctx.h"
 #include "storage/column_store/ob_co_merge_dag.h"
-#include "storage/tablet/ob_tablet.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h"
 #include "storage/compaction/ob_merge_ctx_func.h"
@@ -917,8 +915,8 @@ int ObCOTabletMergeCtx::construct_column_param(
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid argument", K(ret), K(column_id));
     }
-  } else if (OB_FAIL(column_schema->construct_column_param(column_param))) {
-    STORAGE_LOG(WARN, "fail to construct column param from column schema", K(ret), K(column_id));
+  } else if (OB_FAIL(column_schema->construct_column_param(static_param_.data_version_, column_param))) {
+    STORAGE_LOG(WARN, "fail to construct column param from column schema", K(ret), K(column_id), K_(static_param));
   }
   return ret;
 }

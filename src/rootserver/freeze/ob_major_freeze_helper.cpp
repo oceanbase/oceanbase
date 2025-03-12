@@ -15,8 +15,6 @@
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/location_cache/ob_location_service.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_tenant_info_proxy.h"
 #include "src/observer/ob_srv_network_frame.h"
 
 namespace oceanbase

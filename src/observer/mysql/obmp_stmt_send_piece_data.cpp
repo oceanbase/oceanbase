@@ -14,17 +14,8 @@
 
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 
-#include "lib/worker.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "rpc/ob_request.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/mysql/obsm_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
@@ -181,6 +172,8 @@ int ObMPStmtSendPieceData::process()
     } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      LOG_INFO("unit has been migrated, need deny new request", K(ret));
     } else {
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();

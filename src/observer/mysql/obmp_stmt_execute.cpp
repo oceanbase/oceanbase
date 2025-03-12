@@ -12,44 +12,23 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/mysql/obmp_stmt_execute.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/encode/ob_base64_encode.h"
+#include "obmp_stmt_execute.h"
 #include "observer/mysql/obsm_utils.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
 #include "rpc/obmysql/packet/ompk_resheader.h"
 #include "rpc/obmysql/packet/ompk_field.h"
 #include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/obsm_struct.h"
 #include "observer/mysql/obsm_row.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_time_utility2.h"
 #include "sql/ob_sql.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/mysql/ob_async_plan_driver.h"
-#include "observer/ob_req_time_service.h"
-#include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
-#include "pl/ob_pl_exception_handling.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
-#include "observer/mysql/obmp_utils.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
@@ -443,6 +422,7 @@ int ObMPStmtExecute::response_result_for_arraybinding(
         ObSMRow sm_row(BINARY,
                 *arraybinding_row_,
                 dtc_params,
+                session_info,
                 arraybinding_columns_,
                 ctx_.schema_guard_,
                 session_info.get_effective_tenant_id());
@@ -842,6 +822,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
   ObCollationType cs_server = CS_TYPE_INVALID;
   share::schema::ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = session->get_effective_tenant_id();
+  session->set_proxy_version(get_proxy_version());
 
   if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret));
@@ -852,7 +833,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
   } else if (OB_FAIL(session->get_collation_server(cs_server))) {
     LOG_WARN("get charset for client failed", K(ret));
   } else if (OB_FAIL(session->get_ps_session_info(stmt_id_, ps_session_info))) {
-      LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
+    LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
   } else if (OB_ISNULL(ps_session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ps_session_info is null", K(ret));
@@ -1945,8 +1926,10 @@ int ObMPStmtExecute::process()
           session.get_raw_audit_record().request_memory_used_);
     lib::ObMallocCallbackGuard guard(pmcb);
     session.set_thread_id(GETTID());
+    session.set_proxy_version(get_proxy_version());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
+    const bool enable_flt = session.get_control_info().is_valid();
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K(ret));
@@ -1967,34 +1950,42 @@ int ObMPStmtExecute::process()
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
                 OB_SYS_TENANT_ID, sys_version))) {
       LOG_WARN("fail get tenant broadcast version", K(ret));
-    } else if (pkt.exist_trace_info()
+    } else if (!is_prexecute()
+               && pkt.exist_trace_info()
                && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
-    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
-    } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
+    } else if (!is_prexecute() && FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (!is_prexecute() && OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
-    } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (!is_prexecute() && FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       //packet size check with session variable max_allowd_packet or net_buffer_length
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       LOG_WARN("packet too large than allowed for the session", K_(stmt_id), K(ret));
-    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
-                            conn->proxy_cap_flags_.is_full_link_trace_support()))) {
+    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(),
+                            session,
+                            conn->proxy_cap_flags_.is_full_link_trace_support(),
+                            enable_flt))) {
       LOG_WARN("failed to init flt extra info", K(ret));
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to generate configuration string that can influence execution plan", K(ret));
     } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {
       LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
-      FLTSpanGuard(ps_execute);
-      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
-                    receive_ts, get_receive_timestamp(),
-                    client_info, session.get_client_info(),
-                    module_name, session.get_module_name(),
-                    action_name, session.get_action_name(),
-                    sess_id, session.get_sessid());
+      FLTSpanGuardIfEnable(ps_execute, enable_flt);
+      if (enable_flt) {
+        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
+                      receive_ts, get_receive_timestamp(),
+                      client_info, session.get_client_info(),
+                      module_name, session.get_module_name(),
+                      action_name, session.get_action_name(),
+                      sess_id, session.get_sessid());
+      }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);
       retry_ctrl_.set_sys_global_schema_version(sys_version);
@@ -2190,13 +2181,13 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Get PL type by type info is not supported in CE version");
 #else
   const share::schema::ObUDTTypeInfo *udt_info = NULL;
-  if (OB_ISNULL(type_info)) {
+  if (OB_ISNULL(type_info) || OB_ISNULL(ctx_.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type info is null", K(ret), K(type_info));
+    LOG_WARN("type info or schema_guard is null", K(ret), K(type_info), K(ctx_.schema_guard_));
   } else if (!type_info->is_elem_type_) {
     if (type_info->package_name_.empty()) {
       OZ (get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info));
-      OZ (udt_info->transform_to_pl_type(allocator, pl_type));
+      OZ (udt_info->transform_to_pl_type(allocator, *ctx_.schema_guard_, pl_type));
     } else {
       OZ (get_package_type_by_name(allocator, type_info, pl_type));
     }
@@ -2209,7 +2200,7 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
       elem_type.set_data_type(type_info->elem_type_);
     } else if (OB_FAIL(get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info))) {
       LOG_WARN("failed to get udt info", K(ret), K(type_info->relation_name_), K(type_info->type_name_));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, elem_type_ptr))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *ctx_.schema_guard_, elem_type_ptr))) {
       LOG_WARN("failed to transform udt to pl type", K(ret));
     } else if (OB_ISNULL(elem_type_ptr)) {
       ret = OB_ERR_UNEXPECTED;

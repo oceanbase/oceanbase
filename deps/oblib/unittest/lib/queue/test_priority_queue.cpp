@@ -13,8 +13,6 @@
 #include <gtest/gtest.h>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/queue/ob_priority_queue.h"
-#include "lib/thread/thread_pool.h"
-#include <iostream>
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

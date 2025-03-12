@@ -58,7 +58,7 @@ struct SqlInfo: public ParameterizationHashValue
     ps_need_parameterized_ = that.ps_need_parameterized_;
     parse_infos_ = that.parse_infos_;
     need_check_fp_ = that.need_check_fp_;
-    formalize_prec_index_ = that.formalize_prec_index_;
+    fmt_int_or_ch_decint_idx_ = that.fmt_int_or_ch_decint_idx_;
     return *this;
   }
   void destroy() {}
@@ -68,7 +68,7 @@ struct SqlInfo: public ParameterizationHashValue
   common::ObBitSet<> fixed_param_index_;//记录限流语句中可参数化的位置不为?的位置
   common::ObBitSet<> trans_from_minus_index_;
   common::ObBitSet<> must_be_positive_index_; // 记录那些常量必须是正数
-  common::ObBitSet<> formalize_prec_index_;
+  common::ObBitSet<> fmt_int_or_ch_decint_idx_;
   common::ObSEArray<common::ObCharsetType, 16> param_charset_type_;
   ObSqlTraits sql_traits_;
 

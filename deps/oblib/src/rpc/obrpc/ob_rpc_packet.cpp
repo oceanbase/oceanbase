@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBRPC
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "lib/utility/utility.h"
-#include "lib/ob_define.h"
-#include "lib/coro/co_var.h"
+#include "ob_rpc_packet.h"
 #include "common/storage/ob_sequence.h"
-#include "common/ob_tenant_data_version_mgr.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "share/ob_cluster_version.h"
 

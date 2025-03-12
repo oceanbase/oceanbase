@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_dependency_info.h"
 
 namespace oceanbase

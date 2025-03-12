@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_macro_block_writer.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
@@ -198,7 +196,6 @@ int ObStorageHAMacroBlockWriter::process(
         STORAGE_LOG(WARN, "invalid read data", K(ret), K(read_data));
       } else if (read_data.is_macro_meta()) {
         const MacroBlockId &macro_id = read_data.macro_meta_->get_macro_id();
-
         if (ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID == macro_id) {
           ret = OB_INVALID_ARGUMENT;
           STORAGE_LOG(WARN, "invalid macro id (id is default)", K(ret), K(macro_id));

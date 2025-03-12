@@ -12,7 +12,6 @@
  * This file defines test_ob_cdc_part_trans_resolver.cpp
  */
 
-#include "gtest/gtest.h"
 
 #include "data_dict_test_utils.h"
 

@@ -343,7 +343,7 @@ public:
                K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
                K_(ddl_snapshot_version), K_(ddl_execution_id),
                K_(data_format_version), KP_(ddl_redo_callback),
-               KP_(ddl_finish_callback), K_(ddl_replay_status));
+               KP_(ddl_finish_callback), K_(ddl_replay_status), K_(slice_sstables));
 
 public:
   bool keep_old_ddl_sstable_;
@@ -358,6 +358,7 @@ public:
   blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback_;
   // used to decide storage type for replaying ddl clog in cs replica, see ObTabletMeta::ddl_replay_status_ for more detail
   ObCSReplicaDDLReplayStatus ddl_replay_status_;
+  ObArray<const blocksstable::ObSSTable *> slice_sstables_;
 };
 
 struct ObHATableStoreParam final
@@ -372,15 +373,17 @@ public:
     const int64_t transfer_seq,
     const bool need_check_sstable,
     const bool need_check_transfer_seq,
-    const bool need_replace_remote_sstable);
+    const bool need_replace_remote_sstable,
+    const bool is_only_replace_major);
   ~ObHATableStoreParam() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(transfer_seq), K_(need_check_sstable), K_(need_check_transfer_seq), K_(need_replace_remote_sstable));
+  TO_STRING_KV(K_(transfer_seq), K_(need_check_sstable), K_(need_check_transfer_seq), K_(need_replace_remote_sstable), K_(is_only_replace_major));
 public:
   int64_t transfer_seq_;
   bool need_check_sstable_;
   bool need_check_transfer_seq_;
   bool need_replace_remote_sstable_; // only true for restore replace sstable.
+  bool is_only_replace_major_;
 };
 
 struct ObCompactionTableStoreParam final
@@ -471,7 +474,6 @@ struct ObUpdateTableStoreParam
   const blocksstable::ObSSTable *sstable_;
   bool allow_duplicate_sstable_;
   UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
-  bool need_replace_remote_sstable_;
 };
 
 struct ObSplitTableStoreParam final

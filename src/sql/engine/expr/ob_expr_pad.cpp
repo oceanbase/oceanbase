@@ -14,7 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_pad.h"
 #include "sql/engine/expr/ob_expr_lrpad.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 using namespace oceanbase::common;
 

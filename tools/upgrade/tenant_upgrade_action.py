@@ -69,7 +69,7 @@ def upgrade_across_version(cur):
   across_version = False
   sys_tenant_id = 1
 
-  # 1. check if target_data_version/current_data_version match with current_data_version
+  # 1. check if target_data_version/current_data_version/upgrade_begin_data_version match with current_data_version
   sql = "select count(*) from oceanbase.__all_table where table_name = '__all_virtual_core_table'"
   results = query(cur, sql)
   if len(results) < 1 or len(results[0]) < 1:
@@ -86,16 +86,16 @@ def upgrade_across_version(cur):
       raise MyError("tenant_ids count is unexpected")
     tenant_count = len(tenant_ids)
 
-    sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(int_current_data_version)
+    sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0}".format(int_current_data_version)
     results = query(cur, sql)
     if len(results) != 1 or len(results[0]) != 1:
       logging.warn('result cnt not match')
       raise MyError('result cnt not match')
-    elif 2 * tenant_count != results[0][0]:
-      logging.info('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+    elif 3 * tenant_count != results[0][0]:
+      logging.info('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
       across_version = True
     else:
-      logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
+      logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
       across_version = False
 
   # 2. check if compatible match with current_data_version

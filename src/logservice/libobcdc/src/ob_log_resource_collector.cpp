@@ -19,10 +19,8 @@
 #include "storage/tx/ob_trans_define.h" // ObTransID
 
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
-#include "ob_log_part_trans_task.h"     // PartTransTask
 #include "ob_log_task_pool.h"           // ObLogTransTaskPool
 #include "ob_log_binlog_record_pool.h"  // ObLogBRPool
-#include "ob_log_trans_ctx.h"           // TransCtx
 #include "ob_log_trans_ctx_mgr.h"       // IObLogTransCtxMgr
 #include "ob_log_store_service.h"       // IObStoreService
 #include "ob_log_store_key.h"           // ObLogStoreKey

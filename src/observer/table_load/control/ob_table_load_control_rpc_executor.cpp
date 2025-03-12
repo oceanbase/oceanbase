@@ -16,7 +16,7 @@
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "sql/engine/ob_des_exec_context.h"
+#include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase
@@ -106,6 +106,7 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
   } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
                                                 arg_.target_partition_id_array_))) {
     LOG_WARN("fail to store init ctx", KR(ret));
+  } else if (FALSE_IT(table_ctx->store_ctx_->heart_beat())) {
   } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
     LOG_WARN("fail to add ctx", KR(ret));
   }

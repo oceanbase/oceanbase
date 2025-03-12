@@ -10,9 +10,6 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
@@ -871,6 +868,99 @@ TEST_F(TestObSimpleLogClusterArbService, test_lock_memberlist_opt)
   PALF_LOG(INFO, "end test_lock_memberlist_opt", K(id));
 }
 
+TEST_F(TestObSimpleLogClusterArbService, test_4f1a_force_set_member_list)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_4f1a_force_set_member_list");
+  OB_LOGGER.set_log_level("INFO");
+  MockLocCB loc_cb;
+  int ret = OB_SUCCESS;
+  PALF_LOG(INFO, "begin test_4f1a_force_set_member_list");
+  int64_t leader_idx = 0;
+  int64_t arb_replica_idx = -1;
+  PalfHandleImplGuard leader;
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  std::vector<PalfHandleImplGuard*> palf_list;
+	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
+  LogConfigVersion config_version;
+  // change config to 4F1A
+  PALF_LOG(INFO, "begin change config to 4F1A");
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  PALF_LOG(INFO, "change config to 4F1A completes");
+  const int64_t removed_follower_idx = (leader_idx+1)%5;
+  const int64_t another_f1_idx = (leader_idx+3)%5;
+  const int64_t another_f2_idx = (leader_idx+4)%5;
+  palf_list[another_f1_idx]->palf_handle_impl_->set_location_cache_cb(&loc_cb);
+  palf_list[another_f2_idx]->palf_handle_impl_->set_location_cache_cb(&loc_cb);
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  // make 2F1A down
+  block_all_net(arb_replica_idx);
+  block_all_net(removed_follower_idx);
+  block_all_net(leader_idx);
+  PALF_LOG(INFO, "remove 2F1A successfully");
+
+  int64_t new_leader_idx = leader_idx;
+  PalfHandleImplGuard new_leader;
+  // waiting for leader revoke
+  while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
+    sleep(1);
+  }
+
+  common::ObMemberList new_member_list;
+  new_member_list.add_member(ObMember(get_cluster()[another_f1_idx]->get_addr(), 1));
+  new_member_list.add_member(ObMember(get_cluster()[another_f2_idx]->get_addr(), 1));
+  int64_t new_replica_num = 2;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, palf_list[another_f1_idx]->palf_handle_impl_->force_set_member_list(new_member_list, new_replica_num + 1));
+  EXPECT_EQ(OB_SUCCESS, palf_list[another_f1_idx]->palf_handle_impl_->force_set_member_list(new_member_list, new_replica_num));
+  EXPECT_EQ(OB_SUCCESS, palf_list[another_f2_idx]->palf_handle_impl_->force_set_member_list(new_member_list, new_replica_num));
+  PALF_LOG(INFO, "force_set_member_list completes");
+  // waitr for new leader
+  new_leader_idx = -1;
+  while (-1 == new_leader_idx) {
+    new_leader.reset();
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
+  }
+
+  common::ObMemberList curr_member_list;
+  int64_t curr_replica_num = 0;
+  EXPECT_EQ(OB_SUCCESS, palf_list[new_leader_idx]->palf_handle_impl_->get_paxos_member_list(curr_member_list, curr_replica_num));
+  EXPECT_EQ(new_replica_num, curr_replica_num);
+  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, id));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->get_max_lsn()));
+
+  {
+    // test restart after setting member list forcely
+    revert_cluster_palf_handle_guard(palf_list);
+    leader.reset();
+    new_leader.reset();
+    EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+    new_leader_idx = -1;
+    while (-1 == new_leader_idx) {
+      new_leader.reset();
+      EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
+    }
+    EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->get_paxos_member_list(curr_member_list, curr_replica_num));
+    EXPECT_EQ(new_replica_num, curr_replica_num);
+
+    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, id));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->get_max_lsn()));
+  }
+
+  unblock_all_net(arb_replica_idx);
+  unblock_all_net(removed_follower_idx);
+  unblock_all_net(leader_idx);
+
+  new_leader.reset();
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end 4f1a_force_set_member_list", K(id));
+}
+
+
 TEST_F(TestObSimpleLogClusterArbService, test_degradation_policy)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_degradation_policy");
@@ -886,7 +976,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_degradation_policy)
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   share::ObLSID ls_id(id);
   std::vector<PalfHandleImplGuard*> palf_list;
-	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
   palf_list[leader_idx]->get_palf_handle_impl()->set_location_cache_cb(&loc_cb);

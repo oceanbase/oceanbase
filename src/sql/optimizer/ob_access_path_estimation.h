@@ -95,6 +95,8 @@ public:
                                const bool is_inner_path,
                                const ObIArray<ObRawExpr*> &filter_exprs,
                                ObBaseTableEstMethod &method);
+  static int inner_estimate_index_merge_rowcount(common::ObIArray<IndexMergePath *> &paths,
+                                                 ObBaseTableEstMethod &method);
   static int inner_estimate_rowcount(ObOptimizerContext &ctx,
                                       common::ObIArray<AccessPath *> &paths,
                                       const bool is_inner_path,
@@ -239,6 +241,16 @@ private:
                                               bool is_geo_index,
                                               ObIArray<common::ObNewRange> &scan_ranges);
 
+  static int get_valid_partition_info(ObOptimizerContext &ctx,
+                                      ObIAllocator &allocator,
+                                      const ObTablePartitionInfo &table_partition_info,
+                                      ObIArray<ObTablePartitionInfo *> &valid_partition_infos,
+                                      ObTablePartitionInfo *&valid_partition_info);
+
+  static int get_valid_partition_info(ObOptimizerContext &ctx,
+                                      const ObTablePartitionInfo &table_partition_info,
+                                      ObTablePartitionInfo &valid_partition_info);
+
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
                                                  const ObIArray<ObRawExpr*> &filter_exprs,
@@ -358,8 +370,13 @@ private:
                                                         ObIArray<AccessPath *> &paths,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
   static int classify_paths(common::ObIArray<AccessPath *> &paths,
-                             common::ObIArray<AccessPath *> &normal_paths,
-                             common::ObIArray<AccessPath *> &geo_paths);
+                            common::ObIArray<AccessPath *> &normal_paths,
+                            common::ObIArray<AccessPath *> &geo_paths,
+                            common::ObIArray<IndexMergePath *> &index_merge_paths);
+
+  static int get_index_dive_limit(ObOptimizerContext &ctx,
+                                  int64_t *range_index_dive_limit,
+                                  int64_t *partition_index_dive_limit);
 };
 
 class RangePartitionHelper
@@ -369,7 +386,8 @@ public:
            uint64_t ref_table_id,
            const ObDMLStmt *stmt,
            const ObTablePartitionInfo &table_partition_info,
-           const ObIArray<ColumnItem> &range_columns);
+           const ObIArray<ColumnItem> &range_columns,
+           const ObIArray<common::ObNewRange> &ranges);
 
   int get_scan_range_partitions(ObExecContext &exec_ctx,
                                 const ObNewRange &scan_range,

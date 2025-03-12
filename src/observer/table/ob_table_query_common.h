@@ -40,6 +40,15 @@ public:
   static void destroy_result_iterator(ObTableQueryResultIterator *&result_iter);
   static int get_rowkey_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names);
   static int get_full_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names);
+  static int get_scan_row_interator(const ObTableCtx &tb_ctx, ObTableApiScanRowIterator *&scan_iter);
+
+  static int get_table_schemas(ObMultiVersionSchemaService *schema_service,
+                                ObSchemaGetterGuard& schema_guard,
+                                const ObString &arg_table_name,
+                                bool is_tablegroup_name,
+                                uint64_t arg_tenant_id,
+                                uint64_t arg_database_id,
+                                common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
 
 private:
   static int check_htable_query_args(const ObTableQuery &query, const ObTableCtx &tb_ctx);

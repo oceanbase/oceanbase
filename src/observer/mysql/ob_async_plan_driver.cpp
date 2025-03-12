@@ -14,17 +14,7 @@
 
 #include "ob_async_plan_driver.h"
 
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/packet/ompk_resheader.h"
-#include "rpc/obmysql/packet/ompk_field.h"
-#include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/ob_mysql_field.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "lib/profile/ob_perf_event.h"
-#include "obsm_row.h"
 #include "observer/mysql/obmp_query.h"
-#include "observer/mysql/ob_mysql_end_trans_cb.h"
-#include "observer/mysql/obmp_stmt_prexecute.h"
 
 namespace oceanbase
 {
@@ -51,6 +41,7 @@ ObAsyncPlanDriver::~ObAsyncPlanDriver()
 int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
+  ObRetryWaitEventInfoGuard retry_info_guard(session_);
   int ret = OB_SUCCESS;
   // result.open 后 pkt_param 所需的 last insert id 等各项参数都已经计算完毕
   // 对于异步增删改的情况，需要提前update last insert id，以确保回调pkt_param参数正确

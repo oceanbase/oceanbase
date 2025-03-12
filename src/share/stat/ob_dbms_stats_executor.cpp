@@ -12,24 +12,17 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_dbms_stats_executor.h"
-#include "share/stat/ob_basic_stats_estimator.h"
-#include "share/stat/ob_hybrid_hist_estimator.h"
-#include "share/stat/ob_opt_column_stat_cache.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_incremental_stat_estimator.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_index_stats_estimator.h"
 #include "pl/sys_package/ob_dbms_stats.h"
-#include "share/stat/ob_opt_stat_gather_stat.h"
 #include "share/stat/ob_dbms_stats_gather.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "src/observer/ob_server.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/share/stat/ob_opt_stat_monitor_manager.h"
 #include "lib/random/ob_random.h"
+
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -40,6 +33,8 @@ ERRSIM_POINT_DEF(ERRSIM_RANDOM_GATHER_STATS_OPTION);
  *  构造表级别统计信息的收集 SQL
  * @return
  */
+
+ERRSIM_POINT_DEF(ERRSIM_FAILED_ANALYZE_TABLE_STATS);
 int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
                                             const ObTableStatParam &param,
                                             ObOptStatRunningMonitor &running_monitor)
@@ -53,6 +48,10 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
   if (OB_FAIL(gather_trans.start(ctx.get_sql_proxy(), param.tenant_id_)) ||
       OB_FAIL(backup_trans.start(ctx.get_sql_proxy(), param.tenant_id_))) {
     LOG_WARN("fail to start transaction", K(ret));
+  }
+  else if (ERRSIM_FAILED_ANALYZE_TABLE_STATS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ERRSIM: failed to ANALYZE table stats", K(ret));
   } else if (OB_FAIL(prepare_gather_stats(ctx, gather_trans, param,
                                           partition_id_block_map,
                                           gather_helper))) {
@@ -180,6 +179,7 @@ int ObDbmsStatsExecutor::no_split_gather_stats(ObExecContext &ctx,
                                        param.subpart_infos_,
                                        param.column_params_,
                                        true,
+                                       gather_helper.running_monitor_.audit_,
                                        subpart_opt_stats,
                                        all_tstats,
                                        all_cstats))) {
@@ -207,6 +207,7 @@ int ObDbmsStatsExecutor::no_split_gather_stats(ObExecContext &ctx,
                                          param.part_infos_,
                                          param.column_params_,
                                          true,
+                                         gather_helper.running_monitor_.audit_,
                                          part_opt_stats,
                                          all_tstats,
                                          all_cstats))) {
@@ -220,7 +221,12 @@ int ObDbmsStatsExecutor::no_split_gather_stats(ObExecContext &ctx,
           LOG_WARN("get unexpected error", K(ret), K(param.approx_part_infos_), K(subpart_opt_stats));
         } else if (OB_FAIL(gather_helper.running_monitor_.add_monitor_info(ObOptStatRunningPhase::APPROX_GATHER_PART_STATS))) {
           LOG_WARN("failed to add add monitor info", K(ret));
-        } else if (OB_FAIL(ObIncrementalStatEstimator::derive_part_stats_from_subpart_stats(ctx, param, subpart_opt_stats, part_opt_stats))) {
+        } else if (OB_FAIL(ObIncrementalStatEstimator::derive_part_stats_from_subpart_stats(ctx,
+                                                                                            param,
+                                                                                            subpart_opt_stats,
+                                                                                            partition_id_block_map,
+                                                                                            &gather_helper.running_monitor_.audit_,
+                                                                                            part_opt_stats))) {
           LOG_WARN("failed to try derive global stat", K(ret));
         } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(part_opt_stats,
                                                                all_tstats,
@@ -239,7 +245,12 @@ int ObDbmsStatsExecutor::no_split_gather_stats(ObExecContext &ctx,
     } else if (param.global_stat_param_.gather_approx_ && !part_opt_stats.empty()) {//approx global stats base on part stats
       if (OB_FAIL(gather_helper.running_monitor_.add_monitor_info(ObOptStatRunningPhase::APPROX_GATHER_GLOBAL_STATS))) {
         LOG_WARN("failed to add add monitor info", K(ret));
-      } else if (OB_FAIL(ObIncrementalStatEstimator::derive_global_stat_from_part_stats(ctx, param, part_opt_stats, global_opt_stat))) {
+      } else if (OB_FAIL(ObIncrementalStatEstimator::derive_global_stat_from_part_stats(ctx,
+                                                                                        param,
+                                                                                        part_opt_stats,
+                                                                                        partition_id_block_map,
+                                                                                        &gather_helper.running_monitor_.audit_,
+                                                                                        global_opt_stat))) {
         LOG_WARN("failed to try derive global stat", K(ret));
       } else if (OB_FAIL(global_opt_stats.push_back(global_opt_stat))) {
         LOG_WARN("failed to push back", K(ret));
@@ -259,6 +270,7 @@ int ObDbmsStatsExecutor::no_split_gather_stats(ObExecContext &ctx,
                                        dummy_part_infos,
                                        param.column_params_,
                                        true,
+                                       gather_helper.running_monitor_.audit_,
                                        global_opt_stats,
                                        all_tstats,
                                        all_cstats))) {
@@ -266,8 +278,12 @@ int ObDbmsStatsExecutor::no_split_gather_stats(ObExecContext &ctx,
     }
   }
   if (OB_SUCC(ret)) {
+    int64_t start_time = ObTimeUtility::current_time();
     if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, trans.get_connection(), all_tstats, all_cstats))) {
       LOG_WARN("failed to split batch write", K(ret));
+    } else if (OB_FAIL(gather_helper.running_monitor_.audit_.add_flush_stats_audit(
+                        ObTimeUtility::current_time() - start_time))) {
+      LOG_WARN("failed to add flush stats audit", K(ret));
     }
   }
   return ret;
@@ -304,7 +320,8 @@ int ObDbmsStatsExecutor::prepare_gather_stats(ObExecContext &ctx,
     LOG_WARN("failed to adjsut async gather param", K(ret));
   } else if (!gather_helper.use_split_part_ && param.is_auto_sample_size_ &&
              OB_FAIL(adjust_auto_gather_param(partition_id_block_map,
-                                              param, gather_helper.use_split_part_))) {
+                                              param, gather_helper.use_column_store_,
+                                              gather_helper.use_split_part_))) {
     LOG_WARN("failed to adjust auto gather param", K(ret));
   } else if (OB_FAIL(check_need_split_gather(param, gather_helper))) {
     LOG_WARN("failed to check need split gather", K(ret));
@@ -319,7 +336,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
                                                       const ObTableStatParam &param,
                                                       StatLevel stat_level,
                                                       const PartitionIdBlockMap *partition_id_block_map,
-                                                      const GatherHelper &gather_helper)
+                                                      GatherHelper &gather_helper)
 {
   int ret = OB_SUCCESS;
   ObOptStatGatherParam gather_param;
@@ -365,6 +382,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
                                              gather_partition_infos,
                                              param.column_params_,
                                              true,
+                                             gather_helper.running_monitor_.audit_,
                                              opt_stats,
                                              all_tstats,
                                              all_cstats))) {
@@ -410,6 +428,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
                                                    gather_partition_infos,
                                                    gather_column_params,
                                                    idx_col == param.column_params_.count(),
+                                                   gather_helper.running_monitor_.audit_,
                                                    opt_stats,
                                                    all_tstats,
                                                    all_cstats))) {
@@ -424,6 +443,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
                                                 gather_partition_infos,
                                                 gather_column_params,
                                                 idx_col == param.column_params_.count(),
+                                                gather_helper.running_monitor_.audit_,
                                                 opt_stats,
                                                 all_tstats,
                                                 all_cstats))) {
@@ -500,7 +520,14 @@ int ObDbmsStatsExecutor::split_derive_part_stats_by_subpart_stats(ObExecContext 
             derive_param.allocator_ = &allocator;
             if (OB_FAIL(gather_helper.running_monitor_.add_monitor_info(current_phase, extra_ratio))) {
               LOG_WARN("failed to add add monitor info", K(ret));
-            } else if (OB_FAIL(ObIncrementalStatEstimator::derive_split_gather_stats(ctx, trans, derive_param, true, true, all_tstats))) {
+            } else if (OB_FAIL(ObIncrementalStatEstimator::derive_split_gather_stats(ctx,
+                                                                                     trans,
+                                                                                     derive_param,
+                                                                                     partition_id_block_map,
+                                                                                     &gather_helper.running_monitor_.audit_,
+                                                                                     true,
+                                                                                     true,
+                                                                                     all_tstats))) {
               LOG_WARN("failed to derive split gather stats", K(ret));
             } else {
               allocator.reuse();//Phased memory release for split gather, in order to reuse memory
@@ -540,8 +567,12 @@ int ObDbmsStatsExecutor::split_derive_part_stats_by_subpart_stats(ObExecContext 
                   derive_param.allocator_ = &allocator;
                   if (OB_FAIL(gather_helper.running_monitor_.add_monitor_info(current_phase, extra_ratio))) {
                     LOG_WARN("failed to add add monitor info", K(ret));
-                  } else if (OB_FAIL(ObIncrementalStatEstimator::derive_split_gather_stats(ctx, trans,
-                                                                                           derive_param, true,
+                  } else if (OB_FAIL(ObIncrementalStatEstimator::derive_split_gather_stats(ctx,
+                                                                                           trans,
+                                                                                           derive_param,
+                                                                                           partition_id_block_map,
+                                                                                           &gather_helper.running_monitor_.audit_,
+                                                                                           true,
                                                                                            idx_col == param.column_params_.count(),
                                                                                            all_tstats))) {
                     LOG_WARN("failed to derive split gather stats", K(ret));
@@ -619,8 +650,11 @@ int ObDbmsStatsExecutor::split_gather_global_stats(ObExecContext &ctx,
               derive_param.allocator_ = &allocator;
               if (OB_FAIL(gather_helper.running_monitor_.add_monitor_info(current_phase, extra_ratio))) {
                 LOG_WARN("failed to add add monitor info", K(ret));
-              } else if (OB_FAIL(ObIncrementalStatEstimator::derive_split_gather_stats(ctx, trans,
+              } else if (OB_FAIL(ObIncrementalStatEstimator::derive_split_gather_stats(ctx,
+                                                                                       trans,
                                                                                        derive_param,
+                                                                                       partition_id_block_map,
+                                                                                       &gather_helper.running_monitor_.audit_,
                                                                                        false,
                                                                                        idx_col == param.column_params_.count(),
                                                                                        all_tstats))) {
@@ -640,6 +674,7 @@ int ObDbmsStatsExecutor::split_gather_global_stats(ObExecContext &ctx,
                                                dummy_part_infos,
                                                gather_column_params,
                                                idx_col == param.column_params_.count(),
+                                               gather_helper.running_monitor_.audit_,
                                                opt_stats,
                                                all_tstats,
                                                all_cstats))) {
@@ -654,6 +689,7 @@ int ObDbmsStatsExecutor::split_gather_global_stats(ObExecContext &ctx,
                                             dummy_part_infos,
                                             gather_column_params,
                                             idx_col == param.column_params_.count(),
+                                            gather_helper.running_monitor_.audit_,
                                             opt_stats,
                                             all_tstats,
                                             all_cstats))) {
@@ -682,19 +718,21 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
                                          const ObIArray<PartInfo> &gather_partition_infos,
                                          const ObIArray<ObColumnStatParam> &gather_column_params,
                                          bool is_all_columns_gather,
+                                         ObOptStatGatherAudit &audit,
                                          ObIArray<ObOptStat> &opt_stats,
                                          ObIArray<ObOptTableStat *> &all_tstats,
                                          ObIArray<ObOptColumnStat *> &all_cstats)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObOptTableStat *, 4> tmp_all_tstats;
+  int64_t start_time = 0;
   if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check status failed", KR(ret));
   } else if (OB_FAIL(param.partition_infos_.assign(gather_partition_infos))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(param.column_params_.assign(gather_column_params))) {
     LOG_WARN("failed to assign", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsGather::gather_stats(ctx, param, opt_stats))) {
+  } else if (OB_FAIL(ObDbmsStatsGather::gather_stats(ctx, param, audit, opt_stats))) {
     LOG_WARN("failed to gather stats", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::check_all_cols_range_skew(gather_column_params, opt_stats))) {
     LOG_WARN("failed to check all cols range skew", K(ret));
@@ -705,10 +743,13 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
   } else if (param.is_split_gather_) {//avoid memory use too much, write current gather stats.
     if (OB_FAIL(ObDbmsStatsUtils::merge_split_gather_tab_stats(all_tstats, tmp_all_tstats))) {
       LOG_WARN("failed to merge split gather tab stats", K(ret));
+    } else if (OB_FALSE_IT(start_time = ObTimeUtility::current_time())) {
     } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, trans.get_connection(),
                                                            is_all_columns_gather ? all_tstats : tmp_all_tstats,
                                                            all_cstats))) {
       LOG_WARN("failed to split batch write", K(ret));
+    } else if (OB_FAIL(audit.add_flush_stats_audit(ObTimeUtility::current_time() - start_time))) {
+      LOG_WARN("failed to add flush stats audit", K(ret));
     } else {/*do nothing*/}
   } else if (OB_FAIL(append(all_tstats,tmp_all_tstats))) {
     LOG_WARN("failed to append", K(ret));
@@ -1476,18 +1517,20 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       common::sqlclient::ObISQLConnection *conn = NULL;
       ctx.set_is_online_stats_gathering(true);
       //lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
-      if (OB_FAIL(prepare_conn_and_store_session_for_online_stats(ctx.get_my_session(),
-                                                                  ctx.get_sql_proxy(),
-                                                                  schema_guard,
-                                                                  saved_value,
-                                                                  nested_count,
-                                                                  old_db_name,
-                                                                  old_db_id,
-                                                                  old_trx_lock_timeout,
-                                                                  need_restore_session,
-                                                                  need_reset_default_database,
-                                                                  need_reset_trx_lock_timeout,
-                                                                  conn))) {
+      if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
+        LOG_WARN("failed to cancel async gather stats", K(ret));
+      } else if (OB_FAIL(prepare_conn_and_store_session_for_online_stats(ctx.get_my_session(),
+                                                                         ctx.get_sql_proxy(),
+                                                                         schema_guard,
+                                                                         saved_value,
+                                                                         nested_count,
+                                                                         old_db_name,
+                                                                         old_db_id,
+                                                                         old_trx_lock_timeout,
+                                                                         need_restore_session,
+                                                                         need_reset_default_database,
+                                                                         need_reset_trx_lock_timeout,
+                                                                         conn))) {
         LOG_WARN("failed to prepare conn and store session for online stats", K(ret));
       } else if (nullptr != dml_stats && ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(*dml_stats, conn)) {
         LOG_WARN("fail to update dml stat info", K(ret));
@@ -2088,6 +2131,7 @@ bool ObDbmsStatsExecutor::is_async_gather_partition_id(const int64_t partition_i
 
 int ObDbmsStatsExecutor::adjust_auto_gather_param(const PartitionIdBlockMap &partition_id_block_map,
                                                   const ObTableStatParam &param,
+                                                  bool use_column_store,
                                                   bool &need_split_part)
 {
   int ret = OB_SUCCESS;
@@ -2095,6 +2139,8 @@ int ObDbmsStatsExecutor::adjust_auto_gather_param(const PartitionIdBlockMap &par
     LOG_TRACE("begin to adjsut auto gather param", K(param));
     if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
       //do nohting
+    } else if (use_column_store) {
+      need_split_part = true;
     } else {
       BlockNumStat *block_num_stat = NULL;
       int64_t row_cnt = 0;

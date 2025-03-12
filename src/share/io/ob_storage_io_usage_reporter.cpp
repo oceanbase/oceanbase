@@ -12,13 +12,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_storage_io_usage_reporter.h"
 #include "ob_storage_io_usage_proxy.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_define.h"
 #include "observer/ob_server.h"
-#include "observer/ob_server_struct.h"
-#include "share/io/ob_io_define.h"
-#include "share/io/ob_io_manager.h"
 
 
 namespace oceanbase {

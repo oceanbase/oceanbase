@@ -12,22 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_load_data_resolver.h"
-#include "sql/resolver/ob_resolver_define.h"
-#include "sql/resolver/cmd/ob_load_data_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "share/schema/ob_table_schema.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
-#include "sql/resolver/dml/ob_default_value_utils.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
-#include "common/sql_mode/ob_sql_mode.h"
-#include "sql/printer/ob_raw_expr_printer.h"
-#include "sql/resolver/ob_resolver.h"
-#include "sql/resolver/dml/ob_delete_resolver.h"
-#include "lib/json/ob_json.h"
+#include "src/sql/resolver/dml/ob_del_upd_resolver.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_struct.h"
-#include "lib/restore/ob_storage_info.h"
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
 #include "share/schema/ob_part_mgr_util.h"
@@ -72,11 +59,11 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
 
   if (OB_ISNULL(node)
-      || OB_UNLIKELY(T_LOAD_DATA != node->type_)
+      || OB_UNLIKELY(T_LOAD_DATA != node->type_ && T_LOAD_DATA_URL != node->type_)
       || OB_UNLIKELY(ENUM_TOTAL_COUNT != node->num_child_)
       || OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid node", K(ret));
+    LOG_WARN("invalid node", K(ret), K(node->type_));
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP_(session_info), K(ret));
@@ -86,6 +73,7 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create select stmt");
   } else {
+    load_stmt->set_is_load_data_url((T_LOAD_DATA_URL == node->type_));
     stmt_ = load_stmt;
     LOG_DEBUG("load data parser tree", "tree", SJ(ObParserResultPrintWrapper(*node)));
   }
@@ -123,7 +111,25 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
 
   if (OB_SUCC(ret)) {
     /* 1. file name */
-    ret = resolve_filename(load_stmt, node);
+    if (!load_stmt->is_load_data_url()) {
+      ret = resolve_filename(load_stmt, node);
+    } else {
+      ParseNode *url_spec_node = node->children_[ENUM_FILE_NAME];
+      if (OB_ISNULL(url_spec_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid from spec node", K(ret));
+      } else if (T_RELATION_FACTOR == url_spec_node->type_) {
+        load_stmt->get_load_arguments().file_name_ = ObString(url_spec_node->str_len_,
+                                                              url_spec_node->str_value_);
+      } else if (T_SELECT == url_spec_node->type_) {
+        load_stmt->get_load_arguments().url_spec_ = ObString(url_spec_node->str_len_,
+                                                            url_spec_node->str_value_);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid from spec node", K(ret), K(url_spec_node->type_));
+      }
+    }
+
   }
 
   if (OB_SUCC(ret)) {
@@ -191,8 +197,6 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data to the view is");
     } else if (OB_FAIL(check_trigger_constraint(tschema))) {
       LOG_WARN("check trigger constraint failed", K(ret), KPC(tschema));
-    } else if (OB_FAIL(check_collection_sql_type(tschema))) {
-      LOG_WARN("check collection sql type column failed", K(ret), KPC(tschema));
     } else {
       load_args.table_id_ = tschema->get_table_id();
       load_args.table_name_ = table_name;
@@ -436,6 +440,8 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
     LOG_WARN("invalid node type", K(node.type_), K(ret));
   } else {
     ObLoadDataHint &stmt_hints = stmt->get_hints();
+    stmt_hints.set_hint_str(ObString(static_cast<int32_t>(node.str_len_),
+                         const_cast<char *>(node.str_value_)));
 
     for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; i++) {
       ParseNode *hint_node = node.children_[i];
@@ -1677,6 +1683,7 @@ int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt
     const ParseNode *name_list = node.children_[0];
     ObString partition_name;
     ObArray<ObObjectID> part_ids;
+    ObArray<ObString> part_names;
     for (int i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
       ObArray<ObObjectID> partition_ids;
       partition_name.assign_ptr(name_list->children_[i]->str_value_,
@@ -1699,12 +1706,16 @@ int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt
       if (OB_SUCC(ret)) {
         if (OB_FAIL(append_array_no_dup(part_ids, partition_ids))) {
           LOG_WARN("Push partition id error", K(ret));
+        } else if (OB_FAIL(part_names.push_back(partition_name))) {
+          LOG_WARN("Push partition name error", K(ret));
         }
       }
     } // end of for
     if (OB_SUCC(ret)) {
       if (OB_FAIL(load_stmt.set_part_ids(part_ids))) {
         LOG_WARN("fail to set partition ids", KR(ret));
+      } else if (OB_FAIL(load_stmt.set_part_names(part_names))) {
+        LOG_WARN("fail to set partition names", KR(ret));
       }
     }
   }

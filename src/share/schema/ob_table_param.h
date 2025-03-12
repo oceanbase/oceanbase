@@ -241,6 +241,8 @@ public:
 
   inline void set_lob_chunk_size(int64_t chunk_size) { lob_chunk_size_ = chunk_size; }
   inline int64_t get_lob_chunk_size() const { return lob_chunk_size_; }
+  inline void set_is_data_table_rowkey(const bool is_data_table_rowkey) { is_data_table_rowkey_ = is_data_table_rowkey; }
+  inline bool is_data_table_rowkey() const { return is_data_table_rowkey_; }
 
   TO_STRING_KV(K_(column_id),
                K_(meta_type),
@@ -254,7 +256,8 @@ public:
                K_(is_virtual_gen_col),
                K_(is_gen_col_udf_expr),
                K_(is_hidden),
-               K_(lob_chunk_size));
+               K_(lob_chunk_size),
+               K_(is_data_table_rowkey));
 private:
   int deep_copy_obj(const common::ObObj &src, common::ObObj &dest);
 private:
@@ -272,6 +275,7 @@ private:
   bool is_gen_col_udf_expr_;
   bool is_hidden_;
   int64_t lob_chunk_size_;
+  bool is_data_table_rowkey_; // So far only used for DML
 };
 
 typedef common::ObFixedArray<ObColumnParam *, common::ObIAllocator> Columns;
@@ -319,6 +323,8 @@ public:
   inline void set_is_multivalue_index(bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
   inline bool is_vec_index() const { return is_vec_index_; }
   inline void set_is_vec_index(const bool is_vec_index) { is_vec_index_ = is_vec_index; }
+  inline bool is_mlog_table() const { return is_mlog_table_; }
+  inline void set_is_mlog_table(const bool is_mlog_table) { is_mlog_table_ = is_mlog_table; }
   inline int64_t is_partition_table() const { return is_partition_table_; }
   inline void set_is_partition_table(bool is_partition_table) { is_partition_table_ = is_partition_table; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
@@ -337,6 +343,7 @@ public:
   inline void disable_padding() { pad_col_projector_.reset(); }
   inline const storage::ObTableReadInfo &get_read_info() const { return main_read_info_; }
   inline const ObString &get_parser_name() const { return parser_name_; }
+  inline const ObString &get_parser_property() const { return parser_properties_; }
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
 
@@ -411,6 +418,7 @@ private:
   int64_t rowid_version_;
   Projector rowid_projector_;
   ObString parser_name_;
+  ObString parser_properties_;
   // if min cluster version < 4.1 use lob locator v1, else use lob locator v2.
   // use enable_lob_locator_v2_ to avoid locator type sudden change while table scan is running
   bool enable_lob_locator_v2_;
@@ -422,6 +430,8 @@ private:
   bool is_partition_table_;
   // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
   bool is_normal_cgs_at_the_end_;
+  // for read time query check of mview
+  bool is_mlog_table_;
 };
 } //namespace schema
 } //namespace share

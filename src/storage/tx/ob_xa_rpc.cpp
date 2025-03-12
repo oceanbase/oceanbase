@@ -11,11 +11,7 @@
  */
 
 #include "ob_xa_rpc.h"
-#include "ob_trans_ctx_mgr.h"
-//#include "sql/ob_end_trans_callback.h"
-#include "sql/ob_sql_trans_control.h"
 #include "ob_xa_service.h"
-#include "ob_xa_ctx.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

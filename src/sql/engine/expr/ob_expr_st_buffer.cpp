@@ -13,9 +13,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_st_buffer.h"
-#include "common/object/ob_obj_type.h"
-#include "lib/geo/ob_geo_ibin.h"
-#include "lib/geo/ob_geo_func_common.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_normalize_visitor.h"
 

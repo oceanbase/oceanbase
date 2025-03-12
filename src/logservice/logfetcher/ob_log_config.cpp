@@ -17,10 +17,8 @@
 #include "ob_log_config.h"
 
 #include "lib/container/ob_array.h"             // ObArray
-#include "lib/container/ob_array_iterator.h"    // ObArray::begin
 #include "lib/allocator/ob_malloc.h"            // ob_malloc/ob_free
 
-#include "ob_log_utils.h"                       // TS_TO_STR, get_timestamp
 
 using namespace oceanbase::common;
 namespace oceanbase

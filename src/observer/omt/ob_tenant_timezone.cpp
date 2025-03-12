@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 
-#include "common/ob_common_utility.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_timezone.h"
+#include "ob_tenant_timezone.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/ob_thread_mgr.h"
-#include "share/ob_time_zone_info_manager.h"
 
 using namespace oceanbase::common;
 

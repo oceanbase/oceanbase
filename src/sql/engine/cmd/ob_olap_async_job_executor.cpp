@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_olap_async_job_executor.h"
-#include <chrono>
-#include <ctime>
-#include <iomanip>
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
 #include "sql/resolver/cmd/ob_olap_async_job_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 namespace oceanbase
 {
 using namespace common;
@@ -51,7 +45,7 @@ int ObOLAPAsyncCancelJobExecutor::execute(ObExecContext &ctx, ObOLAPAsyncCancelJ
         allocator,
         job_info))) {
     LOG_WARN("get job info failed", KR(ret), K(tenant_id), K(stmt.get_job_name()));
-  } else if (!job_info.is_olap_async_job_class()) {
+  } else if (!job_info.is_olap_async_job()) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("cancel not olap async job", KR(ret), K(tenant_id), K(job_info));
   } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info))) {

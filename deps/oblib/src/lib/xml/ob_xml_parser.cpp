@@ -13,10 +13,7 @@
 
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/ob_errno.h"
-#include "lib/ob_define.h"
 #include "libxml2/libxml/parserInternals.h"
-#include <rapidjson/encodings.h>
 #include <rapidjson/memorystream.h>
 
 namespace oceanbase {

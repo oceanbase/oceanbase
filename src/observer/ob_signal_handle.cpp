@@ -12,18 +12,11 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_signal_handle.h"
 
-#include "io/easy_log.h"
 
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
+#include "ob_signal_handle.h"
 #include "lib/profile/ob_profile_log.h"
 #include "lib/profile/ob_perf_event.h"
-#include "lib/profile/ob_atomic_event.h"
-#include "lib/signal/ob_signal_struct.h"
-#include "storage/memtable/ob_memtable.h"
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "sql/ob_sql_init.h"

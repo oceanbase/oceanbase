@@ -11,10 +11,6 @@
  */
 
 #include "log_meta_info.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/serialization.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

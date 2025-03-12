@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/container/ob_array_iterator.h"
 #include "share/object_storage/ob_device_connectivity.h"
 #include "share/object_storage/ob_object_storage_struct.h"
-#include "share/backup/ob_backup_struct.h"
 
 #define private public
 #undef private

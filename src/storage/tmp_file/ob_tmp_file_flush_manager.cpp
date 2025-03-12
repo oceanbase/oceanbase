@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tmp_file/ob_tmp_file_flush_manager.h"
+#include "ob_tmp_file_flush_manager.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/tmp_file/ob_tmp_file_flush_list_iterator.h"
 
 namespace oceanbase
 {

@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "worker.h"
-#include <stdlib.h>
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/allocator/ob_malloc.h"
-#include "common/ob_clock_generator.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 
 using namespace oceanbase::common;

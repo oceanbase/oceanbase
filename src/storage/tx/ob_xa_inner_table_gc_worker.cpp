@@ -12,9 +12,7 @@
 
 #include "ob_xa_inner_table_gc_worker.h"
 #include "ob_xa_service.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
+#include "storage/tx/ob_trans_service.h"
 #include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
@@ -63,7 +61,7 @@ void ObXAInnerTableGCWorker::run1()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const ObLSID meta_ls_id(ObLSID::SYS_LS_ID);
+  const share::ObLSID meta_ls_id(share::ObLSID::SYS_LS_ID);
   const uint64_t tenant_id = MTL_ID();
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   int64_t last_scan_ts = ObTimeUtil::current_time();
@@ -85,7 +83,7 @@ void ObXAInnerTableGCWorker::run1()
   int64_t gc_interval = std::max(2 * max_gc_cost_time_, tmp_start_delay);
   gc_interval = std::min(gc_interval, gc_interval_upper_bound);
 
-  if (OB_SUCCESS != (tmp_ret = ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id,
+  if (OB_SUCCESS != (tmp_ret = share::ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id,
           is_oracle_mode))) {
     TRANS_LOG(WARN, "check oracle mode failed", K(ret));
   } else {
@@ -128,7 +126,7 @@ void ObXAInnerTableGCWorker::run1()
         }
       }
     } else if (is_user_tenant(tenant_id) && !has_decided_mode) {
-      if (OB_SUCCESS != (tmp_ret = ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id,
+      if (OB_SUCCESS != (tmp_ret = share::ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id,
               is_oracle_mode))) {
         TRANS_LOG(WARN, "check oracle mode failed", K(ret));
       } else {

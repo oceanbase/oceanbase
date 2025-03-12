@@ -13,19 +13,10 @@
  * See the Mulan PubL v2 for more details.
  */
 #include <gtest/gtest.h>
-#include <thread>
-#include <iostream>
 #define protected public
 #define private public
 #include "env/ob_simple_cluster_test_base.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_tx_data_functor.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/ob_relative_table.h"
 #include "storage/ob_dml_running_ctx.h"
 #include "storage/access/ob_rows_info.h"
 static int qcc = 0;

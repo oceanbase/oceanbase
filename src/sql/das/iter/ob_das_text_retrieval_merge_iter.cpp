@@ -15,8 +15,7 @@
 #include "ob_das_text_retrieval_merge_iter.h"
 #include "ob_das_text_retrieval_iter.h"
 #include "sql/das/ob_das_ir_define.h"
-#include "share/text_analysis/ob_text_analyzer.h"
-#include "storage/fts/ob_fts_plugin_helper.h"
+#include "ob_das_text_retrieval_eval_node.h"
 
 namespace oceanbase
 {
@@ -89,6 +88,12 @@ ObDASTextRetrievalMergeIter::ObDASTextRetrievalMergeIter()
     doc_id_idx_tablet_id_(),
     query_tokens_(),
     cache_doc_ids_(),
+    hints_(),
+    cache_relevances_(),
+    reverse_hints_(),
+    boolean_relevances_(),
+    root_node_(nullptr),
+    rangekey_size_(0),
     next_written_idx_(0),
     whole_doc_cnt_iter_(nullptr),
     whole_doc_agg_param_(),
@@ -117,10 +122,6 @@ int ObDASTextRetrievalMergeIter::rescan()
 {
   int ret = OB_SUCCESS;
   if (0 == query_tokens_.count()) {
-  } else if (nullptr != whole_doc_cnt_iter_ &&
-            (!force_return_docid_ || whole_doc_agg_param_.need_switch_param_) &&
-            OB_FAIL(whole_doc_cnt_iter_->rescan())) { // for force_return_docid_ mdoe, we just read the cnt once.
-    LOG_WARN("failed to rescan doc count iter", K(ret));
   } else {
     next_written_idx_ = 0;
     limit_param_ = ir_rtdef_->get_inv_idx_scan_rtdef()->limit_param_;
@@ -154,7 +155,8 @@ int ObDASTextRetrievalMergeIter::set_merge_iters(const ObIArray<ObDASIter *> &re
 int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_ctdef,
                                                    ObDASIRScanRtDef *ir_rtdef,
                                                    common::ObIAllocator &alloc,
-                                                   ObArray<ObString> &query_tokens)
+                                                   ObArray<ObString> &query_tokens,
+                                                   ObFtsEvalNode *&root_node)
 {
   int ret = OB_SUCCESS;
   ObExpr *search_text = ir_ctdef->search_text_;
@@ -167,18 +169,69 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
     LOG_WARN("expr evaluation failed", K(ret));
   } else if (0 == search_text_datum->len_) {
     // empty query text
+  } else if (BOOLEAN_MODE == ir_ctdef->mode_flag_) {
+    const ObString &search_text_string = search_text_datum->get_string();
+    const ObCollationType &cs_type = search_text->datum_meta_.cs_type_;
+    ObString str_dest;
+    ObCharset::tolower(cs_type, search_text_string, str_dest, alloc);
+
+    void *buf = nullptr;
+    FtsParserResult *fts_parser;
+    if (OB_ISNULL(buf = (&alloc)->alloc(sizeof(FtsParserResult)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
+    } else {
+      fts_parser = static_cast<FtsParserResult *>(buf);
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(buf = (&alloc)->alloc(str_dest.length() + 1))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
+    } else {
+      MEMSET(buf, 0, str_dest.length() + 1);
+      MEMCPY(buf, str_dest.ptr(), str_dest.length());
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(fts_parse_docment(static_cast<char *>(buf), &alloc, fts_parser))) {
+    } else if (FTS_OK != fts_parser->ret_) {
+      if (FTS_ERROR_MEMORY == fts_parser->ret_) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else if (FTS_ERROR_SYNTAX == fts_parser->ret_) {
+        ret = OB_ERR_PARSER_SYNTAX;
+      } else if (FTS_ERROR_OTHER == fts_parser->ret_) {
+        ret = OB_ERR_UNEXPECTED;
+      }
+      LOG_WARN("failed to parse query text", K(ret), K(fts_parser->err_info_.str_));
+    } else if (OB_ISNULL(fts_parser->root_)) {
+      // do nothing
+    } else {
+      FtsNode *node = fts_parser->root_;
+      ObFtsEvalNode *parant_node =nullptr;
+      hash::ObHashMap<ObString, int32_t> tokens_map;
+      const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
+      if (OB_FAIL(tokens_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
+        LOG_WARN("failed to create token map", K(ret));
+      } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_node_create(parant_node, node, alloc, query_tokens, tokens_map))) {
+        LOG_WARN("failed to get query tokens", K(ret));
+      } else {
+        root_node = parant_node;
+      }
+    }
   } else {
     // TODO: FTParseHelper currently does not support deduplicate tokens
     //       We should abstract such universal analyse functors into utility structs
     const ObString &search_text_string = search_text_datum->get_string();
     const ObString &parser_name = ir_ctdef->get_inv_idx_scan_ctdef()->table_param_.get_parser_name();
+    const ObString &parser_properties = ir_ctdef->get_inv_idx_scan_ctdef()->table_param_.get_parser_property();
     const ObCollationType &cs_type = search_text->datum_meta_.cs_type_;
     int64_t doc_length = 0;
     storage::ObFTParseHelper tokenize_helper;
     common::ObSEArray<ObFTWord, 16> tokens;
     hash::ObHashMap<ObFTWord, int64_t> token_map;
     const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
-    if (OB_FAIL(tokenize_helper.init(&alloc, parser_name))) {
+    if (OB_FAIL(tokenize_helper.init(&alloc, parser_name, parser_properties))) {
       LOG_WARN("failed to init tokenize helper", K(ret));
     } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
       LOG_WARN("failed to create token map", K(ret));
@@ -253,7 +306,7 @@ int ObDASTextRetrievalMergeIter::inner_init(ObDASIterParam &param)
     tx_desc_ = retrieval_param.tx_desc_;
     snapshot_ = retrieval_param.snapshot_;
 
-    relation_type_ = TokenRelationType::DISJUNCTIVE;
+    relation_type_ = ir_ctdef_->mode_flag_ == BOOLEAN_MODE ? BOOLEAN : DISJUNCTIVE;
     force_return_docid_ = retrieval_param.force_return_docid_; // from param
 
     if (OB_ISNULL(mem_context_)) {
@@ -282,20 +335,29 @@ int ObDASTextRetrievalMergeIter::inner_init(ObDASIterParam &param)
       if (OB_FAIL(ret)) {
       } else if (force_return_docid_) {
         if (FALSE_IT(hints_.set_allocator(&mem_context_->get_arena_allocator()))) {
-        } else if (FALSE_IT(relevances_.set_allocator(&mem_context_->get_arena_allocator()))) {
+        } else if (FALSE_IT(cache_relevances_.set_allocator(&mem_context_->get_arena_allocator()))) {
         } else if (FALSE_IT(reverse_hints_.set_allocator(&mem_context_->get_arena_allocator()))) {
         } else if (OB_FAIL(hints_.init(size))) {
           LOG_WARN("failed to init hints array", K(ret));
         } else if (OB_FAIL(hints_.prepare_allocate(size))) {
           LOG_WARN("failed to prepare allocate hints array", K(ret));
-        } else if (OB_FAIL(relevances_.init(size))) {
+        } else if (OB_FAIL(cache_relevances_.init(size))) {
           LOG_WARN("failed to init relevances array", K(ret));
-        } else if (OB_FAIL(relevances_.prepare_allocate(size))) {
+        } else if (OB_FAIL(cache_relevances_.prepare_allocate(size))) {
           LOG_WARN("failed to prepare allocate relevances array", K(ret));
         } else if (OB_FAIL(reverse_hints_.init(size))) {
           LOG_WARN("failed to init hints array", K(ret));
         } else if (OB_FAIL(reverse_hints_.prepare_allocate(size))) {
           LOG_WARN("failed to prepare allocate hints array", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (BOOLEAN == relation_type_) {
+        if (FALSE_IT(boolean_relevances_.set_allocator(&mem_context_->get_arena_allocator()))) {
+        } else if (OB_FAIL(boolean_relevances_.init(query_tokens_.count()))) {
+          LOG_WARN("failed to init relevances array", K(ret));
+        } else if (OB_FAIL(boolean_relevances_.prepare_allocate(query_tokens_.count()))) {
+          LOG_WARN("failed to prepare allocate relevances array", K(ret));
         }
       }
     }
@@ -316,7 +378,7 @@ int ObDASTextRetrievalMergeIter::inner_reuse()
   } else {
     cache_doc_ids_.reuse();
     hints_.reuse();
-    relevances_.reuse();
+    cache_relevances_.reuse();
     reverse_hints_.reuse();
     if (OB_FAIL(cache_doc_ids_.init(size))) {
       LOG_WARN("failed to init cache_doc_ids_ array", K(ret));
@@ -327,9 +389,9 @@ int ObDASTextRetrievalMergeIter::inner_reuse()
         LOG_WARN("failed to init hints array", K(ret));
       } else if (OB_FAIL(hints_.prepare_allocate(size))) {
         LOG_WARN("failed to prepare allocate hints array", K(ret));
-      } else if (OB_FAIL(relevances_.init(size))) {
+      } else if (OB_FAIL(cache_relevances_.init(size))) {
         LOG_WARN("failed to init relevances array", K(ret));
-      } else if (OB_FAIL(relevances_.prepare_allocate(size))) {
+      } else if (OB_FAIL(cache_relevances_.prepare_allocate(size))) {
         LOG_WARN("failed to prepare allocate relevances array", K(ret));
       } else if (OB_FAIL(reverse_hints_.init(size))) {
         LOG_WARN("failed to init relevances array", K(ret));
@@ -339,21 +401,14 @@ int ObDASTextRetrievalMergeIter::inner_reuse()
     }
   }
   next_written_idx_ = 0;
-  if (!force_return_docid_) {
-    doc_cnt_calculated_ = false;
-  }
   input_row_cnt_ = 0;
   output_row_cnt_ = 0;
-  const ObTabletID &old_doc_id_tablet_id = whole_doc_agg_param_.tablet_id_;
-  whole_doc_agg_param_.need_switch_param_ = whole_doc_agg_param_.need_switch_param_ ||
-    ((old_doc_id_tablet_id.is_valid() && old_doc_id_tablet_id != doc_id_idx_tablet_id_) ? true : false);
+  const ObTabletID &old_tablet_id = whole_doc_agg_param_.tablet_id_;
+  whole_doc_agg_param_.need_switch_param_ = whole_doc_agg_param_.need_switch_param_
+      || ((old_tablet_id.is_valid() && old_tablet_id != doc_id_idx_tablet_id_ ) ? true : false);
+  whole_doc_agg_param_.tablet_id_ = doc_id_idx_tablet_id_;
+  whole_doc_agg_param_.ls_id_ = ls_id_;
   if (!force_return_docid_ || whole_doc_agg_param_.need_switch_param_) {
-    if (nullptr != whole_doc_cnt_iter_) {
-      whole_doc_cnt_iter_->set_scan_param(whole_doc_agg_param_);
-      if (OB_FAIL(whole_doc_cnt_iter_->reuse())) {
-        LOG_WARN("failed to reuse whole doc cnt iter", K(ret));
-      }
-    }
     doc_cnt_calculated_ = false;
   }
 
@@ -376,8 +431,15 @@ int ObDASTextRetrievalMergeIter::inner_release()
   token_iters_.reset();
   cache_doc_ids_.reset();
   hints_.reset();
-  relevances_.reset();
+  cache_relevances_.reset();
   reverse_hints_.reset();
+  if (BOOLEAN == relation_type_) {
+    boolean_relevances_.reset();
+    if (OB_NOT_NULL(root_node_)) {
+      root_node_->release();
+      root_node_ = nullptr;
+    }
+  }
   if (nullptr != mem_context_)  {
     mem_context_->reset_remain_one_page();
     DESTROY_CONTEXT(mem_context_);
@@ -428,7 +490,7 @@ int ObDASTextRetrievalMergeIter::set_rangkey_and_selector(const common::ObIArray
     for (int64_t i = 0; OB_SUCC(ret) && i < virtual_rangkeys.count(); ++i) {
       cache_doc_ids_[i].from_string(virtual_rangkeys.at(i).first.get_string());
       hints_[i] = virtual_rangkeys.at(i).second;
-      relevances_[i] = 0.0;
+      cache_relevances_[i] = 0.0;
       if (virtual_rangkeys.at(i).second >= max_size) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected size", K(ret), K(virtual_rangkeys.at(i).second), K(max_size));
@@ -1520,7 +1582,7 @@ int ObDASTRTaatLookupIter::fill_output_exprs(int64_t &count, int64_t safe_capaci
         input_row_cnt_ ++;
         count ++;
       } else {
-        relevances_[pos] = cur_relevance;
+        cache_relevances_[pos] = cur_relevance;
       }
       next_written_idx_++;
     }
@@ -1653,7 +1715,7 @@ int ObDASTRTaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       int64_t pos = reverse_hints_[next_written_idx_];
       ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
       guard.set_batch_idx(count);
-      if (OB_FAIL(project_result(cache_doc_ids_[pos], relevances_[next_written_idx_]))) {
+      if (OB_FAIL(project_result(cache_doc_ids_[pos], cache_relevances_[next_written_idx_]))) {
         LOG_WARN("failed to project result", K(ret));
       }
       next_written_idx_++;
@@ -1825,18 +1887,22 @@ int ObDASTRDaatIter::inner_get_next_row()
   } else {
     bool filter_valid = false;
     bool got_valid_document = false;
+    bool doc_valid = false;
     ObExpr *match_filter = ir_ctdef_->need_calc_relevance() ? ir_ctdef_->match_filter_ : nullptr;
     ObDatum *filter_res = nullptr;
     const bool is_batch = false;
     while (OB_SUCC(ret) && !got_valid_document) {
       clear_evaluated_infos();
       filter_valid = false;
+      doc_valid = true;
       if (OB_FAIL(pull_next_batch_rows())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to pull next batch rows from iterator", K(ret));
         }
-      } else if (OB_FAIL(next_disjunctive_document(is_batch))) {
+      } else if (OB_FAIL(next_disjunctive_document(is_batch, doc_valid))) {
         LOG_WARN("failed to get next document with disjunctive tokens", K(ret));
+      } else if (!doc_valid) {
+        // do nothing
       } else if (nullptr == match_filter) {
         filter_valid = true;
       } else if (OB_FAIL(match_filter->eval(*ir_rtdef_->eval_ctx_, filter_res))) {
@@ -1845,7 +1911,7 @@ int ObDASTRDaatIter::inner_get_next_row()
         filter_valid = !(filter_res->is_null() || 0 == filter_res->get_int());
       }
       if (OB_SUCC(ret)) {
-        if (filter_valid) {
+        if (doc_valid && filter_valid) {
           ++input_row_cnt_;
           if (input_row_cnt_ > limit_param_.offset_) {
             got_valid_document = true;
@@ -1876,13 +1942,16 @@ int ObDASTRDaatIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     next_written_idx_ = 0;
     count = 0;
     bool filter_valid = false;
+    bool doc_valid = true;
     while (OB_SUCC(ret) && next_written_idx_ < real_capacity) {
       if (OB_FAIL(pull_next_batch_rows_with_batch_mode())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to pull next batch rows from iterator", K(ret));
         }
-      } else if (OB_FAIL(next_disjunctive_document(is_batch))) {
+      } else if (OB_FAIL(next_disjunctive_document(is_batch, doc_valid))) {
         LOG_WARN("failed to get next document with disjunctive tokens", K(ret));
+      } else if (!doc_valid) {
+        // do nothing
       } else {
         ObEvalCtx *ctx = ir_rtdef_->eval_ctx_;
         ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
@@ -2014,7 +2083,7 @@ int ObDASTRDaatIter::fill_loser_tree_item(
   return ret;
 }
 
-int ObDASTRDaatIter::next_disjunctive_document(bool is_batch)
+int ObDASTRDaatIter::next_disjunctive_document(const bool is_batch, bool &doc_valid)
 {
   int ret = OB_SUCCESS;
   int64_t doc_cnt = 0;
@@ -2022,6 +2091,12 @@ int ObDASTRDaatIter::next_disjunctive_document(bool is_batch)
   const ObIRIterLoserTreeItem *top_item = nullptr;
   // Do we need to use ObExpr to collect relevance?
   double cur_doc_relevance = 0.0;
+  doc_valid = true;
+  if (BOOLEAN == relation_type_) {
+    for (int i = 0; OB_SUCC(ret) && i < query_tokens_.count(); ++i) {
+      boolean_relevances_[i] = 0;
+    }
+  }
   while (OB_SUCC(ret) && !iter_row_heap_->empty() && !curr_doc_end) {
     if (iter_row_heap_->is_unique_champion()) {
       curr_doc_end = true;
@@ -2029,16 +2104,30 @@ int ObDASTRDaatIter::next_disjunctive_document(bool is_batch)
     if (OB_FAIL(iter_row_heap_->top(top_item))) {
       LOG_WARN("failed to get top item from heap", K(ret));
     } else {
-      // consider to add an expr for collectiong conjunction result between query tokens here?
-      cur_doc_relevance += top_item->relevance_;
       next_batch_iter_idxes_[next_batch_cnt_++] = top_item->iter_idx_;
+      if (BOOLEAN == relation_type_) {
+        boolean_relevances_[top_item->iter_idx_] = top_item->relevance_;
+      } else {
+        // consider to add an expr for collectiong conjunction result between query tokens here?
+        cur_doc_relevance += top_item->relevance_;
+      }
       if (OB_FAIL(iter_row_heap_->pop())) {
         LOG_WARN("failed to pop top item in heap", K(ret));
       }
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (BOOLEAN != relation_type_) {
+    //do nothing
+  } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_eval(root_node_, boolean_relevances_, cur_doc_relevance))) {
+    LOG_WARN("failed to evaluate boolean relevance", K(ret));
+  } else {
+    doc_valid = cur_doc_relevance > 0;
+  }
+
+  if (OB_SUCC(ret) && doc_valid) {
     const double relevance_score = ir_ctdef_->need_calc_relevance() ? cur_doc_relevance : 1;
     if (!is_batch && OB_FAIL(project_result(top_item->doc_id_, relevance_score))) {
       LOG_WARN("failed to project result", K(ret));
@@ -2233,7 +2322,7 @@ int ObDASTRDaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       int64_t pos = reverse_hints_[next_written_idx_];
       ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
       guard.set_batch_idx(count);
-      if (OB_FAIL(project_result(cache_doc_ids_[pos], relevances_[next_written_idx_]))) {
+      if (OB_FAIL(project_result(cache_doc_ids_[pos], cache_relevances_[next_written_idx_]))) {
         LOG_WARN("failed to project result", K(ret));
       }
       next_written_idx_++;
@@ -2257,8 +2346,12 @@ int ObDASTRDaatLookupIter::next_disjunctive_document(const int capacity)
       LOG_WARN("failed to get top item from heap", K(ret));
     } else if (cache_doc_ids_[next_written_idx_] != top_item->doc_id_) {
       // fill some unexit results with the relevance value of '0'
+      // when rangekey_size_ is 1, we shouldn't use the path
       int64_t pos = hints_[next_written_idx_];
-      if (pos < capacity) {
+      if (OB_UNLIKELY(next_written_idx_ == 0 && rangekey_size_ == 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected case", K(ret));
+      } else if (pos < capacity) {
         ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
         guard.set_batch_idx(pos);
         if (OB_FAIL(project_result(cache_doc_ids_[next_written_idx_], 0))) {
@@ -2266,13 +2359,18 @@ int ObDASTRDaatLookupIter::next_disjunctive_document(const int capacity)
         }
       } else {
         // cache it
-        relevances_[pos] = 0;
+        cache_relevances_[pos] = 0;
       }
     } else {
       int64_t doc_cnt = 0;
       bool curr_doc_end = false;
       // Do we need to use ObExpr to collect relevance?
       double cur_doc_relevance = 0.0;
+      if (BOOLEAN == relation_type_) {
+        for (int i = 0; OB_SUCC(ret) && i < query_tokens_.count(); ++i) {
+          boolean_relevances_[i] = 0;
+        }
+      }
       while (OB_SUCC(ret) && !iter_row_heap_->empty() && !curr_doc_end) {
         if (iter_row_heap_->is_unique_champion()) {
           curr_doc_end = true;
@@ -2280,13 +2378,27 @@ int ObDASTRDaatLookupIter::next_disjunctive_document(const int capacity)
         if (OB_FAIL(iter_row_heap_->top(top_item))) {
           LOG_WARN("failed to get top item from heap", K(ret));
         } else {
-          // consider to add an expr for collectiong conjunction result between query tokens here?
-          cur_doc_relevance += top_item->relevance_;
           next_batch_iter_idxes_[next_batch_cnt_++] = top_item->iter_idx_;
+          if (BOOLEAN == relation_type_) {
+            boolean_relevances_[top_item->iter_idx_] = top_item->relevance_;
+          } else {
+            // consider to add an expr for collectiong conjunction result between query tokens here?
+            cur_doc_relevance += top_item->relevance_;
+          }
           if (OB_FAIL(iter_row_heap_->pop())) {
             LOG_WARN("failed to pop top item in heap", K(ret));
           }
         }
+      }
+
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (BOOLEAN != relation_type_) {
+        //do nothing
+      } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_eval(root_node_, boolean_relevances_, cur_doc_relevance))) {
+        LOG_WARN("failed to evaluate boolean relevance", K(ret));
+      } else {
+        cur_doc_relevance = OB_MAX(cur_doc_relevance, 0);
       }
 
       if (OB_SUCC(ret)) {
@@ -2300,7 +2412,7 @@ int ObDASTRDaatLookupIter::next_disjunctive_document(const int capacity)
           }
         } else {
           // cache it
-          relevances_[pos] = relevance_score;
+          cache_relevances_[pos] = relevance_score;
         }
       }
     }

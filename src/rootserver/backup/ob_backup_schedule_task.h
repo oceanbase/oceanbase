@@ -188,7 +188,8 @@ public:
       dst_(),
       generate_time_(common::ObTimeUtility::current_time()),
       schedule_time_(0),
-      executor_time_(0)
+      executor_time_(0),
+      last_check_alive_time_(common::ObTimeUtility::current_time())
   {
   }
   virtual ~ObBackupScheduleTask()
@@ -237,12 +238,15 @@ public:
   const uint64_t &get_ls_id() const { return task_key_.ls_id_; }
   const BackupJobType &get_type() const { return task_key_.type_; }
   const share::ObBackupTaskStatus &get_status() const { return status_; }
+  void set_last_check_alive_time(int64_t now) { last_check_alive_time_ = now; }
+  const int64_t &get_last_check_alive_time() const { return last_check_alive_time_; }
+
 public:
   /* disallow copy constructor and operator= */
   ObBackupScheduleTask(const ObBackupScheduleTask &) = delete;
   ObBackupScheduleTask &operator=(const ObBackupScheduleTask &) = delete;
   TO_STRING_KV(K_(task_key), K_(trace_id), K_(dst), K_(status), K_(optional_servers), K_(generate_time),
-      K_(schedule_time), K_(executor_time));
+      K_(schedule_time), K_(executor_time), K_(last_check_alive_time));
 private:
   ObBackupScheduleTaskKey task_key_;  // the key for map to indicate a specific task
   share::ObTaskId trace_id_;
@@ -253,6 +257,7 @@ private:
   int64_t generate_time_; // time of generating task
   int64_t schedule_time_; // time of choosing task dst
   int64_t executor_time_; // time of sending to dst
+  int64_t last_check_alive_time_; // time of last check alive
 };
 
 // backup data task
@@ -269,12 +274,17 @@ public:
       const share::ObBackupLSTaskAttr &ls_attr);
   int deep_copy(const ObBackupDataBaseTask &that);
   int set_optional_servers_(const ObIArray<common::ObAddr> &black_servers);
+  int check_replica_status_for_backup(
+      const share::ObLSReplica &replica,
+      char *buf,
+      const int64_t size,
+      bool &can_do_backup);
 private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
       share::ObTaskId &trace_id) final override;
   virtual bool execute_on_sys_server_() const { return false; }
   virtual bool fallback_to_sys_server_when_needed_() const { return false; }
-  int get_ls_replica_array_(ObLSInfo &ls_info);
+  int get_ls_replica_array_(share::ObLSInfo &ls_info);
   bool check_replica_in_black_server_(const share::ObLSReplica &replica, const ObIArray<common::ObAddr> &black_servers);
 public:
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id),

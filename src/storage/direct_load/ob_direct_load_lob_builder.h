@@ -19,6 +19,8 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObDirectLoadInsertLobTabletContext;
+
 class ObDirectLoadLobBuilder
 {
 public:
@@ -31,7 +33,7 @@ public:
   int append_lob(blocksstable::ObDatumRow &datum_row);
   int append_lob(blocksstable::ObBatchDatumRows &datum_rows);
   // 中间过程数据
-  int append_lob(blocksstable::ObDatumRow &datum_row,
+  int append_lob(ObDirectLoadDatumRow &datum_row,
                  const ObDirectLoadRowFlag &row_flag);
   int append_lob(const IVectorPtrs &vectors,
                  const int64_t row_idx,
@@ -49,9 +51,9 @@ private:
   int append_row(blocksstable::ObDatumRow &datum_row);
   int append_batch(blocksstable::ObBatchDatumRows &datum_rows);
 
-  int fill_into_datum_row(blocksstable::ObDatumRow &datum_row,
+  int fill_into_datum_row(ObDirectLoadDatumRow &datum_row,
                           const ObDirectLoadRowFlag &row_flag);
-  int fetch_from_datum_row(blocksstable::ObDatumRow &datum_row,
+  int fetch_from_datum_row(ObDirectLoadDatumRow &datum_row,
                            const ObDirectLoadRowFlag &row_flag);
 
   int fill_into_datum_row(const IVectorPtrs &vectors,
@@ -63,9 +65,10 @@ private:
 
 private:
   ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
+  ObDirectLoadInsertLobTabletContext *insert_lob_tablet_ctx_;
   common::ObIAllocator *lob_allocator_;
   common::ObArenaAllocator inner_lob_allocator_;
-  // 不包含多版本列, 默认lob不会是主键列
+  // 不包含多版本列, lob可能是主键列
   const ObIArray<int64_t> *lob_column_idxs_;
   int64_t lob_column_cnt_;
   int64_t extra_rowkey_cnt_;

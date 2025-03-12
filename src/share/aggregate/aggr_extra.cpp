@@ -299,6 +299,239 @@ int64_t HashBasedDistinctVecExtraResult::to_string(char *buf,
   return pos;
 }
 
-} // end aggregate
-} // end share
-} // end oceanbase
+int DataStoreVecExtraResult::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx,
+                                       const sql::EvalBound &bound, const sql::ObBitVector &skip,
+                                       const uint16_t selector[], const int64_t size,
+                                       ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(need_sort_)) {
+    ObBatchRows brs =
+      ObBatchRows(const_cast<ObBitVector &>(skip), size, bound.get_all_rows_active());
+    ret = sort_->add_batch(brs, selector, size);
+  } else {
+    if (OB_SUCC(ret)) {
+      ret = store_->add_batch(exprs, eval_ctx, selector, bound, skip, size);
+    }
+  }
+
+  return ret;
+}
+
+int DataStoreVecExtraResult::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx,
+                                       const sql::EvalBound &bound, const sql::ObBitVector &skip,
+                                       ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+
+  if (pvt_skip == nullptr) {
+    char *skip_buf = nullptr;
+    int skip_size = ObBitVector::memory_size(eval_ctx.max_batch_size_);
+    if (OB_ISNULL(skip_buf = (char *)alloc_.alloc(skip_size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate memory failed", K(ret));
+    } else {
+      pvt_skip = to_bit_vector(skip_buf);
+      pvt_skip->reset(eval_ctx.max_batch_size_);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    pvt_skip->set_all(static_cast<int64_t>(0), eval_ctx.max_batch_size_);
+    pvt_skip->deep_copy(skip, bound.start(), bound.end());
+
+    ObBatchRows brs = ObBatchRows(const_cast<ObBitVector &>(*pvt_skip), bound.batch_size(),
+                                  bound.get_all_rows_active());
+
+    if (need_sort_) {
+      bool need_dump = true;
+      ret = sort_->add_batch(brs, need_dump);
+    } else {
+      int64_t size = bound.range_size();
+      ret = store_->add_batch(exprs, eval_ctx, brs, size);
+    }
+  }
+
+  return ret;
+}
+
+int DataStoreVecExtraResult::rewind()
+{
+  int ret = OB_SUCCESS;
+
+  if (need_sort_) {
+    ret = sort_->rewind();
+  } else {
+    ret = store_->begin(*vec_result_iter_);
+  }
+
+  return ret;
+}
+
+int DataStoreVecExtraResult::prepare_for_eval()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(need_sort_)) {
+    ret = sort_->sort();
+  } else {
+    ret = store_->begin(*vec_result_iter_);
+  }
+  return ret;
+}
+
+int DataStoreVecExtraResult::get_next_batch(ObEvalCtx &ctx, const common::ObIArray<ObExpr *> &exprs,
+                                            int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(need_sort_)) {
+    ret = sort_->get_next_batch(ctx.max_batch_size_, read_rows);
+  } else {
+    ret = vec_result_iter_->get_next_batch(exprs, ctx, ctx.max_batch_size_, read_rows, nullptr);
+  }
+  return ret;
+}
+
+int DataStoreVecExtraResult::init_data_set(ObAggrInfo &aggr_info, ObEvalCtx &eval_ctx,
+                                           ObMonitorNode *op_monitor_info,
+                                           ObIOEventObserver *io_event_observer_,
+                                           ObIAllocator &allocator, bool need_rewind)
+{
+  int ret = OB_SUCCESS;
+
+  if (data_store_inited_) {
+    ret = OB_INIT_TWICE;
+    SQL_LOG(WARN, "inited", K(data_store_inited_), K(ret));
+  } else if (need_sort_) {
+    ObSortVecOpContext context;
+    context.tenant_id_ = eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
+
+    // Get the sort key exprs
+    OB_ASSERT(aggr_info.sort_collations_.count() > 0);
+
+    ObExprPtrIArray &param_expr = aggr_info.param_exprs_;
+    ObSortCollations &sort_collations_ = aggr_info.sort_collations_;
+
+    void *sort_key_buf = nullptr;
+    void *cur_collation_buf = nullptr;
+
+    ExprFixedArray *sort_key = nullptr;
+    ObSortCollations *cur_collation = nullptr;
+    ExprFixedArray *addon_keys = nullptr;
+
+    if (OB_ISNULL(sort_key_buf = allocator.alloc(sizeof(ExprFixedArray)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate memory failed", K(ret));
+    } else if (FALSE_IT(sort_key = new (sort_key_buf) ExprFixedArray(allocator))) {
+    } else if (OB_ISNULL(cur_collation_buf = allocator.alloc(sizeof(ObSortCollations)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate memory failed", K(ret));
+    } else if (FALSE_IT(cur_collation = new (cur_collation_buf) ObSortCollations(allocator))) {
+    } else if (OB_FAIL(sort_key->init(sort_collations_.count()))) {
+      SQL_LOG(WARN, "failed to init", K(ret));
+    } else if (OB_FAIL(cur_collation->init(sort_collations_.count()))) {
+      SQL_LOG(WARN, "failed to init", K(ret));
+    }
+    for (int i = 0; i < sort_collations_.count() && OB_SUCC(ret); i++) {
+      ObExpr *cur_expr = param_expr.at(sort_collations_.at(i).field_idx_);
+      if (is_contain(*sort_key, cur_expr)) {
+      } else if (OB_FAIL(sort_key->push_back(cur_expr))) {
+        SQL_LOG(WARN, "failed to push back", K(ret));
+      } else if (OB_FAIL(cur_collation->push_back(sort_collations_.at(i)))) {
+        SQL_LOG(WARN, "failed to push back", K(ret));
+      } else {
+        int last_idx = cur_collation->count() - 1;
+        cur_collation->at(last_idx).field_idx_ = last_idx;
+      }
+    }
+
+    if (OB_SUCC(ret) && sort_key->count() < param_expr.count()) {
+      context.has_addon_ = true;
+      void *addon_keys_buf = nullptr;
+      int init_size = param_expr.count() - sort_key->count();
+      if (OB_ISNULL(addon_keys_buf = allocator.alloc(sizeof(ExprFixedArray)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret));
+      } else if (FALSE_IT(addon_keys = new (addon_keys_buf) ExprFixedArray(allocator))) {
+      } else if (OB_FAIL(addon_keys->init(init_size))) {
+        SQL_LOG(WARN, "failed to init", K(ret));
+      } else {
+        for (int i = 0; i < param_expr.count() && OB_SUCC(ret) && addon_keys->count() < init_size;
+             i++) {
+          if (!is_contain(*sort_key, param_expr.at(i))
+              && OB_FAIL(addon_keys->push_back(param_expr.at(i)))) {
+            SQL_LOG(WARN, "failed to push back", K(ret));
+          }
+        }
+      }
+    }
+    context.sk_exprs_ = sort_key;
+    context.addon_exprs_ = addon_keys;
+    context.sk_collations_ = cur_collation;
+    context.eval_ctx_ = &eval_ctx;
+    context.exec_ctx_ = &eval_ctx.exec_ctx_;
+    context.need_rewind_ = need_rewind;
+
+    void *sort_buf = nullptr;
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sort_buf = allocator.alloc(sizeof(ObSortVecOpProvider)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret));
+      } else if (FALSE_IT(sort_ = new (sort_buf) ObSortVecOpProvider(*op_monitor_info))) {
+      } else if (OB_FAIL(sort_->init(context))) {
+        LOG_WARN("failed to init sort", K(ret));
+      } else {
+        sort_->set_operator_type(op_monitor_info->get_operator_type());
+        sort_->set_operator_id(op_monitor_info->get_op_id());
+        sort_->set_io_event_observer(io_event_observer_);
+      }
+    }
+  } else {
+    ObMemAttr attr(eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                   ObModIds::OB_SQL_AGGR_FUN_GROUP_CONCAT, ObCtxIds::WORK_AREA);
+
+    if (OB_FAIL(store_->init(aggr_info.param_exprs_, eval_ctx.max_batch_size_, attr, INT64_MAX,
+                             true, 0, ObCompressorType::NONE_COMPRESSOR))) {
+      LOG_WARN("init temp row store failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(data_store_brs_holder_.init(aggr_info.param_exprs_, eval_ctx))) {
+      LOG_WARN("failed to init result holder", K(ret));
+    } else {
+      data_store_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+void DataStoreVecExtraResult::reuse()
+{
+  data_store_brs_holder_.reset();
+}
+
+DataStoreVecExtraResult::~DataStoreVecExtraResult()
+{
+  reuse();
+  if (need_sort_) {
+    if (sort_ != nullptr) {
+      sort_->reset();
+    }
+  } else {
+    store_->reset();
+  }
+  data_store_brs_holder_.destroy();
+  sort_ = nullptr;
+  if (pvt_skip != nullptr) {
+    alloc_.free(pvt_skip);
+    pvt_skip = nullptr;
+  }
+}
+
+} // namespace aggregate
+} // namespace share
+} // namespace oceanbase

@@ -11,11 +11,7 @@
  */
 
 #include "storage/tx_table/ob_tx_ctx_memtable.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {

@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_balance_task_helper_operator.h"
-#include "lib/mysqlclient/ob_isql_client.h"//ObISQLClient
-#include "lib/mysqlclient/ob_mysql_result.h"//MySQLResult
 #include "lib/mysqlclient/ob_mysql_proxy.h"//MySQLResult
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
 #include "share/inner_table/ob_inner_table_schema.h"//ALL_LS_BALANCE_TASK_HELPER_TNAME
 #include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
 #include "share/ob_debug_sync.h"

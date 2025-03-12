@@ -39,11 +39,13 @@ public:
   ObSSTableReadHandle() :
       is_get_(false),
       is_bf_contain_(false),
+      has_macro_block_bf_(false),
       is_sorted_multi_get_(false),
       row_state_(0),
       range_idx_(-1),
       micro_begin_idx_(-1),
       micro_end_idx_(-1),
+      current_rows_info_idx_(-1),
       query_range_(nullptr),
       index_block_info_(),
       row_handle_(),
@@ -55,11 +57,13 @@ public:
   {
     is_get_ = false;
     is_bf_contain_ = false;
+    has_macro_block_bf_ = false;
     is_sorted_multi_get_ = false;
     row_state_ = 0;
     range_idx_ = -1;
     micro_begin_idx_ = -1;
     micro_end_idx_ = -1;
+    current_rows_info_idx_ = -1;
     query_range_ = nullptr;
     index_block_info_.reset();
     row_handle_.reset();
@@ -68,20 +72,32 @@ public:
   {
     is_get_ = false;
     is_bf_contain_ = false;
+    has_macro_block_bf_ = false;
     is_sorted_multi_get_ = false;
     row_state_ = 0;
     range_idx_ = -1;
     micro_begin_idx_ = -1;
     micro_end_idx_ = -1;
+    current_rows_info_idx_ = -1;
     query_range_ = nullptr;
     micro_handle_ = nullptr;
     index_block_info_.reset();
     row_handle_.reset();
   }
-  OB_INLINE bool is_valid() const
-  { return nullptr != query_range_; }
-  OB_INLINE bool need_read_block() const
-  { return ObSSTableRowState::IN_BLOCK == row_state_; }
+  OB_INLINE bool is_valid() const { return nullptr != query_range_; }
+  OB_INLINE bool need_read_block() const { return ObSSTableRowState::IN_BLOCK == row_state_; }
+  OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey()
+  {
+    return is_sorted_multi_get_ ? rowkeys_info_->get_rowkey(range_idx_) : *rowkey_;
+  }
+  OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey() const
+  {
+    return is_sorted_multi_get_ ? rowkeys_info_->get_rowkey(range_idx_) : *rowkey_;
+  }
+  OB_INLINE int64_t get_rowkey_datum_cnt() const
+  {
+    return is_sorted_multi_get_ ? rowkeys_info_->get_rowkey(range_idx_).get_datum_cnt() : rowkey_->get_datum_cnt();
+  }
   int get_block_data(ObMacroBlockReader &block_reader, blocksstable::ObMicroBlockData &block_data)
   {
     int ret = OB_SUCCESS;
@@ -93,21 +109,19 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(K_(is_get), K_(is_bf_contain), K_(is_sorted_multi_get), K_(row_state), K_(range_idx), K_(index_block_info),
+  TO_STRING_KV(K_(is_get), K_(is_bf_contain), K_(has_macro_block_bf), K_(is_sorted_multi_get), K_(row_state), K_(range_idx), K_(index_block_info),
                K_(micro_begin_idx), K_(micro_end_idx), KP_(query_range), KPC_(micro_handle));
 
 public:
   bool is_get_;
   bool is_bf_contain_;
+  bool has_macro_block_bf_;
   bool is_sorted_multi_get_;
   int8_t row_state_;    // possible states: NOT_EXIST, IN_ROW_CACHE, IN_BLOCK
   int64_t range_idx_;
   int64_t micro_begin_idx_;
   int64_t micro_end_idx_;
-  const blocksstable::ObDatumRowkey &get_rowkey()
-  {
-    return is_sorted_multi_get_ ? rowkeys_info_->get_rowkey(range_idx_) : *rowkey_;
-  }
+  int64_t current_rows_info_idx_;
   union {
     const blocksstable::ObDatumRowkey *rowkey_;
     const blocksstable::ObDatumRange *range_;

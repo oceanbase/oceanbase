@@ -13,7 +13,6 @@
 
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_block_meta_scanner.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_block_compare.h"
-#include "storage/direct_load/ob_direct_load_sstable_data_block.h"
 
 namespace oceanbase
 {

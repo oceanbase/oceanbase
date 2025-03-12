@@ -14,8 +14,6 @@
 #include "ob_das_id_rpc.h"
 #include "ob_das_id_service.h"
 #include "share/location_cache/ob_location_service.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {

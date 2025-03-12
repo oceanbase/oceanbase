@@ -14,14 +14,11 @@
 #include "ob_backup_clean_scheduler.h"
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "ob_backup_clean_task_mgr.h"
-#include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
-#include "rootserver/ob_root_utils.h"
 #include "share/backup/ob_backup_helper.h"
 #include "share/backup/ob_archive_persist_helper.h"
-#include "share/backup/ob_backup_store.h"
 
 namespace oceanbase
 {
@@ -918,9 +915,7 @@ int ObUserTenantBackupDeleteMgr::process()
     ObBackupCleanStatus::Status status = job_attr_->status_.status_;
     switch (status) {
       case ObBackupCleanStatus::Status::INIT: {
-        if (OB_FAIL(check_dest_validity_())) {
-          LOG_WARN("failed to check clean dest validity", K(ret), K(*job_attr_));
-        } else if (OB_FAIL(persist_backup_clean_task_())) {
+        if (OB_FAIL(persist_backup_clean_task_())) {
           LOG_WARN("failed to persist log stream task", K(ret), K(*job_attr_));
         }
         break;

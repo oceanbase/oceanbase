@@ -19,9 +19,6 @@
 #include "env/ob_simple_server_restart_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "logservice/ob_log_base_type.h"
-#include "mtlenv/tablelock/table_lock_tx_common_env.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
 
 static const char *TEST_FILE_NAME = "test_table_lock_split";
 static const char *BORN_CASE_NAME = "ObLockTableSplitBeforeRestartTest";

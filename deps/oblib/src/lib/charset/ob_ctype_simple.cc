@@ -871,7 +871,7 @@ int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
   return slen > tlen ? 1 : slen < tlen ? -1 : 0;
 }
 
-static int ob_strnncollsp_simple(const ObCharsetInfo *cs
+int ob_strnncollsp_simple(const ObCharsetInfo *cs
                           __attribute__((unused)),
                           const unsigned char *s, size_t slen,
                           const unsigned char *t, size_t tlen,

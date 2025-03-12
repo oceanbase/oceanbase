@@ -14,8 +14,6 @@
 
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_utils.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/lob/ob_lob_meta.h"
 
@@ -30,13 +28,36 @@ using namespace table;
 using namespace blocksstable;
 using namespace sql;
 using namespace storage;
-
-int ObTableLoadSchema::get_schema_guard(uint64_t tenant_id, ObSchemaGetterGuard &schema_guard)
+int ObTableLoadSchema::get_schema_guard(uint64_t tenant_id,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
-                                                                                  schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  if (OB_INVALID_VERSION == schema_version) {
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
+                                                                                    schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+    }
+  } else {
+    const int64_t retry_interval = 100 * 1000; // us
+    int64_t tenant_schema_version = OB_INVALID_VERSION;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("fail to check status", K(ret));
+      } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
+                                                                                             schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, tenant_schema_version))) {
+        LOG_WARN("fail to get schema version", KR(ret), K(tenant_id));
+      } else if (tenant_schema_version < schema_version) {
+        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+          LOG_INFO("tenant schema not refreshed", K(schema_version), K(tenant_schema_version));
+        }
+        ob_usleep(retry_interval);
+      } else {
+        break;
+      }
+    }
   }
   return ret;
 }
@@ -140,9 +161,11 @@ int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is null", KR(ret));
       } else if (column_schema->is_hidden()) {
-        // 不显示隐藏主键列
+        // 不显示隐藏列(堆表隐藏主键列,快速删除列,?)
       } else if (column_schema->is_unused()) {
         // 不显示快速删除列
+      } else if (column_schema->is_invisible_column()) {
+        // 不显示invisible列
       } else if (column_schema->is_shadow_column()) {
         // 不显示shadow列
       } else if (OB_FAIL(column_schemas.push_back(column_schema))) {
@@ -252,7 +275,7 @@ int ObTableLoadSchema::get_column_ids(const ObTableSchema *table_schema,
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
     ObArray<ObColDesc> column_descs;
-    if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+    if (OB_FAIL(table_schema->get_column_ids(column_descs, true/*no_virtual*/))) {
       STORAGE_LOG(WARN, "fail to get column descs", KR(ret), KPC(table_schema));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
@@ -291,114 +314,6 @@ int ObTableLoadSchema::get_column_ids(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
-int ObTableLoadSchema::check_has_udt_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->get_udt_set_id() > 0) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_invisible_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->is_invisible_column()) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_unused_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->is_unused()) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_roaringbitmap_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->is_roaringbitmap()) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_lob_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->get_meta_type().is_lob_storage()) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_null_column(const ObTableSchema *table_schema, bool &bret)
-{
-  int ret = OB_SUCCESS;
-  bret = false;
-  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
-    ObColumnSchemaV2 *column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid column schema", K(column_schema));
-    } else if (column_schema->get_meta_type().is_null()) {
-      bret = true;
-      break;
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret)
@@ -428,7 +343,9 @@ int ObTableLoadSchema::check_has_non_local_index(share::schema::ObSchemaGetterGu
   return ret;
 }
 
-int ObTableLoadSchema::check_has_geometry_column(const ObTableSchema *table_schema, bool &bret)
+int ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
+  share::schema::ObSchemaGetterGuard &schema_guard,
+  const share::schema::ObTableSchema *table_schema, bool &bret)
 {
   int ret = OB_SUCCESS;
   bret = false;
@@ -436,12 +353,38 @@ int ObTableLoadSchema::check_has_geometry_column(const ObTableSchema *table_sche
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
-    ObArray<ObColDesc> column_descs;
-    if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
-      LOG_WARN("fail to get column descs", KR(ret), KPC(table_schema));
-    }
-    for (int64_t i = 0; !bret && i < column_descs.count(); i++) {
-      if (column_descs[i].col_type_.is_geometry()) {
+    if (table_schema->is_table_without_pk()) {
+      int normal_local_index_count = 0;
+      int unique_index_count = 0;
+      int other_index_count = 0;
+      const ObIArray<ObAuxTableMetaInfo> &simple_index_infos =
+        table_schema->get_simple_index_infos();
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+        const ObAuxTableMetaInfo &index_table_info = simple_index_infos.at(i);
+        const share::schema::ObTableSchema *index_table_schema = nullptr;
+        if (OB_FAIL(get_table_schema(schema_guard, MTL_ID(), index_table_info.table_id_,
+                                     index_table_schema))) {
+          LOG_WARN("fail to get table shema of index table", KR(ret),
+                   K(index_table_info.table_id_));
+        } else {
+          if (INDEX_TYPE_NORMAL_LOCAL == index_table_schema->get_index_type() ||
+              INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_table_schema->get_index_type()) {
+            normal_local_index_count++;
+          } else if (share::schema::ObIndexType::INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE ==
+                       index_table_schema->get_index_type() ||
+                     share::schema::ObIndexType::INDEX_TYPE_UNIQUE_LOCAL ==
+                       index_table_schema->get_index_type() ||
+                     share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL ==
+                       index_table_schema->get_index_type() ||
+                     share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY ==
+                       index_table_schema->get_index_type()) {
+            unique_index_count++;
+          } else {
+            other_index_count++;
+          }
+        }
+      }
+      if (0 == other_index_count && 1 == unique_index_count) {
         bret = true;
       }
     }
@@ -515,106 +458,15 @@ int ObTableLoadSchema::get_tablet_ids_by_part_ids(const ObTableSchema *table_sch
   return ret;
 }
 
-int ObTableLoadSchema::check_has_identity_column(const ObTableSchema *table_schema,
-                                                 bool &has_identity_column)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is nullptr", KR(ret));
-  } else if (has_identity_column) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("has_identity_column is invalid", KR(ret));
-  } else {
-    ObArray<ObObjectID> column_ids;
-    if (OB_FAIL(table_schema->get_column_ids(column_ids))) {
-      LOG_WARN("failed to get column ids", KR(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && !has_identity_column && (i < column_ids.count()); ++i) {
-        const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(column_ids.at(i));
-        if (OB_ISNULL(col_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null column schema", KR(ret));
-        } else if (col_schema->is_identity_column()) {
-          has_identity_column = true;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_support_partition_exchange(const ObTableSchema *table_schema,
-                                                        bool &is_support)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is nullptr", KR(ret));
-  } else if (!is_support) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("is_support is not invalid", KR(ret), K(is_support));
-  } else {
-    ObPartitionFuncType part_type = ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX;
-    switch (table_schema->get_part_level()) {
-      case ObPartitionLevel::PARTITION_LEVEL_ONE:
-        part_type = table_schema->get_part_option().get_part_func_type();
-        break;
-      case ObPartitionLevel::PARTITION_LEVEL_TWO:
-        part_type = table_schema->get_sub_part_option().get_part_func_type();
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected partition level", KR(ret), K(table_schema->get_part_level()));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!((PARTITION_FUNC_TYPE_RANGE == part_type)
-                          || (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type)
-                          || (PARTITION_FUNC_TYPE_LIST == part_type)
-                          || (PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type)))) {
-      is_support = false;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_has_global_index(ObSchemaGetterGuard &schema_guard,
-                                              const ObTableSchema *table_schema,
-                                              bool &is_have)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is nullptr", KR(ret));
-  } else if (is_have) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("is_have is invalid", KR(ret), K(is_have));
-  } else {
-    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-    if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
-      LOG_WARN("failed to get simple_index_infos", KR(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && !is_have && (i < simple_index_infos.count()); ++i) {
-        const ObTableSchema *index_schema = NULL;
-        if (OB_FAIL(schema_guard.get_table_schema(
-            table_schema->get_tenant_id(), simple_index_infos.at(i).table_id_, index_schema))) {
-          LOG_WARN("failed to get table schema", KR(ret));
-        } else if (OB_ISNULL(index_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("index schema from schema guard is NULL", KR(ret), KP(index_schema));
-        } else if (index_schema->is_global_index_table()) {
-          is_have = true;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
+    table_id_(OB_INVALID_ID),
+    is_index_table_(false),
+    is_lob_table_(false),
     is_partitioned_table_(false),
-    is_heap_table_(false),
+    is_table_without_pk_(false),
+    is_table_with_hidden_pk_column_(false),
+    index_type_(ObIndexType::INDEX_TYPE_MAX),
     is_column_store_(false),
     has_autoinc_column_(false),
     has_identity_column_(false),
@@ -625,11 +477,11 @@ ObTableLoadSchema::ObTableLoadSchema()
     schema_version_(0),
     lob_meta_table_id_(OB_INVALID_ID),
     lob_inrow_threshold_(-1),
-    index_table_count_(0),
     non_partitioned_tablet_id_vector_(nullptr),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  index_table_ids_.set_block_allocator(ModulePageAllocator(allocator_));
   lob_column_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
   column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
   multi_version_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
@@ -643,9 +495,14 @@ ObTableLoadSchema::~ObTableLoadSchema()
 
 void ObTableLoadSchema::reset()
 {
+  table_id_ = OB_INVALID_ID;
   table_name_.reset();
+  is_index_table_ = false;
+  is_lob_table_ = false;
   is_partitioned_table_ = false;
-  is_heap_table_ = false;
+  is_table_without_pk_ = false;
+  is_table_with_hidden_pk_column_ = false;
+  index_type_ = share::schema::ObIndexType::INDEX_TYPE_MAX;
   is_column_store_ = false;
   has_autoinc_column_ = false;
   has_identity_column_ = false;
@@ -656,7 +513,7 @@ void ObTableLoadSchema::reset()
   schema_version_ = 0;
   lob_meta_table_id_ = OB_INVALID_ID;
   lob_inrow_threshold_ = -1;
-  index_table_count_ = 0;
+  index_table_ids_.reset();
   lob_column_idxs_.reset();
   column_descs_.reset();
   multi_version_column_descs_.reset();
@@ -696,8 +553,13 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
+    table_id_ = table_schema->get_table_id();
+    is_index_table_ = table_schema->is_index_table();
+    is_lob_table_ = table_schema->is_aux_lob_table();
     is_partitioned_table_ = table_schema->is_partitioned_table();
-    is_heap_table_ = table_schema->is_heap_table();
+    is_table_without_pk_ = table_schema->is_table_without_pk();
+    is_table_with_hidden_pk_column_ = table_schema->is_table_with_hidden_pk_column();
+    index_type_ = table_schema->get_index_type();
     is_column_store_ = (table_schema->get_column_group_count() > 1) ? true :false;
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
@@ -708,13 +570,12 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       lob_meta_table_id_ = table_schema->get_aux_lob_meta_tid();
     }
     lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
-    index_table_count_ = table_schema->get_simple_index_infos().count();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));
     } else if (OB_FAIL(table_schema->get_store_column_count(store_column_count_))) {
       LOG_WARN("fail to get store column count", KR(ret));
-    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, false))) {
+    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, true/*no_virtual*/))) {
       LOG_WARN("fail to get column descs", KR(ret));
     } else if (OB_FAIL(prepare_col_desc(table_schema, column_descs_))) {
       LOG_WARN("fail to prepare column descs", KR(ret));
@@ -755,6 +616,15 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(
             tablet_id, allocator_, non_partitioned_tablet_id_vector_))) {
         LOG_WARN("fail to make const tablet id vector", KR(ret), K(tablet_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema->get_simple_index_infos();
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+        const uint64_t table_id = simple_index_infos.at(i).table_id_;
+        if (OB_FAIL(index_table_ids_.push_back(table_id))) {
+          LOG_WARN("fail to push back", KR(ret));
+        }
       }
     }
   }

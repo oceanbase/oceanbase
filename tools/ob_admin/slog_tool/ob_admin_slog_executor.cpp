@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_admin_slog_executor.h"
-#include <iostream>
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "share/ob_local_device.h"
-#include "share/ob_device_manager.h"
-#include "common/storage/ob_io_device.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "share/redolog/ob_log_file_handler.h"
-#include "storage/blocksstable/ob_log_file_spec.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase

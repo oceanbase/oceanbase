@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/geo/ob_geo_cache.h"
+#include "ob_geo_cache.h"
 #include "lib/geo/ob_geo_vertex_collect_visitor.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_point_location_visitor.h"

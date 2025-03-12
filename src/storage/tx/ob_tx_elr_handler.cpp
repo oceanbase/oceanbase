@@ -11,7 +11,6 @@
  */
 
 #include "ob_tx_elr_handler.h"
-#include "common/ob_clock_generator.h"
 #include "ob_trans_part_ctx.h"
 #include "ob_trans_service.h"
 

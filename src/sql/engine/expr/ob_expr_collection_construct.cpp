@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_collection_construct.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_spi.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
 
 namespace oceanbase
 {
@@ -142,6 +134,9 @@ int ObExprCollectionConstruct::check_match(const ObObj &element_obj, pl::ObElemD
         OZ (pl::ObPLResolver::check_composite_compatible(ns, composite->get_id(),
                                                          desc.get_udt_id(),
                                                          is_comp));
+      } else if (pl::is_mocked_anonymous_array_id(composite->get_id())) {
+        // anonymous_array compatible check has done in resolve phase
+        is_comp = true;
       } else {
         is_comp = false;
       }
@@ -351,7 +346,8 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
         tmp_ret = exec_ctx.get_pl_ctx()->add(result);
       }
       if (OB_SUCCESS != tmp_ret) {
-        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
       }
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }

@@ -460,7 +460,7 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn odps_column
         LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
       }
     } else if (odps_type.prefix_match("TIMESTAMP_NTZ")) {
-      if (ObDateTimeType == ob_type) {
+      if (ob_is_datetime_or_mysql_datetime(ob_type)) {
         // odps_type to ob_type is valid
         if (ob_type_scale < 6) {
           ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -494,7 +494,7 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn odps_column
         LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
       }
     } else if (odps_type.prefix_match("DATETIME")) {
-      if (ObDateTimeType == ob_type) {
+      if (ob_is_datetime_or_mysql_datetime(ob_type)) {
         // odps_type to ob_type is valid
         // if (ob_type_scale < 3) {
         //   ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -511,7 +511,7 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn odps_column
         LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
       }
     } else if (odps_type.prefix_match("DATE")) {
-      if (ObDateType == ob_type) {
+      if (ob_is_date_or_mysql_date(ob_type)) {
         // odps_type to ob_type is valid
       } else {
         ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -1723,7 +1723,7 @@ int ObODPSJNITableRowIterator::fill_column_(ObEvalCtx &ctx, const ObExpr &expr,
                odps_type.prefix_match("TIMESTAMP_NTZ") ||
                odps_type.prefix_match("TIMESTAMP")) {
       // TODO(bitao): checking timestamp
-      if ((ObDateTimeType == type || ObTimestampType == type) && !is_oracle_mode()) {
+      if (ob_is_datetime_or_mysql_datetime_tc(type) && is_mysql_mode()) {
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
         batch_info_guard.set_batch_idx(0);
 
@@ -1751,7 +1751,13 @@ int ObODPSJNITableRowIterator::fill_column_(ObEvalCtx &ctx, const ObExpr &expr,
             // 1970-01-01 00:00:00 UTC in java side.
             int64_t *v = reinterpret_cast<int64_t *>(column_addr + 8L * row_idx);
             int64_t datetime = *v / 1000 + res_offset;
-            datums[row_idx].set_datetime(datetime);
+            if (ob_is_mysql_datetime(type)) {
+              ObMySQLDateTime mdatetime;
+              ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdatetime);
+              datums[row_idx].set_mysql_datetime(mdatetime);
+            } else {
+              datums[row_idx].set_datetime(datetime);
+            }
           }
         }
       } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
@@ -1777,7 +1783,7 @@ int ObODPSJNITableRowIterator::fill_column_(ObEvalCtx &ctx, const ObExpr &expr,
       }
     } else if (odps_type.prefix_match("DATE")) {
       // DATE should be after DATETIME
-      if (ObDateType == type && !is_oracle_mode()) {
+      if (ob_is_date_or_mysql_date(type) && is_mysql_mode()) {
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
         batch_info_guard.set_batch_idx(0);
 
@@ -1794,7 +1800,13 @@ int ObODPSJNITableRowIterator::fill_column_(ObEvalCtx &ctx, const ObExpr &expr,
             int *v = reinterpret_cast<int*>(column_addr + 4L * row_idx);
             // Note: java side already use epoch day interval, so can set date directly.
             int32_t date = *v;
-            datums[row_idx].set_date(date);
+            if (ob_is_mysql_date_tc(type)) {
+              ObMySQLDate mdate;
+              ObTimeConverter::date_to_mdate(date, mdate);
+              datums[row_idx].set_mysql_date(mdate);
+            } else {
+              datums[row_idx].set_date(date);
+            }
           }
         }
       } else if (false && ObDateTimeType == type && is_oracle_mode()) {

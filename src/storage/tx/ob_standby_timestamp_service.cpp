@@ -11,15 +11,9 @@
  */
 
 #include "ob_standby_timestamp_service.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "ob_timestamp_access.h"
-#include "ob_timestamp_service.h"
 #include "logservice/ob_log_service.h"
-#include "share/scn.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_srv_network_frame.h"
-#include "storage/tx/ob_trans_service.h"
 #include "rootserver/ob_tenant_info_loader.h"
 
 namespace oceanbase

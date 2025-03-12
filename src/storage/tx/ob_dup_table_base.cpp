@@ -8,13 +8,9 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#include "logservice/ob_log_base_header.h"
 #include "ob_dup_table_base.h"
-#include "ob_dup_table_lease.h"
-#include "ob_dup_table_tablets.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 

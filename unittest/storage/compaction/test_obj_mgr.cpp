@@ -13,11 +13,9 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include <string.h>
 
 #ifdef OB_BUILD_SHARED_STORAGE
 
-#include "lib/literals/ob_literals.h"
 #include "storage/compaction/ob_ls_compaction_status.h"
 #include "storage/compaction/ob_ls_compaction_list.h"
 #include "mtlenv/mock_tenant_module_env.h"

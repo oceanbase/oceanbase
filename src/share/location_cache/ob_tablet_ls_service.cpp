@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_tablet_ls_service.h"
-#include "share/ob_share_util.h"
-#include "share/cache/ob_cache_name_define.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/ob_running_mode.h"
-#include "observer/ob_server_struct.h"
-#include "common/ob_timeout_ctx.h"
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
 #include "share/tablet/ob_tablet_to_ls_operator.h" // ObTabletToLSOperator
 
 namespace oceanbase
@@ -616,6 +607,7 @@ int ObTabletLSService::clear_expired_cache()
     ret = OB_NOT_INIT;
     LOG_WARN("service not init", KR(ret));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.schema_service_ is null", KR(ret));
   } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
     ret = OB_NEED_RETRY;

@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX LIB
 
 #include "lib/thread/protected_stack_allocator.h"
-#include <cmath>
-#include <errno.h>
-#include <sys/mman.h>
-#include "lib/ob_errno.h"
 #include "lib/allocator/ob_malloc.h"
-#include "lib/alloc/abit_set.h"
 
 namespace oceanbase
 {

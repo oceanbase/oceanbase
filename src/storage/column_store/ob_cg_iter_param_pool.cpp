@@ -11,8 +11,6 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_iter_param_pool.h"
-#include "ob_column_store_util.h"
-#include "storage/access/ob_table_access_param.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase

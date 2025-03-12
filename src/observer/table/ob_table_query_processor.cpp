@@ -12,15 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_processor.h"
-#include "ob_table_rpc_processor_util.h"
-#include "observer/ob_service.h"
-#include "ob_table_end_trans_cb.h"
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "ob_table_scan_executor.h"
-#include "ob_table_cg_service.h"
-#include "ob_htable_filter_operator.h"
 #include "ob_table_query_common.h"
 
 using namespace oceanbase::observer;
@@ -93,6 +84,7 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
   tb_ctx_.set_simple_table_schema(simple_table_schema_);
   tb_ctx_.set_sess_guard(&sess_guard_);
   tb_ctx_.set_is_tablegroup_req(is_tablegroup_req_);
+  tb_ctx_.set_read_latest(false);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));
@@ -165,7 +157,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
           LOG_WARN("fail to get next result", K(ret));
         }
       } else if (result_iter->has_more_result()) {
-        if (OB_FAIL(this->flush(rpc_pkt_->get_timeout()))) {
+        if (OB_FAIL(this->flush())) {
           if (OB_ITER_END != ret) {
             LOG_WARN("fail to flush result packet", K(ret));
           } else {
@@ -206,9 +198,9 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
 
   // record events
   if (is_hkv) {
-    stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
+    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
   } else {
-    stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
+    stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
   }
   stat_row_count_ = result_row_count_;
 
@@ -262,12 +254,13 @@ int ObTableQueryP::try_process()
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-  } else if (OB_FAIL(start_trans(true,
-                                 arg_.consistency_level_,
-                                 tb_ctx_.get_ls_id(),
-                                 tb_ctx_.get_timeout_ts(),
-                                 tb_ctx_.need_dist_das()))) {
-    LOG_WARN("fail to start transaction", K(ret), K_(tb_ctx));
+  } else if (OB_FAIL(trans_param_.init(arg_.consistency_level_,
+                                       tb_ctx_.get_ls_id(),
+                                       tb_ctx_.get_timeout_ts(),
+                                       tb_ctx_.need_dist_das()))) {
+    LOG_WARN("fail to inti trans param", K(ret));
+  } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param_))) {
+    LOG_WARN("fail to init read trans", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(query_and_result(static_cast<ObTableApiScanExecutor*>(executor)))) {
@@ -279,12 +272,7 @@ int ObTableQueryP::try_process()
     tb_ctx_.set_expr_info(nullptr);
   }
 
-  int tmp_ret = ret;
-  bool need_rollback_trans = (OB_SUCCESS != ret);
-  if (OB_FAIL(end_trans(need_rollback_trans, req_, nullptr/* ObTableCreateCbFunctor */))) {
-    LOG_WARN("fail to end trans", K(ret), K(need_rollback_trans));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
 
   return ret;
 }

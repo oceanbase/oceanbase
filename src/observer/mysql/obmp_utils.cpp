@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "obmp_utils.h"
-#include "obmp_base.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "lib/utility/ob_proto_trans_util.h"
 #include "observer/mysql/obmp_utils.h"
-#include "rpc/obmysql/ob_2_0_protocol_utils.h"
-#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-#include "lib/container/ob_bit_set.h"
-#include "share/ob_rpc_struct.h"
 #include "sql/session/ob_sess_info_verify.h"
 namespace oceanbase
 {
@@ -446,6 +438,14 @@ int ObMPUtils::add_cap_flag(OMPKOK &okp, sql::ObSQLSessionInfo &session)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("sys var is NULL", K(i), "total", session.get_sys_var_count(), K(ret));
     } else if (sys_var->get_type() == SYS_VAR_OB_CAPABILITY_FLAG) {
+      ObStringKV str_kv;
+      str_kv.key_ = ObSysVarFactory::get_sys_var_name_by_id(sys_var->get_type()); // shadow copy
+      if (OB_FAIL(get_plain_str_literal(allocator, sys_var->get_value(), str_kv.value_))) {
+        LOG_WARN("fail to get sql literal", K(i), K(ret));
+      } else if (OB_FAIL(okp.add_system_var(str_kv))) {
+        LOG_WARN("fail to add system var", K(i), K(str_kv), K(ret));
+      }
+    } else if (sys_var->get_type() == SYS_VAR___OB_CLIENT_CAPABILITY_FLAG) {
       ObStringKV str_kv;
       str_kv.key_ = ObSysVarFactory::get_sys_var_name_by_id(sys_var->get_type()); // shadow copy
       if (OB_FAIL(get_plain_str_literal(allocator, sys_var->get_value(), str_kv.value_))) {

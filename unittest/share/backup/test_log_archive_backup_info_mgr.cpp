@@ -14,7 +14,7 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "share/backup/ob_backup_path.h"
+#include "src/share/backup/ob_backup_struct.h"
 using namespace oceanbase;
 using namespace common;
 using namespace share;

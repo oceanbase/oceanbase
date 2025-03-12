@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <time.h>
 #include "ob_admin_test_io_device_executor.h"
-#include "share/backup/ob_backup_io_adapter.h"
 #include "src/logservice/archiveservice/ob_archive_file_utils.h"
-#include "src/share/backup/ob_backup_path.h"
-#include "src/share/backup/ob_backup_clean_util.h"
 #include "src/share/io/ob_io_manager.h"
 #include "src/share/ob_device_manager.h"
 

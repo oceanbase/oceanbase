@@ -13,15 +13,9 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_s2adapter.h"
-#include "lib/geo/ob_geo_func_utils.h"
 #include "lib/geo/ob_geo_func_envelope.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_ibin.h"
 #include "lib/geo/ob_geo_3d.h"
 
-#include <vector>
-#include <memory>
 namespace oceanbase {
 namespace common {
 
@@ -36,33 +30,37 @@ int ObSpatialMBR::filter(const ObSpatialMBR &other, ObDomainOpType type, bool &p
     } else if (OB_FAIL(other.generate_latlng_rect(other_rect))) {
       LOG_WARN("fail to generate other latlng rectangle", K(ret));
     } else {
-      switch (type) {
-        case ObDomainOpType::T_GEO_COVERS: {
-          pass_through = !other_rect.Contains(this_rect);
-          break;
-        }
+      if (is_point_ && other.is_point_ && this_rect.ApproxEquals(other_rect)) {
+        pass_through = false;
+      } else {
+       switch (type) {
+          case ObDomainOpType::T_GEO_COVERS: {
+            pass_through = !other_rect.Contains(this_rect);
+            break;
+          }
 
-        case ObDomainOpType::T_GEO_DWITHIN:
-        case ObDomainOpType::T_GEO_INTERSECTS: {
-          pass_through = !this_rect.Intersects(other_rect);
-          break;
-        }
+          case ObDomainOpType::T_GEO_DWITHIN:
+          case ObDomainOpType::T_GEO_INTERSECTS: {
+            pass_through = !this_rect.Intersects(other_rect);
+            break;
+          }
 
-        case ObDomainOpType::T_GEO_COVEREDBY: {
-          pass_through = !this_rect.Contains(other_rect);
-          break;
-        }
+          case ObDomainOpType::T_GEO_COVEREDBY: {
+            pass_through = !this_rect.Contains(other_rect);
+            break;
+          }
 
-        case ObDomainOpType::T_GEO_DFULLYWITHIN: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support within geo relation type", K(ret), K(type));
-          break;
-        }
+          case ObDomainOpType::T_GEO_DFULLYWITHIN: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support within geo relation type", K(ret), K(type));
+            break;
+          }
 
-        default: {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("undefined geo relation type", K(ret), K(type));
-          break;
+          default: {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("undefined geo relation type", K(ret), K(type));
+            break;
+          }
         }
       }
     }

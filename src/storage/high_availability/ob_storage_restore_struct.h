@@ -101,6 +101,8 @@ struct ObTabletRestoreAction
   static bool need_restore_major_sstable(const ACTION &action);
   static bool need_verify_table_store(const ACTION &action);
   static bool disallow_remote_table_exist(const ACTION &action);
+  static bool is_restore_status_match(
+      const ACTION &action, const ObTabletRestoreStatus::STATUS &status);
 };
 
 struct ObRestoreUtils

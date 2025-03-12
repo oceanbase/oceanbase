@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/utility/ob_sort.h"
 #include "share/ob_errno.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tmp_file/ob_tmp_file_flush_list_iterator.h"

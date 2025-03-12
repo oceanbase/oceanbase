@@ -11,11 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "lib/container/ob_array_serialization.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "observer/virtual_table/ob_table_index.h"
 
@@ -316,7 +311,7 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
     rowkey_info_idx_ = OB_INVALID_ID;
   } else if (is_compat) {
     is_column_visible = true;
-    if (table_schema.is_heap_table()) {
+    if (table_schema.is_table_without_pk()) {
       // don't show hidden pk
       // used for only hidden pk in the RowKey Table_schema
       is_end = true;
@@ -334,7 +329,7 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
     if (table_schema.is_view_table() && !table_schema.is_materialized_view()) {
       is_end = true;
       rowkey_info_idx_ = OB_INVALID_ID;
-    } else if (!table_schema.is_heap_table()
+    } else if (table_schema.is_table_with_pk()
         && OB_FAIL(rowkey_info.is_rowkey_column(store_column_ids.at(rowkey_info_idx_).col_id_, is_column_visible))) {
       SERVER_LOG(WARN, "fail to check rowkey column", K(ret), K(store_column_ids.at(rowkey_info_idx_).col_id_));
     } else if (OB_UNLIKELY(NULL == (column_schema = table_schema.get_column_schema(store_column_ids.at(rowkey_info_idx_).col_id_)))) {
@@ -636,8 +631,8 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
           } else if (index_schema->is_built_in_vec_index()) {
             is_sub_end = true;
           } else if (index_schema->is_vec_index()) {
-            uint64_t vec_vector_id = OB_INVALID_ID;
-            if (OB_FAIL(index_schema->get_vec_index_column_id(vec_vector_id))) {
+            uint64_t vec_column_id = OB_INVALID_ID;
+            if (OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
               LOG_WARN("get generated column id failed", K(ret));
             } else {
               ObArray<uint64_t> vec_index_key_column_ids;
@@ -645,10 +640,10 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
               if (OB_INVALID_ID == static_cast<uint64_t>(vec_dep_col_idx_)) {
                 vec_dep_col_idx_ = 0;
               }
-              if (OB_UNLIKELY(vec_vector_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == vec_vector_id)) {
+              if (OB_UNLIKELY(vec_column_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == vec_column_id)) {
                 ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("invalid vec column id", K(ret), K(vec_vector_id));
-              } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(vec_vector_id))) {
+                LOG_WARN("invalid vec column id", K(ret), K(vec_column_id));
+              } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(vec_column_id))) {
                 ret = OB_SCHEMA_ERROR;
                 SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
               } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(vec_index_key_column_ids))) {

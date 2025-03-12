@@ -10,19 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_data_memtable.h"
 
+#include "ob_tx_data_memtable.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/ls/ob_freezer.h"
 #include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx/ob_tx_data_functor.h"
-#include "storage/tx_table/ob_tx_data_memtable_mgr.h"
-#include "storage/tx_table/ob_tx_data_table.h"
-#include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
 
 namespace oceanbase
 {

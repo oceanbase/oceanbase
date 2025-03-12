@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_dtl_proc.h"
-#include "ob_px_dtl_msg.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -13,21 +13,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include <sys/stat.h>
-#include <sys/vfs.h>
-#include <sys/types.h>
-#include <gmock/gmock.h>
 #define USING_LOG_PREFIX STORAGETEST
 
 #define protected public
 #define private public
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "storage/slog/ob_storage_logger.h"
+#include "src/storage/slog/ob_storage_log_item.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
 
 namespace oceanbase

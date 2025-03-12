@@ -10,11 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/config/ob_server_config.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_task_define.h"
-#include "lib/ob_define.h"
-#include "lib/string/ob_string.h"
+#include "ob_cluster_version.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 namespace oceanbase
 {

@@ -11,8 +11,6 @@
  */
 
 #include "log_io_task_cb_utils.h"
-#include "lib/ob_define.h"
-#include "lsn.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_modify_tenant_stmt.h"
-#include "common/object/ob_obj_type.h"
 
 namespace oceanbase
 {

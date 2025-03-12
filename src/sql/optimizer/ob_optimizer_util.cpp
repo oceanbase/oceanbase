@@ -12,23 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_optimizer_util.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_logical_operator.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "lib/ob_name_def.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "lib/utility/utility.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "share/location_cache/ob_location_service.h"
 #include "share/ob_order_perserving_encoder.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "sql/optimizer/ob_log_join.h"
-#include "sql/optimizer/ob_opt_est_cost_model.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -3547,6 +3536,73 @@ int ObOptimizerUtil::split_child_exprs(const ObFdItem *fd_item,
   return ret;
 }
 
+int ObOptimizerUtil::deduce_determined_exprs(ObIArray<ObRawExpr *> &determined_exprs,
+                                             const ObDMLStmt *stmt,
+                                             const ObFdItemSet &fd_item_set,
+                                             const EqualSets &equal_sets,
+                                             const ObIArray<ObRawExpr *> &const_exprs)
+{
+  int ret = OB_SUCCESS;
+  bool need_contine = true;
+  ObSEArray<bool, 1> fd_is_determined;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_FAIL(fd_is_determined.prepare_allocate(fd_item_set.count(), false))) {
+    LOG_WARN("failed to prepare allocate", K(ret), K(fd_item_set.count()));
+  }
+  while (OB_SUCC(ret) && need_contine) {
+    need_contine = false;
+    for (int64_t fd_idx = 0; OB_SUCC(ret) && fd_idx < fd_item_set.count(); ++fd_idx) {
+      if (fd_is_determined.at(fd_idx)) {
+        // do nothing
+      } else if (OB_ISNULL(fd_item_set.at(fd_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null fd item", K(ret), K(fd_idx));
+      } else if (OB_FAIL(is_exprs_contain_fd_parent(determined_exprs,
+                                                    *fd_item_set.at(fd_idx),
+                                                    equal_sets,
+                                                    const_exprs,
+                                                    fd_is_determined.at(fd_idx)))) {
+        LOG_WARN("failed to check is exprs contain fd parent", K(ret));
+      } else if (fd_is_determined.at(fd_idx)) {
+        need_contine = true;
+        if (fd_item_set.at(fd_idx)->is_expr_fd_item()) {
+          ObExprFdItem *expr_fd = static_cast<ObExprFdItem*>(fd_item_set.at(fd_idx));
+          if (OB_FAIL(append_exprs_no_dup(determined_exprs, expr_fd->get_child_exprs()))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        } else {
+          ObTableFdItem *table_fd = static_cast<ObTableFdItem*>(fd_item_set.at(fd_idx));
+          ObSEArray<TableItem*, 4> child_tables;
+          ObSEArray<ObRawExpr*, 4> child_exprs;
+          if (OB_FAIL(stmt->relids_to_table_items(table_fd->get_child_tables(),
+                                                  child_tables))) {
+            LOG_WARN("failed to get table items", K(ret));
+          } else if (OB_FAIL(stmt->get_column_exprs(child_tables, child_exprs))) {
+            LOG_WARN("failed to get column exprs", K(ret));
+          } else if (OB_FAIL(append_exprs_no_dup(determined_exprs, child_exprs))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < equal_sets.count(); ++i) {
+    if (OB_ISNULL(equal_sets.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null equal set", K(ret), K(i));
+    } else if (overlap_exprs(determined_exprs, *equal_sets.at(i))) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < equal_sets.at(i)->count(); ++j) {
+        if (OB_FAIL(add_var_to_array_no_dup(determined_exprs, equal_sets.at(i)->at(j)))) {
+          LOG_WARN("failed to append array no dup", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::is_expr_is_determined(const ObIArray<ObRawExpr *> &exprs,
                                            const ObFdItemSet &fd_item_set,
                                            const EqualSets &equal_sets,
@@ -3767,10 +3823,10 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
     LOG_WARN("failed to get index cols", K(ret));
   //new heap table not add partition key in rowkey and the tablet id is unique in partition,
   //we need check partition key
-  } else if (index_schema->is_heap_table() && index_schema->get_partition_key_info().is_valid() &&
+  } else if (index_schema->is_table_without_pk() && index_schema->get_partition_key_info().is_valid() &&
              OB_FAIL(index_schema->get_partition_key_info().get_column_ids(column_ids))) {
     LOG_WARN("failed to add part column ids", K(ret));
-  } else if (index_schema->is_heap_table() && index_schema->get_subpartition_key_info().is_valid() &&
+  } else if (index_schema->is_table_without_pk() && index_schema->get_subpartition_key_info().is_valid() &&
              OB_FAIL(index_schema->get_subpartition_key_info().get_column_ids(column_ids))) {
     LOG_WARN("failed to add subpart column ids", K(ret));
   } else {
@@ -5308,14 +5364,14 @@ int ObOptimizerUtil::check_subquery_filter(const JoinedTable *table, bool &has)
     }
   }
   if (OB_SUCC(ret) && !has && table->left_table_->is_joined_table()) {
-    if (OB_FAIL(check_subquery_filter(
-                  static_cast<const JoinedTable *>(table->left_table_), has))) {
+    if (OB_FAIL(SMART_CALL(check_subquery_filter(
+                  static_cast<const JoinedTable *>(table->left_table_), has)))) {
       LOG_WARN("failed to check subquery filter", K(ret));
     }
   }
   if (OB_SUCC(ret) && !has && table->right_table_->is_joined_table()) {
-    if (OB_FAIL(check_subquery_filter(
-                  static_cast<const JoinedTable *>(table->right_table_), has))) {
+    if (OB_FAIL(SMART_CALL(check_subquery_filter(
+                  static_cast<const JoinedTable *>(table->right_table_), has)))) {
       LOG_WARN("failed to check subquery filter", K(ret));
     }
   }
@@ -6509,6 +6565,11 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = (dst_type.get_scale() >= child_type.get_scale()
                            && dst_type.get_precision() >= child_type.get_precision());
           }
+        }
+      } else if (ObEnumSetTC == child_tc) {
+        if (ObStringTC == dst_tc || ObTextTC == dst_tc || ObNumberTC == dst_tc
+            || ObDoubleTC == dst_tc) {
+          is_lossless = true;
         }
       }
     } else {

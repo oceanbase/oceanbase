@@ -14,10 +14,6 @@
 
 #include "rpc/obrpc/ob_rpc_session_handler.h"
 
-#include "lib/atomic/ob_atomic.h"
-#include "lib/thread_local/ob_tsi_utils.h"
-#include "rpc/ob_request.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 

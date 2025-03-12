@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/rcservice/ob_role_change_handler.h"
-#include "logservice/ob_log_base_type.h"
 #undef private
 
 namespace oceanbase

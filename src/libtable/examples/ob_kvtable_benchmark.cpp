@@ -11,7 +11,6 @@
  */
 
 #include "libobtable.h"
-#include "lib/thread/thread_pool.h"
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 /*

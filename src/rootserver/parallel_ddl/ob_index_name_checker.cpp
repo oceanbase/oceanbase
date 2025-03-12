@@ -14,7 +14,6 @@
 
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -237,7 +236,6 @@ int ObIndexNameCache::try_load_cache_()
       LOG_WARN("fail to get timeout", KR(ret));
     } else {
       int64_t original_timeout_ts = THIS_WORKER.get_timeout_ts();
-      int64_t schema_version = OB_INVALID_VERSION;
       THIS_WORKER.set_timeout_ts(timeout_ts);
 
       ObSchemaGetterGuard guard;

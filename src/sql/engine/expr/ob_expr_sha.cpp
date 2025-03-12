@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_sha.h"
 
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_encryption_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

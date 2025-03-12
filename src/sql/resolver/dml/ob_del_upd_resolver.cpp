@@ -11,22 +11,17 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "common/ob_smart_call.h"
-#include "share/ob_define.h"
-#include "sql/resolver/dml/ob_del_upd_resolver.h"
+#include "ob_del_upd_resolver.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/resolver/dml/ob_insert_all_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/ob_stmt_type.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/parser/parse_malloc.h"
 #include "sql/resolver/dml/ob_merge_resolver.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/domain_id/ob_domain_id.h"
 
 namespace oceanbase
 {
@@ -570,6 +565,7 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
 {
   int ret = OB_SUCCESS;
   update_with_vector_index = false;
+  ObIndexType index_type = INDEX_TYPE_MAX;
   ObArray<uint64_t> part_key_col_ids;
   // get part keys
   if (!table_schema->is_partitioned_table()) {
@@ -586,7 +582,8 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
     if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema,
                                                                  *schema_guard,
                                                                  as.column_expr_->get_column_id(),
-                                                                 update_with_vector_index))) {
+                                                                 update_with_vector_index,
+                                                                 index_type))) {
       LOG_WARN("fail to check update with vector index", K(ret));
     } else if (!update_with_vector_index && !part_key_col_ids.empty()) {
       // check if update with part key, update with part key should also update vid
@@ -658,7 +655,8 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
                                                  need_assigned))) {
           LOG_WARN("fail to check assignment exist", KPC(table_item), K(column_id));
         } else if (FALSE_IT(need_assigned = need_assigned ||
-                                            (column_schema->is_vec_vid_column() &&
+                                            ((column_schema->is_vec_hnsw_vid_column() ||
+                                              column_schema->is_vec_ivf_center_id_column()) &&
                                              (update_with_vector_index || T_INSERT_SCOPE == scope)))) {
         } else if (need_assigned) {
           // for insert scope, on duplicate key update column list already
@@ -683,18 +681,6 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
               ObDefaultValueUtils utils(stmt, &params_, this);
               if (OB_FAIL(utils.build_now_expr(col_item, assignment.expr_))) {
                 LOG_WARN("fail to build default expr", K(ret));
-              }
-            } else if (column_schema->is_vec_vid_column() && (stmt->is_update_stmt() || T_INSERT_SCOPE == scope)) {
-              // for vid col, should build generated expr here for update assign new val
-              ObString col_def;
-              if (OB_FAIL(column_schema->get_cur_default_value().get_string(col_def))) {
-                LOG_WARN("get generated column definition failed", K(ret), K(*column_schema));
-              } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_,
-                                                    session_info_->get_dtc_params(), col_def))) {
-                LOG_WARN("fail to convert for resolve", K(ret));
-              } else if (OB_FAIL(resolve_generated_column_expr(col_def, table_item->get_base_table_item(), column_schema,
-                                                              *assignment.column_expr_, assignment.expr_, true, stmt))) {
-                LOG_WARN("resolve generated column expr failed", K(ret));
               }
             } else if (column_schema->is_generated_column()) {
               if (OB_FAIL(copy_schema_expr(*params_.expr_factory_,
@@ -1894,7 +1880,7 @@ bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
   // Returns True although binlog_row_image is MINIMAL temporarily,
   // because optimizer may need full columns currently.
   // This can be optimized later.
-  return (table_schema.is_heap_table() ||
+  return (table_schema.is_table_without_pk() ||
           table_schema.get_foreign_key_infos().count() > 0 ||
           table_schema.get_trigger_list().count() > 0 ||
           table_schema.has_check_constraint() ||
@@ -2203,7 +2189,7 @@ int ObDelUpdResolver::add_all_partition_key_columns_to_stmt(const TableItem &tab
   } else if (NULL == table_schema) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid table schema", K(table_item));
-  } else if (table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_without_pk()) {
     const ObPartitionKeyInfo &partition_keys = table_schema->get_partition_key_info();
     const ObPartitionKeyInfo &subpartition_keys = table_schema->get_subpartition_key_info();
     ObSEArray<uint64_t, 2> column_ids;
@@ -2411,7 +2397,8 @@ int ObDelUpdResolver::view_pullup_special_column_exprs()
             if (OB_ISNULL(basic_column_item->expr_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("basic column item  expr_ is null", K(ret));
-            } else if (basic_column_item->expr_->is_generated_column()) {
+            } else if (basic_column_item->expr_->is_generated_column() ||
+                       basic_column_item->expr_->is_domain_id_column()) {
               ObRawExpr *ref_expr = NULL;
               uint64_t tid = dml_stmt->has_instead_of_trigger() ?
                              view_column_item->base_tid_ : t->ref_id_;
@@ -2430,9 +2417,6 @@ int ObDelUpdResolver::view_pullup_special_column_exprs()
                                           basic_column_item->expr_->get_column_flags());
               }
             } else if (basic_column_item->expr_->is_identity_column()) {
-              view_column_item->expr_->set_column_flags(
-                                        basic_column_item->expr_->get_column_flags());
-            } else if (basic_column_item->expr_->is_vec_vid_column()) {
               view_column_item->expr_->set_column_flags(
                                         basic_column_item->expr_->get_column_flags());
             }
@@ -3025,14 +3009,12 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     } else if (!table_info.is_link_table_ && OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is nullptr", K(ret), KPC(tbl_col), KPC(column_item));
-    } else if (!table_info.is_link_table_ && col_schema->is_doc_id_column()) {
-      if (OB_FAIL(build_doc_id_function_expr(table_info, *col_schema, *tbl_col, function_expr))) {
-        LOG_WARN("fail to build doc id function expr", K(ret), K(table_info), KPC(tbl_col), KPC(col_schema));
+    } else if (!table_info.is_link_table_ && ObDomainIdUtils::is_domain_id_index_col(col_schema)) {
+      if (OB_FAIL(copy_schema_expr(*params_.expr_factory_,
+                                  column_item->expr_->get_dependant_expr(),
+                                  function_expr))) {
+        LOG_WARN("failed to copy dependant expr", K(ret));
       }
-    } else if (!table_info.is_link_table_ && col_schema->is_vec_vid_column()) {
-      if (OB_FAIL(build_vec_vid_function_expr(table_info, *col_schema, *tbl_col, function_expr))) {
-          LOG_WARN("fail to build doc id function expr", K(ret), K(table_info), KPC(tbl_col), KPC(col_schema));
-       }
     } else {
       if (OB_FAIL(table_schema->has_before_insert_row_trigger(*schema_guard, trigger_exist))) {
         LOG_WARN("fail to call has_before_update_row_trigger", K(*table_schema));
@@ -3973,7 +3955,7 @@ int ObDelUpdResolver::check_heap_table_update(ObTableAssignment &tas)
                                                        table_schema, table->is_link_table()))) {
     LOG_WARN("fail to get table schema", K(ret),
              "base_table_id", table->get_base_table_item().ref_id_);
-  } else if (!table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_with_pk()) {
     // 不是堆表，什么都不需要做
   } else if (OB_FAIL(check_update_part_key(tas,
                                            table->get_base_table_item().ref_id_,
@@ -4087,7 +4069,7 @@ int ObDelUpdResolver::replace_gen_col_dependent_col(ObInsertTableInfo& table_inf
     } else if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is nullptr", K(ret), KPC(col_expr), KPC(column_item));
-    } else if (col_expr->is_generated_column() || col_schema->is_doc_id_column() || col_expr->is_vec_vid_column()) {
+    } else if (col_expr->is_generated_column() || ObDomainIdUtils::is_domain_id_index_col(col_schema)) {
       need_replace_col = true;
     }
     if (OB_FAIL(ret)) {
@@ -5052,31 +5034,7 @@ int ObDelUpdResolver::mark_json_partial_update_flag(const ObColumnRefRawExpr *re
   return ret;
 }
 
-int ObDelUpdResolver::build_doc_id_function_expr(
-    const ObInsertTableInfo& table_info,
-    const ObColumnSchemaV2 &col_schema,
-    const ObColumnRefRawExpr &column,
-    ObRawExpr *&func_expr)
-{
-  int ret = OB_SUCCESS;
-  ObString col_def;
-  TableItem *table_item = get_stmt()->get_table_item_by_id(table_info.table_id_);
-  if (OB_ISNULL(table_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, table item is nullptr", K(ret), K(table_info), K(table_info));
-  } else if (OB_FAIL(col_schema.get_cur_default_value().get_string(col_def))) {
-    LOG_WARN("get generated column definition failed", K(ret), K(col_schema));
-  } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_, session_info_->get_dtc_params(),
-          col_def))) {
-    LOG_WARN("fail to convert for resolve", K(ret));
-  } else if (OB_FAIL(resolve_generated_column_expr(col_def, table_item->get_base_table_item(), &col_schema, column,
-          func_expr, true, get_del_upd_stmt()))) {
-    LOG_WARN("resolve generated column expr failed", K(ret));
-  }
-  return ret;
-}
-
-int ObDelUpdResolver::build_vec_vid_function_expr(
+int ObDelUpdResolver::build_domain_id_function_expr(
     const ObInsertTableInfo& table_info,
     const ObColumnSchemaV2 &col_schema,
     const ObColumnRefRawExpr &column,

@@ -13,7 +13,7 @@
 
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
-#include "storage/blocksstable/ob_datum_row.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
@@ -159,7 +159,8 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
   ObDirectLoadInsertTabletContext *insert_tablet_ctx,
   const ObDirectLoadInsertTableRowInfo &row_info,
   ObDirectLoadDMLRowHandler *dml_row_handler,
-  ObIAllocator *lob_allocator)
+  ObIAllocator *lob_allocator,
+  ObLoadDataStat *job_stat)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -170,7 +171,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
   } else if (OB_UNLIKELY(nullptr == dml_row_handler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret), KP(dml_row_handler));
-  } else if (OB_UNLIKELY(!insert_tablet_ctx->get_is_heap_table())) {
+  } else if (OB_UNLIKELY(!insert_tablet_ctx->get_is_table_without_pk())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected not heap table", KR(ret));
   } else if (OB_FAIL(init_sstable_slice())) {
@@ -189,6 +190,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
       direct_datum_rows_.mvcc_row_flag_ = row_info.mvcc_row_flag_;
       direct_datum_rows_.trans_id_ = row_info.trans_id_;
       dml_row_handler_ = dml_row_handler;
+      job_stat_ = job_stat;
       expect_column_count_ = column_count - 1;
       row_flag_.uncontain_hidden_pk_ = true;
       is_inited_ = true;
@@ -202,7 +204,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init_sstable_slice()
   int ret = OB_SUCCESS;
   if (OB_FAIL(insert_tablet_ctx_->get_write_ctx(write_ctx_))) {
     LOG_WARN("fail to get write ctx", KR(ret));
-  } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_, slice_id_))) {
+  } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_, write_ctx_.slice_idx_, slice_id_))) {
     LOG_WARN("fail to open sstable slice", KR(ret));
   }
   return ret;
@@ -211,7 +213,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init_sstable_slice()
 int ObDirectLoadInsertTableBatchRowDirectWriter::close_sstable_slice()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id_))) {
+  if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id_, write_ctx_.slice_idx_))) {
     LOG_WARN("fail to close sstable slice", KR(ret));
   } else {
     slice_id_ = 0;
@@ -248,7 +250,10 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::before_flush_batch(ObBatchDatum
 int ObDirectLoadInsertTableBatchRowDirectWriter::after_flush_batch(ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml_row_handler_->handle_insert_batch_with_multi_version(tablet_id_, datum_rows))) {
+  if (OB_NOT_NULL(job_stat_)) {
+    ATOMIC_AAF(&job_stat_->store_.merge_stage_write_rows_, datum_rows.row_count_);
+  }
+  if (OB_FAIL(dml_row_handler_->handle_insert_batch(tablet_id_, datum_rows))) {
     LOG_WARN("fail to handle insert batch", KR(ret));
   }
   return ret;
@@ -305,7 +310,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const IVectorPtrs &v
   return ret;
 }
 
-int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDatumRow &datum_row)
+int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -317,7 +322,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDatumRow &da
   } else {
     bool is_full = false;
     // 先处理lob列, 降低内存压力
-    if (OB_FAIL(row_handler_.handle_row(const_cast<ObDatumRow &>(datum_row), row_flag_))) {
+    if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(datum_row), row_flag_))) {
       LOG_WARN("fail to handle row", KR(ret));
     } else if (OB_FAIL(buffer_.append_row(datum_row, row_flag_, is_full))) {
       LOG_WARN("fail to append row", KR(ret));
@@ -378,7 +383,7 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::after_flush_batch(ObBatchDatumRo
   int ret = OB_SUCCESS;
   ATOMIC_AAF(&job_stat_->store_.merge_stage_write_rows_, datum_rows.row_count_);
   if (nullptr != dml_row_handler_ &&
-      OB_FAIL(dml_row_handler_->handle_insert_batch_with_multi_version(tablet_id_, datum_rows))) {
+      OB_FAIL(dml_row_handler_->handle_insert_batch(tablet_id_, datum_rows))) {
     LOG_WARN("fail to handle insert batch", KR(ret));
   }
   return ret;
@@ -398,7 +403,7 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
     ObTabletCacheInterval *hide_pk_interval = row_iter->get_hide_pk_interval();
     int64_t start_pos = buffer_.get_row_count();
     bool is_full = false;
-    const ObDatumRow *datum_row = nullptr;
+    const ObDirectLoadDatumRow *datum_row = nullptr;
     if (OB_UNLIKELY(row_flag.uncontain_hidden_pk_ && nullptr == hide_pk_interval)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid row iter", KR(ret), KPC(row_iter));
@@ -417,12 +422,14 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
       } else if (OB_ISNULL(datum_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected datum row is null", KR(ret));
-      } else if (OB_UNLIKELY(datum_row->row_flag_.is_delete())) {
+      }
+      // 有删除行的情况不走batch模式
+      else if (OB_UNLIKELY(datum_row->is_delete_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected delete row", KR(ret), KPC(datum_row));
       }
       // 先处理lob列, 降低内存压力
-      else if (OB_FAIL(row_handler_.handle_row(const_cast<ObDatumRow&>(*datum_row), row_flag))) {
+      else if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(*datum_row), row_flag))) {
         LOG_WARN("fail to handle row", KR(ret), KPC(datum_row), K(row_flag));
       } else if (OB_FAIL(buffer_.append_row(*datum_row, row_flag, is_full))) {
         LOG_WARN("fail to append row", KR(ret));

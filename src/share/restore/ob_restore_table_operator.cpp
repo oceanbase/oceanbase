@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/restore/ob_restore_table_operator.h"
-#include <cstdint>
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_errno.h"
-#include "share/config/ob_server_config.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "ob_log_restore_source.h"
 #include "share/backup/ob_backup_struct.h"
-#include "logservice/palf/log_define.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 
 using namespace oceanbase::share;

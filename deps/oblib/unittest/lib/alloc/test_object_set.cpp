@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/alloc/object_set.h"
-#include "lib/alloc/block_set.h"
 #include <gtest/gtest.h>
 #include "lib/allocator/page_arena.h"
-#include "lib/resource/ob_resource_mgr.h"
-#include "lib/ob_errno.h"
 
 using namespace oceanbase::lib;
 using namespace std;

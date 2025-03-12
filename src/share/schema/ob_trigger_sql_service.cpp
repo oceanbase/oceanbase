@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_trigger_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_trigger_info.h"
-#include "ob_routine_info.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
@@ -133,12 +127,12 @@ int ObTriggerSqlService::flashback_trigger(const ObTriggerInfo &trigger_info,
   return ret;
 }
 
-int ObTriggerSqlService::rebuild_trigger_package(const ObTriggerInfo &trigger_info,
-                                                 const ObString &base_object_database,
-                                                 const ObString &base_object_name,
-                                                 int64_t new_schema_version,
-                                                 ObISQLClient &sql_client,
-                                                 ObSchemaOperationType op_type)
+int ObTriggerSqlService::rebuild_trigger_on_rename(const ObTriggerInfo &trigger_info,
+                                                   const ObString &base_object_database,
+                                                   const ObString &base_object_name,
+                                                   int64_t new_schema_version,
+                                                   ObISQLClient &sql_client,
+                                                   ObSchemaOperationType op_type)
 {
   int ret = OB_SUCCESS;
   ObString spec_source;

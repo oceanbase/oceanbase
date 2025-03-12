@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_ls_log_writer.h"
-#include "storage/tx/ob_timestamp_service.h"
-#include "storage/tx/ob_trans_id_service.h"
-#include "logservice/ob_log_base_header.h"
+#include "ob_tx_ls_log_writer.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
-#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {

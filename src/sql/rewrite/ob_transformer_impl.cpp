@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "sql/rewrite/ob_transformer_impl.h"
-#include "common/ob_common_utility.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_transform_view_merge.h"
 #include "sql/rewrite/ob_transform_min_max.h"
 #include "sql/rewrite/ob_transform_where_subquery_pullup.h"
@@ -53,8 +50,6 @@
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
 #include "sql/rewrite/ob_transform_late_materialization.h"
 #include "sql/rewrite/ob_transform_distinct_aggregate.h"
-#include "common/ob_smart_call.h"
-#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -109,6 +104,7 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
   bool enable_group_by_placement_transform = false;
   bool opt_param_exists = false;
   int64_t opt_param_val = 0;
+  bool disable_gtt_session_isolation = false;
   if (OB_ISNULL(query_ctx) || OB_ISNULL(ctx_) || OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(query_ctx), K(ctx_));
@@ -116,8 +112,11 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
     LOG_WARN("failed to check group by placement transform enabled", K(ret));
   } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::OPTIMIZER_GROUP_BY_PLACEMENT, enable_group_by_placement_transform))) {
     LOG_WARN("fail to check opt param group by placement", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::DISABLE_GTT_SESSION_ISOLATION, disable_gtt_session_isolation))) {
+    LOG_WARN("fail to get bool opt param", K(ret));
   } else {
     ctx_->is_groupby_placement_enabled_ = enable_group_by_placement_transform;
+    ctx_->disable_gtt_session_isolation_ = disable_gtt_session_isolation;
   }
 
   if (OB_FAIL(ret)) {
@@ -590,7 +589,8 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
   ObSqlCtx *sql_ctx = NULL;
   if (OB_ISNULL(stmt)
       || OB_ISNULL(ctx_->exec_ctx_)
-      || OB_ISNULL(sql_ctx = ctx_->exec_ctx_->get_sql_ctx())) {
+      || OB_ISNULL(sql_ctx = ctx_->exec_ctx_->get_sql_ctx())
+      || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
   } else if (sql_ctx->is_batch_params_execute()) {
@@ -601,14 +601,21 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
-        func.contain_fulltext_search_ || func.contain_dml_with_doc_id_ || func.contain_vec_index_approx_) {
-       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+    if (func.contain_unpivot_query_ || func.contain_geometry_values_ ||
+        func.contain_fulltext_search_ || func.contain_vec_index_approx_) {
+      disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+    }
+    if (func.contain_enum_set_values_) {
+      uint64_t enum_set_enable_list = 0;
+      if (ctx_->exec_ctx_->support_enum_set_type_subschema(*ctx_->session_info_)) {
+        ObTransformRule::add_trans_type(enum_set_enable_list, ELIMINATE_OJ);
+      }
+      disable_list |= (~enum_set_enable_list);
     }
     if (func.contain_dml_with_doc_id_) {
       uint64_t dml_with_doc_id_enable_list = 0;
       ObTransformRule::add_trans_type(dml_with_doc_id_enable_list, PREDICATE_MOVE_AROUND);
-      disable_list &= (~dml_with_doc_id_enable_list);
+      disable_list |= (~dml_with_doc_id_enable_list);
     }
     if (func.contain_sequence_) {
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);

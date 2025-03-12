@@ -865,6 +865,9 @@ private:
       bool &is_same);
 
   // for lob tablet dml
+  static int check_rowkey_length(
+      const ObDMLRunningCtx &run_ctx,
+      const blocksstable::ObDatumRow &datum_row);
   static int process_lob_before_insert(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
@@ -950,7 +953,9 @@ private:
       const bool check_exist,
       const ObColDescIArray &col_descs,
       const int64_t row_count,
-      const ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
+      const ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+      const common::ObTimeZoneInfo *tz_info,
+      const bool need_log_user_error);
   static int insert_row_without_rowkey_check_wrap(
       ObTabletHandle &tablet_handle,
       const blocksstable::ObDatumRow *data_row_for_lob,
@@ -987,6 +992,11 @@ private:
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       const blocksstable::ObDatumRow &old_row);
+  static void handle_insert_rows_duplicate(
+      ObRowsInfo &rows_info,
+      const ObRelativeTable &table,
+      const common::ObTimeZoneInfo *tz_info,
+      const bool need_log_user_error);
 
 private:
   friend class ObLSTabletIterator;

@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX TABLELOCK
 
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "storage/memtable/ob_memtable_context.h"    // ObMemtableCtx
 #include "storage/tablelock/ob_table_lock_deadlock.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
-#include "storage/tx_storage/ob_ls_handle.h" 
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

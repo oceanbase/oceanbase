@@ -9,13 +9,9 @@
 // See the Mulan PubL v2 for more details.
 
 #include "storage/tx/ob_xa_query.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_server_struct.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_dbms_xa.h"
 #endif
-#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {

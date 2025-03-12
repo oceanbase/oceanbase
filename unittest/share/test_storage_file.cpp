@@ -11,18 +11,11 @@
  */
 
 #define protected public
-#include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_oss_base.cpp"
 #undef protected
 
-#include "lib/profile/ob_trace_id.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "lib/thread/ob_dynamic_thread_pool.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#include "common/storage/ob_fd_simulator.h"
 #include "share/ob_device_manager.h"
-#include "share/backup/ob_backup_struct.h"
 #include "share/io/ob_io_manager.h"
 
 using namespace oceanbase::common;

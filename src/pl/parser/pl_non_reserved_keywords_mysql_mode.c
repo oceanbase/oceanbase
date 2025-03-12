@@ -11,7 +11,6 @@
  */
 
 #include <stdio.h>
-#include "lib/alloc/alloc_assist.h"
 #include "sql/parser/ob_non_reserved_keywords.h"
 #include "pl/parser/pl_parser_mysql_mode_tab.h"
 
@@ -36,6 +35,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"column_name", COLUMN_NAME},
   {"comment", COMMENT},
   {"commit", COMMIT},
+  {"compile", COMPILE},
   {"condition", CONDITION},
   {"constraint_catalog", CONSTRAINT_CATALOG},
   {"constraint_name", CONSTRAINT_NAME},
@@ -92,6 +92,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"resignal", RESIGNAL},
   {"return", RETURN},
   {"returns", RETURNS},
+  {"reuse", REUSE},
   {"rollback", ROLLBACK},
   {"row", ROW},
   {"rowtype", ROWTYPE},
@@ -147,6 +148,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"time", TIME},
   {"date", DATE},
   {"year", YEAR},
+  {"settings", SETTINGS},
   {"character", CHARACTER},
   {"char", CHARACTER},
   {"text", TEXT},

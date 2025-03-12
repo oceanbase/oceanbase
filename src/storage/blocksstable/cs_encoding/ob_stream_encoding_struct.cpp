@@ -225,7 +225,7 @@ int ObIntegerStreamEncoderCtx::try_use_previous_encoding(bool &use_previous)
   const ObPreviousColumnEncoding *previous = info_.previous_encoding_;
   if (nullptr == previous) {
     // previous_encoding is not set
-  } else if (previous->is_valid_ && !previous->need_redetect_) {
+  } else if (previous->is_stream_encoding_type_valid_ && !previous->stream_need_redetect_) {
     if ((info_.stream_idx_ < 0)
         || (info_.stream_idx_ >= ObCSColumnHeader::MAX_INT_STREAM_COUNT_OF_COLUMN)) {
       ret = OB_ERR_UNEXPECTED;

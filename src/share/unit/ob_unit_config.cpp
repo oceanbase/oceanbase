@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX  SHARE
 
-#include "ob_unit_config.h"
 
-#include "lib/oblog/ob_log_module.h"        // *_LOG
-#include "share/config/ob_server_config.h"  // GCONF
+#include "ob_unit_config.h"
 #include "observer/ob_server_struct.h"      // GCTX
 
 namespace oceanbase

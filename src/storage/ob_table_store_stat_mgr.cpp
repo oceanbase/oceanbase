@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_store_stat_mgr.h"
-#include "lib/ob_errno.h"
-#include "lib/allocator/ob_mod_define.h"
 #include "share/ob_thread_mgr.h"
 
 namespace oceanbase

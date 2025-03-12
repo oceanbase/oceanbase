@@ -28,7 +28,9 @@ namespace observer
 class ObTableLoadSchema
 {
 public:
-  static int get_schema_guard(uint64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard);
+  static int get_schema_guard(uint64_t tenant_id,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const int64_t schema_version = common::OB_INVALID_VERSION);
   static int get_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                               uint64_t tenant_id,
                               uint64_t database_id,
@@ -70,33 +72,24 @@ public:
                             common::ObIArray<uint64_t> &column_ids,
                             bool contain_hidden_pk_column = false);
 
-  static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_roaringbitmap_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_null_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret);
-  static int check_has_geometry_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int check_is_heap_table_with_single_unique_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const share::schema::ObTableSchema *table_schema,
+                                       bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
   static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
                                         const ObIArray<ObObjectID> &part_ids,
                                         ObIArray<ObTabletID> &tablet_ids);
-  static int check_has_identity_column(const ObTableSchema *table_schema, bool &has_identity_column);
-  static int check_support_partition_exchange(const ObTableSchema *table_schema, bool &is_support);
-  static int check_has_global_index(ObSchemaGetterGuard &schema_guard,
-                                    const ObTableSchema *table_schema,
-                                    bool &is_have);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
   void reset();
   int init(uint64_t tenant_id, uint64_t table_id);
   bool is_valid() const { return is_inited_; }
-  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_heap_table), K_(has_autoinc_column),
-               K_(has_identity_column), K_(rowkey_column_count), K_(store_column_count),
+  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
+               K_(has_autoinc_column), K_(has_identity_column), K_(rowkey_column_count), K_(store_column_count),
                K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
@@ -110,9 +103,14 @@ private:
   int gen_lob_meta_datum_utils();
 public:
   common::ObArenaAllocator allocator_;
+  uint64_t table_id_;
   common::ObString table_name_;
+  bool is_index_table_;
+  bool is_lob_table_;
   bool is_partitioned_table_;
-  bool is_heap_table_;
+  bool is_table_without_pk_;
+  bool is_table_with_hidden_pk_column_;
+  share::schema::ObIndexType index_type_;
   bool is_column_store_;
   bool has_autoinc_column_;
   bool has_identity_column_;
@@ -124,7 +122,7 @@ public:
   int64_t schema_version_;
   uint64_t lob_meta_table_id_;
   int64_t lob_inrow_threshold_;
-  int64_t index_table_count_;
+  common::ObArray<uint64_t> index_table_ids_;
   common::ObArray<int64_t> lob_column_idxs_;
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns

@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/basic/ob_batch_result_holder.h"
+#include "ob_batch_result_holder.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/container/ob_se_array_iterator.h"
 
 namespace oceanbase
 {

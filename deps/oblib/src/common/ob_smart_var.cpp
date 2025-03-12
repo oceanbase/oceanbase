@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_smart_var.h"
+#include "ob_smart_var.h"
 #include "lib/rc/context.h"
-#include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase

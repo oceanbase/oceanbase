@@ -10,12 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_clock_generator.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/lock/ob_monitor.h"
-#include "lib/lock/mutex.h"
-#include "lib/time/ob_time_utility.h"
+#include "ob_clock_generator.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/utility/utility.h"
 #include "lib/ash/ob_active_session_guard.h"

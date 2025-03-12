@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <pthread.h>
-#include <string>
 #include "lib/allocator/ob_malloc.h"
 #define TEST_SMART_VAR
 #include "common/ob_smart_var.h"

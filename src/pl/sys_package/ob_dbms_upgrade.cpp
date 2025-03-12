@@ -14,9 +14,6 @@
 
 #include "pl/sys_package/ob_dbms_upgrade.h"
 #include "pl/ob_pl_package_manager.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

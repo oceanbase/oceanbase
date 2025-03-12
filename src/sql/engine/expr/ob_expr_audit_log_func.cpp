@@ -12,14 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
-#include "lib/charset/ob_charset.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_info.h"
 #include "sql/audit/ob_audit_log_table_operator.h"
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
-#include "lib/ob_name_def.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/privilege_check/ob_privilege_check.h"
 

@@ -226,6 +226,13 @@ public:
       common::ObTabletID &tablet_id,
       common::ObObjectID &object_id);
 
+  int get_tablet_and_object_id(
+      const share::schema::ObPartitionLevel part_level,
+      const common::ObPartID part_id,
+      const int64_t target_partition_id,
+      common::ObTabletID &tablet_id,
+      common::ObObjectID &object_id);
+
   const share::schema::ObTableSchema *get_table_schema() const { return table_schema_; }
 
   int get_non_partition_tablet_id(common::ObIArray<common::ObTabletID> &tablet_ids,

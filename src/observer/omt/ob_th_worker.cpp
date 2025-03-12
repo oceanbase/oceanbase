@@ -10,26 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "rpc/ob_lock_wait_node.h"
-#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX SERVER_OMT
-#include "ob_th_worker.h"
 
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/allocator/ob_page_manager.h"
-#include "lib/allocator/ob_sql_mem_leak_checker.h"
-#include "lib/rc/context.h"
-#include "lib/thread/ob_thread_name.h"
+#include "ob_th_worker.h"
 #include "ob_tenant.h"
-#include "ob_worker_processor.h"
-#include "share/config/ob_server_config.h"
 #include "observer/ob_server.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/executor/ob_memory_tracker.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"

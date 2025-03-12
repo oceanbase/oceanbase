@@ -11,9 +11,7 @@
  */
 
 #include "lib/alloc/alloc_failed_reason.h"
-#include <sys/sysinfo.h>
 #include <unistd.h>
-#include <stdio.h>
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/memory_dump.h"
@@ -73,6 +71,12 @@ char *alloc_failed_msg()
                afc.alloc_size_);
       break;
     }
+  case INVALID_ALLOC_SIZE: {
+      snprintf(msg, len,
+               "allocating 0 bytes or a negative number of bytes is not allowed(alloc_size: %ld)",
+               afc.alloc_size_);
+      break;
+    }
   case SINGLE_ALLOC_SIZE_OVERFLOW: {
       snprintf(msg, len,
                "single alloc size large than 4G is not allowed(alloc_size: %ld)",
@@ -122,7 +126,9 @@ char *alloc_failed_msg()
   return msg;
 }
 
-void print_alloc_failed_msg()
+void print_alloc_failed_msg(uint64_t tenant_id, uint64_t ctx_id,
+                            int64_t ctx_hold, int64_t ctx_limit,
+                            int64_t tenant_hold, int64_t tenant_limit)
 {
   if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
 #ifdef FATAL_ERROR_HANG
@@ -132,7 +138,12 @@ void print_alloc_failed_msg()
     }
 #endif
     const char *msg = alloc_failed_msg();
-    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
+    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[oops]: alloc failed reason is that ", msg);
+    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that %s. "
+                "detailed info: tenant_id=%lu, ctx_id=%lu, ctx_name=%s, ctx_hold=%ld, "
+                "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld, backtrace=%s",
+                msg, tenant_id, ctx_id, get_global_ctx_info().get_ctx_name(ctx_id),
+                ctx_hold, ctx_limit, tenant_hold, tenant_limit, lbt());
     // 49 is the user defined signal to dump memory
     raise(49);
   }

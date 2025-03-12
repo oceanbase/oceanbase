@@ -87,7 +87,7 @@ int ObDirectLoadInsertTableRowHandler::handle_row(ObDatumRow &datum_row, const b
         OB_FAIL(insert_tablet_ctx_->get_table_ctx()->update_sql_statistics(*sql_statistics_,
                                                                            datum_row))) {
       LOG_WARN("fail to update sql statistics", KR(ret));
-    } else if (!skip_lob && nullptr != lob_builder_ &&
+    } else if (!skip_lob && nullptr != lob_builder_ && insert_tablet_ctx_->get_is_insert_lob() &&
                OB_FAIL(lob_builder_->append_lob(datum_row))) {
       LOG_WARN("fail to append lob", KR(ret));
     }
@@ -114,7 +114,7 @@ int ObDirectLoadInsertTableRowHandler::handle_batch(ObBatchDatumRows &datum_rows
   return ret;
 }
 
-int ObDirectLoadInsertTableRowHandler::handle_row(ObDatumRow &datum_row,
+int ObDirectLoadInsertTableRowHandler::handle_row(ObDirectLoadDatumRow &datum_row,
                                                   const ObDirectLoadRowFlag &row_flag)
 {
   int ret = OB_SUCCESS;

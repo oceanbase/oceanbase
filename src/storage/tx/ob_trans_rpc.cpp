@@ -11,12 +11,8 @@
  */
 
 #include "ob_trans_rpc.h"
-#include "share/ob_errno.h"
-#include "share/ob_cluster_version.h"
-#include "lib/oblog/ob_log.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "ob_trans_service.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

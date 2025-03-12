@@ -12,19 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_storage_meta_cache.h"
 
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "share/io/ob_io_struct.h"
-#include "share/ob_tablet_autoincrement_param.h"
-#include "storage/blocksstable/ob_sstable.h"
+#include "ob_storage_meta_cache.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase

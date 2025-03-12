@@ -72,7 +72,9 @@ int ObLockTableExecutor::execute(ObExecContext &ctx,
     bool is_commit = OB_SUCC(ret);
     session->get_autocommit(ac);
     if (!explicit_trans && ac) {
-      if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::end_trans(ctx,
+      if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::end_trans(ctx.get_my_session(),
+                                                                ctx.get_need_disconnect_for_update(),
+                                                                ctx.get_trans_state(),
                                                                 !is_commit,
                                                                 false,
                                                                 nullptr))) {

@@ -467,6 +467,10 @@ int ObPdFilterTestBase::check_column_store_white_filter(
       LOG_WARN("fail to filter pushdown filter", KR(ret));
     } else {
       EXPECT_EQ(res_count, res_bitmap->popcnt());
+      if (res_count != res_bitmap->popcnt()) {
+        LOG_ERROR("result mismatch", K(res_count), K(res_bitmap->popcnt()),
+            K(op_type), K(row_cnt), K(col_cnt), K(col_offset), K(col_meta));
+      }
     }
 
     if (nullptr != expr_buf) {

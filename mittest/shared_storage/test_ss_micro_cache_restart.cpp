@@ -16,17 +16,8 @@
 
 #define protected public
 #define private public
-#include <sys/stat.h>
-#include <sys/vfs.h>
-#include <sys/types.h>
-#include <gmock/gmock.h>
-#include "lib/thread/threads.h"
 #include "test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "storage/shared_storage/ob_ss_micro_cache.h"
-#include "storage/shared_storage/ob_disk_space_manager.h"
-#include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
 namespace oceanbase
@@ -286,17 +277,18 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_EQ((total_ckpt_micro_cnt + micro_cnt3) * micro_size, cache_stat.micro_stat().total_micro_size_);
 
   {
-    TestSSCommonUtil::MicroBlockInfo &delete_micro_info = micro_arr3.at(3);
+    TestSSCommonUtil::MicroBlockInfo &delete_micro_info = micro_arr3.at(2);
     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(delete_micro_info.macro_id_, delete_micro_info.offset_, delete_micro_info.size_);
     ObSSMicroBlockMetaHandle delete_micro_handle;
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, delete_micro_handle));
     ObSSMicroBlockMeta *micro_meta = delete_micro_handle.get_ptr();
     ASSERT_EQ(true, micro_meta->is_in_l1_);
-    ASSERT_EQ(false, micro_meta->is_in_ghost_);
+    ASSERT_EQ(true, micro_meta->is_in_ghost_);
     if (micro_meta->is_persisted()) {
       --persisted_micro_cnt;
     }
     delete_micro_handle.set_ptr(micro_meta);
+    ASSERT_EQ(true, micro_meta->can_delete());
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_delete_micro_block_meta(delete_micro_handle));
     delete_micro_handle.reset();
     ASSERT_EQ(total_ckpt_micro_cnt + micro_cnt3 - 1, cache_stat.micro_stat().total_micro_cnt_);
@@ -352,10 +344,10 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_EQ(total_ckpt_micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(total_ckpt_micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
   ASSERT_EQ(cur_data_blk_used_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
-  ASSERT_EQ(3, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_B1].count());
-  ASSERT_EQ(3 * micro_size, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_B1].size());
-  ASSERT_EQ(total_ckpt_micro_cnt - 3, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_T1].count());
-  ASSERT_EQ((total_ckpt_micro_cnt - 3) * micro_size, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_T1].size());
+  ASSERT_EQ(2, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_B1].count());
+  ASSERT_EQ(2 * micro_size, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_B1].size());
+  ASSERT_EQ(total_ckpt_micro_cnt - 2, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_T1].count());
+  ASSERT_EQ((total_ckpt_micro_cnt - 2) * micro_size, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_T1].size());
   const int64_t ori_persisted_micro_cnt = cache_stat.micro_stat().total_micro_cnt_;
   micro_cache->config_.set_micro_ckpt_compressor_type(compress_type);
   micro_cache->config_.set_blk_ckpt_compressor_type(compress_type);

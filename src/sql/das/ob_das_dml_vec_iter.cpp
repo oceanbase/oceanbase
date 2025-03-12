@@ -33,8 +33,7 @@ int ObVecIndexDMLIterator::generate_domain_rows(const ObChunkDatumStore::StoredR
   } else if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_vector_index())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, it isn't fulltext index", K(ret), K(das_ctdef_->table_param_.get_data_table()));
-  } else if (das_ctdef_->table_param_.get_data_table().is_vector_index_id() ||
-             das_ctdef_->table_param_.get_data_table().is_vector_index_snapshot()) {
+  } else if (das_ctdef_->table_param_.get_data_table().is_no_need_update_vector_index()) {
     ret = OB_ITER_END; // for 4, 5 table, do not need to write when DML
   } else {
     int64_t vec_id;

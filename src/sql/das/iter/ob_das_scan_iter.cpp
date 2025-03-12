@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_scan_iter.h"
-#include "sql/das/ob_das_scan_op.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "src/sql/engine/ob_exec_context.h"
 
@@ -140,7 +139,9 @@ int ObDASScanIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 void ObDASScanIter::clear_evaluated_flag()
 {
   OB_ASSERT(nullptr != scan_param_);
-  scan_param_->op_->clear_evaluated_flag();
+  if (OB_NOT_NULL(scan_param_->op_)) {
+    scan_param_->op_->clear_evaluated_flag();
+  }
 }
 
 }  // namespace sql

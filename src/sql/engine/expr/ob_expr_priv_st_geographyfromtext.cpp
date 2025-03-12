@@ -13,7 +13,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_geographyfromtext.h"
-#include "sql/engine/expr/ob_expr_priv_st_geogfromtext.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_conflict_detector.h"
-#include "sql/optimizer/ob_log_plan.h"
+#include "ob_conflict_detector.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/rewrite/ob_transform_utils.h"
 
@@ -1220,7 +1219,11 @@ int ObConflictDetectorGenerator::pushdown_where_filters(const ObDMLStmt *stmt,
           LOG_WARN("failed to push back expr", K(ret));
         }
       } else if (qual->get_relation_ids().is_empty()) {
-        if (OB_FAIL(left_quals.push_back(qual))) {
+        if (!should_pushdown_const_filters_) {
+          if (OB_FAIL(new_quals.push_back(qual))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
+        } else if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else if (qual->is_const_expr() &&
                    OB_FAIL(right_quals.push_back(qual))) {

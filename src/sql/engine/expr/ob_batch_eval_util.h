@@ -970,14 +970,8 @@ struct ObNestedVectorArithOpFunc : public Base
       SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret));
     } else if (OB_FAIL(res_obj->init())) {
       SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
-    } else if (res_vec.get_format() == VEC_UNIFORM || res_vec.get_format() == VEC_UNIFORM_CONST) {
-      if (OB_FAIL(Base::get_res_batch(ctx, res_obj, expr, idx, &res_vec))) {
-        SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
-      }
-    } else {
-      if (OB_FAIL(Base::distribute_expr_attrs(expr, ctx, idx, *res_obj))) {
-        SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
-      }
+    } else if (OB_FAIL(Base::get_res_batch(ctx, res_obj, expr, idx, &res_vec))) {
+      SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
     }
     return ret;
   }

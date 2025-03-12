@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_retry.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/ob_server_struct.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
 #include "storage/lob/ob_lob_location.h"
 

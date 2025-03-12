@@ -12,41 +12,19 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_utils.h"
-#include "lib/container/ob_iarray.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_backup_utils.h"
 #include "share/backup/ob_archive_struct.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "storage/backup/ob_backup_reader.h"
 #include "share/ob_io_device_helper.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "share/scn.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/backup/ob_backup_data_store.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/backup/ob_backup_other_blocks_mgr.h"
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
-#include "storage/tablet/ob_mds_schema_helper.h"
 #include "lib/wait_event/ob_wait_event.h"
-
-#include <algorithm>
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -236,6 +214,12 @@ int ObBackupUtils::check_major_sstables_for_mview_(const share::SCN &mview_dep_s
     LOG_WARN("major sstable array ptr should not be null", K(ret));
   } else if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(tmp_sstable_array))) {
     LOG_WARN("failed to get all table wrappers", K(ret), KPC(major_sstable_array_ptr));
+  } else if (!mview_dep_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("mview_dep_scn is invalid", KR(ret), K(mview_dep_scn));
+  } else if (mview_dep_scn.is_min()) {
+    // do nothing
+    // when major refresh mview first create, it's base table major sstable not match last_refresh_scn
   } else {
     bool exist = false;
     ARRAY_FOREACH_X(tmp_sstable_array, idx, cnt, OB_SUCC(ret)) {

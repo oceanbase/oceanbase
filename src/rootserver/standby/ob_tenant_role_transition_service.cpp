@@ -12,28 +12,15 @@
 
 #define USING_LOG_PREFIX STANDBY
 #include "ob_tenant_role_transition_service.h"
-#include "logservice/palf/log_define.h"
-#include "share/scn.h"
 #include "logservice/ob_log_service.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"//ObChangeLSAccessModeProxy
-#include "lib/oblog/ob_log_module.h"// LOG_*
-#include "lib/utility/ob_print_utils.h"// TO_STRING_KV
-#include "share/ls/ob_ls_operator.h" // ls_status_to_str
 #include "rootserver/ob_cluster_event.h"// CLUSTER_EVENT_ADD_CONTROL
-#include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
 #include "rootserver/ob_ls_service_helper.h" // ObLSServiceHelper
 #include "rootserver/ob_empty_server_checker.h" // ObEmptyServerChecker
-#include "share/ob_rpc_struct.h"//ObLSAccessModeInfo
-#include "observer/ob_server_struct.h"//GCTX
-#include "share/location_cache/ob_location_service.h"//get ls leader
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
-#include "share/ob_schema_status_proxy.h"//set_schema_status
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/balance/ob_balance_task_helper_operator.h"//ObBalanceTaskHelper
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_errno.h"
 #include "share/oracle_errno.h"//oracle error code
 #include "rootserver/ob_service_name_command.h"
 

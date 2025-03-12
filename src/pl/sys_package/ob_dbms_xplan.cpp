@@ -11,19 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "pl/sys_package/ob_dbms_xplan.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
+#include "ob_dbms_xplan.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "lib/number/ob_number_v2.h"
-#include "sql/resolver/ddl/ob_explain_stmt.h"
-#include "lib/string/ob_hex_utils_base.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/ob_spi.h"
-#include "util/easy_time.h"
 
 namespace oceanbase
 {

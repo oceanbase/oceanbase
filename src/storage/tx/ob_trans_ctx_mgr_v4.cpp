@@ -12,19 +12,9 @@
 
 #define USING_LOG_PREFIX TRANS
 
-#include "lib/hash/ob_hashmap.h"
-#include "lib/worker.h"
-#include "lib/list/ob_list.h"
-#include "lib/container/ob_array.h"
-#include "lib/profile/ob_perf_event.h"
+#include "ob_trans_ctx_mgr_v4.h"
 #include "observer/ob_server.h"
-#include "storage/ob_storage_log_type.h"
-#include "ob_trans_factory.h"
 #include "ob_trans_functor.h"
-#include "ob_dup_table.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx/ob_trans_ctx_mgr_v4.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -167,7 +157,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
                        const ObLSID &ls_id,
                        ObTxTable *tx_table,
                        ObLockTable *lock_table,
-                       ObITsMgr *ts_mgr,
+                       ObTsMgr *ts_mgr,
                        ObTransService *txs,
                        ObITxLogParam *param,
                        ObITxLogAdapter *log_adapter)
@@ -204,9 +194,6 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     aggre_rec_scn_.reset();
     prev_aggre_rec_scn_.reset();
     online_ts_ = 0;
-    for (int64_t i = 0; i < READONLY_REQUEST_TRACE_ID_NUM; i++) {
-      readonly_request_trace_id_set_[i].reset();
-    }
     TRANS_LOG(INFO, "ObLSTxCtxMgr inited success", KP(this), K(ls_id));
   }
   return ret;
@@ -1608,9 +1595,6 @@ int ObLSTxCtxMgr::start_readonly_request()
     // readonly read must be blocked, because trx may be killed forcely
     TRANS_LOG(WARN, "logstream is blocked", K(ret));
   } else {
-    const ObCurTraceId::TraceId trace_id = *(ObCurTraceId::get_trace_id());
-    const uint64_t idx = ((uint64_t)trace_id.hash()) % READONLY_REQUEST_TRACE_ID_NUM;
-    readonly_request_trace_id_set_[idx].set(trace_id);
     inc_total_active_readonly_request_count();
   }
   return ret;
@@ -1621,26 +1605,8 @@ int ObLSTxCtxMgr::end_readonly_request()
   if (is_all_blocked_()) {
     TRANS_LOG(INFO, "end readonly request when ls is blocked");
   }
-  const ObCurTraceId::TraceId trace_id = *(ObCurTraceId::get_trace_id());
-  const uint64_t idx = ((uint64_t)trace_id.hash()) % READONLY_REQUEST_TRACE_ID_NUM;
-  if (readonly_request_trace_id_set_[idx] == trace_id) {
-    readonly_request_trace_id_set_[idx].reset();
-  }
   dec_total_active_readonly_request_count();
   return OB_SUCCESS;
-}
-
-void ObLSTxCtxMgr::dump_readonly_request(const int64_t max_req_number)
-{
-  int64_t dump_cnt = 0;
-  for (int64_t i = 0; dump_cnt < max_req_number && i < READONLY_REQUEST_TRACE_ID_NUM; i++) {
-    ObCurTraceId::TraceId trace_id;
-    trace_id.set(readonly_request_trace_id_set_[i]);
-    if (trace_id.is_valid()) {
-      TRANS_LOG(INFO, "readonly request is running", K(trace_id));
-      dump_cnt++;
-    }
-  }
 }
 
 int ObTxCtxMgr::remove_all_ls_()
@@ -1711,7 +1677,7 @@ int ObTxCtxMgr::wait_ls_(const ObLSID &ls_id)
 }
 
 int ObTxCtxMgr::init(const int64_t tenant_id,
-                     ObITsMgr *ts_mgr,
+                     ObTsMgr *ts_mgr,
                      ObTransService *txs)
 {
   int ret = OB_SUCCESS;
@@ -1881,10 +1847,11 @@ int ObTxCtxMgr::get_ls_tx_ctx_mgr(const ObLSID &ls_id, ObLSTxCtxMgr *&ls_tx_ctx_
     TRANS_LOG(WARN, "invalid argument", K(ls_id));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(ls_tx_ctx_mgr_map_.get(ls_id, ls_tx_ctx_mgr))) {
-    if (OB_ENTRY_NOT_EXIST != ret && OB_PARTITION_NOT_EXIST != ret) {
-      TRANS_LOG(WARN, "get ls_tx_ctx_mgr error", KR(ret), K(ls_id));
-    } else {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_PARTITION_NOT_EXIST;
       TRANS_LOG(TRACE, "get ls_tx_ctx_mgr error", KR(ret), K(ls_id));
+    } else {
+      TRANS_LOG(WARN, "get ls_tx_ctx_mgr error", KR(ret), K(ls_id));
     }
     ls_tx_ctx_mgr = NULL;
   }

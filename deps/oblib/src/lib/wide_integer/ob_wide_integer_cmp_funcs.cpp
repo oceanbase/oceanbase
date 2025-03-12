@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/wide_integer/ob_wide_integer.h"
-
 #include "common/object/ob_object.h"
 
 namespace oceanbase

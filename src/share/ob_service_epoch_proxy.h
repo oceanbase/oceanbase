@@ -98,6 +98,7 @@ public:
   constexpr static const char * const SERVER_ZONE_OP_SERVICE_EPOCH = "server_zone_op_service_epoch";
   constexpr static const char * const HEARTBEAT_SERVICE_EPOCH = "heartbeat_service_epoch";
   constexpr static const char * const SERVICE_NAME_EPOCH = "service_name_epoch";
+  constexpr static const char * const DISASTER_RECOVERY_SERVICE_EPOCH = "disaster_recovery_service_epoch";
 
 private:
   static int inner_get_service_epoch_(common::ObISQLClient &sql_proxy,

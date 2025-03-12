@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "share/rc/ob_tenant_base.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/omt/ob_tenant.h"
 #include "storage/direct_load/ob_direct_load_mem_define.h"
 #include "src/observer/table_load/ob_table_load_assigned_memory_manager.h"
 

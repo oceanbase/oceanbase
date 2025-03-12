@@ -931,7 +931,7 @@ private:
                                     ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
                                     bool is_and_op);
   int set_normal_key_true_or_false(ObKeyPart *&out_key_part, bool is_always_true);
-  int get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part,
+  int get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
                              const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime);
   int get_contain_or_overlaps_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type,
                                       ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
@@ -986,6 +986,7 @@ private:
 
   int cold_cast_cur_node(const ObKeyPart *cur,
                          common::ObIAllocator &allocator,
+                         ObExecContext &exec_ctx,
                          const common::ObDataTypeCastParams &dtc_params,
                          const int64_t cur_datetime,
                          common::ObObj &cur_val,

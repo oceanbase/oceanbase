@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/set/ob_hash_intersect_vec_op.h"
-#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase
 {

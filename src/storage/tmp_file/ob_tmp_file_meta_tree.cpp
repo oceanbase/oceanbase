@@ -11,7 +11,6 @@
  */
 
 #include "ob_tmp_file_meta_tree.h"
-#include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
@@ -2149,6 +2148,13 @@ int ObSharedNothingTmpFileMetaTree::release_tmp_file_page_(
         KR(ret), K(fd_), K(block_index), K(begin_page_id), K(page_num));
   } else {
     stat_info_.all_type_flush_page_released_cnt_ += page_num;
+  }
+
+  // ignore ret
+  for (int64_t i = 0; i < page_num; ++i) {
+    int64_t page_id = begin_page_id + i;
+    ObTmpPageCacheKey key(block_index, page_id, MTL_ID());
+    ObTmpPageCache::get_instance().erase(key);
   }
 
   return ret;

@@ -13,17 +13,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "storage/checkpoint/ob_freeze_checkpoint.h"
-#include "storage/checkpoint/ob_checkpoint_executor.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/ob_log_base_type.h"
 #include "storage/init_basic_struct.h"
 #include "storage/mock_ob_log_handler.h"
 

@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_column_redefinition_task.h"
-#include "lib/rc/context.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_ddl_checksum.h" 
 #include "share/ob_ddl_sim_point.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
-#include "storage/tablelock/ob_table_lock_service.h"
-#include "storage/ob_partition_pre_split.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -586,7 +578,7 @@ int ObColumnRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status
     LOG_WARN("table schema not exist", K(ret), K(target_object_id_));
   } else if (!table_schema->is_user_hidden_table()) {
     LOG_INFO("target schema took effect", K(target_object_id_));
-  } else if (table_schema->is_heap_table() && OB_FAIL(sync_tablet_autoinc_seq())) {
+  } else if (table_schema->is_table_with_hidden_pk_column() && OB_FAIL(sync_tablet_autoinc_seq())) {
     if (OB_TIMEOUT == ret || OB_NOT_MASTER == ret) {
       ret = OB_SUCCESS;
       new_status = ObDDLTaskStatus::TAKE_EFFECT;

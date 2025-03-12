@@ -11,10 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/ob_micro_block_info.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "share/cache/ob_kvcache_pointer_swizzle.h"
 #include "ob_micro_block_handle_mgr.h"
+#include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/access/ob_table_access_context.h"
 
 

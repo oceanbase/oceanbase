@@ -28,7 +28,10 @@ public:
   virtual ~ObMViewTransaction();
   DISABLE_COPY_ASSIGN(ObMViewTransaction);
 
-  int start(sql::ObSQLSessionInfo *session_info, ObISQLClient *sql_client);
+  int start(sql::ObSQLSessionInfo *session_info,
+            ObISQLClient *sql_client,
+            const uint64_t database_id,
+            const ObString &database_name);
   int end(const bool commit);
   bool is_started() const { return in_trans_; }
   sql::ObSQLSessionInfo *get_session_info() const { return session_info_; }
@@ -37,6 +40,7 @@ public:
     return nullptr != session_info_ ? session_info_->get_compatibility_mode()
                                     : ObCompatibilityMode::OCEANBASE_MODE;
   }
+  bool is_inner_session() const { return session_param_saved_.is_inner_session(); }
 
 protected:
   int connect(sql::ObSQLSessionInfo *session_info, ObISQLClient *sql_client);
@@ -58,10 +62,15 @@ protected:
     int save(sql::ObSQLSessionInfo *session_info);
     int restore();
 
+    bool is_inner_session() const { return is_inner_; }
+
   private:
+    ObArenaAllocator allocator_;
     sql::ObSQLSessionInfo *session_info_;
     bool is_inner_;
     bool autocommit_;
+    uint64_t database_id_;
+    char *database_name_;
   };
 
   class ObSessionSavedForInner

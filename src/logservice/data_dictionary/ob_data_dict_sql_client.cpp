@@ -14,12 +14,6 @@
 
 #include "ob_data_dict_sql_client.h"
 
-#include "lib/mysqlclient/ob_mysql_proxy.h"     // ObMySQLProxy
-#include "lib/string/ob_sql_string.h"           // ObSqlString
-#include "common/ob_smart_var.h"                // SMART_VAR
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_define.h"
-#include "share/ob_ls_id.h"
 #include "share/ls/ob_ls_operator.h"            // ObLSAttrOperator
 
 #define IF_CLIENT_VALID \

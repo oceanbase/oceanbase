@@ -14,11 +14,7 @@
 
 #include "sql/engine/pdml/static/ob_pdml_op_data_driver.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -50,8 +46,8 @@ int ObPDMLOpDataDriver::init(const ObTableModifySpec &spec,
   op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::PDML_WRITE_DAS_BUFF_ROW_COUNT;
   op_monitor_info_.otherstat_4_value_ = 0;
   op_monitor_info_.otherstat_4_id_ = ObSqlMonitorStatIds::PDML_SKIP_ROW_COUNT;
-  op_monitor_info_.otherstat_6_value_ = 0;
-  op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::PDML_STORAGE_RETURN_ROW_COUNT;
+  op_monitor_info_.otherstat_5_value_ = 0;
+  op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::PDML_STORAGE_RETURN_ROW_COUNT;
 
   if (OB_ISNULL(reader)
       || OB_ISNULL(writer)) {

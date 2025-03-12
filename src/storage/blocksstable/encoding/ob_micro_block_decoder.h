@@ -19,6 +19,7 @@
 #include "storage/ob_i_store.h"
 #include "ob_integer_array.h"
 #include "ob_icolumn_decoder.h"
+#include "ob_new_column_decoder.h"
 #include "ob_encoding_allocator.h"
 #include "lib/container/ob_bitmap.h"
 #include "ob_row_index.h"
@@ -298,6 +299,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const bool is_padding_mode,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
@@ -339,13 +341,14 @@ public:
   virtual bool can_apply_black(const common::ObIArray<int32_t> &col_offsets) const override
   {
     return 1 == col_offsets.count() &&
-        ObColumnHeader::DICT == decoders_[col_offsets.at(0)].ctx_->col_header_->type_ &&
+        (decoders_[col_offsets.at(0)].decoder_->is_new_column() || ObColumnHeader::DICT == decoders_[col_offsets.at(0)].ctx_->col_header_->type_) &&
         header_->all_lob_in_row_;
   }
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(
       const int32_t group_by_col,
       const char **cell_datas,
+      const bool is_padding_mode,
       storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int read_reference(
       const int32_t group_by_col,
@@ -362,12 +365,15 @@ public:
       const char **cell_datas,
       const int64_t row_cap,
       const int64_t vec_offset,
+      const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
       storage::ObGroupByCellVec &group_by_cell) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+      const bool is_padding_mode,
       const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,
@@ -387,6 +393,7 @@ private:
   int init_decoders();
   int add_decoder(const int64_t store_idx,
                   const common::ObObjMeta &obj_meta,
+                  const ObColumnParam *col_param,
                   ObColumnDecoder &dest);
   int free_decoders();
   int decode_cells(const uint64_t row_id,
@@ -453,6 +460,7 @@ private:
   ObColumnDecoderCtx **ctxs_;
   static ObNoneExistColumnDecoder none_exist_column_decoder_;
   static ObColumnDecoderCtx none_exist_column_decoder_ctx_;
+  static ObNewColumnDecoder new_column_decoder_;
   ObBlockReaderAllocator decoder_allocator_;
   common::ObArenaAllocator buf_allocator_;
 };

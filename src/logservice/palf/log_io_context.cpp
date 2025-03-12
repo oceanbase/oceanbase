@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_io_context.h"
-#include "share/rc/ob_tenant_base.h"                          // MTL_ID
-#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
-#include "share/io/ob_io_define.h"                            // ObIOModule
 
 namespace oceanbase
 {

@@ -12,27 +12,13 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/guard/ob_shared_guard.h"
-#include "logservice/ob_garbage_collector.h"
+#include "ob_ls_service.h"
 #include "logservice/ob_log_service.h"
-#include "observer/ob_service.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
-#include "share/rc/ob_tenant_base.h"  // MTL_IS_RESTORE_TENANT
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_lock.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "storage/ls/ob_ls_state.h"
 #include "storage/tx_storage/ob_ls_safe_destroy_task.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "rootserver/ob_tenant_info_loader.h"
-#include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

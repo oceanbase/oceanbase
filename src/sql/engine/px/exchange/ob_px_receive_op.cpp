@@ -13,21 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_receive_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "sql/engine/px/ob_px_dtl_proc.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/dtl/ob_dtl_channel_loop.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/dtl/ob_dtl.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_rpc_share.h"
-#include "sql/engine/px/ob_px_scheduler.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/exchange/ob_px_ms_receive_op.h"
-#include "sql/engine/px/ob_sqc_ctx.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase

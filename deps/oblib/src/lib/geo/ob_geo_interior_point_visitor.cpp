@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX LIB
-#include "lib/ob_errno.h"
 #include "ob_geo_interior_point_visitor.h"
-#include "ob_srs_info.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase
 {

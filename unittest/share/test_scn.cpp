@@ -12,7 +12,6 @@
 
 #include "share/scn.h"
 #include <gtest/gtest.h>
-#include <cstdint>
 
 namespace oceanbase
 {

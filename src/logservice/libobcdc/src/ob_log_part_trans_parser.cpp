@@ -14,8 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG_PARSER
 
-#include "ob_log_part_trans_parser.h"
 
+#include "ob_log_part_trans_parser.h"
 #include "lib/allocator/page_arena.h"   // PageArena
 #include "ob_log_part_trans_task.h"     // PartTransTask
 #include "ob_log_binlog_record_pool.h"  // IObLogBRPool
@@ -437,6 +437,8 @@ int ObLogPartTransParser::parse_direct_load_inc_stmts_(
           } else if (OB_ISNULL(datum_row) || OB_ISNULL(row_key)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("datum_row or row_key is nullptr", K(datum_row), K(row_key));
+          } else if (dml_flag.is_delete()) {
+            LOG_DEBUG("ignore delete operation in direct_load_log", K(dml_flag), K(seq), K(row_key), K(datum_row));
           } else if (OB_FAIL(alloc_macroblock_mutator_row_(task, redo_log_entry_task, datum_row, row_key, seq, dml_flag, row))) {
             LOG_ERROR("alloc macroblock mutator row failed", KR(ret), K(task), K(redo_log_entry_task), KPC(datum_row),
                 KPC(row_key), K(seq), K(dml_flag), K(row));

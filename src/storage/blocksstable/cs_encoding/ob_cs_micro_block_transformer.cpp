@@ -13,14 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_cs_micro_block_transformer.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "ob_int_dict_column_encoder.h"
-#include "ob_str_dict_column_encoder.h"
-#include "ob_cs_encoding_util.h"
-#include "ob_cs_decoding_util.h"
 #include "storage/blocksstable/ob_sstable_printer.h"
 #include "ob_string_stream_decoder.h"
-#include "ob_integer_stream_decoder.h"
 
 namespace oceanbase
 {

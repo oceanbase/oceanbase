@@ -11,14 +11,8 @@
  */
 
 #include "ob_remote_fetch_log.h"
-#include "lib/net/ob_addr.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/restoreservice/ob_log_restore_define.h"
 #include "ob_log_restore_archive_driver.h"    // ObLogRestoreArchiveDriver
 #include "ob_log_restore_net_driver.h"        // ObLogRestoreNetDriver
-#include "share/restore/ob_log_restore_source.h"
 
 namespace oceanbase
 {

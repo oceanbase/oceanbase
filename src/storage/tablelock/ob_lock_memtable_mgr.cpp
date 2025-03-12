@@ -14,7 +14,6 @@
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablelock/ob_lock_memtable_mgr.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ls/ob_ls_tx_service.h"
 #include "storage/ls/ob_freezer.h"
 
 namespace oceanbase

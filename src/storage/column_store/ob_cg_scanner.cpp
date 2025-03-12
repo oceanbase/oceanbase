@@ -526,7 +526,7 @@ int ObCGRowScanner::init(
     void *buf = nullptr;
     void *len_array_buf = nullptr;
     int64_t expr_count = iter_param.output_exprs_->count();
-    const share::schema::ObColumnParam *col_param = nullptr;
+    share::schema::ObColumnParam *col_param = nullptr;
     sql::ObEvalCtx &eval_ctx = iter_param.op_->get_eval_ctx();
     const common::ObIArray<int32_t>* out_cols_projector = iter_param.out_cols_project_;
     int64_t sql_batch_size = iter_param.op_->get_batch_size();
@@ -551,12 +551,12 @@ int ObCGRowScanner::init(
       LOG_WARN("fail to alloc len_array_buf", K(ret), K(sql_batch_size));
     } else if (FALSE_IT(len_array_ = reinterpret_cast<uint32_t *>(len_array_buf))) {
     } else if (!iter_param.enable_pd_aggregate() || use_new_format) {
-      bool need_padding = common::is_pad_char_to_full_length(access_ctx.sql_mode_);
+      is_padding_mode_ = common::is_pad_char_to_full_length(access_ctx.sql_mode_);
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {
         col_param = nullptr;
         int64_t col_offset = out_cols_projector->at(i);
         const common::ObObjMeta &obj_meta = read_info_->get_columns_desc().at(col_offset).col_type_;
-        if (need_padding && obj_meta.is_fixed_len_char_type()) {
+        if (is_padding_mode_ && obj_meta.is_fixed_len_char_type()) {
           col_param = out_cols_param->at(col_offset);
         } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
           col_param = out_cols_param->at(col_offset);
@@ -720,7 +720,8 @@ int ObCGRowScanner::inner_fetch_rows(const int64_t row_cap, const int64_t datum_
                                             row_cap,
                                             datum_infos_,
                                             datum_offset,
-                                            len_array_))) {
+                                            len_array_,
+                                            is_padding_mode_))) {
     LOG_WARN("Fail to get next rows", K(ret));
   }
   return ret;

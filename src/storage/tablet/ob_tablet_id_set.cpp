@@ -14,8 +14,6 @@
 
 #include "storage/tablet/ob_tablet_id_set.h"
 
-#include "lib/oblog/ob_log.h"
-#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {

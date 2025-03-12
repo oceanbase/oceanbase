@@ -317,7 +317,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 523	__all_pkg_type_attr	0	201001	1
 524	__all_pkg_coll_type	0	201001	1
 525	__wr_sql_plan	0	201001	1
+527	__all_kv_redis_table	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
+531	__ft_dict_ik_utf8	0	201001	1
+532	__ft_stopword_ik_utf8	0	201001	1
+533	__ft_quantifier_ik_utf8	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -416,7 +420,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12009	user	2	201003	1
 12010	db	2	201003	1
 12013	__all_virtual_lock_wait_stat	2	201001	1
-12030	proc	2	201003	1
 12031	__tenant_virtual_collation	2	201001	1
 12032	__tenant_virtual_charset	2	201001	1
 12033	__all_virtual_tenant_memstore_allocator_info	2	201001	1
@@ -802,10 +805,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12499	__all_virtual_pkg_coll_type	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
 12501	__all_virtual_wr_sql_plan	2	201001	1
+12503	__all_virtual_kv_redis_table	2	201001	1
 12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
 12506	__all_virtual_ncomp_dll_v2	2	201001	1
+12513	__all_virtual_cs_replica_tablet_stats	2	201001	1
 12514	__all_virtual_ddl_diagnose_info	2	201001	1
+12515	__all_virtual_plugin_info	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1320,10 +1326,17 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21613	CDB_WR_SQL_PLAN	1	201001	1
 21616	DBA_OB_SPM_EVO_RESULT	1	201001	1
 21617	CDB_OB_SPM_EVO_RESULT	1	201001	1
+21618	DBA_OB_KV_REDIS_TABLE	1	201001	1
+21619	CDB_OB_KV_REDIS_TABLE	1	201001	1
 21620	GV$OB_FUNCTION_IO_STAT	1	201001	1
 21621	V$OB_FUNCTION_IO_STAT	1	201001	1
 21622	DBA_OB_TEMP_FILES	1	201001	1
 21623	CDB_OB_TEMP_FILES	1	201001	1
+21628	proc	1	201003	1
+21633	DBA_OB_CS_REPLICA_STATS	1	201001	1
+21634	CDB_OB_CS_REPLICA_STATS	1	201001	1
+21635	GV$OB_PLUGINS	1	201001	1
+21636	V$OB_PLUGINS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

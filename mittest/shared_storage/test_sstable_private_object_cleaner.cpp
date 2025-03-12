@@ -17,12 +17,7 @@
 #define protected public
 
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "unittest/storage/init_basic_struct.h"
 #include "unittest/storage/test_tablet_helper.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/blocksstable/ob_macro_block_writer.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
-#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {

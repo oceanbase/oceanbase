@@ -190,12 +190,12 @@ public:
   }
   static inline bool is_write_stmt(stmt::StmtType stmt_type, bool has_global_variable)
   {
-    return is_ddl_stmt(stmt_type, has_global_variable) ||
-         (stmt_type == stmt::T_INSERT ||
-          stmt_type == stmt::T_INSERT_ALL ||
-          stmt_type == stmt::T_REPLACE ||
-          stmt_type == stmt::T_DELETE ||
-          stmt_type == stmt::T_UPDATE);
+    return stmt_type == stmt::T_INSERT ||
+           stmt_type == stmt::T_INSERT_ALL ||
+           stmt_type == stmt::T_REPLACE ||
+           stmt_type == stmt::T_DELETE ||
+           stmt_type == stmt::T_UPDATE ||
+           is_ddl_stmt(stmt_type, has_global_variable);
   }
 
   static inline bool is_select_stmt(stmt::StmtType stmt_type)
@@ -254,6 +254,11 @@ public:
   static inline bool is_tcl_stmt(stmt::StmtType stmt_type)
   {
     return (stmt_type == stmt::T_START_TRANS || stmt_type == stmt::T_END_TRANS);
+  }
+
+  static inline bool is_physical_restore_stmt(stmt::StmtType stmt_type)
+  {
+    return (stmt_type == stmt::T_PHYSICAL_RESTORE_TENANT);
   }
 
   static inline bool is_ddl_stmt(stmt::StmtType stmt_type, bool has_global_variable)

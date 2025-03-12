@@ -216,13 +216,19 @@ int ObJavaEnv::setup_useful_path()
       ObSqlString tmp_class_path;
       ObString class_path;
       const char *fmt = nullptr;
+      // Append original classpath
       if (len > 0 && connector_path_[len - 1] == '/') {
-        fmt = "%s*:%s%s/%s/*:%s%s/%s/%s/*:%s%s/%s/*:%s%s/%s/%s/*:";
+        fmt = "%s:%s*:%s%s/%s/*:%s%s/%s/%s/*:%s%s/%s/*:%s%s/%s/%s/*:%s";
       } else {
-        fmt = "%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:";
+        fmt = "%s/:%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s";
       }
+
+      const char *original_cp =
+          OB_ISNULL(std::getenv(CLASSPATH)) ? "" : std::getenv(CLASSPATH);
+      LOG_INFO("get original class path", K(ret), K(original_cp));
       if (OB_FAIL(tmp_class_path.assign_fmt(
               fmt,
+              connector_path_, // ${CONNECTOR_PATH}/ setup for other conf file
               connector_path_, // ${CONNECTOR_PATH}/*
               connector_path_, HADOOP_LIB_PATH_PREFIX,
               HADOOP_COMMON_LIB_PREFIX, // ${CONNECTOR_PATH}/hadoop/common/*
@@ -231,7 +237,8 @@ int ObJavaEnv::setup_useful_path()
               connector_path_, HADOOP_LIB_PATH_PREFIX,
               HADOOP_HDFS_LIB_PREFIX, // ${CONNECTOR_PATH}/hadoop/hdfs/*
               connector_path_, HADOOP_LIB_PATH_PREFIX, HADOOP_HDFS_LIB_PREFIX,
-              LIB_PATH_PREFIX // ${CONNECTOR_PATH}/hadoop/hdfs/lib/*
+              LIB_PATH_PREFIX, // ${CONNECTOR_PATH}/hadoop/hdfs/lib/*,
+              original_cp // Original classpath from env
               ))) {
         LOG_WARN("failed to init class path", K(ret));
       } else if (OB_FAIL(ob_write_string(arena_alloc_, tmp_class_path.string(),
@@ -301,7 +308,7 @@ int ObJavaEnv::setup_java_env() {
   const char *ljo = std::getenv(LIBHDFS_OPTS);
   const char *ch = std::getenv(CONNECTOR_PATH);
   const char *cp = std::getenv(CLASSPATH);
-  LOG_TRACE("setup env variables", K(ret), K(jh), K(jo), K(ljo), K(ch), K(cp));
+  LOG_INFO("setup env variables", K(ret), K(jh), K(jo), K(ljo), K(ch), K(cp));
   return ret;
 }
 

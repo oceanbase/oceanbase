@@ -11,17 +11,9 @@
  */
 
 #include "storage/tablet/ob_tablet_mds_node_dump_operator.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_string.h"
-#include "share/ob_errno.h"
-#include "share/ob_tablet_autoincrement_param.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
-#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
-#include "storage/multi_data_source/mds_table_handle.h"
+#include "src/storage/multi_data_source/mds_table_impl.h"
 
 #define USING_LOG_PREFIX MDS
 

@@ -28,11 +28,10 @@ public:
   ObDirectLoadExternalMultiPartitionTableBuildParam();
   ~ObDirectLoadExternalMultiPartitionTableBuildParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_data_desc), KP_(datum_utils), KP_(file_mgr), KP_(extra_buf),
+  TO_STRING_KV(K_(table_data_desc), KP_(file_mgr), KP_(extra_buf),
                K_(extra_buf_size));
 public:
   ObDirectLoadTableDataDesc table_data_desc_;
-  const blocksstable::ObStorageDatumUtils *datum_utils_;
   ObDirectLoadTmpFileManager *file_mgr_;
   char *extra_buf_;
   int64_t extra_buf_size_;
@@ -48,12 +47,11 @@ public:
   virtual ~ObDirectLoadExternalMultiPartitionTableBuilder();
   int init(const ObDirectLoadExternalMultiPartitionTableBuildParam &param);
   int append_row(const common::ObTabletID &tablet_id,
-                 const table::ObTableLoadSequenceNo &seq_no,
-                 const blocksstable::ObDatumRow &datum_row) override;
+                 const ObDirectLoadDatumRow &datum_row) override;
   int close() override;
   int64_t get_row_count() const override { return total_row_count_; }
-  int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
-                 common::ObIAllocator &allocator) override;
+  int get_tables(ObDirectLoadTableHandleArray &table_array,
+                 ObDirectLoadTableManager *table_manager) override;
 private:
   int alloc_tmp_file();
   int generate_fragment();

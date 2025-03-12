@@ -11,7 +11,6 @@
  */
 
 #include <lib/hash/ob_concurrent_hash_map.h>
-#include <lib/allocator/ob_malloc.h>
 
 namespace oceanbase
 {

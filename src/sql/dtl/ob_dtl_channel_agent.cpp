@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_channel_agent.h"
-#include "sql/dtl/ob_dtl_channel.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
-#include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/engine/px/ob_px_row_store.h"
-#include "common/row/ob_row.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -161,8 +156,9 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain)
           LOG_WARN("start message process fail", K(ret));
         }
       }
+      bool send_by_tenant = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
       if (OB_SUCC(ret)) {
-        if (send_by_tenant_
+        if (send_by_tenant
             && OB_FAIL(DTL.get_rpc_proxy()
                        .to(server_addr_)
                        .group_id(share::OBCG_DTL)
@@ -170,7 +166,7 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain)
                        .timeout(timeout_us)
                        .ap_send_bc_message(args, &cb))) {
           LOG_WARN("failed to seed message", K(ret));
-        } else if (!send_by_tenant_
+        } else if (!send_by_tenant
                    && OB_FAIL(DTL.get_rpc_proxy()
                                  .to(server_addr_)
                                  .timeout(timeout_us)

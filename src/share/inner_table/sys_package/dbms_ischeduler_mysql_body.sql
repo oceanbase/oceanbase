@@ -36,9 +36,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_ischeduler
     SELECT 1 INTO DUMMY FROM OCEANBASE.__ALL_TENANT_SCHEDULER_JOB
       WHERE job_name = my_job_name AND POWNER = PUSER
             AND job != (SELECT MAX(job) FROM OCEANBASE.__ALL_TENANT_SCHEDULER_JOB);
-  -- EXCEPTION
-  --   WHEN NO_DATA_FOUND THEN
-  --     RAISE_APPLICATION_ERROR(-20000, 'OBE-23421: job ' || job_name || ' is not a job in the job queue');
+
   END;
 
   PROCEDURE do_create_job( IN job                BIGINT,
@@ -117,7 +115,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_ischeduler
     SET final_start_date = ifnull(start_date, sysdate());
     SET final_next_date = final_start_date;
     SET final_end_date = ifnull(end_date, STR_TO_DATE('4000-01-01', '%Y-%m-%d %H:%i:%s'));
-
 
     SET my_interval = repeat_interval;
     SET my_flag = 0;

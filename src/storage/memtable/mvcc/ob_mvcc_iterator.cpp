@@ -10,18 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/stat/ob_diagnose_info.h"
 
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/memtable/mvcc/ob_mvcc_ctx.h"
-#include "storage/memtable/mvcc/ob_query_engine.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/ob_memtable_context.h"
+#include "ob_mvcc_iterator.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
-#include "storage/tx/ob_trans_ctx.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/access/ob_rows_info.h"
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -40,7 +33,6 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
 {
   int ret = OB_SUCCESS;
   reset();
-  int64_t lock_for_read_start = ObClockGenerator::getClock();
   ctx_ = &ctx;
   if (OB_UNLIKELY(!ctx.get_snapshot_version().is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -56,7 +48,11 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
       is_inited_ = true;
     }
   }
+#ifdef ENABLE_DEBUG_LOG
+  TRANS_LOG(TRACE, "value_iter.init", K(ret),
+#else
   TRANS_LOG(DEBUG, "value_iter.init", K(ret),
+#endif
             KPC(value),
             KPC_(version_iter),
             K(query_flag.is_read_latest()),
@@ -70,14 +66,10 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
 int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
 {
   int ret = OB_SUCCESS;
-  int64_t lock_start_time = OB_INVALID_TIMESTAMP;
   // the head of the read position
   ObMvccTransNode *iter = value_->get_list_head();
   // the resolved mvcc read position
   version_iter_ = NULL;
-  if (GCONF.enable_sql_audit) {
-    lock_start_time =  ObClockGenerator::getClock();
-  }
 
   while (OB_SUCC(ret) && NULL != iter && NULL == version_iter_) {
     if (OB_FAIL(lock_for_read_inner_(flag, iter))) {
@@ -131,9 +123,8 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   //        reader_tx_id.
   const ObTransID &snapshot_tx_id = ctx_->snapshot_.tx_id_;
   const ObTransID &reader_tx_id = ctx_->tx_id_;
-  const ObTxSEQ snapshot_seq_no = ctx_->snapshot_.scn_;
+  const ObTxSEQ &snapshot_seq_no = ctx_->snapshot_.scn_;
 
-  const SCN snapshot_version = ctx_->get_snapshot_version();
   const bool read_latest = flag.is_read_latest();
   const ObTransID &data_tx_id = iter->get_tx_id();
 
@@ -149,7 +140,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const bool is_aborted = iter->is_aborted();
   const bool is_elr = iter->is_elr();
   const bool is_delayed_cleanout = iter->is_delayed_cleanout();
-  const SCN scn = iter->get_scn();
+  const SCN &scn = iter->get_scn();
   const bool is_incomplete = iter->is_incomplete();
 
   // only read elr committed data if reader has created TxCtx
@@ -176,18 +167,17 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
                ctx_->get_tx_table_guards().src_tx_table_guard_.get_tx_table()->
                get_ls_id() != memtable_ls_id_))
           && (// Opt2.1: snapshot reads the data written by snapshot
-            data_tx_id == ctx_->snapshot_.tx_id_ ||
+            data_tx_id == snapshot_tx_id ||
             // Opt2.2: read reader's latest is matched
-            (read_latest && data_tx_id == ctx_->tx_id_)))) {
+            (read_latest && data_tx_id == reader_tx_id)))) {
     // Case 1: Cleanout can be skipped
     //         because inner tx read only care whether tx node rollbacked
     if (is_committed || read_elr) {
       // Case 2: Data is committed, so the state is decided
-      const SCN data_version = iter->trans_version_.atomic_load();
       if (read_uncommitted) {
         // Case 2.0 Read the version if we need the uncommitted version
         version_iter_ = iter;
-      } else if (ctx_->get_snapshot_version() >= data_version) {
+      } else if (ctx_->get_snapshot_version() >= iter->trans_version_.atomic_load()) {
         // Case 2.1 Read the version if it is smaller than read version
         version_iter_ = iter;
       } else {
@@ -203,13 +193,13 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
       if (read_uncommitted) {
         // Case 4.0 Read the version if we need the uncommitted version
         version_iter_ = iter;
-      } else if (read_latest && data_tx_id == ctx_->tx_id_) {
+      } else if (read_latest && data_tx_id == reader_tx_id) {
         // Case 4.1: data is written by the current txn and we also need read the
         //           latest data(eg: check existence), then we can read it if it
         //           is not undone
         version_iter_ = iter;
-      } else if (ctx_->snapshot_.tx_id_ == data_tx_id) {
-        if (iter->get_seq_no() <= ctx_->snapshot_.scn_) {
+      } else if (snapshot_tx_id == data_tx_id) {
+        if (iter->get_seq_no() <= snapshot_seq_no) {
           // Case 4.2.1: data's sequence number is smaller or equal than the read
           //             txn's sequence number, so we can read it if it is not
           //             undone

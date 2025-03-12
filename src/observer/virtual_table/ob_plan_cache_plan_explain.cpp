@@ -14,15 +14,8 @@
 
 #include "ob_plan_cache_plan_explain.h"
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_req_time_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "common/ob_range.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/ob_sql.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/engine/table/ob_table_scan_op.h"
-#include "src/sql/plan_cache/ob_i_lib_cache_object.h"
 using namespace oceanbase;
 using namespace oceanbase::observer;
 using namespace oceanbase::sql;

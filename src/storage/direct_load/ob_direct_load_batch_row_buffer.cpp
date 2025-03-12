@@ -12,8 +12,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_batch_row_buffer.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/direct_load/ob_direct_load_row_iterator.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
+#include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 
 namespace oceanbase
@@ -259,43 +259,7 @@ int ObDirectLoadBatchRowBuffer::to_vector(ObIVector *src_vector, const int64_t s
   return ret;
 }
 
-int ObDirectLoadBatchRowBuffer::append_row(const ObStorageDatum *datums,
-                                           const int64_t count,
-                                           const ObDirectLoadRowFlag &row_flag,
-                                           bool &is_full)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDirectLoadBatchRowBuffer not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(row_count_ >= max_batch_size_)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size overflow", KR(ret), K(max_batch_size_), K(row_count_));
-  } else if (OB_UNLIKELY(nullptr == datums ||
-                         row_flag.get_column_count(count) != vectors_.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(vectors_.count()), KP(datums), K(count), K(row_flag));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-      const ObDatum &datum = datums[i];
-      ObIVector *vec = vectors_.at(row_flag.uncontain_hidden_pk_ ? i + 1 : i);
-      ObIAllocator *allocator = vector_allocators_.at(row_flag.uncontain_hidden_pk_ ? i + 1 : i);
-      if (OB_UNLIKELY(datum.is_ext())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid datum", KR(ret), K(i), K(datum));
-      } else if (OB_FAIL(to_vector(datum, vec, row_count_, allocator))) {
-        LOG_WARN("fail to set vector", KR(ret), K(i), K(datum), K(row_flag));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ++row_count_;
-      is_full = (row_count_ == max_batch_size_);
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadBatchRowBuffer::append_row(const ObDatumRow &datum_row,
+int ObDirectLoadBatchRowBuffer::append_row(const ObDirectLoadDatumRow &datum_row,
                                            const ObDirectLoadRowFlag &row_flag,
                                            bool &is_full)
 {

@@ -17,6 +17,7 @@
 #include "sql/engine/basic/ob_compact_row.h"
 #include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/basic/ob_hp_infras_vec_mgr.h"
+#include "sql/engine/sort/ob_sort_vec_op_provider.h"
 
 namespace oceanbase
 {
@@ -118,6 +119,130 @@ protected:
 
 public:
   ObVectorsResultHolder brs_holder_;
+};
+class DataStoreVecExtraResult : public VecExtraResult
+{
+public:
+  explicit DataStoreVecExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info,
+                                   bool need_sort) :
+    VecExtraResult(alloc, op_monitor_info),
+    sort_(NULL), pvt_skip(nullptr), need_sort_(need_sort), data_store_inited_(false),
+    data_store_brs_holder_(&alloc)
+  {}
+
+  virtual ~DataStoreVecExtraResult();
+
+  int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx,
+                const sql::EvalBound &bound, const sql::ObBitVector &skip,
+                const uint16_t selector[], const int64_t size, ObIAllocator &allocator);
+
+  int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx,
+                const sql::EvalBound &bound, const sql::ObBitVector &skip, ObIAllocator &allocator);
+
+  int get_next_batch(ObEvalCtx &ctx, const common::ObIArray<ObExpr *> &exprs, int64_t &read_rows);
+
+  int prepare_for_eval();
+
+  void reuse();
+
+  bool data_store_is_inited() const
+  {
+    return data_store_inited_;
+  }
+
+  int init_data_set(ObAggrInfo &aggr_info, ObEvalCtx &eval_ctx, ObMonitorNode *op_monitor_info,
+                    ObIOEventObserver *io_event_observer_, ObIAllocator &allocator,
+                    bool need_rewind);
+
+  int rewind();
+
+protected:
+  union
+  {
+    ObSortVecOpProvider *sort_;
+    ObTempRowStore *store_;
+  };
+
+  ObTempRowStore::Iterator *vec_result_iter_;
+
+  ObBitVector *pvt_skip;
+
+  bool need_sort_;
+  bool data_store_inited_;
+
+public:
+  ObVectorsResultHolder data_store_brs_holder_;
+};
+
+struct ExtraStores {
+  class HashBasedDistinctVecExtraResult *distinct_extra_store;
+  class DataStoreVecExtraResult *data_store;
+
+  ~ExtraStores()
+  {
+    if (distinct_extra_store != nullptr) {
+      distinct_extra_store->~HashBasedDistinctVecExtraResult();
+      distinct_extra_store = nullptr;
+    }
+    if (data_store != nullptr) {
+      data_store->~DataStoreVecExtraResult();
+      data_store = nullptr;
+    }
+  }
+
+  void reuse()
+  {
+    if (distinct_extra_store != nullptr) {
+      distinct_extra_store->reuse();
+    }
+    if (data_store != nullptr) {
+      data_store->reuse();
+    }
+  }
+
+  void set_is_evaluated()
+  {
+    if (distinct_extra_store != nullptr) {
+      distinct_extra_store->is_evaluated();
+    }
+    if (data_store != nullptr) {
+      data_store->is_evaluated();
+    }
+  }
+
+  bool is_evaluated()
+  {
+    bool evaluated = false;
+    if (distinct_extra_store != nullptr) {
+      evaluated |= distinct_extra_store->is_evaluated();
+    }
+    if (data_store != nullptr) {
+      evaluated |= data_store->is_evaluated();
+    }
+    return evaluated;
+  }
+
+  int rewind()
+  {
+    int ret = OB_SUCCESS;
+    if (distinct_extra_store != nullptr) {
+      ret = distinct_extra_store->rewind();
+    }
+    if (data_store != nullptr && OB_SUCC(ret)) {
+      ret = data_store->rewind();
+    }
+    return ret;
+  }
+
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(distinct_extra_store));
+    J_KV(K(data_store));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 } // namespace aggregate

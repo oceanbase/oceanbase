@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
 
 #define protected public
 #define private public

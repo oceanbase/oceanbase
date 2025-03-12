@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_MONITOR
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::json;
 namespace oceanbase
 {

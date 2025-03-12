@@ -11,12 +11,7 @@
  */
 
 #include "fetch_log_engine.h"
-#include "log_define.h"
-#include "palf_handle_impl.h"
 #include "palf_handle_impl_guard.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
-#include "share/ob_thread_mgr.h"
-#include "share/ob_ls_id.h"
 #include "palf_env_impl.h"
 
 namespace oceanbase

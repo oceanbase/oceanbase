@@ -15,7 +15,6 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "logservice/cdcservice/ob_cdc_req.h"
 
 #include "ob_cdc_miss_log_handler.h"
 #include "ob_log_config.h"

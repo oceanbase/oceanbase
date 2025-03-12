@@ -12,16 +12,20 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_all_server_tracer.h"
-#include "lib/thread/thread_mgr.h"
-#include "lib/alloc/alloc_assist.h"
 #include "observer/ob_server_struct.h"
+#include "share/ob_rpc_struct.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"     // ObAllServerTracerProxy
 #include "share/ob_zone_table_operation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
 ObServerTraceMap::ObServerTraceMap()
-  : is_inited_(false), has_build_(false), lock_(ObLatchIds::ALL_SERVER_TRACER_LOCK), server_info_arr_()
+    : is_inited_(false),
+      has_build_(false),
+      lock_(ObLatchIds::ALL_SERVER_TRACER_LOCK),
+      renew_time_(0),
+      server_info_arr_()
 {
 }
 
@@ -210,6 +214,48 @@ int ObServerTraceMap::find_server_info(const ObAddr &addr, ObServerInfoInTable &
   return ret;
 }
 
+int ObServerTraceMap::broadcast_server_trace_() const
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<ObAddr> alive_servers;
+  ObZone all_zone;
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is nullptr", KR(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(all_zone, alive_servers))) {
+    LOG_WARN("fail to get_alive_servers", KR(ret));
+  } else {
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+      LOG_WARN("fail to set timeout ctx", KR(ret));
+    } else {
+      rootserver::ObAllServerTracerProxy rpc_proxy(*GCTX.srv_rpc_proxy_,
+          &obrpc::ObSrvRpcProxy::all_server_tracer_send);
+      obrpc::ObRefreshTenantInfoArg rpc_arg;
+      int64_t timeout = ctx.get_timeout();
+      // This init value has no meaning for server_trace refresh
+      if (OB_FAIL(rpc_arg.init(OB_SYS_TENANT_ID))) {
+        LOG_WARN("failed to init ObRefreshTenantInfoArg", KR(ret));
+      } else {
+        FOREACH_CNT(addr, alive_servers) {
+          if (OB_TMP_FAIL(rpc_proxy.call(*addr, timeout, rpc_arg))) {
+            ret = OB_SUCC(ret) ? tmp_ret : ret;
+            LOG_WARN("fail to send rpc", KR(ret), KR(tmp_ret), KPC(addr), K(rpc_arg));
+          }
+        }
+        ObArray<int> rc_array;
+        if (OB_TMP_FAIL(rpc_proxy.wait_all(rc_array))) {
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
+          LOG_WARN("fail to wait all results", KR(ret), KR(tmp_ret));
+        }
+      }
+    }
+  }
+  LOG_INFO("finished broadcasting server trace", KR(ret), KR(tmp_ret), K(alive_servers));
+  return ret;
+}
+
 // get rpc port by sql port, ip
 int ObServerTraceMap::get_rpc_port_status(const ObAddr &addr, const int64_t sql_port,
                               int64_t &rpc_port, ObServerInfoInTable &status) const
@@ -217,13 +263,12 @@ int ObServerTraceMap::get_rpc_port_status(const ObAddr &addr, const int64_t sql_
   int ret = OB_SUCCESS;
   bool found = false;
   for (int64_t i = 0; (i < server_info_arr_.count()) && !found; i++) {
-    const static int MAX_IP_BUFFER_LEN = 32;
-    char server_ip_buf[MAX_IP_BUFFER_LEN];
+    char server_ip_buf[MAX_IP_ADDR_LENGTH];
     server_ip_buf[0] = '\0';
-    char addr_buf[MAX_IP_BUFFER_LEN];
+    char addr_buf[MAX_IP_ADDR_LENGTH];
     addr_buf[0] = '\0';
-    server_info_arr_.at(i).get_server().ip_to_string(server_ip_buf, MAX_IP_BUFFER_LEN);
-    addr.ip_to_string(addr_buf, MAX_IP_BUFFER_LEN);
+    server_info_arr_.at(i).get_server().ip_to_string(server_ip_buf, MAX_IP_ADDR_LENGTH);
+    addr.ip_to_string(addr_buf, MAX_IP_ADDR_LENGTH);
     if (0 == strcmp(server_ip_buf, addr_buf) && server_info_arr_.at(i).get_sql_port() == sql_port) {
       status = server_info_arr_.at(i);
       rpc_port = server_info_arr_.at(i).get_server().get_port();
@@ -436,6 +481,34 @@ int ObServerTraceMap::get_alive_servers(const ObZone &zone, ObIArray<ObAddr> &se
   return ret;
 }
 
+int ObServerTraceMap::get_alive_servers_with_renew_time(
+    const common::ObZone &zone,
+    common::ObIArray<common::ObAddr> &server_list,
+    int64_t &renew_time) const
+{
+  int ret = OB_SUCCESS;
+  server_list.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server trace map has not inited", KR(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_info_arr_.count(); ++i) {
+      const ObServerInfoInTable &server_info = server_info_arr_.at(i);
+      const ObAddr &server = server_info.get_server();
+      if ((server_info.get_zone() == zone || zone.is_empty()) && server_info.is_alive()) {
+        if (OB_FAIL(server_list.push_back(server))) {
+          LOG_WARN("fail to push an element into server_list", KR(ret), K(server));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      renew_time = renew_time_;
+    }
+  }
+  return ret;
+}
+
 int ObServerTraceMap::get_alive_and_not_stopped_servers(const ObZone &zone, ObIArray<ObAddr> &server_list) const
 {
   int ret = OB_SUCCESS;
@@ -603,7 +676,7 @@ int ObServerTraceMap::get_min_server_version(
   return ret;
 }
 
-int ObServerTraceMap::refresh()
+int ObServerTraceMap::refresh(bool allow_broadcast /* = false */)
 {
   int ret = OB_SUCCESS;
   ObArray<ObServerInfoInTable> servers_info;
@@ -611,6 +684,12 @@ int ObServerTraceMap::refresh()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObServerTraceMap has not been inited", KR(ret), K(is_inited_));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("can not renew tenant map because sys tenant schema is not ready", KR(ret));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
@@ -622,30 +701,263 @@ int ObServerTraceMap::refresh()
   } else if (OB_FAIL(ObZoneTableOperation::get_inactive_zone_list(*GCTX.sql_proxy_, inactive_zone_list))) {
     LOG_WARN("failed to get inactive zone list", K(ret));
   } else {
-    SpinWLockGuard guard(lock_);
-    // reuse memory
-    server_info_arr_.reuse();
-    inactive_zone_list_.reuse();
-    if (OB_FAIL(inactive_zone_list_.assign(inactive_zone_list))) {
-      LOG_WARN("failed to assign inactive zone list", K(ret));
-    }
-    // can not use ObArray's assign, which will reallocate memory
-    for (int64_t i = 0; i < servers_info.count() && OB_SUCC(ret); ++i) {
-      const ObServerInfoInTable &server_info_i = servers_info.at(i);
-      if (OB_FAIL(server_info_arr_.push_back(server_info_i))) {
-        LOG_WARN("fail to push back", K(server_info_i), KR(ret));
+    {
+      SpinWLockGuard guard(lock_);
+      // reuse memory
+      server_info_arr_.reuse();
+      inactive_zone_list_.reuse();
+      if (OB_FAIL(inactive_zone_list_.assign(inactive_zone_list))) {
+        LOG_WARN("failed to assign inactive zone list", K(ret));
+      }
+      // can not use ObArray's assign, which will reallocate memory
+      for (int64_t i = 0; i < servers_info.count() && OB_SUCC(ret); ++i) {
+        const ObServerInfoInTable &server_info_i = servers_info.at(i);
+        if (OB_FAIL(server_info_arr_.push_back(server_info_i))) {
+          LOG_WARN("fail to push back", K(server_info_i), KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FALSE_IT(renew_time_ = ObTimeUtility::current_time())) {
+      } else if (!has_build_) {
+        has_build_ = true;
+        FLOG_INFO("server tracer has built", KR(ret), K(has_build_), K(renew_time_), K(server_info_arr_));
       }
     }
-    if (OB_SUCC(ret) && !has_build_) {
-      has_build_ = true;
-      FLOG_INFO("server tracer has built", KR(ret), K(has_build_), K(server_info_arr_));
+
+    if (OB_SUCC(ret) && allow_broadcast) {
+      if (OB_FAIL(broadcast_server_trace_())) {
+        LOG_WARN("failed to broadcast server trace ",KR(ret));
+      }
     }
   }
   return ret;
 }
 
+ObTenantServersCacheMap::ObTenantServersCacheMap()
+    : is_inited_(false),
+      tenant_map_(),
+      ut_operator_(),
+      last_cache_clear_ts_(0)
+{
+}
+
+ObTenantServersCacheMap::~ObTenantServersCacheMap()
+{
+}
+
+int ObTenantServersCacheMap::init()
+{
+  int ret = OB_SUCCESS;
+  const int64_t BUCKET_NUM = 512;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTenantServersCacheMap has already been inited", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the GCTX.sql_proxy_ is null", KR(ret));
+  } else if (OB_FAIL(ut_operator_.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init ObUnitTableOperator", KR(ret));
+  } else if (OB_FAIL(tenant_map_.create(BUCKET_NUM,
+        SET_USE_500("TntSrvCaMap"), SET_USE_500("TntSrvCaMap")))){
+    LOG_WARN("failed to create tenant map", KR(ret));
+  } else {
+    last_cache_clear_ts_ = ObTimeUtility::current_time();
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_GET_TENANT_MAP_ERROR)
+int ObTenantServersCacheMap::get_alive_tenant_servers(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObAddr> &alive_servers,
+    int64_t &renew_time) const
+{
+  int ret = OB_SUCCESS;
+  alive_servers.reset();
+  renew_time = 0;
+  ObTenantServers tenant_servers;
+  uint64_t valid_tnt_id = is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantServersCacheMap has not been initialized", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(valid_tnt_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("valid_tnt_id is invalid", KR(ret), K(valid_tnt_id), K(tenant_id));
+  } else if (OB_UNLIKELY(ERRSIM_GET_TENANT_MAP_ERROR != OB_SUCCESS)) {
+    LOG_WARN("ERRSIM_GET_TENANT_MAP_ERROR", K(ret));
+  } else if (OB_FAIL(tenant_map_.get_refactored(valid_tnt_id, tenant_servers))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get from tenant_map_", KR(ret), K(valid_tnt_id));
+    }
+  } else if (OB_FALSE_IT(renew_time = tenant_servers.get_renew_time())) {
+  } else {
+    bool is_alive = false;
+    const ObArray<ObAddr> &all_servers = tenant_servers.get_servers();
+    ARRAY_FOREACH(all_servers, idx) {
+      if (OB_FAIL(SVR_TRACER.check_server_alive(all_servers.at(idx), is_alive))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // skip this server and continue judging
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to check_server_alive", KR(ret), "server", all_servers.at(idx));
+        }
+      } else if (is_alive) {
+        if (OB_FAIL(alive_servers.push_back(all_servers.at(idx)))) {
+          LOG_WARN("push back failed", KR(ret), "server", all_servers.at(idx));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantServersCacheMap::set_tenant_servers_cache_(
+    const ObTenantServers &tenant_servers)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantServersCacheMap has not been initialized", KR(ret));
+  } else if (OB_UNLIKELY(!tenant_servers.is_valid()
+        || tenant_servers.get_renew_time() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the input parameter is invalid", KR(ret),
+        K(tenant_servers), "renew_time", tenant_servers.get_renew_time());
+  } else if (OB_UNLIKELY(is_meta_tenant(tenant_servers.get_tenant_id()))) {
+    // defensive check. The previous step ensures that tenant_servers should not be meta tenants.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("this tenant_servers should not belong to meta tenants", KR(ret), K(tenant_servers));
+  } else {
+    ObTenantServersCacheUpdater updater(tenant_servers);
+    if (OB_FAIL(tenant_map_.set_or_update(tenant_servers.get_tenant_id(), tenant_servers, updater))) {
+      LOG_WARN("failed to set_or_update", KR(ret), K(tenant_servers));
+    }
+  }
+  return ret;
+}
+
+int ObTenantServersCacheMap::clear_expired_tenent_servers_cache_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> dropped_tenant_ids;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantServersCacheMap has not been initialized", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("can not clear expiered cache because sys tenant schema is not ready", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_dropped_tenant_ids(dropped_tenant_ids))) {
+    LOG_WARN("failed to get tenant ids", KR(ret));
+  } else {
+    ARRAY_FOREACH(dropped_tenant_ids, idx) {
+      if (is_meta_tenant(dropped_tenant_ids.at(idx))) {
+        // skip
+      } else if (OB_FAIL(tenant_map_.erase_refactored(dropped_tenant_ids.at(idx)))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to delete tenant_servers_cache from tenant_map", K(ret),
+              "tenant_id", dropped_tenant_ids.at(idx));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantServersCacheMap::renew_tenant_map()
+{
+  int ret = OB_SUCCESS;
+  ObArray<share::ObTenantServers> all_tenant_servers;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantServersCacheMap has not been initialized", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("can not renew tenant map because sys tenant schema is not ready", KR(ret));
+  } else if (OB_FAIL(ut_operator_.get_tenant_servers(all_tenant_servers))) {
+    LOG_WARN("failed to get tenant servers information in batches", KR(ret));
+  } else if (OB_UNLIKELY(all_tenant_servers.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the tenant_servers should be greater than 0", KR(ret));
+  } else {
+    ARRAY_FOREACH(all_tenant_servers, idx) {
+      if (OB_FAIL(set_tenant_servers_cache_(all_tenant_servers.at(idx)))) {
+        LOG_WARN("set_tenant_location failed", KR(ret),
+            "tenant_servers", all_tenant_servers.at(idx),
+            "renew_time", all_tenant_servers.at(idx).get_renew_time());
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (ObTimeUtil::current_time() - last_cache_clear_ts_ > CLEAR_CACHE_INTERVAL) {
+    if (OB_FAIL(clear_expired_tenent_servers_cache_())) {
+      LOG_WARN("failed to clear expired cache", KR(ret));
+    } else {
+      last_cache_clear_ts_ = ObTimeUtil::current_time();
+    }
+  }
+  return ret;
+}
+
+int ObTenantServersCacheMap::renew_tenant_map_by_id(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObArray<share::ObTenantServers> all_tenant_servers;
+  bool has_been_dropped = false;
+  uint64_t valid_tnt_id = is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id;
+  if (OB_UNLIKELY(!is_inited_)) {
+    LOG_WARN("ObTenantServersCacheMap has not been initialized", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->check_if_tenant_has_been_dropped(tenant_id, has_been_dropped))) {
+    LOG_WARN("failed to check_if_tenant_has_been_dropped", KR(ret), K(tenant_id));
+  } else if (has_been_dropped) {
+    // skip
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(valid_tnt_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the tenant_id is invalid", KR(ret), K(valid_tnt_id), K(tenant_id));
+  } else if (OB_FAIL(ut_operator_.get_tenant_servers(all_tenant_servers, valid_tnt_id))) {
+    LOG_WARN("failed to get_tenant_servers", KR(ret), K(valid_tnt_id), K(tenant_id));
+  } else if (OB_UNLIKELY(all_tenant_servers.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the number of tenant_servers of this tenant is not one", KR(ret), K(tenant_id), K(all_tenant_servers));
+  } else if (OB_FAIL(set_tenant_servers_cache_(all_tenant_servers.at(0)))) {
+    LOG_WARN("set_tenant_location failed", KR(ret), "tenant_servers by tenant_id", all_tenant_servers.at(0));
+  }
+  return ret;
+}
+
+void ObTenantServersCacheUpdater::operator()(
+    common::hash::HashMapPair<
+    uint64_t,
+    ObTenantServers> &entry)
+{
+  int ret = OB_SUCCESS;
+  if (update_value_.get_renew_time() > entry.second.get_renew_time()) {
+    if (OB_FAIL(entry.second.assign(update_value_))) {
+      LOG_WARN("assign failed", KR(ret), K(update_value_));
+    }
+  } else {
+    LOG_TRACE("ObTenantServers is not the latest",
+        "already_inserted_renew_time", entry.second.get_renew_time(),
+        "desired_renew_time", update_value_.get_renew_time(),
+        "desired_tenant_id", update_value_.get_tenant_id());
+  }
+}
+
 ObServerTraceTask::ObServerTraceTask()
-  : trace_map_(NULL), is_inited_(false)
+    : tracer_(nullptr), is_inited_(false)
 {
 }
 
@@ -653,20 +965,22 @@ ObServerTraceTask::~ObServerTraceTask()
 {
 }
 
-int ObServerTraceTask::init(ObServerTraceMap *trace_map, int tg_id)
+int ObServerTraceTask::init(ObAllServerTracer *tracer, int tg_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObServerTraceTask has already been inited", K(ret));
-  } else if (OB_ISNULL(trace_map)) {
+  } else if (OB_ISNULL(tracer)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(trace_map));
-  } else if (OB_FAIL(TG_SCHEDULE(tg_id, *this, REFRESH_INTERVAL_US,
+    LOG_WARN("invalid argument", K(ret), KP(tracer));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id, *this,
+                                 GCONF.virtual_table_location_cache_expire_time,
                                  true /*repeat schedule*/))) {
     LOG_WARN("fail to schedule timer", K(ret));
   } else {
-    trace_map_ = trace_map;
+    tg_id_ = tg_id;
+    tracer_ = tracer;
     is_inited_ = true;
   }
   return ret;
@@ -675,16 +989,34 @@ int ObServerTraceTask::init(ObServerTraceMap *trace_map, int tg_id)
 void ObServerTraceTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObServerTraceTask has not been inited", K(ret));
-  } else if (OB_FAIL(trace_map_->refresh())) {
-    LOG_WARN("fail to refresh all server map", K(ret));
+    LOG_WARN("ObServerTraceTask has not been inited", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(tracer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ or tracer_ is null", KR(ret));
+  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("sys tenant schema is not ready", KR(ret));
+  } else {
+    // the following operations all ignore error codes
+    // to ensure that they do not interfere with each other
+
+    // this operation will refresh all servers to the cache
+    if (OB_TMP_FAIL(tracer_->refresh())) {
+      LOG_WARN("fail to refresh all server map", KR(tmp_ret));
+    }
+    // this operation will refresh all tenant servers into the cache.
+    if (OB_TMP_FAIL(tracer_->renew_tenant_servers_cache_map())) {
+      // overwrite tmp_ret
+      LOG_WARN("failed to renew tenant servers map", KR(tmp_ret));
+    }
   }
 }
 
 ObAllServerTracer::ObAllServerTracer()
-  : is_inited_(false), trace_map_()
+    : is_inited_(false), trace_map_(), tenant_servers_cache_map_()
 {
 }
 
@@ -706,8 +1038,12 @@ int ObAllServerTracer::init(int tg_id, ObServerTraceTask &trace_task)
     LOG_WARN("ObAllServerTracer has already been inited", K(ret));
   } else if (OB_FAIL(trace_map_.init())) {
     LOG_WARN("fail to init trace map", K(ret));
-  } else if (OB_FAIL(trace_task.init(&trace_map_, tg_id))) {
+  } else if (OB_FAIL(trace_task.init(this, tg_id))) {
     LOG_WARN("fail to init trace task", K(ret));
+  } else if (OB_FAIL(tenant_servers_cache_map_.init())) {
+    LOG_WARN("fail to init tenant servers cache map", K(ret));
+  } else {
+    is_inited_ = true;
   }
   return ret;
 }
@@ -802,6 +1138,14 @@ int ObAllServerTracer::get_alive_servers(const ObZone &zone, ObIArray<ObAddr> &s
   return trace_map_.get_alive_servers(zone, server_list);
 }
 
+int ObAllServerTracer::get_alive_servers_with_renew_time(
+    const common::ObZone &zone,
+    common::ObIArray<common::ObAddr> &server_list,
+    int64_t &renew_time) const
+{
+  return trace_map_.get_alive_servers_with_renew_time(zone, server_list, renew_time);
+}
+
 int ObAllServerTracer::check_server_active(const ObAddr &server, bool &is_active) const
 {
   return trace_map_.check_server_active(server, is_active);
@@ -822,9 +1166,9 @@ int ObAllServerTracer::get_alive_and_not_stopped_servers(const ObZone &zone, ObI
   return trace_map_.get_alive_and_not_stopped_servers(zone, server_list);
 }
 
-int ObAllServerTracer::refresh()
+int ObAllServerTracer::refresh(bool allow_broadcast /* = false */)
 {
-  return trace_map_.refresh();
+  return trace_map_.refresh(allow_broadcast);
 }
 
 int ObAllServerTracer::get_servers_by_status(
@@ -845,4 +1189,22 @@ int ObAllServerTracer::get_min_server_version(
 bool ObAllServerTracer::has_build() const
 {
   return trace_map_.has_build();
+}
+
+int ObAllServerTracer::get_alive_tenant_servers(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObAddr> &servers,
+    int64_t &renew_time) const
+{
+  return tenant_servers_cache_map_.get_alive_tenant_servers(tenant_id, servers, renew_time);
+}
+
+int ObAllServerTracer::renew_tenant_servers_cache_map()
+{
+  return tenant_servers_cache_map_.renew_tenant_map();
+}
+
+int ObAllServerTracer::renew_tenant_servers_cache_by_id(const uint64_t tenant_id)
+{
+  return tenant_servers_cache_map_.renew_tenant_map_by_id(tenant_id);
 }

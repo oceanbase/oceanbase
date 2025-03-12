@@ -13,13 +13,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include <share/scn.h>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
-#include "env/ob_simple_log_server.h"
 #undef private
 
 const std::string TEST_NAME = "log_throttling";

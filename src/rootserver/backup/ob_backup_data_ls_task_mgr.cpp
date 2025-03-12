@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_data_ls_task_mgr.h"
-#include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
-#include "share/backup/ob_backup_struct.h"
-#include "rootserver/backup/ob_backup_service.h"
-#include "share/ls/ob_ls_status_operator.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "share/backup/ob_backup_connectivity.h"
-#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_operator.h"
 
 

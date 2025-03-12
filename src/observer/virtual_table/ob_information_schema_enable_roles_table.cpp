@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_information_schema_enable_roles_table.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;

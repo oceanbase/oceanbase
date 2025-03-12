@@ -139,6 +139,7 @@ private:
   explicit ObBootstrap(obrpc::ObSrvRpcProxy &rpc_proxy,
                        share::ObLSTableOperator &lst_operator,
                        ObDDLService &ddl_service,
+                       ObTenantDDLService &tenant_ddl_service,
                        ObUnitManager &unit_mgr,
                        common::ObServerConfig &config,
                        const obrpc::ObBootstrapArg &arg,
@@ -150,12 +151,12 @@ private:
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas);
   int construct_all_schema(
-      common::ObIArray<share::schema::ObTableSchema> &table_schemas);
+      common::ObSArray<share::schema::ObTableSchema> &table_schemas,
+      ObIAllocator &allocator);
   int sort_schema(const common::ObIArray<share::schema::ObTableSchema> &table_schemas,
                   common::ObIArray<share::schema::ObTableSchema> &sort_table_schemas);
 private:
   static const int64_t HEAT_BEAT_INTERVAL_US = 2 * 1000 * 1000; //2s
-  static const int64_t WAIT_RS_IN_SERVICE_TIMEOUT_US = 40 * 1000 * 1000; //40s
   static const int64_t BATCH_INSERT_SCHEMA_CNT = 128;
   virtual int generate_table_schema_array_for_create_partition(
       const share::schema::ObTableSchema &tschema,
@@ -168,8 +169,7 @@ private:
   virtual int construct_schema(
       const share::schema_create_func func,
       share::schema::ObTableSchema &tschema);
-  virtual int broadcast_sys_schema(
-      const common::ObSArray<share::schema::ObTableSchema> &table_schemas);
+  virtual int broadcast_sys_schema();
   static int batch_create_schema(
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas,
@@ -181,7 +181,6 @@ private:
   virtual int init_all_zone_table();
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient &sql_client);
   virtual int add_servers_in_rs_list(rootserver::ObServerZoneOpService &server_zone_op_service);
-  virtual int wait_all_rs_in_service();
 #ifdef OB_BUILD_SHARED_STORAGE
   virtual int write_shared_storage_args();
   virtual int write_shared_storage_args_for_zone(const ObZone &zone, const ObRegion &region,
@@ -211,6 +210,7 @@ private:
 private:
   share::ObLSTableOperator &lst_operator_;
   ObDDLService &ddl_service_;
+  ObTenantDDLService &tenant_ddl_service_;
   ObUnitManager &unit_mgr_;
   const obrpc::ObBootstrapArg &arg_;
   obrpc::ObCommonRpcProxy &common_proxy_;

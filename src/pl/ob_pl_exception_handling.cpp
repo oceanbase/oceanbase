@@ -15,9 +15,6 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_call_stack_trace.h"
 #endif
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

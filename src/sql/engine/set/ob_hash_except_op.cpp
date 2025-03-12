@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/set/ob_hash_except_op.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/basic/ob_hash_partitioning_infrastructure_op.h"
 
 namespace oceanbase
 {

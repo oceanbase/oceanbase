@@ -43,7 +43,7 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "ls can't schedule merge",
-    1, {"weak_read_ts"})
+    2, {"weak_read_ts", "ls_status"})
 #ifdef OB_BUILD_SHARED_STORAGE
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_START_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "failed to start ss merge",
     2, {"broadcast_version", "error_code"})

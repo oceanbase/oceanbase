@@ -12,18 +12,11 @@
 
 #define USING_LOG_PREFIX TEST
 #include <getopt.h>
-#include <unistd.h>
 #include <gtest/gtest.h>
 #define protected public
 #define private public
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "observer/omt/ob_tenant_node_balancer.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/column_store/ob_co_merge_dag.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms

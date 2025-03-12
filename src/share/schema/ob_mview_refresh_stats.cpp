@@ -14,8 +14,6 @@
 
 #include "share/schema/ob_mview_refresh_stats.h"
 #include "observer/ob_server_struct.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase
 {
@@ -366,6 +364,7 @@ ObMViewRefreshStats &ObMViewRefreshStats::operator=(const ObMViewRefreshStats &s
     final_num_rows_ = src_schema.final_num_rows_;
     num_steps_ = src_schema.num_steps_;
     result_ = src_schema.result_;
+    refresh_parallelism_ = src_schema.refresh_parallelism_;
   }
   return *this;
 }
@@ -403,6 +402,7 @@ void ObMViewRefreshStats::reset()
   final_num_rows_ = 0;
   num_steps_ = 0;
   result_ = UNEXECUTED_STATUS;
+  refresh_parallelism_ = 0;
   ObSchema::reset();
 }
 
@@ -450,6 +450,32 @@ int ObMViewRefreshStats::gen_insert_refresh_stats_dml(uint64_t exec_tenant_id,
         OB_FAIL(dml.add_column("num_steps", num_steps_)) ||
         OB_FAIL(dml.add_column("result", result_))) {
       LOG_WARN("add column failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMViewRefreshStats::insert_refresh_stats(const ObMViewRefreshStats &refresh_stat)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = refresh_stat.get_tenant_id();
+  ObMySQLTransaction trans;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret), KP(GCTX.sql_proxy_));
+  } else if (!refresh_stat.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(refresh_stat));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+  } else if (OB_FAIL(insert_refresh_stats(trans, refresh_stat))) {
+    LOG_WARN("fail to insert record", K(ret), K(refresh_stat));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", K(ret));
+      ret = COVER_SUCC(tmp_ret);
     }
   }
   return ret;

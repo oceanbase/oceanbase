@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/charset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_ctype_latin1_tab.h"
 
 static int ob_mb_wc_latin1(const ObCharsetInfo *cs __attribute__((unused)),

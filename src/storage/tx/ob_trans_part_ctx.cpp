@@ -10,41 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include <cstdint>
 #define USING_LOG_PREFIX TRANS
-#include "ob_trans_part_ctx.h"
 
-#include "common/storage/ob_sequence.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/utility/serialization.h"
-#include "lib/container/ob_array_helper.h"
-#include "ob_trans_ctx_mgr.h"
-#include "ob_ts_mgr.h"
-#include "ob_tx_log.h"
-#include "ob_tx_msg.h"
+#include "ob_trans_part_ctx.h"
 #include "ob_tx_redo_submitter.h"
-#include "lib/worker.h"
-#include "share/rc/ob_context.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_leak_checker.h"
-#include "storage/tx/ob_multi_data_source_printer.h"
-#include "share/ob_alive_server_tracer.h"
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #define NEED_MDS_REGISTER_DEFINE
 #include "storage/multi_data_source/compile_utility/mds_register.h"
 #undef NEED_MDS_REGISTER_DEFINE
-#include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
-#include "storage/tx/ob_ctx_tx_data.h"
-#include "storage/multi_data_source/runtime_utility/mds_tlocal_info.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "logservice/ob_log_service.h"
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"
@@ -3027,7 +3000,7 @@ int ObPartTransCtx::get_gts_(SCN &gts)
   MonotonicTs receive_gts_ts;
   const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
   const MonotonicTs stc_ahead = get_stc_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
-  ObITsMgr *ts_mgr = trans_service_->get_ts_mgr();
+  ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
 
   if (sub_state_.is_gts_waiting()) {
     ret = OB_EAGAIN;
@@ -3057,7 +3030,7 @@ int ObPartTransCtx::wait_gts_elapse_commit_version_(bool &need_wait)
   int ret = OB_SUCCESS;
   need_wait = false;
 
-  ObITsMgr *ts_mgr = trans_service_->get_ts_mgr();
+  ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
 
   if (OB_FAIL(ts_mgr->wait_gts_elapse(tenant_id_,
                                       ctx_tx_data_.get_commit_version(),
@@ -6469,7 +6442,12 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_PREPARE)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2);
     const bool contain_mds_tablet_split = is_contain_mds_type_(ObTxDataSourceType::TABLET_SPLIT);
-    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out || contain_mds_tablet_split;
+    const bool contain_mds_tablet_transfer_in = is_contain_mds_type_(ObTxDataSourceType::TRANSFER_IN_ABORTED)
+                           || is_contain_mds_type_(ObTxDataSourceType::FINISH_TRANSFER_IN);
+    const bool need_kill_tx = contain_mds_table_lock
+                           || contain_mds_transfer_out
+                           || contain_mds_tablet_split
+                           || contain_mds_tablet_transfer_in;
     bool kill_by_append_mode_initial_scn = false;
     if (append_mode_initial_scn.is_valid()) {
       kill_by_append_mode_initial_scn = exec_info_.max_applying_log_ts_ <= append_mode_initial_scn;
@@ -6477,21 +6455,22 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 
     if (ObTxState::INIT == exec_info_.state_) {
       if (exec_info_.data_complete_ && !contain_mds_table_lock && !contain_mds_transfer_out
-          && !contain_mds_tablet_split && !kill_by_append_mode_initial_scn) {
+          && !contain_mds_tablet_split && !kill_by_append_mode_initial_scn && !contain_mds_tablet_transfer_in) {
         if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
         TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_mds_table_lock),
-                  K(contain_mds_transfer_out), K(contain_mds_tablet_split), K(kill_by_append_mode_initial_scn),
-                  K(append_mode_initial_scn), KPC(this));
+                  K(contain_mds_transfer_out), K(contain_mds_tablet_split), K(contain_mds_tablet_transfer_in),
+                  K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
         if (has_persisted_log_()) {
           if (ObPartTransAction::COMMIT == part_trans_action_
               || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
 
             TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
                       K(contain_mds_table_lock), K(contain_mds_transfer_out), K(contain_mds_tablet_split),
-                      K(need_kill_tx), K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
+                      K(contain_mds_tablet_transfer_in), K(need_kill_tx), K(kill_by_append_mode_initial_scn),
+                      K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               //Temporary fix:
               //The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.
@@ -11303,6 +11282,27 @@ int ObPartTransCtx::check_need_transfer(
     }
     if (OB_SUCC(ret) && !contain) {
       need_transfer = false;
+    }
+  }
+  return ret;
+}
+
+int ObPartTransCtx::collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg)
+{
+  int ret = OB_SUCCESS;
+  need_collect = false;
+  CtxLockGuard guard(lock_);
+  for (int64_t i = 0; i < exec_info_.multi_data_source_.count(); i++) {
+    if (exec_info_.multi_data_source_[i].get_data_source_type() == ObTxDataSourceType::MVIEW_MDS_OP) {
+      need_collect = true;
+      const ObMViewMdsOpCtx *user_ctx = static_cast<const ObMViewMdsOpCtx*>(exec_info_.multi_data_source_[i].get_buffer_ctx_node().get_ctx());
+      if (OB_ISNULL(user_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "mview mds is null", KR(ret), KPC(this));
+      } else if (OB_FAIL(arg.assign(user_ctx->get_arg_const()))) {
+        TRANS_LOG(WARN, "assign mview op arg failed", KR(ret), KPC(this));
+      }
+      break;
     }
   }
   return ret;

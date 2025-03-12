@@ -217,6 +217,8 @@ plan_cache_evict_interval
 plsql_code_type
 plsql_debug
 plsql_v2_compatibility
+plugins_load
+px_node_policy
 px_task_size
 px_workers_per_cpu_quota
 query_memory_limit_percentage
@@ -292,10 +294,12 @@ trace_log_slow_query_watermark
 trx_2pc_retry_interval
 ttl_thread_score
 undo_retention
+unit_gc_wait_time
 user_block_cache_priority
 user_row_cache_priority
 use_ipv6
 use_large_pages
+utl_file_open_max
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval
 workarea_size_policy
@@ -326,6 +330,7 @@ _datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _delay_resource_recycle_after_correctness_issue
 _display_mysql_version
+_display_non_session_cursor
 _dop_of_collect_external_table_statistics
 _enable_active_txn_transfer
 _enable_adaptive_auto_dop
@@ -341,6 +346,7 @@ _enable_choose_migration_source_policy
 _enable_column_store
 _enable_compaction_diagnose
 _enable_compatible_monotonic
+_enable_constant_type_demotion
 _enable_convert_real_to_decimal
 _enable_das_batch_rescan_flag
 _enable_das_keep_order
@@ -359,10 +365,12 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
+_enable_index_merge
 _enable_inner_session_mgr
 _enable_insertup_replace_gts_opt
 _enable_in_range_optimization
 _enable_kv_feature
+_enable_kv_group_commit_ops
 _enable_log_cache
 _enable_malloc_v2
 _enable_memleak_light_backtrace
@@ -377,6 +385,7 @@ _enable_parallel_das_dml
 _enable_parallel_minor_merge
 _enable_parallel_redo_logging
 _enable_parallel_table_creation
+_enable_parallel_tenant_creation
 _enable_partition_level_retry
 _enable_persistent_compiled_routine
 _enable_pkt_nio
@@ -395,6 +404,7 @@ _enable_ss_migration_prewarm
 _enable_ss_replica_prewarm
 _enable_system_tenant_memory_limit
 _enable_tenant_sql_net_thread
+_enable_topn_runtime_filter
 _enable_trace_session_leak
 _enable_trace_tablet_leak
 _enable_transaction_internal_routing
@@ -440,6 +450,7 @@ _max_elr_dependent_trx_count
 _max_ls_cnt_per_server
 _max_malloc_sample_interval
 _max_partition_count_to_collect_statistic
+_max_px_workers_per_cpu
 _max_rpc_packet_size
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
@@ -447,11 +458,14 @@ _mds_memory_limit_percentage
 _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
+_minor_merge_write_amplification_threshold
 _min_const_integer_precision
 _min_malloc_sample_interval
 _multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
+_ndv_runtime_bloom_filter_size
 _nested_loop_join_enabled
+_non_standard_comparison_level
 _no_logging
 _object_storage_io_timeout
 _obkv_feature_mode
@@ -468,6 +482,7 @@ _ob_enable_fast_parser
 _ob_enable_prepared_statement
 _ob_enable_standby_db_parallel_log_transport
 _ob_get_gts_ahead_interval
+_ob_immediate_row_conflict_check
 _ob_max_thread_num
 _ob_obj_dep_maint_task_interval
 _ob_plan_cache_auto_flush_interval
@@ -537,6 +552,7 @@ _storage_leak_check_mod
 _storage_meta_memory_limit_percentage
 _stream_rpc_max_wait_timeout
 _system_tenant_limit_mode
+_system_trig_enabled
 _temporary_file_io_area_size
 _trace_control_info
 _transfer_finish_trans_timeout

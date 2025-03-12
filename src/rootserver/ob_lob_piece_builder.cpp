@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_lob_piece_builder.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -96,6 +94,7 @@ int ObLobPieceBuilder::generate_aux_lob_piece_schema(
     }
     if (OB_SUCC(ret)) {
       aux_lob_piece_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
+      aux_lob_piece_schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
     }
 
   }

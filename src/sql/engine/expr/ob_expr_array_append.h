@@ -8,7 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
- * This file contains implementation for array_append.
+ * This file contains implementation for array_append and array_prepend.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_ARRAY_APPEND
@@ -41,14 +41,13 @@ public:
                                 bool is_preappend = false);
 
   static int append_elem(ObIAllocator &tmp_allocator, ObEvalCtx &ctx,
-                         ObCollectionArrayType *arr_type, ObDatum *val_datum,
-                         uint16_t val_subschema_id, ObIArrayType *val_arr,
-                         ObIArrayType *res_arr);
+                         ObDatum *val_datum, uint16_t val_subschema_id,
+                         ObIArrayType *val_arr, ObIArrayType *res_arr);
 
   static int append_elem_vector(ObIAllocator &tmp_allocator, ObEvalCtx &ctx,
-                                ObCollectionArrayType *arr_type, ObIVector *val_vec, int64_t idx,
-                                uint16_t val_subschema_id, ObExpr &param_expr, ObIArrayType *val_arr,
-                                ObIArrayType *res_arr);
+                                ObIVector *val_vec, int64_t idx,
+                                uint16_t val_subschema_id, ObExpr &param_expr,
+                                ObIArrayType *val_arr, ObIArrayType *res_arr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayAppendCommon);
 };
@@ -71,6 +70,26 @@ public:
                       ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayAppend);
+};
+
+class ObExprArrayPrepend : public ObExprArrayAppendCommon
+{
+public:
+  explicit ObExprArrayPrepend(common::ObIAllocator &alloc);
+  explicit ObExprArrayPrepend(common::ObIAllocator &alloc, ObExprOperatorType type,
+                              const char *name, int32_t param_num, int32_t dimension);
+  virtual ~ObExprArrayPrepend();
+  static int eval_array_prepend(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_array_prepend_batch(const ObExpr &expr, ObEvalCtx &ctx,
+                                      const ObBitVector &skip, const int64_t batch_size);
+  static int eval_array_prepend_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                       const ObBitVector &skip, const EvalBound &bound);
+
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprArrayPrepend);
 };
 
 } // sql

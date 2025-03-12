@@ -10,32 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/container/ob_iarray.h"
-#include "lib/container/ob_array_array.h"
 #include "storage/compaction/ob_partition_merger.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "blocksstable/ob_data_file_prepare.h"
-#include "blocksstable/ob_row_generate.h"
-#include "observer/ob_service.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_memtable_iterator.h"
-#include "storage/memtable/ob_memtable_mutator.h"
 
-#include "common/cell/ob_cell_reader.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/container/ob_se_array.h"
-#include "storage/ob_i_store.h"
-#include "share/ob_srv_rpc_proxy.h"
 
-#include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
 
-#include "memtable/utils_rowkey_builder.h"
-#include "memtable/utils_mock_row.h"
 #include "storage/test_tablet_helper.h"
 
 #include "storage/ob_partition_range_spliter.h"

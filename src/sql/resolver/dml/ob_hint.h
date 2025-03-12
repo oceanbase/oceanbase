@@ -47,6 +47,13 @@ enum class ObPxNodePolicy
   CLUSTER
 };
 
+enum class ObPxNodeSelectionMode
+{
+  DEFAULT,
+  SPECIFY_COUNT,
+  SPECIFY_NODE
+};
+
 struct ObAllocOpHint
 {
   ObAllocOpHint() : id_(0), flags_(0), alloc_level_(INVALID_LEVEL) {}
@@ -202,7 +209,11 @@ struct ObOptParamHint
     DEF(LOB_ROWSETS_MAX_ROWS,)                      \
     DEF(ENABLE_ENUM_SET_SUBSCHEMA,)                 \
     DEF(ENABLE_OPTIMIZER_ROWGOAL,)                  \
-    DEF(DAS_BATCH_RESCAN_FLAG,)          \
+    DEF(DAS_BATCH_RESCAN_FLAG,)                     \
+    DEF(DISABLE_GTT_SESSION_ISOLATION,)             \
+    DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
+    DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
+    DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -271,6 +282,34 @@ struct ObDBLinkHit {
   bool hint_xa_trans_stop_check_lock_;
 };
 
+struct ObPxNodeHint {
+  static const int64_t UNSET_PX_NODE_COUNT = -1;
+  ObPxNodeHint() { reset(); }
+  void reset() {
+    px_node_policy_ = ObPxNodePolicy::INVALID;
+    px_node_addrs_.reset();
+    px_node_count_ = UNSET_PX_NODE_COUNT;
+  }
+  bool empty() const {
+    return ObPxNodePolicy::INVALID == px_node_policy_
+         && px_node_addrs_.empty()
+         && UNSET_PX_NODE_COUNT == px_node_count_;
+  }
+  int merge_px_node_hint(const ObPxNodeHint &other);
+  void merge_px_node_policy(ObPxNodePolicy px_node_policy);
+  int merge_px_node_addrs(const ObIArray<ObAddr> &px_node_addrs);
+  void merge_px_node_count(int64_t px_node_count);
+  int print_px_node_hint(PlanText &plan_text) const;
+  int print_px_node_addrs(PlanText &plan_text) const;
+
+  TO_STRING_KV(K_(px_node_policy),
+               K_(px_node_addrs),
+               K_(px_node_count));
+  ObPxNodePolicy px_node_policy_;
+  common::ObSArray<common::ObAddr> px_node_addrs_;
+  int64_t px_node_count_;
+};
+
 struct ObGlobalHint {
   ObGlobalHint() { reset(); }
   void reset();
@@ -284,6 +323,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_1_BP5  (oceanbase::common::cal_version(4, 2, 1, 5))
 #define COMPAT_VERSION_4_2_1_BP7  (oceanbase::common::cal_version(4, 2, 1, 7))
 #define COMPAT_VERSION_4_2_1_BP8  (oceanbase::common::cal_version(4, 2, 1, 8))
+#define COMPAT_VERSION_4_2_1_BP9  (oceanbase::common::cal_version(4, 2, 1, 9))
+#define COMPAT_VERSION_4_2_1_BP10 (oceanbase::common::cal_version(4, 2, 1, 10))
 #define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
 #define COMPAT_VERSION_4_2_4      (oceanbase::common::cal_version(4, 2, 4, 0))
@@ -294,7 +335,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_3      (oceanbase::common::cal_version(4, 3, 3, 0))
 #define COMPAT_VERSION_4_3_4      (oceanbase::common::cal_version(4, 3, 4, 0))
 #define COMPAT_VERSION_4_3_5      (oceanbase::common::cal_version(4, 3, 5, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5
+#define COMPAT_VERSION_4_3_5_BP1  (oceanbase::common::cal_version(4, 3, 5, 1))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5_BP1
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 
@@ -321,6 +363,7 @@ struct ObGlobalHint {
   void reset_tm_sessid_tx_id_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
   void merge_parallel_hint(int64_t parallel);
+  void merge_dml_parallel_hint(int64_t dml_parallel);
   void merge_parallel_dml_hint(ObPDMLOption pdml_option);
   void merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option);
   void merge_param_option_hint(ObParamOption opt);
@@ -343,8 +386,10 @@ struct ObGlobalHint {
   int64_t get_dblink_tx_id_hint() const { return dblink_hints_.tx_id_; }
   uint32_t get_dblink_tm_sessid_hint() const { return dblink_hints_.tm_sessid_; }
   int64_t get_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL ? parallel_ : UNSET_PARALLEL; }
+  int64_t get_dml_parallel_degree() const { return dml_parallel_; }
   bool has_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
+  bool has_dml_parallel_hint() const { return UNSET_PARALLEL < dml_parallel_; }
   bool enable_auto_dop() const { return SET_ENABLE_AUTO_DOP == parallel_; }
   bool enable_manual_dop() const { return SET_ENABLE_MANUAL_DOP == parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
@@ -406,6 +451,7 @@ struct ObGlobalHint {
                K_(force_refresh_lc),
                K_(log_level),
                K_(parallel),
+               K_(dml_parallel),
                K_(monitor),
                K_(pdml_option),
                K_(param_option),
@@ -421,7 +467,8 @@ struct ObGlobalHint {
                K_(parallel_das_dml_option),
                K_(dynamic_sampling),
                K_(alloc_op_hints),
-               K_(dblink_hints));
+               K_(dblink_hints),
+               K_(px_node_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -435,6 +482,7 @@ struct ObGlobalHint {
   bool force_refresh_lc_;
   common::ObString log_level_;
   int64_t parallel_;
+  int64_t dml_parallel_;
   bool monitor_;
   ObPDMLOption pdml_option_;
   ObParamOption param_option_;
@@ -453,6 +501,7 @@ struct ObGlobalHint {
   ObDirectLoadHint direct_load_hint_;
   ObDBLinkHit dblink_hints_;
   common::ObString resource_group_;
+  ObPxNodeHint px_node_hint_;
 };
 
 // used in physical plan
@@ -1241,7 +1290,8 @@ class ObPQHint : public ObOptHint
   public:
   ObPQHint(ObItemType hint_type)
     : ObOptHint(hint_type),
-      dist_method_(T_INVALID)
+      dist_method_(T_INVALID),
+      parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_PQ);
   }
@@ -1255,10 +1305,13 @@ class ObPQHint : public ObOptHint
   inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
   inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
   inline bool is_force_pull_to_local() const { return T_DISTRIBUTE_LOCAL == dist_method_; }
+  void set_parallel(int64_t parallel) { parallel_ = parallel; }
+  int64_t get_parallel() const { return parallel_; }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method), K_(parallel));
 private:
   ObItemType dist_method_;
+  int64_t parallel_;
 };
 
 class ObJoinOrderHint : public ObOptHint {

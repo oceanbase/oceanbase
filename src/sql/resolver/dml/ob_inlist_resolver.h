@@ -60,6 +60,7 @@ private:
                                        const int64_t row_cnt,
                                        const bool is_question_mark,
                                        const bool is_prepare_stmt,
+                                       const bool is_called_in_sql,
                                        const ParamStore *param_store,
                                        ObSQLSessionInfo *session_info,
                                        ObIAllocator *allocator,
@@ -89,6 +90,7 @@ private:
                                         const ParamStore *param_store,
                                         ObSQLSessionInfo *session_info,
                                         ObIAllocator *allocator,
+                                        const bool is_called_in_sql,
                                         ObValuesTableDef &table_def);
   int resolve_access_obj_values_table(const ParseNode &in_list,
                                       const int64_t column_cnt,
@@ -96,6 +98,7 @@ private:
                                       ObSQLSessionInfo *session_info,
                                       ObIAllocator *allocator,
                                       const bool is_prepare_stage,
+                                      const bool is_called_in_sql,
                                       ObValuesTableDef &table_def);
 private:
   ObDMLResolver *cur_resolver_;

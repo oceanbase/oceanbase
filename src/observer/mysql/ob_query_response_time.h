@@ -35,6 +35,93 @@ DEF_RESP_TIME_SQL_TYPE(hbase_check_and_put_sql)
 DEF_RESP_TIME_SQL_TYPE(hbase_check_and_mutate_sql)
 DEF_RESP_TIME_SQL_TYPE(hbase_check_and_delete_sql)
 DEF_RESP_TIME_SQL_TYPE(hbase_hybrid_batch_sql)
+DEF_RESP_TIME_SQL_TYPE(redis_lindex)
+DEF_RESP_TIME_SQL_TYPE(redis_lset)
+DEF_RESP_TIME_SQL_TYPE(redis_lrange)
+DEF_RESP_TIME_SQL_TYPE(redis_ltrim)
+DEF_RESP_TIME_SQL_TYPE(redis_lpush)
+DEF_RESP_TIME_SQL_TYPE(redis_lpushx)
+DEF_RESP_TIME_SQL_TYPE(redis_rpush)
+DEF_RESP_TIME_SQL_TYPE(redis_rpushx)
+DEF_RESP_TIME_SQL_TYPE(redis_lpop)
+DEF_RESP_TIME_SQL_TYPE(redis_rpop)
+DEF_RESP_TIME_SQL_TYPE(redis_lrem)
+DEF_RESP_TIME_SQL_TYPE(redis_rpoplpush)
+DEF_RESP_TIME_SQL_TYPE(redis_linsert)
+DEF_RESP_TIME_SQL_TYPE(redis_llen)
+DEF_RESP_TIME_SQL_TYPE(redis_sdiff)
+DEF_RESP_TIME_SQL_TYPE(redis_sdiffstore)
+DEF_RESP_TIME_SQL_TYPE(redis_sinter)
+DEF_RESP_TIME_SQL_TYPE(redis_sinterstore)
+DEF_RESP_TIME_SQL_TYPE(redis_sunion)
+DEF_RESP_TIME_SQL_TYPE(redis_sunionstore)
+DEF_RESP_TIME_SQL_TYPE(redis_sadd)
+DEF_RESP_TIME_SQL_TYPE(redis_scard)
+DEF_RESP_TIME_SQL_TYPE(redis_sismember)
+DEF_RESP_TIME_SQL_TYPE(redis_smembers)
+DEF_RESP_TIME_SQL_TYPE(redis_smove)
+DEF_RESP_TIME_SQL_TYPE(redis_spop)
+DEF_RESP_TIME_SQL_TYPE(redis_srandmember)
+DEF_RESP_TIME_SQL_TYPE(redis_srem)
+DEF_RESP_TIME_SQL_TYPE(redis_zadd)
+DEF_RESP_TIME_SQL_TYPE(redis_zcard)
+DEF_RESP_TIME_SQL_TYPE(redis_zrem)
+DEF_RESP_TIME_SQL_TYPE(redis_zincrby)
+DEF_RESP_TIME_SQL_TYPE(redis_zscore)
+DEF_RESP_TIME_SQL_TYPE(redis_zrank)
+DEF_RESP_TIME_SQL_TYPE(redis_zrevrank)
+DEF_RESP_TIME_SQL_TYPE(redis_zrange)
+DEF_RESP_TIME_SQL_TYPE(redis_zrevrange)
+DEF_RESP_TIME_SQL_TYPE(redis_zremrangebyrank)
+DEF_RESP_TIME_SQL_TYPE(redis_zcount)
+DEF_RESP_TIME_SQL_TYPE(redis_zrangebyscore)
+DEF_RESP_TIME_SQL_TYPE(redis_zrevrangebyscore)
+DEF_RESP_TIME_SQL_TYPE(redis_zremrangebyscore)
+DEF_RESP_TIME_SQL_TYPE(redis_zinterstore)
+DEF_RESP_TIME_SQL_TYPE(redis_zunionstore)
+DEF_RESP_TIME_SQL_TYPE(redis_hset)
+DEF_RESP_TIME_SQL_TYPE(redis_hmset)
+DEF_RESP_TIME_SQL_TYPE(redis_hsetnx)
+DEF_RESP_TIME_SQL_TYPE(redis_hget)
+DEF_RESP_TIME_SQL_TYPE(redis_hmget)
+DEF_RESP_TIME_SQL_TYPE(redis_hgetall)
+DEF_RESP_TIME_SQL_TYPE(redis_hvals)
+DEF_RESP_TIME_SQL_TYPE(redis_hkeys)
+DEF_RESP_TIME_SQL_TYPE(redis_hexists)
+DEF_RESP_TIME_SQL_TYPE(redis_hdel)
+DEF_RESP_TIME_SQL_TYPE(redis_hincrby)
+DEF_RESP_TIME_SQL_TYPE(redis_hincrbyfloat)
+DEF_RESP_TIME_SQL_TYPE(redis_hlen)
+DEF_RESP_TIME_SQL_TYPE(redis_getset)
+DEF_RESP_TIME_SQL_TYPE(redis_setbit)
+DEF_RESP_TIME_SQL_TYPE(redis_incr)
+DEF_RESP_TIME_SQL_TYPE(redis_incrby)
+DEF_RESP_TIME_SQL_TYPE(redis_decr)
+DEF_RESP_TIME_SQL_TYPE(redis_decrby)
+DEF_RESP_TIME_SQL_TYPE(redis_append)
+DEF_RESP_TIME_SQL_TYPE(redis_bitcount)
+DEF_RESP_TIME_SQL_TYPE(redis_get)
+DEF_RESP_TIME_SQL_TYPE(redis_getbit)
+DEF_RESP_TIME_SQL_TYPE(redis_getrange)
+DEF_RESP_TIME_SQL_TYPE(redis_incrbyfloat)
+DEF_RESP_TIME_SQL_TYPE(redis_mget)
+DEF_RESP_TIME_SQL_TYPE(redis_mset)
+DEF_RESP_TIME_SQL_TYPE(redis_set)
+DEF_RESP_TIME_SQL_TYPE(redis_psetex)
+DEF_RESP_TIME_SQL_TYPE(redis_setex)
+DEF_RESP_TIME_SQL_TYPE(redis_setnx)
+DEF_RESP_TIME_SQL_TYPE(redis_setrange)
+DEF_RESP_TIME_SQL_TYPE(redis_strlen)
+DEF_RESP_TIME_SQL_TYPE(redis_ttl)
+DEF_RESP_TIME_SQL_TYPE(redis_pttl)
+DEF_RESP_TIME_SQL_TYPE(redis_expire)
+DEF_RESP_TIME_SQL_TYPE(redis_pexpire)
+DEF_RESP_TIME_SQL_TYPE(redis_expireat)
+DEF_RESP_TIME_SQL_TYPE(redis_pexpireat)
+DEF_RESP_TIME_SQL_TYPE(redis_del)
+DEF_RESP_TIME_SQL_TYPE(redis_exists)
+DEF_RESP_TIME_SQL_TYPE(redis_type)
+DEF_RESP_TIME_SQL_TYPE(redis_persist)
 #endif // DEF_RESP_TIME_SQL_TYPE
 
 #ifndef OB_QUERY_RESPONSE_TIME_
@@ -45,6 +132,7 @@ DEF_RESP_TIME_SQL_TYPE(hbase_hybrid_batch_sql)
 #include "lib/string/ob_string.h"
 #include "sql/resolver/ob_stmt_type.h"
 #include "lib/lock/ob_tc_rwlock.h"
+#include "observer/table/ob_table_process_type.h"
 namespace oceanbase {
 
 namespace share {
@@ -115,6 +203,7 @@ public:
   ~ObRespTimeInfoCollector() = default;
   int setup(uint32_t base);
   int collect(const sql::stmt::StmtType sql_type, const bool is_inner_sql, const uint64_t resp_time);
+  int collect(const ObTableHistogramType table_his_type, const uint64_t resp_time);
   int flush(int64_t base = OB_INVALID_ID);
   const ObRSTUtility &utility() const {return utility_;}
   int get_count_val(const RespTimeSqlType resp_time_sql_type, const int32_t pos, int64_t &val);
@@ -126,6 +215,7 @@ public:
 #include "observer/mysql/ob_query_response_time.h"
 #undef DEF_RESP_TIME_SQL_TYPE
 private:
+  int collect_redis(const ObTableProccessType redis_type, int pos, const uint64_t resp_time);
   ObRSTUtility utility_;
 };
 
@@ -139,6 +229,7 @@ public:
   static void mtl_destroy(ObTenantQueryRespTimeCollector *&t_resp_time_collector);
 
   int collect(const sql::stmt::StmtType sql_type, const bool is_inner_sql, const uint64_t resp_time);
+  int collect(const ObTableHistogramType table_his_type, const uint64_t resp_time);
   int get_sum_value(ObRespTimeInfoCollector &total_collector);
   int resize();
   int flush();

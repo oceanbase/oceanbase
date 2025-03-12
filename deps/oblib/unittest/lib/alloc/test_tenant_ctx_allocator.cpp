@@ -13,13 +13,8 @@
 #include <gtest/gtest.h>
 #define private public
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
-#include "lib/alloc/object_mgr.h"
 #undef private
-#include "lib/alloc/alloc_func.h"
-#include "lib/resource/ob_resource_mgr.h"
 #include "lib/coro/testing.h"
-#include "lib/random/ob_random.h"
-#include "lib/atomic/ob_atomic.h"
 #include "lib/container/ob_array.h"
 
 using namespace std;

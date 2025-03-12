@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 #include "ob_log_route_service.h"
 #include "lib/thread/thread_mgr.h"  // MTL
-#include "share/ob_thread_pool.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_mgr.h"    // TG*
-#include "ob_ls_log_stat_info.h"    // LogStatRecordArray
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -118,8 +114,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   } else if (OB_FAIL(LOG_ROUTE_TIMER_INIT_FAIL)) {
     LOG_ERROR("ERRSIM: LOG_ROUTE_TIMER_INIT_FAIL");
 #endif
-  } else if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
-    LOG_WARN("timer set run wrapper failed", K(ret));
+  } else if (OB_FAIL(timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
+    LOG_ERROR("timer set run wrapper failed", K(ret));
   } else if (OB_FAIL(timer_.init("LogRouter"))) {
     LOG_ERROR("fail to init itable gc timer", K(ret));
 #ifdef ERRSIM

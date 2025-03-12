@@ -12,9 +12,7 @@
 
 #include <gtest/gtest.h>
 #include <fstream>
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/utility.h"
-#include "lib/number/ob_number_v2.h"
+#include "deps/oblib/src/lib/rc/context.h"
 
 using namespace oceanbase::common;
 using namespace std;

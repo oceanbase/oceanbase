@@ -12,10 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
-#include "lib/string/ob_string.h"
 #include "storage/fts/ob_beng_ft_parser.h"
+#include "storage/fts/ob_fts_struct.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::plugin;
 
 namespace oceanbase
 {
@@ -63,7 +64,7 @@ int ObBEngFTParser::get_next_token(
   return ret;
 }
 
-int ObBEngFTParser::init(lib::ObFTParserParam *param)
+int ObBEngFTParser::init(ObFTParserParam *param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -129,21 +130,21 @@ ObBasicEnglishFTParserDesc::ObBasicEnglishFTParserDesc()
 {
 }
 
-int ObBasicEnglishFTParserDesc::init(lib::ObPluginParam *param)
+int ObBasicEnglishFTParserDesc::init(ObPluginParam *param)
 {
   is_inited_ = true;
   return OB_SUCCESS;
 }
 
-int ObBasicEnglishFTParserDesc::deinit(lib::ObPluginParam *param)
+int ObBasicEnglishFTParserDesc::deinit(ObPluginParam *param)
 {
   reset();
   return OB_SUCCESS;
 }
 
 int ObBasicEnglishFTParserDesc::segment(
-    lib::ObFTParserParam *param,
-    lib::ObITokenIterator *&iter) const
+    ObFTParserParam *param,
+    ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -160,17 +161,17 @@ int ObBasicEnglishFTParserDesc::segment(
     ObBEngFTParser *parser = new (buf) ObBEngFTParser(*(param->allocator_));
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("fail to init basic english parser", K(ret), KPC(param));
+      param->allocator_->free(parser);
     } else {
       iter = parser;
     }
   }
   return ret;
-  return ret;
 }
 
 void ObBasicEnglishFTParserDesc::free_token_iter(
-    lib::ObFTParserParam *param,
-    lib::ObITokenIterator *&iter) const
+    ObFTParserParam *param,
+    ObITokenIterator *&iter) const
 {
   if (OB_NOT_NULL(iter)) {
     abort_unless(nullptr != param);
@@ -178,6 +179,15 @@ void ObBasicEnglishFTParserDesc::free_token_iter(
     iter->~ObITokenIterator();
     param->allocator_->free(iter);
   }
+}
+
+int ObBasicEnglishFTParserDesc::get_add_word_flag(ObAddWordFlag &flag) const
+{
+  int ret = OB_SUCCESS;
+  flag.set_min_max_word();
+  flag.set_stop_word();
+  flag.set_groupby_word();
+  return ret;
 }
 
 } // end namespace storage

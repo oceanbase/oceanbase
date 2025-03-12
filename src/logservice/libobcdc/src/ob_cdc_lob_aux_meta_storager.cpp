@@ -15,9 +15,6 @@
 #include "ob_cdc_lob_aux_meta_storager.h"
 #include "ob_log_store_service.h"                   // IObStoreService
 #include "ob_log_utils.h"                           // get_timestamp
-#include "ob_log_config.h"                          // ObLogConfig
-#include "logservice/libobcdc/src/ob_log_part_trans_task.h"
-#include "logservice/libobcdc/src/ob_log_tenant.h"
 #include "logservice/libobcdc/src/ob_log_instance.h"
 
 using namespace oceanbase::common;

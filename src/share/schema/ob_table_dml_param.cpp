@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_dml_param.h"
-#include "share/schema/ob_column_schema.h"
-#include "storage/ob_i_store.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
@@ -39,6 +37,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     spatial_mbr_col_id_(OB_INVALID_ID),
     index_name_(),
     fts_parser_name_(),
+    fts_parser_properties_(),
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
@@ -77,6 +76,7 @@ void ObTableSchemaParam::reset()
   spatial_mbr_col_id_ = OB_INVALID_ID;
   index_name_.reset();
   fts_parser_name_.reset();
+  fts_parser_properties_.reset();
   columns_.reset();
   col_map_.clear();
   pk_name_.reset();
@@ -121,7 +121,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     }
   }
 
-  if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {
+  if (OB_SUCC(ret) && schema->is_user_table() && schema->is_table_with_pk()) {
     ObString tmp_pk_name;
     if (OB_FAIL(schema->get_pk_constraint_name(tmp_pk_name))) {
       LOG_WARN("get pk name from schema failed", K(ret));
@@ -153,6 +153,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id_), K(fulltext_col_id_));
       } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_name_str(), fts_parser_name_))) {
         LOG_WARN("fail to copy fts parser name", K(ret), K(schema->get_parser_name_str()));
+      } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_property_str(), fts_parser_properties_))) {
+        LOG_WARN("fail to copy fts parser properties", K(ret), K(schema->get_parser_property_str()));
       }
     } else if (schema->is_multivalue_index_aux()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
@@ -184,10 +186,10 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
-        } else if (column_schema->is_vec_vid_column()) {
+        } else if (column_schema->is_vec_hnsw_vid_column()) {
           vec_id_col_id_ = column_schema->get_column_id();
         } else if (schema->is_vec_delta_buffer_type()) {
-          if (column_schema->is_vec_vector_column()) {
+          if (column_schema->is_vec_hnsw_vector_column()) {
             vec_vector_col_id_ = column_schema->get_column_id();
           }
         }
@@ -480,6 +482,7 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(fulltext_col_id),
        K_(index_name),
        K_(fts_parser_name),
+       K_(fts_parser_properties),
        K_(pk_name),
        K_(columns),
        K_(read_info),
@@ -545,6 +548,9 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_ENCODE(vec_dim_);
   OB_UNIS_ENCODE(vec_vector_col_id_);
+  if (FAILEDx(fts_parser_properties_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize fts parser properties", K(ret));
+  }
   return ret;
 }
 
@@ -676,6 +682,14 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_DECODE(vec_dim_);
   OB_UNIS_DECODE(vec_vector_col_id_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    ObString tmp_properties;
+    if (OB_FAIL(tmp_properties.deserialize(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize fts parser properties", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_properties, fts_parser_properties_))) {
+      LOG_WARN("fail to copy fts parser properties", K(ret), K(tmp_properties));
+    }
+  }
   return ret;
 }
 
@@ -727,6 +741,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   len += vec_index_param_.get_serialize_size();
   OB_UNIS_ADD_LEN(vec_dim_);
   OB_UNIS_ADD_LEN(vec_vector_col_id_);
+  len += fts_parser_properties_.get_serialize_size();
   return len;
 }
 
@@ -886,6 +901,46 @@ int ObTableDMLParam::prepare_storage_param(const ObIArray<uint64_t> &column_ids)
     if (OB_SUCC(ret)) {
       if (OB_FAIL(col_map_.init(col_descs_))) {
         LOG_WARN("fail to init column map", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableDMLParam::set_data_table_rowkey_tags(share::schema::ObSchemaGetterGuard *guard,
+                                                const ObTableSchema *index_schema,
+                                                const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == guard || nullptr == index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid guard or index schema", K(ret), KP(guard), KP(index_schema));
+  } else {
+    const ObTableSchema *data_table_schema = index_schema;
+    common::ObSEArray<uint64_t, 4> data_table_rowkey_cids;
+    const common::ObIArray<ObColumnParam *> &columns = data_table_.get_columns();
+    if (index_schema->is_index_table()) {
+      if (OB_FAIL(guard->get_table_schema(tenant_id, index_schema->get_data_table_id(), data_table_schema))) {
+        LOG_WARN("fail to get data_table_schema", K(ret), K(index_schema->get_data_table_id()));
+      } else if (OB_ISNULL(data_table_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("data table schema is NULL", K(ret), KP(data_table_schema), K(index_schema->get_data_table_id()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(data_table_schema->get_rowkey_column_ids(data_table_rowkey_cids))) {
+        LOG_WARN("fail to get rowkey cids", K(ret), KPC(data_table_schema));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+        if (OB_ISNULL(columns.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column param is null", K(ret), K(i), KP(columns.at(i)));
+        } else {
+          const uint64_t col_id = is_shadow_column(columns.at(i)->get_column_id()) ?
+                                  columns.at(i)->get_column_id() - OB_MIN_SHADOW_COLUMN_ID :
+                                  columns.at(i)->get_column_id();
+          columns.at(i)->set_is_data_table_rowkey(has_exist_in_array(data_table_rowkey_cids, col_id));
+        }
       }
     }
   }

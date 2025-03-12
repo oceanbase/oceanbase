@@ -9,12 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
 #include "ob_index_block_data_prepare.h"
 

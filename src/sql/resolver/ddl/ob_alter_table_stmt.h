@@ -64,6 +64,8 @@ public:
   inline void set_alter_table_column(){alter_table_arg_.is_alter_columns_ = true;}
   inline void set_alter_table_index(){alter_table_arg_.is_alter_indexs_ = true;}
   inline void set_alter_table_partition(){alter_table_arg_.is_alter_partitions_ = true;}
+  inline void set_alter_mview_attributes(){alter_table_arg_.is_alter_mview_attributes_ = true;}
+  inline void set_alter_mlog_attributes(){alter_table_arg_.is_alter_mlog_attributes_ = true;}
   /* to do: interval */
   inline void set_interval_expr(ObRawExpr *expr) {interval_expr_ = expr;}
   inline void set_transition_expr(ObRawExpr *expr) {transition_expr_ = expr;}

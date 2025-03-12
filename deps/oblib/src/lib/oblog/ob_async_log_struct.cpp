@@ -11,7 +11,7 @@
  */
 
 #include "ob_async_log_struct.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
+#include "deps/oblib/src/lib/allocator/ob_slice_alloc.h"
 
 
 namespace oceanbase

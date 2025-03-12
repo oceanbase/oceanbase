@@ -20,7 +20,11 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
-
+#include <orc/Common.hh>
+#include "parquet/schema.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
 namespace oceanbase
 {
 namespace sql
@@ -374,6 +378,16 @@ protected:
   int replace_col_ref_prefix(ObQualifiedName &col_ref, uint64_t idx, ObQualifiedName &q_name, bool &try_success);
   int replace_col_ref_prefix(ObQualifiedName &q_name);
   int resolve_columns(ObRawExpr *&expr, common::ObArray<ObQualifiedName> &columns);
+  int try_resolve_external_symbol(ObQualifiedName &q_name,
+                                  ObIArray<ObQualifiedName> &columns,
+                                  ObIArray<ObRawExpr*> &real_exprs,
+                                  ObRawExpr *&real_ref_expr,
+                                  bool &is_external);
+  int try_resolve_sql_symbol(ObQualifiedName &q_name,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs,
+                             ObRawExpr *&real_ref_expr,
+                             bool keey_ret = false);
   int resolve_qualified_identifier(ObQualifiedName &q_name,
                                    ObIArray<ObQualifiedName> &columns,
                                    ObIArray<ObRawExpr*> &real_exprs,
@@ -401,6 +415,9 @@ protected:
   int check_contain_lateral_node(const ParseNode *parse_tree, bool &is_contain);
 
   int check_stmt_has_flashback_query(ObDMLStmt *stmt, bool check_all, bool &has_fq);
+  int resolve_mocked_table(const ParseNode *table_node,
+                           TableItem *&table_item,
+                           const ParseNode *alias_node = NULL);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
@@ -480,12 +497,23 @@ protected:
       const uint64_t table_id,
       const uint64_t index_tid,
       const ObTableSchema *table_schema,
-      ObRawExpr *&doc_id_expr);
+      ObRawExpr *&doc_id_expr,
+      ObDMLStmt *stmt = NULL);
   int fill_vec_id_expr_param(
     const uint64_t table_id,
     const uint64_t index_tid,
     const ObTableSchema *table_schema,
-    ObRawExpr *&vec_id_expr);
+    ObRawExpr *&vec_id_expr,
+    ObDMLStmt *stmt = NULL);
+  int fill_ivf_vec_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const uint64_t column_id, // index column
+    const ObColumnSchemaV2 *column_schema, // generate column schema
+    const ObTableSchema *table_schema,
+    bool need_dist_algo_expr,
+    ObRawExpr *&expr,
+    ObDMLStmt *stmt = NULL);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   virtual int resolve_inlist_info(common::ObIArray<ObInListInfo> &inlist_infos);
@@ -1042,6 +1070,41 @@ private:
   int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   int compute_values_table_row_count(ObValuesTableDef &table_def);
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
+  int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
+  int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
+  int build_column_schemas_for_orc(const orc::Type* type, ObTableSchema& table_schema);
+  int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema, ObTableSchema& table_schema);
+  int build_column_schemas_for_csv(const ObExternalFileFormat &format,
+                                  common::ObString table_location,
+                                  ObTableSchema &table_schema,
+                                  common::ObIAllocator &allocator,
+                                  uint64_t new_table_id);
+#ifdef OB_BUILD_CPP_ODPS
+  int build_column_schemas_for_odps(const ObSEArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn, 8> &column_list,
+                                const common::ObIArray<ObString> &part_col_names,
+                                ObTableSchema& table_schema);
+  int set_partition_info_for_odps(ObTableSchema &table_schema,
+                                  const common::ObIArray<ObString> &part_col_names);
+#endif
+  int build_column_schemas(ObTableSchema& table_schema,
+                                      ObExternalFileFormat &format,
+                                      uint64_t new_table_id,
+                                      common::ObString table_location,
+                                      const common::ObString &tmp_location,
+                                      common::ObIAllocator &allocator);
+  int set_basic_info_for_mocked_table(ObTableSchema &table_schema,
+                                      common::ObString table_location,
+                                      const ObExternalFileFormat &format);
+  int sample_external_file_name(common::ObIAllocator &allocator,
+                                ObTableSchema &table_schema,
+                                common::ObString &sampled_file_name);
+  int build_mocked_external_table_schema(const ParseNode *location_node,
+                                          const ParseNode *format_node,
+                                          const ParseNode *pattern_node,
+                                          const share::schema::ObTableSchema *&new_table_schema);
+  int build_mocked_external_table_item(const share::schema::ObTableSchema *table_schema,
+                                        TableItem *&tbl_item,
+                                        const ParseNode *alias_node = NULL);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():
@@ -1067,12 +1130,19 @@ protected:
       const TableItem &table_item,
       TableItem *rowkey_doc_table,
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
-  int check_doc_id_need_column_ref_expr(
+  int check_domain_id_need_column_ref_expr(
       ObDMLStmt &stmt,
-      bool &need_column_ref_expr);
-  int check_vec_vid_need_column_ref_expr(
-      ObDMLStmt &stmt,
-      bool &need_column_ref_expr);
+      bool &need_column_ref_expr,
+      const ObColumnSchemaV2 *col_schema);
+  int check_need_fill_ivf_vec_expr_param(const ObDMLStmt &stmt,
+                                         const ObColumnSchemaV2 &column_schema,
+                                         ObRawExpr *ref_expr,
+                                         bool &need_fill,
+                                         bool &need_dist_algo_expr);
+  int get_ivf_index_type_if_ddl(
+      const ObDMLStmt &stmt,
+      bool &is_ddl,
+      ObIndexType &index_type);
 protected:
   ObStmtScope current_scope_;
   int32_t current_level_;

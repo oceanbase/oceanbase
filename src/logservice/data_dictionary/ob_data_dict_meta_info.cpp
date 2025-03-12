@@ -15,12 +15,6 @@
 
 #include "ob_data_dict_meta_info.h"
 #include "ob_data_dict_service.h"
-#include "lib/oblog/ob_log_module.h"    // DDLOG
-#include "logservice/palf/log_define.h" // LOG_INVALID_LSN_VAL
-#include "lib/checksum/ob_crc64.h"      // ob_crc64
-#include "lib/string/ob_sql_string.h"   // ObString
-#include "share/inner_table/ob_inner_table_schema_constants.h" // OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME
-#include "share/rc/ob_tenant_base.h"    // MTL
 
 
 namespace oceanbase

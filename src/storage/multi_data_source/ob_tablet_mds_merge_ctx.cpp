@@ -12,9 +12,7 @@
 
 #include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 
-#include "lib/ob_errno.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/multi_data_source/ob_mds_compaction_filter.h"
 
 #define USING_LOG_PREFIX MDS

@@ -11,13 +11,10 @@
  */
 
 #define USING_LOG_PREFIX RS
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define  private public
 #include "rootserver/ob_balance_ls_primary_zone.h"
-#include "share/ls/ob_ls_status_operator.h"
 #include "rootserver/ob_primary_ls_service.h"
-#include "share/ls/ob_ls_operator.h"
 namespace oceanbase {
 using namespace common;
 using namespace share;

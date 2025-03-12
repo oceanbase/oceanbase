@@ -14,9 +14,6 @@
 #define private public
 #define protected public
 #define USING_LOG_PREFIX STORAGE
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/aggregate/ob_aggregate_util.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "ob_index_block_data_prepare.h"
 

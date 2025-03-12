@@ -541,7 +541,7 @@ def					trim(BOTH  from '  hhhhaaaa  ')	253	48	8	Y	0	0	45
 +---------------------------------+
 select trim(123 from 123542) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(123 from 123542)	253	24	3	Y	0	0	45
+def					trim(123 from 123542)	253	80	3	Y	0	0	45
 +-----------------------+
 | trim(123 from 123542) |
 +-----------------------+
@@ -565,7 +565,7 @@ def					length(trim('     hi' || 'dir '))	8	20	1	Y	32896	0	63
 +-----------------------------------+
 select trim(1) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(1)	253	4	1	Y	0	0	45
+def					trim(1)	253	80	1	Y	0	0	45
 +---------+
 | trim(1) |
 +---------+
@@ -2594,7 +2594,7 @@ def					EXTRACT(DAY FROM null)	8	20	0	Y	32896	0	63
 ####test abs func
 select abs(10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(10)	8	2	2	N	32897	0	63
+def					abs(10)	8	20	2	N	32897	0	63
 +---------+
 | abs(10) |
 +---------+
@@ -2602,7 +2602,7 @@ def					abs(10)	8	2	2	N	32897	0	63
 +---------+
 select abs(-10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-10)	8	3	2	N	32897	0	63
+def					abs(-10)	8	21	2	N	32897	0	63
 +----------+
 | abs(-10) |
 +----------+
@@ -2610,7 +2610,7 @@ def					abs(-10)	8	3	2	N	32897	0	63
 +----------+
 select abs(-0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0)	8	2	1	N	32897	0	63
+def					abs(-0)	8	21	1	N	32897	0	63
 +---------+
 | abs(-0) |
 +---------+
@@ -2618,7 +2618,7 @@ def					abs(-0)	8	2	1	N	32897	0	63
 +---------+
 select abs(0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(0)	8	1	1	N	32897	0	63
+def					abs(0)	8	20	1	N	32897	0	63
 +--------+
 | abs(0) |
 +--------+
@@ -2626,7 +2626,7 @@ def					abs(0)	8	1	1	N	32897	0	63
 +--------+
 select abs(1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1)	8	1	1	N	32897	0	63
+def					abs(1)	8	20	1	N	32897	0	63
 +--------+
 | abs(1) |
 +--------+
@@ -2634,7 +2634,7 @@ def					abs(1)	8	1	1	N	32897	0	63
 +--------+
 select abs(-1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1)	8	2	1	N	32897	0	63
+def					abs(-1)	8	21	1	N	32897	0	63
 +---------+
 | abs(-1) |
 +---------+
@@ -2642,7 +2642,7 @@ def					abs(-1)	8	2	1	N	32897	0	63
 +---------+
 select abs(-1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1000000000000)	8	14	13	N	32897	0	63
+def					abs(-1000000000000)	8	21	13	N	32897	0	63
 +---------------------+
 | abs(-1000000000000) |
 +---------------------+
@@ -2650,7 +2650,7 @@ def					abs(-1000000000000)	8	14	13	N	32897	0	63
 +---------------------+
 select abs(1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1000000000000)	8	13	13	N	32897	0	63
+def					abs(1000000000000)	8	20	13	N	32897	0	63
 +--------------------+
 | abs(1000000000000) |
 +--------------------+
@@ -2706,7 +2706,7 @@ def					abs(Null)	5	23	0	Y	32896	31	63
 +-----------+
 select abs(5-5);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(5-5)	8	2	1	N	32897	0	63
+def					abs(5-5)	8	5	1	N	32897	0	63
 +----------+
 | abs(5-5) |
 +----------+
@@ -2714,7 +2714,7 @@ def					abs(5-5)	8	2	1	N	32897	0	63
 +----------+
 select abs(-0.1*3);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1*3)	246	6	3	N	32897	1	63
+def					abs(-0.1*3)	246	25	3	N	32897	1	63
 +-------------+
 | abs(-0.1*3) |
 +-------------+
@@ -2846,7 +2846,7 @@ def					w is not false	3	1	1	N	32897	0	63
 def					(not w) is false	3	1	1	N	32897	0	63
 def					not(w is false)	3	1	1	N	32897	0	63
 def					if(w,'true','false')	253	20	5	N	1	0	45
-def					!1+1	8	2	1	N	32897	0	63
+def					!1+1	8	5	1	N	32897	0	63
 def					!'a'	3	1	1	N	32897	0	63
 def					!false	3	1	1	N	32897	0	63
 def					!isnull('a')	3	1	1	N	32897	0	63

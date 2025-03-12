@@ -11,17 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <limits.h>
 #include "storage/utl_file/ob_utl_file_handler.h"
-#include "common/ob_smart_var.h"
 #include "common/storage/ob_io_device.h"
 #include "share/ob_io_device_helper.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/alloc/alloc_assist.h"
-#include "lib/utility/utility.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

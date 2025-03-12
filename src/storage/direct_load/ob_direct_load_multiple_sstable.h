@@ -128,7 +128,7 @@ public:
   int64_t max_data_block_size_;
 };
 
-class ObDirectLoadMultipleSSTable : public ObIDirectLoadPartitionTable
+class ObDirectLoadMultipleSSTable : public ObDirectLoadITable
 {
 public:
   typedef ObDirectLoadMultipleSSTableFragment Fragment;
@@ -141,7 +141,6 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return tablet_id_; }
   int64_t get_row_count() const override { return meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
-  void release_data() override;
   int copy(const ObDirectLoadMultipleSSTable &other);
   bool is_empty() const { return 0 == meta_.row_count_; }
   const ObDirectLoadMultipleSSTableMeta &get_meta() const { return meta_; }

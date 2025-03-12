@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 namespace oceanbase
 {
@@ -163,56 +164,72 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
                                           bool &is_first, int8_t &last_soundex_code)
 {
   int ret = OB_SUCCESS;
-  ObStringScanner scanner(input, input_cs_type);
-  ObString tmp_str;
-  int32_t wchar = 0;
-  int8_t soundex_code = 0;
   int8_t pre_code = last_soundex_code;
   if (OB_UNLIKELY(len < MIN_RESULT_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buf is not enough", K(ret), K(len));
   }
-  while(OB_SUCC(ret) && !(fix_min_len && pos >= MIN_RESULT_LENGTH)) {
-    if (OB_FAIL(scanner.next_character(tmp_str, wchar))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("get next character failed", K(ret), K(input));
-      }
-    } else if (FALSE_IT(soundex_code = get_character_code(wchar))) {
-    } else if (0 == pos && is_first) {
-      if (soundex_code >= 0) {
-        // only expect alphabetic character as beginning of result.
-        if (wchar <= static_cast<int32_t>('z') && wchar >= static_cast<int32_t>('a')) {
-          buf[pos++] = wchar - 'a' + 'A';
-        } else if (wchar <= static_cast<int32_t>('Z') && wchar >= static_cast<int32_t>('A')) {
-          buf[pos++] = wchar;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected character", K(ret), K(wchar), K(soundex_code));
-        }
-        pre_code = soundex_code;
-        is_first = false;
-      } else {
-        // ignore nonalphabetic character
-      }
-    } else {
-      if (soundex_code > 0) {
-        // middle alphabetic character, ignore if same as pre_code.
-        if (pre_code != soundex_code) {
-          if (OB_UNLIKELY(pos >= len)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("buf is not enough", K(ret), K(len), K(pos), K(input));
+  struct Functor {
+    Functor(const ObString &input, char* buf, int64_t& pos, bool& is_first, int8_t& pre_code,
+            const bool use_original_algo, const bool fix_min_len, const int64_t len)
+      : input(input), buf(buf), pos(pos), is_first(is_first), pre_code(pre_code),
+        use_original_algo(use_original_algo), fix_min_len(fix_min_len), len(len) {}
+    const ObString &input;
+    char *buf;
+    int64_t& pos;
+    bool& is_first;
+    int8_t& pre_code;
+    const bool use_original_algo;
+    bool fix_min_len;
+    const int64_t len;
+    int8_t soundex_code = 0;
+
+    int operator() (const ObString &encoding, ob_wc_t wchar) {
+      int ret = OB_SUCCESS;
+      if (fix_min_len && pos >= MIN_RESULT_LENGTH) {
+        return ret;
+      } else if (FALSE_IT(soundex_code = get_character_code(wchar))) {
+      } else if (0 == pos && is_first) {
+        if (soundex_code >= 0) {
+          // only expect alphabetic character as beginning of result.
+          if (wchar <= static_cast<int32_t>('z') && wchar >= static_cast<int32_t>('a')) {
+            buf[pos++] = wchar - 'a' + 'A';
+          } else if (wchar <= static_cast<int32_t>('Z') && wchar >= static_cast<int32_t>('A')) {
+            buf[pos++] = wchar;
           } else {
-            buf[pos++] = soundex_code + '0';
-            pre_code = soundex_code;
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected character", K(ret), K(wchar), K(soundex_code));
           }
+          pre_code = soundex_code;
+          is_first = false;
+        } else {
+          // ignore nonalphabetic character
         }
       } else {
-        // middle nonalphabetic character
-        // just ignore if use original algorithm, otherwise reset pre_code.
-        pre_code = use_original_algo ? pre_code : 0;
+        if (soundex_code > 0) {
+          // middle alphabetic character, ignore if same as pre_code.
+          if (pre_code != soundex_code) {
+            if (OB_UNLIKELY(pos >= len)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("buf is not enough", K(ret), K(len), K(pos), K(input));
+            } else {
+              buf[pos++] = soundex_code + '0';
+              pre_code = soundex_code;
+            }
+          }
+        } else {
+          // middle nonalphabetic character
+          // just ignore if use original algorithm, otherwise reset pre_code.
+          pre_code = use_original_algo ? pre_code : 0;
+        }
       }
-    }
-  }
+      return ret;
+    };
+  };
+  Functor temp_handler(input, buf, pos, is_first, pre_code, use_original_algo, fix_min_len, len);
+  ObCharsetType input_charset_type = ObCharset::charset_type_by_coll(input_cs_type);
+  OZ(ObFastStringScanner::foreach_char(input, input_charset_type, temp_handler));
+
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }

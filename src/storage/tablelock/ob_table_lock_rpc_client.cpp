@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX TABLELOCK
 
 #include "ob_table_lock_rpc_client.h"
-#include "share/ob_ls_id.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_srv_network_frame.h"
 

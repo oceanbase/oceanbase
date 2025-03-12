@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_dag.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_cs_replica_migration.h"
 
 namespace oceanbase
@@ -256,7 +251,7 @@ int ObIHADagNetCtx::get_retry_count(int32_t &retry_count)
 ObStorageHADag::ObStorageHADag(
     const share::ObDagType::ObDagTypeEnum &dag_type)
   : ObIDag(dag_type),
-    ha_dag_net_ctx_(),
+    ha_dag_net_ctx_(nullptr),
     result_mgr_(),
     compat_mode_(lib::Worker::CompatMode::MYSQL)
 {
@@ -378,7 +373,8 @@ int ObStorageHADagUtils::deal_with_fo(
   } else if (0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "MIGRATE")
       && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "RESTORE")
       && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "BACKFILL_TX")
-      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "TRANSFER")) {
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "TRANSFER")
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "REBUILD_TABLET")) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag type is unexpected", K(ret), KPC(dag));
   } else if (OB_ISNULL(ha_dag = static_cast<ObStorageHADag *>(dag))) {
@@ -966,6 +962,7 @@ int ObStorageHACancelDagNetUtils::cancel_migration_task_(const share::ObTaskId &
   }
   return ret;
 }
+
 }
 }
 

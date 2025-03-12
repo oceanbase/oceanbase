@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 
 namespace oceanbase
@@ -196,8 +197,7 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
 }
 
 int ObDirectLoadMultipleSSTableBuilder::append_row(const ObTabletID &tablet_id,
-                                                   const table::ObTableLoadSequenceNo &seq_no,
-                                                   const ObDatumRow &datum_row)
+                                                   const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -212,8 +212,9 @@ int ObDirectLoadMultipleSSTableBuilder::append_row(const ObTabletID &tablet_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param_), K(tablet_id), K(datum_row));
   } else {
-    if (OB_FAIL(row_.from_datums(tablet_id, datum_row.storage_datums_, datum_row.count_,
-                                 param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
+    if (OB_FAIL(row_.from_datum_row(tablet_id,
+                                    datum_row,
+                                    param_.table_data_desc_.rowkey_column_num_))) {
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(append_row(row_))) {
       LOG_WARN("fail to append row", KR(ret), K(row_));
@@ -304,8 +305,8 @@ int ObDirectLoadMultipleSSTableBuilder::close()
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableBuilder::get_tables(
-  ObIArray<ObIDirectLoadPartitionTable *> &table_array, ObIAllocator &allocator)
+int ObDirectLoadMultipleSSTableBuilder::get_tables(ObDirectLoadTableHandleArray &table_array,
+                                                   ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -352,21 +353,15 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(
       LOG_WARN("fail to push back", KR(ret));
     }
     if (OB_SUCC(ret)) {
+      ObDirectLoadTableHandle sstable_handle;
       ObDirectLoadMultipleSSTable *sstable = nullptr;
-      if (OB_ISNULL(sstable = OB_NEWx(ObDirectLoadMultipleSSTable, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadMultipleSSTable", KR(ret));
+      if (OB_FAIL(table_manager->alloc_multiple_sstable(sstable_handle))) {
+        LOG_WARN("fail to alloc sstable", KR(ret));
+      } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable*>(sstable_handle.get_table()))) {
       } else if (OB_FAIL(sstable->init(create_param))) {
         LOG_WARN("fail to init sstable", KR(ret), K(create_param));
-      } else if (OB_FAIL(table_array.push_back(sstable))) {
+      } else if (OB_FAIL(table_array.add(sstable_handle))) {
         LOG_WARN("fail to push back ssstable", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != sstable) {
-          sstable->~ObDirectLoadMultipleSSTable();
-          allocator.free(sstable);
-          sstable = nullptr;
-        }
       }
     }
   }

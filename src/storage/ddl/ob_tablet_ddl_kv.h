@@ -326,7 +326,7 @@ public:
   share::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
   int64_t get_macro_block_cnt() const { return macro_block_count_; }
   // not thread safe, external call are limited to ddl merge task
-  int get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable);
+  int get_ddl_memtable(const int64_t slice_idx, const int64_t cg_idx, ObDDLMemtable *&ddl_memtable);
   ObIArray<ObDDLMemtable *> &get_ddl_memtables() { return ddl_memtables_; }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();
@@ -341,6 +341,8 @@ public:
     int64_t &macro_block_count,
     int64_t &micro_block_count,
     int64_t &row_count) const;
+
+  int64_t get_merge_slice_idx() const { return merge_slice_idx_; }
 
   // for inc_ddl_kv only
   template<class _callback>
@@ -365,7 +367,8 @@ public:
                        K_(freeze_scn),
                        K_(pending_cnt),
                        K_(macro_block_count),
-                       K_(ddl_memtables));
+                       K(ddl_memtables_.count()),
+                       K_(merge_slice_idx));
 
 private:
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }
@@ -404,6 +407,7 @@ private:
 
   int64_t macro_block_count_;
   ObArray<ObDDLMemtable *> ddl_memtables_;
+  int64_t merge_slice_idx_; // record max slice idx can be merged, require all data begin from start_scn
 };
 
 template<class _callback>

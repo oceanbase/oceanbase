@@ -16,6 +16,7 @@
 #include "ob_column_encoding_struct.h"
 #include "ob_dict_encoding_hash_table.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
+#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
 
 namespace oceanbase
 {
@@ -65,6 +66,28 @@ public:
 private:
   const ObDictEncodingHashTable &ht_;
   ObDictEncodingHashTable::ConstIterator iter_;
+};
+
+class ObEncodingHashTableDatumIter final : public ObIDatumIter
+{
+public:
+  explicit ObEncodingHashTableDatumIter(const ObEncodingHashTable &ht)
+    : ht_(ht), iter_(ht_.begin())
+  {}
+  virtual ~ObEncodingHashTableDatumIter() {}
+  virtual int get_next(const ObDatum *&datum) override;
+  virtual int64_t size() const override
+  {
+    return ht_.size();
+  }
+  virtual void reset() override
+  {
+    iter_ = ht_.begin();
+  }
+private:
+  const ObEncodingHashTable &ht_;
+  ObEncodingHashTable::ConstIterator iter_;
+  DISALLOW_COPY_AND_ASSIGN(ObEncodingHashTableDatumIter);
 };
 
 

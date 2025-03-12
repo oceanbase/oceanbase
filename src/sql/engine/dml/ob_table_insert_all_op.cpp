@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
 
 namespace oceanbase
 {

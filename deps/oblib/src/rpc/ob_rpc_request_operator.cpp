@@ -10,10 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "rpc/ob_rpc_request_operator.h"
+#include "ob_rpc_request_operator.h"
 #include "rpc/obrpc/ob_easy_rpc_request_operator.h"
 #include "rpc/obrpc/ob_poc_rpc_request_operator.h"
-#include "rpc/obrpc/ob_rpc_opts.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 

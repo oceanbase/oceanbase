@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_insert_executor.h"
 #include "ob_table_cg_service.h"
-#include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::sql;
 
@@ -173,7 +172,7 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
       ret = OB_ITER_END;
     } else {
       const ObTableEntity *entity = static_cast<const ObTableEntity *>(&ops->at(cur_idx_).entity());
-      if (OB_NOT_NULL(tablet_ids)) {
+      if (tb_ctx_.is_multi_tablet_get()) {
         if (OB_UNLIKELY(tablet_ids->count() != ops->count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("use multi tablets batch but tablet ids is not equal to ops", K(tablet_ids->count()), K(ops->count()));

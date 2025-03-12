@@ -13,21 +13,11 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_json_table_op.h"
-#include "share/object/ob_obj_cast_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_json_access_utils.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_value.h"
 #include "sql/engine/expr/ob_expr_json_query.h"
 #include "sql/engine/expr/ob_expr_json_exists.h"
 #include "lib/xml/ob_binary_aggregate.h"
-#include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
@@ -1003,125 +993,32 @@ int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, Ob
   INIT_SUCC(ret);
   col_node.cur_pos_++;
   ObIArrayType **arr_stucts = reinterpret_cast<ObIArrayType**>(in);
-  ObDataType data_type = col_node.col_info_.data_type_;
   ObIArrayType *arr_obj = arr_stucts[col_node.col_info_.output_column_idx_];
-  ObObjType obj_type = data_type.get_obj_type();
   int32_t idx = col_node.cur_pos_;
   ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
   ObDatum& res_datum = expr->locate_datum_for_write(*ctx->eval_ctx_);
 
-  if (OB_ISNULL(arr_obj) || (arr_obj->get_format() !=  ArrayFormat::Vector && arr_obj->is_null(idx))) {
-    col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+  if (OB_ISNULL(arr_obj) || arr_obj->is_null(idx)) {
+    res_datum.set_null();
+  } else if (arr_obj->is_nested_array()) {
+    ObArrayNested *arr = static_cast<ObArrayNested*>(arr_obj);
+    ObIArrayType* child_arr = NULL;
+    ObString res_str;
+    if (OB_FAIL(ObArrayTypeObjFactory::construct(*ctx->op_exec_alloc_, *arr_obj->get_array_type()->element_type_, child_arr))) {
+      LOG_WARN("failed to add null to array", K(ret));
+    } else if (OB_FAIL(arr->at(idx, *child_arr))) {
+      LOG_WARN("failed to get elem", K(ret), K(idx));
+    } else if (OB_FAIL(ObArrayExprUtils::set_array_res(child_arr, child_arr->get_raw_binary_len(), *expr, *ctx->eval_ctx_, res_str))) {
+      LOG_WARN("get array binary string failed", K(ret));
+    } else {
+      res_datum.set_string(res_str);
+    }
   } else {
-    switch (obj_type) {
-      case ObTinyIntType: {
-        ObArrayFixedSize<int8_t> *arr = static_cast<ObArrayFixedSize<int8_t> *>(arr_obj);
-        res_datum.set_int(static_cast<int64_t>((*arr)[idx]));
-        break;
-      }
-      case ObSmallIntType: {
-        ObArrayFixedSize<int16_t> *arr = static_cast<ObArrayFixedSize<int16_t> *>(arr_obj);
-        res_datum.set_int(static_cast<int64_t>((*arr)[idx]));
-        break;
-      }
-      case ObIntType: {
-        ObArrayFixedSize<int64_t> *arr = static_cast<ObArrayFixedSize<int64_t> *>(arr_obj);
-        res_datum.set_int((*arr)[idx]);
-        break;
-      }
-      case ObInt32Type: {
-        ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj);
-        res_datum.set_int32((*arr)[idx]);
-        break;
-      }
-      case ObUTinyIntType: {
-        ObArrayFixedSize<uint8_t> *arr = static_cast<ObArrayFixedSize<uint8_t> *>(arr_obj);
-        res_datum.set_uint(static_cast<uint64_t>((*arr)[idx]));
-        break;
-      }
-      case ObUSmallIntType: {
-        ObArrayFixedSize<uint16_t> *arr = static_cast<ObArrayFixedSize<uint16_t> *>(arr_obj);
-        res_datum.set_uint(static_cast<uint64_t>((*arr)[idx]));
-        break;
-      }
-      case ObUInt64Type: {
-        ObArrayFixedSize<uint64_t> *arr = static_cast<ObArrayFixedSize<uint64_t> *>(arr_obj);
-        res_datum.set_uint((*arr)[idx]);
-        break;
-      }
-      case ObUInt32Type: {
-        ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj);
-        res_datum.set_uint32((*arr)[idx]);
-        break;
-      }
-      case ObDecimalIntType: {
-        ObPrecision prec = data_type.get_precision();
-        if (get_decimalint_type(prec) == DECIMAL_INT_32) {
-          ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj);
-          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int32_t));
-        } else if (get_decimalint_type(prec) == DECIMAL_INT_64) {
-          ObArrayFixedSize<int64_t> *arr = static_cast<ObArrayFixedSize<int64_t> *>(arr_obj);
-          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int64_t));
-        } else if (get_decimalint_type(prec) == DECIMAL_INT_128) {
-          ObArrayFixedSize<int128_t> *arr = static_cast<ObArrayFixedSize<int128_t> *>(arr_obj);
-          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int128_t));
-        } else if (get_decimalint_type(prec) == DECIMAL_INT_256) {
-          ObArrayFixedSize<int256_t> *arr = static_cast<ObArrayFixedSize<int256_t> *>(arr_obj);
-          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int256_t));
-        } else if (get_decimalint_type(prec) == DECIMAL_INT_512) {
-          ObArrayFixedSize<int512_t> *arr = static_cast<ObArrayFixedSize<int512_t> *>(arr_obj);
-          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int512_t));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "unexpected precision", K(ret), K(prec));
-        }
-        break;
-      }
-      case ObVarcharType : {
-        ObArrayBinary *arr = static_cast<ObArrayBinary *>(arr_obj);
-        res_datum.set_string((*arr)[idx]);
-        break;
-      }
-      case ObDoubleType:
-      case ObUDoubleType: {
-        ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(arr_obj);
-        res_datum.set_double((*arr)[idx]);
-        break;
-      }
-      case ObFloatType:
-      case ObUFloatType: {
-        ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(arr_obj);
-        res_datum.set_float((*arr)[idx]);
-        break;
-      }
-      case ObCollectionSQLType: {
-        ObArrayNested *arr = static_cast<ObArrayNested*>(arr_obj);
-        uint16_t subschema_id = data_type.get_subschema_id();
-        ObSubSchemaValue value;
-        ObSqlCollectionInfo *coll_info  = NULL;
-        ObIArrayType* child_arr = NULL;
-        ObString res_str;
-        if (OB_FAIL(ctx->exec_ctx_->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-          LOG_WARN("failed to get subschema ctx", K(ret));
-        } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid subschema type", K(ret), K(value));
-        } else if (OB_FALSE_IT(coll_info = reinterpret_cast<ObSqlCollectionInfo *>(value.value_))) {
-        } else if (OB_FAIL(ObArrayTypeObjFactory::construct(*ctx->op_exec_alloc_, *coll_info->collection_meta_, child_arr))) {
-          LOG_WARN("failed to add null to array", K(ret));
-        } else if (OB_FAIL(arr->at(idx, *child_arr))) {
-          LOG_WARN("failed to get elem", K(ret), K(idx));
-        } else if (OB_FAIL(ObArrayExprUtils::set_array_res(child_arr, child_arr->get_raw_binary_len(), *expr, *ctx->eval_ctx_, res_str))) {
-          LOG_WARN("get array binary string failed", K(ret));
-        } else {
-          res_datum.set_string(res_str);
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "unexpected element type", K(ret), K(data_type.get_obj_type()));
-      }
+    ObObj elem_obj;
+    if (OB_FAIL(arr_obj->elem_at(idx, elem_obj))) {
+      LOG_WARN("failed to get element", K(ret), K(idx));
+    } else {
+      res_datum.from_obj(elem_obj);
     }
   }
 

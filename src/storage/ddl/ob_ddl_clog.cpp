@@ -13,18 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_clog.h"
-#include "storage/ddl/ob_ddl_struct.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/blocksstable/ob_object_manager.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
 namespace oceanbase
 {
 
@@ -208,6 +197,7 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
       ddl_macro_block_.ddl_start_scn_ = redo_info.start_scn_;
       ddl_macro_block_.table_key_ = redo_info.table_key_;
       ddl_macro_block_.end_row_id_ = redo_info.end_row_id_;
+      ddl_macro_block_.merge_slice_idx_ = redo_info.merge_slice_idx_;
     }
   }
   return ret;

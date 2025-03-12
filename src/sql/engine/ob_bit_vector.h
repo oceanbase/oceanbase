@@ -50,7 +50,6 @@ public:
   ~ObBitVectorImpl() = default;
   inline static int64_t word_count(const int64_t size);
   inline static int64_t memory_size(const int64_t size);
-  inline static int64_t byte_count(const int64_t size);
   // The unit of "size" is bit.
   void init(const int64_t size) { MEMSET(data_, 0, memory_size(size)); }
   void reset(const int64_t size) { init(size); }
@@ -181,6 +180,7 @@ private:
   template <typename OP>
   static OB_INLINE int inner_foreach_one_word(const WordType &s_word, const int64_t step_size,
                                               int64_t &step, OP op);
+  inline static int64_t byte_count(const int64_t size);
 
 public:
   WordType data_[0];

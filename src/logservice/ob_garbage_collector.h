@@ -213,6 +213,8 @@ private:
                           ObGCCandidateArray &gc_candidates);
   int check_if_tenant_has_been_dropped_(const uint64_t tenant_id,
                                         bool &has_dropped);
+  int check_if_tenant_is_creating_(const uint64_t tenant_id,
+                                        bool &is_creating);
   int delete_ls_status_(const share::ObLSID &id);
   void execute_gc_(ObGCCandidateArray &gc_candidates);
 

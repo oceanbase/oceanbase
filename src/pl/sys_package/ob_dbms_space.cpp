@@ -11,19 +11,10 @@
  */
 
 #define USING_LOG_PREFIX DDL
-#include "pl/sys_package/ob_dbms_space.h"
+#include "ob_dbms_space.h"
 #include "sql/parser/ob_parser.h"
-#include "sql/ob_sql_context.h"
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/stat/ob_dbms_stats_utils.h"
-#include "pl/sys_package/ob_dbms_stats.h"
-#include "sql/ob_sql_define.h"
-#include "lib/utility/utility.h"
-#include "share/ob_ddl_common.h"
-#include "observer/ob_server_struct.h"
 
 #define GET_COMPRESSED_INFO_SQL "select sum(occupy_size)/sum(original_size) as compression_ratio from oceanbase.__all_virtual_tablet_sstable_macro_info "\
                                 "where tablet_id in (%.*s) and (svr_ip, svr_port) in (%.*s) and tenant_id = %lu;"\
@@ -1021,11 +1012,10 @@ int ObDbmsSpace::generate_part_key_str(ObSqlString &target_str,
 {
   int ret = OB_SUCCESS;
   target_str.reset();
-  const static int MAX_IP_BUFFER_LEN = 32;
-  char host[MAX_IP_BUFFER_LEN];
+  char host[MAX_IP_ADDR_LENGTH];
   for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); i++) {
     host[0] = '\0';
-    if (!addr_list.at(i).ip_to_string(host, MAX_IP_BUFFER_LEN)) {
+    if (!addr_list.at(i).ip_to_string(host, MAX_IP_ADDR_LENGTH)) {
       ret = OB_BUF_NOT_ENOUGH;
       SQL_ENG_LOG(WARN, "fail to get host.", K(ret));
     } else if (OB_FAIL(target_str.append_fmt((i == addr_list.count() - 1) ? "('%.*s', %d)" : "('%.*s', %d),",

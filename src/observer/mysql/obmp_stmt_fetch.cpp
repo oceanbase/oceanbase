@@ -12,38 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/mysql/obmp_stmt_fetch.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/timezone/ob_time_convert.h"
 #include "observer/mysql/obsm_utils.h"
-#include "observer/mysql/obmp_utils.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_time_utility2.h"
 #include "sql/ob_sql.h"
-#include "sql/ob_spi.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/plan_cache/ob_prepare_stmt_struct.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/mysql/ob_sync_plan_driver.h"
-#include "observer/mysql/ob_sync_cmd_driver.h"
-#include "observer/mysql/ob_async_plan_driver.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/sys_package/ob_dbms_sql.h"
-#include "pl/ob_pl_exception_handling.h"
-#include "sql/engine/ob_exec_context.h"
-#include "rpc/obmysql/packet/ompk_row.h"
-#include "observer/mysql/obsm_row.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/packet/ompk_resheader.h"
-#include "rpc/obmysql/packet/ompk_field.h"
+#include "deps/oblib/src/rpc/obmysql/packet/ompk_eof.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
@@ -716,6 +690,7 @@ int ObMPStmtFetch::process()
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
+    session.set_proxy_version(get_proxy_version());
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
     lib::ObMallocCallbackGuard guard(pmcb);
@@ -746,6 +721,9 @@ int ObMPStmtFetch::process()
     } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else {
       need_disconnect = false;
       ObPLCursorInfo *cursor = NULL;

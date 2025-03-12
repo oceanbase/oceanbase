@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_file_system_router.h"
-#include "observer/ob_server_struct.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_io_device_helper.h"
 
 namespace oceanbase {

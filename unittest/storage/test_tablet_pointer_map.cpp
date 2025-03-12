@@ -17,12 +17,7 @@
 #define protected public
 #define private public
 
-#include "share/rc/ob_tenant_base.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/meta_mem/ob_tablet_pointer_map.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "common/ob_tablet_id.h"
 
 namespace oceanbase
 {

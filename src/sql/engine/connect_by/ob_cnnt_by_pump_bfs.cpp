@@ -14,7 +14,6 @@
 
 #include "sql/engine/connect_by/ob_nl_cnnt_by_with_index_op.h"
 #include "sql/engine/connect_by/ob_cnnt_by_pump_bfs.h"
-#include "sql/engine/ob_operator.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

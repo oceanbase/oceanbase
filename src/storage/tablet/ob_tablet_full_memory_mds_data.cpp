@@ -10,12 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_tablet_full_memory_mds_data.h"
-#include "lib/allocator/ob_allocator.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
-#include "storage/tablet/ob_tablet_mds_data.h"
-#include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "storage/multi_data_source/mds_table_impl.h"
+#include "ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 
 #define USING_LOG_PREFIX STORAGE

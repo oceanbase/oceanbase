@@ -8,12 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_progressive_merge_helper.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "ob_progressive_merge_helper.h"
 #include "storage/compaction/ob_partition_merger.h"
-#include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -145,6 +141,7 @@ int ObProgressiveMergeHelper::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("input progressive mgr is invalid", KR(ret), KPC(mgr));
   } else if (FALSE_IT(reset())) {
+  } else if (static_param.for_unittest_) {
   } else if (static_param.is_full_merge_) {
     full_merge_ = check_macro_need_merge_ = true;
   } else if (merge_param.is_mv_merge()) {

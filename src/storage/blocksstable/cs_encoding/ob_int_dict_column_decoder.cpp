@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_int_dict_column_decoder.h"
-#include "ob_integer_stream_decoder.h"
 #include "ob_integer_stream_vector_decoder.h"
 #include "ob_cs_vector_decoding_util.h"
 #include "storage/access/ob_pushdown_aggregate.h"

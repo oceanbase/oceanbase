@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "sql/optimizer/ob_log_expr_values.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/optimizer/ob_del_upd_log_plan.h"
+#include "src/sql/optimizer/ob_log_del_upd.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/rewrite/ob_transform_utils.h"
 

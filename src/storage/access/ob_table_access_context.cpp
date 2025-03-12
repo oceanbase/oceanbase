@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_access_context.h"
-#include "ob_dml_param.h"
-#include "share/ob_lob_access_utils.h"
-#include "ob_store_row_iterator.h"
-#include "ob_global_iterator_pool.h"
 
 namespace oceanbase
 {
@@ -203,6 +199,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     table_scan_stat_ = &scan_param.main_table_scan_stat_;
     limit_param_ = scan_param.limit_param_.is_valid() ? &scan_param.limit_param_ : NULL;
     table_scan_stat_->reset();
+    table_store_stat_.in_row_cache_threshold_ = scan_param.in_row_cache_threshold_;
     trans_version_range_ = trans_version_range;
     need_scn_ = scan_param.need_scn_;
     range_array_pos_ = &scan_param.range_array_pos_;

@@ -15,139 +15,19 @@
 
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/container/ob_array.h"
-#include "lib/queue/ob_link.h"
-#include "lib/queue/ob_link_queue.h"
 #include "lib/allocator/ob_fifo_allocator.h"
-#include "share/io/ob_io_define.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
+#include "storage/tmp_file/ob_tmp_file_write_buffer_pool_entry_array.h"
 
 namespace oceanbase
 {
 namespace tmp_file
 {
 
-class ObTmpWriteBufferPool;
-enum class PageEntryType
-{
-  INVALID = -1,
-  DATA = 0,
-  META = 1
-};
-
-struct ObTmpFilePageUniqKey
-{
-public:
-  ObTmpFilePageUniqKey() : type_(PageEntryType::INVALID), virtual_page_id_(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID) {}
-  explicit ObTmpFilePageUniqKey(const int64_t virtual_page_id) :
-               type_(PageEntryType::DATA), virtual_page_id_(virtual_page_id) {}
-  explicit ObTmpFilePageUniqKey(const int64_t tree_level, const int64_t level_page_index) :
-               type_(PageEntryType::META), tree_level_(tree_level),
-               level_page_index_ (level_page_index) {}
-
-  void reset()
-  {
-    virtual_page_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
-    type_ = PageEntryType::INVALID;
-  }
-
-  OB_INLINE bool is_valid() const
-  {
-    return type_ != PageEntryType::INVALID &&
-           type_ == PageEntryType::META ?
-           0 <= tree_level_ && 0 <= level_page_index_ :
-           ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID != virtual_page_id_;
-  }
-  bool operator==(const ObTmpFilePageUniqKey other) const
-  {
-    return type_ == other.type_ && virtual_page_id_ == other.virtual_page_id_;
-  }
-  bool operator!=(const ObTmpFilePageUniqKey other) const
-  {
-    return type_ != other.type_ || virtual_page_id_ != other.virtual_page_id_;
-  }
-
-public:
-  PageEntryType type_;
-  union {
-    int64_t virtual_page_id_; // page_offset / page_size
-    struct { //The specific value for the tree pages
-      int64_t tree_level_:16;
-      int64_t level_page_index_:48;
-    };
-  };
-  TO_STRING_KV(K(type_), K(virtual_page_id_), K(tree_level_), K(level_page_index_));
-};
-
-struct ObPageEntry final
-{
-  friend class ObTmpWriteBufferPool;
-public:
-  ObPageEntry()
-    : buf_(nullptr),
-      fd_(-1),
-      state_(State::INVALID),
-      next_page_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
-      page_key_() {}
-  ObPageEntry(const int64_t fd, const uint32_t next_page_id, char *buf)
-    : buf_(buf),
-      fd_(fd),
-      state_(State::INVALID),
-      next_page_id_(next_page_id),
-      page_key_() {}
-
-  int switch_state(const int64_t op);
-
-  TO_STRING_KV(K(fd_), K(page_key_), K(next_page_id_), K(state_), KP(buf_));
-public:
-  struct State
-  {
-  public:
-    static const int32_t N = -1;          // illegal state
-    static const int32_t INVALID = 0;     // page entry is INVALID after page is freed or before allocating
-    static const int32_t INITED = 1;      // page entry is INITED after allocating
-    static const int32_t LOADING = 2;     // page entry is LOADING after sending async io to read page from disk
-    static const int32_t CACHED = 3;      // page entry is CACHED when page is clean
-    static const int32_t DIRTY = 4;       // page entry is DIRTY after page is written
-    static const int32_t WRITE_BACK = 5;  // page entry is WRITE_BACK when sending async io to write page to disk
-    static const int32_t MAX = 6;
-  public:
-    static bool is_valid(const int32_t state){
-      return state > N && state < MAX;
-    }
-  };
-
-  struct Ops
-  {
-  public:
-    static const int64_t INVALID = -1;
-    static const int64_t ALLOC = 0;
-    static const int64_t LOAD = 1;
-    static const int64_t LOAD_FAIL = 2;
-    static const int64_t LOAD_SUCC = 3;
-    static const int64_t DELETE = 4;
-    static const int64_t WRITE = 5;
-    static const int64_t WRITE_BACK = 6;
-    static const int64_t WRITE_BACK_FAILED = 7;
-    static const int64_t WRITE_BACK_SUCC = 8;
-    static const int64_t MAX = 9;
-  public:
-    static bool is_valid(const int64_t op){
-      return op > INVALID && op < MAX;
-    }
-  };
-public:
-  bool is_block_beginning_; // means buf_ points to the beginning of a memory block,
-                            // allocator only free page entry with this flag set to true.
-  char *buf_;
-  int64_t fd_;
-  int32_t state_;
-  uint32_t next_page_id_;
-  ObTmpFilePageUniqKey page_key_;
-};
-
 struct WBPShrinkContext
 {
+public:
+  static const int64_t MAX_SHRINKING_DURATION = 5 * 60 * 1000 * 1000; // 5min
   enum WBP_SHRINK_STATE
   {
     INVALID = 0,
@@ -158,7 +38,10 @@ struct WBPShrinkContext
 public:
   WBPShrinkContext();
   ~WBPShrinkContext() { reset(); }
-  int init(uint32_t lower_page_id, uint32_t max_allow_alloc_page_id, uint32_t upper_page_id);
+  int init(const uint32_t lower_page_id,
+           const uint32_t max_allow_alloc_page_id,
+           const uint32_t upper_page_id,
+           const bool is_auto);
   void reset();
   bool is_valid();
   int64_t get_not_alloc_page_num();
@@ -168,10 +51,21 @@ public:
   {
     return is_inited_ && page_id > upper_page_id_;
   }
-  TO_STRING_KV(K(is_inited_), K(lower_page_id_), K(max_allow_alloc_page_id_), K(upper_page_id_),
-               K(wbp_shrink_state_), K(shrink_list_head_), K(shrink_list_size_));
+  bool is_execution_too_long() const
+  {
+    return is_inited_ && shrink_begin_ts_ > 0 &&
+           ObTimeUtility::current_time() - shrink_begin_ts_ > MAX_SHRINKING_DURATION;
+  }
+  OB_INLINE bool is_auto() const { return is_auto_; }
+  TO_STRING_KV(K(is_inited_), K(is_auto_),
+               K(lower_page_id_), K(max_allow_alloc_page_id_),
+               K(upper_page_id_), K(wbp_shrink_state_),
+               K(shrink_list_head_), K(shrink_list_size_), K(shrink_begin_ts_));
 public:
   bool is_inited_;
+  bool is_auto_;  // indicates whether current shrinking process is auto or manual.
+                  // auto shrinking may be aborted if watermark increases.
+  int64_t shrink_begin_ts_;
   uint32_t max_allow_alloc_page_id_; // in the range between [lower_page_id_ - 1, upper_page_id_].
                                      // init as upper_page_id_ and will decrease towards lower_page_id_ - 1
                                      // when free page number increase.
@@ -198,7 +92,13 @@ public:
   static const int64_t BLOCK_PAGE_NUMS = WBP_BLOCK_SIZE / ObTmpFileGlobal::PAGE_SIZE;    // 253 pages per block (24KB for header)
   static const int64_t INITIAL_POOL_SIZE = WBP_BLOCK_SIZE;
   static const int64_t INITIAL_PAGE_NUMS = INITIAL_POOL_SIZE / ObTmpFileGlobal::PAGE_SIZE;
-
+  static const int64_t SHRINKING_PERIOD = 5 * 60 * 1000 * 1000; // 5min
+  static const int32_t AUTO_SHRINKING_WATERMARK_L1 = 10;
+  static const int32_t AUTO_SHRINKING_WATERMARK_L2 = 5;
+  static const int32_t AUTO_SHRINKING_WATERMARK_L3 = 0;
+  static const int32_t AUTO_SHRINKING_TARGET_SIZE_L1 = 50; // 50%
+  static const int32_t AUTO_SHRINKING_TARGET_SIZE_L2 = 20; // 20%
+  static const int32_t AUTO_SHRINKING_TARGET_SIZE_L3 = 10; // 10%
 public:
   ObTmpWriteBufferPool();
   ~ObTmpWriteBufferPool();
@@ -296,12 +196,9 @@ public:
   void print_statistics();
 public:
   // for shrinking
-  bool need_to_shrink()
-  {
-    return ATOMIC_LOAD(&capacity_) > get_memory_limit();
-  }
-  int init_shrink_context();
-  int begin_shrinking();
+  bool need_to_shrink(bool &is_auto);
+  int init_shrink_context(const bool is_auto);
+  int begin_shrinking(const bool is_auto);
   int finish_shrinking();
   int release_blocks_in_shrink_range();
   int advance_shrink_state();
@@ -312,8 +209,9 @@ private:
   int remove_invalid_page_in_free_list_();
   bool is_shrink_range_all_free_();
   void insert_page_entry_to_free_list_(const uint32_t page_id, uint32_t &free_list_head);
-  int64_t get_not_allow_alloc_percent_();
+  int64_t get_not_allow_alloc_percent_(const int64_t target_wbp_size);
   uint32_t cal_max_allow_alloc_page_id_(int64_t lower_bound, int64_t upper_bound);
+  int cal_target_shrink_range_(const bool is_auto, int64_t &lower_page_id, int64_t &upper_page_id);
 private:
   static double MAX_DATA_PAGE_USAGE_RATIO; // control data pages ratio, can be preempted by meta pages
   // only for unittest
@@ -345,7 +243,7 @@ private:
   int release_all_blocks_();
   DISALLOW_COPY_AND_ASSIGN(ObTmpWriteBufferPool);
 private:
-  common::ObArray<ObPageEntry> fat_;   // file allocation table
+  ObTmpWriteBufferPoolEntryArray fat_; // file allocation table
   common::TCRWLock lock_;              // holds w-lock when expanding and shrinking fat_, holds r-lock when reading fat_
   ObSpinLock free_list_lock_;          // holds lock when updating free page list
   common::ObFIFOAllocator allocator_;
@@ -358,6 +256,8 @@ private:
   int64_t default_wbp_memory_limit_;   // if this var is valid, the wbp memory limit will always be it.
                                        // currently, this var is only modified in ut.
   int64_t last_access_tenant_config_ts_;
+  int64_t last_shrink_complete_ts_;
+  int64_t max_used_watermark_after_shrinking_;
   int64_t meta_page_cnt_;
   int64_t data_page_cnt_;
   int64_t dirty_meta_page_cnt_;

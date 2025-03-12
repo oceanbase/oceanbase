@@ -10,23 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_trans_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "ob_trans_part_ctx.h"
-#include "ob_trans_ctx.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
-#include "observer/ob_server.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_define.h"
-#include "common/storage/ob_sequence.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/stat/ob_latch_define.h"
+#include "ob_trans_define_v4.h"
 #include "ob_trans_functor.h"
-#include "ob_tx_stat.h"
-#include "ob_xa_ctx.h"
 
 #define USING_LOG_PREFIX TRANS
 namespace oceanbase
@@ -1499,7 +1484,7 @@ void ObTxExecResult::reset()
 int ObTxExecResult::add_touched_ls(const share::ObLSID ls)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(touched_ls_list_.push_back(ls))) {
+  if (OB_FAIL(common::add_var_to_array_no_dup(touched_ls_list_, ls))) {
     incomplete_ = true;
     TRANS_LOG(WARN, "add touched ls failed, set incomplete", K(ret), K(ls));
   }

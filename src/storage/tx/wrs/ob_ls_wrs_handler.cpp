@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tx/wrs/ob_ls_wrs_handler.h"
-#include "lib/utility/ob_print_utils.h"
+#include "ob_ls_wrs_handler.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/ob_log_service.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {

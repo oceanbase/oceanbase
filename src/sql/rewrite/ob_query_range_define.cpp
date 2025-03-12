@@ -337,7 +337,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const bool phy_rowid_for_table_loc,
                           const bool ignore_calc_failure,
                           const int64_t index_prefix,
-                          const ColumnIdInfoMap *geo_column_id_map)
+                          const ColumnIdInfoMap *geo_column_id_map,
+                          const ObTableSchema *index_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
@@ -366,6 +367,11 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     index_prefix_ = index_prefix;
     geo_column_id_map_ = geo_column_id_map;
     is_geo_range_ = geo_column_id_map != NULL;
+    if (OB_NOT_NULL(index_schema) &&
+        index_schema->is_unique_index() &&
+        index_schema->get_index_column_num() > 0) {
+      unique_index_column_num_ = index_schema->get_index_column_num();
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);
@@ -605,6 +611,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const bool phy_rowid_for_table_loc,
                                                      const bool ignore_calc_failure,
                                                      const int64_t index_prefix /* =-1*/,
+                                                     const ObTableSchema *index_schema /* = NULL*/,
                                                      const ColumnIdInfoMap *geo_column_id_map /* = NULL*/)
 {
   int ret = OB_SUCCESS;
@@ -618,7 +625,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
-                              geo_column_id_map))) {
+                              geo_column_id_map, index_schema))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);

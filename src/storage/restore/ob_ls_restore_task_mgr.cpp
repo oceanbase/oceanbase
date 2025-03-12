@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_restore_task_mgr.h"
 #include "storage/ls/ob_ls.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/atomic/ob_atomic.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/restore/ob_restore_compatibility_util.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"

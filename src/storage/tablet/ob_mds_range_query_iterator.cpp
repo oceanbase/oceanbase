@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_mds_range_query_iterator.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
+#include "ob_mds_range_query_iterator.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase

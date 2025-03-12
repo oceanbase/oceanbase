@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "share/schema/ob_schema_struct.h"
 #include "sql/resolver/ob_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
 #include "sql/resolver/dml/ob_merge_resolver.h"
 #include "sql/resolver/dml/ob_update_resolver.h"
@@ -54,12 +52,10 @@
 #include "sql/resolver/ddl/ob_create_outline_resolver.h"
 #include "sql/resolver/ddl/ob_alter_outline_resolver.h"
 #include "sql/resolver/ddl/ob_drop_outline_resolver.h"
-#include "sql/resolver/ddl/ob_create_routine_resolver.h"
 #include "sql/resolver/ddl/ob_drop_routine_resolver.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
 #include "sql/resolver/ddl/ob_optimize_resolver.h"
 #include "sql/resolver/ddl/ob_create_standby_tenant_resolver.h"
-#include "ddl/ob_create_routine_resolver.h"
 #include "ddl/ob_drop_routine_resolver.h"
 #include "ddl/ob_alter_routine_resolver.h"
 #include "sql/resolver/ddl/ob_create_package_resolver.h"
@@ -97,7 +93,6 @@
 #include "sql/resolver/cmd/ob_resource_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 #include "sql/resolver/cmd/ob_show_resolver.h"
-#include "sql/resolver/cmd/ob_alter_system_resolver.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
 #include "sql/resolver/cmd/ob_kill_resolver.h"
 #include "sql/resolver/cmd/ob_set_names_resolver.h"
@@ -133,8 +128,8 @@
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
 #include "sql/resolver/ddl/ob_drop_directory_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
+#include "sql/resolver/cmd/ob_module_data_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
@@ -149,6 +144,7 @@
 #include "sql/resolver/ddl/ob_create_udt_resolver.h"
 #include "sql/resolver/ddl/ob_drop_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
+#include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
 #endif
 namespace oceanbase
 {
@@ -996,6 +992,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         }
         break;
       }
+      case T_LOAD_DATA_URL:
       case T_LOAD_DATA: {
         REGISTER_STMT_RESOLVER(LoadData);
         break;
@@ -1292,6 +1289,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(Mock);
         break;
       }
+      case T_MODULE_DATA: {
+        REGISTER_STMT_RESOLVER(ModuleData);
+        break;
+      }
       case T_OLAP_ASYNC_JOB_SUBMIT: {
         REGISTER_STMT_RESOLVER(OLAPAsyncJob);
         break;
@@ -1300,11 +1301,41 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(OLAPAsyncJob);
         break;
       }
+      case T_REBUILD_TABLET: {
+        REGISTER_STMT_RESOLVER(RebuildTablet);
+        break;
+      }
       case T_GRANT_PROXY:
       case T_REVOKE_PROXY: {
         REGISTER_STMT_RESOLVER(Mock);
         break;
       }
+#ifdef OB_BUILD_ORACLE_PL
+      case T_CREATE_WRAPPED_PACKAGE: {
+        REGISTER_STMT_RESOLVER(CreateWrappedPackage);
+        break;
+      }
+      case T_CREATE_WRAPPED_PACKAGE_BODY: {
+        REGISTER_STMT_RESOLVER(CreateWrappedPackageBody);
+        break;
+      }
+      case T_CREATE_WRAPPED_TYPE: {
+        REGISTER_STMT_RESOLVER(CreateWrappedType);
+        break;
+      }
+      case T_CREATE_WRAPPED_TYPE_BODY: {
+        REGISTER_STMT_RESOLVER(CreateWrappedTypeBody);
+        break;
+      }
+      case T_CREATE_WRAPPED_FUNCTION: {
+        REGISTER_STMT_RESOLVER(CreateWrappedFunction);
+        break;
+      }
+      case T_CREATE_WRAPPED_PROCEDURE: {
+        REGISTER_STMT_RESOLVER(CreateWrappedProcedure);
+        break;
+      }
+#endif
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

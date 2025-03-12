@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
-#include "lib/utility/ob_print_utils.h"
-#include "sql/engine/ob_exec_context.h"
 #include "storage/vector_index/ob_vector_index_refresh.h"
 #include "pl/ob_pl.h"
 #include "share/ob_vec_index_builder_util.h"
@@ -231,9 +229,8 @@ int ObVectorRefreshIndexExecutor::generate_vector_aux_index_name(
     ObString suffix_index_name;
     if (VectorIndexAuxType::DOMAIN_INDEX == index_type) {
       if (OB_FAIL(databuff_printf(name_buf, OB_MAX_TABLE_NAME_LENGTH, pos,
-                                  "%.*s%s",
-                                  index_name.length(), index_name.ptr(),
-                                  ObVecIndexBuilderUtil::DELTA_BUFFER_TABLE_NAME_SUFFIX))) {
+                                  "%.*s",
+                                  index_name.length(), index_name.ptr()))) {
         LOG_WARN("failed to print", K(ret));
       }
     } else if (VectorIndexAuxType::INDEX_ID_INDEX == index_type) {
@@ -378,7 +375,7 @@ int ObVectorRefreshIndexExecutor::mock_resolve_and_check_table_valid(
     const ObString &arg_idx_name, const ObString &arg_base_name,
     const ObString &idx_col_name,
     const share::schema::ObTableSchema *&base_table_schema,
-    const share::schema::ObTableSchema *&delta_buf_table_schema,
+    const share::schema::ObTableSchema *&domain_table_schema,
     const share::schema::ObTableSchema *&index_id_table_schema) {
   int ret = OB_SUCCESS;
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
@@ -393,9 +390,9 @@ int ObVectorRefreshIndexExecutor::mock_resolve_and_check_table_valid(
   } else {
     ObString base_db_name, base_name, index_db_name, index_name;
     ObString new_base_db_name, new_base_name;
-    ObString delta_buf_table_name, index_id_table_name;
+    ObString domain_table_name, index_id_table_name;
     bool has_synonym = false;
-    base_table_schema = delta_buf_table_schema = index_id_table_schema = nullptr;
+    base_table_schema = domain_table_schema = index_id_table_schema = nullptr;
     uint64_t base_table_id = -1;
     if (OB_FAIL(ObVectorRefreshIndexExecutor::resolve_table_name(
             cs_type, case_mode, lib::is_oracle_mode(), arg_base_name,
@@ -436,7 +433,7 @@ int ObVectorRefreshIndexExecutor::mock_resolve_and_check_table_valid(
     } else if (FALSE_IT(base_table_id = base_table_schema->get_table_id())) {
     } else if (OB_FAIL(generate_vector_aux_index_name(
                   VectorIndexAuxType::MOCK_INDEX_1, base_table_id, index_name,
-                  delta_buf_table_name))) {
+                  domain_table_name))) {
       LOG_WARN("fail to generate delta buf index table name", KR(ret),
               K(base_table_id), K(index_name));
     } else if (OB_FAIL(generate_vector_aux_index_name(
@@ -445,10 +442,10 @@ int ObVectorRefreshIndexExecutor::mock_resolve_and_check_table_valid(
       LOG_WARN("fail to generate index id index table name", KR(ret),
               K(base_table_id), K(index_name));
     } else if (OB_FAIL(schema_checker_.get_table_schema(
-                  tenant_id_, index_db_name, delta_buf_table_name, true,
-                  delta_buf_table_schema))) {
+                  tenant_id_, index_db_name, domain_table_name, true,
+                  domain_table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(index_db_name),
-              K(delta_buf_table_name));
+              K(domain_table_name));
     } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, index_db_name,
                                                         index_id_table_name, true,
                                                         index_id_table_schema,
@@ -456,15 +453,15 @@ int ObVectorRefreshIndexExecutor::mock_resolve_and_check_table_valid(
                                                         true /*is_built_in_index*/))) {
       LOG_WARN("fail to get table schema", KR(ret), K(index_db_name),
               K(index_id_table_name));
-    } else if (OB_ISNULL(delta_buf_table_schema) ||
+    } else if (OB_ISNULL(domain_table_schema) ||
               OB_ISNULL(index_id_table_schema)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("delta_buf_table or index_id_table is not exist", KR(ret), K(arg_idx_name),
-               KP(delta_buf_table_schema), KP(index_id_table_schema));
+               KP(domain_table_schema), KP(index_id_table_schema));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "idx name");
     } else if (!idx_col_name.empty() &&
               OB_FAIL(mock_check_idx_col_name(idx_col_name, base_table_schema,
-                                              delta_buf_table_schema,
+                                              domain_table_schema,
                                               index_id_table_schema))) {
       LOG_WARN("fail to check idx column name", KR(ret), K(idx_col_name));
     }
@@ -476,7 +473,7 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
     const ObString &arg_idx_name, const ObString &arg_base_name,
     const ObString &idx_col_name,
     const share::schema::ObTableSchema *&base_table_schema,
-    const share::schema::ObTableSchema *&delta_buf_table_schema,
+    const share::schema::ObTableSchema *&domain_table_schema,
     const share::schema::ObTableSchema *&index_id_table_schema) {
   int ret = OB_SUCCESS;
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
@@ -491,9 +488,10 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
   } else {
     ObString base_db_name, base_name, index_db_name, index_name;
     ObString new_base_db_name, new_base_name;
-    ObString delta_buf_table_name, index_id_table_name;
+    ObString index_id_table_name;
+    ObString domain_index_table_name;
     bool has_synonym = false;
-    base_table_schema = delta_buf_table_schema = index_id_table_schema = nullptr;
+    base_table_schema = domain_table_schema = index_id_table_schema = nullptr;
     uint64_t base_table_id = -1;
     ObString base_vector_index_col_name;
     if (OB_FAIL(ObVectorRefreshIndexExecutor::resolve_table_name(
@@ -537,37 +535,52 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
     } else if (FALSE_IT(base_table_id = base_table_schema->get_table_id())) {
     } else if (OB_FAIL(generate_vector_aux_index_name(
                   VectorIndexAuxType::DOMAIN_INDEX, base_table_id, index_name,
-                  delta_buf_table_name))) {
+                  domain_index_table_name))) {
       LOG_WARN("fail to generate delta buf index table name", KR(ret),
               K(base_table_id), K(index_name));
-    } else if (OB_FAIL(generate_vector_aux_index_name(
-                  VectorIndexAuxType::INDEX_ID_INDEX, base_table_id, index_name,
-                  index_id_table_name))) {
-      LOG_WARN("fail to generate index id index table name", KR(ret),
-              K(base_table_id), K(index_name));
     } else if (OB_FAIL(schema_checker_.get_table_schema(
-                  tenant_id_, index_db_name, delta_buf_table_name, true,
-                  delta_buf_table_schema))) {
+                  tenant_id_, index_db_name, domain_index_table_name, true,
+                  domain_table_schema))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("fail to get table schema", KR(ret), K(index_db_name),
-              K(delta_buf_table_name));
+              K(domain_index_table_name));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "index name");
-    } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, index_db_name,
-                                                        index_id_table_name, true,
-                                                        index_id_table_schema,
-                                                        false, /*with_hidden_flag*/
-                                                        true /*is_built_in_index*/))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(index_db_name),
-              K(index_id_table_name));
-    } else if (OB_ISNULL(delta_buf_table_schema) ||
-              OB_ISNULL(index_id_table_schema)) {
+    } else if (OB_ISNULL(domain_table_schema)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("delta_buf_table or index_id_table is not exist", KR(ret), K(arg_idx_name),
-              KP(delta_buf_table_schema), KP(index_id_table_schema));
+      LOG_WARN("domain index table is not exist", KR(ret), K(domain_index_table_name));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "index name");
+    } else if (!domain_table_schema->is_vec_index()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rebuild or refresh not vector index is not support ", K(ret), K(domain_index_table_name));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rebuild or refresh not vector index is");
+    }
+    // get
+    if (OB_FAIL(ret)) {
+    } else if (domain_table_schema->is_vec_hnsw_index()) {
+      if (OB_FAIL(generate_vector_aux_index_name(
+                  VectorIndexAuxType::INDEX_ID_INDEX,
+                  base_table_id, index_name, index_id_table_name))) {
+        LOG_WARN("fail to generate index id index table name", KR(ret),
+                K(base_table_id), K(index_name));
+      } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, index_db_name,
+                                                          index_id_table_name, true,
+                                                          index_id_table_schema,
+                                                          false, /*with_hidden_flag*/
+                                                          true /*is_built_in_index*/))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(index_db_name),
+                K(index_id_table_name));
+      } else if (OB_ISNULL(index_id_table_schema)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("index_id_table is not exist",
+          KR(ret), K(arg_idx_name), KP(index_id_table_schema));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "index name");
+      }
+    }
+    // check index column match
+    if (OB_FAIL(ret)) {
     } else if (!idx_col_name.empty() &&
               OB_FAIL(get_vector_index_column_name(
-                  base_table_schema, delta_buf_table_schema,
+                  base_table_schema, domain_table_schema,
                   base_vector_index_col_name))) {
       LOG_WARN("fail to get vector index column name", KR(ret));
     } else if (!idx_col_name.empty() &&
@@ -583,14 +596,14 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
 int ObVectorRefreshIndexExecutor::resolve_table_id_and_check_table_valid(
   const int64_t idx_table_id,
   const share::schema::ObTableSchema *&base_table_schema,
-  const share::schema::ObTableSchema *&delta_buf_table_schema,
+  const share::schema::ObTableSchema *&domain_table_schema,
   const share::schema::ObTableSchema *&index_id_table_schema,
   bool& in_recycle_bin)
 {
   int ret = OB_SUCCESS;
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
   ObCollationType cs_type = CS_TYPE_INVALID;
-  base_table_schema = delta_buf_table_schema = index_id_table_schema = nullptr;
+  base_table_schema = domain_table_schema = index_id_table_schema = nullptr;
   ObString user_index_name;
   ObString index_id_table_name;
   const ObDatabaseSchema *database_schema = nullptr;
@@ -602,32 +615,38 @@ int ObVectorRefreshIndexExecutor::resolve_table_id_and_check_table_valid(
     LOG_WARN("fail to get name case mode", KR(ret));
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("fail to get collation_connection", KR(ret));
-  } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, idx_table_id, delta_buf_table_schema))) {
+  } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, idx_table_id, domain_table_schema))) {
     LOG_WARN("fail to get index id table table schema", KR(ret), K(idx_table_id));
-  } else if (OB_UNLIKELY(delta_buf_table_schema->is_in_recyclebin())) {
-    in_recycle_bin = true;
-    LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
-  } else if (OB_ISNULL(delta_buf_table_schema)) {
+  } else if (OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_schema is null", K(ret), KP(delta_buf_table_schema));
-  } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, delta_buf_table_schema->get_data_table_id(), base_table_schema))) {
+    LOG_WARN("table_schema is null", K(ret), KP(domain_table_schema));
+  } else if (OB_UNLIKELY(domain_table_schema->is_in_recyclebin())) {
+    in_recycle_bin = true;
+    LOG_DEBUG("domain table is in recyclebin, do nothing");
+  } else if (OB_UNLIKELY(!domain_table_schema->is_vec_domain_index())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid index table type", KR(ret), K(domain_table_schema->is_vec_domain_index()));
+  } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, domain_table_schema->get_data_table_id(), base_table_schema))) {
     LOG_WARN("fail to get base table schema", KR(ret), K(idx_table_id));
   } else if (OB_ISNULL(base_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is null", K(ret), KP(base_table_schema));
-  } else if (OB_FAIL(ObTableSchema::get_index_name(delta_buf_table_schema->get_table_name_str(), user_index_name))) {
-    LOG_WARN("fail to get user index name", K(ret), K(delta_buf_table_schema->get_table_name_str()));
-  } else if (OB_FAIL(generate_vector_aux_index_name(
-                     VectorIndexAuxType::INDEX_ID_INDEX, delta_buf_table_schema->get_data_table_id(),
-                     user_index_name, index_id_table_name))) {
-    LOG_WARN("fail to generate index id index table name", KR(ret),
-              K(delta_buf_table_schema->get_data_table_id()), K(user_index_name));
-  } else if (OB_FAIL(schema_checker_.get_database_schema(tenant_id_, delta_buf_table_schema->get_database_id(),
-                                                         database_schema))) {
-    LOG_WARN("fail to get database schema", KR(ret), K(tenant_id_), K(delta_buf_table_schema->get_database_id()));
+  } else if (OB_FAIL(schema_checker_.get_database_schema(tenant_id_, domain_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("fail to get database schema", KR(ret), K(tenant_id_), K(domain_table_schema->get_database_id()));
   } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database_schema is null", K(ret), KP(database_schema));
+  }
+  // get index id table schema if need
+  if (OB_FAIL(ret)) {
+  } else if (!domain_table_schema->is_vec_hnsw_index()) {   // skip not hnsw index
+  } else if (OB_FAIL(ObTableSchema::get_index_name(domain_table_schema->get_table_name_str(), user_index_name))) {
+    LOG_WARN("fail to get user index name", K(ret), K(domain_table_schema->get_table_name_str()));
+  } else if (OB_FAIL(generate_vector_aux_index_name(
+                     VectorIndexAuxType::INDEX_ID_INDEX, domain_table_schema->get_data_table_id(),
+                     user_index_name, index_id_table_name))) {
+    LOG_WARN("fail to generate index id index table name", KR(ret),
+              K(domain_table_schema->get_data_table_id()), K(user_index_name));
   } else if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, database_schema->get_database_name_str(),
                                                       index_id_table_name, true,
                                                       index_id_table_schema,
@@ -638,11 +657,9 @@ int ObVectorRefreshIndexExecutor::resolve_table_id_and_check_table_valid(
   } else if (OB_ISNULL(index_id_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is null", K(ret), KP(index_id_table_schema));
-  } else if (OB_UNLIKELY(!delta_buf_table_schema->is_vec_delta_buffer_type() ||
-             !index_id_table_schema->is_vec_index_id_type())) {
+  } else if (OB_UNLIKELY(!index_id_table_schema->is_vec_index_id_type())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("invalid index table type", KR(ret), K(delta_buf_table_schema->is_vec_delta_buffer_type()),
-             K(index_id_table_schema->is_vec_index_id_type()));
+    LOG_WARN("invalid index table type", KR(ret), K(index_id_table_schema->is_vec_index_id_type()));
   }
   return ret;
 }
@@ -708,20 +725,20 @@ int ObVectorRefreshIndexExecutor::to_vector_index_distance_metric(
 
 int ObVectorRefreshIndexExecutor::get_vector_index_column_name(
     const share::schema::ObTableSchema *base_table_schema,
-    const share::schema::ObTableSchema *delta_buf_table_schema,
+    const share::schema::ObTableSchema *domain_index_schema,
     ObString &col_name) {
   int ret = OB_SUCCESS;
   col_name.reset();
   CK(OB_NOT_NULL(base_table_schema),
-     OB_NOT_NULL(delta_buf_table_schema));
+     OB_NOT_NULL(domain_index_schema));
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(!delta_buf_table_schema->is_vec_delta_buffer_type())) {
+  } else if (OB_UNLIKELY(!domain_index_schema->is_vec_domain_index())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table is not a delta_buf_table", KR(ret));
+    LOG_WARN("table is not a domain index table", KR(ret), K(domain_index_schema));
   } else {
     ObSEArray<ObString, 1> col_names;
     if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_name(*base_table_schema,
-                                                                *delta_buf_table_schema,
+                                                                *domain_index_schema,
                                                                 col_names))) {
       LOG_WARN("fail to get vector index col name", K(ret));
     } else if (col_names.count() < 1) {
@@ -746,29 +763,35 @@ int ObVectorRefreshIndexExecutor::resolve_refresh_arg(
     const ObVectorRefreshIndexArg &arg) {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *base_table_schema = nullptr;
-  const share::schema::ObTableSchema *delta_buf_table_schema = nullptr;
+  const share::schema::ObTableSchema *domain_table_schema = nullptr;
   const share::schema::ObTableSchema *index_id_table_schema = nullptr;
 
 #ifdef DBMS_VECTOR_MOCK_TEST
   if (OB_FAIL(mock_resolve_and_check_table_valid(
           arg.idx_name_, arg.table_name_, arg.idx_vector_col_,
-          base_table_schema, delta_buf_table_schema, index_id_table_schema)))
+          base_table_schema, domain_table_schema, index_id_table_schema)))
 #else
   if (OB_FAIL(resolve_and_check_table_valid(
           arg.idx_name_, arg.table_name_, arg.idx_vector_col_,
-          base_table_schema, delta_buf_table_schema, index_id_table_schema)))
+          base_table_schema, domain_table_schema, index_id_table_schema)))
 #endif
   {
     LOG_WARN("fail to resolve and check table valid", KR(ret), K(arg));
   } else if (OB_ISNULL(base_table_schema) ||
-             OB_ISNULL(delta_buf_table_schema) ||
-             OB_ISNULL(index_id_table_schema)) {
+             OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(delta_buf_table_schema), KP(index_id_table_schema));
+    LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(domain_table_schema));
+  } else if (domain_table_schema->is_vec_ivf_index()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("refresh ivf index is not support", K(ret), K(domain_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh ivf index is");
+  } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schemas are null", K(ret), KP(index_id_table_schema));
   } else {
     base_tb_id_ = base_table_schema->get_table_id();
-    delta_buf_tb_id_ = delta_buf_table_schema->get_table_id();
-    index_id_tb_id_ = index_id_table_schema->get_table_id();
+    domain_tb_id_ = domain_table_schema->get_table_id();
+    index_id_tb_id_ = index_id_table_schema == nullptr ? OB_INVALID_ID : index_id_table_schema->get_table_id();
     refresh_threshold_ = arg.refresh_threshold_;
   }
   // resolve method
@@ -787,22 +810,24 @@ int ObVectorRefreshIndexExecutor::resolve_refresh_inner_arg(const ObVectorRefres
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *base_table_schema = nullptr;
-  const share::schema::ObTableSchema *delta_buf_table_schema = nullptr;
+  const share::schema::ObTableSchema *domain_table_schema = nullptr;
   const share::schema::ObTableSchema *index_id_table_schema = nullptr;
   in_recycle_bin = false;
-  if (OB_FAIL(resolve_table_id_and_check_table_valid(arg.idx_table_id_, base_table_schema, delta_buf_table_schema, index_id_table_schema, in_recycle_bin))) {
+  if (OB_FAIL(resolve_table_id_and_check_table_valid(arg.idx_table_id_, base_table_schema, domain_table_schema, index_id_table_schema, in_recycle_bin))) {
     LOG_WARN("fail to resolve table id and check table valid", KR(ret), K(arg));
   } else if (OB_UNLIKELY(in_recycle_bin)) {
     LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
   } else if (OB_ISNULL(base_table_schema) ||
-             OB_ISNULL(delta_buf_table_schema) ||
-             OB_ISNULL(index_id_table_schema)) {
+             OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(delta_buf_table_schema), KP(index_id_table_schema));
+    LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(domain_table_schema));
+  } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schemas are null", K(ret), KP(index_id_table_schema));
   } else {
     base_tb_id_ = base_table_schema->get_table_id();
-    delta_buf_tb_id_ = delta_buf_table_schema->get_table_id();
-    index_id_tb_id_ = index_id_table_schema->get_table_id();
+    domain_tb_id_ = domain_table_schema->get_table_id();
+    index_id_tb_id_ = index_id_table_schema == nullptr ? OB_INVALID_ID : index_id_table_schema->get_table_id();
     refresh_threshold_ = arg.refresh_threshold_;
   }
 
@@ -820,29 +845,31 @@ int ObVectorRefreshIndexExecutor::resolve_rebuild_arg(
     const ObVectorRebuildIndexArg &arg) {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *base_table_schema = nullptr;
-  const share::schema::ObTableSchema *delta_buf_table_schema = nullptr;
+  const share::schema::ObTableSchema *domain_table_schema = nullptr;
   const share::schema::ObTableSchema *index_id_table_schema = nullptr;
 
 #ifdef DBMS_VECTOR_MOCK_TEST
   if (OB_FAIL(mock_resolve_and_check_table_valid(
           arg.idx_name_, arg.table_name_, arg.idx_vector_col_,
-          base_table_schema, delta_buf_table_schema, index_id_table_schema)))
+          base_table_schema, domain_table_schema, index_id_table_schema)))
 #else
   if (OB_FAIL(resolve_and_check_table_valid(
           arg.idx_name_, arg.table_name_, arg.idx_vector_col_,
-          base_table_schema, delta_buf_table_schema, index_id_table_schema)))
+          base_table_schema, domain_table_schema, index_id_table_schema)))
 #endif
   {
     LOG_WARN("fail to resolve and check table valid", KR(ret), K(arg));
   } else if (OB_ISNULL(base_table_schema) ||
-             OB_ISNULL(delta_buf_table_schema) ||
-             OB_ISNULL(index_id_table_schema)) {
+             OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(delta_buf_table_schema), KP(index_id_table_schema));
+    LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(domain_table_schema));
+  } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schemas are null", K(ret), KP(index_id_table_schema));
   } else {
     base_tb_id_ = base_table_schema->get_table_id();
-    delta_buf_tb_id_ = delta_buf_table_schema->get_table_id();
-    index_id_tb_id_ = index_id_table_schema->get_table_id();
+    domain_tb_id_ = domain_table_schema->get_table_id();
+    index_id_tb_id_ = index_id_table_schema == nullptr ? OB_INVALID_ID : index_id_table_schema->get_table_id();
     refresh_method_ = schema::ObVectorRefreshMethod::REBUILD_COMPLETE;
     // TODO:(@wangmiao) resolve vector index and check if it is the same as the
     // origin parameter.
@@ -875,22 +902,24 @@ int ObVectorRefreshIndexExecutor::resolve_rebuild_inner_arg(const ObVectorRebuil
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *base_table_schema = nullptr;
-  const share::schema::ObTableSchema *delta_buf_table_schema = nullptr;
+  const share::schema::ObTableSchema *domain_table_schema = nullptr;
   const share::schema::ObTableSchema *index_id_table_schema = nullptr;
   in_recycle_bin = false;
-  if (OB_FAIL(resolve_table_id_and_check_table_valid(arg.idx_table_id_, base_table_schema, delta_buf_table_schema, index_id_table_schema, in_recycle_bin))) {
+  if (OB_FAIL(resolve_table_id_and_check_table_valid(arg.idx_table_id_, base_table_schema, domain_table_schema, index_id_table_schema, in_recycle_bin))) {
     LOG_WARN("fail to resolve table id and check table valid", KR(ret), K(arg));
   } else if (OB_UNLIKELY(in_recycle_bin)) {
-    LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
+    LOG_DEBUG("domain table is in recyclebin, do nothing");
   } else if (OB_ISNULL(base_table_schema) ||
-             OB_ISNULL(delta_buf_table_schema) ||
-             OB_ISNULL(index_id_table_schema)) {
+             OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_schema is null", K(ret), KP(base_table_schema), KP(delta_buf_table_schema), KP(index_id_table_schema));
+    LOG_WARN("table_schema is null", K(ret), KP(base_table_schema), KP(domain_table_schema));
+  } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schema is null", K(ret), KP(index_id_table_schema));
   } else {
     base_tb_id_ = base_table_schema->get_table_id();
-    delta_buf_tb_id_ = delta_buf_table_schema->get_table_id();
-    index_id_tb_id_ = index_id_table_schema->get_table_id();
+    domain_tb_id_ = domain_table_schema->get_table_id();
+    index_id_tb_id_ = index_id_table_schema != nullptr ? index_id_table_schema->get_table_id() : OB_INVALID_ID;
     refresh_method_ = schema::ObVectorRefreshMethod::REBUILD_COMPLETE;
     idx_parameters_ = arg.idx_parameters_;
     idx_parallel_creation_ = arg.idx_parallel_creation_;
@@ -917,7 +946,7 @@ int ObVectorRefreshIndexExecutor::do_refresh() {
   ObVectorRefreshIndexCtx refresh_ctx;
   refresh_ctx.tenant_id_ = tenant_id_;
   refresh_ctx.base_tb_id_ = base_tb_id_;
-  refresh_ctx.delta_buf_tb_id_ = delta_buf_tb_id_;
+  refresh_ctx.domain_tb_id_ = domain_tb_id_;
   refresh_ctx.index_id_tb_id_ = index_id_tb_id_;
   refresh_ctx.refresh_method_ = refresh_method_;
   refresh_ctx.refresh_threshold_ = refresh_threshold_;
@@ -954,7 +983,7 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
   ObVectorRefreshIndexCtx refresh_ctx;
   refresh_ctx.tenant_id_ = tenant_id_;
   refresh_ctx.base_tb_id_ = base_tb_id_;
-  refresh_ctx.delta_buf_tb_id_ = delta_buf_tb_id_;
+  refresh_ctx.domain_tb_id_ = domain_tb_id_;
   refresh_ctx.index_id_tb_id_ = index_id_tb_id_;
   refresh_ctx.refresh_method_ = refresh_method_;
   refresh_ctx.refresh_threshold_ = refresh_threshold_;
@@ -999,7 +1028,7 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
   ObVectorRefreshIndexCtx refresh_ctx;
   refresh_ctx.tenant_id_ = tenant_id_;
   refresh_ctx.base_tb_id_ = base_tb_id_;
-  refresh_ctx.delta_buf_tb_id_ = delta_buf_tb_id_;
+  refresh_ctx.domain_tb_id_ = domain_tb_id_;
   refresh_ctx.index_id_tb_id_ = index_id_tb_id_;
   refresh_ctx.refresh_method_ = refresh_method_;
   refresh_ctx.idx_organization_ = idx_organization_;
@@ -1040,7 +1069,7 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
   ObVectorRefreshIndexCtx refresh_ctx;
   refresh_ctx.tenant_id_ = tenant_id_;
   refresh_ctx.base_tb_id_ = base_tb_id_;
-  refresh_ctx.delta_buf_tb_id_ = delta_buf_tb_id_;
+  refresh_ctx.domain_tb_id_ = domain_tb_id_;
   refresh_ctx.index_id_tb_id_ = index_id_tb_id_;
   refresh_ctx.refresh_method_ = refresh_method_;
   refresh_ctx.idx_organization_ = idx_organization_;

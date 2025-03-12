@@ -12,20 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/high_availability/ob_physical_copy_task.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "observer/report/ob_tablet_table_updater.h"
-#include "share/ob_cluster_version.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/high_availability/ob_storage_ha_tablet_builder.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_refresh_tablet_util.h"
 #endif
-#include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -206,7 +195,7 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected task_idx_", K(ret), K(task_idx_));
     } else if (OB_FAIL(index_block_rebuilder.init(
-            *copy_ctx_->sstable_index_builder_, &task_idx_, copy_ctx_->table_key_.is_ddl_merge_sstable()))) {
+            *copy_ctx_->sstable_index_builder_, &task_idx_, copy_ctx_->table_key_))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));
@@ -636,8 +625,6 @@ int ObPhysicalCopyTask::record_server_event_()
   }
   return ret;
 }
-
-
 
 }
 }

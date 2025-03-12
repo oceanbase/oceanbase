@@ -281,7 +281,7 @@ public:
   void wait_all_msg_consumed();
   void wait_tx_log_synced();
 public:
-  ObString name_; char name_buf_[32];
+  ObString name_; char name_buf_[MAX_IP_PORT_LENGTH];
   ObAddr addr_;
   ObLSID ls_id_;
   int64_t tenant_id_;

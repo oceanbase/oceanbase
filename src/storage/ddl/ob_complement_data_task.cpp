@@ -12,21 +12,16 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_complement_data_task.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "logservice/ob_log_service.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "sql/engine/px/ob_granule_util.h"
 #include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/ddl/ob_direct_load_mgr_agent.h"
 #include "storage/ddl/ob_tablet_split_task.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "deps/oblib/src/lib/charset/ob_charset.h"
 
 namespace oceanbase
@@ -1342,6 +1337,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     slice_info.data_tablet_id_ = param_->dest_tablet_id_;
     slice_info.context_id_ = context_->context_id_;
     slice_info.total_slice_cnt_ = context_->total_slice_cnt_;
+    slice_info.slice_idx_ = task_id_;
     ObInsertMonitor insert_monitor(context_->row_scanned_, context_->row_inserted_, context_->cg_row_inserted_);
     ObDDLInsertRowIterator row_iter;
     ObTabletSliceParam tablet_slice_param(context_->concurrent_cnt_, task_id_);
@@ -1730,7 +1726,7 @@ int ObLocalScan::table_scan(
 int ObLocalScan::construct_column_schema(const ObTableSchema &data_table_schema)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObColDesc> &extended_col_ids = extended_gc_.extended_col_ids_;
+  const ObArray<ObColDesc> &extended_col_ids = extended_gc_.extended_col_ids_;
   for (int64_t i = 0; OB_SUCC(ret) && i < extended_col_ids.count(); i++) {
     const ObColumnSchemaV2 *col = data_table_schema.get_column_schema(extended_col_ids.at(i).col_id_);
     if (OB_ISNULL(col)) {

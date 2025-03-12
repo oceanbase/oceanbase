@@ -21,11 +21,17 @@
 #include "storage/access/ob_dml_param.h"
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
+#include "sql/ob_sql_context.h"
 
 namespace oceanbase
 {
 namespace common
 {
+}
+
+namespace share
+{
+class ObPartitionIdRowPairArray;
 }
 
 namespace sql {
@@ -156,7 +162,13 @@ public:
 protected:
   int init_exprs(const storage::ObTableScanParam *scan_param);
   int gen_ip_port(common::ObIAllocator &allocator);
-  int calc_file_partition_list_value(const int64_t part_id, common::ObIAllocator &allocator, common::ObNewRow &value);
+  int calc_file_partition_list_value(const int64_t part_id,
+                                     common::ObIAllocator &allocator,
+                                     common::ObNewRow &value);
+  int calc_file_part_list_value_by_array(const int64_t part_id,
+                                        common::ObIAllocator &allocator,
+                                        const share::ObPartitionIdRowPairArray *partition_array,
+                                        common::ObNewRow &value);
   int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
   int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state);
 protected:

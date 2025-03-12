@@ -1,6 +1,5 @@
+#include "easy_message.h"
 #include "io/easy_io.h"
-#include "io/easy_message.h"
-#include "io/easy_connection.h"
 #include "io/easy_request.h"
 #include "io/easy_baseth_pool.h"
 #include "util/easy_util.h"

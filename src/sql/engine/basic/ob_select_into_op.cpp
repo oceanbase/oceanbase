@@ -24,15 +24,11 @@
 #include <memory>
 
 #include "ob_select_into_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "share/ob_device_manager.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "lib/udt/ob_collection_type.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/connector/ob_java_env.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
@@ -155,9 +151,23 @@ int ObSelectIntoOp::init_csv_env()
     if (external_properties_.csv_format_.compression_algorithm_ != CsvCompressType::NONE) {
       has_compress_ = true;
     }
+    // setup binary output format for bit/binary
+    switch (external_properties_.csv_format_.binary_format_) {
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::DEFAULT:
+        print_params_.binary_string_print_hex_ = lib::is_oracle_mode();
+        break;
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::HEX:
+        print_params_.binary_string_print_hex_ = true;
+        break;
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64:
+        print_params_.binary_string_print_base64_ = true;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set csv binary output format", K(ret));
+    }
     print_params_.tz_info_ = session->get_timezone_info();
     print_params_.use_memcpy_ = true;
-    print_params_.binary_string_print_hex_ = lib::is_oracle_mode();
     print_params_.cs_type_ = cs_type_;
   }
   //create buffer
@@ -1037,7 +1047,13 @@ int ObSelectIntoOp::check_buf_sufficient(ObCsvFileWriter &data_writer,
 int ObSelectIntoOp::write_obj_to_file(const ObObj &obj, ObCsvFileWriter &data_writer, bool need_escape)
 {
   int ret = OB_SUCCESS;
-  if ((obj.is_string_type() || obj.is_json()) && need_escape) {
+  // binary collation do not require to escape when encode with base64/hex
+  if (obj.get_collation_type() == CS_TYPE_BINARY &&
+      (print_params_.binary_string_print_hex_ || print_params_.binary_string_print_base64_)) {
+    need_escape = false;
+  }
+
+  if ((obj.is_string_type() || obj.is_json() || obj.is_collection_sql_type()) && need_escape) {
     if (OB_FAIL(print_str_or_json_with_escape(obj, data_writer))) {
       LOG_WARN("failed to print str or json with escape", K(ret));
     }
@@ -1066,11 +1082,18 @@ int ObSelectIntoOp::print_str_or_json_with_escape(const ObObj &obj, ObCsvFileWri
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (OB_FAIL(get_buf(escape_printer_.buf_, escape_printer_.buf_len_, escape_printer_.pos_, data_writer))) {
     LOG_WARN("failed to get buffer", K(ret));
-  } else if (obj.is_json()) {
+  } else if (obj.is_json() || obj.is_collection_sql_type()) {
     ObObj inrow_obj = obj;
     if (obj.is_lob_storage()
         && OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(obj, inrow_obj, NULL, &temp_allocator))) {
       LOG_WARN("failed to convert outrow lobs", K(ret), K(obj));
+    } else if (obj.is_collection_sql_type()) {
+      ObSubSchemaValue sub_meta;
+      if (OB_FAIL((get_exec_ctx().get_sqludt_meta_by_subschema_id(obj.get_meta().get_subschema_id(), sub_meta)))) {
+        LOG_WARN("failed to get collection subschema", K(ret), K(obj.get_meta().get_subschema_id()));
+      } else {
+        print_params_.coll_meta_ = reinterpret_cast<ObSqlCollectionInfo *>(sub_meta.value_);
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(print_json_to_json_buf(inrow_obj, buf, buf_len, pos, data_writer))) {
@@ -1381,7 +1404,7 @@ int ObSelectIntoOp::print_field(const ObObj &obj, ObCsvFileWriter &data_writer)
   int ret = OB_SUCCESS;
   char char_n = 'N';
   const bool need_enclose = has_enclose_ && !obj.is_null()
-                            && (!is_optional_ || obj.is_string_type()
+                            && (!is_optional_ || obj.is_string_type() || obj.is_collection_sql_type()
                                 || obj.is_json() || obj.is_geometry() || obj.is_date()
                                 || obj.is_time() || obj.is_timestamp() || obj.is_datetime()
                                 || obj.is_mysql_date() || obj.is_mysql_datetime());
@@ -1461,6 +1484,17 @@ int ObSelectIntoOp::into_outfile(ObExternalFileWriter *data_writer)
   return ret;
 }
 
+static OB_INLINE int get_cast_ret(const bool is_strict_mode, int ret)
+{
+  if (OB_SUCCESS != ret && !is_strict_mode) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+#define CAST_FAIL(stmt) \
+  (OB_UNLIKELY((OB_SUCCESS != (ret = get_cast_ret((is_strict_mode), (stmt))))))
+
 #ifdef OB_BUILD_CPP_ODPS
 int ObSelectIntoOp::into_odps()
 {
@@ -1468,8 +1502,10 @@ int ObSelectIntoOp::into_odps()
   const ObIArray<ObExpr*> &select_exprs = MY_SPEC.select_exprs_;
   apsara::odps::sdk::ODPSTableRecordPtr table_record;
   ObDatum *datum = NULL;
+  ObSQLMode sql_mode = eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode();
   ObDateSqlMode date_sql_mode;
-  date_sql_mode.init(eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode());
+  date_sql_mode.init(sql_mode);
+  bool is_strict_mode = common::is_strict_mode(sql_mode);
   try {
     if (OB_UNLIKELY(!upload_ || !record_writer_ || !(table_record = upload_->CreateBufferRecord())
                     || !(table_record->GetSchema()))) {
@@ -1494,7 +1530,7 @@ int ObSelectIntoOp::into_odps()
                    && OB_FAIL(set_odps_column_value_mysql(*table_record, *datum,
                                                           select_exprs.at(i)->datum_meta_,
                                                           select_exprs.at(i)->obj_meta_,
-                                                          i, date_sql_mode))) {
+                                                          i, is_strict_mode, sql_mode))) {
           LOG_WARN("failed to set odps column value", K(ret));
         } else if (lib::is_oracle_mode()
                    && OB_FAIL(set_odps_column_value_oracle(*table_record, *datum,
@@ -1534,8 +1570,11 @@ int ObSelectIntoOp::into_odps_batch(const ObBatchRows &brs)
   ObArray<ObDatumVector> datum_vectors;
   ObDatum *datum = NULL;
   apsara::odps::sdk::ODPSTableRecordPtr table_record;
+  ObSQLMode sql_mode = eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode();
   ObDateSqlMode date_sql_mode;
-  date_sql_mode.init(eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode());
+  date_sql_mode.init(sql_mode);
+  bool is_strict_mode = common::is_strict_mode(sql_mode);
+
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
     if (OB_ISNULL(select_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1571,7 +1610,7 @@ int ObSelectIntoOp::into_odps_batch(const ObBatchRows &brs)
                        && OB_FAIL(set_odps_column_value_mysql(*table_record, *datum,
                                                               select_exprs.at(col_idx)->datum_meta_,
                                                               select_exprs.at(col_idx)->obj_meta_,
-                                                              col_idx, date_sql_mode))) {
+                                                              col_idx, is_strict_mode, date_sql_mode))) {
               LOG_WARN("failed to set odps column value", K(ret));
             } else if (lib::is_oracle_mode()
                        && OB_FAIL(set_odps_column_value_oracle(*table_record, *datum,
@@ -1611,6 +1650,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
                                                 const ObDatumMeta &datum_meta,
                                                 const ObObjMeta &obj_meta,
                                                 uint32_t col_idx,
+                                                const bool is_strict_mode,
                                                 const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
@@ -1791,12 +1831,19 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
         case apsara::odps::sdk::ODPS_TIMESTAMP:
         case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
         {
+          int64_t datetime = datum.get_datetime();
+          ObMySQLDateTime mdatetime = datetime;
+          if (ob_is_mysql_datetime(ob_type)
+              && CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
+            LOG_WARN("mdatetime_to_datetime", K(ret));
+          }
           int64_t us = apsara::odps::sdk::ODPS_TIMESTAMP == odps_type
                        ? datum.get_timestamp()
-                       : datum.get_datetime();
+                       : datetime;
           int64_t sec = us / 1000000;
           int32_t ns = (us % 1000000) * 1000;
-          if (us < ORACLE_DATETIME_MIN_VAL) {
+          if (OB_FAIL(ret)) {
+          } else if (us < ORACLE_DATETIME_MIN_VAL) {
             ret = OB_DATETIME_FUNCTION_OVERFLOW;
             LOG_WARN("odps timestamp min value is 0001-01-01 00:00:00", K(ret), K(us));
           } else {
@@ -1807,9 +1854,9 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
         case apsara::odps::sdk::ODPS_DATE:
         {
           int32_t date = datum.get_date();
-          ObMySQLDate mdate(date);
+          ObMySQLDate mdate = date;
           if (ob_is_mysql_date_tc(ob_type)
-              && OB_FAIL(ObTimeConverter::mdate_to_date(mdate, date, date_sql_mode))) {
+              && CAST_FAIL(ObTimeConverter::mdate_to_date(mdate, date, date_sql_mode))) {
             LOG_WARN("mdate_to_date fail", K(ret));
           } else if (date < ODPS_DATE_MIN_VAL) {
             ret = OB_DATETIME_FUNCTION_OVERFLOW;
@@ -1823,10 +1870,10 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
         {
           int32_t tmp_offset = 0;
           int64_t datetime = datum.get_datetime();
-          ObMySQLDateTime mdatetime(datetime);
+          ObMySQLDateTime mdatetime = datetime;
           if (ob_is_mysql_datetime_tc(ob_type)
-              && OB_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
-            LOG_WARN("mdate_to_date fail", K(ret));
+              && CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
+            LOG_WARN("mdatetime_to_datetime fail", K(ret));
           } else if (OB_ISNULL(ctx_.get_my_session()) || OB_ISNULL(ctx_.get_my_session()->get_timezone_info())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret));
@@ -2184,7 +2231,9 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
                                                     const ObDatumMeta &datum_meta,
                                                     const ObObjMeta &obj_meta,
                                                     arrow::Field &arrow_field,
-                                                    uint32_t col_idx)
+                                                    uint32_t col_idx,
+                                                    const bool is_strict_mode,
+                                                    const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
   ObObjType ob_type = datum_meta.get_type();
@@ -2428,13 +2477,20 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
       case JniWriter::OdpsType::TIMESTAMP:
       case JniWriter::OdpsType::TIMESTAMP_NTZ:
       {
+        int64_t datetime = datum.get_datetime();
+        ObMySQLDateTime mdatetime = datetime;
+        if (ob_is_mysql_datetime(ob_type)
+            && CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
+          LOG_WARN("mdatetime_to_datetime fail", K(ret));
+        }
         int64_t us = JniWriter::OdpsType::TIMESTAMP == odps_type
                      ? datum.get_timestamp()
-                     : datum.get_datetime();
+                     : datetime;
         int64_t sec = us / 1000000;
         int32_t ns = (us % 1000000) * 1000;
 
-        if (us < ORACLE_DATETIME_MIN_VAL) {
+        if (OB_FAIL(ret)) {
+        } else if (us < ORACLE_DATETIME_MIN_VAL) {
           ret = OB_DATETIME_FUNCTION_OVERFLOW;
           LOG_WARN("odps timestamp min value is 0001-01-01 00:00:00", K(ret), K(us));
         } else {
@@ -2445,11 +2501,16 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
       }
       case JniWriter::OdpsType::DATE:
       {
-        if (datum.get_date() < ODPS_DATE_MIN_VAL) {
+        int32_t date = datum.get_date();
+        ObMySQLDate mdate = date;
+        if (ob_is_mysql_date_tc(ob_type)
+            && CAST_FAIL(ObTimeConverter::mdate_to_date(mdate, date, date_sql_mode))) {
+          LOG_WARN("mdate_to_date fail", K(ret));
+        } else if (date < ODPS_DATE_MIN_VAL) {
           ret = OB_DATETIME_FUNCTION_OVERFLOW;
           LOG_WARN("odps date min value is 0001-01-01", K(ret));
         } else {
-          PUT_DATUM_INTO_ARROW_BUILDER(arrow::Date32Builder, datum.get_date());
+          PUT_DATUM_INTO_ARROW_BUILDER(arrow::Date32Builder, date);
           PUT_DATUM_INTO_ARROW_BUILDER(arrow::Date32Builder, 0);
         }
         break;
@@ -2457,16 +2518,21 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
       case JniWriter::OdpsType::DATETIME:
       {
         int32_t tmp_offset = 0;
+        int64_t datetime = datum.get_datetime();
+        ObMySQLDateTime mdatetime(datetime);
         if (OB_ISNULL(ctx_.get_my_session()) || OB_ISNULL(ctx_.get_my_session()->get_timezone_info())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
         } else if (OB_FAIL(ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset))) {
           LOG_WARN("failed to get timezone offset", K(ret));
-        } else if (datum.get_datetime() < ORACLE_DATETIME_MIN_VAL + SEC_TO_USEC(tmp_offset)) {
+        } else if (ob_is_mysql_datetime(ob_type)
+                && CAST_FAIL( ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
+          LOG_WARN("mdatetime_to_datetime fail", K(ret));
+        } else if (datetime < ORACLE_DATETIME_MIN_VAL + SEC_TO_USEC(tmp_offset)) {
           ret = OB_DATETIME_FUNCTION_OVERFLOW;
           LOG_WARN("odps datetime min value is 0001-01-01 00:00:00", K(ret));
         } else {
-          PUT_DATUM_INTO_ARROW_BUILDER(arrow::Date64Builder, ((datum.get_datetime() - SEC_TO_USEC(tmp_offset)) / 1000));
+          PUT_DATUM_INTO_ARROW_BUILDER(arrow::Date64Builder, ((datetime - SEC_TO_USEC(tmp_offset)) / 1000));
           PUT_DATUM_INTO_ARROW_BUILDER(arrow::Date64Builder, 0);
         }
         break;
@@ -2831,6 +2897,10 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
 int ObSelectIntoOp::into_odps_jni()
 {
   int ret = OB_SUCCESS;
+  ObSQLMode sql_mode = eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode();
+  ObDateSqlMode date_sql_mode;
+  date_sql_mode.init(sql_mode);
+  bool is_strict_mode = common::is_strict_mode(sql_mode);
   const ObIArray<ObExpr*> &select_exprs = MY_SPEC.select_exprs_;
   const ObIArray<JniWriter::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
   const arrow::FieldVector &type_vec = arrow_schema_->fields();
@@ -2864,7 +2934,7 @@ int ObSelectIntoOp::into_odps_jni()
                                              select_exprs.at(col_idx)->datum_meta_,
                                              select_exprs.at(col_idx)->obj_meta_,
                                              *type_vec.at(col_idx),
-                                             col_idx))) {
+                                             col_idx, is_strict_mode, date_sql_mode))) {
         LOG_WARN("failed to set odps column value", K(ret));
       } else if (lib::is_oracle_mode()
                    && OB_FAIL(set_odps_column_value_oracle_jni(array_builder, odps_type, *datum,
@@ -2916,8 +2986,10 @@ int ObSelectIntoOp::into_odps_jni()
 
 using DaysChecker = std::function<bool(int32_t)>;
 template <typename ArrowType, typename ObType>
-int vectorize_fill_int_mysql(arrow::ArrayBuilder *builder, const ObBatchRows &brs, ObIVector &expr_vector,
-    ObDatumMeta &datum_meta, int& act_cnt, std::shared_ptr<std::function<bool(ObType)> > filter = nullptr)
+int vectorize_fill_int_mysql(arrow::ArrayBuilder *builder, const ObBatchRows &brs,
+                             ObIVector &expr_vector, ObDatumMeta &datum_meta, int &act_cnt,
+                             const bool is_strict_mode, const ObDateSqlMode date_sql_mode,
+                             std::shared_ptr<std::function<bool(ObType)>> filter = nullptr)
 {
   int ret = OB_SUCCESS;
   act_cnt = 0;
@@ -2937,14 +3009,24 @@ int vectorize_fill_int_mysql(arrow::ArrayBuilder *builder, const ObBatchRows &br
             LOG_WARN("fail to append null", K(ret));
           }
         } else {
-          if (OB_LIKELY(filter == nullptr)) {
-            arrow::Status status = builder_ref->Append(arrow_get<ObType>(expr_vector, i));
+          ObType value = arrow_get<ObType>(expr_vector, i);
+          if (ob_is_mysql_date_tc(datum_meta.get_type())) {
+            ObMySQLDate md_value(value);
+            int32_t d_value = 0;
+            if (CAST_FAIL(ObTimeConverter::mdate_to_date(md_value, d_value, date_sql_mode))) {
+              LOG_WARN("mdate_to_date fail", K(ret));
+            } else {
+              value = d_value;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_LIKELY(filter == nullptr)) {
+            arrow::Status status = builder_ref->Append(value);
             if (OB_UNLIKELY(!status.ok())) {
               ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
               LOG_WARN("fail to append null", K(ret));
             }
           } else {
-            ObType value = arrow_get<ObType>(expr_vector, i);
             if ((*filter)(value)) {
               arrow::Status status = builder_ref->Append(value);
               if (OB_UNLIKELY(!status.ok())) {
@@ -3332,13 +3414,14 @@ bool ObSelectIntoOp::day_number_checker(int32_t days) { return days > ODPS_DATE_
 
 int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::OdpsType odps_type,
     arrow::Field &arrow_field, ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector,
-    arrow::ArrayBuilder *builder, const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc)
+    arrow::ArrayBuilder *builder, const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc,
+    const bool is_strict_mode, const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
   switch (odps_type) {
     case JniWriter::OdpsType::BIGINT:
       if (!is_oracle_mode()) {
-        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int64Type, int64_t>(builder, brs, expr_vector, meta, act_cnt)))) {
+        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int64Type, int64_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
         }
       } else {
@@ -3349,7 +3432,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::Odps
       break;
     case JniWriter::OdpsType::TINYINT:
       if (!is_oracle_mode()) {
-        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int8Type, int8_t>(builder, brs, expr_vector, meta, act_cnt)))) {
+        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int8Type, int8_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
         }
       } else {
@@ -3361,7 +3444,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::Odps
       break;
     case JniWriter::OdpsType::SMALLINT:
       if (!is_oracle_mode()) {
-        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int16Type, int16_t>(builder, brs, expr_vector, meta, act_cnt)))) {
+        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int16Type, int16_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
         }
       } else {
@@ -3373,7 +3456,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::Odps
       break;
     case JniWriter::OdpsType::INT:
       if (!is_oracle_mode()) {
-        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int32Type, int32_t>(builder, brs, expr_vector, meta, act_cnt)))) {
+        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int32Type, int32_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
         }
       } else {
@@ -3440,7 +3523,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::Odps
     {
       std::shared_ptr<DaysChecker> filter = std::make_shared<DaysChecker>(day_number_checker);
       if (!is_oracle_mode()) {
-        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Date32Type, int32_t>(builder, brs, expr_vector, meta, act_cnt, filter)))) {
+        if (OB_FAIL((vectorize_fill_int_mysql<arrow::Date32Type, int32_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode, filter)))) {
           LOG_WARN("fail to vectorize date", K(ret));
         }
       } else {
@@ -3515,11 +3598,17 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::Odps
               } else {
                 if (!is_oracle_mode()) {
                   int32_t tmp_offset = 0;
-                  if (expr_vector.get_datetime(i) < ORACLE_DATETIME_MIN_VAL + SEC_TO_USEC(tmp_offset)) {
+                  int64_t datetime = expr_vector.get_datetime(i);
+                  ObMySQLDateTime mdatetime = datetime;
+                  if (ob_is_mysql_datetime_tc(obj_meta.get_type())
+                      && CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime,
+                                                                          date_sql_mode))) {
+                    LOG_WARN("mdatetime_to_datetime fail", K(ret));
+                  } else if (datetime < ORACLE_DATETIME_MIN_VAL + SEC_TO_USEC(tmp_offset)) {
                     ret = OB_DATETIME_FUNCTION_OVERFLOW;
                     LOG_WARN("odps datetime min value is 0001-01-01 00:00:00", K(ret));
                   } else {
-                    arrow::Status status = builder_ref->Append((expr_vector.get_datetime(i) - SEC_TO_USEC(tmp_offset)) / 1000);
+                    arrow::Status status = builder_ref->Append((datetime - SEC_TO_USEC(tmp_offset)) / 1000);
                     if (OB_UNLIKELY(!status.ok())) {
                       ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
                       LOG_WARN("fail to append null", K(ret));
@@ -3570,12 +3659,20 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::Odps
               }
             } else {
               if (!is_oracle_mode()) {
+                int64_t datetime = expr_vector.get_datetime(i);
+                ObMySQLDateTime mdatetime = datetime;
+                if (ob_is_mysql_datetime_tc(obj_meta.get_type())
+                    && CAST_FAIL(
+                      ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
+                  LOG_WARN("mdatetime_to_datetime fail", K(ret));
+                }
                 int64_t us = JniWriter::OdpsType::TIMESTAMP == odps_type
                        ? expr_vector.get_timestamp(i)
-                       : expr_vector.get_datetime(i);
+                       : datetime;
                 int64_t sec = us / 1000000;
                 int32_t ns = (us % 1000000) * 1000;
-                if (us < ORACLE_DATETIME_MIN_VAL) {
+                if (OB_FAIL(ret)) {
+                } else if (us < ORACLE_DATETIME_MIN_VAL) {
                   ret = OB_DATETIME_FUNCTION_OVERFLOW;
                   LOG_WARN("odps timestamp min value is 0001-01-01 00:00:00", K(ret), K(us));
                 } else {
@@ -3684,7 +3781,10 @@ int ObSelectIntoOp::into_odps_jni_batch(const ObBatchRows &brs)
   int ret = OB_SUCCESS;
   need_commit_ = false;
   const ObIArray<ObExpr *> &select_exprs = MY_SPEC.select_exprs_;
-
+  ObSQLMode sql_mode = eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode();
+  ObDateSqlMode date_sql_mode;
+  date_sql_mode.init(sql_mode);
+  bool is_strict_mode = common::is_strict_mode(sql_mode);
   ObArray<common::ObIVector *> expr_vectors;
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
     if (OB_ISNULL(select_exprs.at(i))) {
@@ -3742,7 +3842,9 @@ int ObSelectIntoOp::into_odps_jni_batch(const ObBatchRows &brs)
                        array_builder,
                        brs_,
                        act_cnt,
-                       allocator))) {
+                       allocator,
+                       is_strict_mode,
+                       date_sql_mode))) {
           LOG_WARN("failed to into odps jni batch one col", K(ret));
         }
       }
@@ -4183,8 +4285,10 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
   int64_t row_group_size = 0;
   int64_t file_size = 0;
   ObParquetFileWriter *parquet_data_writer = NULL;
+  ObSQLMode sql_mode = eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode();
   ObDateSqlMode date_sql_mode;
-  date_sql_mode.init(eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode());
+  date_sql_mode.init(sql_mode);
+  bool is_strict_mode = common::is_strict_mode(sql_mode);
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
     if (OB_ISNULL(select_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4236,6 +4340,7 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
                                          parquet_data_writer->get_parquet_row_def_levels().at(col_idx),
                                          parquet_data_writer->get_batch_allocator(),
                                          parquet_data_writer->get_parquet_row_batch().at(col_idx),
+                                         is_strict_mode,
                                          date_sql_mode))) {
             LOG_WARN("failed to build parquet cell", K(ret));
           }
@@ -4274,6 +4379,7 @@ int ObSelectIntoOp::get_data_from_expr_vector(const common::ObIVector* expr_vect
                                               int row_idx,
                                               ObObjType type,
                                               int64_t &value,
+                                              const bool is_strict_mode,
                                               const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
@@ -4301,12 +4407,13 @@ int ObSelectIntoOp::get_data_from_expr_vector(const common::ObIVector* expr_vect
       value = expr_vector->get_date(row_idx);
       break;
     case ObMySQLDateType:
-      ret = ObTimeConverter::mdate_to_date(expr_vector->get_mysql_date(row_idx), date, date_sql_mode);
+      CAST_FAIL(
+        ObTimeConverter::mdate_to_date(expr_vector->get_mysql_date(row_idx), date, date_sql_mode));
       value = date;
       break;
     case ObMySQLDateTimeType:
-      ret = ObTimeConverter::mdatetime_to_datetime(expr_vector->get_mysql_datetime(row_idx), value,
-                                                   date_sql_mode);
+      CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(expr_vector->get_mysql_datetime(row_idx), value,
+                                             date_sql_mode));
       break;
     default:
       ret = OB_OBJ_TYPE_ERROR;
@@ -4323,8 +4430,10 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
   int64_t file_size = 0;
   orc::StructVectorBatch *root = NULL;
   ObOrcFileWriter *orc_data_writer = NULL;
+  ObSQLMode sql_mode = eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode();
   ObDateSqlMode date_sql_mode;
-  date_sql_mode.init(eval_ctx_.exec_ctx_.get_my_session()->get_sql_mode());
+  date_sql_mode.init(sql_mode);
+  bool is_strict_mode = common::is_strict_mode(sql_mode);
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
     if (OB_ISNULL(select_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4369,6 +4478,7 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
                                      orc_data_writer->get_row_batch_offset(),
                                      root->fields[col_idx],
                                      orc_data_writer->get_batch_allocator(),
+                                     is_strict_mode,
                                      date_sql_mode))) {
             LOG_WARN("failed to build orc cell", K(ret));
           }
@@ -4410,6 +4520,7 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
                                    int64_t row_offset,
                                    orc::ColumnVectorBatch* col_vector_batch,
                                    ObIAllocator &allocator,
+                                   const bool is_strict_mode,
                                    const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
@@ -4425,7 +4536,8 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       col_vector_batch->notNull[row_offset] = false;
     } else {
       col_vector_batch->notNull[row_offset] = true;
-      if (OB_FAIL(get_data_from_expr_vector(expr_vector, row_idx, datum_meta.type_, long_batch->data[row_offset], date_sql_mode))) {
+      if (OB_FAIL(get_data_from_expr_vector(expr_vector, row_idx, datum_meta.type_,
+                            long_batch->data[row_offset], is_strict_mode, date_sql_mode))) {
         LOG_WARN("faild to get data from expr vector", K(ret), K(col_idx), K(row_idx), K(datum_meta.type_));
       }
     }
@@ -4510,7 +4622,7 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       col_vector_batch->notNull[row_offset] = true;
       int64_t out_usec = expr_vector->get_int(row_idx);
       if (ob_is_mysql_datetime(datum_meta.type_)
-          && OB_FAIL(ObTimeConverter::mdatetime_to_datetime(
+          && CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(
             expr_vector->get_mysql_datetime(row_idx), out_usec, date_sql_mode))) {
         LOG_WARN("mdatetime_to_datetime fail", K(ret));
       } else {
@@ -4915,6 +5027,7 @@ int ObSelectIntoOp::build_parquet_cell(parquet::RowGroupWriter* rg_writer,
                                        int16_t* definition_levels,
                                        ObIAllocator &allocator,
                                        void* value_batch,
+                                       const bool is_strict_mode,
                                        const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
@@ -5016,8 +5129,8 @@ int ObSelectIntoOp::build_parquet_cell(parquet::RowGroupWriter* rg_writer,
           definition_levels[row_offset] = null_definition_level;
         } else if (ob_is_mysql_date_tc(datum_meta.type_)) {
           ObMySQLDate mdate(expr_vector->get_int32(row_idx));
-          if (OB_FAIL(ObTimeConverter::mdate_to_date(mdate, *value, date_sql_mode))) {
-            LOG_WARN("mdatetime_to_datetime fail", K(ret));
+          if (CAST_FAIL(ObTimeConverter::mdate_to_date(mdate, *value, date_sql_mode))) {
+            LOG_WARN("mdate_to_date fail", K(ret));
           } else {
             value_offset++;
             definition_levels[row_offset] = normal_definition_level;
@@ -5037,7 +5150,7 @@ int ObSelectIntoOp::build_parquet_cell(parquet::RowGroupWriter* rg_writer,
           definition_levels[row_offset] = null_definition_level;
         } else if (ob_is_mysql_datetime(datum_meta.type_)) {
           ObMySQLDateTime mdatetime(expr_vector->get_int(row_idx));
-          if (OB_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, *value, date_sql_mode))) {
+          if (CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, *value, date_sql_mode))) {
             LOG_WARN("mdatetime_to_datetime fail", K(ret));
           } else {
             value_offset++;
@@ -5215,7 +5328,8 @@ int ObSelectIntoOp::check_has_lob_or_json()
       LOG_WARN("select expr is unexpected null", K(ret));
     } else if (ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())) {
       has_lob_ = true;
-    } else if (ob_is_json_tc(select_exprs.at(i)->obj_meta_.get_type())) {
+    } else if (ob_is_json_tc(select_exprs.at(i)->obj_meta_.get_type()) ||
+               ob_is_collection_sql_type(select_exprs.at(i)->obj_meta_.get_type())) {
       has_json_ = true;
     }
   }
@@ -5545,3 +5659,4 @@ void ObSelectIntoOp::destroy()
 
 }
 }
+#undef CAST_FAIL

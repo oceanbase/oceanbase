@@ -19,10 +19,21 @@ namespace table
 {
   const ObString ObTableUtils::KV_NORMAL_TRACE_INFO = ObString::make_string("OBKV Operation");
   const ObString ObTableUtils::KV_TTL_TRACE_INFO = ObString::make_string("TTL Delete");
-
   bool ObTableUtils::is_kv_trace_info(const ObString &trace_info)
   {
     return (trace_info.compare(KV_NORMAL_TRACE_INFO) == 0 || trace_info.compare(KV_TTL_TRACE_INFO) == 0);
+  }
+
+  bool ObTableUtils::has_exist_in_columns(const ObIArray<ObString> &columns, const ObString &name)
+  {
+    bool exist = false;
+    int64_t num = columns.count();
+    for (int64_t i = 0; i < num && !exist; i++) {
+      if (0 == name.case_compare(columns.at(i))) {
+        exist = true;
+      }
+    }
+    return exist;
   }
 }
 }

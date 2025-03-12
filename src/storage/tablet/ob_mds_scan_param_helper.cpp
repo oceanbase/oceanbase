@@ -12,22 +12,8 @@
 
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 
-#include "lib/ob_errno.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/string/ob_string.h"
-#include "common/ob_common_types.h"
-#include "common/ob_range.h"
-#include "common/ob_tablet_id.h"
-#include "share/ob_ls_id.h"
-#include "share/scn.h"
-#include "share/rc/ob_tenant_base.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/access/ob_dml_param.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/multi_data_source/mds_unit.h"
-#include "storage/compaction/ob_medium_compaction_info.h"
-#include "storage/tx/ob_trans_define_v4.h"
 #include "storage/multi_data_source/mds_table_impl.h"
 
 #define USING_LOG_PREFIX STORAGE

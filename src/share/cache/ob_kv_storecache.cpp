@@ -14,14 +14,8 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "share/cache/ob_kv_storecache.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ob_task_define.h"
-#include "lib/stat/ob_latch_define.h"
-#include "lib/trace/ob_trace_event.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "share/ob_debug_sync.h"             // DEBUG_SYNC
-#include "share/ob_debug_sync_point.h"
 #include "share/ob_thread_mgr.h"
 #include "share/config/ob_server_config.h"
 

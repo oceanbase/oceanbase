@@ -160,6 +160,7 @@ public:
   int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
                            obrpc::ObGetLSSyncScnRes &result);
   int force_set_ls_as_single_replica(const obrpc::ObForceSetLSAsSingleReplicaArg &arg);
+  int force_set_server_list(const obrpc::ObForceSetServerListArg &arg, obrpc::ObForceSetServerListResult &result);
   int refresh_tenant_info(const obrpc::ObRefreshTenantInfoArg &arg,
                           obrpc::ObRefreshTenantInfoRes &result);
   int get_ls_replayed_scn(const obrpc::ObGetLSReplayedScnArg &arg,
@@ -316,6 +317,8 @@ private:
   int generate_master_rs_ls_info_(
       const share::ObLSReplica &cur_leader,
       share::ObLSInfo &ls_info);
+  int generate_tenant_table_schemas_(const obrpc::ObBatchBroadcastSchemaArg &arg,
+      ObSArray<share::schema::ObTableSchema> &tables, ObIAllocator &allocator);
 private:
   bool inited_;
   bool in_register_process_;

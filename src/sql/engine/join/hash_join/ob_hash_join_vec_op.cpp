@@ -14,14 +14,8 @@
 
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "share/diagnosis/ob_sql_monitor_statname.h"
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "sql/engine/join/ob_join_filter_partition_splitter.h"
 
 namespace oceanbase
 {
@@ -1365,6 +1359,11 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
   part_shift += min(__builtin_ctz(part_count_), 8);
   // if is create left partition and is top level, no need to create real partition store,
   // only create the ObHJPartition(an wrapper)
+  uint32_t build_extra_size = sizeof(ObHJStoredRow::ExtraInfo);
+  if (is_left && MY_SPEC.use_realistic_runtime_bloom_filter_size()) {
+    build_extra_size =
+        MY_SPEC.jf_material_control_info_.extra_hash_count_ * sizeof(ObHJStoredRow::ExtraInfo);
+  }
   bool need_create_left_partition_store = !(is_left && is_top_level_process_with_join_filter());
   if (OB_FAIL(part_mgr_->get_or_create_part(part_level_, part_shift,
                                             (tmp_batch_round << 32) + part_id, is_left, part, false,
@@ -1376,7 +1375,7 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
     // the row store in part is already inited
   // } else if (OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
   } else if (OB_FAIL(part->init(is_left ? *jt_ctx_.build_output_ : right_->get_spec().output_,
-                                MY_SPEC.max_batch_size_, MY_SPEC.compress_type_))) {
+                                MY_SPEC.max_batch_size_, MY_SPEC.compress_type_, build_extra_size))) {
     LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id), K(is_left));
   } else {
     part->get_row_store().set_dir_id(sql_mem_processor_.get_dir_id());
@@ -2465,6 +2464,9 @@ int ObHashJoinVecOp::calc_hash_value_and_skip_null(const ObIArray<ObExpr*> &join
       ObExpr *expr = join_keys.at(idx); // expr ptr check in cg, not check here
       if (OB_FAIL(expr->eval_vector(eval_ctx_, *brs))) {
         LOG_WARN("eval failed", K(ret));
+      } else if (OB_UNLIKELY(expr->is_nested_expr()) &&
+                 OB_FAIL(expr->cast_to_uniform(brs->size_, eval_ctx_, brs->skip_))) {
+        LOG_WARN("nested expr cast to uniform failed", K(ret));
       } else {
         const bool is_batch_seed = (idx > 0);
         ObIVector *vector = expr->get_vector(eval_ctx_);

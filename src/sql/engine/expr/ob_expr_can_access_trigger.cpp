@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "objit/common/ob_item_type.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
@@ -82,7 +79,7 @@ int ObExprCanAccessTrigger::can_access_trigger(const ObExpr &expr,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("schema guard is NULL", K(ret));
         } else {
-          OZ (schema_guard->check_single_table_priv(session_priv, need_priv), K(need_priv), K(ret));
+          OZ (schema_guard->check_single_table_priv(session_priv, session->get_enable_role_array(), need_priv), K(need_priv), K(ret));
           if(OB_ERR_NO_TABLE_PRIVILEGE == ret) {
             ret = OB_SUCCESS;
             OX (res_datum.set_false());

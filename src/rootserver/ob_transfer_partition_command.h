@@ -104,8 +104,12 @@ private:
   int check_tenant_status_(const uint64_t tenant_id);
   int check_data_version_for_cancel_(const uint64_t tenant_id);
   int check_data_version_and_config_(const uint64_t tenant_id);
-  int check_table_schema_(const uint64_t tenant_id, const uint64_t table_id, const ObObjectID &object_id);
-  int check_ls_(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int check_table_schema_(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const ObObjectID &object_id,
+      bool &is_dup_table);
+  int check_ls_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool is_dup_table);
   int try_cancel_transfer_partition_(const share::ObTransferPartitionTask &task,
       common::ObMySQLTransaction &trans);
   int cancel_balance_job_in_trans_(const uint64_t tenant_id, common::ObMySQLTransaction &trans);
@@ -118,7 +122,6 @@ private:
   int cancel_all_init_transfer_partition_(const uint64_t tenant_id,
       const share::ObTransferPartList &init_list,
       common::ObMySQLTransaction &trans);
-
 };
 }
 }

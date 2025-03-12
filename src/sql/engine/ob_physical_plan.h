@@ -558,6 +558,23 @@ public:
   inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
   void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
   bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
+
+  void set_px_node_policy(ObPxNodePolicy px_node_policy)
+  {
+    px_node_policy_ = px_node_policy;
+  }
+  void set_px_node_count(int64_t px_node_count)
+  {
+    px_node_count_ = px_node_count;
+  }
+  int set_px_node_addrs(const common::ObIArray<ObAddr> &px_node_addrs);
+  ObPxNodePolicy get_px_node_policy() const { return px_node_policy_; }
+  int64_t get_px_node_count() const { return px_node_count_; }
+  const ObFixedArray<ObAddr, common::ObIAllocator> &get_px_node_addrs() const
+  {
+    return px_node_addrs_;
+  }
+
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:

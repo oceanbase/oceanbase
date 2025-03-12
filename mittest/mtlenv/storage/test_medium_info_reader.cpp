@@ -19,7 +19,6 @@
 #define protected public
 
 #include "mtlenv/storage/medium_info_common.h"
-#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

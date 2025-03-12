@@ -11,13 +11,7 @@
  */
 
 #include "log_task.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "log_group_entry_header.h"
 #include "log_sliding_window.h"
-#include "palf_callback.h"
-#include "palf_callback_wrapper.h"
 
 namespace oceanbase
 {

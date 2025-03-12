@@ -13,14 +13,8 @@
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
-#include "lib/mysqlclient/ob_mysql_prepared_statement.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_read_context.h"
-#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #include "share/schema/ob_routine_info.h"
 
 namespace oceanbase
@@ -121,6 +115,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     int64_t ssl_enforce = 1;
 #endif
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
+    mysql_options(&mysql_, MYSQL_OPT_NONBLOCK, 0);
     if (read_write_no_timeout) {
       int64_t zero_second = 0;
       mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &zero_second);
@@ -202,6 +197,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     }
 #endif
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
+    mysql_options(&mysql_, MYSQL_OPT_NONBLOCK, 0);
     if (read_write_no_timeout) {
       int64_t zero_second = 0;
       mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &zero_second);

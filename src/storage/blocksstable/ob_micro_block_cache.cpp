@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_micro_block_cache.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_handle.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_handle.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
+#include "ob_micro_block_cache.h"
+#include "src/storage/meta_mem/ob_tablet_pointer.h"
+#include "src/storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {

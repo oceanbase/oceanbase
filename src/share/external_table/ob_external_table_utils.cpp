@@ -10,22 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL
-#include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
 
-#include "common/ob_range.h"
-#include "common/object/ob_object.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
-#include "sql/engine/expr/ob_expr_regexp_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/table/ob_external_table_access_service.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/rewrite/ob_query_range.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "deps/oblib/src/lib/net/ob_addr.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
-#include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #include "sql/executor/ob_task_spliter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "share/config/ob_server_config.h"
@@ -311,7 +298,8 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
                                                     ObIArray<ObNewRange *> &ranges,
                                                     ObIAllocator &range_allocator,
                                                     ObIArray<ObNewRange *> &new_range,
-                                                    bool is_file_on_disk) {
+                                                    bool is_file_on_disk,
+                                                    ObExecContext &ctx) {
   int ret = OB_SUCCESS;
   ObSEArray<ObExternalFileInfo, 16> file_urls;
   ObSEArray<ObNewRange *, 4> tmp_ranges;
@@ -323,19 +311,44 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
     LOG_WARN("unexpected error", K(ret));
   } else if (OB_FAIL(tmp_ranges.assign(ranges))) {
     LOG_WARN("failed to assign array", K(ret));
-  } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(tenant_id,
-                                  table_id, partition_ids, is_file_on_disk, range_allocator, file_urls,
-                                  tmp_ranges.empty() ? NULL : &tmp_ranges))) {
-    LOG_WARN("get external table file error", K(ret), K(partition_ids));
-  } else if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
-      LOG_WARN("fail to get external table location", K(ret));
-  } else if (is_file_on_disk
-            && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls,
-                                                                       all_locations))) {
-      //For recovered cluster, the file addr may not in the cluster. Then igore it.
-      LOG_WARN("filter files in location failed", K(ret));
-  } else {
-    new_range.reset();
+  }
+
+  bool is_external_object = is_external_object_id(table_id);
+  const ObTableSchema *table_schema = NULL;
+
+  if (OB_SUCC(ret) && is_external_object) {
+    const ObSqlSchemaGuard& sql_schema_guard = ctx.get_sql_ctx()->cur_stmt_->get_query_ctx()->sql_schema_guard_;
+    if (OB_FAIL(sql_schema_guard.get_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_external_object) {
+      if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
+                              tenant_id, table_id, partition_ids, file_urls, table_schema, ctx))) {
+        LOG_WARN("failed to get mocked external table files", K(ret));
+      }
+    } else {
+      if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(
+                            tenant_id, table_id, partition_ids, is_file_on_disk,
+                            range_allocator, file_urls, tmp_ranges.empty() ? NULL : &tmp_ranges))) {
+        LOG_WARN("failed to get external files by part ids", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
+        LOG_WARN("fail to get external table location", K(ret));
+    } else if (is_file_on_disk
+              && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls,
+                                                                        all_locations))) {
+        //For recovered cluster, the file addr may not in the cluster. Then igore it.
+        LOG_WARN("filter files in location failed", K(ret));
+    } else {
+      new_range.reset();
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_format_or_properties, is_odps_external_table))) {
@@ -410,7 +423,7 @@ int ObExternalPathFilter::is_filtered(const ObString &path, bool &is_filtered)
                                                    out_text,
                                                    CS_TYPE_UTF16_BIN,
                                                    temp_allocator_))) {
-    LOG_WARN("convert charset failed", K(ret));
+    LOG_WARN("convert charset failed", K(ret), K(path));
   } else if (OB_FAIL(regex_ctx_.match(temp_allocator_, out_text, CS_TYPE_UTF16_BIN, 0, match))) {
     LOG_WARN("regex match failed", K(ret));
   }
@@ -664,6 +677,9 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
                 row_count_assigned_to_block += row_count_needed_to_block;
                 file_start += row_count_needed_to_block;
               }
+              if (splited_file_info.row_count_ + splited_file_info.row_start_ == splited_file_info.file_size_) {
+                splited_file_info.row_count_ = INT64_MAX;
+              }
               OZ (temp_block_files.push_back(splited_file_info));
             } else if (remaining_row_count_in_file > 0) {
               ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
@@ -674,6 +690,9 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
               if (remaining_row_count_in_file >= (1 - DROP_FACTOR) * row_count_needed_to_block) {
                 droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
                 expected_row_count_to_block = row_count_assigned_to_block;
+              }
+              if (splited_file_info.row_count_ + splited_file_info.row_start_ == splited_file_info.file_size_) {
+                splited_file_info.row_count_ = INT64_MAX;
               }
               OZ (temp_block_files.push_back(splited_file_info));
             } else { //remaining_row_count_in_file == 0
@@ -705,7 +724,9 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
     sqc_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
       if (files.at(i).file_size_ <= SMALL_FILE_SIZE) {
-        OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
+        share::ObExternalFileInfo small_file = files.at(i);
+        small_file.file_size_ = INT64_MAX;
+        OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(small_file));
       }
     }
   }

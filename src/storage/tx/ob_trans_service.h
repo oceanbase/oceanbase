@@ -89,7 +89,7 @@ class ObSrvRpcProxy;
 
 namespace transaction
 {
-class ObITsMgr;
+class ObTsMgr;
 class ObTimestampService;
 class ObITxLogParam;
 
@@ -184,7 +184,7 @@ public:
            ObIDupTableRpc *dup_table_rpc,
            ObILocationAdapter *location_adapter,
            ObIGtiSource *gti_source,
-           ObITsMgr *ts_mgr,
+           ObTsMgr *ts_mgr,
            obrpc::ObSrvRpcProxy *rpc_proxy,
            share::schema::ObMultiVersionSchemaService *schema_service,
            share::ObAliveServerTracer *server_tracer);
@@ -223,7 +223,7 @@ public:
   ObILocationAdapter *get_location_adapter() { return location_adapter_; }
   common::ObMySQLProxy *get_mysql_proxy() { return GCTX.sql_proxy_; }
   bool is_running() const { return is_running_; }
-  ObITsMgr *get_ts_mgr() { return ts_mgr_; }
+  ObTsMgr *get_ts_mgr() { return ts_mgr_; }
   share::ObAliveServerTracer *get_server_tracer() { return server_tracer_; }
   share::schema::ObMultiVersionSchemaService *get_schema_service() { return schema_service_; }
   ObTxVersionMgr &get_tx_version_mgr() { return tx_version_mgr_; }
@@ -332,7 +332,7 @@ protected:
   // the adapter between transaction and clog
   share::schema::ObMultiVersionSchemaService *schema_service_;
 private:
-  ObITsMgr *ts_mgr_;
+  ObTsMgr *ts_mgr_;
   // server alive tracker
   share::ObAliveServerTracer *server_tracer_;
   // account task qeuue's inqueue and dequeue

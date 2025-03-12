@@ -156,6 +156,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void set_geo_type(const common::ObGeoType geo_type) { srs_info_.geo_type_ = static_cast<uint8_t>(geo_type); }
   int set_geo_type(const int32_t type_val);
   inline void set_skip_index_attr(const uint64_t attr_val) { skip_index_attr_.set_column_attr(attr_val); }
+  inline void set_is_string_lob() { add_column_flag(STRING_LOB_COLUMN_FLAG); }
   //get methods
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
@@ -198,6 +199,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_roaringbitmap() const { return meta_type_.is_roaringbitmap(); }
   inline bool is_raw() const { return meta_type_.is_raw(); }
   inline bool is_decimal_int() const { return meta_type_.is_decimal_int(); }
+  inline bool is_string_lob() const { return column_flags_ & STRING_LOB_COLUMN_FLAG; }
+  inline bool is_key_forbid_lob() const { return ob_is_text_tc(meta_type_.get_type()) && !is_string_lob(); }
 
   inline bool is_xmltype() const {
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
@@ -268,14 +271,26 @@ int assign(const ObColumnSchemaV2 &src_schema);
     del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
     del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
   }
+  inline void erase_string_lob_flag()
+  {
+    del_column_flag(STRING_LOB_COLUMN_FLAG);
+  }
   /* vector index */
   inline bool is_vec_index_column() const { return ObSchemaUtils::is_vec_index_column(column_flags_); }
-  inline bool is_vec_vid_column() const { return ObSchemaUtils::is_vec_vid_column(column_flags_); }
-  inline bool is_vec_type_column() const { return ObSchemaUtils::is_vec_type_column(column_flags_); }
-  inline bool is_vec_vector_column() const { return ObSchemaUtils::is_vec_vector_column(column_flags_); }
-  inline bool is_vec_scn_column() const { return ObSchemaUtils::is_vec_scn_column(column_flags_); }
-  inline bool is_vec_key_column() const { return ObSchemaUtils::is_vec_key_column(column_flags_); }
-  inline bool is_vec_data_column() const { return ObSchemaUtils::is_vec_data_column(column_flags_); }
+  inline bool is_vec_ivf_center_id_column() const { return ObSchemaUtils::is_vec_ivf_center_id_column(column_flags_); }
+  inline bool is_vec_ivf_center_vector_column() const { return ObSchemaUtils::is_vec_ivf_center_vector_column(column_flags_); }
+  inline bool is_vec_ivf_data_vector_column() const { return ObSchemaUtils::is_vec_ivf_data_vector_column(column_flags_); }
+  inline bool is_vec_ivf_meta_id_column() const { return ObSchemaUtils::is_vec_ivf_meta_id_column(column_flags_); }
+  inline bool is_vec_ivf_meta_vector_column() const { return ObSchemaUtils::is_vec_ivf_meta_vector_column(column_flags_); }
+  inline bool is_vec_ivf_pq_center_id_column() const { return ObSchemaUtils::is_vec_ivf_pq_center_id_column(column_flags_); }
+  inline bool is_vec_ivf_pq_center_ids_column() const { return ObSchemaUtils::is_vec_ivf_pq_center_ids_column(column_flags_); }
+
+  inline bool is_vec_hnsw_vid_column() const { return ObSchemaUtils::is_vec_hnsw_vid_column(column_flags_); }
+  inline bool is_vec_hnsw_type_column() const { return ObSchemaUtils::is_vec_hnsw_type_column(column_flags_); }
+  inline bool is_vec_hnsw_vector_column() const { return ObSchemaUtils::is_vec_hnsw_vector_column(column_flags_); }
+  inline bool is_vec_hnsw_scn_column() const { return ObSchemaUtils::is_vec_hnsw_scn_column(column_flags_); }
+  inline bool is_vec_hnsw_key_column() const { return ObSchemaUtils::is_vec_hnsw_key_column(column_flags_); }
+  inline bool is_vec_hnsw_data_column() const { return ObSchemaUtils::is_vec_hnsw_data_column(column_flags_); }
   inline bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
   inline bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
   inline bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
@@ -320,7 +335,13 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
 
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
+  inline bool is_heap_table_primary_key_column() const { return column_flags_ & HEAP_TABLE_PRIMARY_KEY_FLAG; }
   inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
+  inline void set_unused()
+  {
+    set_is_hidden(true);
+    add_column_flag(UNUSED_COLUMN_FLAG);
+  }
 
   //other methods
   int64_t get_convert_size(void) const;

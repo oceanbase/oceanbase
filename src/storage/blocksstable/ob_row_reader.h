@@ -31,6 +31,7 @@ class ObNopBitMap;
 namespace blocksstable
 {
 typedef common::ObIArray<share::schema::ObColDesc> ObColDescIArray;
+typedef common::ObIArray<ObColumnParam *> ObColumnParamIArray;
 
 class ObClusterColumnReader
 {

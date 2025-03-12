@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public  // 获取私有成员
 #define protected public  // 获取私有成员
 #include "observer/table/ob_table_session_pool.h"
-#include "lib/utility/ob_test_util.h"
-#include "share/ob_thread_pool.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -91,10 +87,13 @@ int TestTableSessPool::create_and_add_node(ObTableApiCredential &cred)
     } else if (OB_ISNULL(tmp_mem_ctx)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
+      ObMemAttr attr(cred.tenant_id_, "TbSessQueue");
+      int64_t max_sess_num = 100;
       tmp_node->mem_ctx_ = tmp_mem_ctx;
       tmp_node->last_active_ts_ = ObTimeUtility::fast_current_time();
       tmp_node->is_inited_ = true;
-      if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->pool_->key_node_map_.set_refactored(cred.hash_val_, tmp_node))) {
+      if (OB_FAIL(tmp_node->sess_queue_.init(max_sess_num, &tmp_node->queue_allocator_, attr))) {
+      } else if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->pool_->key_node_map_.set_refactored(cred.hash_val_, tmp_node))) {
         if (OB_HASH_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // replace error code
@@ -133,8 +132,6 @@ TEST_F(TestTableSessPool, test_pool_init)
 TEST_F(TestTableSessPool, test_node_init)
 {
   ObTableApiSessNode node(*mock_cred_);
-  ASSERT_TRUE(node.sess_lists_.free_list_.is_empty());
-  ASSERT_TRUE(node.sess_lists_.used_list_.is_empty());
   ASSERT_EQ(0, node.last_active_ts_);
 }
 
@@ -166,8 +163,6 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ObTableApiSessNode *node;
   ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
   ASSERT_NE(nullptr, node);
-  ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
-  ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
   ASSERT_NE(0, node->last_active_ts_);
 
   // add mock val to node
@@ -176,9 +171,10 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ASSERT_NE(nullptr, buf = node->mem_ctx_->allocf(sizeof(ObTableApiSessNodeVal), attr));
   ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(node, MTL_ID());
   val->is_inited_ = true;
-  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(val));
+  ASSERT_EQ(OB_SUCCESS, node->sess_queue_.push(val));
 
   ObTableApiSessGuard guard;
+  mgr->sys_vars_.is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));
   ASSERT_NE(nullptr, guard.sess_node_val_);
   ASSERT_NE(nullptr, guard.get_sess_node_val());
@@ -218,9 +214,10 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
   ASSERT_NE(nullptr, buf = node->mem_ctx_->allocf(sizeof(ObTableApiSessNodeVal), attr));
   ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(node, MTL_ID());
   val->is_inited_ = true;
-  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(val));
+  ASSERT_EQ(OB_SUCCESS, node->sess_queue_.push(val));
 
   ObTableApiSessGuard guard;
+  mgr->sys_vars_.is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));
   mgr->elimination_task_.runTimerTask();
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());

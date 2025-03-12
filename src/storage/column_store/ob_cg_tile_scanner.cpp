@@ -12,9 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_tile_scanner.h"
 #include "ob_cg_scanner.h"
-#include "ob_column_oriented_sstable.h"
-#include "ob_co_sstable_rows_filter.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
 {

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "storage/blocksstable/ob_data_macro_block_merge_writer.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase

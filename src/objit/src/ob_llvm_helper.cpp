@@ -13,25 +13,11 @@
 #define USING_LOG_PREFIX PL
 
 #include "core/jit_context.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/Support/TargetSelect.h"
-
-#include "share/ob_define.h"
 #include "objit/ob_llvm_helper.h"
-#include "objit/ob_llvm_di_helper.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/container/ob_se_array.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/alloc/malloc_hook.h"
-#include "pl/ob_pl_allocator.h"
+
+#include "src/pl/ob_pl.h"
 
 using namespace llvm;
 
@@ -149,6 +135,24 @@ int ObLLVMType::get_pointer_to(ObLLVMType &result)
     ret = common::OB_NOT_INIT;
   } else {
     result.set_v(get_v()->getPointerTo());
+  }
+  return ret;
+}
+
+int ObLLVMType::get_pointee_type(ObLLVMType &result)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_ISNULL(get_v())) {
+    ret = common::OB_NOT_INIT;
+  } else if (OB_UNLIKELY(llvm::Type::PointerTyID != get_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not a pointer", K(ret), K(get_id()), K(lbt()));
+  } else {
+#ifndef CPP_STANDARD_20
+    result.set_v(get_v()->getPointerElementType());
+#else
+    result.set_v(get_v()->getNonOpaquePointerElementType());
+#endif
   }
   return ret;
 }
@@ -618,7 +622,12 @@ int ObLLVMHelper::compile_module(jit::ObPLOptLevel optimization)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(jit_->set_optimize_level(optimization))) {
+  CK (OB_NOT_NULL(jc_));
+  CK (OB_NOT_NULL(jc_->TheModule));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(jit_->set_optimize_level(optimization))) {
     LOG_WARN("failed to set backend optimize level", K(ret), K(optimization));
   } else {
     if (optimization >= jit::ObPLOptLevel::O2) {
@@ -627,8 +636,37 @@ int ObLLVMHelper::compile_module(jit::ObPLOptLevel optimization)
       LOG_INFO("================Optimized LLVM Module================");
       dump_module();
     }
-    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
-    jc_->compile(*jit_);
+
+    if (OB_SUCC(ret)) {
+      OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+
+      for (auto func_iter = jc_->TheModule->functions().begin();
+           OB_SUCC(ret) && func_iter != jc_->TheModule->functions().end();
+           func_iter++) {
+        for (auto block_iter = func_iter->begin();
+             OB_SUCC(ret) && block_iter != func_iter->end();
+             block_iter++) {
+          for (auto inst_iter = block_iter->begin();
+               OB_SUCC(ret) && inst_iter != block_iter->end();
+               inst_iter++) {
+            const auto &alloca = llvm::dyn_cast_or_null<llvm::AllocaInst>(&*inst_iter);
+            if (alloca && !alloca->isStaticAlloca()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("[to hyy] dynamic alloca found, which is not allowed",
+                       K(ret),
+                       "alloca_name", alloca->getName().str().c_str(),
+                       "block_name", alloca->getParent()->getName().str().c_str(),
+                       "function_name", alloca->getParent()->getParent()->getName().str().c_str());
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+      OZ (jc_->compile(*jit_));
+    }
   }
 
   return ret;
@@ -1657,7 +1695,7 @@ int ObLLVMHelper::create_global_string(const ObString &str, ObLLVMValue &result)
     llvm::Value *value = jc_->get_builder().CreateGlobalStringPtr(make_string_ref(str));
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create switch", K(ret));
+      LOG_WARN("unexpected NULL global string", K(ret), K(str));
     } else {
       result.set_v(value);
     }
@@ -1701,6 +1739,30 @@ int ObLLVMHelper::set_insert_point(const ObLLVMBasicBlock &block)
   return ret;
 }
 
+int ObLLVMHelper::set_insert_point(ObLLVMValue &value)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(ret));
+  } else if (OB_ISNULL(value.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("value is NULL", K(value), K(ret));
+  } else {
+    llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(value.get_v());
+
+    if (OB_ISNULL(inst)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value is not an instruction", K(ret), K(value), K(lbt()));
+    } else {
+      jc_->get_builder().SetInsertPoint(inst);
+    }
+  }
+
+  return ret;
+}
+
 int ObLLVMHelper::set_debug_location(uint32_t line, uint32_t col, ObLLVMDIScope *scope)
 {
   int ret = OB_SUCCESS;
@@ -1717,6 +1779,30 @@ int ObLLVMHelper::set_debug_location(uint32_t line, uint32_t col, ObLLVMDIScope 
     jc_->get_builder().SetCurrentDebugLocation(ObDebugLoc::get(line, col, scope->get_v()));
 #endif
   }
+  return ret;
+}
+
+int ObLLVMHelper::get_debug_location(uint32_t &line, uint32_t &col)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(ret));
+  } else {
+    line = 0;
+    col = 0;
+    DebugLoc curr_loc = jc_->get_builder().getCurrentDebugLocation();
+
+    if (OB_NOT_NULL(curr_loc.get())) {
+      line = curr_loc.getLine();
+      col = curr_loc.getCol();
+    } else {
+      LOG_INFO("[to hyy] some statement may forget to set debug_location, please check",
+               K(lbt()));
+    }
+  }
+
   return ret;
 }
 
@@ -1791,14 +1877,20 @@ int ObLLVMHelper::get_array_type(const ObLLVMType &elem_type, uint64_t size, ObL
   return ret;
 }
 
-int ObLLVMHelper::get_uint64_array(const ObIArray<uint64_t> &elem_values, ObLLVMValue &result)
+template <typename T>
+static int get_llvm_array_ptr(ObIAllocator &allocator,
+                              ObLLVMContext &context,
+                              llvm::Module &module,
+                              const ObIArray<T> &elem_values,
+                              ObLLVMValue &result)
 {
   int ret = OB_SUCCESS;
+
   if (elem_values.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("element types is empty", K(ret));
   } else {
-    ObFastArray<uint64_t, 64> array(allocator_);
+    ObFastArray<T, 64> array(allocator);
     for (int64_t i = 0; OB_SUCC(ret) && i < elem_values.count(); ++i) {
       if (OB_FAIL(array.push_back(elem_values.at(i)))) {
         LOG_WARN("push_back error", K(i), K(elem_values), K(ret));
@@ -1806,52 +1898,62 @@ int ObLLVMHelper::get_uint64_array(const ObIArray<uint64_t> &elem_values, ObLLVM
     }
     // TODO:
     if (OB_SUCC(ret)) {
-      llvm::Constant *value = llvm::ConstantDataArray::get(jc_->get_context(), make_array_ref(array));
+      llvm::Constant *value = llvm::ConstantDataArray::get(context, make_array_ref(array));
       if (OB_ISNULL(value)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create struct type", K(ret));
       } else {
-        result.set_v(value);
+        GlobalVariable *gv = new GlobalVariable(
+          module, value->getType(), true, GlobalValue::PrivateLinkage, value);
+
+        if (OB_ISNULL(gv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL global variable", K(ret));
+        } else {
+          gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+          gv->setAlignment(Align(alignof(T)));
+        }
+
+        if (OB_SUCC(ret)) {
+          llvm::Constant *zero = ConstantInt::get(Type::getInt32Ty(context), 0);
+          llvm::Constant *indices[] = {zero, zero};
+
+          llvm::Value *ptr = ConstantExpr::getInBoundsGetElementPtr(gv->getValueType(), gv, indices);
+
+          result.set_v(ptr);
+        }
       }
     }
   }
+
   return ret;
 }
 
-int ObLLVMHelper::get_string(const ObString &str, ObLLVMValue &result)
+int ObLLVMHelper::get_uint64_array(const ObIArray<uint64_t> &elem_values, ObLLVMValue &result)
 {
   int ret = OB_SUCCESS;
-  if (str.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("element types is empty", K(str), K(ret));
-  } else {
-    llvm::Constant *value = llvm::ConstantDataArray::getString(jc_->get_context(), make_string_ref(str));
-    if (OB_ISNULL(value)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create struct type", K(str), K(ret));
-    } else {
-      result.set_v(value);
-    }
+
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(jc_), K(ret));
+  } else if (OB_FAIL(get_llvm_array_ptr(allocator_, jc_->get_context(), jc_->get_module(), elem_values, result))) {
+    LOG_WARN("failed to get_llvm_array_ptr", K(ret), K(elem_values), K(result));
   }
+
   return ret;
 }
 
-int ObLLVMHelper::get_global_string(ObLLVMValue &const_string, ObLLVMValue &result)
+int ObLLVMHelper::get_int8_array(const ObIArray<int8_t> &elem_values, ObLLVMValue &result)
 {
   int ret = OB_SUCCESS;
-  llvm::Value *string_var = nullptr;
-  if (nullptr == (string_var = new llvm::GlobalVariable(
-    (jc_->get_module()),
-    const_string.get_v()->getType(),
-    true,
-    llvm::GlobalVariable::PrivateLinkage,
-    static_cast<llvm::Constant *>(const_string.get_v()),
-    ""))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed allocate memory for GlobalVariable", K(ret), K(sizeof(llvm::GlobalVariable)));
-  } else {
-    result.set_v(string_var);
+
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(jc_), K(ret));
+  } else if (OB_FAIL(get_llvm_array_ptr(allocator_, jc_->get_context(), jc_->get_module(), elem_values, result))) {
+    LOG_WARN("failed to get_llvm_array_ptr", K(ret), K(elem_values), K(result));
   }
+
   return ret;
 }
 
@@ -1923,6 +2025,55 @@ int ObLLVMHelper::create_block(const common::ObString &name, ObLLVMFunction &par
   return ret;
 }
 
+int ObLLVMHelper::acc_struct_field_rec(const ObLLVMType &type, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(type.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("type is NULL", K(ret), K(type), K(lbt()));
+  } else if (llvm::Type::StructTyID == type.get_id()) {
+    int64_t child_count = type.get_num_child();
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_count; ++i) {
+      ObLLVMType curr = type.get_child(i);
+
+      if (OB_ISNULL(type.get_v())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("child type is NULL", K(ret), K(type), K(lbt()));
+      // in most cases, structs are not deeply nested, this path can avoid a recursive call
+      } else if (OB_LIKELY(llvm::Type::StructTyID != curr.get_id())) {
+        count += 1;
+      } else if (OB_FAIL(SMART_CALL(acc_struct_field_rec(curr, count)))) {
+        LOG_WARN("failed to acc_struct_field_rec", K(ret), K(i), K(curr), K(type), K(child_count));
+      }
+    }
+  } else {
+    count += 1;
+  }
+
+  return ret;
+}
+
+int ObLLVMHelper::check_struct_type(common::ObIArray<ObLLVMType> &elem_types)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t field_count = 0;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < elem_types.count(); ++i) {
+    if (OB_FAIL(acc_struct_field_rec(elem_types.at(i), field_count))) {
+      LOG_WARN("failed to acc_struct_field_rec", K(ret), K(i), K(elem_types), K(field_count));
+    } else if (std::numeric_limits<unsigned short>::max() < field_count) {  // when we switch to LLVM GlobalISel, this limit may be dropped.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("too many struct fields", K(ret), K(i), K(elem_types), K(field_count), K(lbt()));
+      LOG_USER_WARN(OB_NOT_SUPPORTED, "struct fields exceed 65535 is");
+    }
+  }
+
+  return ret;
+}
+
 int ObLLVMHelper::create_struct_type(const common::ObString &name, common::ObIArray<ObLLVMType> &elem_types, ObLLVMType &type)
 {
   int ret = OB_SUCCESS;
@@ -1932,6 +2083,8 @@ int ObLLVMHelper::create_struct_type(const common::ObString &name, common::ObIAr
   } else if (elem_types.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("element types is empty", K(ret));
+  } else if (OB_FAIL(check_struct_type(elem_types))) {
+    LOG_WARN("failed to check_struct_type", K(ret), K(elem_types));
   } else {
     common::ObFastArray<ObIRType*, 64> array(allocator_);
     for (int64_t i = 0; OB_SUCC(ret) && i < elem_types.count(); ++i) {
@@ -2058,6 +2211,46 @@ int ObLLVMHelper::check_insert_point(bool &is_valid)
   } else {
     is_valid = !block.is_terminated();
   }
+  return ret;
+}
+
+int ObLLVMHelper::create_phi(const ObString &name,
+                             ObLLVMType &type,
+                             ObIArray<std::pair<ObLLVMValue, ObLLVMBasicBlock>> &incoming,
+                             ObLLVMValue &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(jc_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jc is NULL", K(jc_), K(ret));
+  } else if (OB_ISNULL(type.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("value is NULL", K(name), K(type), K(ret));
+  } else {
+    llvm::PHINode *phi = jc_->get_builder().CreatePHI(type.get_v(), incoming.count(), make_string_ref(name));
+
+    if (OB_ISNULL(phi)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to create LLVM PHI node", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < incoming.count(); ++i) {
+        std::pair<ObLLVMValue, ObLLVMBasicBlock> &curr = incoming.at(i);
+
+        CK (OB_NOT_NULL(curr.first.get_v()));
+        CK (OB_NOT_NULL(curr.second.get_v()))
+
+        if (OB_SUCC(ret)) {
+          phi->addIncoming(curr.first.get_v(), curr.second.get_v());
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        result.set_v(phi);
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -2310,6 +2503,19 @@ int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
 const ObString& ObLLVMHelper::get_compiled_object()
 {
   return jit_->get_compiled_object();
+}
+
+int ObLLVMHelper::get_compiled_stack_size(uint64_t &stack_size) {
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(jit_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jit is NULL", K(ret), K(jc_), K(jit_), K(lbt()));
+  } else {
+    stack_size = jit_->get_stack_size();
+  }
+
+  return ret;
 }
 
 #ifdef CPP_STANDARD_20

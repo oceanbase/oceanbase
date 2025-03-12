@@ -11,12 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_adaptive_auto_dop.h"
+#include "ob_adaptive_auto_dop.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_storage_estimator.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "share/ob_rpc_struct.h"
 
 using namespace oceanbase::common;
 

@@ -11,41 +11,22 @@
  */
 #define USING_LOG_PREFIX SERVER
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
 #include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
 #include "share/rpc/ob_batch_processor.h"
 #include "share/rpc/ob_blacklist_req_processor.h"
 #include "share/rpc/ob_blacklist_resp_processor.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/executor/ob_remote_executor_processor.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
-#include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "sql/das/ob_das_rpc_processor.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
-// #include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_dup_table_base.h"
-#include "storage/tx/ob_ts_response_handler.h"
-#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "observer/ob_rpc_processor_simple.h"
 #include "observer/ob_inner_sql_rpc_processor.h"
-#include "observer/ob_srv_task.h"
 #include "logservice/palf/log_rpc_processor.h"
 #include "logservice/logrpc/ob_log_rpc_processor.h"
 #include "logservice/cdcservice/ob_cdc_rpc_processor.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
-#include "observer/table/ob_table_execute_processor.h"
-#include "observer/table/ob_table_batch_execute_processor.h"
-#include "observer/table/ob_table_query_processor.h"
-#include "observer/table/ob_table_query_and_mutate_processor.h"
 #include "observer/net/ob_rpc_reverse_keepalive.h"
 
 #include "observer/dbms_job/ob_dbms_job_rpc_processor.h"

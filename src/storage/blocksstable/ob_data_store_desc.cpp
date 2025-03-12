@@ -7,10 +7,11 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
+
+#define USING_LOG_PREFIX STORAGE
+
 #include "storage/blocksstable/ob_data_store_desc.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
-#include "share/schema/ob_column_schema.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase
@@ -69,6 +70,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   MEMCPY(encrypt_key_, desc.encrypt_key_, sizeof(encrypt_key_));
   exec_mode_ = desc.exec_mode_;
   micro_index_clustered_ = desc.micro_index_clustered_;
+  enable_macro_block_bloom_filter_ = desc.enable_macro_block_bloom_filter_;
   need_submit_io_ = desc.need_submit_io_;
   encoding_granularity_ = desc.encoding_granularity_;
   return ret;
@@ -140,8 +142,10 @@ int ObStaticDataStoreDesc::init(
     tablet_transfer_seq_ = tablet_transfer_seq;
     exec_mode_ = exec_mode;
     encoding_granularity_ = encoding_granularity;
+    enable_macro_block_bloom_filter_ = merge_schema.get_enable_macro_block_bloom_filter();
 
     if (compaction::is_mds_merge(merge_type_)) {
+      // Disable for mds table.
       micro_index_clustered_ = false;
     } else {
       micro_index_clustered_ = micro_index_clustered;
@@ -762,6 +766,11 @@ int ObDataStoreDesc::inner_init(
 bool ObDataStoreDesc::micro_index_clustered() const
 {
   return static_desc_->micro_index_clustered_;
+}
+
+bool ObDataStoreDesc::enable_macro_block_bloom_filter() const
+{
+  return static_desc_->enable_macro_block_bloom_filter_;
 }
 
 int ObDataStoreDesc::update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta)

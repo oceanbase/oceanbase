@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "sql/executor/ob_local_identity_task_spliter.h"
-#include "sql/executor/ob_task_info.h"
-#include "sql/executor/ob_job.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

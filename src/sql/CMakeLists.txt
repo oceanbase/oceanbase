@@ -34,6 +34,7 @@ ob_set_subtarget(ob_sql common_mixed
   resolver/mv/ob_mv_provider.cpp
   resolver/mv/ob_mv_printer.cpp
   resolver/mv/ob_mv_dep_utils.cpp
+  resolver/mv/ob_alter_mview_utils.cpp
 )
 
 ob_set_subtarget(ob_sql das
@@ -41,8 +42,6 @@ ob_set_subtarget(ob_sql das
   das/ob_das_define.cpp
   das/ob_das_delete_op.cpp
   das/ob_das_dml_ctx_define.cpp
-  das/ob_domain_index_lookup_op.cpp
-  das/ob_vector_index_lookup_op.cpp
   das/ob_das_extra_data.cpp
   das/ob_das_factory.cpp
   das/ob_das_insert_op.cpp
@@ -78,15 +77,18 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_sort_iter.cpp
   das/iter/ob_das_text_retrieval_iter.cpp
   das/iter/ob_das_text_retrieval_merge_iter.cpp
+  das/iter/ob_das_text_retrieval_eval_node.cpp
   das/iter/ob_das_iter_utils.cpp
-  das/iter/ob_das_doc_id_merge_iter.cpp
-  das/iter/ob_das_vid_merge_iter.cpp
   das/iter/ob_das_index_merge_iter.cpp
   das/iter/ob_das_func_data_iter.cpp
   das/iter/ob_das_functional_lookup_iter.cpp
   das/iter/ob_das_cache_lookup_iter.cpp
   das/iter/ob_das_mvi_lookup_iter.cpp
   das/iter/ob_das_spatial_scan_iter.cpp
+  das/iter/ob_das_hnsw_scan_iter.cpp
+  das/iter/ob_das_ivf_scan_iter.cpp
+  das/iter/ob_das_domain_id_merge_iter.cpp
+  das/iter/ob_das_vec_scan_utils.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -548,9 +550,11 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_contains_all.cpp
   engine/expr/ob_expr_array_distinct.cpp
   engine/expr/ob_expr_array_map.cpp
+  engine/expr/ob_expr_array_sum.cpp
   engine/expr/ob_expr_array_remove.cpp
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
+  engine/expr/ob_expr_ora_login_user.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
@@ -558,6 +562,15 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_vector.cpp
   engine/expr/ob_array_expr_utils.cpp
   engine/expr/ob_array_cast.cpp
+  engine/expr/ob_expr_vec_ivf_center_id.cpp
+  engine/expr/ob_expr_vec_ivf_center_vector.cpp
+  engine/expr/ob_expr_vec_ivf_flat_data_vector.cpp
+  engine/expr/ob_expr_vec_ivf_sq8_data_vector.cpp
+  engine/expr/ob_expr_vec_ivf_meta_id.cpp
+  engine/expr/ob_expr_vec_ivf_meta_vector.cpp
+  engine/expr/ob_expr_vec_ivf_pq_center_id.cpp
+  engine/expr/ob_expr_vec_ivf_pq_center_ids.cpp
+  engine/expr/ob_expr_vec_ivf_pq_center_vector.cpp
   engine/expr/ob_expr_vec_vid.cpp
   engine/expr/ob_expr_vec_type.cpp
   engine/expr/ob_expr_vec_vector.cpp
@@ -606,6 +619,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_within.cpp
   engine/expr/ob_expr_sql_mode_convert.cpp
   engine/expr/ob_expr_can_access_trigger.cpp
+  engine/expr/ob_expr_mysql_proc_info.cpp
   engine/expr/ob_expr_get_mysql_routine_parameter_type_str.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
@@ -835,9 +849,25 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_calc_odps_size.cpp
   engine/expr/ob_expr_to_pinyin_tab.cpp
   engine/expr/ob_expr_to_pinyin.cpp
+  engine/expr/ob_expr_url_codec.cpp
+  engine/expr/ob_expr_keyvalue.cpp
+  engine/expr/ob_expr_demote_cast.cpp
+  engine/expr/ob_expr_array_max.cpp
+  engine/expr/ob_expr_array_avg.cpp
+  engine/expr/ob_expr_array_first.cpp
+  engine/expr/ob_expr_array_concat.cpp
+  engine/expr/ob_expr_array_difference.cpp
+  engine/expr/ob_expr_array_compact.cpp
+  engine/expr/ob_expr_array_sort.cpp
+  engine/expr/ob_expr_array_sortby.cpp
+  engine/expr/ob_expr_array_filter.cpp
+  engine/expr/ob_expr_array_range.cpp
+  engine/expr/ob_expr_array_length.cpp
+  engine/expr/ob_expr_array_position.cpp
+  engine/expr/ob_expr_array_slice.cpp
 )
 
-ob_set_subtarget(ob_sql ALONE
+ob_set_subtarget(ob_sql_extra ALONE
   engine/expr/ob_datum_cast.cpp
   engine/expr/ob_expr_cmp_func.cpp
   engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part0.cpp
@@ -1245,6 +1275,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_tenant_clone_resolver.cpp
   resolver/cmd/ob_olap_async_job_resolver.cpp
   resolver/cmd/ob_olap_async_job_stmt.cpp
+  resolver/cmd/ob_module_data_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl
@@ -1321,6 +1352,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_tenant_stmt.cpp
   resolver/ddl/ob_create_standby_tenant_resolver.cpp
   resolver/ddl/ob_create_view_resolver.cpp
+  resolver/ddl/ob_create_wrapped_resolver.cpp
   resolver/ddl/ob_ddl_resolver.cpp
   resolver/ddl/ob_ddl_stmt.cpp
   resolver/ddl/ob_drop_database_resolver.cpp
@@ -1366,11 +1398,11 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_use_database_resolver.cpp
   resolver/ddl/ob_create_context_resolver.cpp
   resolver/ddl/ob_drop_context_resolver.cpp
+  resolver/ddl/ob_fts_parser_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_aggr_expr_push_up_analyzer.cpp
-  resolver/dml/ob_any_value_checker.cpp
   resolver/dml/ob_column_namespace_checker.cpp
   resolver/dml/ob_default_value_utils.cpp
   resolver/dml/ob_del_upd_resolver.cpp
@@ -1415,6 +1447,7 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_util.cpp
   resolver/expr/ob_raw_expr_wrap_enum_set.cpp
   resolver/expr/ob_shared_expr_resolver.cpp
+  resolver/expr/ob_raw_expr_type_demotion.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_prepare
@@ -1507,6 +1540,13 @@ if(CPP_STANDARD_20)
   add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 ob_add_new_object_target(ob_sql ob_sql)
+ob_add_new_object_target(ob_sql_extra ob_sql_extra)
+
+if (DETECT_RECURSION)
+ target_compile_options(ob_sql
+   PRIVATE -finstrument-functions
+ )
+endif()
 
 ob_set_subtarget(ob_sql_simd common
   engine/basic/ob_pushdown_filter_simd.cpp
@@ -1524,6 +1564,7 @@ if (${ARCHITECTURE} STREQUAL "x86_64")
 endif()
 
 target_link_libraries(ob_sql PUBLIC ob_base)
+target_link_libraries(ob_sql_extra PUBLIC ob_base_without_pass)
 
 add_library(ob_sql_static
   STATIC
@@ -1531,11 +1572,11 @@ add_library(ob_sql_static
 
 if(OB_BUILD_OPENSOURCE)
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql
+  PUBLIC ob_sql ob_sql_extra
   ob_sql_server_parser_static)
 else()
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql
+  PUBLIC ob_sql ob_sql_extra
   ob_sql_server_parser_static
   ${DEP_DIR}/lib64/libprotobuf-v371.a
   ${DEP_DIR}/lib64/libzstd.a

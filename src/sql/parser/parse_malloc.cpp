@@ -11,13 +11,43 @@
  */
 
 #define USING_LOG_PREFIX SQL_PARSER
-#include "sql/parser/parse_malloc.h"
-#include <string.h>
+#include "parse_malloc.h"
 #include <lib/alloc/alloc_assist.h>
+#include "parse_node.h"
 #include "lib/charset/ob_ctype.h"
 #include "sql/parser/parse_define.h"
 #include "sql/parser/parser_proxy_func.h"
 
+char* charset_upper(const struct ObCharsetInfo* src_cs,
+                    char *src_ptr, int64_t src_len,
+                    void *malloc_pool)
+{
+  char *buf = NULL;
+
+  if (OB_ISNULL(src_ptr)) {
+  } else if (OB_ISNULL(src_cs)) {
+  } else if (OB_ISNULL(src_cs->cset)) {
+  } else if (OB_ISNULL(malloc_pool)) {
+  } else if (OB_UNLIKELY(src_len <= 0)) {
+  } else if (src_cs->number == ob_charset_bin.number) {
+    buf = str_toupper(src_ptr, src_len);
+  } else {
+    int casemulti = src_cs->caseup_multiply;
+    int64_t buf_len = src_len * casemulti;
+    if(OB_LIKELY(NULL != (buf = static_cast<char *>(parse_malloc(buf_len + 1, malloc_pool))))) {
+      if (1 == casemulti) {
+        MEMCPY(buf, src_ptr, buf_len);
+        size_t size = src_cs->cset->caseup(src_cs, buf, buf_len, buf, buf_len);
+      } else {
+        size_t size = src_cs->cset->caseup(src_cs, src_ptr, src_len, buf, buf_len);
+      }
+      buf[buf_len] = '\0';
+    } else {
+    }
+  }
+
+  return buf;
+}
 
 void *malloc_parentheses_info(const size_t nbyte, void *malloc_pool)
 {

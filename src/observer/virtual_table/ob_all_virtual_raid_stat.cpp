@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "observer/ob_server.h"
 #include "observer/virtual_table/ob_all_virtual_raid_stat.h"
 
 using namespace oceanbase;

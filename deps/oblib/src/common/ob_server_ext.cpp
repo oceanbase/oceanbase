@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_log.h"
 #include "common/ob_server_ext.h"
-#include "lib/ob_define.h"
 using namespace oceanbase::common;
 
 ObServerExt::ObServerExt()

@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_scan_op.h"
+#include "ob_group_scan_iter.h"
 #include "sql/engine/ob_exec_context.h"
 namespace oceanbase
 {

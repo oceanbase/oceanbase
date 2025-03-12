@@ -56,6 +56,7 @@ const int64_t OB_BACKUP_DEFAULT_PG_NUM = 10000;
 const int64_t OB_MAX_BACKUP_DEST_LENGTH = 2048;
 const int64_t OB_MAX_RESTORE_DEST_LENGTH = OB_MAX_BACKUP_DEST_LENGTH * 10;
 const int64_t OB_MAX_BACKUP_PATH_LENGTH = 1024;
+const int64_t OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH = 2048;
 const int64_t OB_MAX_BACKUP_AUTHORIZATION_LENGTH = 1024;
 const int64_t OB_MAX_BACKUP_CHECK_FILE_LENGTH = OB_MAX_BACKUP_PATH_LENGTH;
 const int64_t OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH = 256;
@@ -1878,8 +1879,8 @@ public:
   bool operator<=(const ObBackupTableListItem &o) const { return !(operator > (o)); }
 
   TO_STRING_KV(K_(database_name), K_(table_name));
-  common::ObFixedLengthString<OB_MAX_DATABASE_NAME_LENGTH + 1> database_name_;
-  common::ObFixedLengthString<OB_MAX_TABLE_NAME_LENGTH + 1> table_name_;
+  common::ObFixedLengthString<OB_MAX_DATABASE_NAME_BINARY_LENGTH + 1> database_name_;
+  common::ObFixedLengthString<OB_MAX_TABLE_NAME_BINARY_LENGTH + 1> table_name_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupTableListItem);
 };

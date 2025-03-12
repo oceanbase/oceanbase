@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX RS
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
-#include "observer/ob_check_params.h"
-#include "share/config/ob_server_config.h"
+#include "src/share/config/ob_config.h"
 namespace oceanbase
 {
 using namespace common;

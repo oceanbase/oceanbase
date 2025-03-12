@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/parallel_ddl/ob_create_view_helper.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_rpc_struct.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;

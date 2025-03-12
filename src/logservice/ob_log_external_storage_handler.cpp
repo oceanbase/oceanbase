@@ -11,13 +11,10 @@
  */
 
 #include "ob_log_external_storage_handler.h"
-#include "lib/string/ob_string.h"                                             // ObString
-#include "lib/stat/ob_latch_define.h"                                         // LOG_EXTERNAL_STORAGE_HANDLER_LOCK
-#include "share/rc/ob_tenant_base.h"                                          // MTL_NEW
 #include "share/backup/ob_backup_io_adapter.h"                                // ObBackupIoAdapter
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "log/ob_shared_log_utils.h"                                          // ObSharedLogUtils
-#include "share/ob_device_manager.h"                                          // ObDeviceManager
+#include "share/ob_device_manager.h"
 #endif
 #include "ob_log_external_storage_utils.h"                                    // get_and_init_io_device
 

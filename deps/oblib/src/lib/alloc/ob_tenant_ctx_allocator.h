@@ -412,7 +412,9 @@ public:
       }
     }
     if (NULL == nptr) {
-      print_alloc_failed_msg();
+      print_alloc_failed_msg(ta.get_tenant_id(), ta.get_ctx_id(),
+                             ta.get_hold(), ta.get_limit(),
+                             ta.get_tenant_hold(), ta.get_tenant_limit());
     }
     return nptr;
   }

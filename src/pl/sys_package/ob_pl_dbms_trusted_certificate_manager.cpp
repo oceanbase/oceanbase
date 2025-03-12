@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX PL
 #include "ob_pl_dbms_trusted_certificate_manager.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

@@ -13,20 +13,8 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "ob_granule_util.h"
-#include "share/ob_i_tablet_scan.h"
-#include "share/config/ob_server_config.h"
-#include "lib/ob_errno.h"
-#include "sql/ob_sql_define.h"
-#include "sql/optimizer/ob_table_partition_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "ob_granule_pump.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "share/schema/ob_table_param.h"
-#include "sql/engine/ob_engine_op_traits.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
+#include "src/sql/engine/px/ob_dfo.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/das/ob_das_simple_op.h"
 
 using namespace oceanbase::common;
@@ -627,6 +615,24 @@ int ObGranuleUtil::convert_new_range_to_store_range(ObIAllocator &allocator,
     }
   }
   return ret;
+}
+
+ObGranuleSplitterType ObGranuleUtil::calc_split_type(uint64_t gi_attr_flag)
+{
+  ObGranuleSplitterType res = GIT_UNINITIALIZED;
+  if (access_all(gi_attr_flag)) {
+    res = GIT_ACCESS_ALL;
+  } else if (pwj_gi(gi_attr_flag) &&
+             affinitize(gi_attr_flag)) {
+    res = GIT_PARTITION_WISE_WITH_AFFINITY;
+  } else if (affinitize(gi_attr_flag)) {
+    res = GIT_AFFINITY;
+  } else if (pwj_gi(gi_attr_flag)) {
+    res = GIT_FULL_PARTITION_WISE;
+  } else {
+    res = GIT_RANDOM;
+  }
+  return res;
 }
 
 }

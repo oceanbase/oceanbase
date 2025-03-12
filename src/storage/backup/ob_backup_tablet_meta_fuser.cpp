@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_tablet_meta_fuser.h"
-#include "storage/backup/ob_backup_restore_util.h"
 #include "storage/backup/ob_backup_factory.h"
 
 namespace oceanbase

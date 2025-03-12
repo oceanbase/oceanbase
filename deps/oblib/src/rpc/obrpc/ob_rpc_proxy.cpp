@@ -14,10 +14,6 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 
-#include "lib/worker.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/trace/ob_trace.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -47,14 +43,6 @@ Handle::Handle()
       first_pkt_id_(INVALID_RPC_PKT_ID),
       abs_timeout_ts_(OB_INVALID_TIMESTAMP)
 {}
-
-Handle::~Handle()
-{
-  if (!has_more_ && first_pkt_id_ != INVALID_RPC_PKT_ID) {
-    LOG_WARN_RET(OB_RPC_PACKET_TOO_LONG, "stream rpc is forgotten to abort", K_(pcode), K_(first_pkt_id));
-    stream_rpc_unregister(first_pkt_id_);
-  }
-}
 
 void Handle::reset_timeout()
 {
@@ -365,7 +353,7 @@ void ObRpcProxy::set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, c
     handle->abs_timeout_ts_ = send_ts + timeout_;
     if (is_stream_next) {
       handle->first_pkt_id_ = pkt_id;
-      LOG_TRACE("stream rpc register", K(pcode), K(pkt_id));
+      LOG_INFO("stream rpc register", K(pcode), K(pkt_id));
       stream_rpc_register(pkt_id, send_ts);
     }
     int64_t timeout = min(timeout_, INT64_MAX/2);

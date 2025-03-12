@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_plugin_vector_index_serialize.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "storage/lob/ob_lob_manager.h"
-#include "deps/oblib/src/lib/vector/ob_vector_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 
 namespace oceanbase
 {
@@ -29,7 +27,9 @@ std::streamsize ObOStreamBuf::xsputn(const char* s, std::streamsize count)
 {
   std::streamsize written_size = 0;
   std::streamsize left_size = 0;
-  if (OB_ISNULL(s)) {
+  if (count == 0) {
+    // do nothing
+  } else if (OB_ISNULL(s)) {
     last_error_code_ = OB_INVALID_ARGUMENT;
   }
   while (is_valid() && is_success() && written_size < count) {
@@ -125,7 +125,9 @@ std::streamsize ObIStreamBuf::xsgetn(char* s, std::streamsize n)
 {
   std::streamsize get_size = 0;
   std::streamsize data_size = 0;
-  if (OB_ISNULL(s)) {
+  if (n == 0) {
+    // do nothing
+  } else if (OB_ISNULL(s)) {
     last_error_code_ = OB_INVALID_ARGUMENT;
   } else if (is_success() && !is_valid()) {
     last_error_code_ = do_callback();
@@ -208,34 +210,29 @@ int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb
 {
   int ret = OB_SUCCESS;
   char *data = nullptr;
-  if (OB_ISNULL(index)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(index));
-  } else {
-    ObIStreamBuf streambuf(nullptr, 0, cb_param, cb);
-    std::istream in(&streambuf);
-    if (OB_FAIL(streambuf.init())) {
-      if (ret == OB_ITER_END) {
-        LOG_INFO("[vec index deserialize] read table is empty, just return");
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to init istreambuf", K(ret));
-      }
+  ObIStreamBuf streambuf(nullptr, 0, cb_param, cb);
+  std::istream in(&streambuf);
+  if (OB_FAIL(streambuf.init())) {
+    if (ret == OB_ITER_END) {
+      LOG_INFO("[vec index deserialize] read table is empty, just return");
+      ret = OB_SUCCESS;
     } else {
-      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
-      if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
-        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
-        LOG_WARN("fail to do vsag deserialize", K(ret));
-      }
+      LOG_WARN("failed to init istreambuf", K(ret));
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(streambuf.get_error_code())) {
-      if (ret == OB_ITER_END) {
-        LOG_INFO("[vec index deserialize] read table finish, just return");
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to deserialize", K(ret));
-      }
+  } else {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
+    if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+      LOG_WARN("fail to do vsag deserialize", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(streambuf.get_error_code())) {
+    if (ret == OB_ITER_END) {
+      LOG_INFO("[vec index deserialize] read table finish, just return");
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to deserialize", K(ret));
     }
   }
   return ret;
@@ -302,10 +299,47 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
             LOG_WARN("fail to new ObTextStringIter", KR(ret));
           } else if (OB_FAIL(str_iter->init(0, NULL, allocator))) {
             LOG_WARN("init lob str iter failed ", K(ret));
+          } else if (index_type_ == VIAT_MAX) {
+            ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
+            ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+            uint32_t idx = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
+                                       "hnsw_sq", 7, 1);
+            if (OB_ISNULL(adp)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get invalid adp", K(ret));
+            } else if (idx > 0) {
+              index_type_ = VIAT_HNSW_SQ;
+              if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_SQ))) {
+                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
+              }
+            } else {
+              index_type_ = VIAT_HNSW;
+              if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW))) {
+                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
+              }
+            }
+            LOG_INFO("HgraphIndex vector index get key data from snap_index_table", K(ret), K(index_type_), K(key_datum.get_string()));
           }
         }
       }
     } while (OB_SUCC(ret) && OB_ISNULL(data));
+
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      ObPluginVectorIndexAdaptor *adp_ptr = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
+      if (OB_ISNULL(adp_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid adp", K(ret));
+      } else if (!adp_ptr->is_mem_data_init_atomic(VIRT_SNAP)) {
+        if (OB_FAIL(adp_ptr->init_snap_data_without_lock(VIAT_HNSW))) {
+          LOG_WARN("failed to init hnsw mem data", K(ret));
+        } else {
+          ret = OB_ITER_END;
+        }
+      } else {
+        ret = OB_ITER_END;
+      }
+    }
   }
   return ret;
 }

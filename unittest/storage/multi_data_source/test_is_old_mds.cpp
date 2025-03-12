@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_errno.h"
 #include <gtest/gtest.h>
 #include "storage/schema_utils.h"
 #include "storage/test_tablet_helper.h"

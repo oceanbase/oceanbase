@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "src/share/table/ob_redis_parser.h"
+#include "src/share/table/redis/ob_redis_parser.h"
 #include "src/share/ob_errno.h"
 
 using namespace oceanbase::common;
@@ -32,47 +32,63 @@ public:
 
 TEST_F(TestRedisParser, test_decode_inline) {
   ObArenaAllocator allocator(ObModIds::TEST);
-  ObString redis_msg = "Monitor\r\n";
+  ObString msg = "Monitor\r\n";
+  ObString redis_msg;
+  ob_write_string(allocator, msg, redis_msg);
+  char cmd_name_buf_[64] = {};
   ObString method;
+  method.assign_buffer(cmd_name_buf_, sizeof(cmd_name_buf_));
   ObArray<ObString> args;
-  ASSERT_EQ(OB_SUCCESS, ObRedisParser::decode(allocator, redis_msg, method, args));
+  ASSERT_EQ(OB_SUCCESS, ObRedisParser::decode(redis_msg, method, args));
   ASSERT_EQ(0, args.size());
-  ObString expected = "MONITOR";
+  ObString expected = "monitor";
   ASSERT_EQ(method == expected, true);
 }
 
 TEST_F(TestRedisParser, test_decode_array) {
+  ObString msg = "*2\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
   ObArenaAllocator allocator(ObModIds::TEST);
-  ObString redis_msg = "*2\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
+  ObString redis_msg;
+  ob_write_string(allocator, msg, redis_msg);
+  char cmd_name_buf_[64] = {};
   ObString method;
+  method.assign_buffer(cmd_name_buf_, sizeof(cmd_name_buf_));
   ObArray<ObString> args;
-  ASSERT_EQ(OB_SUCCESS, ObRedisParser::decode(allocator, redis_msg, method, args));
+  ASSERT_EQ(OB_SUCCESS, ObRedisParser::decode(redis_msg, method, args));
   ASSERT_EQ(1, args.size());
-  ObString expected1 = "GET";
+  ObString expected1 = "get";
   ASSERT_EQ(method == expected1, true);
   ObString expected2 = "foobar";
   ASSERT_EQ(args[0] == expected2, true);
 }
 
 TEST_F(TestRedisParser, test_decode_err) {
-  ObArenaAllocator allocator(ObModIds::TEST);
+  char cmd_name_buf_[64] = {};
   ObString method;
+  method.assign_buffer(cmd_name_buf_, sizeof(cmd_name_buf_));
   ObArray<ObString> args;
   // invalid length
-  ObString redis_msg = "*3\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
-  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(allocator, redis_msg, method, args));
-  redis_msg = "*1\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
-  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(allocator, redis_msg, method, args));
+  ObString msg = "*3\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString redis_msg;
+  ob_write_string(allocator, msg, redis_msg);
+  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(redis_msg, method, args));
+  msg = "*1\r\n$3\r\nGET\r\n$6\r\nfoobar\r\n";
+  ob_write_string(allocator, msg, redis_msg);
+  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(redis_msg, method, args));
 
   // invalid end char
-  redis_msg = "$2\r\n$3\r\nGET\r\n$6\nfoobar\r\n";
-  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(allocator, redis_msg, method, args));
-  redis_msg = "Monitor\n";
-  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(allocator, redis_msg, method, args));
+  msg = "$2\r\n$3\r\nGET\r\n$6\nfoobar\r\n";
+  ob_write_string(allocator, msg, redis_msg);
+  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(redis_msg, method, args));
+  msg = "Monitor\n";
+  ob_write_string(allocator, msg, redis_msg);
+  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(redis_msg, method, args));
 
   // invalid header
-  redis_msg = "-2\r\n$3\r\nGET\r\n$6\nfoobar\r\n";
-  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(allocator, redis_msg, method, args));
+  msg = "-2\r\n$3\r\nGET\r\n$6\nfoobar\r\n";
+  ob_write_string(allocator, msg, redis_msg);
+  ASSERT_EQ(OB_KV_REDIS_PARSE_ERROR, ObRedisParser::decode(redis_msg, method, args));
 }
 
 TEST_F(TestRedisParser, test_encode_simple_string)

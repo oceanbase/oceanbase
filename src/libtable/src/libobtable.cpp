@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX CLIENT
 #include "libobtable.h"
 #include "share/ob_version.h"
-#include "lib/oblog/ob_easy_log.h"
 #include "io/easy_log.h"
-#include "share/cache/ob_kv_storecache.h"
 #include "share/ob_simple_mem_limit_getter.h"
-#include "share/system_variable/ob_system_variable_init.h"  // ObPreProcessSysVars::init_sys_var()
 #include "sql/ob_sql_init.h"
-#include "lib/resource/ob_resource_mgr.h"
 #include "rpc/frame/ob_net_easy.h"
 #include "observer/ob_signal_handle.h"
 using namespace oceanbase::common;

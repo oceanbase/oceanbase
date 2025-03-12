@@ -11,7 +11,6 @@
  */
 
 #include "gtest/gtest.h"
-#include "lib/hash/ob_placement_hashmap.h"
 #include "storage/ob_col_map.h"
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;

@@ -11,27 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_schema_checker.h"
-#include "lib/string/ob_string.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_udf.h"
-#include "share/schema/ob_synonym_mgr.h"
+#include "ob_schema_checker.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/ob_resolver_define.h"
 #include "observer/virtual_table/ob_table_columns.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "pl/ob_pl_stmt.h"
 #include "sql/privilege_check/ob_privilege_check.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -114,6 +99,7 @@ int ObSchemaChecker::check_ora_priv(
 }
 
 int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_priv,
+                                const common::ObIArray<uint64_t> &enable_role_id_array,
                                 const share::schema::ObStmtNeedPrivs &stmt_need_privs) const
 {
   int ret = OB_SUCCESS;
@@ -123,7 +109,7 @@ int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_
   } else if (OB_UNLIKELY(!session_priv.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_priv is invalid", K(session_priv), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_priv(session_priv, stmt_need_privs))) {
+  } else if (OB_FAIL(schema_mgr_->check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
     LOG_WARN("failed to check_priv", K(session_priv), K(stmt_need_privs), K(ret));
   } else {}
   return ret;
@@ -131,6 +117,7 @@ int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_
 
 
 int ObSchemaChecker::check_priv_or(const share::schema::ObSessionPrivInfo &session_priv,
+                                   const common::ObIArray<uint64_t> &enable_role_id_array,
                                    const share::schema::ObStmtNeedPrivs &stmt_need_privs)
 {
   int ret = OB_SUCCESS;
@@ -140,13 +127,14 @@ int ObSchemaChecker::check_priv_or(const share::schema::ObSessionPrivInfo &sessi
   } else if (OB_UNLIKELY(!session_priv.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_priv is invalid", K(session_priv), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_priv_or(session_priv, stmt_need_privs))) {
+  } else if (OB_FAIL(schema_mgr_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
     LOG_WARN("failed to check_priv_or", K(session_priv), K(stmt_need_privs), K(ret));
   } else {}
   return ret;
 }
 
 int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
+                                     const common::ObIArray<uint64_t> &enable_role_id_array,
                                      const ObString& database_name) const
 {
   int ret = OB_SUCCESS;
@@ -156,13 +144,14 @@ int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
   } else if (OB_UNLIKELY(!s_priv.is_valid() || database_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(database_name), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, database_name))) {
-    LOG_WARN("failed to check_db_access", K(s_priv), K(database_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, enable_role_id_array, database_name))) {
+    LOG_WARN("failed to check_db_access", K(s_priv), K(enable_role_id_array), K(database_name), K(ret));
   } else {}
   return ret;
 }
 
 int ObSchemaChecker::check_table_show(const share::schema::ObSessionPrivInfo &s_priv,
+                                      const common::ObIArray<uint64_t> &enable_role_id_array,
                                       const ObString &db,
                                       const ObString &table,
                                       bool &allow_show) const
@@ -174,8 +163,8 @@ int ObSchemaChecker::check_table_show(const share::schema::ObSessionPrivInfo &s_
   } else if (OB_UNLIKELY(!s_priv.is_valid() || db.empty() || table.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(db), K(table), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_table_show(s_priv, db, table, allow_show))) {
-    LOG_WARN("failed to check_table_show", K(s_priv), K(db), K(table), K(ret));
+  } else if (OB_FAIL(schema_mgr_->check_table_show(s_priv, enable_role_id_array, db, table, allow_show))) {
+    LOG_WARN("failed to check_table_show", K(s_priv), K(enable_role_id_array), K(db), K(table), K(ret));
   } else {}
   return ret;
 }
@@ -274,6 +263,7 @@ int ObSchemaChecker::check_routine_show(const share::schema::ObSessionPrivInfo &
 }
 
 int ObSchemaChecker::check_trigger_show(const share::schema::ObSessionPrivInfo &s_priv,
+                                        const common::ObIArray<uint64_t> &enable_role_id_array,
                                         const ObString &db,
                                         const ObString &trigger,
                                         bool &allow_show,
@@ -298,11 +288,11 @@ int ObSchemaChecker::check_trigger_show(const share::schema::ObSessionPrivInfo &
       need_priv.db_ = db;
       need_priv.priv_set_ = OB_PRIV_TRIGGER;
       need_priv.table_ = table;
-      OZ (schema_mgr_->check_single_table_priv(s_priv, need_priv));
+      OZ (schema_mgr_->check_single_table_priv(s_priv, enable_role_id_array, need_priv));
       if(OB_FAIL(ret)) {
         allow_show = false;
         ret = OB_SUCCESS;
-        LOG_WARN("show create trigger not has trigger priv", K(s_priv), K(db), K(trigger), K(table), K(ret));
+        LOG_WARN("show create trigger not has trigger priv", K(s_priv), K(enable_role_id_array), K(db), K(trigger), K(table), K(ret));
       }
     }
   }
@@ -2429,6 +2419,117 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     LOG_WARN("get_object_type_with_view_info failed",
              K(tenant_id), K(database_name), K(table_name), K(ret));
   }
+  return ret;
+}
+
+int ObSchemaChecker::get_object_id_by_name(const uint64_t tenant_id,
+                                            uint64_t database_id,
+                                            const common::ObString &object_name,
+                                            uint64_t &object_id)
+{
+  int ret = OB_SUCCESS;
+
+  common::ObString database_name;
+  const ObDatabaseSchema  *db_schema = NULL;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  if (OB_FAIL(get_database_schema(tenant_id, database_id, db_schema))) {
+    LOG_WARN("fail to get db schema", K(ret));
+  } else if (OB_NOT_NULL(db_schema)) {
+    database_name = db_schema->get_database_name();
+    ret = get_table_schema(tenant_id, database_name, object_name, false, table_schema);
+    if (OB_TABLE_NOT_EXIST == ret) {
+      if (lib::is_oracle_mode()) {
+        ret = get_idx_schema_by_origin_idx_name(tenant_id, database_id, object_name, table_schema);
+        if (OB_SUCC(ret)) {
+          if (table_schema == NULL) {
+            ret = OB_TABLE_NOT_EXIST;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
+      object_id = table_schema->get_table_id();
+    }
+
+    //check sequence
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t sequence_id = 0;
+      if (OB_FAIL(get_sequence_id(tenant_id, database_name, object_name, sequence_id))) {
+        if (OB_ERR_SEQ_NOT_EXIST == ret) {
+          ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        object_id = sequence_id;
+      }
+    }
+    //check procedure/function
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t routine_id = 0;
+      bool is_proc = false;
+      if (OB_FAIL(get_routine_id(tenant_id, database_name, object_name, routine_id, is_proc))) {
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+          ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        object_id = routine_id;
+      }
+    }
+    //check package
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t package_id = 0;
+      int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
+                                                      : COMPATIBLE_MYSQL_MODE;
+      if (OB_FAIL(get_package_id(tenant_id, database_name, object_name,
+                                  compatible_mode, package_id))) {
+        if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+          if (OB_FAIL(get_package_id(OB_SYS_TENANT_ID,
+                                      OB_SYS_DATABASE_ID,
+                                      object_name,
+                                      compatible_mode,
+                                      package_id))) {
+            if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+              ret = OB_TABLE_NOT_EXIST;
+            }
+          } else {
+            object_id = package_id;
+          }
+        }
+      } else {
+        object_id = package_id;
+      }
+    }
+
+    //check type
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t udt_id = 0;
+      if (OB_FAIL(get_udt_id(tenant_id, database_name, object_name, udt_id))) {
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+        ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        object_id = udt_id;
+      }
+    }
+    //check synonym
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ObString obj_db_name;
+      ObString obj_name;
+      uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
+      bool exist = false;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(get_syn_info(tenant_id, database_name, object_name, obj_db_name,
+                               obj_name, synonym_id, database_id, exist))) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        object_id = synonym_id;
+      }
+    }
+  }
+  if (OB_TABLE_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  }
+
   return ret;
 }
 

@@ -12,18 +12,9 @@
 
 #define USING_LOG_PREFIX RS_LB
 
-#include "ob_root_balancer.h"
 
-#include "lib/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_unit_replica_counter.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
+#include "ob_root_balancer.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
-#include "ob_unit_manager.h"
 #include "ob_balance_info.h"
 
 namespace oceanbase
@@ -46,7 +37,6 @@ int64_t ObRootBalanceIdling::get_idle_interval_us()
 ObRootBalancer::ObRootBalancer()
   : ObRsReentrantThread(true), inited_(false), active_(0), idling_(stop_, *this),
     server_balancer_(),
-    disaster_recovery_worker_(stop_),
     rootservice_util_checker_(stop_)
 {
 }
@@ -55,15 +45,13 @@ ObRootBalancer::~ObRootBalancer()
 {
 }
 
-int ObRootBalancer::init(common::ObServerConfig &cfg,
+int ObRootBalancer::init(
     share::schema::ObMultiVersionSchemaService &schema_service,
     ObUnitManager &unit_mgr,
     ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
-    ObSrvRpcProxy &rpc_proxy,
     ObAddr &self_addr,
-    ObMySQLProxy &sql_proxy,
-    ObDRTaskMgr &dr_task_mgr)
+    ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   static const int64_t root_balancer_thread_cnt = 1;
@@ -78,12 +66,8 @@ int ObRootBalancer::init(common::ObServerConfig &cfg,
     LOG_WARN("init failed", K(ret));
   } else if (OB_FAIL(create(root_balancer_thread_cnt, "RootBalance"))) {
     LOG_WARN("create root balancer thread failed", K(ret), K(root_balancer_thread_cnt));
-  } else if (OB_FAIL(disaster_recovery_worker_.init(
-          self_addr, cfg, zone_mgr,
-          dr_task_mgr, *GCTX.lst_operator_, schema_service, rpc_proxy, sql_proxy))) {
-    LOG_WARN("fail to init disaster recovery worker", KR(ret));
   } else if (OB_FAIL(rootservice_util_checker_.init(
-          unit_mgr, zone_mgr, *GCTX.rs_rpc_proxy_, self_addr, schema_service, sql_proxy, *GCTX.lst_operator_))) {
+          unit_mgr, *GCTX.rs_rpc_proxy_, self_addr, schema_service, sql_proxy, *GCTX.lst_operator_))) {
     LOG_WARN("fail to init rootservice util checker", KR(ret));
   } else {
     inited_ = true;
@@ -207,12 +191,6 @@ int ObRootBalancer::all_balance()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(disaster_recovery_worker_.try_disaster_recovery())) {
-        LOG_WARN("fail to try disaster recovery", KR(ret));
-      }
-    }
-
     if (OB_SUCC(ret)) {
       if (OB_FAIL(rootservice_util_checker_.rootservice_util_check())) {
         LOG_WARN("fail to do rootservice util check", KR(ret));

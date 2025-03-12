@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "observer/mysql/obsm_handler.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
 #include "lib/random/ob_mysql_random.h"
-#include "rpc/obmysql/ob_mysql_handler.h"
 #include "rpc/obmysql/packet/ompk_handshake.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_srv_task.h"
 #include "observer/omt/ob_tenant.h"
 

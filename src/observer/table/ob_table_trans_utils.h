@@ -51,6 +51,9 @@ public:
     create_cb_functor_ = nullptr;
     timeout_ts_ = -1;
     did_async_commit_ = false;
+    if (OB_NOT_NULL(trans_state_ptr_)) {
+      trans_state_ptr_->reset();
+    }
   }
   TO_STRING_KV(KPC_(trans_desc),
                K_(tx_snapshot),
@@ -102,8 +105,8 @@ public:
   static int start_trans(ObTableTransParam &trans_param);
   static int end_trans(ObTableTransParam &trans_param);
   static int sync_end_trans(ObTableTransParam &trans_param);
-private:
   static int setup_tx_snapshot(ObTableTransParam &trans_param);
+private:
   static int async_commit_trans(ObTableTransParam &trans_param);
 };
 

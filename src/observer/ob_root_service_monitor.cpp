@@ -14,13 +14,7 @@
 
 #include "ob_root_service_monitor.h"
 
-#include "share/ob_rpc_struct.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_server_status.h"
-#include "lib/thread/ob_thread_name.h"
 #include "logservice/ob_log_service.h"
 namespace oceanbase
 {

@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_coll_pred.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/hash/ob_hashmap.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_allocator.h"
-#include "lib/utility/utility.h"
-#include "share/object/ob_obj_cast.h"
+#include "sql/engine/expr/ob_expr_multiset.h"
+#include "src/pl/ob_pl.h"
 
 namespace oceanbase
 {
@@ -30,6 +25,8 @@ OB_SERIALIZE_MEMBER((ObExprCollPred, ObExprOperator),
                     ms_modifier_);
 
 typedef hash::ObHashMap<ObObj, int64_t, common::hash::NoPthreadDefendMode> LocalNTSHashMap;
+
+static const ObString MEMBER_OF_EXPR_NAME = ObString("MEMBER OF");
 
 ObExprCollPred::ObExprCollPred(ObIAllocator &alloc)
   : ObExprOperator(alloc, T_OP_COLL_PRED, N_COLL_PRED, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
@@ -87,8 +84,11 @@ int ObExprCollPred::calc_result_type2(ObExprResType &type,
 
 #define FILL_HASH_MAP(map_name, coll, map_cnt) \
 do { \
-  if (OB_FAIL(map_name.create(coll->get_actual_count(), ObModIds::OB_SQL_HASH_SET))) { \
-    LOG_WARN("fail create hash map", K(coll->get_actual_count()), K(ret)); \
+  int64_t count = coll->get_actual_count(); \
+  if (OB_FAIL(map_name.create(std::max(count, 1L), ObModIds::OB_SQL_HASH_SET))) { \
+    LOG_WARN("fail create hash map", K(count), K(ret)); \
+  } else if (0 == count) { \
+    /* do nothing */ \
   } else { \
     const ObObj *elem = NULL; \
     bool is_del = false; \
@@ -212,64 +212,162 @@ int ObExprCollPred::calc_collection_is_contained_without_null(const pl::ObPLColl
   return ret;
 }
 
-int ObExprCollPred::calc_is_submultiset(const ObObj &obj1,
-                                     const ObObj &obj2,
-                                     int64_t tz_offset,
-                                     const ObExprCalcType calc_type,
-                                     CollectionPredRes &result)
+int ObExprCollPred::calc_is_submultiset(ObExecContext &exec_ctx,
+                                        const ObObj &obj1,
+                                        const ObObj &obj2,
+                                        CollectionPredRes &result)
 {
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "SUBMULTISET expr is");
-  LOG_WARN("SUBMULTISET expr is not supported");
-  // result = COLL_PRED_FALSE;
-  // if (obj1.get_meta().is_ext() && obj2.get_meta().is_ext()) {
-  //   pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
-  //   pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
-  //   int64_t c1_cnt = c1->get_actual_count();
-  //   int64_t c2_cnt = c2->get_actual_count();
-  //   // 1) return true when:
-  //   // 1. obj1 is not null and contains no row, return true whatever obj2 is.
-  //   // for example obj nest_type := nest_type();
-  //   // 2. obj1 and obj2 not null, obj1 does not contain any null element, obj1 elem one-to-one
-  //   // mapping to obj2 element.
+  int ret = OB_SUCCESS;
 
-  //   // 2) return null when:
-  //   // 1. obj1 is null
-  //   // 2. obj2 is null, and obj1 is not null and not empty.
-  //   // 3. obj1 contain null element, and any non null is element is one-to-one mapping to obj2 elem
-  //   // for example:  nt1(1,2,3,4,5), nt2(1,2,NULL), nt3(1,7,null); nt2 submultiset of nt1 => null
-  //   // nt3 submultiset nt1 => false
+  static const ObString EXPR_NAME = "SUBMULTISET";
 
-  //   // 3) return false when:
-  //   // if none of above conditions occur, return false;
-  //   if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
-  //     ret = OB_ERR_UNEXPECTED;
-  //     LOG_WARN("union udt failed due to null udt", K(ret), K(obj1), K(obj2));
-  //   } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()
-  //             || pl::PL_NESTED_TABLE_TYPE != c2->get_type()) {
-  //     ret = OB_NOT_SUPPORTED;
-  //     LOG_WARN("not support udt union except nested table", K(ret), K(c1), K(c2));
-  //     LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt union except nested table");
-  //   } else if ((c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type())) {
-  //     ret = OB_ERR_UNEXPECTED;
-  //     LOG_WARN("udt union failed due to uninited", K(ret));
-  //   } else if (0 == c1_cnt && (c1->is_inited())) {
-  //     result = COLL_PRED_TRUE;
-  //   } else if (!c1->is_inited()) {
-  //     result = COLL_PRED_NULL; // null
-  //   } else if (!c2->is_inited()) {
-  //     result = COLL_PRED_NULL;
-  //   } else if (c1_cnt > c2_cnt) {
-  //     result = COLL_PRED_FALSE;
-  //   } else if (calc_collection_is_contained_without_null(c1, c2, tz_offset, calc_type, result)) {
-  //     LOG_WARN("faile to calc multiset without null and delete val", K(ret));
-  //   } else {
-  //     // 去除了null和delete数据之后比较，如果是包含关系，但是c1含有null，置结果为null.
-  //     if (COLL_PRED_TRUE == result && c1->is_contain_null_val()) {
-  //       result = COLL_PRED_NULL;
-  //     }
-  //   }
-  // }
+  // LHS = common_part(C) + unique_part(Ul) + null_part(Nl)
+  // RHS = common_part(C) + unique_part(Ur) + null_part(Nr)
+  // assume both LHS and RHS are not empty
+  // (LHS or RHS is NULL or empty is handled by C++ code)
+  // LHS submultiset RHS =
+  //    TRUE: if and only if |Ul| = 0 and |Nl| = 0 <=> |LHS| = |C|
+  //    FALSE: if and only if some element in LHS can't be mapped to RHS, which is |Ul| > |Nr|
+  //    NULL: otherwise, we have |Ul| <= |Nr|, so all elements in LHS can be mapped to RHS, and the result is NULL
+  static constexpr char SUBMULTISET_PL[] =
+      "declare\n"
+      "cmp boolean := :result;\n"
+      "lhs_count pls_integer := :lhs.count;\n"
+      "rhs_count pls_integer := :rhs.count;\n"
+      "lhs_null pls_integer := 0;\n"  // Nl
+      "rhs_null pls_integer := 0;\n"  // Nr
+      "matched pls_integer := 0;\n"  // C
+      "null_reuslt boolean := NULL;\n"
+      "begin\n"
+      "for j in :rhs.first..:rhs.last loop\n"
+      "  if :rhs.exists(j) and (:rhs(j)=:rhs(j)) is null then\n"
+      "    rhs_null := rhs_null + 1;\n"
+      "    :rhs.delete(j);\n"
+      "  end if;\n"
+      "end loop;\n"
+      "for i in :lhs.first..:lhs.last loop\n"
+      "  if not :lhs.exists(i) then continue; end if;\n"
+      "  if (:lhs(i)=:lhs(i)) is null then\n"
+      "    lhs_null := lhs_null + 1;\n"
+      "    continue;\n"
+      "  end if;\n"
+      "  for j in :rhs.first..:rhs.last loop\n"
+      "    if not :rhs.exists(j) then continue; end if;\n"
+      "    if :lhs(i) = :rhs(j) then\n"
+      "      matched := matched + 1;\n"
+      "      :rhs.delete(j);\n"
+      "      exit;\n"
+      "    end if;\n"
+      "  end loop;\n"
+      "end loop;\n"
+      "\n"
+      "if lhs_count = matched then\n"
+      "  :result := TRUE;\n"
+      "elsif lhs_count - matched - lhs_null > rhs_null then\n"
+      "  :result := FALSE;\n"
+      "else\n"
+      "  :result := null_reuslt;\n"
+      "end if;\n"
+      "end;";
+
+  pl::ObPLComposite *lhs = nullptr;
+  pl::ObPLComposite *rhs = nullptr;
+
+  if (!obj1.is_ext() || !obj2.is_ext()) {
+    ret = OB_ERR_CALL_WRONG_ARG;
+
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, EXPR_NAME.length(), EXPR_NAME.ptr());
+    LOG_WARN("failed to calc_is_submultiset",
+             K(ret), K(obj1), K(obj2));
+  } else {
+    lhs = reinterpret_cast<pl::ObPLComposite*>(obj1.get_ext());
+    rhs = reinterpret_cast<pl::ObPLComposite*>(obj2.get_ext());
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL operand for SUBMULTISET",
+             K(ret), KPC(lhs), KPC(rhs), K(obj1), K(obj2));
+  } else if (pl::PL_NESTED_TABLE_TYPE != lhs->get_type()
+               || pl::PL_NESTED_TABLE_TYPE != rhs->get_type()
+               || lhs->get_id() != rhs->get_id()) {
+    ret = OB_ERR_CALL_WRONG_ARG;
+
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, EXPR_NAME.length(), EXPR_NAME.ptr());
+    LOG_WARN("failed to calc_is_submultiset",
+             K(ret), KPC(lhs), KPC(rhs), K(obj1), K(obj2));
+  } else {
+    pl::ObPLCollection *left = static_cast<pl::ObPLCollection*>(lhs);
+    pl::ObPLCollection *right = static_cast<pl::ObPLCollection*>(rhs);
+
+    if (0 == left->get_actual_count() && !left->is_collection_null()) {
+      result = COLL_PRED_TRUE;
+    } else if (left->is_collection_null() || right->is_collection_null()) {
+      result = COLL_PRED_NULL;
+    } else if (left->get_actual_count() > right->get_actual_count()) {
+      result = COLL_PRED_FALSE;
+    } else {
+      ObObj res;
+      res.set_bool(false);
+
+      ObArenaAllocator alloc;
+      ParamStore params((ObWrapperAllocator(alloc)));
+      ObBitSet<> out_args;
+
+      bool tmp_result = false;
+
+      ObObj obj2_copy;
+      DEFER(pl::ObUserDefinedType::destruct_obj(obj2_copy));
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(alloc, obj2, obj2_copy))) {
+        LOG_WARN("failed to deep_copy_obj", K(ret), K(obj2), K(obj2_copy));
+      } else if (OB_FAIL(params.push_back(res))) {
+        LOG_WARN("failed to push back result",
+                 K(ret), K(res), K(params));
+      } else if (FALSE_IT(params.at(0).set_param_meta())) {
+        // unreachable
+      } else if (OB_FAIL(params.push_back(obj1))) {
+        LOG_WARN("failed to push back coll",
+                 K(ret), K(obj1), KPC(left), K(params));
+      } else if (FALSE_IT(params.at(1).set_udt_id(left->get_id()))) {
+        // unreachable
+      } else if (FALSE_IT(params.at(1).set_param_meta())) {
+        // unreachable
+      } else if (OB_FAIL(params.push_back(obj2_copy))) {
+        LOG_WARN("failed to push back val",
+                  K(ret), K(obj2_copy), KPC(right), K(params));
+      } else if (FALSE_IT(params.at(2).set_udt_id(right->get_id()))) {
+        // unreachable
+      } else if (FALSE_IT(params.at(2).set_param_meta())) {
+        // unreachable
+      } else if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(exec_ctx,
+                                                                                 SUBMULTISET_PL,
+                                                                                 params,
+                                                                                 out_args))) {
+        LOG_WARN("failed to execute PS anonymous bolck",
+                  K(ret), K(obj1), K(obj2_copy), KPC(left), KPC(right),
+                  K(res), K(params));
+      } else if (out_args.num_members() != 2 || !out_args.has_member(0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected out args",
+                  K(ret), K(obj1), K(obj2_copy), KPC(left), KPC(right),
+                  K(res), K(params));
+      } else if (params.at(0).is_null()) {
+        result = COLL_PRED_NULL;
+      } else if (OB_FAIL(params.at(0).get_bool(tmp_result))) {
+        LOG_WARN("failed to get result",
+                  K(ret), K(obj1), K(obj2_copy), KPC(left), KPC(right),
+                  K(res), K(params));
+      } else {
+        result = tmp_result ? COLL_PRED_TRUE : COLL_PRED_FALSE;
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -387,35 +485,79 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       {
       case MULTISET_TYPE_SUBMULTISET: {
         CollectionPredRes pred_res = COLL_PRED_INVALID;
-        if (OB_FAIL(calc_is_submultiset(obj1, obj2, info->tz_offset_,
-                                        info->result_type_.get_calc_meta(), pred_res))) {
+        pl::ObPLComposite *lhs = nullptr;
+
+        if (obj1.is_null()) {
+          pred_res = COLL_PRED_NULL;
+        } else if (obj1.is_ext()
+                     && OB_NOT_NULL(lhs = reinterpret_cast<pl::ObPLComposite*>(obj1.get_ext()))
+                     && pl::PL_NESTED_TABLE_TYPE == lhs->get_type()
+                     && 0 == reinterpret_cast<pl::ObPLCollection*>(lhs)->get_actual_count()) {
+          pred_res = COLL_PRED_TRUE;
+        } else if (obj2.is_null()) {
+          pred_res = COLL_PRED_NULL;
+        } else if (OB_FAIL(calc_is_submultiset(ctx.exec_ctx_, obj1, obj2, pred_res))) {
           LOG_WARN("failed to call submultiset", K(ret));
+        }
+
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (COLL_PRED_NULL == pred_res) {
+          result.set_null();
         } else {
-          if (COLL_PRED_NULL == pred_res) {
-            result.set_null();
+          if (pred_res ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
+            result.set_tinyint(1);
           } else {
-            if (pred_res ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
-              result.set_tinyint(1);
-            } else {
-              result.set_tinyint(0);
-            }
+            result.set_tinyint(0);
           }
         }
       }
         break;
       case MULTISET_TYPE_MEMBER_OF: {
-        if (obj2.get_meta().is_ext()) {
+        if (!obj2.is_pl_extend()
+              || (pl::PL_NESTED_TABLE_TYPE != obj2.get_meta().get_extend_type()
+                    && pl::PL_VARRAY_TYPE != obj2.get_meta().get_extend_type()
+                    && pl::PL_ASSOCIATIVE_ARRAY_TYPE != obj2.get_meta().get_extend_type())) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG,
+                         MEMBER_OF_EXPR_NAME.length(), MEMBER_OF_EXPR_NAME.ptr());
+          LOG_WARN("failed to eval MEMBER OF", K(ret), K(obj2));
+        } else {
           pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
-          if (OB_NOT_NULL(c2) && 0 < c2->get_actual_count()) {
-            if (c2->is_of_composite()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "MEMBER OF for collections of composite types is");
-              LOG_WARN("MEMBER OF for collections of composite types is not supported", K(c2->get_element_type()));
+          if (OB_NOT_NULL(c2)) {
+            if (ObTinyIntType == obj1.get_type()
+                  && ObTinyIntType != c2->get_element_type().get_obj_type()) {
+              ret = OB_ERR_CALL_WRONG_ARG;
+
+              LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG,
+                            MEMBER_OF_EXPR_NAME.length(), MEMBER_OF_EXPR_NAME.ptr());
+              LOG_WARN("failed to eval MEMBER OF, BOOLEAN cannot convert to other types", K(ret), K(obj1), K(obj2));
+            } else if (c2->is_of_composite()) {
+              ObObj res;
+              bool tmp_result = false;
+
+              if (OB_FAIL(eval_member_of_composite(ctx.exec_ctx_, obj1, obj2, res))) {
+                LOG_WARN("failed to eval_member_of_composite", K(ret), K(obj1), K(obj2), K(res));
+              } else if (res.is_null()) {
+                result.set_null();
+              } else if (OB_FAIL(res.get_bool(tmp_result))){
+                LOG_WARN("failed to get bool result from res", K(ret), K(res), K(tmp_result));
+              } else if (MULTISET_MODIFIER_NOT == info->ms_modifier_) {
+                result.set_bool(!tmp_result);
+              } else {
+                result.set_bool(tmp_result);
+              }
+            } else if (c2->is_collection_null()) {
+              result.set_null();
+            } else if (0 == c2->get_actual_count()) {
+              result.set_bool(MULTISET_MODIFIER_NOT == info->ms_modifier_);
+            } else if (obj1.is_null()) {
+              result.set_null();
             } else {
-              ObObj *elem = static_cast<ObObj*>(c2->get_data());
               ObObj mem_cast;
-              const ObObj * res_obj1 = &obj1;
-              ObCollationType cast_coll_type = elem->get_collation_type();
+              const ObObj *res_obj1 = &obj1;
+              ObCollationType cast_coll_type = c2->get_element_type().get_collation_type();
               ObCastMode cp_cast_mode;
               if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.exec_ctx_.get_my_session(),
                                                             cp_cast_mode))) {
@@ -430,18 +572,40 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                                 cast_coll_type,
                                 nullptr);
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(ObObjCaster::to_type(elem->get_type(), cast_ctx,
-                                                      obj1, mem_cast, res_obj1))) {
+              } else if (OB_FAIL(ObObjCaster::to_type(c2->get_element_type().get_obj_type(),
+                                                      cast_ctx,
+                                                      obj1,
+                                                      mem_cast,
+                                                      res_obj1))) {
                 LOG_WARN("failed to cast member to collection elem type", K(ret));
               } else {
                 LocalNTSHashMap dmap_c;
                 int64_t res_cnt = 0;
                 FILL_HASH_MAP(dmap_c, c2, res_cnt);
                 if (OB_SUCC(ret)) {
-                  if (OB_NOT_NULL(dmap_c.get(*res_obj1)) ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
-                    result.set_tinyint(1);
+                  if (OB_NOT_NULL(dmap_c.get(*res_obj1))) {
+                    result.set_bool(MULTISET_MODIFIER_NOT != info->ms_modifier_);
                   } else {
-                    result.set_tinyint(0);
+                    bool has_null = false;
+
+                    for (int64_t i = 0; OB_SUCC(ret) && i < c2->get_count(); ++i) {
+                      ObObj *curr = c2->get_data() + i;
+
+                      CK (OB_NOT_NULL(curr));
+
+                      if (OB_SUCC(ret) && curr->is_null()) {
+                        has_null = true;
+                        break;
+                      }
+                    }
+
+                    if (OB_FAIL(ret)) {
+                      // do nothing
+                    } else if (has_null) {
+                      result.set_null();
+                    } else {
+                      result.set_bool(MULTISET_MODIFIER_NOT == info->ms_modifier_);
+                    }
                   }
                 }
               }
@@ -454,17 +618,28 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         if (obj1.get_meta().is_ext()) {
           pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
           if (OB_NOT_NULL(c1)) {
-            if (c1->is_of_composite()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "IS A SET for collections of composite types is");
-              LOG_WARN("IS A SET for collections of composite types is not supported", K(c1->get_element_type()));
+            ObObj res;
+            bool tmp_result;
+
+            if (c1->is_collection_null()) {
+              result.set_null();
+            } else if (c1->is_of_composite()) {
+              if (OB_FAIL(eval_is_set_composit(ctx.exec_ctx_, obj1, res))) {
+                LOG_WARN("failed to eval_is_set_composit", K(ret), K(obj1), K(res));
+              } else if (OB_FAIL(res.get_bool(tmp_result))) {
+                LOG_WARN("failed to get bool result", K(ret), K(res));
+              } else {
+                result.set_bool(MULTISET_MODIFIER_NOT == info->ms_modifier_
+                                    ? !tmp_result
+                                    : tmp_result);
+              }
             } else {
               LocalNTSHashMap dmap_c;
               int64_t count = c1->get_actual_count();
               int res_cnt = 0;
               if (0 == count) {
                 // empty nest table is a set
-                result.set_tinyint(1);
+                result.set_tinyint(MULTISET_MODIFIER_NOT != info->ms_modifier_);
               } else if (!c1->is_inited()) {
                 result.set_null();
               } else {
@@ -531,5 +706,227 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   return ret;
 }
 
-}  // namespace sql
+int ObExprCollPred::eval_member_of_composite(ObExecContext &exec_ctx,
+                                             const ObObj &val,
+                                             const ObObj &coll,
+                                             ObObj &res)
+{
+  int ret = OB_SUCCESS;
+
+  static constexpr char MEMBER_OF_PL[] =
+      "declare\n"
+      "coll_count pls_integer := :coll.count;\n"
+      "cmp boolean;\n"
+      "null_result boolean := NULL;\n"
+      "begin\n"
+      "if (:val = :val) is null then\n"
+      "  :result := null_result;\n"
+      "  return;\n"
+      "end if;\n"
+      ":result := FALSE;\n"
+      "for idx in :coll.first..:coll.last loop\n"
+      "  if not :coll.exists(idx) then continue; end if;\n"
+      "  if :coll(idx) is NULL then\n"
+      "    :result := null_result;\n"
+      "    continue;\n"
+      "  end if;\n"
+      "  cmp := (:val = :coll(idx));\n"
+      "  if cmp then\n"
+      "    :result := TRUE;\n"
+      "    exit;\n"
+      "  elsif :result is not NULL then\n"
+      "    :result := cmp;\n"
+      "  end if;\n"
+      "end loop;\n"
+      "end;";
+
+  pl::ObPLCollection *collection = reinterpret_cast<pl::ObPLCollection *>(coll.get_ext());
+  pl::ObPLComposite *value = nullptr;
+
+  ObArenaAllocator alloc;
+  ParamStore params((ObWrapperAllocator(alloc)));
+  ObBitSet<> out_args;
+
+  ObObj result;
+  result.set_bool(false);
+
+  bool tmp_result = false;
+
+  CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+  CK (OB_NOT_NULL(collection));
+
+  // 1st, check if the collection is null, if so, the result is NULL
+  // 2nd, check if the collection is empty, if so, the result is FALSE
+  // 3rd, check if the val is null, if so, the result is NULL
+  // otherwise, iterate the collection
+  // this order is important
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (collection->is_collection_null()) {
+    res.set_null();
+  } else if (0 == collection->get_actual_count()) {
+    // Oracle Doc: The return value is NULL if expr is null or if the nested table is empty.
+    // but actually, if the collection is empty, then the result is alway FALSE in Oracle 19c
+    res.set_bool(false);
+  } else if (val.is_null()) {
+    res.set_null();
+  } else if (!val.is_ext() ||
+        OB_ISNULL(value = reinterpret_cast<pl::ObPLComposite*>(val.get_ext())) ||
+        value->get_id() != collection->get_element_type().get_udt_id()) {
+    ret = OB_ERR_CALL_WRONG_ARG;
+
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG,
+                   MEMBER_OF_EXPR_NAME.length(), MEMBER_OF_EXPR_NAME.ptr());
+    LOG_WARN("failed to eval MEMBER OF", K(ret), K(val), K(coll));
+  } else {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(params.push_back(coll))) {
+      LOG_WARN("failed to push back coll",
+                K(ret), K(val), K(coll), K(params));
+    } else if (FALSE_IT(params.at(0).set_udt_id(collection->get_id()))) {
+      // unreachable
+    } else if (FALSE_IT(params.at(0).set_param_meta())) {
+      // unreachable
+    } else if (OB_FAIL(params.push_back(val))) {
+      LOG_WARN("failed to push back val",
+              K(ret), K(val), K(coll), K(params));
+    } else if (FALSE_IT(params.at(1).set_udt_id(value->get_id()))) {
+      // unreachable
+    } else if (FALSE_IT(params.at(1).set_param_meta())) {
+      // unreachable
+    } else if (OB_FAIL(params.push_back(result))) {
+      LOG_WARN("failed to push back result",
+              K(ret), K(val), K(coll), K(result), K(params));
+    } else if (FALSE_IT(params.at(2).set_param_meta())) {
+      // unreachable
+    } else if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(exec_ctx,
+                                                                              MEMBER_OF_PL,
+                                                                              params,
+                                                                              out_args))) {
+      LOG_WARN("failed to execute PS anonymous bolck", K(ret), K(val), K(coll), K(params));
+    } else if (out_args.num_members() != 1 || !out_args.has_member(2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected out args",
+              K(ret), K(val), K(coll), K(params), K(out_args));
+    } else if (params.at(2).is_null()) {
+      res.set_null();
+    } else if (OB_FAIL(params.at(2).get_bool(tmp_result))) {
+      LOG_WARN("failed to get result",
+              K(ret), K(val), K(coll), K(params), K(result), K(res));
+    } else {
+      res.set_bool(tmp_result);
+    }
+  }
+
+  return ret;
+}
+
+int ObExprCollPred::eval_is_set_composit(ObExecContext &exec_ctx,
+                                         const ObObj &obj,
+                                         ObObj &res)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  static constexpr char IS_SET_PL[] =
+      "declare\n"
+      "has_null boolean := FALSE;\n"
+      "cmp boolean;\n"
+      "begin\n"
+      ":result := TRUE;\n"
+      "if :coll.count > 0 then\n"
+      "for i in :coll.first..:coll.last loop\n"
+      "  if not :coll.exists(i) then continue; end if;\n"
+      "  cmp := :coll(i) member of :buf;\n"
+      "  if cmp then\n"
+      "    :result := FALSE;\n"
+      "    exit;\n"
+      "  elsif (:coll(i) = :coll(i)) is null then\n"
+      "    if has_null then\n"
+      "       :result := FALSE;\n"
+      "       exit;\n"
+      "    else\n"
+      "      has_null := TRUE;\n"
+      "    end if;\n"
+      "  else\n"
+      "    :buf.extend(1);\n"
+      "    :buf(:buf.count) := :coll(i);\n"
+      "  end if;\n"
+      "end loop;\n"
+      "end if;\n"
+      "end;";
+
+  pl::ObPLCollection *collection = reinterpret_cast<pl::ObPLCollection *>(obj.get_ext());
+
+  ObArenaAllocator alloc;
+  ParamStore params((ObWrapperAllocator(alloc)));
+
+  ObObj result;
+  result.set_bool(false);
+
+  ObObj buf_obj;
+  pl::ObPLNestedTable buf;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(pl::PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  pl::ObPLAllocator1 tmp_coll_alloc(pl::PL_MOD_IDX::OB_PL_COLLECTION, &tmp_alloc);
+  OZ (tmp_coll_alloc.init(nullptr));
+
+  CK (OB_NOT_NULL(GCTX.pl_engine_));
+  CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+  CK (OB_NOT_NULL(collection));
+  CK (collection->is_nested_table());
+  OX (buf.set_id(collection->get_id()));
+  OX (buf.set_allocator(&tmp_coll_alloc));
+  OX (buf.set_element_desc(collection->get_element_desc()));
+  OX (buf.set_inited());
+  OX (buf_obj.set_extend(reinterpret_cast<int64_t>(&buf), obj.get_meta().get_extend_type()));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(params.push_back(result))) {
+    LOG_WARN("failed to push back result obj", K(ret), K(obj), K(params));
+  } else if (OB_FAIL(params.push_back(obj))) {
+    LOG_WARN("failed to push back collection obj", K(ret), K(result), K(params));
+  } else if (OB_FAIL(params.push_back(buf_obj))) {
+    LOG_WARN("failed to push back buf obj", K(ret), K(result), K(params));
+  } else {
+    params.at(0).set_param_meta();
+
+    params.at(1).set_udt_id(collection->get_id());
+    params.at(1).set_param_meta();
+
+    params.at(2).set_udt_id(collection->get_id());
+    params.at(2).set_param_meta();
+  }
+
+  if (OB_SUCC(ret)) {
+    ObBitSet<> out_args;
+
+    if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(exec_ctx,
+                                                                        IS_SET_PL,
+                                                                        params,
+                                                                        out_args))) {
+      LOG_WARN("failed to execute PS anonymous bolck", K(ret), K(obj), K(params));
+    } else if (out_args.num_members() != 2 || !out_args.has_member(0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected out args",
+               K(ret), K(obj), K(params), K(out_args));
+    } else {
+      res = params.at(0);
+    }
+  }
+
+  int temp_ret = pl::ObUserDefinedType::destruct_obj(params.at(2));
+  if (OB_SUCCESS != temp_ret) {
+    LOG_WARN("failed to destruct obj", K(temp_ret));
+  }
+  ret = OB_SUCCESS == ret ? temp_ret : ret;
+
+#endif // OB_BUILD_ORACLE_PL
+
+  return ret;
+}
+
+} // namespace sql
 }  // namespace oceanbase

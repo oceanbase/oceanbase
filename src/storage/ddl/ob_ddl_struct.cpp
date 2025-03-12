@@ -12,15 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ls/ob_ls.h"
-#include "storage/ddl/ob_ddl_struct.h"
+#include "ob_ddl_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ob_i_table.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
@@ -90,7 +84,8 @@ ObDDLMacroBlock::ObDDLMacroBlock()
     trans_id_(),
     data_macro_meta_(nullptr),
     buf_(nullptr),
-    size_(0)
+    size_(0),
+    merge_slice_idx_(0)
 {
 }
 
@@ -117,6 +112,7 @@ int ObDDLMacroBlock::deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator 
     dst_block.end_row_id_ = end_row_id_;
     dst_block.buf_ = nullptr;
     dst_block.size_ = 0;
+    dst_block.merge_slice_idx_ = merge_slice_idx_;
   }
 
   if (OB_FAIL(ret) || !GCTX.is_shared_storage_mode() || ObDDLMacroBlockType::DDL_MB_INDEX_TYPE != block_type_) {
@@ -200,6 +196,15 @@ ObDDLKVHandle &ObDDLKVHandle::operator =(const ObDDLKVHandle &other)
     }
   }
   return *this;
+}
+
+DEF_TO_STRING(ObDDLKVHandle)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(ddl_kv), KP_(t3m), KP_(allocator));
+  J_OBJ_END();
+  return pos;
 }
 
 bool ObDDLKVHandle::is_valid() const
@@ -399,7 +404,8 @@ ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
     with_cs_replica_(false),
     macro_block_id_(MacroBlockId::mock_valid_macro_id()),
     parallel_cnt_(0),
-    cg_cnt_(0)
+    cg_cnt_(0),
+    merge_slice_idx_(0)
 {
 }
 
@@ -418,6 +424,7 @@ void ObDDLMacroBlockRedoInfo::reset()
   macro_block_id_ = MacroBlockId::mock_valid_macro_id();
   parallel_cnt_ = 0;
   cg_cnt_ = 0;
+  merge_slice_idx_ = 0;
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
@@ -478,7 +485,8 @@ OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
                     with_cs_replica_,
                     macro_block_id_,
                     parallel_cnt_,
-                    cg_cnt_);
+                    cg_cnt_,
+                    merge_slice_idx_);
 
 ObTabletDirectLoadMgrHandle::ObTabletDirectLoadMgrHandle()
   : tablet_mgr_(nullptr)

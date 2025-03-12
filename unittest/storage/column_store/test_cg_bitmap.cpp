@@ -11,20 +11,15 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 #define protected public
 
-#include <chrono>
 #define private public
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #include "common/ob_target_specific.h"
-#include "lib/container/ob_bitmap.h"
-#include "lib/allocator/page_arena.h"
 #include "storage/ob_storage_struct.h"
-#include "storage/column_store/ob_cg_bitmap.h"
 
 
 namespace oceanbase

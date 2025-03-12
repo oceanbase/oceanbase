@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX  TRANS
 
-#include "share/ob_errno.h"
 #include "ob_tenant_weak_read_cluster_version_mgr.h"
-#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {

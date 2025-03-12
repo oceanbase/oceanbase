@@ -11,7 +11,7 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "approx_count_distinct.h"
+#include "approx_count_distinct_synopsis.h"
 
 namespace oceanbase
 {

@@ -12,18 +12,14 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/table_load/ob_table_load_service.h"
+#include "ob_table_load_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_client_task.h"
-#include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
-#include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "observer/table_load/ob_table_load_utils.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_table_schema.h"
+#include "rootserver/ob_partition_exchange.h"
 
 namespace oceanbase
 {
@@ -31,6 +27,7 @@ namespace observer
 {
 using namespace common;
 using namespace lib;
+using namespace rootserver;
 using namespace share::schema;
 using namespace storage;
 using namespace table;
@@ -461,22 +458,19 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                   !ObDirectLoadMethod::is_type_valid(method) ||
                   !ObDirectLoadInsertMode::is_type_valid(insert_mode) ||
                   !ObDirectLoadMode::is_type_valid(load_mode) ||
+                  !ObDirectLoadLevel::is_type_valid(load_level) ||
                   column_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode), K(column_ids));
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode), K(load_mode),
+             K(load_level), K(column_ids));
   } else {
     const uint64_t tenant_id = MTL_ID();
     uint64_t compat_version = 0;
     bool trigger_enabled = false;
-    bool has_udt_column = false;
     bool has_fts_index = false;
     bool has_multivalue_index = false;
-    bool has_invisible_column = false;
-    bool has_unused_column = false;
-    bool has_roaringbitmap_column = false;
-    bool has_null_column = false;
-    bool has_geometry_column = false;
     bool has_non_normal_local_index = false;
+    bool is_heap_table_with_single_unique_index = false;
     // check if it is a user table
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
 
@@ -506,12 +500,6 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has full-text search index", tmp_prefix);
     }
-    // check if exists generated column
-    else if (OB_UNLIKELY(table_schema->has_generated_column())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has generated column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has generated column", tmp_prefix);
-    }
     // check if the trigger is enabled
     else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
       LOG_WARN("failed to check has trigger in table", KR(ret));
@@ -520,59 +508,23 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with trigger enabled", tmp_prefix);
     }
-    // check has udt column
-    else if (OB_FAIL(ObTableLoadSchema::check_has_udt_column(table_schema, has_udt_column))) {
-      LOG_WARN("fail to check has udt column", KR(ret));
-    } else if (has_udt_column) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has udt column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has udt column", tmp_prefix);
-    }
-    // check has invisible column
-    else if (OB_FAIL(ObTableLoadSchema::check_has_invisible_column(table_schema, has_invisible_column))) {
-      LOG_WARN("fail to check has invisible column", KR(ret));
-    } else if (has_invisible_column) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has invisible column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has invisible column", tmp_prefix);
-    }
-    // check has unused column
-    else if (OB_FAIL(ObTableLoadSchema::check_has_unused_column(table_schema, has_unused_column))) {
-      LOG_WARN("fail to check has unused column", KR(ret));
-    } else if (has_unused_column) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has unused column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has unused column", tmp_prefix);
-    }
-    // check has roaringbitmap column
-    else if (OB_FAIL(ObTableLoadSchema::check_has_roaringbitmap_column(table_schema, has_roaringbitmap_column))) {
-      LOG_WARN("fail to check has roaringbitmap column", KR(ret));
-    } else if (has_roaringbitmap_column) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has roaringbitmap column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
-    }
-    // check has null column
-    else if (OB_FAIL(ObTableLoadSchema::check_has_null_column(table_schema, has_null_column))) {
-      LOG_WARN("fail to check has null column", KR(ret));
-    } else if (has_null_column) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has null column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has null column", tmp_prefix);
-    }
-    // check has geometry column in load data or client disk mode
-    else if (OB_FAIL(ObTableLoadSchema::check_has_geometry_column(table_schema, has_geometry_column))) {
-      LOG_WARN("fail to check has geometry column", KR(ret));
-    } else if (has_geometry_column && (ObDirectLoadMode::is_load_data(load_mode) || ObDirectLoadMode::is_table_load(load_mode))) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has geometry column in load data or client disk", KR(ret), K(load_mode));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has geometry column in load data or client disk", tmp_prefix);
-    }
     // check if table has mlog
-    else if (table_schema->required_by_mview_refresh() && !table_schema->mv_container_table()) {
+    else if (table_schema->has_mlog_table() && !table_schema->mv_container_table()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);
+      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with materialized view log", tmp_prefix);
+    } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table required by materialized view", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view", tmp_prefix);
+    }
+    // check for columns
+    else if (OB_FAIL(check_support_direct_load_for_columns(table_schema, load_mode))) {
+      LOG_WARN("fail to check support direct load for columns", KR(ret));
+    }
+    // check for default value
+    else if (OB_FAIL(check_support_direct_load_for_default_value(table_schema, column_ids))) {
+      LOG_WARN("fail to check support direct load for default value", KR(ret), K(column_ids));
     }
     // check for partition level
     else if (ObDirectLoadLevel::PARTITION == load_level
@@ -607,25 +559,48 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                  OB_FAIL(ObTableLoadSchema::check_has_non_local_index(
                    schema_guard, table_schema, has_non_normal_local_index))) {
         LOG_WARN("fail to check support direct load for local index", KR(ret));
-      } else if (has_non_normal_local_index) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("incremental direct-load does not support table with non-normal local index",
-                 KR(ret));
-        FORWARD_USER_ERROR_MSG(
-          ret, "incremental direct-load does not support table with global index or unique index");
-      } else if (table_schema->get_simple_index_infos().count() > 0 && !has_non_normal_local_index && compat_version < DATA_VERSION_4_3_4_0) {
+      } else if (table_schema->get_simple_index_infos().count() > 0 &&
+                 OB_FAIL(ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
+                   schema_guard, table_schema, is_heap_table_with_single_unique_index))) {
+        LOG_WARN("fail to check support direct load for heap table with single local unique index", KR(ret));
+      } else if (table_schema->get_simple_index_infos().count() > 0 && compat_version < DATA_VERSION_4_3_4_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
-          "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index",
+          "version lower than 4.3.4.0 incremental direct-load does not support table with index",
           KR(ret));
         FORWARD_USER_ERROR_MSG(
           ret,
-          "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index");
+          "version lower than 4.3.4.0 incremental direct-load does not support table with index");
+      } else if (has_non_normal_local_index && compat_version < DATA_VERSION_4_3_5_1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "version lower than 4.3.5.1 incremental direct-load only support table with "
+          "normal local index",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(
+          ret,
+          "version lower than 4.3.5.1 incremental direct-load only support table with "
+          "normal local index");
+      } else if (has_non_normal_local_index && !is_heap_table_with_single_unique_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "unsupported index type exists, "
+          "incremental direct-load does only support "
+          "normal local index or "
+          "single local unique index in heap table",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(ret,
+                               "unsupported index type exists, "
+                               "incremental direct-load does only support "
+                               "normal local index or "
+                               "single local unique index in heap table");
       } else if (table_schema->get_foreign_key_infos().count() > 0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
-      } else if (table_schema->has_check_constraint() && (ObDirectLoadMode::LOAD_DATA == load_mode || ObDirectLoadMode::TABLE_LOAD == load_mode)) {
+      } else if (table_schema->has_check_constraint() &&
+                 (ObDirectLoadMode::LOAD_DATA == load_mode ||
+                  ObDirectLoadMode::TABLE_LOAD == load_mode)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");
@@ -643,53 +618,121 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support insert overwrite mode");
       }
     }
-    // check default column
-    if (OB_SUCC(ret)) {
-      ObArray<ObColDesc> column_descs;
-      if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
-        STORAGE_LOG(WARN, "fail to get column descs", KR(ret), KPC(table_schema));
-      } else if (column_ids.count() == (table_schema->is_heap_table() ? column_descs.count() - 1
-                                                                      : column_descs.count())) {
-        // non default column
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
-          const ObColDesc &col_desc = column_descs.at(i);
-          bool found_column = ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_);
-          for (int64_t j = 0; !found_column && j < column_ids.count(); ++j) {
-            if (col_desc.col_id_ == column_ids.at(j)) {
-              found_column = true;
-            }
-          }
-          if (!found_column) {
-            const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
-            if (OB_ISNULL(column_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
-            }
-            // 自增列
-            else if (column_schema->is_autoincrement() || column_schema->is_identity_column()) {
-            }
-            // 默认值是表达式
-            else if (OB_UNLIKELY(lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext())) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("direct-load does not support column default value is ext", KR(ret),
-                       KPC(column_schema), K(column_schema->get_cur_default_value()));
-              FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is ext");
-            } else if (OB_UNLIKELY(lib::is_oracle_mode() && column_schema->is_default_expr_v2_column())) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("direct-load does not support column default value is expr", KR(ret),
-                       KPC(column_schema), K(column_schema->get_cur_default_value()));
-              FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is expr");
-            }
-            // 没有默认值, 且为NOT NULL
-            // 例外:枚举类型默认为第一个
-            else if (OB_UNLIKELY(column_schema->is_not_null_for_write() &&
-                                   column_schema->get_cur_default_value().is_null() &&
-                                   !column_schema->get_meta_type().is_enum())) {
-              ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
-              LOG_WARN("column doesn't have a default value", KR(ret), KPC(column_schema));
-            }
-          }
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load_for_columns(
+    const ObTableSchema *table_schema,
+    const ObDirectLoadMode::Type load_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == table_schema || !ObDirectLoadMode::is_type_valid(load_mode))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(load_mode));
+  } else {
+    const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
+    const bool is_px_mode = ObDirectLoadMode::is_px_mode(load_mode);
+    for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+         OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+      ObColumnSchemaV2 *column_schema = *iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", KR(ret), KP(column_schema));
+      } else if (column_schema->is_unused()) {
+        // 快速删除列, 仍然需要写宏块, 直接填null
+        // TODO : udt类型SQL写入的列数与存储层列数不匹配, 暂时先不做支持
+        if (column_schema->is_xmltype()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("direct-load does not support table has drop xmltype column instant", KR(ret), KPC(column_schema));
+          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop xmltype column instant", tmp_prefix);
+        } else if (column_schema->get_udt_set_id() > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("direct-load does not support table has drop udt column instant", KR(ret), KPC(column_schema));
+          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop udt column instant", tmp_prefix);
+        }
+      } else if (column_schema->is_generated_column()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support table has generated column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has generated column", tmp_prefix);
+      } else if (column_schema->get_meta_type().is_null()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support table has null column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has null column", tmp_prefix);
+      } else if (!is_px_mode && column_schema->is_geometry()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support table has geometry column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has geometry column", tmp_prefix);
+      } else if (column_schema->is_roaringbitmap()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support table has roaringbitmap column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
+      } else if (column_schema->is_xmltype()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support table has xmltype column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has xmltype column", tmp_prefix);
+      } else if (column_schema->get_udt_set_id() > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support table has udt column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has udt column", tmp_prefix);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load_for_default_value(
+    const ObTableSchema *table_schema,
+    const ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == table_schema || column_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(column_ids));
+  } else {
+    ObArray<ObColDesc> column_descs;
+    if (OB_FAIL(table_schema->get_column_ids(column_descs, true/*no_virtual*/))) {
+      STORAGE_LOG(WARN, "fail to get column descs", KR(ret), KPC(table_schema));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
+      const ObColDesc &col_desc = column_descs.at(i);
+      bool found_column = ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_);
+      for (int64_t j = 0; !found_column && j < column_ids.count(); ++j) {
+        if (col_desc.col_id_ == column_ids.at(j)) {
+          found_column = true;
+        }
+      }
+      if (!found_column) {
+        const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
+        }
+        // 快速删除列
+        // 对于insert into, sql会填充null
+        // 对于load data和java api, 用户无法指定被删除的列写数据, 旁路导入在类型转换时直接填充null
+        else if (column_schema->is_unused()) {
+        }
+        // 自增列
+        else if (column_schema->is_autoincrement() || column_schema->is_identity_column()) {
+        }
+        // 默认值是表达式
+        else if (OB_UNLIKELY(lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("direct-load does not support column default value is ext", KR(ret), KPC(column_schema));
+          FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is ext");
+        } else if (OB_UNLIKELY(lib::is_oracle_mode() && column_schema->is_default_expr_v2_column())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("direct-load does not support column default value is expr", KR(ret), KPC(column_schema));
+          FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is expr");
+        }
+        // 没有默认值, 且为NOT NULL
+        // 例外:枚举类型默认为第一个
+        else if (OB_UNLIKELY(column_schema->is_not_null_for_write() &&
+                             column_schema->get_cur_default_value().is_null() &&
+                             !column_schema->get_meta_type().is_enum())) {
+          ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+          LOG_WARN("column doesn't have a default value", KR(ret), KPC(column_schema));
         }
       }
     }
@@ -707,49 +750,9 @@ int ObTableLoadService::check_support_direct_load_for_partition_level(
   if (ObDirectLoadMethod::is_incremental(method)) {
     // do nothing
   } else if (ObDirectLoadMethod::is_full(method)) {
-    bool has_global_index = false;
-    bool has_identity_column = false;
-    bool is_support_partition_exchange = true;
-    if (compat_version < DATA_VERSION_4_3_5_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("version lower than 4.3.5.0 does not support direct load partition", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.5.0 does not support direct load partition");
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is nullptr", KR(ret));
-    } else {
-      if (table_schema->is_duplicate_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("partition level direct load not support duplicate table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support duplicate table");
-      } else if (0 != table_schema->get_autoinc_column_id()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("partition level direct load not support table with auto_increment columns", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support table with auto_increment columns");
-      } else if (table_schema->get_index_tid_count() > 0
-                && OB_FAIL(ObTableLoadSchema::check_has_global_index(schema_guard,
-                                                                     table_schema,
-                                                                     has_global_index))) {
-        LOG_WARN("fail to check has global index", KR(ret));
-      } else if (has_global_index) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("partition level direct load not support table with global indexes", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support table with global indexes");
-      } else if (lib::is_oracle_mode() && OB_FAIL(ObTableLoadSchema::check_has_identity_column(
-                                                  table_schema, has_identity_column))) {
-        LOG_WARN("fail to check has identity column", KR(ret));
-      } else if (has_identity_column) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("partition level direct load not support table with identity columns", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support table with identity columns");
-      } else if (OB_FAIL(ObTableLoadSchema::check_support_partition_exchange(table_schema,
-                                                                             is_support_partition_exchange))) {
-        LOG_WARN("fail to check support partition exchange", KR(ret));
-      } else if (!is_support_partition_exchange) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("partition level direct load not support hash/key partitions", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support hash/key partitions");
-      }
+    if (OB_FAIL(ObPartitionExchange::check_exchange_partition_for_direct_load(
+        schema_guard, table_schema, compat_version))) {
+      LOG_WARN("fail to check exchange partition", KR(ret), KPC(table_schema), K(compat_version));
     }
   }
   return ret;
@@ -895,7 +898,7 @@ int ObTableLoadService::start()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadService not init", KR(ret), KP(this));
   } else {
-    if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
+    if (OB_FAIL(timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
       LOG_WARN("fail to set gc timer's run wrapper", KR(ret));
     } else if (OB_FAIL(timer_.init("TLD_Timer", ObMemAttr(MTL_ID(), "TLD_TIMER")))) {
       LOG_WARN("fail to init gc timer", KR(ret));

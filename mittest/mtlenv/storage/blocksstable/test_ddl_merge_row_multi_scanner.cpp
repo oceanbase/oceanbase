@@ -10,13 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/access/ob_sstable_row_multi_scanner.h"
-#include "storage/access/ob_sstable_row_multi_getter.h"
 #include "ob_index_block_data_prepare.h"
 
 namespace oceanbase
@@ -68,6 +65,7 @@ private:
   ObArenaAllocator allocator_;
   ObDatumRow start_row_;
   ObDatumRow end_row_;
+  ObSSTable *ddl_sstable_ptr_array_[1];
 };
 
 TestDDLMergeRowMultiScanner::TestDDLMergeRowMultiScanner()
@@ -107,10 +105,17 @@ void TestDDLMergeRowMultiScanner::SetUp()
 
   ASSERT_EQ(OB_SUCCESS, start_row_.init(allocator_, TEST_COLUMN_CNT));
   ASSERT_EQ(OB_SUCCESS, end_row_.init(allocator_, TEST_COLUMN_CNT));
+
+  ddl_sstable_ptr_array_[0] = &partial_sstable_;
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.reset();
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.sstable_array_ = ddl_sstable_ptr_array_;
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.cnt_ = 1;
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.is_inited_ = true;
 }
 
 void TestDDLMergeRowMultiScanner::TearDown()
 {
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.reset();
   tablet_handle_.get_obj()->ddl_kv_count_ = 0;
   tablet_handle_.get_obj()->ddl_kvs_ = nullptr;
   tablet_handle_.reset();

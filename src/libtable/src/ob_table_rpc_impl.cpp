@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_table_rpc_impl.h"
-#include "share/table/ob_table_rpc_proxy.h"               // ObTableRpcProxy
-#include "share/ob_tenant_mgr.h"
 #include "src/libtable/src/ob_tablet_location_proxy.h"
 
 using namespace oceanbase::table;

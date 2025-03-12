@@ -434,3 +434,83 @@ WHERE v1.s_c2 >= t2.c2 and v1.c1 = t2.c1;
 drop table t1;
 drop table t2;
 drop table t3;
+
+--disable_warnings
+drop table if exists case_partition_10_parent, case_partition_10_set_null_parent, case6_grandparent1;
+--enable_warnings
+
+CREATE TABLE `case_partition_10_parent` (
+  `pk` int(11) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(pk)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`,
+partition `p5`,
+partition `p6`,
+partition `p7`);
+
+CREATE TABLE `case_partition_10_set_null_parent` (
+  `pk` int(11) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(pk)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`,
+partition `p5`,
+partition `p6`,
+partition `p7`);
+
+CREATE TABLE `case6_grandparent1` (
+  `pk` int(11) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+
+explain
+UPDATE
+    /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml no_use_px */
+    case6_grandparent1 JOIN_A
+    left join (
+        select
+            /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml */
+            pk
+        from (
+                select
+                    /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml NO_USE_NL_MATERIALIZATION(B) leading(A,B) use_hash(A,B) index(A PRIMARY) index(B PRIMARY)*/
+                    B.pk,
+                    B.pk pk_alias
+                from case_partition_10_parent A
+                    right join case_partition_10_set_null_parent B on A.pk = B.pk
+                order by 1,
+                    2
+            )
+        where pk not in (-798)
+        order by 1 desc
+    ) JOIN_B ON JOIN_A.pk = JOIN_B.pk
+SET JOIN_A.pk = JOIN_A.pk,
+    JOIN_A.pk = JOIN_A.pk
+WHERE JOIN_A.pk in (
+        select
+            /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml */
+            pk
+        from (
+                select
+                    /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml NO_USE_NL_MATERIALIZATION(B) leading(A,B) use_hash(A,B) index(A PRIMARY) index(B PRIMARY)*/
+                    B.pk,
+                    B.pk pk_alias
+                from case_partition_10_parent A
+                    right join case_partition_10_set_null_parent B on A.pk = B.pk
+                order by 1,
+                    2
+            )
+        where pk not in (-798)
+        order by 1 desc
+    );
+
+drop table case_partition_10_parent, case_partition_10_set_null_parent, case6_grandparent1;

@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_merge_info_mgr.h"
-#include "lib/utility/ob_print_utils.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "share/config/ob_server_config.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

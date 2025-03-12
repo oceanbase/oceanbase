@@ -11,9 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/stat/ob_opt_column_stat_cache.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_dbms_stats_copy_table_stats.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"

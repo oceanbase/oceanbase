@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -19,9 +17,6 @@
 #define private public
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "mittest/mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
-#include "storage/slog_ckpt/ob_tenant_meta_snapshot_handler.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/tablet/ob_tablet_persister.h"
 
 namespace oceanbase
 {

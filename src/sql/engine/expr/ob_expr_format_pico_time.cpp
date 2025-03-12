@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_format_pico_time.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include <math.h>
 
 namespace oceanbase
 {

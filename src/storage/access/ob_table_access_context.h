@@ -71,16 +71,17 @@ struct ObTableScanStoreStat
     rowkey_prefix_ = 0;
     logical_read_cnt_ = 0;
     physical_read_cnt_ = 0;
+    in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
   }
 public:
   OB_INLINE bool enable_get_row_cache() const
   {
-    return row_cache_miss_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
+    return row_cache_miss_cnt_ < in_row_cache_threshold_
            || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
   }
   OB_INLINE bool enable_put_row_cache() const
   {
-    return row_cache_put_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
+    return row_cache_put_cnt_ < in_row_cache_threshold_;
   }
   OB_INLINE bool enable_put_fuse_row_cache(const int64_t threshold) const
   {
@@ -93,7 +94,7 @@ public:
   }
   OB_INLINE bool enable_bf_cache() const
   {
-    return (bf_access_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
+    return (bf_access_cnt_ < common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
            || bf_filter_cnt_ > (bf_access_cnt_ / 8));
   }
   TO_STRING_KV(K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt),
@@ -102,7 +103,7 @@ public:
                K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),
                K_(micro_access_cnt), K_(pushdown_micro_access_cnt),
                K_(empty_read_cnt), K_(rowkey_prefix),
-               K_(logical_read_cnt), K_(physical_read_cnt));
+               K_(logical_read_cnt), K_(physical_read_cnt), K_(in_row_cache_threshold));
   int64_t row_cache_hit_cnt_;
   int64_t row_cache_miss_cnt_;
   int64_t row_cache_put_cnt_;
@@ -119,6 +120,7 @@ public:
   int64_t rowkey_prefix_;
   int64_t logical_read_cnt_;
   int64_t physical_read_cnt_;
+  int64_t in_row_cache_threshold_;
 };
 
 struct ObTableAccessContext
@@ -262,7 +264,8 @@ struct ObTableAccessContext
     KP_(cg_param_pool),
     KP_(block_row_store),
     KP_(sample_filter),
-    KPC_(mview_scan_info));
+    KPC_(mview_scan_info),
+    K_(table_store_stat));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -304,6 +307,7 @@ public:
   common::ObTableScanStatistic *table_scan_stat_;
   ObTableScanStoreStat table_store_stat_;
   int64_t out_cnt_;
+  int64_t in_row_cache_threshold_;
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;
   share::SCN merge_scn_;

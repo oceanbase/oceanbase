@@ -11,11 +11,9 @@
  */
 
 #include "ob_rows_info.h"
-#include "storage/ob_storage_struct.h"
 #include "storage/ob_relative_table.h"
-#include "storage/ob_storage_schema.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
-#include "ob_store_row_iterator.h"
 
 namespace oceanbase
 {
@@ -73,6 +71,9 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
     } else {
       table_iter_param_.table_id_ = table.get_table_id();
       table_iter_param_.tablet_id_ = table.get_tablet_id();
+      if (nullptr != table.tablet_iter_.get_tablet()) {
+        table_iter_param_.ls_id_ = table.tablet_iter_.get_tablet()->get_tablet_meta().ls_id_;
+      }
       table_iter_param_.out_cols_project_ = NULL;
       table_iter_param_.read_info_ = &rowkey_read_info;
       table_iter_param_.set_tablet_handle(table.get_tablet_handle());

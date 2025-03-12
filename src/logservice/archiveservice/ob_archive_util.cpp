@@ -11,6 +11,7 @@
  */
 
 #include "ob_archive_util.h"
+#include "src/logservice/palf/lsn.h"
 namespace oceanbase
 {
 namespace archive

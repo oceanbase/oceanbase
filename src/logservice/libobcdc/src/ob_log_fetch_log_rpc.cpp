@@ -14,8 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_log_fetch_log_rpc.h"
 
+#include "ob_log_fetch_log_rpc.h"
 #include <unistd.h>                       // getpid
 #include "share/ob_errno.h"                 // OB_SUCCESS
 #include "lib/atomic/ob_atomic.h"         // ATOMIC_*

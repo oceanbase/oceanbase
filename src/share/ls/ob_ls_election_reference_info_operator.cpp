@@ -11,17 +11,7 @@
  */
 
 #include "ob_ls_election_reference_info_operator.h"
-#include "lib/net/ob_addr.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/string/ob_sql_string.h"//ObSqlString
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
-#include "common/ob_timeout_ctx.h"
-#include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {

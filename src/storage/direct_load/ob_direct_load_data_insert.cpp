@@ -27,9 +27,7 @@ using namespace sql;
  */
 
 ObDirectLoadDataInsertParam::ObDirectLoadDataInsertParam()
-  : store_column_count_(0),
-    datum_utils_(nullptr),
-    dml_row_handler_(nullptr)
+  : datum_utils_(nullptr), dml_row_handler_(nullptr)
 {
 }
 
@@ -39,8 +37,8 @@ ObDirectLoadDataInsertParam::~ObDirectLoadDataInsertParam()
 
 bool ObDirectLoadDataInsertParam::is_valid() const
 {
-  return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
-         nullptr != datum_utils_ && nullptr != dml_row_handler_;
+  return tablet_id_.is_valid() && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
+         nullptr != dml_row_handler_;
 }
 
 /**
@@ -58,7 +56,7 @@ ObDirectLoadDataInsert::~ObDirectLoadDataInsert()
 
 int ObDirectLoadDataInsert::init(
     const ObDirectLoadDataInsertParam &param,
-    ObIStoreRowIterator *load_iter)
+    ObDirectLoadIStoreRowIterator *load_iter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -76,7 +74,7 @@ int ObDirectLoadDataInsert::init(
   return ret;
 }
 
-int ObDirectLoadDataInsert::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadDataInsert::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -86,17 +84,14 @@ int ObDirectLoadDataInsert::get_next_row(const ObDatumRow *&datum_row)
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get next row", KR(ret));
     }
-  } else if (OB_UNLIKELY(datum_row->count_ != param_.store_column_count_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected column count", KR(ret), K(datum_row->count_), K(param_.store_column_count_));
   } else {
-    if (datum_row->row_flag_.is_delete()) {
+    if (datum_row->is_delete_) {
       if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
-        LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+        LOG_WARN("fail to handle insert row", KR(ret), KPC(datum_row));
       }
     } else {
       if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
-        LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+        LOG_WARN("fail to handle insert row", KR(ret), KPC(datum_row));
       }
     }
   }
@@ -119,7 +114,7 @@ ObDirectLoadSSTableDataInsert::~ObDirectLoadSSTableDataInsert()
 
 int ObDirectLoadSSTableDataInsert::init(
     const ObDirectLoadDataInsertParam &param,
-    const ObIArray<ObDirectLoadSSTable *> &sstable_array,
+    const ObDirectLoadTableHandleArray &sstable_array,
     const ObDatumRange &range)
 {
   int ret = OB_SUCCESS;
@@ -140,9 +135,8 @@ int ObDirectLoadSSTableDataInsert::init(
     } else if (OB_FAIL(data_insert_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init data insert", KR(ret));
     } else {
-      row_flag_.uncontain_hidden_pk_ = false;
-      row_flag_.has_multi_version_cols_ = false;
-      // row_flag_.has_delete_row_ = ?;
+      // set parent params
+      row_flag_ = param.table_data_desc_.row_flag_;
       column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
@@ -151,7 +145,7 @@ int ObDirectLoadSSTableDataInsert::init(
   return ret;
 }
 
-int ObDirectLoadSSTableDataInsert::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadSSTableDataInsert::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -179,7 +173,7 @@ ObDirectLoadMultipleSSTableDataInsert::~ObDirectLoadMultipleSSTableDataInsert()
 
 int ObDirectLoadMultipleSSTableDataInsert::init(
     const ObDirectLoadDataInsertParam &param,
-    const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+    const ObDirectLoadTableHandleArray &sstable_array,
     const ObDatumRange &range)
 {
   int ret = OB_SUCCESS;
@@ -201,9 +195,8 @@ int ObDirectLoadMultipleSSTableDataInsert::init(
     } else if (OB_FAIL(data_insert_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init data insert", KR(ret));
     } else {
-      row_flag_.uncontain_hidden_pk_ = false;
-      row_flag_.has_multi_version_cols_ = false;
-      // row_flag_.has_delete_row_ = ?;
+      // set parent params
+      row_flag_ = param.table_data_desc_.row_flag_;
       column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
@@ -212,7 +205,7 @@ int ObDirectLoadMultipleSSTableDataInsert::init(
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableDataInsert::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadMultipleSSTableDataInsert::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

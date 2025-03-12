@@ -17,7 +17,6 @@
 #include "share/ob_errno.h"                     // OB_SUCCESS, ..
 #include "lib/oblog/ob_log_module.h"            // LOG_*
 #include "lib/container/ob_array_iterator.h"
-#include "lib/allocator/ob_mod_define.h"        // ObModIds
 
 #include "ob_log_part_progress_controller.h"    // PartProgressController
 #include "ob_log_part_trans_resolver_factory.h" // IObLogPartTransResolverFactory

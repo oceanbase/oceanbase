@@ -10,12 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_finish_transfer_in_mds_ctx.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "mds_table_handle.h"
-#include "share/ob_errno.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 #define USING_LOG_PREFIX MDS
 

@@ -12,22 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_group_by.h"
-#include "lib/allocator/page_arena.h"
-#include "sql/resolver/expr/ob_raw_expr_replacer.h"
-#include "ob_log_operator_factory.h"
-#include "ob_log_exchange.h"
-#include "ob_log_sort.h"
-#include "ob_log_topk.h"
-#include "ob_log_material.h"
 #include "ob_log_table_scan.h"
-#include "ob_optimizer_context.h"
-#include "ob_optimizer_util.h"
-#include "ob_opt_est_cost.h"
-#include "ob_select_log_plan.h"
-#include "common/ob_smart_call.h"
-#include "ob_opt_selectivity.h"
-#include "ob_log_operator_factory.h"
-#include "sql/optimizer/ob_join_order.h"
 #include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase;
@@ -569,6 +554,7 @@ int ObLogGroupBy::print_outline_data(PlanText &plan_text)
     if (OB_SUCC(ret) && T_DISTRIBUTE_BASIC != dist_method_) {
       ObPQHint hint(T_PQ_GBY_HINT);
       hint.set_qb_name(qb_name);
+      hint.set_parallel(gby_dop_);
       if (hash_rollup_info_.valid() && is_partition_wise() && dist_method_ == T_DISTRIBUTE_HASH) {
         hint.set_dist_method(T_DISTRIBUTE_NONE);
       } else {

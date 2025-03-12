@@ -11,14 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdio.h>
-#include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_array.h"
 #include "lib/compress/ob_compressor_pool.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/ob_define.h"
-#include "zlib.h"
-#include "lib/checksum/ob_crc64.h"
 #include "lib/coro/testing.h"
 
 

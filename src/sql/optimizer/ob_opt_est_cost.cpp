@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/optimizer/ob_optimizer_context.h"
+#include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "storage/access/ob_table_scan_range.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
 #include "ob_opt_est_parameter_normal.h"
 #include "ob_opt_est_parameter_vector.h"
 #include "share/stat/ob_opt_stat_manager.h"
@@ -373,6 +366,35 @@ int ObOptEstCost::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_in
                                                             px_cost,
                                                             cost))) {
     LOG_WARN("failed to est cost for table scan parallel", K(ret));
+  }
+  return ret;
+}
+
+int ObOptEstCost::cost_index_back(const ObCostTableScanInfo &est_cost_info,
+                                  double row_count,
+                                  double limit_count,
+                                  double &index_back_cost,
+                                  const ObOptimizerContext &opt_ctx)
+{
+  int ret = OB_SUCCESS;
+  GET_COST_MODEL();
+  if (OB_FAIL(model->cost_index_back(est_cost_info,
+                                     row_count,
+                                     limit_count,
+                                     index_back_cost))) {
+    LOG_WARN("failed to est cost for index back", K(ret));
+  }
+  return ret;
+}
+
+int ObOptEstCost::get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types,
+                                    double &cmp_cost,
+                                    const ObOptimizerContext &opt_ctx)
+{
+  int ret = OB_SUCCESS;
+  GET_COST_MODEL();
+  if (OB_FAIL(model->get_sort_cmp_cost(types, cmp_cost))) {
+    LOG_WARN("failed to get sort cmp cost", K(ret));
   }
   return ret;
 }

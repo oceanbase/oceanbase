@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <thread>
 #define USING_LOG_PREFIX STORAGE
 
 #define USING_LOG_PREFIX STORAGE
@@ -20,10 +18,6 @@
 #define protected public
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

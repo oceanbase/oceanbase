@@ -14,24 +14,6 @@
 
 #include "ob_dbms_sched_table_operator.h"
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "lib/worker.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/ob_server_struct.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 
 namespace oceanbase
@@ -366,7 +348,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
     if (OB_SUCC(ret) && job_info.max_failures_ > 0 && job_info.failures_ >= job_info.max_failures_) {
       // when if failures > max_failures then set broken state, and disable job
       job_info.state_ = ObString("BROKEN");
-    } else if (job_info.is_date_expression_job_class()) {
+    } else if (job_info.is_mview_job()) {
       if (now >= job_info.end_date_) {
         job_info.state_ = ObString("COMPLETED");
       }
@@ -502,6 +484,12 @@ int ObDBMSSchedTableOperator::extract_info(
     ret = OB_SUCCESS;
     job_info_local.database_id_ = OB_INVALID_ID;
   }
+  uint64_t func_type = 0;
+  EXTRACT_INT_FIELD_MYSQL(result, "func_type", func_type, uint64_t);
+  if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+    ret = OB_SUCCESS;
+  }
+  job_info_local.func_type_ = static_cast<ObDBMSSchedFuncType>(func_type);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "lowner", job_info_local.lowner_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "powner", job_info_local.powner_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "cowner", job_info_local.cowner_);
@@ -578,7 +566,6 @@ do {                                                                  \
   //comments not used
   //credential_name not used
   //destination_name not used
-
   OZ (job_info.deep_copy(allocator, job_info_local));
 
   return ret;
@@ -799,7 +786,7 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_class_infos_in_tenant(
   return ret;
 }
 
-int ObDBMSSchedTableOperator::_purge(uint64_t tenant_id, ObString &job_class_name, int64_t log_history)
+int ObDBMSSchedTableOperator::_purge(uint64_t tenant_id, const ObString &job_class_name, int64_t log_history)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -829,7 +816,7 @@ int ObDBMSSchedTableOperator::_purge_fallback(uint64_t tenant_id, int64_t log_hi
   int64_t purge_rows = 0;
   OZ (sql.assign_fmt("delete from %s where time<DATE_SUB(NOW(), INTERVAL %ld DAY) order by time asc limit %ld",
       OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME,
-      max(max(log_history, DEFAULT_LOG_HISTORY), ObInnerJobClassSet::instance().get_max_log_history()),
+      max(log_history, DEFAULT_LOG_HISTORY),
       PURGE_LOG_BATCH_COUNT));
   while (OB_SUCC(ret) && !THIS_WORKER.is_timeout()) {
     OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
@@ -902,17 +889,24 @@ int ObDBMSSchedTableOperator::purge_run_detail(uint64_t tenant_id)
         }
       }
     }
-    // inner job class
-    for (int64_t id = 0; !THIS_WORKER.is_timeout() && id < INNER_JOB_CLASS_MAXNUM; id++) {
-      int64_t purge_rows = 0;
-      ObString job_class_name = ObString(ObInnerJobClassSet::instance().id_to_name(id));
-      log_history = ObInnerJobClassSet::instance().id_to_log_history(id);
-      if (OB_TMP_FAIL(_purge(tenant_id, job_class_name, log_history))) {
-        LOG_WARN("purge inner run detail failed", K(tmp_ret), K(tenant_id), K(job_class_name));
-      }
+    // default job class
+    if (OB_TMP_FAIL(_purge(tenant_id, ObString("DEFAULT_JOB_CLASS"), DEFAULT_LOG_HISTORY))) {
+      LOG_WARN("purge default class run detail failed", K(tmp_ret), K(tenant_id));
+    }
+    // for compatible, purge old olap async job run detail
+    if (OB_TMP_FAIL(_purge(tenant_id, ObString("OLAP_ASYNC_JOB_CLASS"), DEFAULT_LOG_HISTORY))) {
+      LOG_WARN("purge olap async job class run detail failed", K(tmp_ret), K(tenant_id));
+    }
+    // for compatible, purge old mview refresh job run detail
+    if (OB_TMP_FAIL(_purge(tenant_id, ObString("DATE_EXPRESSION_JOB_CLASS"), DEFAULT_LOG_HISTORY))) {
+      LOG_WARN("purge mview refresh job class run detail failed", K(tmp_ret), K(tenant_id));
+    }
+    // for compatible, purge old mysql event job run detail
+    if (OB_TMP_FAIL(_purge(tenant_id, ObString("MYSQL_EVENT_JOB_CLASS"), DEFAULT_LOG_HISTORY))) {
+      LOG_WARN("purge mysql event job class run detail failed", K(tmp_ret), K(tenant_id));
     }
   }
-  // purge old run detail table
+  // for compatible, purge old run detail table
   if (OB_TMP_FAIL(_purge_old(tenant_id))) {
     LOG_WARN("purge old run detail failed", K(tmp_ret), K(tenant_id));
   }

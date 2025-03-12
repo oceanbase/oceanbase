@@ -14,19 +14,8 @@
 
 #include "ob_dbms_job_master.h"
 
-#include "lib/time/Time.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/alloc/alloc_struct.h"
-#include "lib/container/ob_array.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/profile/ob_trace_id.h"
 
-#include "share/partition_table/ob_partition_location.h"
 #include "share/ob_all_server_tracer.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

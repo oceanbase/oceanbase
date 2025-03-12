@@ -11,10 +11,6 @@
  */
 
 #include "ob_storage_log.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "share/ob_ls_id.h"
-#include "storage/tablet/ob_tablet.h"
-#include "observer/omt/ob_tenant_meta.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase

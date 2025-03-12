@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/aggregate/iaggregate.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "ob_aggregated_store_vec.h"
 
@@ -148,6 +147,14 @@ OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
       agg_type_flag_.set_sum_flag(true);
       break;
     }
+    case PD_HLL : {
+      agg_type_flag_.set_hll_flag(true);
+      break;
+    }
+    case PD_SUM_OP_SIZE : {
+      agg_type_flag_.set_sum_op_nsize_flag(true);
+      break;
+    }
     case PD_RB_BUILD: {
       agg_type_flag_.set_has_rb_build_agg(true);
       break;
@@ -174,7 +181,6 @@ ObAggregatedStoreVec::ObAggregatedStoreVec(
         need_get_row_ids_(false)
 {
   agg_groups_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
-  is_vec2_ = true;
 }
 
 ObAggregatedStoreVec::~ObAggregatedStoreVec()

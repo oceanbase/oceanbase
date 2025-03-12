@@ -12,15 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
-#include "observer/omt/ob_tenant.h"
-#include "observer/table_load/ob_table_load_exec_ctx.h"
+#include "ob_table_direct_insert_ctx.h"
 #include "observer/table_load/ob_table_load_instance.h"
-#include "observer/table_load/ob_table_load_schema.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_struct.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan.h"
 
 namespace oceanbase
@@ -119,7 +113,7 @@ int ObTableDirectInsertCtx::init(
                                                      : ObTableLoadParam::DEFAULT_BATCH_SIZE;
         param.max_error_row_count_ = 0;
         param.column_count_ = column_ids.count();
-        param.need_sort_ = table_schema->is_heap_table() ? phy_plan.get_direct_load_need_sort() : true;
+        param.need_sort_ = table_schema->is_table_without_pk() ? phy_plan.get_direct_load_need_sort() : true;
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE

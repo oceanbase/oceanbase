@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_imicro_block_decoder.h"
-#include "storage/access/ob_block_row_store.h"
 
 namespace oceanbase
 {

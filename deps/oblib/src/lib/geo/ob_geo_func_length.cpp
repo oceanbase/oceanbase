@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX LIB
 #include "lib/geo/ob_geo_dispatcher.h"
 #include "lib/geo/ob_geo_func_length.h"
-#include "lib/geo/ob_geo_utils.h"
 
 using namespace oceanbase::common;
 namespace bg = boost::geometry;

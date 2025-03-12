@@ -16,7 +16,6 @@
 #define protected public
 #define private public
 #include "test_decoder_filter_perf.h"
-#include "storage/compaction/ob_compaction_memory_pool.h"
 
 namespace oceanbase
 {

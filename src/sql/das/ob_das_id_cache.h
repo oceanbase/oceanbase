@@ -32,7 +32,7 @@ class ObDASIDRequestRpc;
 
 struct IdCache
 {
-  int64_t start_id;
+  int64_t start_id CACHE_ALIGNED;
   int64_t end_id;
   TO_STRING_KV(K(start_id), K(end_id));
 };

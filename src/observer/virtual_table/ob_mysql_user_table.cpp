@@ -12,10 +12,6 @@
 
 #include "observer/virtual_table/ob_mysql_user_table.h"
 
-#include "share/schema/ob_priv_type.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

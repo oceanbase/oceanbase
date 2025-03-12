@@ -11,7 +11,6 @@
  */
 
 #include "ob_log_miner_record_file_format.h"
-#include <cstring>
 namespace oceanbase
 {
 namespace oblogminer

@@ -11,27 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <utility>
-#include "storage/restore/ob_ls_restore_handler.h"
-#include "lib/lock/ob_mutex.h"
-#include "common/ob_member.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/backup/ob_backup_restore_util.h"
-#include "share/backup/ob_backup_path.h"
-#include "storage/ob_storage_rpc.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ls/ob_ls_status_operator.h"
+#include "ob_ls_restore_handler.h"
 #include "logservice/ob_log_service.h"
 #include "storage/high_availability/ob_ls_restore.h"
-#include "storage/high_availability/ob_tablet_group_restore.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "share/restore/ob_physical_restore_table_operator.h"
-#include "storage/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "share/restore/ob_restore_persist_helper.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
@@ -327,7 +313,8 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   bool is_normal = false;
   bool is_exist = true;
   bool is_in_member_or_learner_list = false;
-  if (is_stop()) { 
+  if (is_stop() || !is_online()) {
+      LOG_INFO("ls stopped or disabled", KPC(ls_));
   } else if (OB_FAIL(check_meta_tenant_normal_(is_normal))) {
     LOG_WARN("fail to get meta tenant status", K(ret));
   } else if (!is_normal) {
@@ -433,8 +420,7 @@ int ObLSRestoreHandler::update_state_handle_()
   ObILSRestoreState *new_state_handler = nullptr;
   if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
-  } else if (nullptr != state_handler_
-      && new_status == state_handler_->get_restore_status()) { // no need update state handler
+  } else if (!need_update_state_handle_(new_status)) { // no need update state handler
   } else if (OB_FAIL(fill_restore_arg())) {
     LOG_WARN("fail to fill restore arg", K(ret));
   } else {
@@ -466,6 +452,7 @@ int ObLSRestoreHandler::update_state_handle_()
           state_handler_ = nullptr;
         }
         state_handler_ = new_state_handler;
+        result_mgr_.reset();
       }
     }
 
@@ -475,6 +462,12 @@ int ObLSRestoreHandler::update_state_handle_()
     }
   }
   return ret;
+}
+
+bool ObLSRestoreHandler::need_update_state_handle_(share::ObLSRestoreStatus &new_status)
+{
+  lib::ObMutexGuard guard(mtx_);
+  return nullptr == state_handler_ || new_status != state_handler_->get_restore_status();
 }
 
 int ObLSRestoreHandler::get_restore_state_handler_(const share::ObLSRestoreStatus &new_status, ObILSRestoreState *&new_state_handler)
@@ -633,7 +626,11 @@ int ObLSRestoreHandler::construct_state_handler_(T *&new_handler)
 int ObLSRestoreHandler::deal_failed_restore_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(state_handler_->deal_failed_restore(result_mgr_))) {
+  lib::ObMutexGuard guard(mtx_);
+  if (OB_ISNULL(state_handler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("state handler is nullptr!", K(ret));
+  } else if (OB_FAIL(state_handler_->deal_failed_restore(result_mgr_))) {
     LOG_WARN("fail to deal failed restore", K(ret), K(result_mgr_), KPC(state_handler_));
   }
   return ret;
@@ -3183,6 +3180,16 @@ ObLSRestoreResultMgr::ObLSRestoreResultMgr()
 {
 }
 
+void ObLSRestoreResultMgr::reset()
+{
+  lib::ObMutexGuard guard(mtx_);
+  result_ = OB_SUCCESS;
+  retry_cnt_ = 0;
+  last_err_ts_ = 0;
+  trace_id_.reset();
+  failed_type_ = RestoreFailedType::MAX_FAILED_TYPE;
+}
+
 bool ObLSRestoreResultMgr::can_retry() const
 {
   int64_t max_retry_cnt = OB_MAX_RESTORE_RETRY_TIMES;
@@ -3210,14 +3217,13 @@ void ObLSRestoreResultMgr::set_result(const int result, const share::ObTaskId &t
 {
   // update result_ conditions:
   // 1. result_ is OB_SUCCESS;
-  // 2. result_ is retrieable err, but input result is non retrieable err.
+  // 2. result_ is retrieable err, which can be updated by newer retryable err or non-retryable err
   lib::ObMutexGuard guard(mtx_);
   if (OB_EAGAIN == result
      || OB_IO_LIMIT == result) {
   } else {
     if (retry_cnt_ >= OB_MAX_RESTORE_RETRY_TIMES) { // avoiding overwrite error code
-    } else if ((!can_retrieable_err(result) && can_retrieable_err(result_))
-        || OB_SUCCESS == result_) {
+    } else if (can_retrieable_err(result_) || OB_SUCCESS == result_) {
       result_ = result;
       trace_id_.set(trace_id);
       failed_type_ = failed_type;

@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
+#include "ob_shared_object_reader_writer.h"
+#include "src/storage/ob_storage_struct.h"
 
 namespace oceanbase
 {

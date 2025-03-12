@@ -10,12 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "share/ob_errno.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx_storage/ob_ls_handle.h"
+#include "ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 #define USING_LOG_PREFIX MDS

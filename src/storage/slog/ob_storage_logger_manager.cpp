@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE_REDO
 #include <sys/statvfs.h>
-#include "lib/ob_define.h"
-#include "lib/ob_running_mode.h"
 #include "ob_storage_logger_manager.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase

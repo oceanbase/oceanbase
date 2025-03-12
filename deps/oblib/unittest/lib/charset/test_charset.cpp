@@ -10,10 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include <stdio.h>
-#include <time.h>
-#include <sys/time.h>
 #include <codecvt>
 #include "gtest/gtest.h"
 
@@ -21,14 +17,7 @@
 #define private public
 
 #include "lib/allocator/page_arena.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/charset/ob_template_helper.h"
-#include "lib/string/ob_string.h"
-#include "lib/utility/ob_print_utils.h"
-#include "unicode_map.h"
 #include "common/data_buffer.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/charset/mb_wc.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #define USING_LOG_PREFIX SQL
 
@@ -967,20 +956,28 @@ TEST_F(TestCharset, foreach_char) {
        const char *data1 =   "豫章故郡，洪都新府。星分翼軒，地接衡廬。襟三江而帶五湖，控蠻荊而引甌越。物華天寶，龍光射牛斗之墟。落霞與孤鷺齊飛，秋水共長天一色。"
                               "人傑地靈，徐孺下陳蕃之榻。雄州霧列，俊採星馳。台隍枕夷夏之交，賓主盡東南之美。都督閻之雅望，棨戟遙臨"
                               "時維九月，序屬三秋。潦水盡而寒潭清，煙光凝而暮山紫。物華天寶";
-  /*
-  const char *data = "I hear America singing, the varied carols I hear,Those of mechanics, "
-                     "each one singing his as it should be blithe and strong,The carpenter "
-                     "singing his as he measures his plank or beam,The mason singing his as "
-                     "he makes ready for work, or leaves off work,The boatman singing what "
-                     "belongs to him in his boat, the deckhand singing on the steamboat deck,"
-                     "The shoemaker singing as he sits on his bench, the hatter singing as "
-                     "he stands,The wood-cutter’s song, the ploughboy’s on his way in the morning, "
-                     "or at noon intermission or at sundown,The delicious singing of the mother, "
-                     "or of the young wife at work, or of the girl sewing or washing,Each singing "
-                     "what belongs to him or her and to none else,The day what belongs to the day—at "
-                     "night the party of young fellows, robust, friendly,Singing with open "
-                     "mouths their strong melodious songs.";
-                     */
+       const char *data2 = "豫章故郡，洪都新府。星分翼轸，地接衡庐。"
+                           "人杰地灵，徐孺下陈蕃之榻。";
+       const char *data_kr = "한국의 사계절은 아름답습니다. 봄에는벚꽃이 피고, 여름에는 바다에서 수영을 합니다. 가을에는 단풍을 즐기며, 겨울에는 눈 내리는 풍경을 감상합니다."
+                             "한국의 문화도 다양하고 풍부하며,찻집이나 축제 등 많은 전통 행사가 있습니다. 또한 한국 음식도 매우 다양하여 김치찌개, 불고기, 비빔밥 등이 인기가 많습니다."
+                             "이러한 문화와 자연의 아름다움이 한국의 매력을 만들어냅니다.";
+       const char *data_jp = "朝になったら, 二人目を合わせて""たわいないこと, 少し話ししたいな"
+                              "晴れた午後は, そっと手を繋いで""穏やかな街を, 少し歩いてみたり"
+                              "いつまでも同じ時間を""一緒に過ごしてたくて"
+                              "だって, 朝も夜も""伝えたいこと, たくさんあって"
+                              "今日も明日も""「きだ」なんて あぁ、言えたら";
+       const char *data_ascii = "I hear America singing, the varied carols I hear,Those of mechanics, "
+                                "each one singing his as it should be blithe and strong,The carpenter "
+                                "singing his as he measures his plank or beam,The mason singing his as "
+                                "he makes ready for work, or leaves off work,The boatman singing what "
+                                "belongs to him in his boat, the deckhand singing on the steamboat deck,"
+                                "The shoemaker singing as he sits on his bench, the hatter singing as "
+                                "he stands,The wood-cutter's song, the ploughboy's on his way in the morning, "
+                                "or at noon intermission or at sundown,The delicious singing of the mother, "
+                                "or of the young wife at work, or of the girl sewing or washing,Each singing "
+                                "what belongs to him or her and to none else,The day what belongs to the day-at "
+                                "night the party of young fellows, robust, friendly,Singing with open "
+                                "mouths their strong melodious songs.";
   int64_t word_cnt = 0;
   auto do_nothing = [&word_cnt] (const ObString &str, ob_wc_t wchar) -> int {
     int ret = OB_SUCCESS;
@@ -1001,6 +998,10 @@ TEST_F(TestCharset, foreach_char) {
 
   ObString data_in(data);
   ObString data_in1(data1);
+  ObString data_in2(data2);
+  ObString data_in_jp(data_jp);
+  ObString data_in_kr(data_kr);
+  ObString data_in_ascii(data_ascii);
   ObArenaAllocator alloc;
 
   for (int i = CHARSET_BINARY + 1; i <= CHARSET_GB18030; i++) {
@@ -1052,6 +1053,12 @@ TEST_F(TestCharset, foreach_char) {
       continue;
     } else if (test_cs_type == CHARSET_BIG5 || test_cs_type == CHARSET_HKSCS || test_cs_type == CHARSET_HKSCS31) {
       ASSERT_TRUE(OB_SUCCESS == ObCharset::charset_convert(alloc, data_in1, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if (test_cs_type == CHARSET_GB2312) {
+      ASSERT_TRUE(OB_SUCCESS == ObCharset::charset_convert(alloc, data_in2, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if (test_cs_type == CHARSET_UJIS || test_cs_type == CHARSET_CP932 || test_cs_type == CHARSET_EUCJPMS) {
+      ASSERT_TRUE(OB_SUCCESS == ObCharset::charset_convert(alloc, data_in_jp, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if (test_cs_type == CHARSET_EUCKR) {
+      ASSERT_TRUE(OB_SUCCESS == ObCharset::charset_convert(alloc, data_in_kr, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
     } else {
       ASSERT_TRUE(OB_SUCCESS == ObCharset::charset_convert(alloc, data_in, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
     }
@@ -1071,17 +1078,64 @@ TEST_F(TestCharset, foreach_char) {
     start_timer();
     ASSERT_EQ(OB_SUCCESS, ObCharsetUtils::foreach_char(input, test_collation_type, do_nothing, true));
     end_timer();
+    int64_t raw_word_cnt = word_cnt;
 
 
     fprintf(stdout, "Inline Impl\n");
     start_timer();
     ASSERT_EQ(OB_SUCCESS, ObFastStringScanner::foreach_char(input, test_cs_type, do_nothing));
     end_timer();
+    int64_t inline_word_cnt = word_cnt;
+    ASSERT_EQ(inline_word_cnt, raw_word_cnt);
 
     fprintf(stdout, "Skip encoding Impl\n");
     start_timer();
     ASSERT_EQ(OB_SUCCESS, ObFastStringScanner::foreach_char(input, test_cs_type, do_nothing, false));
     end_timer();
+    int64_t skip_word_cnt = word_cnt;
+    ASSERT_EQ(skip_word_cnt, raw_word_cnt);
+  }
+
+  ObCollationType test_cs_type_;
+  auto test_decode = [&test_cs_type_] (const ObString &str, ob_wc_t wchar) -> int {
+    int ret = OB_SUCCESS;
+    int32_t right_wc;
+    ret = ObCharset::mb_wc(test_cs_type_, str, right_wc);
+    if(right_wc != wchar) {
+      fprintf(stdout, "[foreach decode check ERROR] wchar = %ld, right_wc = %d\n", wchar, right_wc);
+      ret = OB_ERR_INCORRECT_STRING_VALUE;
+    }
+    return ret;
+  };
+
+  for (int i = CHARSET_BINARY + 1; i < CHARSET_MAX; i++) {
+    ObCharsetType test_cs_type = static_cast<ObCharsetType>(i);
+    ObCollationType test_collation_type = ObCharset::get_default_collation(test_cs_type);
+    test_cs_type_ = test_collation_type;
+    ObString data_out;
+    ASSERT_TRUE(ObCharset::is_valid_collation(test_collation_type));
+
+
+    fprintf(stdout, "\n# For charset(decode): %s\n", ObCharset::charset_name(test_collation_type));
+
+    if(ObCharset::get_charset(test_collation_type)->mbmaxlen == 1) { // latin1, ascii, tis620, dec8
+      ASSERT_EQ(OB_SUCCESS, ObCharset::charset_convert(alloc, data_in_ascii, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if (test_cs_type == CHARSET_BIG5 || test_cs_type == CHARSET_HKSCS || test_cs_type == CHARSET_HKSCS31) { // traditional chinese
+      ASSERT_EQ(OB_SUCCESS, ObCharset::charset_convert(alloc, data_in1, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if(test_cs_type == CHARSET_SJIS
+           || test_cs_type == CHARSET_UJIS
+           || test_cs_type == CHARSET_CP932
+           || test_cs_type == CHARSET_EUCJPMS) { // japanese
+      ASSERT_EQ(OB_SUCCESS, ObCharset::charset_convert(alloc, data_in_jp, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if(test_cs_type == CHARSET_EUCKR) { // korean
+      ASSERT_EQ(OB_SUCCESS, ObCharset::charset_convert(alloc, data_in_kr, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else if(test_cs_type == CHARSET_GB2312) {
+      ASSERT_EQ(OB_SUCCESS, ObCharset::charset_convert(alloc, data_in2, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    } else { // simplify chinese
+      ASSERT_EQ(OB_SUCCESS, ObCharset::charset_convert(alloc, data_in, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    }
+
+    ASSERT_EQ(OB_SUCCESS, ObFastStringScanner::foreach_char(data_out, test_cs_type, test_decode));
   }
 }
 

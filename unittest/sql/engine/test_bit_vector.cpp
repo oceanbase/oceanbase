@@ -14,7 +14,6 @@
 
 #include "lib/random/ob_random.h"
 #include "src/sql/engine/ob_bit_vector.h"
-#include "src/sql/ob_eval_bound.h"
 
 #define private public
 #define WordType uint64_t

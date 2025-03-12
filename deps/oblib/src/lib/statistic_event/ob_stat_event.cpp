@@ -11,7 +11,6 @@
  */
 
 #include "lib/statistic_event/ob_stat_event.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -44,15 +43,8 @@ ObStatEventAddStat::ObStatEventAddStat()
 
 int ObStatEventAddStat::add(const ObStatEventAddStat &other)
 {
-  int ret = OB_SUCCESS;
-  if (other.is_valid()) {
-    if (is_valid()) {
-      stat_value_ += other.stat_value_;
-    } else {
-      *this = other;
-    }
-  }
-  return ret;
+  stat_value_ += other.stat_value_;
+  return OB_SUCCESS;
 }
 
 int ObStatEventAddStat::add(int64_t value)

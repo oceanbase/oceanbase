@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX RS_COMPACTION
 
-#include "rootserver/freeze/ob_major_freeze_util.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "share/ob_define.h"
+#include "ob_major_freeze_util.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 

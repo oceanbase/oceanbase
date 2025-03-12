@@ -14,6 +14,10 @@
 #define OCEANBASE_OB_ARRAY_UTILS_
 
 #include "lib/udt/ob_array_type.h"
+#include "ob_array_fixed_size.h"
+#include "ob_array_binary.h"
+#include "ob_array_nested.h"
+#include "lib/udt/ob_vector_type.h"
 #include "src/share/vector/ob_vector_base.h"
 
 namespace oceanbase {
@@ -33,7 +37,7 @@ namespace common {
 class ObArrayUtil
 {
 public :
-  static int get_type_name(const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth = 1);
+  static int get_type_name(ObNestedType coll_type, const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth = 1);
   static int push_back_decimal_int(const ObPrecision prec, const ObDecimalInt *dec_val, bool is_null, ObIArrayType *arr_obj);
   template<typename Elem_Type>
   static int contains(const ObIArrayType &array, const Elem_Type &elem, bool &bret)
@@ -85,8 +89,17 @@ public :
       }
       break;
     case ArrayFormat::Vector :
-      if (OB_FAIL(static_cast<const ObVectorData *>(&array)->contains(elem, pos))) {
-        OB_LOG(WARN, "failed to do array contains", K(ret));
+      if (static_cast<ObObjType>(array.get_element_type()) == ObUTinyIntType) {
+        if (OB_FAIL(static_cast<const ObVectorU8Data *>(&array)->contains(elem, pos))) {
+          OB_LOG(WARN, "failed to do array contains", K(ret));
+        }
+      } else if (static_cast<ObObjType>(array.get_element_type()) == ObFloatType) {
+        if (OB_FAIL(static_cast<const ObVectorF32Data *>(&array)->contains(elem, pos))) {
+          OB_LOG(WARN, "failed to do array contains", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "invalid array type", K(ret), K(array.get_element_type()));
       }
       break;
     case ArrayFormat::Nested_Array :
@@ -109,7 +122,6 @@ public :
                             obmysql::EMySQLFieldType &type);
 
   static int append(ObIArrayType &array, const ObObjType elem_type, const ObDatum *datum);
-  static int append_array(ObIArrayType &array, ObIArrayType &elem_arr, bool is_null = false);
 
   template<typename Elem_Type>
   static int clone_except(ObIAllocator &alloc, const ObIArrayType &src_array, const Elem_Type *elem, bool is_null, ObIArrayType *&dst_array)
@@ -148,8 +160,17 @@ public :
       }
       break;
     case ArrayFormat::Vector :
-      if (OB_FAIL(static_cast<const ObVectorData *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
-        OB_LOG(WARN, "failed to do src_array contains", K(ret));
+      if (static_cast<ObObjType>(src_array.get_element_type()) == ObUTinyIntType) {
+        if (OB_FAIL(static_cast<const ObVectorU8Data *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
+          OB_LOG(WARN, "failed to do src_array contains", K(ret));
+        }
+      } else if (static_cast<ObObjType>(src_array.get_element_type()) == ObFloatType) {
+        if (OB_FAIL(static_cast<const ObVectorF32Data *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
+          OB_LOG(WARN, "failed to do src_array contains", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "invalid array type", K(ret), K(src_array.get_element_type()));
       }
       break;
     case ArrayFormat::Nested_Array :

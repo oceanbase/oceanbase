@@ -11,11 +11,7 @@
  */
 
 #include "ob_trans_event.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

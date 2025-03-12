@@ -12,12 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_transfer_lock_info_operator.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"  // for OTTZ_MGR.get_tenant_tz
-#include "observer/ob_server_event_history_table_operator.h"
-#include "storage/ob_common_id_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

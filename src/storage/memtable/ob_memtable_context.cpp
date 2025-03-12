@@ -10,26 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/memtable/ob_memtable_context.h"
-#include "lib/ob_errno.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/memtable/ob_memtable_iterator.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "ob_memtable.h"
-#include "storage/ob_sequence.h"
+#include "ob_memtable_context.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_multi_data_source.h"
-#include "share/ob_tenant_mgr.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
-#include "share/ob_force_print_log.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/container/ob_array_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_table/ob_tx_table.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tablelock/ob_table_lock_callback.h"
-#include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 
 namespace oceanbase

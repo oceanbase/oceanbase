@@ -346,6 +346,7 @@ void TestTmpFileStress::read_data_(const int64_t read_offset, const int64_t read
   ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, read_offset, handle);
   int cmp = memcmp(handle.get_buffer(), buf_ + read_offset, io_info.size_);
   if (cmp != 0 || OB_FAIL(ret)) {
+    printf("TestTmpFileStress read thread failed, fd_:%d, thread_idx_:%ld\n", fd_, thread_idx_);
     STORAGE_LOG(ERROR, "TestTmpFileStress read thread failed", KR(ret), K(fd_), K(cmp), K(thread_idx_), KP(buf_), K(read_offset), K(read_size));
     ob_abort();
   }

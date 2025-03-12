@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/ddl/ob_ddl_inc_clog.h"
-#include "lib/hash/ob_link_hashmap.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

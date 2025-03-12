@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_trans_factory.h"
-#include "storage/tx/ob_trans_log.h"
-#include "storage/tx/ob_trans_ctx.h"
+#include "src/share/location_cache/ob_location_service.h"
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

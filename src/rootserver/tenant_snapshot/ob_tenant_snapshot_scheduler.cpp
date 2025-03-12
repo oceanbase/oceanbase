@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_tenant_snapshot_scheduler.h"
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "src/rootserver/ob_rs_async_rpc_proxy.h"
-#include "src/rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
-#include "src/rootserver/restore/ob_tenant_clone_util.h"
+#include "src/share/restore/ob_tenant_clone_table_operator.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
-#include "storage/tablelock/ob_lock_inner_connection_util.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "storage/tx/ob_ts_mgr.h"
 

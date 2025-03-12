@@ -15,25 +15,29 @@ namespace oceanbase
 {
 namespace common
 {
-int ObVectorL2Distance::l2_square_func(const float *a, const float *b, const int64_t len, double &square)
-{
-  return l2_square_normal(a, b, len, square);
-}
-
-int ObVectorL2Distance::l2_distance_func(const float *a, const float *b, const int64_t len, double &distance)
+template<>
+int ObVectorL2Distance<float>::l2_square_func(const float *a, const float *b, const int64_t len, double &square)
 {
   int ret = OB_SUCCESS;
-  double square = 0;
-  distance = 0;
-  if (OB_FAIL(l2_square_func(a, b, len, square))) {
-    LIB_LOG(WARN, "failed to cal l2 square", K(ret));
-  } else {
-    distance = sqrt(square);
-  }
+#if OB_USE_MULTITARGET_CODE
+    if (common::is_arch_supported(ObTargetArch::AVX512)) {
+      ret = common::specific::avx512::l2_square(a, b, len, square);
+    } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+      ret = common::specific::avx2::l2_square(a, b, len, square);
+    } else if (common::is_arch_supported(ObTargetArch::AVX)) {
+      ret = common::specific::avx::l2_square(a, b, len, square);
+    } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+      ret = common::specific::sse42::l2_square(a, b, len, square);
+    } else {
+      ret = common::specific::normal::l2_square(a, b, len, square);
+    }
+#else
+    ret = common::specific::normal::l2_square(a, b, len, square);
+#endif
   return ret;
 }
-
-OB_INLINE int ObVectorL2Distance::l2_square_normal(const float *a, const float *b, const int64_t len, double &square)
+template <>
+int ObVectorL2Distance<uint8_t>::l2_square_func(const uint8_t *a, const uint8_t *b, const int64_t len, double &square)
 {
   int ret = OB_SUCCESS;
   double sum = 0;

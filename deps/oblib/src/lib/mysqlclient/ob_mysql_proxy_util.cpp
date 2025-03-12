@@ -13,10 +13,8 @@
 #define USING_LOG_PREFIX COMMON_MYSQLP
 
 #include "lib/ob_define.h"
-#include "lib/ob_errno.h"
 #include "lib/mysqlclient/ob_mysql_proxy_util.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;

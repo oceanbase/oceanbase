@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX LOGMNR
 
 #include "ob_log_miner_analyzer.h"
-#include "ob_log_miner_utils.h"
 #include "ob_log_miner_br_producer.h"
 #include "ob_log_miner_br_filter.h"
 #include "ob_log_miner_br_converter.h"

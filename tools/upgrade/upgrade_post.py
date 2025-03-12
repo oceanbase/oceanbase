@@ -1464,7 +1464,7 @@
 #  across_version = False
 #  sys_tenant_id = 1
 #
-#  # 1. check if target_data_version/current_data_version match with current_data_version
+#  # 1. check if target_data_version/current_data_version/upgrade_begin_data_version match with current_data_version
 #  sql = "select count(*) from oceanbase.__all_table where table_name = '__all_virtual_core_table'"
 #  results = query(cur, sql)
 #  if len(results) < 1 or len(results[0]) < 1:
@@ -1481,16 +1481,16 @@
 #      raise MyError("tenant_ids count is unexpected")
 #    tenant_count = len(tenant_ids)
 #
-#    sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(int_current_data_version)
+#    sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0}".format(int_current_data_version)
 #    results = query(cur, sql)
 #    if len(results) != 1 or len(results[0]) != 1:
 #      logging.warn('result cnt not match')
 #      raise MyError('result cnt not match')
-#    elif 2 * tenant_count != results[0][0]:
-#      logging.info('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+#    elif 3 * tenant_count != results[0][0]:
+#      logging.info('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
 #      across_version = True
 #    else:
-#      logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
+#      logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
 #      across_version = False
 #
 #  # 2. check if compatible match with current_data_version
@@ -2036,6 +2036,7 @@
 #          if len(results) != 1 or len(results[0]) != 1:
 #            fail_list.append('result cnt not match')
 #          else:
+#            # check upgrade_begin_data_version
 #            tenant_count = results[0][0]
 #
 #            sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
@@ -2046,6 +2047,17 @@
 #              fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
 #            else:
 #              logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
+#
+#            if data_version >= get_version("4.3.5.1"):
+#              # check upgrade_begin_data_version
+#              sql = "select count(*) from __all_virtual_core_table where column_name in ('upgrade_begin_data_version') and column_value = {0}".format(data_version)
+#              (desc, results) = query_cur.exec_query(sql)
+#              if len(results) != 1 or len(results[0]) != 1:
+#                fail_list.append('result cnt not match')
+#              elif tenant_count != results[0][0]:
+#                fail_list.append('upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
+#              else:
+#                logging.info("check data version success, all tenant's upgrade_begin_data_version is {0}".format(data_version_str))
 #
 ## 2. 检查paxos副本是否同步, paxos副本是否缺失
 #def check_paxos_replica(query_cur):
@@ -3240,18 +3252,18 @@
 #
 #  actions.set_session_timeout(cur, 10)
 #
-#  # check target_data_version/current_data_version from __all_core_table
+#  # check target_data_version/current_data_version/upgrade_begin_data_version from __all_core_table
 #  int_current_data_version = actions.get_version(current_data_version)
-#  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
+#  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) != 1 or len(results[0]) != 1:
 #    logging.warn('result cnt not match')
 #    raise MyError('result cnt not match')
-#  elif 2 * tenant_count != results[0][0]:
-#    logging.warn('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
-#    raise MyError('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+#  elif 3 * tenant_count != results[0][0]:
+#    logging.warn('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
+#    raise MyError('target_data_version/current_data_version/upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
 #  else:
-#    logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
+#    logging.info("all tenant's target_data_version/current_data_version/upgrade_begin_data_version are match with {0}".format(current_data_version))
 #
 ## 3 检查内部表自检是否成功
 #def check_root_inspection(cur, query_cur, timeout):

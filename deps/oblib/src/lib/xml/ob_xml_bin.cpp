@@ -11,13 +11,7 @@
  * This file contains implement for the xml bin abstraction.
  */
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_bin.h"
-#include "lib/xml/ob_xml_tree.h"
+#include "ob_xml_bin.h"
 #include "lib/xml/ob_xml_util.h"
 
 namespace oceanbase {

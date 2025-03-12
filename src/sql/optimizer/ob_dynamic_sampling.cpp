@@ -11,20 +11,11 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/utility.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "ob_dynamic_sampling.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_basic_stats_estimator.h"
-#include "share/stat/ob_opt_ds_stat_cache.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -1406,7 +1397,7 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
   } else if (OB_UNLIKELY(!log_plan->get_stmt()->is_select_stmt()) ||
              OB_UNLIKELY(ctx.use_default_stat()) ||
              OB_UNLIKELY(is_virtual_table(table_meta->get_ref_table_id()) && !is_ds_virtual_table(table_meta->get_ref_table_id())) ||
-             OB_UNLIKELY(table_meta->get_table_type() == EXTERNAL_TABLE)) {
+             OB_UNLIKELY(is_external_object_id(table_meta->get_ref_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected param", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
   } else if (OB_FAIL(get_valid_dynamic_sampling_level(ctx.get_session_info(),

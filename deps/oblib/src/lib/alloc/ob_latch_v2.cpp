@@ -12,10 +12,7 @@
 
 #ifndef ENABLE_SANITY
 #else
-#include "lib/alloc/ob_latch_v2.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_print_utils.h"
-
+#include "ob_latch_v2.h"
 
 namespace oceanbase
 {

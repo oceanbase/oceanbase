@@ -92,6 +92,7 @@ public:
   bool is_domain_index() const;
   bool is_spatial_index() const;
   bool is_fts_index() const;
+  bool is_vector_index() const;
   int check_rowkey_in_column_ids(const common::ObIArray<uint64_t> &column_ids,
                                   const bool has_other_column) const;
   int build_index_row(const common::ObNewRow &table_row,

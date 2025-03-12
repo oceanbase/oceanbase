@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_sort_iter.h"
 #include "sql/das/ob_das_attach_define.h"
-#include "sql/engine/ob_bit_vector.h"
 
 namespace oceanbase
 {

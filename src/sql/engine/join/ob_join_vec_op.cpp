@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/ob_join_vec_op.h"
-#include "share/vector/ob_uniform_format.h"
 
 namespace oceanbase
 {

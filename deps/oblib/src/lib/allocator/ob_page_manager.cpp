@@ -11,7 +11,6 @@
  */
 
 #include "lib/allocator/ob_page_manager.h"
-#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::lib;
 namespace oceanbase

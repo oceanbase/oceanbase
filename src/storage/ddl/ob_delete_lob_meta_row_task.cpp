@@ -12,25 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_delete_lob_meta_row_task.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "logservice/ob_log_service.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_ddl_checksum.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/ob_ddl_task_executor.h"
-#include "share/schema/ob_tenant_schema_service.h"
-#include "share/ob_ddl_sim_point.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/ob_i_table.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "storage/access/ob_table_scan_iterator.h"
 
 namespace oceanbase

@@ -12,33 +12,24 @@
 
 #pragma once
 
-#include "observer/table_load/ob_table_load_table_compactor.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
-#include "storage/direct_load/ob_direct_load_mem_define.h"
-#include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_mem_context.h"
-#include "observer/table_load/ob_table_load_parallel_merge_ctx.h"
 
 namespace oceanbase
 {
-namespace storage
-{
-  class ObDirectLoadMemDump;
-  class ObDirectLoadMemLoader;
-}
-
 namespace observer
 {
-class ObTableLoadParam;
+class ObTableLoadStoreCtx;
+class ObTableLoadStoreTableCtx;
+class ObTableLoadMergeMemSortOp;
 class ObITableLoadTaskScheduler;
 
-class ObTableLoadMemCompactor : public ObTableLoadTableCompactor
+class ObTableLoadMemCompactor
 {
-  class CompactTaskProcessor;
-  class CompactTaskCallback;
+  class LoadTaskProcessor;
+  class DumpTaskProcessor;
   class SampleTaskProcessor;
-  class MemDumpTaskProcessor;
-  class MemDumpTaskCallback;
+  class CompactTaskCallback;
   class FinishTaskProcessor;
   class FinishTaskCallback;
 
@@ -46,54 +37,35 @@ public:
   ObTableLoadMemCompactor();
   virtual ~ObTableLoadMemCompactor();
   void reset();
-  int start() override;
-  void stop() override;
+  int init(ObTableLoadMergeMemSortOp *op);
+  int start();
+  void stop();
 
-  void set_has_error()
-  {
-    mem_ctx_.has_error_ = true;
-  }
+  void set_has_error() { mem_ctx_.has_error_ = true; }
 
 private:
-  class ParallelMergeCb : public ObTableLoadParallelMergeCb
-  {
-  public:
-    ParallelMergeCb(ObTableLoadMemCompactor *compactor) : compactor_(compactor) {}
-    int on_success() override;
-  private:
-    ObTableLoadMemCompactor *compactor_;
-  };
-
-private:
-  int inner_init() override;
+  int init_scheduler();
   int construct_compactors();
   int start_compact();
   int start_load();
-  int start_sample();
   int start_dump();
+  int start_sample();
   int start_finish();
-  int handle_compact_task_finish(int ret_code);
-  int handle_merge_success();
-  int build_result();
-  int add_table_to_parallel_merge_ctx();
-  int init_scheduler();
+  int handle_compact_thread_finish();
   int finish();
-  int start_parallel_merge();
-  int build_result_for_heap_table();
+
 private:
-  int add_tablet_table(storage::ObIDirectLoadPartitionTable *table);
-  int create_mem_loader(ObDirectLoadMemLoader *&mem_loader);
-  int64_t get_compact_task_count() const;
+  int add_tablet_table(const storage::ObDirectLoadTableHandle &table_handle);
+
 private:
   ObTableLoadStoreCtx *store_ctx_;
   ObTableLoadStoreTableCtx *store_table_ctx_;
-  const ObTableLoadParam *param_;
+  ObTableLoadMergeMemSortOp *op_;
   common::ObArenaAllocator allocator_; //需要最后析构
-  int64_t finish_task_count_ CACHE_ALIGNED;
-  ObITableLoadTaskScheduler *task_scheduler_;
   ObDirectLoadMemContext mem_ctx_;
-  ObTableLoadParallelMergeCtx parallel_merge_ctx_;
-  ParallelMergeCb parallel_merge_cb_;
+  ObITableLoadTaskScheduler *task_scheduler_;
+  int64_t finish_thread_cnt_ CACHE_ALIGNED;
+  bool is_inited_;
 };
 
 } // namespace observer

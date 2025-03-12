@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_raw_expr_sets.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "src/sql/resolver/expr/ob_raw_expr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;

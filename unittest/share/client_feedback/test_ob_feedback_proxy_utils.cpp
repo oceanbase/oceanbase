@@ -16,9 +16,6 @@
 #undef private
 #include "src/sql/session/ob_sql_session_info.h"
 #include <gtest/gtest.h>
-#include <string>
-#include <sstream>
-#include <iostream>
 
 namespace oceanbase
 {

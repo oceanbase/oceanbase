@@ -10,15 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_local_device.h"
 #include <sys/vfs.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 #include <linux/falloc.h>
-#include "share/ob_local_device.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_resource_limit.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"

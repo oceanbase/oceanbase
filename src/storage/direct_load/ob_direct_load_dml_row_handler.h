@@ -11,39 +11,68 @@
  */
 #pragma once
 
-#include "storage/blocksstable/ob_batch_datum_rows.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/direct_load/ob_direct_load_external_row.h"
-#include "storage/direct_load/ob_direct_load_multiple_datum_row.h"
+#include "lib/container/ob_array.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObTabletID;
+} // namespace common
+namespace blocksstable
+{
+class ObDatumRow;
+class ObBatchDatumRows;
+} // namespace blocksstable
 namespace storage
 {
+class ObDirectLoadDatumRow;
+class ObDirectLoadExternalRow;
+class ObDirectLoadMultipleDatumRow;
 
 class ObDirectLoadDMLRowHandler
 {
 public:
   ObDirectLoadDMLRowHandler() = default;
   virtual ~ObDirectLoadDMLRowHandler() = default;
-  // handle rows direct insert into sstable
-  virtual int handle_insert_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) = 0;
-  virtual int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) = 0;
-  virtual int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) = 0;
-  // only used for heap table
-  virtual int handle_insert_row_with_multi_version(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) = 0;
-  virtual int handle_insert_batch_with_multi_version(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) = 0;
-  // handle rows with the same primary key in the imported data
-  virtual int handle_update_row(const blocksstable::ObDatumRow &row) = 0;
-  virtual int handle_update_row(common::ObArray<const ObDirectLoadExternalRow *> &rows,
+
+  /**
+   * handle rows direct insert into sstable
+   */
+  // ObDirectLoadDatumRow without multi version cols
+  virtual int handle_insert_row(const ObTabletID &tablet_id,
+                                const ObDirectLoadDatumRow &datum_row) = 0;
+  virtual int handle_delete_row(const ObTabletID &tablet_id,
+                                const ObDirectLoadDatumRow &datum_row) = 0;
+  // ObDatumRow with multi version cols
+  // 堆表导入insert非向量化接口使用
+  virtual int handle_insert_row(const ObTabletID &tablet_id,
+                                const blocksstable::ObDatumRow &datum_row) = 0;
+  // ObBatchDatumRows with multi version cols
+  // 堆表导入insert向量化接口使用
+  virtual int handle_insert_batch(const ObTabletID &tablet_id,
+                                  const blocksstable::ObBatchDatumRows &datum_rows) = 0;
+
+  /**
+   * handle rows with the same primary key in the imported data
+   */
+  virtual int handle_update_row(const ObTabletID &tablet_id,
+                                const ObDirectLoadDatumRow &row) = 0;
+  virtual int handle_update_row(const ObTabletID &tablet_id,
+                                common::ObArray<const ObDirectLoadExternalRow *> &rows,
                                 const ObDirectLoadExternalRow *&row) = 0;
   virtual int handle_update_row(common::ObArray<const ObDirectLoadMultipleDatumRow *> &rows,
                                 const ObDirectLoadMultipleDatumRow *&row) = 0;
-  // handle rows with the same primary key between the imported data and the original data
-  virtual int handle_update_row(const ObTabletID tablet_id,
-                                const blocksstable::ObDatumRow &old_row,
-                                const blocksstable::ObDatumRow &new_row,
-                                const blocksstable::ObDatumRow *&result_row) = 0;
+
+  /**
+   * handle rows with the same primary key between the imported data and the original data
+   */
+  virtual int handle_update_row(const ObTabletID &tablet_id,
+                                const ObDirectLoadDatumRow &old_row,
+                                const ObDirectLoadDatumRow &new_row,
+                                const ObDirectLoadDatumRow *&result_row) = 0;
+
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_tmp_file_block_manager.h"
+#include "storage/tmp_file/ob_tmp_file_cache.h"
 namespace oceanbase
 {
 using namespace storage;
@@ -751,7 +752,6 @@ int ObTmpFileBlockManager::release_tmp_file_page(const int64_t block_index,
   return ret;
 }
 
-// only called by ObTmpFileBlockHandle::reset()
 int ObTmpFileBlockManager::remove_tmp_file_block_(const int64_t block_index)
 {
   int ret = OB_SUCCESS;
@@ -773,6 +773,7 @@ int ObTmpFileBlockManager::remove_tmp_file_block_(const int64_t block_index)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", KR(ret), K(block_index));
     } else {
+      ObTmpBlockCache::get_instance().erase(ObTmpBlockCacheKey(block_index, MTL_ID()));
       LOG_DEBUG("erase tmp file block from map succ", KR(ret), K(handle));
     }
   }

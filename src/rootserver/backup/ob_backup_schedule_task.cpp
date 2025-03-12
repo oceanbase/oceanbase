@@ -13,14 +13,11 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_task_scheduler.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_backup_clean_operator.h"
-#include "share/ob_srv_rpc_proxy.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
+#include "share/backup/ob_backup_struct.h"
 namespace oceanbase 
 {
 using namespace common;
@@ -209,6 +206,7 @@ int ObBackupScheduleTask::deep_copy(const ObBackupScheduleTask &that)
     generate_time_ = that.generate_time_;
     schedule_time_ = that.schedule_time_;
     executor_time_ = that.executor_time_;
+    last_check_alive_time_ = that.last_check_alive_time_;
   }
   return ret;
 }
@@ -408,6 +406,46 @@ int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const sh
   return ret;
 }
 
+int ObBackupDataBaseTask::check_replica_status_for_backup(
+    const share::ObLSReplica &replica,
+    char *buf,
+    const int64_t size,
+    bool &can_do_backup)
+{
+  int ret = OB_SUCCESS;
+  ObLSRestoreStatus restore_status;
+  int64_t pos = 0;
+  can_do_backup = false;
+
+  if (OB_ISNULL(buf) || size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(size));
+  } else if (OB_FAIL(replica.get_server().ip_port_to_string(buf, size))) {
+    LOG_WARN("failed to get string of ip and port", K(ret), K(size));
+  } else if (FALSE_IT(pos = strlen(buf))) {
+  } else if (!replica.is_in_service()) {
+    if (OB_FAIL(databuff_printf(buf, size, pos, ": replica is not in service. "))) {
+      LOG_WARN("failed to databuff printf", K(ret), K(buf), K(size), K(pos));
+    }
+  } else if (!replica.is_valid()) {
+    if (OB_FAIL(databuff_printf(buf, size, pos, ": replica is not valid. "))) {
+      LOG_WARN("failed to databuff printf", K(ret), K(buf), K(size), K(pos));
+    }
+  } else if (!ObReplicaTypeCheck::is_full_replica(replica.get_replica_type())) {// TODO(zeyong) 4.3 allow R replica backup later
+    if (OB_FAIL(databuff_printf(buf, size, pos, ": replica is not full replica. "))) {
+      LOG_WARN("failed to databuff printf", K(ret), K(buf), K(size), K(pos));
+    }
+  } else if (!replica.get_restore_status().is_none()) {
+    if (OB_FAIL(databuff_printf(buf, size, pos, ": replica is restoring. "))) {
+      LOG_WARN("failed to databuff printf", K(ret), K(buf), K(size), K(pos));
+    }
+  } else {
+    can_do_backup = true;
+  }
+
+  return ret;
+}
+
 int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &black_servers)
 {
   int ret = OB_SUCCESS;
@@ -416,16 +454,27 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
   uint64_t tenant_id = get_tenant_id();
   share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
   int64_t cluster_id = GCONF.cluster_id;
+  char replica_status_info[OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH] = {'\0'};
+  int64_t pos = 0;
   if (OB_FAIL(get_ls_replica_array_(ls_info))) {
     LOG_WARN("failed to get ls replica array", K(ret));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid()
-          && replica.get_restore_status().is_none()
-          && ObReplicaTypeCheck::is_full_replica(replica.get_replica_type()) // TODO(zeyong) 4.3 allow R replica backup later
-          && !check_replica_in_black_server_(replica, black_servers)) { 
+      bool can_do_backup = false;
+      if (replica.is_strong_leader()) {
+        //do nothing
+      } else if (OB_FAIL(check_replica_status_for_backup(replica,
+                            replica_status_info+pos, OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH - pos, can_do_backup))) {
+        LOG_WARN("failed to check replica status for backup", K(ret), K(replica), K(replica_status_info), K(pos));
+      } else if (FALSE_IT(pos = strlen(replica_status_info))){
+      } else if (check_replica_in_black_server_(replica, black_servers)) {
+        if (OB_FAIL(databuff_printf(replica_status_info,
+                        OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH, pos, ": is in black server list. "))) {
+          LOG_WARN("failed to databuff printf", K(ret), K(replica_status_info), K(pos));
+        }
+      } else if (can_do_backup) {
         ObBackupServer server;
         server.set(replica.get_server(), 0/*high priority*/);
         if (OB_FAIL(servers.push_back(server))) {
@@ -435,27 +484,39 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
-          && replica.get_restore_status().is_none()
-          && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
-        // if only has one replica. no use black server.
-        ObBackupServer server;
-        server.set(replica.get_server(), 1/*low priority*/);
-        if (OB_FAIL(servers.push_back(server))) {
-          LOG_WARN("failed to push server", K(ret), K(server));
+      bool can_do_backup = false;
+      if (replica.is_strong_leader()) {
+        if (OB_FAIL(check_replica_status_for_backup(replica, replica_status_info+pos,
+                        OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH - pos, can_do_backup))) {
+          LOG_WARN("failed to check replica status for backup", K(ret), K(replica), K(replica_status_info), K(pos));
+        } else if (FALSE_IT(pos = strlen(replica_status_info))){
+        } else if (can_do_backup) {
+          if (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers)) {
+            // if only has one replica. no use black server.
+            ObBackupServer server;
+            server.set(replica.get_server(), 1/*low priority*/);
+            if (OB_FAIL(servers.push_back(server))) {
+              LOG_WARN("failed to push server", K(ret), K(server));
+            }
+          } else {
+            if (OB_FAIL(databuff_printf(replica_status_info,
+                            OB_MAX_REPLICA_STATUS_FOR_BACKUP_INFO_LENGTH, pos, ": is in black server list. "))) {
+              LOG_WARN("failed to databuff printf", K(ret), K(replica_status_info), K(pos));
+            }
+          }
         }
       }
     }
     if (OB_SUCC(ret) && servers.empty()) {
-      ret = OB_LS_LOCATION_NOT_EXIST;
-      LOG_WARN("no optional servers, retry_later", K(ret), K(*this));
+      ret = OB_NO_LS_REPLICA_CAN_DO_BACKUP;
+      LOG_WARN("no optional servers, retry_later", K(ret), K(*this), K(replica_status_info));
     }
   }
 
   if (OB_SUCC(ret) && OB_FAIL(set_optional_servers(servers))) {
     LOG_WARN("failed to optional servers", K(ret));
   } else {
-    FLOG_INFO("task optional servers are：", K(*this), K(servers));
+    FLOG_INFO("task optional servers are: ", K(*this), K(servers));
   }
   return ret;
 }

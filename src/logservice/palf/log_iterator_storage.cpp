@@ -11,14 +11,6 @@
  */
 
 #include "log_iterator_storage.h"
-#include "lib/function/ob_function.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_utility.h"
-#include "share/rc/ob_tenant_base.h"
-#include "log_storage_interface.h"
-#include "log_define.h"
-#include "log_reader_utils.h"
-#include "lsn.h"
 namespace oceanbase
 {
 namespace palf

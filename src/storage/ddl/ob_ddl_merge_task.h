@@ -156,7 +156,8 @@ public:
       const ObTabletDDLParam &ddl_param,
       const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
-      blocksstable::ObSSTable *sstable);
+      blocksstable::ObSSTable *sstable,
+      const ObTablesHandleArray &slice_sstables);
 
   static int compact_ddl_kv(
       ObLS &ls,

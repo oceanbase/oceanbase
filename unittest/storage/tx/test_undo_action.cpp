@@ -12,7 +12,6 @@
 
 #include "storage/tx/ob_trans_define.h"
 #include <gtest/gtest.h>
-#include "lib/oblog/ob_log.h"
 namespace oceanbase
 {
 using namespace transaction;

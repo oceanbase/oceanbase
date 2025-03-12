@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_optimize_stmt.h"
-#include "lib/container/ob_array.h"
 
 namespace oceanbase
 {

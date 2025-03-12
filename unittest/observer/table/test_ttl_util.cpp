@@ -14,7 +14,6 @@
 #define private public  // 获取private成员
 #define protected public  // 获取protect成员
 #include "share/table/ob_ttl_util.h"
-#include "lib/container/ob_se_array.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;

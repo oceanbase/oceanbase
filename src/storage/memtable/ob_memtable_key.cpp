@@ -49,6 +49,8 @@ int ObMemtableKeyGenerator::generate_memtable_key(const blocksstable::ObDatumRow
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt_; i++) {
       if (OB_FAIL(row.storage_datums_[i].to_obj_enhance(objs[i], columns_.at(i).col_type_))) {
         TRANS_LOG(WARN, "failed to transfer datum to obj", K(ret), K(i), K(row));
+      } else if (row.storage_datums_[i].has_lob_header()) {
+        objs[i].set_has_lob_header();
       }
     }
     if (OB_SUCC(ret)) {

@@ -11,13 +11,9 @@
  */
 
 #include "lib/encode/ob_base64_encode.h"
-#include "share/ob_errno.h"
 
 #include <gtest/gtest.h>
-#include <cstdlib>
-#include <iostream>
 #include <string>
-#include <cstring>
 #include "share/backup/ob_archive_piece.h"
 
 namespace oceanbase

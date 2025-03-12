@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #include "common/cell/ob_cell_writer.h"
 #include "common/object/ob_object.h"
-#include "lib/number/ob_number_v2.h"
 namespace oceanbase
 {
 using namespace common;

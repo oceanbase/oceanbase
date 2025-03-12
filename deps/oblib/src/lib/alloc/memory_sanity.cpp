@@ -13,9 +13,7 @@
 #ifndef ENABLE_SANITY
 #else
 #define USING_LOG_PREFIX LIB
-#include "lib/alloc/memory_sanity.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/utility.h"
+#include "memory_sanity.h"
 
 int do_madvise(void *addr, size_t length, int advice)
 {

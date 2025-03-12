@@ -12,22 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_ctx.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/backup/ob_backup_io_adapter.h"
+#include "ob_backup_ctx.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "share/backup/ob_backup_path.h"
-#include "storage/backup/ob_backup_reader.h"
-#include "share/backup/ob_backup_struct.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "common/storage/ob_device_common.h"
-#include "storage/backup/ob_backup_data_store.h"
 
-#include <algorithm>
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -1422,7 +1412,7 @@ void ObLSBackupCtx::set_result_code(const int64_t result, bool &is_set)
   ObMutexGuard guard(mutex_);
   if (OB_SUCCESS == result_code_ && OB_SUCCESS != result) {
     result_code_ = result;
-    is_finished_ = true;
+    ATOMIC_STORE(&is_finished_, true);
     is_set = true;
   } else {
     is_set = false;
@@ -1438,14 +1428,12 @@ int64_t ObLSBackupCtx::get_result_code() const
 
 void ObLSBackupCtx::set_finished()
 {
-  ObMutexGuard guard(mutex_);
-  is_finished_ = true;
+  ATOMIC_STORE(&is_finished_, true);
 }
 
 bool ObLSBackupCtx::is_finished() const
 {
-  ObMutexGuard guard(mutex_);
-  return is_finished_;
+  return ATOMIC_LOAD(&is_finished_);
 }
 
 int ObLSBackupCtx::close()

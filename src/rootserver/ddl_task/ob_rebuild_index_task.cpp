@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_rebuild_index_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ob_root_service.h"
-#include "lib/timezone/ob_timezone_info.h"                     // for  ObTimeZoneInfoWrap
 #include "observer/omt/ob_tenant_timezone_mgr.h"               // for OTTZ_MGR
 #include "share/vector_index/ob_vector_index_util.h"
 #include "src/storage/ddl/ob_ddl_lock.h"
@@ -44,7 +42,7 @@ int ObRebuildIndexTask::init(
     const int64_t task_id,
     const share::ObDDLType &ddl_type,
     const uint64_t data_table_id,
-    const uint64_t index_table_id,  // delta_buffer_table table id
+    const uint64_t index_table_id,  // domain index table id
     const int64_t schema_version,
     const int64_t parent_task_id,
     const int64_t consumer_group_id,
@@ -241,7 +239,7 @@ int ObRebuildIndexTask::rebuild_index_impl()
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("index schema is null", KR(ret), K(target_object_id_));
-  } else if (index_schema->is_vec_delta_buffer_type() &&
+  } else if (index_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh
              OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(root_service_->get_sql_proxy(), tenant_id_,
                                                                  index_schema->get_table_id(),
                                                                  dbms_vector_job_info_allocator,

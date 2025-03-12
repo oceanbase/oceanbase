@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
-#include "common/ob_smart_call.h"
+#include "ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "lib/charset/ob_charset.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -520,6 +515,42 @@ double ObExprUtil::trunc_double(double val, int64_t dec)
   return res;
 }
 
+int ObExprUtil::set_expr_asscii_result(const ObExpr &expr, ObEvalCtx &ctx,
+                                          ObTextStringDatumResult &out_res,
+                                          const ObString &ascii, const int64_t datum_idx,
+                                          const bool is_ascii,
+                                          const common::ObCollationType src_coll_type)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator temp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObString out;
+  if (ascii.empty()) {
+    if (lib::is_oracle_mode()) {
+      out_res.set_result_null();
+    } else if (OB_FAIL(out_res.init_with_batch_idx(0, datum_idx))) {
+      LOG_WARN("init text str result failed", K(ret));
+    } else {
+      out_res.set_result();
+    }
+  } else {
+    if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
+      out = ascii;
+    } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
+                                                  expr.datum_meta_.cs_type_, out))) {
+      LOG_WARN("charset convert failed", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(out_res.init_with_batch_idx(out.length(), datum_idx))) {
+      LOG_WARN("init text str result failed");
+    } else if (OB_FAIL(out_res.append(out.ptr(), out.length()))) {
+      LOG_WARN("append text str result failed", K(ret));
+    } else {
+      out_res.set_result();
+    }
+  }
+  return ret;
+}
+
 int ObExprUtil::set_expr_ascii_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
                                       const ObString &ascii, const int64_t datum_idx,
                                       const bool is_ascii,
@@ -760,6 +791,30 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
     LOG_WARN("charset convert failed", K(ret), K(from_collation), K(CS_TYPE_UTF8MB4_BIN));
   } else {
     to_string.assign(buf, static_cast<int32_t>(result_len));
+  }
+  return ret;
+}
+
+int ObExprUtil::get_real_expr_without_cast(const ObExpr *expr, const ObExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is NULL", K(ret));
+  } else {
+    while (T_FUN_SYS_CAST == expr->type_ && CM_IS_IMPLICIT_CAST(expr->extra_)) {
+      if (OB_UNLIKELY(2 != expr->arg_cnt_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_count of cast expr should be 2", K(ret), K(*expr));
+      } else if (OB_ISNULL(expr = expr->args_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("first child of cast expr is NULL", K(ret), K(*expr));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      out_expr = expr;
+      LOG_DEBUG("get_real_expr_without_cast done", K(*out_expr));
+    }
   }
   return ret;
 }

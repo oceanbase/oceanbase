@@ -12,58 +12,26 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_rpc_processor_simple.h"
 
-#include "share/io/ob_io_manager.h"
-#include "lib/allocator/page_arena.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/config/ob_config_manager.h"
-#include "share/stat/ob_opt_stat_manager.h"
+#include "ob_rpc_processor_simple.h"
 #include "share/ob_server_blacklist.h"
-#include "share/rc/ob_context.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/cache/ob_cache_name_define.h"
-#include "share/ob_share_util.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/ddl/ob_ddl_inc_redo_log_writer.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "rootserver/ob_root_service.h"
 #include "sql/ob_sql.h"
-#include "observer/ob_service.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/mysql/ob_diag.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/omt/ob_tenant_node_balancer.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/share/stat/ob_opt_stat_monitor_manager.h"
 // for 4.0
-#include "share/ob_ls_id.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx/ob_trans_service.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/ob_log_handler.h"
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "share/scn.h"
-#include "storage/ob_common_id_utils.h"
-#include "storage/high_availability/ob_storage_ha_service.h"
-#include "storage/tx_table/ob_tx_table.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "storage/high_availability/ob_transfer_service.h" // ObTransferService
@@ -76,22 +44,17 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"  // ObAdminDRTaskUtil
-#include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
-#include "rootserver/ob_root_utils.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
+#include "rootserver/ob_disaster_recovery_service.h" // for ObDRService
 #include "rootserver/ob_split_partition_helper.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "storage/tablelock/ob_table_lock_live_detector.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "share/ob_rpc_struct.h"
-#include "share/backup/ob_backup_io_adapter.h"
 #include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "storage/mview/ob_major_mv_merge_info.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
@@ -99,6 +62,7 @@
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
+#include "storage/high_availability/ob_rebuild_service.h"
 
 namespace oceanbase
 {
@@ -322,6 +286,23 @@ int ObRpcLSCheckDRTaskExistP::process()
     if (OB_SUCC(ret)) {
       result_ = is_exist;
     }
+  }
+  return ret;
+}
+
+int ObRpcDRTaskReplyToMetaP::process()
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[DRTASK_NOTICE] receive disaster recovery task reply to meta", K(arg_));
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg_));
+  } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::clean_task_while_task_finish(
+                                      arg_.task_id_,
+                                      arg_.tenant_id_,
+                                      arg_.ls_id_,
+                                      arg_.result_))) {
+    LOG_WARN("fail to clean task while task finish", KR(ret), K(arg_));
   }
   return ret;
 }
@@ -922,6 +903,7 @@ int ObRpcSwitchSchemaP::process()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_USER_LS_ERROR);
 int ObRpcCreateTenantUserLSP::process()
 {
   int ret = OB_SUCCESS;
@@ -937,11 +919,14 @@ int ObRpcCreateTenantUserLSP::process()
         LOG_WARN("primary ls service is null", KR(ret), K(tenant_id));
       } else if (OB_FAIL(primary_ls_service->create_ls_for_create_tenant())) {
         LOG_WARN("failed to create ls for create tenant", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(primary_ls_service->advance_user_ls_status_for_creating_tenant())) {
+        LOG_WARN("failed to advance user ls status", KR(ret));
+      } else if (OB_FAIL(ERRSIM_CREATE_USER_LS_ERROR)) {
+        LOG_WARN("ERRSIM_CREATE_USER_LS_ERROR", KR(ret));
       }
     }
   }
   return ret;
-
 }
 
 int ObRpcRefreshMemStatP::process()
@@ -2170,41 +2155,14 @@ int ObUpdateTenantMemoryP::process()
 
 int ObForceSetServerListP::process()
 {
-  int ret = OB_NOT_SUPPORTED;
-  // ObPartitionService *partition_service = gctx_.par_ser_;
-  // TRANS_LOG(INFO, "force_set_server_list");
-  // if (NULL == partition_service) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   TRANS_LOG(ERROR, "partition_service is NULL");
-  // } else {
-  //   storage::ObIPartitionGroupIterator *partition_iter = NULL;
-  //   if (NULL == (partition_iter = partition_service->alloc_pg_iter())) {
-  //     ret = OB_ALLOCATE_MEMORY_FAILED;
-  //     TRANS_LOG(ERROR, "partition_mgr alloc_scan_iter failed", K(ret));
-  //   } else {
-  //     storage::ObIPartitionGroup *partition = NULL;
-  //     ObIPartitionLogService *pls = NULL;
-  //     while (OB_SUCC(ret)) {
-  //       int tmp_ret = OB_SUCCESS;
-  //       if (OB_FAIL(partition_iter->get_next(partition)) || NULL == partition) {
-  //         TRANS_LOG(INFO, "get_next failed or partition is NULL", K(ret));
-  //       } else if (!partition->is_valid() || (NULL == (pls = partition->get_log_service()))) {
-  //         TRANS_LOG(INFO, "partition is invalid or pls is NULL", "partition_key", partition->get_partition_key());
-  //       } else if (OB_SUCCESS != (tmp_ret = pls->force_set_server_list(arg_.server_list_, arg_.replica_num_))) {
-  //         TRANS_LOG(WARN, "force_set_server_list failed", K(ret), K(tmp_ret), "partition_key",
-  //             partition->get_partition_key());
-  //       }
-  //     }
-  //   }
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->force_set_server_list(arg_, result_))) {
+    COMMON_LOG(WARN, "force_set_server_list failed", KR(ret), K(arg_));
+  }
 
-  //   if (NULL != partition_iter) {
-  //     partition_service->revert_pg_iter(partition_iter);
-  //     partition_iter = NULL;
-  //   }
-  //   if (OB_ITER_END == ret) {
-  //     ret = OB_SUCCESS;
-  //   }
-  // }
   return ret;
 }
 
@@ -3330,6 +3288,33 @@ int ObRpcNotifyCloneSchedulerP::process()
   return ret;
 }
 
+#define CHECK_PALF_LS_LEADER                                                          \
+    if (OB_SUCC(ret)) {                                                               \
+      int64_t proposal_id = 0;                                                        \
+      common::ObRole role = FOLLOWER;                                                 \
+      logservice::ObLogService *log_service = nullptr;                                \
+      palf::PalfHandleGuard palf_handle_guard;                                        \
+      if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {                 \
+        ret = OB_ERR_UNEXPECTED;                                                      \
+        LOG_WARN("MTL ObLogService is null", KR(ret), K_(arg));                       \
+      } else if (OB_FAIL(log_service->open_palf(SYS_LS, palf_handle_guard))) {        \
+        LOG_WARN("open palf failed", KR(ret), K_(arg));                               \
+      } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {            \
+        LOG_WARN("get role failed", KR(ret), K_(arg));                                \
+      } else if (common::ObRole::LEADER != role) {                                    \
+        ret = OB_LS_NOT_LEADER;                                                       \
+        LOG_WARN("not leader", KR(ret), K_(arg), K(role));                            \
+      }                                                                               \
+    }                                                                                 \
+
+#define WAKE_UP_TENANT_SERVICE                                                        \
+        if (OB_ISNULL(service)) {                                                     \
+          ret = OB_ERR_UNEXPECTED;                                                    \
+          LOG_WARN("MTL service is null", KR(ret), K_(arg));                          \
+        } else {                                                                      \
+          service->wakeup();                                                          \
+        }                                                                             \
+
 int ObRpcNotifyTenantThreadP::process()
 {
   int ret = OB_SUCCESS;
@@ -3339,15 +3324,14 @@ int ObRpcNotifyTenantThreadP::process()
     LOG_WARN("invalid argument", KR(ret), K(arg_));
   } else {
     MTL_SWITCH(arg_.get_tenant_id()) {
-      if (obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE == arg_.get_thread_type()) {
-        rootserver::ObRecoveryLSService *ls_service =
-          MTL(rootserver::ObRecoveryLSService *);
-        if (OB_ISNULL(ls_service)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ls service is null", KR(ret), K(arg_));
-        } else {
-          ls_service->wakeup();
-        }
+      CHECK_PALF_LS_LEADER
+      if (OB_FAIL(ret)) {
+      } else if (obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObRecoveryLSService *service = MTL(rootserver::ObRecoveryLSService *);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObDRService *service = MTL(rootserver::ObDRService *);
+        WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));
@@ -3485,6 +3469,17 @@ int ObTabletLocationReceiveP::process()
   return OB_SUCCESS;
 }
 
+int ObAllServerTracerP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(SVR_TRACER.refresh())) {
+    LOG_WARN("failed to refresh all_server_tracer", KR(ret));
+  } else {
+    LOG_INFO("SVR_TRACER.refresh succeed");
+  }
+  return ret;
+}
+
 int ObCancelGatherStatsP::process()
 {
   int ret = OB_SUCCESS;
@@ -3578,6 +3573,7 @@ int ObRefreshServiceNameP::process()
   }
   return ret;
 }
+
 int ObResourceLimitCalculatorP::process()
 {
   int ret = OB_SUCCESS;
@@ -4038,6 +4034,50 @@ int ObSetSSCkptCompressorP::process()
   return ret;
 }
 #endif
+
+int ObRebuildTabletP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg_), K(ret));
+  } else {
+    SERVER_EVENT_ADD("storage_ha", "schedule_rebuild_tablet start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
+                     "data_src", arg_.src_, "dest", arg_.dest_);
+
+    MTL_SWITCH(tenant_id) {
+      ObLSService *ls_service = MTL(ObLSService*);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      ObRebuildService *rebuild_service = nullptr;
+      ObLSRebuildInfo rebuild_info;
+      rebuild_info.src_ = arg_.src_;
+      rebuild_info.status_ = ObLSRebuildStatus::INIT;
+      rebuild_info.type_ = ObLSRebuildType::TABLET;
+      if (OB_FAIL(rebuild_info.tablet_id_array_.assign(arg_.tablet_id_array_))) {
+        LOG_WARN("failed to assign tablet id array", K(ret), K(arg_));
+      } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg_));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (OB_FAIL(ls->set_rebuild_info(rebuild_info))) {
+        LOG_WARN("failed to set rebuild info", K(ret), K(rebuild_info));
+      } else if (OB_ISNULL(rebuild_service = (MTL(ObRebuildService *)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rebuild service not be NULL", K(ret), KP(rebuild_service));
+      } else {
+        rebuild_service->wakeup();
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_ADD("storage_ha", "schedule_rebuild_tablet failed", "ls_id", arg_.ls_id_.id(), "result", ret);
+    }
+  }
+  return ret;
+}
 
 int ObNotifySharedStorageInfoP::process()
 {

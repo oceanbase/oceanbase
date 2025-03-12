@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_tenant_mem_manager.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/dtl/ob_dtl_channel_mem_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;

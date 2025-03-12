@@ -10,20 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include<dirent.h>
-#include <memory>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
 
 #define private public
 #define protected public
 
-#include "lib/oblog/ob_log.h"
 #include "ob_simple_server.h"
 #include "ob_simple_server_restart_helper.h"
-#include "observer/ob_server.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 #undef private
 #undef protected

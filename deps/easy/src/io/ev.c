@@ -168,20 +168,10 @@
 #endif
 
 #include <math.h>
-#include <stdlib.h>
-#include <string.h>
 #include <fcntl.h>
-#include <stddef.h>
 
-#include <stdio.h>
 
-#include <assert.h>
-#include <errno.h>
 #include <sys/types.h>
-#include <time.h>
-#include <limits.h>
-#include <syscall.h>
-#include <signal.h>
 #include <sys/eventfd.h>
 #include "io/easy_log.h"
 

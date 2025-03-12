@@ -12,15 +12,8 @@
 
 #include "ob_simple_cluster_test_base.h"
 #include "ob_simple_server_restart_helper.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_defer.h"
-#include "logservice/palf/election/utils/election_common_define.h"
 #define private public
 #define protected public
-#include "share/config/ob_server_config.h"
 #undef private
 #undef protected
 

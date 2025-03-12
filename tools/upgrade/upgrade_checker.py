@@ -386,6 +386,7 @@ def check_data_version(query_cur):
           if len(results) != 1 or len(results[0]) != 1:
             fail_list.append('result cnt not match')
           else:
+            # check upgrade_begin_data_version
             tenant_count = results[0][0]
 
             sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
@@ -396,6 +397,17 @@ def check_data_version(query_cur):
               fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
             else:
               logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
+
+            if data_version >= get_version("4.3.5.1"):
+              # check upgrade_begin_data_version
+              sql = "select count(*) from __all_virtual_core_table where column_name in ('upgrade_begin_data_version') and column_value = {0}".format(data_version)
+              (desc, results) = query_cur.exec_query(sql)
+              if len(results) != 1 or len(results[0]) != 1:
+                fail_list.append('result cnt not match')
+              elif tenant_count != results[0][0]:
+                fail_list.append('upgrade_begin_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
+              else:
+                logging.info("check data version success, all tenant's upgrade_begin_data_version is {0}".format(data_version_str))
 
 # 2. 检查paxos副本是否同步, paxos副本是否缺失
 def check_paxos_replica(query_cur):

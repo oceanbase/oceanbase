@@ -14,7 +14,6 @@
 
 #include "share/ls/ob_ls_log_stat_info.h"
 #include "rootserver/ob_root_utils.h"   // majority
-#include "logservice/palf/log_define.h" // INVALID_PROPOSAL_ID
 
 namespace oceanbase
 {

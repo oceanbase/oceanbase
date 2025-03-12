@@ -13,20 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_mysql_end_trans_cb.h"
-#include "lib/allocator/ob_malloc.h"
-#include "common/data_buffer.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/packet/ompk_error.h"
-#include "observer/mysql/ob_mysql_result_set.h"
-#include "observer/mysql/obmp_base.h"
-#include "observer/mysql/obmp_utils.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/mysql/ob_mysql_end_trans_cb.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "obmp_stmt_send_piece_data.h"
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;

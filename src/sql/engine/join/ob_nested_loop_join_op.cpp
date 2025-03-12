@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/ob_nested_loop_join_op.h"
-#include "sql/engine/table/ob_table_scan_op.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
 
 namespace oceanbase

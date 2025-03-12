@@ -14,10 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_ibin.h"
-#include "sql/engine/ob_exec_context.h"
 #include "ob_expr_priv_st_equals.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;

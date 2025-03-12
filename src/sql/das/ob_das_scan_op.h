@@ -19,6 +19,8 @@
 #include "sql/das/ob_group_scan_iter.h"
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
+#include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_partition_id_row_pair.h"
 
 namespace oceanbase
@@ -27,21 +29,27 @@ namespace sql
 {
 class ObDASExtraData;
 class ObLocalIndexLookupOp;
+struct ObDASTCBInterruptInfo;
 
 struct ObDASTCBMemProfileKey {
-  ObDASTCBMemProfileKey()
-    : fake_unique_id_(0), timestamp_(0) {}
+  ObDASTCBMemProfileKey(): fake_unique_id_(0), timestamp_(0)
+  {}
 
-  explicit ObDASTCBMemProfileKey(const ObDASTCBMemProfileKey &key)
-    : fake_unique_id_(key.fake_unique_id_), timestamp_(key.timestamp_) {}
-
-  void init(uint64_t timestamp, int64_t thread_id, int64_t op_id) {
+  void init(uint64_t timestamp, int64_t thread_id, int64_t op_id)
+  {
     timestamp_ = timestamp;
     // [op_id (32bit), thread_id (32bit)]
     fake_unique_id_ = (((uint64_t)op_id) << 32) | ((uint64_t)0xffffffff & thread_id);
   }
 
-  void reset() {
+  void init(const ObDASTCBMemProfileKey &key)
+  {
+    timestamp_ = key.timestamp_;
+    fake_unique_id_ = key.fake_unique_id_;
+  }
+
+  void reset()
+  {
     fake_unique_id_ = 0;
     timestamp_ = 0;
   }
@@ -53,14 +61,15 @@ struct ObDASTCBMemProfileKey {
     hash_val = common::murmurhash(&timestamp_, sizeof(uint64_t), hash_val);
     return hash_val;
   }
-  int hash(int64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
   inline bool operator==(const ObDASTCBMemProfileKey& key) const
   {
     return fake_unique_id_ == key.fake_unique_id_ && timestamp_ == key.timestamp_;
   }
 
-  inline bool is_valid() {
+  inline bool is_valid()
+  {
     return (fake_unique_id_ > 0) && (timestamp_ > 0);
   }
 
@@ -103,7 +112,11 @@ public:
       multivalue_type_(0),
       index_merge_idx_(OB_INVALID_ID),
       pre_query_range_(),
-      flags_(0)
+      flags_(0),
+      domain_id_idxs_(alloc),
+      domain_types_(alloc),
+      domain_tids_(alloc),
+      pre_range_graph_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -121,6 +134,12 @@ public:
     }
     return has_pl_udf;
   }
+  const ObQueryRangeProvider& get_query_range_provider() const
+  {
+    return is_new_query_range_ ? static_cast<const ObQueryRangeProvider&>(pre_range_graph_)
+                               : static_cast<const ObQueryRangeProvider&>(pre_query_range_);
+  }
+
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(ref_table_id),
                        K_(access_column_ids),
@@ -144,7 +163,8 @@ public:
                        K_(vec_vid_idx),
                        K_(index_merge_idx),
                        K_(pre_query_range),
-                       K_(is_index_merge));
+                       K_(is_index_merge),
+                       K_(pre_range_graph));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -178,9 +198,14 @@ public:
     uint64_t flags_;
     struct {
       uint64_t is_index_merge_               : 1; // whether used for index merge
-      uint64_t reserved_                     : 63;
+      uint64_t is_new_query_range_           : 1; // whether use new query range
+      uint64_t reserved_                     : 62;
     };
   };
+  ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
+  ObFixedArray<int64_t, common::ObIAllocator> domain_types_;
+  ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
+  ObPreRangeGraph pre_range_graph_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -216,7 +241,8 @@ public:
       scan_op_id_(common::OB_INVALID_ID),
       scan_rows_size_(common::OB_INVALID_ID),
       row_width_(common::OB_INVALID_ID),
-      das_tasks_key_()
+      das_tasks_key_(),
+      in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -240,7 +266,8 @@ public:
                        K_(mbr_filters),
                        K_(scan_op_id),
                        K_(scan_rows_size),
-                       K_(das_tasks_key));
+                       K_(das_tasks_key),
+                       K_(in_row_cache_threshold));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -271,7 +298,7 @@ public:
   int64_t scan_rows_size_;
   int64_t row_width_;   // no use
   ObDASTCBMemProfileKey das_tasks_key_;
-
+  int64_t in_row_cache_threshold_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
@@ -305,12 +332,13 @@ public:
   virtual int assign_task_result(ObIDASTaskOp *other) override { return OB_SUCCESS; }
   storage::ObTableScanParam &get_scan_param() { return scan_param_; }
   const storage::ObTableScanParam &get_scan_param() const { return scan_param_; }
+  storage::ObTableScanParam *get_local_lookup_param();
 
   int init_related_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
 
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
-  virtual int fill_extra_result() override;
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return scan_ctdef_; }
@@ -326,30 +354,33 @@ public:
   //only used in local index lookup, it it nullptr when scan data table or scan index table
   const ObDASScanCtDef *get_lookup_ctdef() const;
   ObDASScanRtDef *get_lookup_rtdef();
-  int get_aux_lookup_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_doc_rowkey_tablet_id(common::ObTabletID &tablet_id) const;
   int get_table_lookup_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_doc_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_vid_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_fts_tablet_ids(common::ObIArray<ObDASFTSTabletID> &fts_tablet_ids, ObDASBaseRtDef *rtdef);
+  int get_rowkey_domain_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const;
   int init_scan_param();
-  int do_vec_index_rescan();
   int rescan();
   int reuse_iter();
   void reset_access_datums_ptr(int64_t capacity = 0);
   void reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx &eval_ctx, int64_t capacity);
-  ObLocalIndexLookupOp *get_lookup_op();
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
-  int do_table_scan();
-  int do_domain_index_lookup();
-  int get_base_text_ir_tablet_ids(
-      common::ObTabletID &inv_idx_tablet_id,
-      common::ObTabletID &fwd_idx_tablet_id,
-      common::ObTabletID &doc_id_idx_tablet_id);
-  int get_vec_ir_tablet_ids(
+  int get_vec_ir_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
+  int get_ivf_ir_tablet_ids(
+      common::ObTabletID &vec_row_tid,
+      common::ObTabletID &centroid_tid_,
+      common::ObTabletID &cid_vec_tid,
+      common::ObTabletID &rowkey_cid_tid,
+      common::ObTabletID &special_aux_tid,
+      common::ObTabletID &com_aux_vec_tid);
+  int get_hnsw_ir_tablet_ids(
       common::ObTabletID &vec_row_tid,
       common::ObTabletID &delta_buf_tid,
       common::ObTabletID &index_id_tid,
       common::ObTabletID &snapshot_tid,
-      common::ObTabletID &com_aux_vec_tid);
+      common::ObTabletID &com_aux_vec_tid,
+      common::ObTabletID &rowkey_vid_tid);
   int get_index_merge_tablet_ids(common::ObIArray<common::ObTabletID> &index_merge_tablet_ids);
   int get_func_lookup_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
@@ -361,12 +392,12 @@ public:
                        "scan_flag", scan_param_.scan_flag_);
 protected:
   common::ObITabletScan &get_tsc_service();
-  int do_local_index_lookup();
-  common::ObNewRowIterator *get_storage_scan_iter();
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
   bool is_index_merge(const ObDASBaseCtDef *attach_ctdef) const;
   bool is_func_lookup(const ObDASBaseCtDef *attach_ctdef) const;
+  bool is_vec_idx_scan(const ObDASBaseCtDef *attach_ctdef) const;
+
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;
 protected:

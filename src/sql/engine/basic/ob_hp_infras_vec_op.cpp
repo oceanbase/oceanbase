@@ -35,9 +35,6 @@ int ObIHashPartInfrastructure::init(
   if (need_rewind && 2 == ways) {
     ret = OB_NOT_SUPPORTED;
     SQL_ENG_LOG(WARN, "Two-way input does not support rewind", K(ret), K(need_rewind), K(ways));
-  } else if (OB_ISNULL(buf = mem_context_->allocp(sizeof(ObArenaAllocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
   } else {
     tenant_id_ = tenant_id;
     enable_sql_dumped_ = enable_sql_dumped;
@@ -54,8 +51,6 @@ int ObIHashPartInfrastructure::init(
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "Invalid Argument", K(ret), K(ways));
     }
-    arena_alloc_ = new (buf) ObArenaAllocator(mem_context_->get_malloc_allocator());
-    arena_alloc_->set_label("HashPartInfra");
     alloc_ = &mem_context_->get_malloc_allocator();
     sql_mem_processor_ = sql_mem_processor;
     compressor_type_ = compressor_type;
@@ -165,7 +160,6 @@ void ObIHashPartInfrastructure::destroy_cur_parts()
 void ObIHashPartInfrastructure::destroy()
 {
   reset();
-  arena_alloc_ = nullptr;
   left_part_map_.destroy();
   right_part_map_.destroy();
   vector_ptrs_.destroy();
@@ -209,9 +203,6 @@ void ObIHashPartInfrastructure::reset()
   need_rewind_ = false;
   is_inited_pre_part_ = false;
   has_dump_preprocess_part_ = false;
-  if (OB_NOT_NULL(arena_alloc_)) {
-    arena_alloc_->reset();
-  }
 }
 
 void ObIHashPartInfrastructure::reuse()
@@ -244,9 +235,6 @@ void ObIHashPartInfrastructure::reuse()
   need_rewind_ = false;
   is_inited_pre_part_ = false;
   has_dump_preprocess_part_ = false;
-  if (OB_NOT_NULL(arena_alloc_)) {
-    arena_alloc_->reset();
-  }
 }
 
 int ObIHashPartInfrastructure::rewind()
@@ -435,9 +423,6 @@ int ObIHashPartInfrastructure::end_round()
     if (!need_rewind_ || has_create_part_map_) {
       is_inited_pre_part_ = false;
       preprocess_part_.store_.reuse();
-      if (OB_NOT_NULL(arena_alloc_)) {
-        arena_alloc_->reset();
-      }
     }
   }
   return ret;

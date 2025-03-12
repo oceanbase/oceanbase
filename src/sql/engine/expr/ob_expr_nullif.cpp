@@ -14,16 +14,10 @@
 
 #include "sql/engine/expr/ob_expr_nullif.h"
 
-#include "lib/charset/ob_charset.h"
 
-#include "share/object/ob_obj_cast.h"
 
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/engine/expr/ob_expr_equal.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {

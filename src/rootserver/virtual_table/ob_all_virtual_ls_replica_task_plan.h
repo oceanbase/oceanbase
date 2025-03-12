@@ -34,10 +34,6 @@ class ObAllVirtualLSReplicaTaskPlan : public common::ObVirtualTableProjector
 public:
   ObAllVirtualLSReplicaTaskPlan();
   virtual ~ObAllVirtualLSReplicaTaskPlan();
-
-  int init(
-      share::schema::ObMultiVersionSchemaService &schema_service,
-      rootserver::ObDRWorker &task_worker);
   virtual int inner_get_next_row(common::ObNewRow *&row);
 
 private:
@@ -45,9 +41,6 @@ private:
                     const ObLSReplicaTaskDisplayInfo &task_stat,
                     common::ObIArray<Column> &columns);
 private:
-  bool inited_;
-  share::schema::ObMultiVersionSchemaService *schema_service_;
-  rootserver::ObDRWorker *task_worker_;
   common::ObArenaAllocator arena_allocator_;
 
 private:

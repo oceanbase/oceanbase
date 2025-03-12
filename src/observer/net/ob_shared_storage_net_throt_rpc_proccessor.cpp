@@ -11,7 +11,6 @@
  */
 
 #include "observer/net/ob_shared_storage_net_throt_rpc_processor.h"
-#include "observer/net/ob_shared_storage_net_throt_rpc_struct.h"
 #include "observer/ob_srv_network_frame.h"
 
 #define USING_LOG_PREFIX RPC

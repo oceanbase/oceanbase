@@ -45,7 +45,8 @@ public:
       conflict_checker_ctdef_(alloc),
       all_saved_exprs_(alloc),
       has_global_unique_index_(false),
-      auto_inc_expr_(nullptr),
+      ins_auto_inc_expr_(nullptr),
+      upd_auto_inc_expr_(nullptr),
       alloc_(alloc)
   {
   }
@@ -69,7 +70,8 @@ public:
   // insert_row + child_->output_
   ExprFixedArray all_saved_exprs_;
   bool has_global_unique_index_;
-  ObExpr *auto_inc_expr_;
+  ObExpr *ins_auto_inc_expr_;
+  ObExpr *upd_auto_inc_expr_;
 protected:
   common::ObIAllocator &alloc_;
 };

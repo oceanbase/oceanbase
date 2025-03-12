@@ -203,4 +203,5 @@ TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
 TG_DEF(TmpFileFlush, TFFlush, TIMER)
 TG_DEF(LogFetcherBGWorker, LogFetcherBGW, TIMER)
+TG_DEF(MaBlkBFLoader, MBFLoad, THREAD_POOL, 1)
 #endif

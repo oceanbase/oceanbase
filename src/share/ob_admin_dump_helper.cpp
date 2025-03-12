@@ -11,8 +11,6 @@
  */
 
 #include "share/ob_admin_dump_helper.h"
-#include <cstdio>
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

@@ -13,12 +13,8 @@
 
 #include "lib/xml/ob_libxml2_sax_handler.h"
 #include "lib/xml/ob_xml_util.h"
-#include "libxml2/libxml/parser.h"
 #include "libxml2/libxml/parserInternals.h"
-#include "lib/ob_define.h"
-#include "lib/allocator/ob_malloc.h"
 #ifdef OB_BUILD_ORACLE_PL
-#include "libxslt/xslt.h"
 #include "libxslt/extensions.h"
 #endif
 

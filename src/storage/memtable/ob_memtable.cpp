@@ -12,46 +12,22 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "common/rowkey/ob_store_rowkey.h"
 
-#include "storage/memtable/ob_memtable.h"
 
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/worker.h"
-#include "share/rc/ob_context.h"
+#include "ob_memtable.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 
-#include "storage/memtable/mvcc/ob_mvcc_engine.h"
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 
-#include "storage/memtable/ob_memtable_compact_writer.h"
-#include "storage/memtable/ob_memtable_iterator.h"
-#include "storage/memtable/ob_memtable_mutator.h"
-#include "storage/memtable/ob_memtable_util.h"
-#include "storage/memtable/ob_memtable_context.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
-#include "storage/memtable/ob_concurrent_control.h"
 #include "storage/memtable/ob_row_compactor.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/access/ob_sstable_row_lock_checker.h"
+#include "src/storage/access/ob_sstable_row_getter.h"
 
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/access/ob_row_sample_iterator.h"
-#include "storage/concurrency_control/ob_trans_stat_row.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 #include "logservice/ob_log_service.h"
@@ -971,8 +947,12 @@ int ObMemtable::get(
       }
       if (OB_SUCC(ret)) {
         const ObStoreRowkey *store_rowkey = nullptr;
-        concurrency_control::ObTransStatRow trans_stat_row;
-        (void)value_iter.get_trans_stat_row(trans_stat_row);
+        // generate trans stat datum for 4377 check
+        if (param.need_trans_info() && OB_NOT_NULL(row.trans_info_)) {
+          concurrency_control::ObTransStatRow trans_stat_row;
+          (void)value_iter.get_trans_stat_row(trans_stat_row);
+          concurrency_control::build_trans_stat_datum(&param, row, trans_stat_row);
+        }
         if (NULL != returned_mtk.get_rowkey()) {
           returned_mtk.get_rowkey(store_rowkey);
         } else {
@@ -988,7 +968,7 @@ int ObMemtable::get(
           if (param.need_scn_) {
             if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
               // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
-              TRANS_LOG(INFO, "use max row scn", K(context.store_ctx_->mvcc_acc_ctx_), K(trans_stat_row));
+              TRANS_LOG(INFO, "use max row scn", K(context.store_ctx_->mvcc_acc_ctx_));
             }
             for (int64_t i = 0; i < out_cols.count(); i++) {
               if (out_cols.at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
@@ -997,9 +977,6 @@ int ObMemtable::get(
               }
             }
           }
-
-          // generate trans stat datum for 4377 check
-          concurrency_control::build_trans_stat_datum(&param, row, trans_stat_row);
         }
       }
     }
@@ -1320,7 +1297,7 @@ int ObMemtable::lock_row_on_frozen_stores_(
     // skip if it is non-unique index for which the lock has been checked in primary table
   } else {
     ObRowState row_state;
-    common::ObSEArray<ObITable *, 4> iter_tables;
+    common::ObSEArray<ObITable *, 8> iter_tables;
     ObMvccWriteDebugInfo debug_info;
     if (OB_FAIL(get_all_tables_(ctx, iter_tables))) {
       TRANS_LOG(WARN, "get all tables from table iter failed", KR(ret));
@@ -1637,7 +1614,7 @@ int ObMemtable::lock_rows_on_frozen_stores_(
     // skip if it is non-unique index table for which the transaction conflict has checked in primary table,
     // so there is no need to check transaction conflict again.
   } else {
-    common::ObSEArray<ObITable *, 4> iter_tables;
+    common::ObSEArray<ObITable *, 8> iter_tables;
     ObMvccWriteDebugInfo debug_info;
     if (OB_FAIL(get_all_tables_(ctx, iter_tables))) {
       TRANS_LOG(WARN, "get all tables from table iter failed", KR(ret));

@@ -27,7 +27,7 @@ using namespace sql;
 class AggBitVector;
 using AggrRowPtr = char *;
 using AggrRowPtrRef = char *&;
-using AggregateExtras = VecExtraResult **;
+using AggregateExtras = ExtraStores **;
 // examples of aggregate row:
 // with extra idx:
 //
@@ -235,7 +235,7 @@ struct RuntimeContext
   {
     return agg_row_meta_;
   }
-  inline VecExtraResult *&get_extra(const int64_t agg_col_id, const char *agg_cell)
+  inline ExtraStores *&get_extra_stores(const int64_t agg_col_id, const char *agg_cell)
   {
     OB_ASSERT(agg_col_id < agg_row_meta_.col_cnt_);
     OB_ASSERT(agg_cell != nullptr);
@@ -250,6 +250,19 @@ struct RuntimeContext
               && row_meta().extra_cnt_> agg_extra_id);
     return agg_extras_.at(extra_idx)[agg_extra_id];
   }
+
+  inline HashBasedDistinctVecExtraResult *&get_distinct_store(const int64_t agg_col_id,
+                                                                const char *agg_cell)
+  {
+    return get_extra_stores(agg_col_id, agg_cell)->distinct_extra_store;
+  }
+
+  inline DataStoreVecExtraResult *&get_extra_data_store(const int64_t agg_col_id,
+                                                          const char *agg_cell)
+  {
+    return get_extra_stores(agg_col_id, agg_cell)->data_store;
+  }
+
   ObAggrInfo &locate_aggr_info(const int64_t agg_col_idx)
   {
     OB_ASSERT(agg_col_idx < aggr_infos_.count());
@@ -330,7 +343,7 @@ struct RuntimeContext
       if (OB_NOT_NULL(agg_extras_.at(i))) {
         for (int j = 0; j < row_meta().extra_cnt_; j++) {
           if (OB_NOT_NULL(agg_extras_.at(i)[j])) {
-            agg_extras_.at(i)[j]->~VecExtraResult();
+            agg_extras_.at(i)[j]->~ExtraStores();
           }
         } // end for
       }
@@ -349,7 +362,7 @@ struct RuntimeContext
       if (OB_NOT_NULL(agg_extras_.at(i))) {
         for (int j = 0; j < row_meta().extra_cnt_; j++) {
         if (OB_NOT_NULL(agg_extras_.at(i)[j])) {
-            agg_extras_.at(i)[j]->~VecExtraResult();
+            agg_extras_.at(i)[j]->~ExtraStores();
           }
         } // end for
       }

@@ -13,14 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 #include "rootserver/ob_root_service.h"
 #include "ob_backup_connectivity.h"
-#include "ob_backup_struct.h"
-#include "ob_backup_path.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/ob_encryption_util.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/backup/ob_backup_data_table_operator.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "lib/restore/ob_object_device.h"
 
 namespace oceanbase

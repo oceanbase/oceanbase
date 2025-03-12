@@ -11,13 +11,10 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #define private public
 #define protected public
-#include <string.h>
-#include "storage/compaction/ob_compaction_diagnose.h"
+#include "src/storage/ob_i_store.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/rc/ob_tenant_base.h"
 namespace oceanbase
 {
 using namespace common;

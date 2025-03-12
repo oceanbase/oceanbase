@@ -13,48 +13,18 @@
 #define USING_LOG_PREFIX SERVER_OMT
 #include "ob_tenant.h"
 
-#include "share/ob_define.h"
-#include "lib/container/ob_vector.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "share/config/ob_server_config.h"
-#include "sql/engine/px/ob_px_admission.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "ob_th_worker.h"
-#include "ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
-#include "logservice/palf/palf_options.h"
 #include "sql/dtl/ob_dtl_fc_server.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "observer/ob_srv_deliver.h"
 #include "observer/ob_srv_network_frame.h"
-#include "storage/tx/wrs/ob_tenant_weak_read_service.h"
-#include "sql/engine/ob_tenant_sql_memory_manager.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "lib/worker.h"
-#include "ob_tenant_mtl_helper.h"
 #include "storage/ob_file_system_router.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/ob_file_system_router.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
-#include "common/ob_smart_var.h"
-#include "rpc/obmysql/ob_sql_nio_server.h"
-#include "rpc/obrpc/ob_rpc_stat.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "lib/container/ob_array.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/engine/px/ob_px_worker.h"
-#include "lib/thread/protected_stack_allocator.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::lib;
@@ -765,7 +735,6 @@ ObTenant::ObTenant(const int64_t id,
       recv_retry_on_lock_rpc_cnt_(0),
       recv_retry_on_lock_mysql_cnt_(0),
       tt_large_quries_(0),
-      pop_normal_cnt_(0),
       group_map_(group_map_buf_, sizeof(group_map_buf_)),
       lock_(),
       rpc_stat_info_(nullptr),
@@ -984,6 +953,7 @@ void ObTenant::mark_tenant_is_removed()
       "unit_id", tenant_meta_.unit_.unit_id_,
       K_(tenant_meta));
   tenant_meta_.unit_.is_removed_ = true;
+  set_prepare_unit_gc();
 }
 
 ERRSIM_POINT_DEF(CREATE_MTL_MODULE_FAIL)
@@ -1310,7 +1280,6 @@ int ObTenant::get_new_request(
         } else {
           // If large requests exist and this worker doesn't have LQT but
           // can acquire, do it.
-          ATOMIC_INC(&pop_normal_cnt_);
           ret = req_queue_.pop(task, timeout);
         }
       }

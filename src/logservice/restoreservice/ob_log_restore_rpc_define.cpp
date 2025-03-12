@@ -11,12 +11,6 @@
  */
 
 #include "ob_log_restore_rpc_define.h"
-#include "lib/allocator/ob_allocator.h"     // ObMemAttr
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/ob_log_handler.h"  // PalfGroupBufferIterator
-#include "share/rc/ob_tenant_base.h"        // MTL*
 #include "logservice/ob_log_service.h"      // ObLogService
 
 namespace oceanbase

@@ -13,22 +13,9 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_restore_util.h"
-#include "lib/lock/ob_mutex.h"
 #include "share/restore/ob_restore_uri_parser.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_path.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "storage/backup/ob_backup_restore_util.h"
-#include "share/backup/ob_archive_store.h"
-#include "share/restore/ob_restore_persist_helper.h"//ObRestorePersistHelper ObRestoreProgressPersistInfo
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
-#include "storage/ls/ob_ls_meta_package.h"//ls_meta
 #include "share/backup/ob_archive_path.h"
 #include "share/ob_upgrade_utils.h"
-#include "share/ob_unit_table_operator.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/restore/ob_restore_progress_display_mode.h"
@@ -145,9 +132,10 @@ int ObRestoreUtil::record_physical_restore_job(
 }
 
 int ObRestoreUtil::insert_user_tenant_restore_job(
-             common::ObISQLClient &sql_client,
+             common::ObMySQLProxy &sql_client,
              const ObString &tenant_name,
-             const int64_t user_tenant_id)
+             const int64_t user_tenant_id,
+             ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_user_tenant(user_tenant_id))) {
@@ -165,7 +153,6 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
     } else if (OB_FAIL(job_info.assign(initaitor_job_info))) {
       LOG_WARN("failed to assign job info", KR(ret), K(initaitor_job_info));
     } else {
-      ObMySQLTransaction trans;
       //TODO get tenant job_id, use tenant
       const int64_t job_id = initaitor_job_info.get_job_id();
       job_info.init_restore_key(user_tenant_id, job_id);
@@ -181,9 +168,7 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
       persist_info.key_.job_id_ = job_info.get_job_id();
       persist_info.restore_scn_ = job_info.get_restore_scn();
       const uint64_t exec_tenant_id = gen_meta_tenant_id(user_tenant_id);
-      if (OB_FAIL(trans.start(&sql_client, exec_tenant_id))) {
-        LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-      } else if (OB_FAIL(user_restore_op.init(&trans, user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
+      if (OB_FAIL(user_restore_op.init(&trans, user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init restore op", KR(ret), K(user_tenant_id));
       } else if (OB_FAIL(restore_persist_op.init(user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init restore persist op", KR(ret), K(user_tenant_id));
@@ -191,14 +176,6 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
         LOG_WARN("failed to insert job", KR(ret), K(job_info));
       } else if (OB_FAIL(restore_persist_op.insert_initial_restore_progress(trans, persist_info))) {
         LOG_WARN("failed to insert persist info", KR(ret), K(persist_info));
-      }
-      if (trans.is_started()) {
-        int temp_ret = OB_SUCCESS;
-        bool commit = OB_SUCC(ret);
-        if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-          ret = (OB_SUCC(ret)) ? temp_ret : ret;
-          LOG_WARN("trans end failed", KR(ret), KR(temp_ret), K(commit));
-        }
       }
     }
   }
@@ -1696,9 +1673,9 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
     LOG_WARN("cluster version are not exist", K(ret), K(backup_file_desc));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cluster version of backup set");
   } else if (!ObUpgradeChecker::check_data_version_exist(backup_file_desc.tenant_compatible_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data version are not exist", K(ret), K(backup_file_desc));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant compatible of backup set");
+    ret = OB_CLUSTER_VERSION_NOT_COMPATIBLE;
+    LOG_WARN("cluster version is not compatible", K(ret), K(backup_file_desc));
+    LOG_USER_ERROR(OB_CLUSTER_VERSION_NOT_COMPATIBLE);
   } else if (GET_MIN_CLUSTER_VERSION() < backup_file_desc.cluster_version_) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore from higher cluster version is not allowed", K(ret));
@@ -1995,13 +1972,19 @@ int ObRestoreUtil::get_restore_tenant_cpu_count(
   if (FAILEDx(unit_op.get_unit_configs(unit_config_ids, configs))) {
     LOG_WARN("failed to get unit configs", K(ret));
   }
-  double max_cpu = OB_MAX_CPU_NUM;
-  ARRAY_FOREACH(configs, i) {
-    max_cpu = std::min(max_cpu, configs.at(i).max_cpu());
-  }
-  if (OB_SUCC(ret)) {
+
+  if (OB_FAIL(ret)) {
+  } else if (configs.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get empty unit config", K(ret));
+  } else {
+    double max_cpu = configs.at(0).max_cpu();
+    ARRAY_FOREACH(configs, i) {
+      max_cpu = std::min(max_cpu, configs.at(i).max_cpu());
+    }
     cpu_count = max_cpu;
   }
+
   return ret;
 }
 

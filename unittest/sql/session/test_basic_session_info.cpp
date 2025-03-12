@@ -14,11 +14,6 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "io/easy_io_struct.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "lib/allocator/ob_malloc.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;

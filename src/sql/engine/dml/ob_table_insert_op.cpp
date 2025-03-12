@@ -14,20 +14,6 @@
 
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/basic/ob_expr_values_op.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/partition_table/ob_partition_location.h"
-#include "share/ob_autoincrement_service.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/profile/ob_perf_event.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "share/ob_tablet_autoincrement_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 
 namespace oceanbase

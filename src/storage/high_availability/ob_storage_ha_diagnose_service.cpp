@@ -14,10 +14,7 @@
 
 #include "ob_storage_ha_diagnose_service.h"
 #include "ob_storage_ha_diagnose_mgr.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

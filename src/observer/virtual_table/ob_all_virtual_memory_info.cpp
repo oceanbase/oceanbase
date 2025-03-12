@@ -11,10 +11,7 @@
  */
 
 #include "ob_all_virtual_memory_info.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "lib/alloc/memory_dump.h"
-#include "observer/ob_server.h"
-#include "observer/ob_server_utils.h"
 
 namespace oceanbase
 {

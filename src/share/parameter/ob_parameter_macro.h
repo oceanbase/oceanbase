@@ -155,6 +155,9 @@ access_specifier:                                                               
 #define DEF_BOOL(args...)                                                      \
   _DEF_PARAMETER_SCOPE_EASY(public, Bool, args)
 
+#define DEF_BOOL_WITH_CHECKER(args...)                                          \
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Bool, args)
+
 #define DEF_STR(args...)                                                       \
   _DEF_PARAMETER_SCOPE_EASY(public, String, args)
 

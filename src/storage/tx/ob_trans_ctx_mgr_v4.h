@@ -55,7 +55,7 @@ namespace transaction
 class ObLSTxCtxMgrStat;
 class ObTransCtx;
 class ObPartTransCtx;
-class ObITsMgr;
+class ObTsMgr;
 class ObITxLogParam;
 class ObITxLogAdapter;
 class ObLSTxLogAdapter;
@@ -194,7 +194,7 @@ public:
            const share::ObLSID &ls_id,
            ObTxTable *tx_table,
            ObLockTable *lock_table,
-           ObITsMgr *ts_mgr,
+           ObTsMgr *ts_mgr,
            ObTransService *txs,
            ObITxLogParam *log_param,
            ObITxLogAdapter * log_adapter);
@@ -371,8 +371,6 @@ public:
   int dump_single_tx_data_2_text(const int64_t tx_id, FILE *fd);
   int start_readonly_request();
   int end_readonly_request();
-
-  void dump_readonly_request(const int64_t max_req_number);
 
   // check this ObLSTxCtxMgr contains the specified ObLSID
   bool contain(const share::ObLSID &ls_id)
@@ -615,7 +613,6 @@ public:
   static const int64_t WAIT_SW_CB_TIMEOUT = 100 * 1000; // 100 ms
   static const int64_t WAIT_SW_CB_INTERVAL = 10 * 1000; // 10 ms
   static const int64_t WAIT_READONLY_REQUEST_TIME = 10 * 1000 * 1000;
-  static const int64_t READONLY_REQUEST_TRACE_ID_NUM = 8192;
 
 private:
   inline bool is_master_() const
@@ -702,7 +699,7 @@ private:
   ObTransService *txs_;
 
   // The time source
-  ObITsMgr *ts_mgr_;
+  ObTsMgr *ts_mgr_;
 
   // See the ObLSTxCtxMgr's member function update_max_replay_commit_version
   share::SCN max_replay_commit_version_;
@@ -719,7 +716,6 @@ private:
 
   // Online timestamp for ObLSTxCtxMgr
   int64_t online_ts_;
-  ObCurTraceId::TraceId readonly_request_trace_id_set_[READONLY_REQUEST_TRACE_ID_NUM];
 };
 
 // Used to iteratively access TxCtx in ObLSTxCtxMgr;
@@ -795,7 +791,7 @@ public:
   // @param [in] tenant_id: tenant id
   // @param [in] ts_mgr: used to get gts, see: update_max_replay_commit_version function;
   // @param [in] txs: transaction service which hold the ObTxCtxMgr;
-  int init(const int64_t tenant_id, ObITsMgr *ts_mgr, ObTransService *txs);
+  int init(const int64_t tenant_id, ObTsMgr *ts_mgr, ObTransService *txs);
 
   // Mark ObTxCtxMgr as running
   int start();
@@ -983,7 +979,7 @@ private:
   ObLSTxCtxMgrMap ls_tx_ctx_mgr_map_;
 
   // The time source
-  ObITsMgr *ts_mgr_;
+  ObTsMgr *ts_mgr_;
 
   // Statistical variable that records the number of ObLSTxCtxMgr allocated;
   int64_t ls_alloc_cnt_;

@@ -11,14 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "share/stat/ob_stat_item.h"
-#include "lib/utility/ob_print_utils.h"
-#include "pl/sys_package/ob_dbms_stats.h"
-#include "share/stat/ob_opt_table_stat.h"
+#include "ob_stat_item.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
-#include "share/stat/ob_topk_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace sql;
@@ -528,8 +523,20 @@ int ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int6
         LOG_WARN("failed to assign", K(ret));
       }
     } else if (OB_UNLIKELY(cg_macro_arr.count() != cg_macro_cnt_arr_.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(cg_macro_arr), K(cg_macro_cnt_arr_));
+      if (cg_macro_arr.count() == 1) {
+        cg_macro_cnt_arr_.at(0) += cg_macro_arr.at(0);
+      } else if (cg_macro_cnt_arr_.count() == 1) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < cg_macro_arr.count(); ++i) {
+          if (i == 0) {
+            cg_macro_cnt_arr_.at(0) += cg_macro_arr.at(0);
+          } else if (OB_FAIL(cg_macro_cnt_arr_.push_back(cg_macro_arr.at(i)))) {
+            LOG_WARN("failed to push back macro cnt", K(ret));
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(cg_macro_arr), K(cg_macro_cnt_arr_));
+      }
     } else {
       for (int64_t i = 0; i < cg_macro_arr.count(); ++i) {
         cg_macro_cnt_arr_.at(i) += cg_macro_arr.at(i);
@@ -543,8 +550,21 @@ int ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int6
           LOG_WARN("failed to assign", K(ret));
         }
       } else if (OB_UNLIKELY(cg_micro_arr.count() != cg_micro_cnt_arr_.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(cg_micro_arr), K(cg_micro_cnt_arr_));
+        if (cg_micro_arr.count() == 1) {
+          cg_micro_cnt_arr_.at(0) += cg_micro_arr.at(0);
+        } else if (cg_micro_cnt_arr_.count() == 1) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < cg_micro_arr.count(); ++i) {
+            if (i == 0) {
+              cg_micro_cnt_arr_.at(0) += cg_micro_arr.at(0);
+            } else if (OB_FAIL(cg_micro_cnt_arr_.push_back(cg_micro_arr.at(i)))) {
+              LOG_WARN("failed to push back micro cnt", K(ret));
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(cg_micro_arr), K(cg_micro_cnt_arr_));
+        }
+
       } else {
         for (int64_t i = 0; i < cg_micro_arr.count(); ++i) {
           cg_micro_cnt_arr_.at(i) += cg_micro_arr.at(i);
@@ -833,8 +853,12 @@ int ObStatAvgLen::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     LOG_WARN("column param is null", K(ret));
   } else if (col_param_->column_type_ < type_count &&
              DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_] > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d",
-                                DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_]))) {
+    const char* fmt = lib::is_oracle_mode() ? " (%d * COUNT(\"%.*s\"))/decode(COUNT(*),0,1,COUNT(*))"
+                     : " (%d * COUNT(`%.*s`))/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt,
+                                DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_],
+                                col_param_->column_name_.length(),
+                                col_param_->column_name_.ptr()))) {
       LOG_WARN("failed to print avg column size", K(ret));
     }
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, get_fmt(),

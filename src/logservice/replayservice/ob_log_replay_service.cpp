@@ -11,20 +11,12 @@
  */
 
 #include "ob_log_replay_service.h"
-#include "lib/atomic/ob_atomic.h"
-#include "ob_replay_status.h"
-#include "logservice/ob_log_base_header.h"
 #include "logservice/ob_ls_adapter.h"
-#include "logservice/palf/palf_env.h"
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
 #include "logservice/ob_log_compression.h"
 #endif
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
-#include "share/scn.h"
-#include "share/ob_thread_mgr.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

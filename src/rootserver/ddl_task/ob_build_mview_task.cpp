@@ -14,7 +14,6 @@
 
 #include "rootserver/ddl_task/ob_build_mview_task.h"
 #include "rootserver/ob_root_service.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 
 namespace oceanbase

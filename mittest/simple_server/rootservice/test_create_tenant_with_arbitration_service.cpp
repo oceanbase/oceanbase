@@ -15,11 +15,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "share/arbitration_service/ob_arbitration_service_table_operator.h" // for ObArbitrationServiceTableOperator
 
 
 namespace oceanbase

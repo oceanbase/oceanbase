@@ -177,12 +177,14 @@ int ObLogExpand::get_op_exprs(ObIArray<ObRawExpr *> &all_exprs)
 
 int ObLogExpand::dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory,
                                                     ObSQLSessionInfo *sess,
+                                                    ObIArray<ObExprConstraint> &constraints,
                                                     const ObIArray<ObRawExpr *> &rollup_exprs,
                                                     const ObIArray<ObAggFunRawExpr *> &aggr_items,
                                                     ObIArray<DupRawExprPair> &dup_expr_pairs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> uniq_expand_exprs;
+  ObRawExprCopier copier(factory);
   if (OB_UNLIKELY(rollup_exprs.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid expand exprs", K(ret));
@@ -202,14 +204,22 @@ int ObLogExpand::dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory,
     if (OB_FAIL(ret)) {
     } else if (found) {
       ObRawExpr *dup_expr = nullptr;
+      ObRawExpr *new_const_expr = nullptr;
       if (OB_FAIL(ObRawExprUtils::build_dup_data_expr(factory, uniq_expand_exprs.at(i), dup_expr))) {
         LOG_WARN("build duplicate expr failed", K(ret));
       } else if (OB_FAIL(dup_expr->formalize(sess))) {
         LOG_WARN("formalize expr failed", K(ret));
       } else if (OB_FAIL(dup_expr_pairs.push_back(DupRawExprPair(uniq_expand_exprs.at(i), dup_expr)))) {
         LOG_WARN("push back element failed", K(ret));
+      } else if (!uniq_expand_exprs.at(i)->is_static_scalar_const_expr()) {
+      } else if (OB_FAIL(copier.copy(uniq_expand_exprs.at(i), new_const_expr))) {
+        LOG_WARN("copy expr failed", K(ret));
       }
     }
+  }
+  // before replacing rollup exprs in place, it is necessary to unshare the related expr constraints to avoid incorrect replacements.
+  if (OB_SUCC(ret) && OB_FAIL(ObLogExpand::unshare_constraints(copier, constraints))) {
+    LOG_WARN("unshare constraints failed", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < dup_expr_pairs.count(); i++) {
     for (int j = 0; OB_SUCC(ret) && j < aggr_items.count(); j++) {
@@ -308,11 +318,14 @@ int ObLogExpand::gen_hash_rollup_info(ObHashRollupInfo &info)
 }
 
 int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
+                                  ObIArray<ObExprConstraint> &constraints,
                                   ObIArray<ObRawExpr *> &rollup_exprs,
                                   ObIArray<ObRawExpr *> &gby_exprs,
                                   ObIArray<DupRawExprPair> &dup_expr_pairs)
 {
   int ret = OB_SUCCESS;
+  ObRawExprCopier copier(factory);
+  int64_t origin_size = dup_expr_pairs.count();
   if (OB_ISNULL(sess)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null arguments", K(ret));
@@ -327,6 +340,7 @@ int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *s
       } else {
         bool found = false;
         ObRawExpr *rollup_expr = rollup_exprs.at(i);
+        ObRawExpr *new_const_expr = nullptr;
         for (int j = 0; !found && OB_SUCC(ret) && j < gby_exprs.count(); j++) {
           if (OB_FAIL(find_expr(gby_exprs.at(j), rollup_expr, found))) {
             LOG_WARN("find expr failed", K(ret));
@@ -343,12 +357,23 @@ int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *s
             LOG_WARN("formalize failed", K(ret));
           } else if (OB_FAIL(dup_expr_pairs.push_back(DupRawExprPair(rollup_expr, new_expr)))) {
             LOG_WARN("push back element failed", K(ret));
+          } else if (!rollup_expr->is_static_scalar_const_expr()) {
+          } else if (OB_FAIL(copier.copy(rollup_expr, new_const_expr))) {
+            LOG_WARN("copy expr failed", K(ret));
           }
-          for (int j = 0; OB_SUCC(ret) && j < gby_exprs.count(); j++) {
-            if (OB_FAIL(replace_expr(gby_exprs.at(j), rollup_expr, new_expr))) {
-              LOG_WARN("replace expr failed", K(ret));
-            }
-          }
+        }
+      }
+    }
+    // before replacing rollup exprs in place, it is necessary to unshare the related expr constraints to avoid incorrect replacements.
+    if (OB_SUCC(ret) && OB_FAIL(ObLogExpand::unshare_constraints(copier, constraints))) {
+      LOG_WARN("unshare constraints failed", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < gby_exprs.count(); i++) {
+      for (int j = origin_size; OB_SUCC(ret) && j < dup_expr_pairs.count(); j++) {
+        if (OB_FAIL(replace_expr(gby_exprs.at(i),
+                                dup_expr_pairs.at(j).element<0>(),
+                                dup_expr_pairs.at(j).element<1>()))) {
+          LOG_WARN("replace expr failed", K(ret));
         }
       }
     }
@@ -461,6 +486,18 @@ int ObLogExpand::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
   reset_op_ordering();
+  return ret;
+}
+
+int ObLogExpand::unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprConstraint> &constraints)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < constraints.count(); ++i) {
+    ObExprConstraint &constraint = constraints.at(i);
+    if (OB_FAIL(copier.copy_on_replace(constraint.pre_calc_expr_, constraint.pre_calc_expr_))) {
+      LOG_WARN("failed to unshare expr", K(ret));
+    }
+  }
   return ret;
 }
 } // end sql

@@ -150,12 +150,13 @@ const int64_t MAX_ROOTSERVICE_EVENT_NAME_LENGTH = 256;
 const int64_t MAX_ROOTSERVICE_EVENT_VALUE_LENGTH = 512;
 const int64_t MAX_ROOTSERVICE_EVENT_DESC_LENGTH = 64;
 const int64_t MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH = 512;
+const int64_t MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH = 4096;
 const int64_t MAX_TENANT_EVENT_NAME_LENGTH = 256;
 const int64_t MAX_TENANT_EVENT_VALUE_LENGTH = 4096;
 const int64_t MAX_ELECTION_EVENT_DESC_LENGTH = 64;
 const int64_t MAX_ELECTION_EVENT_EXTRA_INFO_LENGTH = 512;
 const int64_t MAX_BUFFER_SIZE = 1024 * 1024;
-const int64_t MAX_MULTI_GET_CACHE_AWARE_ROW_NUM = 100;
+const int64_t DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM = 100;
 const int64_t OB_DEFAULT_TABLET_SIZE = (1 << 27);
 const int64_t OB_DEFAULT_PCTFREE = 10;
 const int64_t OB_MAX_PCTFREE = 50;
@@ -709,6 +710,14 @@ const char *const OB_VEC_SCN_COLUMN_NAME_PREFIX = "__scn";
 const char *const OB_VEC_KEY_COLUMN_NAME_PREFIX = "__key";
 const char *const OB_VEC_DATA_COLUMN_NAME_PREFIX = "__data";
 
+const char *const OB_VEC_IVF_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_center_id";
+const char *const OB_VEC_IVF_CENTER_VECTOR_COLUMN_NAME_PREFIX = "__ivf_center_vector";
+const char *const OB_VEC_IVF_DATA_VECTOR_COLUMN_NAME_PREFIX = "__ivf_data_vector";
+const char *const OB_VEC_IVF_META_ID_COLUMN_NAME_PREFIX = "__ivf_meta_id";
+const char *const OB_VEC_IVF_META_VECTOR_COLUMN_NAME_PREFIX = "__ivf_meta_vector";
+const char *const OB_VEC_IVF_PQ_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_pq_center_id";
+const char *const OB_VEC_IVF_PQ_CENTER_IDS_COLUMN_NAME_PREFIX = "__ivf_pq_center_ids";
+
 // fulltext search
 const char *const OB_DOC_ID_COLUMN_NAME = "__doc_id";
 const char *const OB_WORD_SEGMENT_COLUMN_NAME_PREFIX = "__word_segment";
@@ -756,6 +765,7 @@ const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
 const char *const OB_S3_PREFIX = "s3://";
+const char *const OB_HDFS_PREFIX= "hdfs://";
 const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
@@ -1389,7 +1399,20 @@ OB_INLINE bool is_inner_profile_id(const uint64_t profile_id)
 
 /*
  * ################################################################################
- * OBJECT_ID RESERVED FOR OTHER SCHEMA OBJECTS (202300, 300000)
+ * OBJECT_ID FOR EXTERNAL OBJECT (202300, 203300)
+ * ################################################################################
+ */
+const uint64_t OB_MIN_EXTERNAL_OBJECT_ID      = 202300;
+const uint64_t OB_MAX_EXTERNAL_OBJECT_ID      = 203300;
+
+OB_INLINE bool is_external_object_id(const uint64_t tid)
+{
+  return (tid > OB_MIN_EXTERNAL_OBJECT_ID) && (tid < OB_MAX_EXTERNAL_OBJECT_ID);
+}
+
+/*
+ * ################################################################################
+ * OBJECT_ID RESERVED FOR OTHER SCHEMA OBJECTS (203300, 300000)
  * ################################################################################
  */
 
@@ -1752,6 +1775,7 @@ const int64_t OB_USER_ROW_MAX_COLUMNS_COUNT = 4096;
 const int64_t OB_ROW_MAX_COLUMNS_COUNT =
     OB_USER_ROW_MAX_COLUMNS_COUNT + 2 * OB_USER_MAX_ROWKEY_COLUMN_NUMBER; // used in ObRow
 const int64_t OB_ROW_DEFAULT_COLUMNS_COUNT = 32;
+const int64_t OB_MAX_UNUSED_COLUMNS_COUNT = 128; // drop column online.
 const int64_t OB_DEFAULT_COL_DEC_NUM = common::OB_ROW_MAX_COLUMNS_COUNT / 80;
 const int64_t OB_DEFAULT_MULTI_GET_ROWKEY_NUM = 8;
 const int64_t OB_MAX_TIMESTAMP_LENGTH = 32;
@@ -1833,7 +1857,7 @@ const int64_t OB_CAST_TO_VARCHAR_MAX_LENGTH = 256;
 const int64_t OB_CAST_TO_JSON_SCALAR_LENGTH = 256;
 const int64_t OB_CAST_BUFFER_LENGTH = 256;
 const int64_t OB_PREALLOCATED_NUM = 21;  // half of 42
-const int64_t OB_PREALLOCATED_COL_ID_NUM = 4;
+const int64_t OB_PREALLOCATED_COL_ID_NUM = 8;
 const int64_t OB_MAX_DATE_PRECISION = 0;
 const int64_t OB_MAX_DATETIME_PRECISION = 6;
 const int64_t OB_MAX_TIMESTAMP_TZ_PRECISION = 9;
@@ -1997,6 +2021,8 @@ const int16_t DEFAULT_SCALE_FOR_STRING = -1;
 const int16_t DEFAULT_SCALE_FOR_TEXT = 0;
 const int16_t DEFAULT_SCALE_FOR_ORACLE_FRACTIONAL_SECONDS = 6;  //SEE : https://docs.oracle.com/cd/B19306_01/server.102/b14225/ch4datetime.htm
 const int16_t DEFUALT_PRECISION_FOR_INTERVAL = 2;
+
+const int64_t OB_ORACLE_SCALE_FOR_NUMBER = -127;
 
 #define NUMBER_SCALE_UNKNOWN_YET (lib::is_oracle_mode() ? ORA_NUMBER_SCALE_UNKNOWN_YET: SCALE_UNKNOWN_YET)
 //TDE相关参数

@@ -11,12 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/thread/thread_mgr.h"
-#include "lib/thread/threads.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_tenant_base.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
-#include "storage/ob_file_system_router.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
+#include "src/share/schema/ob_schema_struct.h"
 #include "observer/omt/ob_tenant_mtl_helper.h"
 #include "share/ob_tenant_info_proxy.h"
 
@@ -107,7 +104,8 @@ ObTenantBase::ObTenantBase(const uint64_t id, const int64_t epoch, bool enable_t
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0),
-    mini_mode_(false)
+    mini_mode_(false),
+    marked_prepare_gc_ts_(0)
 {
 }
 #undef CONSTRUCT_MEMBER

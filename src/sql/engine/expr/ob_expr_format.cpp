@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "ob_expr_format.h"
-#include "lib/charset/ob_charset.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
 

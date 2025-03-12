@@ -234,7 +234,7 @@ class ObFakeGtiSource : public ObIGtiSource
   int64_t tx_id = 66;
 };
 
-class ObFakeTsMgr : public ObITsMgr
+class ObFakeTsMgr : public ObTsMgr
 {
 private:
   int get_gts_error_ = OB_SUCCESS;

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_mock_executor.h"
-#include "sql/resolver/cmd/ob_mock_stmt.h"
 namespace oceanbase
 {
 using namespace common;

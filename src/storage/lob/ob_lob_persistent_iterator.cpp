@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_persistent_iterator.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "storage/access/ob_table_scan_iterator.h"
 
 namespace oceanbase

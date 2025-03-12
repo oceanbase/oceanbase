@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_join_limit_pushdown.h"
 
 namespace oceanbase

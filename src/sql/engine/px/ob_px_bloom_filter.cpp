@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-//#include <immintrin.h>
 #include "ob_px_bloom_filter.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/container/ob_se_array.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_rpc_share.h"
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 
@@ -104,7 +100,7 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
       MEMSET(bits_array_, 0, bits_array_length_ * sizeof(int64_t));
       is_inited_ = true;
       LOG_TRACE("init px bloom filter", K(data_length_), K(bits_array_buf),
-                 K(bits_array_), K(hash_func_count_), K(simd_support));
+                 K(bits_array_), K_(bits_array_length), K(hash_func_count_), K(simd_support));
     }
   }
   return ret;

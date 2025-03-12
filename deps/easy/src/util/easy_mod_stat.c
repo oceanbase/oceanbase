@@ -1,5 +1,4 @@
 #include "util/easy_mod_stat.h"
-#include <string.h>
 
 typedef struct alloc_stat_header_t {
     mod_stat_t* mod_stat;

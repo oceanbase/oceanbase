@@ -74,7 +74,6 @@ TEST_F(TestIntDictPdFilter, test_int_dict_decoder)
       int64_t res_arr_nn[1] = {100};
       integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NN, 1, 0, res_arr_nn);
     }
-
     // check EQ/NE
     {
       int64_t ref_arr[4] = {-100, 2 % distinct_cnt + INT32_MAX,
@@ -354,14 +353,14 @@ TEST_F(TestIntDictPdFilter, test_int_dict_const_without_null_decoder)
     ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
   }
 
-  for (int64_t i = 0; i < row_cnt - 100; ++i) {
+  for (int64_t i = 0; i < row_cnt - 50; ++i) {
     row_arr[i].storage_datums_[0].set_int32(i);
     row_arr[i].storage_datums_[1].set_int(0);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  for (int64_t i = 0; i < 10; ++i) {
+  for (int64_t i = 0; i < 5; ++i) {
     for (int64_t j = 0; j < 10; ++j) {
-      int64_t cur_idx = row_cnt - 100 + (i * 10 + j);
+      int64_t cur_idx = row_cnt - 50 + (i * 10 + j);
       row_arr[cur_idx].storage_datums_[0].set_int32(cur_idx);
       row_arr[cur_idx].storage_datums_[1].set_int(1 + i * 10);
       ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[cur_idx]));
@@ -389,38 +388,38 @@ TEST_F(TestIntDictPdFilter, test_int_dict_const_without_null_decoder)
 
   // check EQ/NE
   {
-    int64_t ref_arr[4] = {0, 1, 2, 32768};
-    int64_t res_arr_eq[4] = {1100, 10, 0, 0};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_EQ, 4, 1, res_arr_eq);
-    int64_t res_arr_ne[4] = {100, 1190, 1200, 1200};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 4, 1, res_arr_ne);
+    int64_t ref_arr[6] = {0, 1, 11, 21, 2, 32768};
+    int64_t res_arr_eq[6] = {1150, 10, 10, 10, 0, 0};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_EQ, 6, 1, res_arr_eq);
+    int64_t res_arr_ne[6] = {50, 1190, 1190, 1190, 1200, 1200};
+    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 6, 1, res_arr_ne);
   }
 
   // check LT/LE/GT/GE
   {
-    int64_t ref_arr[4] = {-32769, -1, 1, 90};
-    int64_t res_arr_lt[4] = {0, 0, 1100, 1190};
+    int64_t ref_arr[4] = {-32769, -1, 1, 40};
+    int64_t res_arr_lt[4] = {0, 0, 1150, 1190};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LT, 4, 1, res_arr_lt);
-    int64_t res_arr_le[4] = {0, 0, 1110, 1190};
+    int64_t res_arr_le[4] = {0, 0, 1160, 1190};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LE, 4, 1, res_arr_le);
   }
   {
     int64_t ref_arr[4] = {-32769, -1, 10, 32768};
-    int64_t res_arr_gt[4] = {1200, 1200, 90, 0};
+    int64_t res_arr_gt[4] = {1200, 1200, 40, 0};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GT, 4, 1, res_arr_gt);
-    int64_t res_arr_ge[4] = {1200, 1200, 90, 0};
+    int64_t res_arr_ge[4] = {1200, 1200, 40, 0};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
   }
 
   // check IN/BT
   {
-    int64_t ref_arr[4] = {-32769, 1, 91, 32768};
+    int64_t ref_arr[4] = {-32769, 1, 41, 32768};
     int64_t res_arr[1] = {20};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_IN, 1, 4, res_arr);
   }
   {
     int64_t ref_arr[10] = {-32769, -32768, -32769, 0, -1, 10, 0, 21, 1, 32768};
-    int64_t res_arr[5] = {0, 1100, 1110, 1130, 100};
+    int64_t res_arr[5] = {0, 1150, 1160, 1180, 50};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_BT, 5, 2, res_arr);
   }
 

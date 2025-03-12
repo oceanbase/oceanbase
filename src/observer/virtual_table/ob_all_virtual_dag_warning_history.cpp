@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_dag_warning_history.h"
-#include "share/ob_errno.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {

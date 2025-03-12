@@ -11,8 +11,6 @@
  */
 
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_get_mod.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

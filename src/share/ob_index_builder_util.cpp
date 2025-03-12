@@ -15,16 +15,8 @@
 #include "ob_fts_index_builder_util.h"
 #include "ob_vec_index_builder_util.h"
 
-#include "share/ob_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_array.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_get_compat_mode.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/printer/ob_raw_expr_printer.h"
 namespace oceanbase
 {
 using namespace common;
@@ -215,7 +207,7 @@ int ObIndexBuilderUtil::add_shadow_pks(
     const ObPartitionKeyInfo &subpartition_keys = data_schema.get_subpartition_key_info();
     char shadow_pk_name[OB_MAX_COLUMN_NAME_BUF_LENGTH];
     ObSEArray<uint64_t, 2> column_ids;
-    if (data_schema.is_heap_table() && schema.is_global_unique_index_table()) {
+    if (data_schema.is_table_without_pk() && schema.is_global_unique_index_table()) {
       if (partition_keys.is_valid() && OB_FAIL(partition_keys.get_column_ids(column_ids))) {
         LOG_WARN("fail to get column ids from partition keys", K(ret));
       } else if (subpartition_keys.is_valid() && OB_FAIL(subpartition_keys.get_column_ids(column_ids))) {
@@ -237,7 +229,7 @@ int ObIndexBuilderUtil::add_shadow_pks(
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("get_column_schema failed", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
-        } else if (ob_is_text_tc(const_data_column->get_data_type())) {
+        } else if (const_data_column->is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_WARN("Unexpected lob column in shadow pk", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
@@ -273,7 +265,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
   ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
-  if (!data_schema.is_heap_table()) {
+  if (!data_schema.is_table_without_pk()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only heap table should add shadow partition keys", K(data_schema), K(ret));
   } else {
@@ -284,7 +276,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
     const ObColumnSchemaV2 *const_data_column = NULL;
     ObColumnSchemaV2 data_column;
     ObSEArray<uint64_t, 2> column_ids;
-    if (data_schema.is_heap_table()) {
+    if (data_schema.is_table_without_pk()) {
       if (partition_keys.is_valid() && OB_FAIL(partition_keys.get_column_ids(column_ids))) {
         LOG_WARN("fail to get column ids from partition keys", K(ret));
       } else if (subpartition_keys.is_valid() && OB_FAIL(subpartition_keys.get_column_ids(column_ids))) {
@@ -298,7 +290,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("get_column_schema failed", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
-        } else if (ob_is_text_tc(const_data_column->get_data_type())) {
+        } else if (const_data_column->is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_WARN("Unexpected lob column in shadow partition key", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
@@ -384,26 +376,38 @@ int ObIndexBuilderUtil::set_index_table_columns(
   // no matter what index col of data table is, columns of 4 aux fts table is fixed
   if (OB_FAIL(ret)) {
   } else if (is_vec_index(arg.index_type_)) {
-    if (is_vec_rowkey_vid_type(arg.index_type_)) {
-      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_rowkey_vid_table_columns(arg, data_schema, index_schema))) {
-        LOG_WARN("fail to set vec rowkey vid table column", K(ret));
+    if (is_vec_ivf_index(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_ivf_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set ivf table columns", K(ret), K(arg.index_type_));
       }
-    } else if (is_vec_vid_rowkey_type(arg.index_type_)) {
-      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_vid_rowkey_table_columns(arg, data_schema, index_schema))) {
-        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+    } else if (is_vec_hnsw_index(arg.index_type_)) {
+      if (is_vec_rowkey_vid_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_rowkey_vid_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("fail to set vec rowkey vid table column", K(ret));
+        }
+      } else if (is_vec_vid_rowkey_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_vid_rowkey_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+        }
+      } else if (is_vec_delta_buffer_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("fail to set vec delta buffer table column", K(ret));
+        }
+      } else if (is_vec_index_id_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_id_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("fail to set vec index id table column", K(ret));
+        }
+      } else if (is_vec_index_snapshot_data_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("fail to set vec snapshot data table column", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index type", K(ret), K(arg.index_type_));
       }
-    } else if (is_vec_delta_buffer_type(arg.index_type_)) {
-      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(arg, data_schema, index_schema))) {
-        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
-      }
-    } else if (is_vec_index_id_type(arg.index_type_)) {
-      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_id_table_columns(arg, data_schema, index_schema))) {
-        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
-      }
-    } else if (is_vec_index_snapshot_data_type(arg.index_type_)) {
-      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(arg, data_schema, index_schema))) {
-        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
-      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index type", K(ret), K(arg.index_type_));
     }
   } else if (is_fts_index(arg.index_type_) ||
              is_multivalue_index(arg.index_type_)) {
@@ -460,7 +464,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
                    "database_id", data_schema.get_database_id(),
                    "table_name", data_schema.get_table_name(),
                    "column name", sort_item.column_name_, K(ret));
-        } else if (ob_is_text_tc(data_column->get_data_type())) {
+        } else if (data_column->is_key_forbid_lob()) {
           if (use_mysql_errno && data_column->is_func_idx_column()) {
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
             LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
@@ -550,7 +554,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
             ret = OB_ERR_BAD_FIELD_ERROR;
             LOG_WARN("get_column_schema failed", "table_id", data_schema.get_table_id(),
                 K(column_id), K(ret));
-          } else if (ob_is_text_tc(data_column->get_data_type())) {
+          } else if (data_column->is_key_forbid_lob()) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_WARN("Lob column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
@@ -584,7 +588,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
       }
 
       // if data table is a heap table, add partition keys to index table
-      if (OB_SUCC(ret) && data_schema.is_heap_table() && index_schema.is_global_index_table()) {
+      if (OB_SUCC(ret) && data_schema.is_table_without_pk() && index_schema.is_global_index_table()) {
         if (OB_FAIL(add_shadow_partition_keys(data_schema, row_desc, index_schema))) {
           LOG_WARN("add_shadow_partition_keys failed", K(data_schema), K(row_desc), K(ret));
         }
@@ -603,7 +607,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("get_column_schema failed", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
-          } else if (ob_is_text_tc(data_column->get_data_type())) {
+          } else if (data_column->is_key_forbid_lob()) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
             LOG_WARN("Index storing column should not be lob type", "tenant_id", data_schema.get_tenant_id(),
@@ -659,7 +663,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("get_column_schema failed", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
-          } else if (ob_is_text_tc(data_column->get_data_type())) {
+          } else if (data_column->is_key_forbid_lob()) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
                                                     arg.hidden_store_columns_.at(i).ptr());

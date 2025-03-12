@@ -14,13 +14,7 @@
 
 #include "storage/tablet/ob_tablet_meta.h"
 
-#include "lib/ob_define.h"
-#include "lib/utility/serialization.h"
-#include "share/scn.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/tablet/ob_tablet_binding_info.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
 namespace oceanbase
 {
@@ -1484,8 +1478,6 @@ int ObMigrationTabletParam::deserialize_v1(const char *buf, const int64_t len, i
     LOG_WARN("failed to deserialize max sync medium snapshot", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(ddl_commit_scn_.fixed_deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ddl commit scn", K(ret), K(len), K(new_pos));
-  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &micro_index_clustered_))) {
-    LOG_WARN("failed to deserialize micro_index_clustered", K(ret), K(len));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
@@ -1508,6 +1500,7 @@ int ObMigrationTabletParam::deserialize_v1(const char *buf, const int64_t len, i
     compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
     version_ = PARAM_VERSION_V2;
     pos = new_pos;
+    micro_index_clustered_ = false;
     LOG_DEBUG("succeed to deserialize migration tablet param v1", K(ret), KPC(this));
   }
 

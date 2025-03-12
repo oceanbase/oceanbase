@@ -20,7 +20,6 @@
 #include "ob_log_part_trans_task.h"     // PartTransTask
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
-#include "ob_log_table_matcher.h"       // IObLogTableMatcher
 #include "ob_log_config.h"              // TCONF
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [DDL_PROCESSOR] " fmt, ##args)

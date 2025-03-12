@@ -11,7 +11,6 @@
  */
 
 #include "storage/tablet/ob_tablet_dumped_medium_info.h"
-#include <algorithm>
 #include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 

@@ -41,7 +41,7 @@ public:
       ObExprJoinFilterContext() : ObExprOperatorCtx(),
           rf_msg_(nullptr), rf_key_(), hash_funcs_(), cmp_funcs_(), start_time_(0),
           filter_count_(0), total_count_(0), check_count_(0),
-          n_times_(0), ready_ts_(0), slide_window_(total_count_), flag_(0), max_wait_time_ms_(0),
+          n_times_(0), ready_ts_(0), by_pass_count_before_ready_(0), slide_window_(total_count_), flag_(0), max_wait_time_ms_(0),
           cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr)
         {
           cur_row_.set_attr(ObMemAttr(MTL_ID(), "RfCurRow"));
@@ -95,6 +95,7 @@ public:
         check_count_ = 0;
         n_times_ = 0;
         ready_ts_ = 0;
+        by_pass_count_before_ready_ = 0;
         is_ready_ = false;
       }
 
@@ -115,12 +116,13 @@ public:
       int64_t check_count_;
       int64_t n_times_;
       int64_t ready_ts_;
+      int64_t by_pass_count_before_ready_;
 
       ObAdaptiveFilterSlideWindow slide_window_;
 
       union {
         uint64_t flag_;
-        struct {
+        struct { // FARM COMPAT WHITELIST
           bool is_ready_:1;
           bool is_first_:1;
           // whether need to sync wait

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_from_days.h"
-#include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 

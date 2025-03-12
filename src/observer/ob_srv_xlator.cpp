@@ -14,28 +14,7 @@
 
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
-#include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_sql_sock_session.h"
-#include "share/rpc/ob_batch_processor.h"
-#include "share/rpc/ob_blacklist_req_processor.h"
-#include "share/rpc/ob_blacklist_resp_processor.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/cmd/ob_load_data_rpc.h"
-#include "sql/engine/px/ob_px_rpc_processor.h"
-#include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "sql/ob_sql_task.h"
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
-#include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_ts_response_handler.h"
-#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "observer/ob_rpc_processor_simple.h"
-#include "observer/ob_srv_task.h"
 #include "observer/mysql/obmp_query.h"
 #include "observer/mysql/obmp_ping.h"
 #include "observer/mysql/obmp_quit.h"
@@ -46,7 +25,6 @@
 #include "observer/mysql/obmp_error.h"
 #include "observer/mysql/obmp_statistic.h"
 #include "observer/mysql/obmp_stmt_prepare.h"
-#include "observer/mysql/obmp_stmt_execute.h"
 #include "observer/mysql/obmp_stmt_fetch.h"
 #include "observer/mysql/obmp_stmt_close.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
@@ -62,11 +40,6 @@
 #include "observer/mysql/obmp_debug.h"
 #include "observer/mysql/obmp_refresh.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
-#include "observer/table/ob_table_execute_processor.h"
-#include "observer/table/ob_table_batch_execute_processor.h"
-#include "observer/table/ob_table_query_processor.h"
-#include "observer/table/ob_table_query_and_mutate_processor.h"
 #include "logservice/palf/log_rpc_processor.h"
 #include "sql/das/ob_das_parallel_handler.h"
 
@@ -220,26 +193,44 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
           processor = p;
         }
       } else if (pkt.get_cmd() == obmysql::COM_PROCESS_INFO) {
-        char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
-        ObMPProcessInfo *p = new (buf) ObMPProcessInfo(gctx_);
-        if (OB_ISNULL(p)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-        } else if (OB_FAIL(p->init())) {
-          SERVER_LOG(ERROR, "Init ObMPProcessInfo fail", K(ret));
-          p->~ObMPProcessInfo();
+        ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(
+            SQL_REQ_OP.get_sql_session(&req));
+        if (OB_ISNULL(conn)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(conn), K(ret));
+        } else if (conn->is_proxy_ && conn->proxy_version_ < PROXY_VERSION_4_3_0_0) {
+          NEW_MYSQL_PROCESSOR(ObMPDefault, gctx_);
         } else {
-          processor = p;
+          char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
+          ObMPProcessInfo *p = new (buf) ObMPProcessInfo(gctx_);
+          if (OB_ISNULL(p)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else if (OB_FAIL(p->init())) {
+            SERVER_LOG(ERROR, "Init ObMPProcessInfo fail", K(ret));
+            p->~ObMPProcessInfo();
+          } else {
+            processor = p;
+          }
         }
       } else if (pkt.get_cmd() == obmysql::COM_PROCESS_KILL) {
-        char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
-        ObMPProcessKill *p = new (buf) ObMPProcessKill(gctx_);
-        if (OB_ISNULL(p)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-        } else if (OB_FAIL(p->init())) {
-          SERVER_LOG(ERROR, "Init ObMPProcessKill fail", K(ret));
-          p->~ObMPProcessKill();
+        ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(
+            SQL_REQ_OP.get_sql_session(&req));
+        if (OB_ISNULL(conn)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(conn), K(ret));
+        } else if (conn->is_proxy_ && conn->proxy_version_ < PROXY_VERSION_4_3_0_0) {
+          NEW_MYSQL_PROCESSOR(ObMPDefault, gctx_);
         } else {
-          processor = p;
+          char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
+          ObMPProcessKill *p = new (buf) ObMPProcessKill(gctx_);
+          if (OB_ISNULL(p)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else if (OB_FAIL(p->init())) {
+            SERVER_LOG(ERROR, "Init ObMPProcessKill fail", K(ret));
+            p->~ObMPProcessKill();
+          } else {
+            processor = p;
+          }
         }
       } else {
         switch (pkt.get_cmd()) {
@@ -318,17 +309,15 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
             static_cast<ObMPQuery *>(processor)->set_is_com_filed_list();
           }
         }
-        if (OB_SUCC(ret) && (pkt.get_cmd() == obmysql::COM_STMT_PREPARE
-                              || pkt.get_cmd() == obmysql::COM_STMT_PREXECUTE)) {
-          ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(
-              SQL_REQ_OP.get_sql_session(&req));
-          if (OB_ISNULL(conn) || OB_ISNULL(dynamic_cast<ObMPBase *>(processor))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(dynamic_cast<ObMPBase *>(processor)));
-          } else {
-            uint64_t proxy_version = conn->is_proxy_ ? conn->proxy_version_ : 0;
-              static_cast<ObMPBase *>(processor)->set_proxy_version(proxy_version);
-          }
+      }
+      if (OB_SUCC(ret) && pkt.get_cmd() != obmysql::COM_QUERY) {
+        ObSMConnection *conn = reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(&req));
+        if (OB_ISNULL(conn) || OB_ISNULL(dynamic_cast<ObMPBase *>(processor))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(dynamic_cast<ObMPBase *>(processor)));
+        } else {
+          uint64_t proxy_version = conn->is_proxy_ ? conn->proxy_version_ : 0;
+          static_cast<ObMPBase *>(processor)->set_proxy_version(proxy_version);
         }
       }
     }

@@ -349,12 +349,5 @@ OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncSymDifferenceImpl, ObCartesianMultipolygon,
   return apply_bg_symdifference<ObCartesianMultipolygon, ObCartesianPolygon, ObCartesianMultipolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
-// implement of outer class eval
-// use an outer class to void implement templates in header files
-int ObGeoFuncSymDifference::eval(const ObGeoEvalCtx &gis_context, ObGeometry *&result)
-{
-  return ObGeoFuncSymDifferenceImpl::eval_geo_func(gis_context, result);
-}
-
 }  // namespace common
 }  // namespace oceanbase

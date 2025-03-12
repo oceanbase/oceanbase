@@ -15,10 +15,7 @@
 #include "storage/ob_relative_table.h"
 
 #include "share/ob_unique_index_row_transformer.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/access/ob_dml_param.h"
 
 namespace oceanbase
 {
@@ -486,6 +483,11 @@ bool ObRelativeTable::is_spatial_index() const
 bool ObRelativeTable::is_fts_index() const
 {
   return schema_param_->is_fts_index();
+}
+
+bool ObRelativeTable::is_vector_index() const
+{
+  return schema_param_->is_vector_index();
 }
 
 int ObRelativeTable::check_rowkey_in_column_ids(

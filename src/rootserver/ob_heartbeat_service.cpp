@@ -13,23 +13,9 @@
 #define USING_LOG_PREFIX RS
 #include "ob_heartbeat_service.h"
 
-#include "share/ob_define.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_version.h"
 #include "share/ob_zone_table_operation.h"
-#include "lib/thread/threads.h"               // set_run_wrapper
-#include "lib/mysqlclient/ob_mysql_transaction.h"  // ObMySQLTransaction
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/time/ob_time_utility.h"
-#include "observer/ob_server_struct.h"              // GCTX
-#include "logservice/ob_log_base_header.h"          // ObLogBaseHeader
-#include "logservice/ob_log_handler.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "rootserver/ob_root_utils.h"            // get_proposal_id_from_sys_ls
-#include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/ob_root_service.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {
@@ -713,7 +699,8 @@ int ObHeartbeatService::end_trans_and_refresh_server_(
           K(server), K(commit));
     }
     //ignore error of refresh and on server_status_change
-    if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+    bool allow_broadcast = true;
+    if (OB_TMP_FAIL(SVR_TRACER.refresh(allow_broadcast))) {
       LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
     }
     if (OB_ISNULL(GCTX.root_service_)) {

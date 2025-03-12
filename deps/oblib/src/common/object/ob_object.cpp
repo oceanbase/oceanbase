@@ -10,25 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_object.h"
 #include <string.h>
-#include <algorithm>
-#include <math.h>  // for fabs, fabsf
 #define USING_LOG_PREFIX COMMON
-#include "common/object/ob_object.h"
-#include "lib/utility/serialization.h"
-#include "lib/utility/utility.h"
-#include "lib/checksum/ob_crc64.h"
 #include "common/object/ob_obj_compare.h"
-#include "common/ob_action_flag.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/number/ob_number_v2.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/string/ob_sql_string.h"
-#include "lib/worker.h"
 #include "common/object/ob_obj_funcs.h"
-#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -1186,6 +1173,157 @@ int ObDocId::from_string(const ObString &doc_id)
     seq_id_ = doc_id_ptr->seq_id_;
   }
   return ret;
+}
+
+ObCenterId::ObCenterId()
+  : tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    center_id_(-1)
+{
+  static_assert(sizeof(ObCenterId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObCenterId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+ObCenterId::ObCenterId(const uint64_t tablet_id, const uint64_t center_id)
+  : tablet_id_(tablet_id),
+    center_id_(center_id)
+{
+  static_assert(sizeof(ObCenterId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObCenterId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+bool ObCenterId::operator==(const ObCenterId &other) const
+{
+  return tablet_id_ == other.tablet_id_ && center_id_ == other.center_id_;
+}
+
+bool ObCenterId::operator!=(const ObCenterId &other) const
+{
+  return !(operator==(other));
+}
+
+bool ObCenterId::operator <(const ObCenterId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret= true;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret = false;
+  } else if (center_id_ < other.center_id_) {
+    bool_ret= true;
+  } else if (center_id_ > other.center_id_) {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+bool ObCenterId::operator >(const ObCenterId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret = false;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret= true;
+  } else if (center_id_ < other.center_id_) {
+    bool_ret = false;
+  } else if (center_id_ > other.center_id_) {
+    bool_ret= true;
+  }
+
+  return bool_ret;
+
+}
+
+void ObCenterId::reset()
+{
+  tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+  center_id_ = -1;
+}
+
+bool ObCenterId::is_valid() const
+{
+  return ObTabletID(tablet_id_).is_valid() && center_id_ >= 0;
+}
+
+ObPqCenterId::ObPqCenterId()
+  : tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    m_id_(0),
+    center_id_(-1)
+{
+  static_assert(sizeof(ObPqCenterId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObPqCenterId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+ObPqCenterId::ObPqCenterId(const uint64_t tablet_id, const uint32_t m_id, const uint32_t center_id)
+  : tablet_id_(tablet_id),
+    m_id_(m_id),
+    center_id_(center_id)
+{
+  static_assert(sizeof(ObPqCenterId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObPqCenterId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+bool ObPqCenterId::operator==(const ObPqCenterId &other) const
+{
+  return tablet_id_ == other.tablet_id_ && center_id_ == other.center_id_ && m_id_ == other.m_id_;
+}
+
+bool ObPqCenterId::operator!=(const ObPqCenterId &other) const
+{
+  return !(operator==(other));
+}
+
+bool ObPqCenterId::operator <(const ObPqCenterId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret= true;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret = false;
+  } else if (m_id_ < other.m_id_) {
+    bool_ret= true;
+  } else if (m_id_ > other.m_id_) {
+    bool_ret = false;
+  } else if (center_id_ < other.center_id_) {
+    bool_ret= true;
+  } else if (center_id_ > other.center_id_) {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+bool ObPqCenterId::operator >(const ObPqCenterId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret = false;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret= true;
+  } else if (m_id_ < other.m_id_) {
+    bool_ret = false;
+  } else if (m_id_ > other.m_id_) {
+    bool_ret= true;
+  } else if (center_id_ < other.center_id_) {
+    bool_ret = false;
+  } else if (center_id_ > other.center_id_) {
+    bool_ret= true;
+  }
+
+  return bool_ret;
+
+}
+
+void ObPqCenterId::reset()
+{
+  tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+  m_id_ = 0;
+  center_id_ = -1;
+}
+
+bool ObPqCenterId::is_valid() const
+{
+  return ObTabletID(tablet_id_).is_valid() && center_id_ >= 0 && m_id_ > 0;
 }
 
 #define PRINT_META()

@@ -172,7 +172,10 @@ public:
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
-        standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000),
+        state_info_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, reserve_allocator_),
+        standby_part_collected_(reserve_allocator_),
+        ask_state_info_interval_(100 * 1000),
+        refresh_state_info_interval_(100 * 1000),
         transfer_deleted_(false)
   { /*reset();*/ }
   ~ObPartTransCtx() { destroy(); }
@@ -542,6 +545,8 @@ public:
   RetainCause get_retain_cause() const { return static_cast<RetainCause>(ATOMIC_LOAD(&retain_cause_)); };
 
   int del_retain_ctx();
+
+  int collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg);
 
   // ========================================================
 private:

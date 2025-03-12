@@ -15,25 +15,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define protected public
 #define private public
 
 #include "storage/schema_utils.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
 #include "storage/backup/ob_backup_extern_info_mgr.h"
-#include "share/backup/ob_backup_io_adapter.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

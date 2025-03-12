@@ -10,14 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_occam_time_guard.h"
-#include "share/rc/ob_tenant_base.h"
 #include "election_utils.h"
-#include "election_common_define.h"
-#include "election_args_checker.h"
 #include "logservice/palf/election/message/election_message.h"
 
 namespace oceanbase

@@ -17,26 +17,20 @@
 #define protected public
 #define private   public
 
-#include "lib/ob_plugin.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_fts_plugin_mgr.h"
-#include "storage/fts/ob_whitespace_ft_parser.h"
-#include "storage/fts/ob_fts_stop_word.h"
 #include "sql/das/ob_das_utils.h"
+#include "storage/fts/ob_fts_plugin_helper.h"
+#include "storage/fts/ob_fts_stop_word.h"
+#include "storage/fts/ob_whitespace_ft_parser.h"
+#include "plugin/sys/ob_plugin_mgr.h"
+
+using namespace oceanbase::plugin;
 
 namespace oceanbase
 {
 
-static storage::ObTenantFTPluginMgr ft_plugin_mgr(OB_SYS_TENANT_ID);
-
 namespace storage
 {
-
-ObTenantFTPluginMgr &ObTenantFTPluginMgr::get_ft_plugin_mgr()
-{
-  return ft_plugin_mgr;
-}
 
 typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
 
@@ -72,7 +66,7 @@ public:
 public:
   ObTestAddWord(const ObCollationType &type, common::ObIAllocator &allocator);
   ~ObTestAddWord() = default;
-  int check_words(lib::ObITokenIterator *iter);
+  int check_words(ObITokenIterator *iter);
   int64_t get_add_word_count() const { return ith_word_; }
   static int64_t get_word_cnt_without_stopword() { return TEST_WORD_COUNT_WITHOUT_STOPWORD; }
   VIRTUAL_TO_STRING_KV(K_(ith_word));
@@ -125,7 +119,7 @@ int ObTestAddWord::casedown_word(const ObFTWord &src, ObFTWord &dst)
   return ret;
 }
 
-int ObTestAddWord::check_words(lib::ObITokenIterator *iter)
+int ObTestAddWord::check_words(ObITokenIterator *iter)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter)) {
@@ -184,8 +178,8 @@ public:
   virtual void TearDown() override;
 
 private:
-  lib::ObPluginParam plugin_param_;
-  lib::ObFTParserParam ft_parser_param_;
+  ObPluginParam plugin_param_;
+  ObFTParserParam ft_parser_param_;
   ObWhiteSpaceFTParserDesc desc_;
   common::ObArenaAllocator allocator_;
   ObTestAddWord add_word_;
@@ -198,7 +192,7 @@ TestDefaultFTParser::TestDefaultFTParser()
     allocator_(),
     add_word_(ObCollationType::CS_TYPE_UTF8MB4_BIN, allocator_)
 {
-  plugin_param_.desc_ = &desc_;
+  // plugin_param_.desc_ = &desc_;
 }
 
 void TestDefaultFTParser::SetUp()
@@ -290,49 +284,49 @@ TEST_F(TestDefaultFTParser, test_default_ft_parser_desc)
   ASSERT_EQ(OB_INVALID_ARGUMENT, desc_.segment(nullptr, iter));
 }
 
-class ObTestFTPluginHelper : public ::testing::Test
-{
-public:
-  static const char *TEST_FULLTEXT;
-  static const char *file_name;
-public:
-  ObTestFTPluginHelper();
-  virtual ~ObTestFTPluginHelper() = default;
+// class ObTestFTPluginHelper : public ::testing::Test
+// {
+// public:
+//   static const char *TEST_FULLTEXT;
+//   static const char *file_name;
+// public:
+//   ObTestFTPluginHelper();
+//   virtual ~ObTestFTPluginHelper() = default;
 
-  virtual void SetUp() override;
-  virtual void TearDown() override;
+//   virtual void SetUp() override;
+//   virtual void TearDown() override;
 
-private:
-  share::ObPluginSoHandler handler_;
-  const char *plugin_name_;
-  const ObCharsetInfo *cs_;
-  common::ObArenaAllocator allocator_;
-};
+// private:
+//   share::ObPluginSoHandler handler_;
+//   const char *plugin_name_;
+//   const ObCharsetInfo *cs_;
+//   common::ObArenaAllocator allocator_;
+// };
 
-const char *ObTestFTPluginHelper::TEST_FULLTEXT = "Test fulltext plugin.";
-const char *ObTestFTPluginHelper::file_name = "libmock_ft_parser.so";
+// const char *ObTestFTPluginHelper::TEST_FULLTEXT = "Test fulltext plugin.";
+// const char *ObTestFTPluginHelper::file_name = "libmock_ft_parser.so";
 
-ObTestFTPluginHelper::ObTestFTPluginHelper()
-  : handler_(),
-    plugin_name_("mock_ft_parser"),
-    cs_(nullptr),
-    allocator_()
-{
-}
+// ObTestFTPluginHelper::ObTestFTPluginHelper()
+//   : handler_(),
+//     plugin_name_("mock_ft_parser"),
+//     cs_(nullptr),
+//     allocator_()
+// {
+// }
 
-void ObTestFTPluginHelper::SetUp()
-{
-  ASSERT_EQ(OB_SUCCESS, handler_.open(plugin_name_, file_name));
+// void ObTestFTPluginHelper::SetUp()
+// {
+//   ASSERT_EQ(OB_SUCCESS, handler_.open(plugin_name_, file_name));
 
-  cs_ = common::ObCharset::get_charset(ObCollationType::CS_TYPE_UTF8MB4_BIN);
-  ASSERT_TRUE(nullptr != cs_);
-}
+//   cs_ = common::ObCharset::get_charset(ObCollationType::CS_TYPE_UTF8MB4_BIN);
+//   ASSERT_TRUE(nullptr != cs_);
+// }
 
-void ObTestFTPluginHelper::TearDown()
-{
-  cs_ = nullptr;
-  ASSERT_EQ(OB_SUCCESS, handler_.close());
-}
+// void ObTestFTPluginHelper::TearDown()
+// {
+//   cs_ = nullptr;
+//   ASSERT_EQ(OB_SUCCESS, handler_.close());
+// }
 
 //TEST_F(ObTestFTPluginHelper, test_fts_plugin)
 //{
@@ -423,6 +417,7 @@ class ObTestFTParseHelper : public ::testing::Test
 {
 public:
   static const char *name_;
+  static const char *properties_;
   typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
 public:
   ObTestFTParseHelper();
@@ -435,15 +430,17 @@ public:
 
 private:
   const common::ObString plugin_name_;
+  const common::ObString plugin_properties_;
   const common::ObCollationType cs_type_;
   common::ObArenaAllocator allocator_;
   ObFTParseHelper parse_helper_;
 };
 
 const char *ObTestFTParseHelper::name_ = "space.1";
-
+const char *ObTestFTParseHelper::properties_ = "{\"min_token_size\":3,\"max_token_size\":84,\"stopword_table\":\"default\",\"dict_table\":\"none\",\"quanitfier_table\":\"none\",\"ngram_token_size\":2}";
 ObTestFTParseHelper::ObTestFTParseHelper()
   : plugin_name_(STRLEN(name_), name_),
+    plugin_properties_(STRLEN(properties_), properties_),
     cs_type_(ObCollationType::CS_TYPE_UTF8MB4_BIN),
     allocator_()
 {
@@ -451,7 +448,13 @@ ObTestFTParseHelper::ObTestFTParseHelper()
 
 void ObTestFTParseHelper::SetUp()
 {
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  if (OB_ISNULL(GCTX.plugin_mgr_)) {
+    GCTX.plugin_mgr_ = OB_NEW(ObPluginMgr, ObMemAttr(OB_SYS_TENANT_ID, "test"));
+    ASSERT_NE(nullptr, GCTX.plugin_mgr_);
+    ASSERT_EQ(OB_SUCCESS, GCTX.plugin_mgr_->init(ObString("")));
+    ASSERT_EQ(OB_SUCCESS, GCTX.plugin_mgr_->load_builtin_plugins());
+  }
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 }
 
 void ObTestFTParseHelper::TearDown()
@@ -461,14 +464,14 @@ void ObTestFTParseHelper::TearDown()
 
 void ObTestFTParseHelper::SetUpTestCase()
 {
-  ASSERT_EQ(common::OB_SUCCESS, ObTenantFTPluginMgr::register_plugins());
-  ASSERT_EQ(common::OB_SUCCESS, ft_plugin_mgr.init());
+  // ASSERT_EQ(common::OB_SUCCESS, ObTenantFTPluginMgr::register_plugins());
+  // ASSERT_EQ(common::OB_SUCCESS, ft_plugin_mgr.init());
 }
 
 void ObTestFTParseHelper::TearDownTestCase()
 {
-  ft_plugin_mgr.destroy();
-  ObTenantFTPluginMgr::unregister_plugins();
+  // ft_plugin_mgr.destroy();
+  // ObTenantFTPluginMgr::unregister_plugins();
 }
 
 TEST_F(ObTestFTParseHelper, test_parse_fulltext)
@@ -503,23 +506,23 @@ TEST_F(ObTestFTParseHelper, test_parse_fulltext)
   ASSERT_EQ(OB_NOT_INIT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
 
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(nullptr, plugin_name_));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(&allocator_, ObString()));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(nullptr, plugin_name_, plugin_properties_));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(&allocator_, ObString(), plugin_properties_));
 
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_INVALID, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_PINYIN_BEGIN_MARK, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
 
-  ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 
   parse_helper_.reset();
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 
   parse_helper_.reset();
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
   ASSERT_EQ(ObTestAddWord::get_word_cnt_without_stopword(), ft_word_map.size());
@@ -531,7 +534,7 @@ TEST_F(ObTestFTParseHelper, test_parse_fulltext)
   }
   parse_helper_.reset();
   ft_word_map.clear();
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, "beng.1"));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, "beng.1", plugin_properties_));
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
   ASSERT_EQ(ObTestAddWord::get_word_cnt_without_stopword(), ft_word_map.size());
@@ -589,6 +592,7 @@ class ObTestNgramFTParseHelper : public ::testing::Test
 {
 public:
   static const char *name_;
+  static const char *properties_;
   static const int64_t TEST_WORD_COUNT = 27;
   typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
 public:
@@ -603,6 +607,7 @@ public:
 
 private:
   const common::ObString plugin_name_;
+  const common::ObString plugin_properties_;
   const char *ngram_words_[TEST_WORD_COUNT];
   const common::ObCollationType cs_type_;
   common::ObArenaAllocator allocator_;
@@ -610,9 +615,11 @@ private:
 };
 
 const char *ObTestNgramFTParseHelper::name_ = "ngram.1";
+const char *ObTestNgramFTParseHelper::properties_ = "{\"min_token_size\":3,\"max_token_size\":84,\"stopword_table\":\"default\",\"dict_table\":\"none\",\"quanitfier_table\":\"none\",\"ngram_token_size\":2}";
 
 ObTestNgramFTParseHelper::ObTestNgramFTParseHelper()
   : plugin_name_(STRLEN(name_), name_),
+    plugin_properties_(STRLEN(properties_), properties_),
     ngram_words_{"oc", "ce", "ea", "an", "nb", "ba", "as", "se", "fu", "ul", "ll", "lt", "te", "ex", "xt", "ar", "rc", "ch", "is", "no", "in", "th", "he", "wo", "or", "rl", "ld"},
     cs_type_(ObCollationType::CS_TYPE_UTF8MB4_BIN),
     allocator_()
@@ -621,7 +628,7 @@ ObTestNgramFTParseHelper::ObTestNgramFTParseHelper()
 
 void ObTestNgramFTParseHelper::SetUp()
 {
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 }
 
 void ObTestNgramFTParseHelper::TearDown()
@@ -631,14 +638,14 @@ void ObTestNgramFTParseHelper::TearDown()
 
 void ObTestNgramFTParseHelper::SetUpTestCase()
 {
-  ASSERT_EQ(common::OB_SUCCESS, ObTenantFTPluginMgr::register_plugins());
-  ASSERT_EQ(common::OB_SUCCESS, ft_plugin_mgr.init());
+  // ASSERT_EQ(common::OB_SUCCESS, ObTenantFTPluginMgr::register_plugins());
+  // ASSERT_EQ(common::OB_SUCCESS, ft_plugin_mgr.init());
 }
 
 void ObTestNgramFTParseHelper::TearDownTestCase()
 {
-  ft_plugin_mgr.destroy();
-  ObTenantFTPluginMgr::unregister_plugins();
+  // ft_plugin_mgr.destroy();
+  // ObTenantFTPluginMgr::unregister_plugins();
 }
 
 TEST_F(ObTestNgramFTParseHelper, test_parse_fulltext)
@@ -673,25 +680,25 @@ TEST_F(ObTestNgramFTParseHelper, test_parse_fulltext)
   ASSERT_EQ(OB_NOT_INIT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
 
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(nullptr, plugin_name_));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(&allocator_, ObString()));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(nullptr, plugin_name_, plugin_properties_));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(&allocator_, ObString(), plugin_properties_));
 
   const char *plugin_name = "space.1";
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, common::ObString(STRLEN(plugin_name), plugin_name)));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, common::ObString(STRLEN(plugin_name), plugin_name), plugin_properties_));
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_INVALID, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_PINYIN_BEGIN_MARK, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
 
-  ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 
   parse_helper_.reset();
   words.clear();
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
 
   parse_helper_.reset();
-  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_, plugin_properties_));
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
   ASSERT_EQ(get_word_count(), words.size());
@@ -747,7 +754,6 @@ int main(int argc, char **argv)
   system("rm -rf test_fts_plugin.log");
   OB_LOGGER.set_file_name("test_fts_plugin.log", true);
   OB_LOGGER.set_log_level("DEBUG");
-  oceanbase::storage::ObTestFTPluginHelper::file_name = argv[0];
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

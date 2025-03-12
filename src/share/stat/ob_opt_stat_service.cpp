@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "ob_opt_stat_service.h"
 
 namespace oceanbase {

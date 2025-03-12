@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/hash/ob_hashset.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 
 using namespace oceanbase::common::hash;

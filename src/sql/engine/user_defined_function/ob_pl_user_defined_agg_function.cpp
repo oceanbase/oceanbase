@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_pl_user_defined_agg_function.h"
-#include "sql/ob_spi.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"

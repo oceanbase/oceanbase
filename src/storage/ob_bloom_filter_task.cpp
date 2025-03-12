@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/ob_bloom_filter_task.h"
-#include "storage/blocksstable/ob_bloom_filter_cache.h"
-#include "storage/blocksstable/ob_bloom_filter_data_reader.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
-#include "lib/stat/ob_session_stat.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "share/ob_get_compat_mode.h"
 
 namespace oceanbase
 {

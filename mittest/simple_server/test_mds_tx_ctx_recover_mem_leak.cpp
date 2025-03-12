@@ -12,39 +12,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/time/ob_time_utility.h"
 #include <gtest/gtest.h>
-#include <stdlib.h>
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
-#include "lib/container/ob_tuple.h"
-#include "lib/ob_define.h"
-#include "ob_tablet_id.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_ls_id.h"
 #include "env/ob_simple_cluster_test_base.h"
 #include "env/ob_simple_server_restart_helper.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "logservice/rcservice/ob_role_change_service.h"
-#include "logservice/ob_ls_adapter.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/ls/ob_freezer.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ob_relative_table.h"
-#include "storage/ob_storage_table_guard.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include <fstream>
 
 #undef private
 #undef protected

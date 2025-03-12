@@ -259,6 +259,7 @@ struct TableItem
     skip_locked_ = false;
     need_expand_rt_mv_ = false;
     mview_id_ = common::OB_INVALID_ID;
+    mr_mv_flags_ = 0;
     node_ = NULL;
     view_base_item_ = NULL;
     flashback_query_expr_ = nullptr;
@@ -422,6 +423,7 @@ struct TableItem
   bool skip_locked_;
   bool need_expand_rt_mv_; // for real-time materialized view
   uint64_t mview_id_; // for materialized view, ref_id_ is mv container table id, mview_id_ is the view id
+  uint64_t mr_mv_flags_; // for major refresh mview
   const ParseNode* node_;
   // base table item for updatable view, can not access after the resolve phase
   const TableItem *view_base_item_;
@@ -1088,6 +1090,7 @@ public:
   inline bool is_reverse_link() const { return is_reverse_link_; }
   inline void set_has_vec_approx(bool has_vec_approx) { has_vec_approx_ = has_vec_approx; }
   inline bool has_vec_approx() const { return has_vec_approx_; }
+  bool is_contain_vector_origin_distance_calc() const;
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
   int64_t get_subquery_expr_size() const { return subquery_exprs_.count(); }

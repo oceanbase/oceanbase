@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "ob_p2p_dh_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 using namespace oceanbase::common;

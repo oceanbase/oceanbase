@@ -12,12 +12,8 @@
 
 #include <gtest/gtest.h>
 
-#include <cstring>
 
-#include "sql/engine/expr/ob_infix_expression.h"
-#include "lib/allocator/page_arena.h"
-#include "common/object/ob_object.h"
-#include "lib/container/ob_se_array.h"
+#include "src/sql/engine/expr/ob_postfix_expression.h"
 
 namespace oceanbase
 {

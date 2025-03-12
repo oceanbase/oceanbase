@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "observer/ob_uniq_task_queue.h"
-#include "rpc/mock_ob_common_rpc_proxy.h"
-#include "lib/ob_define.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/config/ob_server_config.h"
-#include "lib/oblog/ob_log_module.h"
+#include "src/share/ob_common_rpc_proxy.h"
 namespace oceanbase
 {
 namespace observer

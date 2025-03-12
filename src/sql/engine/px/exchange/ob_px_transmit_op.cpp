@@ -13,18 +13,12 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_transmit_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/datahub/components/ob_dh_sample.h"
-#include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
 #include "sql/dtl/ob_dtl_utils.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"
 #include "sql/engine/aggregate/ob_merge_groupby_vec_op.h"
 #include "share/detect/ob_detect_manager_utils.h"
-#include <unordered_set>
 
 namespace oceanbase
 {

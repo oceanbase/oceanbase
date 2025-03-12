@@ -11,10 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/meta_store/ob_tenant_seq_generator.h"
+#include "ob_tenant_seq_generator.h"
 #include "storage/meta_store/ob_tenant_storage_meta_persister.h"
-#include "lib/ob_errno.h"
-#include "lib/atomic/ob_atomic.h"
 #include "observer/omt/ob_tenant.h"
 namespace oceanbase
 {

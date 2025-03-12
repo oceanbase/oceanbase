@@ -11,12 +11,8 @@
  */
 
 #include "ob_replay_status.h"
-#include "ob_log_replay_service.h"
-#include "logservice/ob_log_base_type.h"
-#include "logservice/palf/palf_env.h"
-#include "lib/stat/ob_session_stat.h"
-#include "share/ob_errno.h"
 #include "logservice/ob_log_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

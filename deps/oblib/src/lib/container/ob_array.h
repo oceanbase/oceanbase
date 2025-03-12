@@ -499,32 +499,39 @@ int ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::assign(con
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
-    this->reset();
     int64_t N = other.count();
-    (void)this->reserve(other.count());
-    if (OB_UNLIKELY(static_cast<uint64_t>(data_size_) < (sizeof(T)*N))) {
-      _OB_LOG(WARN, "no memory");
-      ret = OB_ALLOCATE_MEMORY_FAILED;
+    if (N > 0) {
+      int64_t new_size = sizeof(T) * N;
+      int64_t plus = new_size % block_size_;
+      new_size += (0 == plus) ? 0 : (block_size_ - plus);
+      T *new_data = (T *)block_allocator_.alloc(new_size);
+      if (NULL == new_data) {
+        _OB_LOG(WARN, "no memory");
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        int64_t failed_idx = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+          if (OB_FAIL(construct_assign(new_data[i], other.at(i)))) {
+            LIB_LOG(WARN, "failed to assign data", K(ret));
+            failed_idx = i;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          this->reset();
+          count_ = N;
+          valid_count_ = N;
+          data_size_ = new_size;
+          data_ = new_data;
+        } else {
+          for (int64_t i = 0; i < failed_idx; ++i) {
+            new_data[i].~T();
+          }
+          block_allocator_.free(new_data);
+          new_data = NULL;
+        }
+      }
     } else {
-      const int64_t assign = std::min(valid_count_, N);
-      for (int64_t i = 0; OB_SUCC(ret) && i < assign; ++i) {
-        if (OB_FAIL(copy_assign(data_[i], other.at(i)))) {
-          LIB_LOG(WARN, "failed to copy data", K(ret));
-          count_ = i;
-        }
-      }
-      for (int64_t i = assign; OB_SUCC(ret) && i < N; ++i) {
-        if (OB_FAIL(construct_assign(data_[i], other.at(i)))) {
-          LIB_LOG(WARN, "failed to copy data", K(ret));
-          count_ = i;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        count_ = N;
-      }
-      if (valid_count_ < count_) {
-        valid_count_ = count_;
-      }
+      this->reset();
     }
   }
   return ret;

@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_dist_plans.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_set.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_dist_plans.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/plan_cache/ob_plan_match_helper.h"
 using namespace oceanbase::share;

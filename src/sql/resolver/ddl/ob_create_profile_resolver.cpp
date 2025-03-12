@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_profile_resolver.h"
 #include "sql/resolver/ddl/ob_create_profile_stmt.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_service.h"
 
 namespace oceanbase
 {
@@ -258,8 +254,7 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
                                                          params_.session_info_->get_sql_mode(),
                                                          false, // FIXME: enable decimal int
                                                          compat_type,
-                                                         false, /*enable_mysql_compatible_dates*/
-                                                         params_.session_info_->get_local_ob_enable_plan_cache()))) {
+                                                         false /*enable_mysql_compatible_dates*/))) {
                 LOG_WARN("fail to resolve const", K(ret));
               } else if (OB_FAIL(fill_arg(param_type->value_, numeric_value, arg))) {
                 LOG_WARN("fail to fill arg", K(ret), K(param_type->value_));

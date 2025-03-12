@@ -12,97 +12,46 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_service.h"
 
-#include <new>
-#include <string.h>
-#include <cmath>
 
-#include "share/ob_define.h"
-#include "lib/ob_running_mode.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/utility/utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
+#include "ob_service.h"
 #include "lib/alloc/memory_dump.h"
 
-#include "common/ob_member_list.h"
-#include "common/ob_zone.h"
-#include "common/ob_tenant_data_version_mgr.h"
 #include "share/ob_version.h"
 
-#include "share/ob_ddl_common.h"
 #include "share/ob_version.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_zone_table_operation.h"
-#include "share/tablet/ob_tablet_info.h" // for ObTabletReplica
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
-#include "share/rc/ob_tenant_base.h"
 
-#include "storage/ob_i_table.h"
-#include "storage/tx/ob_trans_service.h"
 #include "sql/optimizer/ob_storage_estimator.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/optimizer/ob_join_order.h"
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_tenant_event_history_table_operator.h" // TENANT_EVENT_INSTANCE
 #include "observer/ob_server.h"
-#include "observer/ob_dump_task_generator.h"
-#include "observer/ob_server_schema_updater.h"
 #include "ob_server_event_history_table_operator.h"
-#include "share/ob_alive_server_tracer.h"
-#include "storage/ddl/ob_tablet_split_task.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
-#include "storage/ddl/ob_complement_data_task.h" // complement data for drop column
-#include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_delete_lob_meta_row_task.h" // delete lob meta row for drop vec index
-#include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_build_index_task.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_checkpoint_service.h"
-#include "storage/ls/ob_ls.h"
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "logservice/palf_handle_guard.h"     // PalfHandleGuard
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "share/scn.h"     // PalfHandleGuard
 #include "storage/backup/ob_backup_handler.h"
 #include "storage/backup/ob_ls_backup_clean_mgr.h"
-#include "storage/ob_file_system_router.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_ddl_sim_point.h" // for DDL_SIM
-#include "storage/backup/ob_backup_utils.h"
-#include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
-#include "rootserver/backup/ob_backup_schedule_task.h" // ObBackupScheduleTask
-#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_ls_replica_readbable_scn
 #include "rootserver/ob_service_name_command.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/ob_heartbeat_handler.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
-#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn
 
 namespace oceanbase
 {
@@ -899,6 +848,7 @@ int ObService::backup_fuse_tablet_meta(const obrpc::ObBackupFuseTabletMetaArg &a
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CHECK_BACKUP_TASK_EXIST_ERROR);
 int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &res)
 {
   int ret = OB_SUCCESS;
@@ -917,6 +867,13 @@ int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &re
       }
     }
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && ERRSIM_CHECK_BACKUP_TASK_EXIST_ERROR) {
+    res = true;
+    ret = ERRSIM_CHECK_BACKUP_TASK_EXIST_ERROR;
+    LOG_WARN("check backup task exist failed", K(ret), K(arg));
+  }
+#endif
   return ret;
 }
 
@@ -1760,6 +1717,8 @@ int ObService::check_server_empty_with_result(const obrpc::ObCheckServerEmptyArg
       const uint64_t server_id = arg.get_server_id();
       if (OB_FAIL(set_server_id_(server_id))) {
         LOG_WARN("failed to set server_id", KR(ret), K(server_id));
+      } else {
+        GCTX.in_bootstrap_ = true;
       }
     }
   }
@@ -2434,6 +2393,22 @@ int ObService::request_heartbeat(ObLeaseRequest &lease_request)
   return ret;
 }
 
+int ObService::generate_tenant_table_schemas_(const obrpc::ObBatchBroadcastSchemaArg &arg,
+      ObSArray<share::schema::ObTableSchema> &tables, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.get_tenant_id();
+  if (CLUSTER_CURRENT_VERSION != arg.get_cluster_current_version()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("server binary not equal, create tenant is not allowed", KR(ret), KCV(CLUSTER_CURRENT_VERSION), K(arg));
+  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, tables, allocator))) {
+    LOG_WARN("failed to construct_inner_table_schemas", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_BROADCAST_SCHEMA);
+
 // used by bootstrap/create_tenant
 int ObService::batch_broadcast_schema(
     const obrpc::ObBatchBroadcastSchemaArg &arg,
@@ -2442,6 +2417,9 @@ int ObService::batch_broadcast_schema(
   int ret = OB_SUCCESS;
   ObMultiVersionSchemaService *schema_service = gctx_.schema_service_;
   const int64_t sys_schema_version = arg.get_sys_schema_version();
+  ObSArray<ObTableSchema> generated_tables;
+  const ObIArray<ObTableSchema> *tables_to_broadcast = NULL;
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -2451,14 +2429,30 @@ int ObService::batch_broadcast_schema(
   } else if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(ERRSIM_BROADCAST_SCHEMA)) {
+    LOG_WARN("ERRSIM_BROADCAST_SCHEMA", KR(ret));
   } else if (OB_FAIL(schema_service->async_refresh_schema(
              OB_SYS_TENANT_ID, sys_schema_version))) {
     LOG_WARN("fail to refresh sys schema", KR(ret), K(sys_schema_version));
+  } else if (arg.need_generate_schema()) {
+    if (OB_FAIL(generate_tenant_table_schemas_(arg, generated_tables, arena_allocator))) {
+      LOG_WARN("failed to generate tenant table schemas", KR(ret), K(arg));
+    } else {
+      tables_to_broadcast = &generated_tables;
+    }
+  } else {
+    tables_to_broadcast = &arg.get_tables();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tables_to_broadcast)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(tables_to_broadcast));
   } else if (OB_FAIL(schema_service->broadcast_tenant_schema(
-             arg.get_tenant_id(), arg.get_tables()))) {
+             arg.get_tenant_id(), *tables_to_broadcast))) {
     LOG_WARN("fail to broadcast tenant schema", KR(ret), K(arg));
   }
   result.set_ret(ret);
+  DEBUG_SYNC(BEFORE_FINISH_BROADCAST_SCHEMA);
   return ret;
 }
 
@@ -3584,6 +3578,120 @@ int ObService::force_set_ls_as_single_replica(
     }
   }
   LOG_INFO("finish force_set_ls_as_single_replica", KR(ret), K(arg));
+  return ret;
+}
+
+int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, obrpc::ObForceSetServerListResult &result)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("force_set_server_list", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ob_service is not inited", KR(ret));
+  } else if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.omt_ is null", KR(ret), K(arg));
+  } else {
+    common::ObArray<uint64_t> tenant_ids;
+    (void) GCTX.omt_->get_mtl_tenant_ids(tenant_ids);
+    const int64_t new_membership_timestamp = ObTimeUtility::current_time();
+    bool all_succeed = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
+      const int64_t tenant_id = tenant_ids[i];
+      COMMON_LOG(INFO, "start to excute force_set_server_list", K(tenant_id));
+      MTL_SWITCH(tenant_id) {
+        ObLSService *ls_svr = MTL(ObLSService*);
+        logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+        ObSharedGuard<storage::ObLSIterator> ls_iter_guard;
+        ObForceSetServerListResult::ResultInfo result_info(tenant_id);
+
+        if (OB_ISNULL(ls_svr) || OB_ISNULL(log_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ptr is null", KR(ret), K(tenant_id), KP(ls_svr), KP(log_service));
+        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD))) {
+          LOG_WARN("fail to get ls iter guard", KR(ret), K(tenant_id));
+        }
+
+        if (OB_FAIL(ret)) {
+          all_succeed = false;
+          COMMON_LOG(WARN, "force_set_server_list with current tenant failed", KR(ret), K(tenant_id));
+        }
+
+        while (OB_SUCC(ret)) {
+          COMMON_LOG(INFO, "start to iterate every log stream of tenant", K(tenant_id));
+          ObLS *ls = nullptr;
+          logservice::ObLogHandler *log_handler = NULL;
+          if (OB_FAIL(ls_iter_guard->get_next(ls))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next ls", KR(ret), K(tenant_id));
+            }
+          } else if (OB_ISNULL(ls)){
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ls is nullptr", KR(ret), K(tenant_id));
+          } else {
+            common::ObMemberList old_member_list;
+            int64_t old_replica_num = 0;
+            ObLSID ls_id = ls->get_ls_id();
+
+            if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+              ret = OB_ERR_UNEXPECTED;
+              COMMON_LOG(ERROR, "log_handler is null", KR(ret), K(tenant_id), K(ls_id), KP(ls));
+            } else if (OB_FAIL(log_handler->get_paxos_member_list(old_member_list, old_replica_num))) {
+              LOG_WARN("get old_member_list failed", KR(ret), K(tenant_id), K(ls_id), KP(ls));
+            } else {
+              common::ObMemberList new_member_list;
+              // new_member_list is the intersection of args.server_list_ and old_member_list
+              for (int64_t j = 0; OB_SUCC(ret) && j < arg.server_list_.size(); ++j) {
+                const common::ObAddr &server = arg.server_list_[j];
+                if (!old_member_list.contains(server)) {
+                } else if (OB_FAIL(new_member_list.add_member(ObMember(server, new_membership_timestamp)))){
+                  LOG_WARN("new_member_list add_member failed", K(ret), K(server));
+                }
+              }
+
+              if (OB_FAIL(ret)) {
+              } else if (arg.replica_num_ != new_member_list.get_member_number()) {
+                ret = OB_STATE_NOT_MATCH;
+                LOG_WARN("new_member_list number does not equal to arg.replica_num", K(ret), K(arg), K(new_member_list.get_member_number()));
+              } else if (OB_FAIL(log_handler->force_set_member_list(new_member_list, arg.replica_num_))) {
+                LOG_WARN("force_set_server_list failed", KR(ret), K(arg), K(tenant_id), K(ls_id));
+              } else {
+                COMMON_LOG(INFO, "execute force_set_server_list successfully with "
+                           "current tenant and ls", K(arg), K(tenant_id), K(ls_id));
+              }
+            }
+
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(result_info.add_ls_info(ls_id, ret))) {
+              LOG_WARN("add_result_info failed", K(tmp_ret), K(ls_id), "actual ret", ret);
+            }
+
+            if (OB_FAIL(ret)) {
+              COMMON_LOG(WARN, "failed to execute force_set_server_list with "
+                         "current tenant and ls", KR(ret), K(arg), K(tenant_id), K(ls_id));
+              ret = OB_SUCCESS; // ignore failed return code, keep executing next ls
+            }
+          } // end if
+        } // end while
+
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(result.result_list_.push_back(result_info))) {
+          LOG_WARN("result_list_ push_back failed", K(tmp_ret), K(tenant_id), K(result_info));
+        }
+        if (0 != result_info.failed_ls_info_.size()) {
+          all_succeed = false;
+        }
+        ret = OB_SUCCESS; // ignore failed return code, keep executing next tenant
+      } // MTL_SWITCH end
+    } // for end
+
+    if (all_succeed) {
+      result.ret_ = OB_SUCCESS;
+    } else {
+      result.ret_ = OB_PARTIAL_FAILED;
+    }
+  }
   return ret;
 }
 

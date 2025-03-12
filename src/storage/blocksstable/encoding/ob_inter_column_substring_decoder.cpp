@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_inter_column_substring_decoder.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {

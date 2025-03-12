@@ -32,7 +32,7 @@ public:
                       ObIPxCoordEventListener &listener);
 public:
   virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const = 0;
-  virtual int try_schedule_next_dfo(ObExecContext &ctx) const = 0;
+  virtual int try_schedule_next_dfo(ObExecContext &ctx) = 0;
   virtual int set_temp_table_ctx_for_sqc(ObExecContext &exec_ctx, ObDfo &child) const;
   virtual int dispatch_transmit_channel_info_via_sqc(ObExecContext &ctx,
                                                      ObDfo &child,
@@ -64,7 +64,7 @@ public:
 
   virtual int init_all_dfo_channel(ObExecContext &ctx) const;
   virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
-  virtual int try_schedule_next_dfo(ObExecContext &ctx) const;
+  virtual int try_schedule_next_dfo(ObExecContext &ctx);
   virtual void clean_dtl_interm_result(ObExecContext &ctx) override;
 
 private:
@@ -84,6 +84,42 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSerialDfoScheduler);
 };
 
+typedef common::ObFixedArray<common::ObAddr, common::ObIAllocator> ObAddrFixedArray;
+struct ObPxNodePool {
+  ObPxNodePool()
+      : candidate_node_pool_(),
+        data_node_cnt_(OB_INVALID_SIZE),
+        px_node_policy_(ObPxNodePolicy::INVALID),
+        px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT) {}
+  int init(ObExecContext &exec_ctx);
+  inline const ObAddrFixedArray& get_candidate_node_pool() { return candidate_node_pool_; }
+  inline void set_data_node_cnt(int64_t data_node_cnt) { data_node_cnt_ = data_node_cnt; }
+  inline int64_t get_data_node_cnt() { return data_node_cnt_; }
+  inline bool data_node_empty() const { return data_node_cnt_ == 0; }
+
+  inline ObPxNodePolicy get_px_node_policy() const { return px_node_policy_; }
+  inline void set_px_node_policy(ObPxNodePolicy px_node_policy) { px_node_policy_ = px_node_policy; }
+  inline ObPxNodeSelectionMode get_px_node_selection_mode() const { return px_node_selection_mode_; }
+  inline void set_px_node_selection_mode(ObPxNodeSelectionMode selection_mode)
+  {
+    px_node_selection_mode_ = selection_mode;
+  }
+
+  static int get_tenant_config_px_node_policy(int64_t tenant_id,
+                                          ObPxNodePolicy &px_node_policy);
+
+  // It represents the candidate pool of execution nodes,
+  // prioritizing nodes that contain the data
+  // to achieve the goal of preferentially selecting data-containing nodes
+  // and reducing network overhead.
+  ObAddrFixedArray candidate_node_pool_;
+  // Represents the total number of data-related nodes involved in the SQL.
+  // 0 indicates that the node pool is empty
+  // and a fallback to child_distribution is required.
+  int64_t data_node_cnt_;
+  ObPxNodePolicy px_node_policy_;
+  ObPxNodeSelectionMode px_node_selection_mode_;
+};
 
 class ObParallelDfoScheduler : public ObDfoSchedulerBasic
 {
@@ -95,7 +131,7 @@ public:
         : ObDfoSchedulerBasic(coord_info, root_dfo_action, listener), proc_(proc)
     {}
     virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
-    virtual int try_schedule_next_dfo(ObExecContext &ctx) const;
+    virtual int try_schedule_next_dfo(ObExecContext &ctx);
     virtual void clean_dtl_interm_result(ObExecContext &ctx) override { UNUSED(ctx); }
 private:
     int dispatch_transmit_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
@@ -120,10 +156,11 @@ private:
                                  int rc) const;
     int schedule_pair(ObExecContext &exec_ctx,
                       ObDfo &child,
-                      ObDfo &parent) const;
+                      ObDfo &parent);
     int wait_for_dfo_finish(ObDfoMgr &dfo_mgr) const;
   private:
     ObPxMsgProc &proc_;
+    ObPxNodePool px_node_pool_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObParallelDfoScheduler);
 };

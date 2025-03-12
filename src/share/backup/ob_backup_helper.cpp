@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_helper.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "common/ob_smart_var.h"
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 
 using namespace oceanbase;
 using namespace common;

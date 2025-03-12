@@ -11,7 +11,6 @@
  */
 
 #include "lib/ob_name_id_def.h"
-#include <stdlib.h>
 #include <string.h>
 namespace oceanbase
 {

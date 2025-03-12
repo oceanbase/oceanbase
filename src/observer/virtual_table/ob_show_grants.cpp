@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_show_grants.h"
 
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_priv_common.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase
@@ -27,7 +24,9 @@ namespace observer
 ObShowGrants::ObShowGrants()
     : ObVirtualTableScannerIterator(),
       tenant_id_(OB_INVALID_ID),
-      user_id_(OB_INVALID_ID)
+      user_id_(OB_INVALID_ID),
+      enable_role_id_array_(),
+      session_priv_()
 {
 }
 
@@ -1155,7 +1154,7 @@ int ObShowGrants::has_show_grants_priv(uint64_t show_user_id) const
       SERVER_LOG(WARN, "fail to init need_privs", K(ret));
     } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
       SERVER_LOG(WARN, "Add need priv to stmt_need_privs error", K(ret));
-    } else if (OB_FAIL(schema_guard_->check_priv(session_priv_, stmt_need_privs))) {
+    } else if (OB_FAIL(schema_guard_->check_priv(session_priv_, enable_role_id_array_, stmt_need_privs))) {
       SERVER_LOG(WARN, "No privilege show grants", K(ret));
     } else {
       //do nothing

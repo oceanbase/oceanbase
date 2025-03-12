@@ -11,11 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include <sys/time.h>
 #include "lib/geo/ob_geo_func_register.h"
 #include "ob_geo_func_testx.h"
 #include "ob_geo_func_testy.h"
-#include "lib/json_type/ob_json_common.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {

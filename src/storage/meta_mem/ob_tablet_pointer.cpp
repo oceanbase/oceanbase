@@ -10,22 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/hash/ob_cuckoo_hashmap.h"
-#include "lib/stat/ob_latch_define.h"
-#include "common/ob_tablet_id.h"
-#include "share/ob_ls_id.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "ob_tablet_pointer.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 #define USING_LOG_PREFIX STORAGE
 

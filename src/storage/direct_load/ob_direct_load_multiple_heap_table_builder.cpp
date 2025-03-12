@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_builder.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 
 namespace oceanbase
 {
@@ -88,8 +89,7 @@ int ObDirectLoadMultipleHeapTableBuilder::init(const ObDirectLoadMultipleHeapTab
 }
 
 int ObDirectLoadMultipleHeapTableBuilder::append_row(const ObTabletID &tablet_id,
-                                                     const table::ObTableLoadSequenceNo &seq_no,
-                                                     const ObDatumRow &datum_row)
+                                                     const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -103,8 +103,7 @@ int ObDirectLoadMultipleHeapTableBuilder::append_row(const ObTabletID &tablet_id
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param_), K(datum_row));
   } else {
-    row_.tablet_id_ = tablet_id;
-    if (OB_FAIL(row_.from_datums(datum_row.storage_datums_, datum_row.count_, seq_no))) {
+    if (OB_FAIL(row_.from_datum_row(tablet_id, datum_row))) {
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(append_row(row_))) {
       LOG_WARN("fail to append row", KR(ret), K(row_));
@@ -194,7 +193,7 @@ int ObDirectLoadMultipleHeapTableBuilder::close()
 }
 
 int ObDirectLoadMultipleHeapTableBuilder::get_tables(
-  ObIArray<ObIDirectLoadPartitionTable *> &table_array, ObIAllocator &allocator)
+  ObDirectLoadTableHandleArray &table_array, ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -230,21 +229,15 @@ int ObDirectLoadMultipleHeapTableBuilder::get_tables(
       LOG_WARN("fail to push back data fragment", KR(ret));
     }
     if (OB_SUCC(ret)) {
+      ObDirectLoadTableHandle table_handle;
       ObDirectLoadMultipleHeapTable *heap_table = nullptr;
-      if (OB_ISNULL(heap_table = OB_NEWx(ObDirectLoadMultipleHeapTable, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadMultipleHeapTable", KR(ret));
+      if (OB_FAIL(table_manager->alloc_multiple_heap_table(table_handle))) {
+        LOG_WARN("fail to alloc multiple heap table", KR(ret));
+      } else if (FALSE_IT(heap_table = static_cast<ObDirectLoadMultipleHeapTable *>(table_handle.get_table()))) {
       } else if (OB_FAIL(heap_table->init(create_param))) {
         LOG_WARN("fail to init heap_table", KR(ret), K(create_param));
-      } else if (OB_FAIL(table_array.push_back(heap_table))) {
+      } else if (OB_FAIL(table_array.add(table_handle))) {
         LOG_WARN("fail to push back heap table", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != heap_table) {
-          heap_table->~ObDirectLoadMultipleHeapTable();
-          allocator.free(heap_table);
-          heap_table = nullptr;
-        }
       }
     }
   }

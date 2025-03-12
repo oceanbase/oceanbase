@@ -14,7 +14,6 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "lib/utility/ob_test_util.h"
 #include "common/object/ob_obj_type.h"
 #undef protected
 #undef private
@@ -29,9 +28,6 @@ constexpr bool is_array_fully_initialized(const T (&arr)[row][col], int row_dept
 }
 
 #include "sql/engine/expr/ob_expr_relational_cmp_type.map"
-#include "sql/engine/expr/ob_expr_arithmetic_result_type.map"
-#include "sql/engine/expr/ob_expr_merge_result_type_oracle.map"
-#include "sql/engine/expr/ob_expr_relational_result_type.map"
 
 // Do these maps need to be symmetric?
 // ob_expr_div_result_type.map

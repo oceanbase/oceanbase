@@ -41,6 +41,7 @@ namespace blocksstable
 class ObSSTable;
 class ObDDLIndexBlockRowIterator;
 class ObDDLMergeBlockRowIterator;
+class ObUnitedSliceRowIterator;
 // Memory structure of Index micro block.
 // This struct won't hold extra memory, lifetime security need to be ensured by caller
 struct ObIndexBlockDataHeader
@@ -112,6 +113,7 @@ enum class ObIndexFormat {
   TRANSFORMED,
   BLOCK_TREE,
   DDL_MERGE
+  //DDL_SLICE
 };
 
 class ObIndexBlockIterParam final
@@ -417,7 +419,7 @@ public:
                       const ObStorageDatumUtils &datum_utils,
                       const ObQueryFlag &query_flag,
                       const ObITableReadInfo *table_read_info = nullptr);
-  TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
+  TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter), KP_(ddl_slice_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),
                K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
                K_(is_normal_cg), K_(parent_row_range), K_(filter_constant_type), K_(is_normal_query),
@@ -451,6 +453,7 @@ private:
   ObTFMIndexBlockRowIterator *transformed_iter_;
   ObDDLIndexBlockRowIterator *ddl_iter_;
   ObDDLMergeBlockRowIterator *ddl_merge_iter_;
+  ObUnitedSliceRowIterator *ddl_slice_iter_;
   ObIndexBlockRowIterator *iter_; //point to one of above four iter
   const ObStorageDatumUtils *datum_utils_;
   int64_t range_idx_;

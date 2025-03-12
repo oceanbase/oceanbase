@@ -28,6 +28,7 @@
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "common/ob_learner_list.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
+#include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 
 namespace oceanbase
 {
@@ -180,7 +181,8 @@ struct ObMigrationOpArg
       K_(src),
       K_(dst),
       K_(data_src),
-      K_(paxos_replica_number));
+      K_(paxos_replica_number),
+      K_(tablet_id_array));
   share::ObLSID ls_id_;
   ObMigrationOpType::TYPE type_;
   int64_t cluster_id_;
@@ -190,6 +192,7 @@ struct ObMigrationOpArg
   common::ObReplicaMember data_src_;
   int64_t paxos_replica_number_;
   bool prioritize_same_zone_src_;
+  common::ObArray<ObTabletID> tablet_id_array_;
 };
 
 struct ObTabletsTransferArg
@@ -427,7 +430,8 @@ public:
   TYPE get_type() const { return type_; }
   int set_type(int32_t type);
   void reset();
-
+  bool is_rebuild_ls_type() const { return ObLSRebuildType::CLOG == type_ || ObLSRebuildType::TRANSFER == type_; }
+  bool is_rebuild_rebuild_type() const { return ObLSRebuildType::TABLET == type_; }
   TO_STRING_KV(K_(type));
 private:
   TYPE type_;
@@ -486,7 +490,11 @@ public:
   bool operator ==(const ObLSRebuildInfo &other) const;
   int assign(const ObLSRebuildInfo &info);
 
+  bool is_rebuild_ls() const { return type_.is_rebuild_ls_type(); }
+  bool is_rebuild_tablet() const { return type_.is_rebuild_rebuild_type(); }
+
   TO_STRING_KV(K_(status), K_(type), K_(tablet_id_array), K_(src));
+public:
   ObLSRebuildStatus status_;
   ObLSRebuildType type_;
   ObRebuildTabletIDArray tablet_id_array_;

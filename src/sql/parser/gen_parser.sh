@@ -47,6 +47,16 @@ fi
 }
 
 function generate_parser {
+
+# fts boolean mode parser for mysql
+bison_parser ../../../src/sql/parser/ftsparser.y ../../../src/sql/parser/ftsparser_tab.c
+flex -Cfa -B -8 -o ../../../src/sql/parser/ftsblex_lex.c ../../../src/sql/parser/ftsblex.l ../../../src/sql/parser/ftsparser_tab.h
+
+sed '/This var may be unused depending upon options./d' -i ../../../src/sql/parser/ftsblex_lex.c
+sed "/Setup the input buffer state to scan the given bytes/,/}/{/int i/d}" -i ../../../src/sql/parser/ftsblex_lex.c
+sed "/Setup the input buffer state to scan the given bytes/,/}/{/for ( i = 0; i < _yybytes_len; ++i )/d}" -i ../../../src/sql/parser/ftsblex_lex.c
+sed "/Setup the input buffer state to scan the given bytes/,/}/{s/\tbuf\[i\] = yybytes\[i\]/memcpy(buf, yybytes, _yybytes_len)/g}" -i ../../../src/sql/parser/ftsblex_lex.c
+
 # generate mysql sql_parser
 bison_parser ../../../src/sql/parser/sql_parser_mysql_mode.y ../../../src/sql/parser/sql_parser_mysql_mode_tab.c
 flex -Cfa -B -8 -o ../../../src/sql/parser/sql_parser_mysql_mode_lex.c ../../../src/sql/parser/sql_parser_mysql_mode.l ../../../src/sql/parser/sql_parser_mysql_mode_tab.h

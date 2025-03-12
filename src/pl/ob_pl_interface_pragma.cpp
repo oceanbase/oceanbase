@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/ob_pl_interface_pragma.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "pl/ob_pl.h"
 
 namespace oceanbase
 {

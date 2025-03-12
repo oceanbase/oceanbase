@@ -10,14 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SERVER
-#include "share/vector_index/ob_plugin_vector_index_scheduler.h"
+#include "ob_plugin_vector_index_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
-#include "share/table/ob_ttl_util.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -901,9 +898,9 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
           // do nothing
         } else if (tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
           // do nothing, wait for next schedule
-        } else if (OB_FAIL(adapter->check_need_sync_to_follower(need_sync))) {
+        } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower(need_sync))) {
           LOG_WARN("fail to check need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
-        } else if (need_sync && is_leader_) {
+        } else if ((need_refresh_ || need_sync) && is_leader_) {
           if (OB_FAIL(tablet_id_array_.push_back(iter->first))) {
             LOG_WARN("fail to push tablet id need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
           } else if (OB_FAIL(table_id_array_.push_back(adapter->get_inc_table_id()))) {
@@ -916,15 +913,26 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
     }
   }
 
-  if (OB_FAIL(ret) || !is_leader_) {
+  if (OB_FAIL(ret)) {
     // do nothing
-  } else if (need_submit_log) {
-    if (OB_FAIL(submit_log_())) {
+  } else if (!need_submit_log) {
+    // do nothing
+  } else if (is_leader_) {
+    if (need_refresh_) {
+      if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(mgr->get_complete_adapter_map()))) {
+        TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
+      }
+    } else if (OB_FAIL(submit_log_())) {
       TRANS_LOG(WARN, "fail to submit vector index memdata sync log",KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     } else {
-      TRANS_LOG(INFO, "submit vector index memdata sync log success", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      TRANS_LOG(INFO, "submit vector index memdata sync log success", KR(ret), K(need_refresh_), K(tenant_id_), K(ls_->get_ls_id()));
+    }
+  } else if (!is_leader_ && need_refresh_) {
+    if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(mgr->get_complete_adapter_map()))) {
+      TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
     }
   }
+  need_refresh_ = false;
 
   return ret;
 }
@@ -1030,7 +1038,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
   } else {
     // Notice: index_ls_mgr maybe null
     // create / remove adapter, check need update & write mem sync log
-    if (OB_FAIL(check_and_execute_adapter_maintenance_task(index_ls_mgr))) {
+    if (OB_FAIL(check_and_execute_adapter_maintenance_task(index_ls_mgr))) { // Tips: do merge
       LOG_WARN("fail to check and execute adapter maintenance task",
         KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
@@ -1040,7 +1048,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
     // write tablets need memdata sync to clog
     if (OB_NOT_NULL(index_ls_mgr)
         && (current_memory_config_ != 0)
-        && OB_FAIL(log_tablets_need_memdata_sync(index_ls_mgr))) {
+        && OB_FAIL(log_tablets_need_memdata_sync(index_ls_mgr))) { // Tips: check if need check to follower
       LOG_WARN("fail to log tablets need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
 
@@ -1568,27 +1576,22 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
     ObPluginVectorIndexAdaptor *adapter = iter->second;
     ObTabletID tablet_id = iter->first;
     if (tablet_id == adapter->get_inc_tablet_id()) {
-      if (adapter->get_sync_idle_count() == 0) {
-        adapter->inc_sync_idle_count();
+      char *task_ctx_buf =
+        static_cast<char *>(get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+      ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
+      if (OB_ISNULL(task_ctx_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
+      } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, adapter->get_inc_table_id()))) {
+      } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
+        LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
       } else {
-        // generate one task
-        char *task_ctx_buf =
-          static_cast<char *>(get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
-        ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
-        if (OB_ISNULL(task_ctx_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
-        } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, adapter->get_inc_table_id()))) {
-        } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
-          LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
-        } else {
-          LOG_INFO("memdata sync success set force index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
-        }
-        if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
-          task_ctx->~ObPluginVectorIndexTaskCtx();
-          get_processing_allocator().free(task_ctx);
-          task_ctx = nullptr;
-        }
+        LOG_INFO("memdata sync success set force index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
+        task_ctx->~ObPluginVectorIndexTaskCtx();
+        get_processing_allocator().free(task_ctx);
+        task_ctx = nullptr;
       }
     }
   }

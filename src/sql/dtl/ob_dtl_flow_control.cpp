@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_flow_control.h"
-#include "share/ob_errno.h"
-#include "ob_dtl_basic_channel.h"
 #include "sql/engine/px/ob_sqc_ctx.h"
-#include "ob_dtl_channel_loop.h"
 #include "ob_dtl_utils.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;

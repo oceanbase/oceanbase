@@ -11,17 +11,8 @@
  */
 
 #include "ob_ls_task.h"
-#include <cstdint>
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_print_utils.h"
-#include "ob_archive_define.h"                // ArchiveKey
-#include "share/backup/ob_archive_piece.h"    // ObArchivePiece
-#include "share/backup/ob_archive_struct.h"   // ObLSArchivePersistInfo
 #include "ob_archive_task.h"                  // Archive.*Task
 #include "ob_ls_mgr.h"                        // ObArchiveLSMgr
-#include "ob_archive_worker.h"                // ObArchiveWorker
 #include "ob_archive_allocator.h"             // ObArchiveAllocator
 #include "ob_archive_task_queue.h"            // ObArchiveTaskStatus
 

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_upgrade_storage_format_version_executor.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ob_ddl_service.h"
-#include "rootserver/ob_rs_job_table_operator.h"
-#include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/ob_time_zone_info_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

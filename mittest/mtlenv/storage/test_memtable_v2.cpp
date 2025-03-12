@@ -17,13 +17,9 @@
 #define private public
 #define protected public
 #include "storage/memtable/ob_memtable.h"
-#include "share/rc/ob_tenant_base.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/tx/ob_mock_tx_ctx.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/init_basic_struct.h"
-#include "share/ob_master_key_getter.h"
 
 namespace oceanbase
 {
@@ -149,7 +145,7 @@ public:
                                   ls_id_,
                                   &tx_table_,
                                   (ObLockTable*)(0x01),
-                                  (ObITsMgr *)(0x01),
+                                  (ObTsMgr *)(0x01),
                                   (ObTransService *)(0x01),
                                   &palf_param,
                                   nullptr));
@@ -3621,7 +3617,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
                        const ObLSID &ls_id,
                        ObTxTable *tx_table,
                        ObLockTable *lock_table,
-                       ObITsMgr *ts_mgr,
+                       ObTsMgr *ts_mgr,
                        ObTransService *txs,
                        ObITxLogParam * param,
                        ObITxLogAdapter * log_adapter)

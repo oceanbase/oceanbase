@@ -12,10 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
-#include "lib/string/ob_string.h"
 #include "ob_ngram_ft_parser.h"
+#include "storage/fts/ob_fts_struct.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::plugin;
 
 namespace oceanbase
 {
@@ -31,6 +32,7 @@ ObNgramFTParser::ObNgramFTParser()
     next_(nullptr),
     end_(nullptr),
     c_nums_(0),
+    ngram_token_size_(plugin::ObFTParserParam::NGRAM_TOKEN_SIZE),
     is_inited_(false)
 {}
 
@@ -46,10 +48,11 @@ void ObNgramFTParser::reset()
   next_ = nullptr;
   end_ = nullptr;
   c_nums_ = 0;
+  ngram_token_size_ = plugin::ObFTParserParam::NGRAM_TOKEN_SIZE;
   is_inited_ = false;
 }
 
-int ObNgramFTParser::init(lib::ObFTParserParam *param)
+int ObNgramFTParser::init(ObFTParserParam *param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -67,6 +70,7 @@ int ObNgramFTParser::init(lib::ObFTParserParam *param)
     next_ = start_;
     end_ = start_ + param->ft_length_;
     c_nums_ = 0;
+    ngram_token_size_ = param->ngram_token_size_;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
@@ -118,13 +122,13 @@ int ObNgramFTParser::get_next_token(
           next += c_len;
           ++c_nums;
         }
-        if (NGRAM_TOKEN_SIZE == c_nums) {
+        if (ngram_token_size_ == c_nums) {
           word = start;
           word_len = next - start;
           char_len = c_nums;
           word_freq = 1;
           start += ob_mbcharlen_ptr(cs, start, end);
-          c_nums = NGRAM_TOKEN_SIZE - 1;
+          c_nums = ngram_token_size_ - 1;
           break;
         } else if (next >= end) {
           ret = OB_ITER_END;
@@ -148,21 +152,21 @@ ObNgramFTParserDesc::ObNgramFTParserDesc()
 {
 }
 
-int ObNgramFTParserDesc::init(lib::ObPluginParam *param)
+int ObNgramFTParserDesc::init(ObPluginParam *param)
 {
   is_inited_ = true;
   return OB_SUCCESS;
 }
 
-int ObNgramFTParserDesc::deinit(lib::ObPluginParam *param)
+int ObNgramFTParserDesc::deinit(ObPluginParam *param)
 {
   reset();
   return OB_SUCCESS;
 }
 
 int ObNgramFTParserDesc::segment(
-    lib::ObFTParserParam *param,
-    lib::ObITokenIterator *&iter) const
+    ObFTParserParam *param,
+    ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -179,6 +183,7 @@ int ObNgramFTParserDesc::segment(
     ObNgramFTParser *parser = new (buf) ObNgramFTParser();
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("fail to init ngram fulltext parser", K(ret), KPC(param));
+      param->allocator_->free(parser);
     } else {
       iter = parser;
     }
@@ -187,8 +192,8 @@ int ObNgramFTParserDesc::segment(
 }
 
 void ObNgramFTParserDesc::free_token_iter(
-    lib::ObFTParserParam *param,
-    lib::ObITokenIterator *&iter) const
+    ObFTParserParam *param,
+    ObITokenIterator *&iter) const
 {
   if (OB_NOT_NULL(iter)) {
     abort_unless(nullptr != param);
@@ -196,6 +201,14 @@ void ObNgramFTParserDesc::free_token_iter(
     iter->~ObITokenIterator();
     param->allocator_->free(iter);
   }
+}
+
+int ObNgramFTParserDesc::get_add_word_flag(ObAddWordFlag &flag) const
+{
+  int ret = OB_SUCCESS;
+  flag.set_casedown();
+  flag.set_groupby_word();
+  return ret;
 }
 
 } // end namespace storage

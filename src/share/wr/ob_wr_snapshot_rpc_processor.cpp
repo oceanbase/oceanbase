@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX WR
 
-#include "share/wr/ob_wr_snapshot_rpc_processor.h"
+#include "ob_wr_snapshot_rpc_processor.h"
 #include "share/wr/ob_wr_collector.h"
-#include "share/wr/ob_wr_task.h"
 #include "share/wr/ob_wr_service.h"
 #include "share/wr/ob_wr_stat_guard.h"
 #include "observer/ob_srv_network_frame.h"

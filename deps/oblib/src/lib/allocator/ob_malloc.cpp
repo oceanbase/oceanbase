@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/ob_malloc.h"
-#include <errno.h>
-#include "lib/thread_local/ob_tsi_factory.h"
+#include "ob_malloc.h"
 #include "lib/utility/utility.h"
-#include <algorithm>
 #ifdef __OB_MTRACE__
 #include <execinfo.h>
 #endif

@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_warning_buffer.h"
 #include "observer/virtual_table/ob_tenant_virtual_warning.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 namespace oceanbase

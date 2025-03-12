@@ -83,7 +83,8 @@ public:
               const ObString &zone_priority,
               const bool create_with_palf,
               const palf::PalfBaseInfo &palf_base_info,
-              const uint64_t source_tenant_id);
+              const uint64_t source_tenant_id,
+              const ObAllTenantInfo &tenant_info);
   int create_user_ls(const share::ObLSStatusInfo &status_info,
                      const int64_t paxos_replica_num,
                      const share::schema::ZoneLocalityIArray &zone_locality,
@@ -97,6 +98,15 @@ public:
   bool is_valid();
 
 private:
+
+  int create_sys_ls_(
+      const ObILSAddr &addr,
+      const int64_t paxos_replica_num,
+      const share::ObAllTenantInfo &tenant_info,
+      const common::ObCompatibilityMode &compat_mode,
+      const bool create_with_palf,
+      const palf::PalfBaseInfo &palf_base_info);
+
  int construct_clone_tenant_ls_addrs_(const uint64_t source_tenant_id,
                                       ObLSAddr &addr);
  int do_create_ls_(const ObLSAddr &addr,

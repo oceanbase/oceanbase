@@ -11,11 +11,8 @@
  */
 
 #include "ob_table_scan_range.h"
-#include "ob_dml_param.h"
-#include "storage/ob_storage_struct.h"
 #include "share/ob_partition_split_query.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
 
 namespace oceanbase
 {

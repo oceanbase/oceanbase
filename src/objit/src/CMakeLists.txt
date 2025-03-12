@@ -11,7 +11,7 @@ if(NOT CPP_STANDARD_20)
     add_definitions(-std=gnu++14)
 endif()
 add_library(objit_objects OBJECT ${objit_SRC})
-target_link_libraries(objit_objects PRIVATE oblib_base_base objit_base)
+target_link_libraries(objit_objects PRIVATE oblib_base objit_base)
 
 # Define a static library target named OBJIT_RAW.
 add_library(objit STATIC dummy.cpp)

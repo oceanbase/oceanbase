@@ -13,7 +13,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_all_virtual_ddl_sim_point_stat.h"
-#include "share/ob_ddl_sim_point.h"
 
 namespace oceanbase
 {

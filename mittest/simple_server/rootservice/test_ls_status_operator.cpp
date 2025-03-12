@@ -15,15 +15,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "share/ls/ob_ls_status_operator.h"
-#include "share/ls/ob_ls_recovery_stat_operator.h"
 #include "share/ls/ob_ls_life_manager.h"
-#include "share/scn.h"
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 
 
 namespace oceanbase

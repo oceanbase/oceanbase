@@ -10,21 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/ob_parallel_external_sort.h"
+#include "deps/oblib/src/common/storage/ob_device_common.h"
 #undef private
-#include <algorithm>
-#include "lib/hash/ob_hashmap.h"
-#include "lib/container/ob_vector.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/random/ob_random.h"
-#include "lib/string/ob_string.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_srv_rpc_proxy.h"
 #include "./blocksstable/ob_data_file_prepare.h"
-#include "share/ob_simple_mem_limit_getter.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase

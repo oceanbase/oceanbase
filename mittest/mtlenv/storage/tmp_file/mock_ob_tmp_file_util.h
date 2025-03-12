@@ -163,7 +163,7 @@ void MockTmpFileUtil::check_wbp_free_list(ObTmpWriteBufferPool &wbp)
   ObArray<uint32_t> meta_page_id;
 
   int64_t free_page_num = max_page_num - wbp.used_page_num_;
-  LOG_DEBUG("checking free page num", K(free_page_num), K(wbp.used_page_num_));
+  LOG_INFO("checking free page num", K(free_page_num), K(wbp.used_page_num_));
   wbp.print_statistics();
   EXPECT_GT(free_page_num, 0);
 
@@ -172,7 +172,7 @@ void MockTmpFileUtil::check_wbp_free_list(ObTmpWriteBufferPool &wbp)
     char *buf = nullptr;
     uint32_t new_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
     if (OB_FAIL(wbp.alloc_page(0/*fd*/, ObTmpFilePageUniqKey(i), new_page_id, buf))) {
-      LOG_DEBUG("wbp fail to alloc data page", K(wbp.shrink_ctx_));
+      LOG_WARN("wbp fail to alloc data page", K(wbp.shrink_ctx_));
     } else {
       ASSERT_EQ(OB_SUCCESS, data_page_id.push_back(new_page_id));
     }
@@ -184,12 +184,12 @@ void MockTmpFileUtil::check_wbp_free_list(ObTmpWriteBufferPool &wbp)
     char *buf = nullptr;
     uint32_t new_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
     if (OB_FAIL(wbp.alloc_page(0/*fd*/, ObTmpFilePageUniqKey(0, i), new_page_id, buf))) {
-      LOG_DEBUG("wbp fail to alloc meta page", K(wbp.shrink_ctx_));
+      LOG_WARN("wbp fail to alloc meta page", K(wbp.shrink_ctx_));
     } else {
       ASSERT_EQ(OB_SUCCESS, meta_page_id.push_back(new_page_id));
     }
   }
-  LOG_DEBUG("allocate all usable free pages",
+  LOG_INFO("allocate all usable free pages",
            K(free_page_num), K(data_page_id.size()), K(meta_page_id.size()));
   wbp.print_statistics();
   EXPECT_EQ(free_page_num, data_page_id.size() + meta_page_id.size());

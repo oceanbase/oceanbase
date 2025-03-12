@@ -13,20 +13,6 @@
 #include "lib/charset/ob_ctype.h"
 #include "ob_ctype_big5_tab.h"
 
-#define hasbig5head(c) (0xa1 <= (unsigned char)(c) && \
-                               (unsigned char)(c) <= 0xf9)
-#define hasbig5tail(c) \
-  ((0x40 <= (unsigned char)(c) && \
-            (unsigned char)(c) <= 0x7e) || \
-   (0xa1 <= (unsigned char)(c) && \
-            (unsigned char)(c) <= 0xfe))
-
-#define isbig5code(c, d) (hasbig5head(c) && hasbig5tail(d))
-#define big5code(c, d) (((unsigned char)(c) << 8) | (unsigned char)(d))
-#define getbig5head(e) ((unsigned char)(e >> 8))
-#define getbig5tail(e) ((unsigned char)(e & 0xff))
-
-
 static uint16 big5strokexfrm(uint16 i) {
   // storke order
   if ((i == 0xA440) || (i == 0xA441))
@@ -239,7 +225,7 @@ static size_t ob_well_formed_len_big5(const ObCharsetInfo *cs [[maybe_unused]],
 
 static ObUnicaseInfo ob_caseinfo_big5 = {0xFFFF, ob_caseinfo_pages_big5};
 
-static int func_big5_uni_onechar(int code) {
+int func_big5_uni_onechar(int code) {
   if ((code >= 0xA140) && (code <= 0xC7FC))
     return (tab_big5_uni0[code - 0xA140]);
   if ((code >= 0xC940) && (code <= 0xF9DC))

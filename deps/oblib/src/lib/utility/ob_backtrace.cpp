@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/utility/ob_backtrace.h"
-#include <stdio.h>
-#include <execinfo.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <string.h>
-#include "lib/utility/ob_defer.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/coro/co_var.h"
-#include "common/ob_common_utility.h"
+#include "ob_backtrace.h"
 #include "lib/utility/utility.h"
 
 namespace oceanbase

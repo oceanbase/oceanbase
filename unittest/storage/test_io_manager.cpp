@@ -12,27 +12,13 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #define private public
 #define protected public
-#include "share/io/ob_io_define.h"
-#include "share/io/ob_io_manager.h"
-#include "share/io/ob_io_calibration.h"
-#include "share/io/io_schedule/ob_io_mclock.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #undef private
 #undef protected
-#include "share/ob_local_device.h"
-#include "lib/thread/thread_pool.h"
-#include "lib/file/file_directory_utils.h"
-#include "common/ob_clock_generator.h"
-#include "storage/blocksstable/ob_micro_block_cache.h"
-#include "storage/tmp_file/ob_tmp_file_cache.h"
-#include "storage/meta_mem/ob_storage_meta_cache.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "share/io/ob_ss_io_request.h"
 #endif
 
 #define ASSERT_SUCC(ret) ASSERT_EQ((ret), ::oceanbase::common::OB_SUCCESS)

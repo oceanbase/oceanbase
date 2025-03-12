@@ -14,11 +14,6 @@
 
 #include "ob_ls_id.h"
 
-#include "lib/oblog/ob_log_module.h"       // LOG_*
-#include "lib/oblog/ob_log.h"       // LOG_*
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

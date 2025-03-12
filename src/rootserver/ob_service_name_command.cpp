@@ -13,14 +13,9 @@
 
 #include "ob_service_name_command.h"
 
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_unit_table_operator.h"
 #include "share/ob_all_server_tracer.h"
-#include "observer/ob_server_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_root_utils.h"
+#include "src/rootserver/ob_root_utils.h"
 #include "rootserver/ob_tenant_event_def.h"
 
 using namespace oceanbase::common;

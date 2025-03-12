@@ -741,8 +741,10 @@ create table jx_t1(pk int, a int, b int, c int, d int, primary key (pk), unique 
 insert into jx_t1 values(1, 2, 2, 2, 2);
 # BUG#29775335 - 修复外键指向自身时删除数据失败
 update jx_t1 set a =3, c = 3 where pk = 1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
 # BUG#29775335 - 修复外键指向自身时删除数据失败
 update jx_t1 set c =3, a = 3 where pk = 1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
 drop table jx_t1;
 drop table if exists child, parent;
 create table parent (id int not null, name varchar(228), primary key (id));

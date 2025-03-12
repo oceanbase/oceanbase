@@ -11,11 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdint.h>
-#include "lib/ob_define.h"
-    #include "lib/timezone/ob_timezone_util.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/timezone/ob_time_format.h"
 #include "lib/timezone/ob_timezone_info.h"
 
 using namespace oceanbase;

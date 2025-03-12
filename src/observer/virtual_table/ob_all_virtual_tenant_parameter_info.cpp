@@ -11,10 +11,7 @@
  */
 
 #include "ob_all_virtual_tenant_parameter_info.h"
-#include "lib/container/ob_array_iterator.h"
-#include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

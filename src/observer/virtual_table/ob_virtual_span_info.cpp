@@ -14,9 +14,6 @@
  * ---------------------------------------------------------------------------------------
  */
 #include "observer/virtual_table/ob_virtual_span_info.h"
-#include "sql/monitor/flt/ob_flt_span_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;

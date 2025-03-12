@@ -38,7 +38,10 @@ public:
     bool b_ret = share::OB_ALL_BALANCE_JOB_TID == inner_table_id
               || share::OB_ALL_RECOVER_TABLE_JOB_TID == inner_table_id
               || share::OB_ALL_LS_REPLICA_TASK_TID == inner_table_id
-              || share::OB_ALL_TRANSFER_PARTITION_TASK_TID == inner_table_id;
+              || share::OB_ALL_TRANSFER_PARTITION_TASK_TID == inner_table_id
+              || share::OB_FT_DICT_IK_UTF8_TID == inner_table_id
+              || share::OB_FT_STOPWORD_IK_UTF8_TID == inner_table_id
+              || share::OB_FT_QUANTIFIER_IK_UTF8_TID == inner_table_id;
     return b_ret;
   }
   /*

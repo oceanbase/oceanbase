@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_sql_parameterization.h"
-#include "share/schema/ob_schema_struct.h"
 #include "lib/json/ob_json_print_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/parser/ob_fast_parser.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/parser/parse_malloc.h"
-#include "sql/ob_sql_utils.h"
-#include "common/ob_smart_call.h"
-#include <algorithm>
 
 using namespace oceanbase;
 using namespace sql;
@@ -558,8 +550,11 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             is_fixed = false;
           }
           // int constants in div/mul/add/sub
-          bool formalize_int_prec =
-            node->type_ == T_INT
+          bool fmt_int_or_ch_decint =
+            (ctx.value_father_level_ < VALUE_VECTOR_LEVEL
+             && ctx.assign_father_level_ < ASSIGN_ITEM_LEVEL)
+            && ((lib::is_mysql_mode() && node->type_ == T_INT)
+                || (lib::is_oracle_mode() && (node->type_ == T_NUMBER || node->type_ == T_INT)))
             && (ctx.parent_type_ == T_OP_DIV
                 || ctx.parent_type_ == T_OP_MUL
                 || ctx.parent_type_ == T_OP_ADD
@@ -572,8 +567,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             LOG_WARN("get sys variable failed", K(ret));
           } else if (OB_FAIL(add_param_flag(ctx.tree_, *ctx.sql_info_))) {
             SQL_PC_LOG(WARN, "fail to get neg flag", K(ret));
-          } else if (formalize_int_prec
-                     && OB_FAIL(ctx.sql_info_->formalize_prec_index_.add_member(ctx.sql_info_->total_))) {
+          } else if (fmt_int_or_ch_decint
+                     && OB_FAIL(ctx.sql_info_->fmt_int_or_ch_decint_idx_.add_member(ctx.sql_info_->total_))) {
             LOG_WARN("add bitset member failed", K(ret));
           } else if (OB_FAIL(ObResolverUtils::resolve_const(node,
                               static_cast<stmt::StmtType>(ctx.sql_info_->sql_traits_.stmt_type_),
@@ -590,9 +585,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               enable_decimal_int,
                               compat_type,
                               enable_mysql_compatible_dates,
-                              session_info.get_local_ob_enable_plan_cache(),
                               ctx.is_from_pl_,
-                              formalize_int_prec))) {
+                              fmt_int_or_ch_decint))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
             //对于字符串值，其T_VARCHAR型的parse node有一个T_VARCHAR类型的子node，该子node描述字符串的charset等信息。
@@ -1225,7 +1219,7 @@ int ObSqlParameterization::gen_special_param_info(SqlInfo &sql_info, ObPlanCache
       LOG_WARN("fail to assign fixed param idx", K(ret));
     } else if (OB_FAIL(pc_ctx.must_be_positive_index_.add_members2(sql_info.must_be_positive_index_))) {
       LOG_WARN("failed to add bitset members", K(ret));
-    } else if (OB_FAIL(pc_ctx.formalize_prec_index_.add_members2(sql_info.formalize_prec_index_))){
+    } else if (OB_FAIL(pc_ctx.fmt_int_or_ch_decint_idx_.add_members2(sql_info.fmt_int_or_ch_decint_idx_))){
       LOG_WARN("failed to add bitset members", K(ret));
     }
   }
@@ -2812,7 +2806,9 @@ bool ObSqlParameterization::is_vector_index_query(const ParseNode *tree)
           curr = curr->children_[0]; // sort key is sys func
           if (curr->type_ == T_IDENT && OB_NOT_NULL(curr->str_value_)) {
             ObString func_name(curr->str_len_, curr->str_value_);
-            bret = func_name.case_compare("l2_distance") == 0 || func_name.case_compare("negative_inner_product") == 0;
+            bret = func_name.case_compare("l2_distance") == 0
+                   || func_name.case_compare("negative_inner_product") == 0
+                   || func_name.case_compare("cosine_distance") == 0;
           }
         }
       }

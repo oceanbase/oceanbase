@@ -14,10 +14,6 @@
 
 #include "ob_core_meta_table.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_column_schema.h"
-#include "lib/string/ob_string.h"  // for ObString
 
 namespace oceanbase
 {

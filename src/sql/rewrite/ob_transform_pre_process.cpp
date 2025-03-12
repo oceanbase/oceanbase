@@ -12,39 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_pre_process.h"
-#include "sql/rewrite/ob_transformer_impl.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_unit_getter.h"
-#include "share/schema/ob_column_schema.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/expr/ob_expr_arg_case.h"
-#include "sql/engine/expr/ob_expr_xmlparse.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/config/ob_server_config.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/dml/ob_merge_resolver.h"
-#include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/rewrite/ob_transform_udt_utils.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "sql/resolver/dml/ob_insert_all_stmt.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
 
 using namespace oceanbase::common;
@@ -3483,7 +3457,8 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
   } else if (/*false == ctx_->session_info_->is_inner() //内部session不附加条件, 给定的sql已经考虑过了*/
-             ObSQLSessionInfo::USER_SESSION == ctx_->session_info_->get_session_type()) {
+             ObSQLSessionInfo::USER_SESSION == ctx_->session_info_->get_session_type()
+             && !ctx_->disable_gtt_session_isolation_) {
     common::ObArray<TableItem*> table_item_list;
     int64_t num_from_items = stmt->get_from_item_size();
     //1, collect all table item
@@ -9117,13 +9092,13 @@ int ObTransformPreProcess::extract_idx_from_table_items(ObDMLStmt *sub_stmt,
     LOG_WARN("unexpected null error.", K(ret));
   } else if (table_item->is_joined_table()) {
     const JoinedTable *joined_table = static_cast<const JoinedTable*>(table_item);
-    if (OB_FAIL(extract_idx_from_table_items(sub_stmt,
+    if (OB_FAIL(SMART_CALL(extract_idx_from_table_items(sub_stmt,
                                              joined_table->left_table_,
-                                             rel_ids))) {
+                                             rel_ids)))) {
       LOG_WARN("failed to extract idx from join table.", K(ret));
-    } else if (OB_FAIL(extract_idx_from_table_items(sub_stmt,
+    } else if (OB_FAIL(SMART_CALL(extract_idx_from_table_items(sub_stmt,
                                                     joined_table->right_table_,
-                                                    rel_ids))) {
+                                                    rel_ids)))) {
       LOG_WARN("failed to extract idx from join table.", K(ret));
     } else {}
   } else {
@@ -9458,7 +9433,9 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObDMLStmt &stmt,
       } else if (OB_ISNULL(dest_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected dest_info", K(ret), KPC(dest_info));
-      } else if (OB_FAIL(dest_info->transform_to_pl_type(*ctx_->allocator_, pl_type))) {
+      } else if (OB_FAIL(dest_info->transform_to_pl_type(*ctx_->allocator_,
+                                                         *ctx_->schema_checker_->get_schema_mgr(),
+                                                         pl_type))) {
         LOG_WARN("failed to get pl type", K(ret));
       } else if (OB_ISNULL(coll_type = static_cast<const pl::ObCollectionType *>(pl_type)) ||
                  OB_UNLIKELY(!pl_type->is_collection_type())) {
@@ -9560,7 +9537,9 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
   } else if (OB_ISNULL(elem_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected info", K(ret), KPC(elem_info));
-  } else if (OB_FAIL(elem_info->transform_to_pl_type(*ctx_->allocator_, pl_type))) {
+  } else if (OB_FAIL(elem_info->transform_to_pl_type(*ctx_->allocator_,
+                                                     *ctx_->schema_checker_->get_schema_mgr(),
+                                                     pl_type))) {
     LOG_WARN("failed to get pl type", K(ret));
   } else if (OB_ISNULL(object_type = static_cast<const pl::ObRecordType *>(pl_type)) ||
              OB_UNLIKELY(!pl_type->is_record_type())) {

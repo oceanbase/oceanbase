@@ -11,16 +11,8 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_server.h"
-#include "observer/omt/ob_multi_tenant.h"
 
-#include "observer/omt/ob_tenant_node_balancer.h"     // ObTenantNodeBalancer
-#include "share/io/ob_io_manager.h"                   // ObIOManager
-#include "share/io/ob_io_struct.h"                    // device_health_status_to_str
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_service.h"
-#include "logservice/ob_server_log_block_mgr.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
@@ -162,6 +154,20 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
           break;
         case MEMORY_LIMIT:
           cur_row_.cells_[i].set_int(GMEMCONF.get_server_memory_limit());
+          break;
+        case DATA_DISK_SUGGESTED_OPERATION:
+          if (GCTX.is_shared_storage_mode()) {
+            cur_row_.cells_[i].set_varchar(share::DataDiskSuggestedOperationType::get_str(resource_info.report_data_disk_suggested_operation_));
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
+          break;
+        case DATA_DISK_SUGGESTED_SIZE:
+          if (GCTX.is_shared_storage_mode()) {
+            cur_row_.cells_[i].set_int(resource_info.report_data_disk_suggested_size_);
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
           break;
         default: {
           ret = OB_ERR_UNEXPECTED;

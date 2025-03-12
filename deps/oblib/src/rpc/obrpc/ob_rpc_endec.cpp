@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBRPC
-#include "rpc/obrpc/ob_rpc_endec.h"
-#include "rpc/obrpc/ob_irpc_extra_payload.h"
-#include "lib/runtime.h"
-#include "lib/trace/ob_trace.h"
+#include "ob_rpc_endec.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 

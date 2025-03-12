@@ -2446,7 +2446,7 @@ int ObInnerTableSchema::all_rootservice_job_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH, //column_length
+      MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable

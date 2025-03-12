@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_maintenance_service.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_schema_struct.h" // ObMvRefreshMode
 
 namespace oceanbase
 {
@@ -28,7 +24,8 @@ using namespace common;
  */
 
 ObMViewMaintenanceService::ObMViewMaintenanceService() : is_inited_(false),
-                                                         mview_refresh_info_timestamp_(0)
+                                                         mview_refresh_info_timestamp_(0),
+                                                         mview_mds_timestamp_(0)
   {}
 
 ObMViewMaintenanceService::~ObMViewMaintenanceService() {}
@@ -50,8 +47,7 @@ int ObMViewMaintenanceService::init()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint64_t bucket_num = 64;
-  ObMemAttr attr(tenant_id, "MvRefreshInfo");
-  ObMemAttr cache_attr(tenant_id, "MvCacheTask");
+  ObMemAttr attr(tenant_id, "MViewService");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObMViewMaintenanceService init twice", KR(ret), KP(this));
@@ -77,8 +73,12 @@ int ObMViewMaintenanceService::init()
       LOG_WARN("fail to init mview clean snapshot task", KR(ret));
     } else if (OB_FAIL(mview_update_cache_task_.init())) {
       LOG_WARN("fail to init mview update cache task", KR(ret));
+    } else if (OB_FAIL(mview_mds_task_.init())) {
+      LOG_WARN("fail to init mview mds task", KR(ret));
     } else if (OB_FAIL(mview_refresh_info_cache_.create(bucket_num, attr))) {
-      LOG_WARN("fail to create mview refresh info map", KR(ret));
+      LOG_WARN("fail to create mview refresh info cache", KR(ret));
+    } else if (OB_FAIL(mview_mds_map_.create(bucket_num, attr))) {
+      LOG_WARN("fail to create mview mds map", KR(ret));
     } else {
       is_inited_ = true;
     }
@@ -116,6 +116,7 @@ void ObMViewMaintenanceService::sys_ls_task_stop_()
   replica_safe_check_task_.stop();
   collect_mv_merge_info_task_.stop();
   mview_clean_snapshot_task_.stop();
+  mview_mds_task_.stop();
 }
 
 void ObMViewMaintenanceService::wait()
@@ -129,6 +130,7 @@ void ObMViewMaintenanceService::wait()
   collect_mv_merge_info_task_.wait();
   mview_clean_snapshot_task_.wait();
   mview_update_cache_task_.wait();
+  mview_mds_task_.wait();
 }
 
 void ObMViewMaintenanceService::destroy()
@@ -144,6 +146,8 @@ void ObMViewMaintenanceService::destroy()
   mview_clean_snapshot_task_.destroy();
   mview_update_cache_task_.destroy();
   mview_refresh_info_cache_.destroy();
+  mview_mds_task_.destroy();
+  mview_mds_map_.destroy();
 }
 
 int ObMViewMaintenanceService::inner_switch_to_leader()
@@ -171,6 +175,8 @@ int ObMViewMaintenanceService::inner_switch_to_leader()
       LOG_WARN("collect mv merge info task start failed", KR(ret));
     } else if (OB_FAIL(mview_clean_snapshot_task_.start())) {
       LOG_WARN("fail to start mview clean snapshot task", KR(ret));
+    } else if (OB_FAIL(mview_mds_task_.start())) {
+      LOG_WARN("fail to start mview mds task", KR(ret));
     }
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
@@ -377,6 +383,7 @@ int ObMViewMaintenanceService::fetch_mv_refresh_scns(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_GET_WRONG_CACHE);
 int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &src_mview_ids,
                                                       ObMySQLProxy *sql_proxy,
                                                       const share::SCN &read_snapshot,
@@ -421,6 +428,19 @@ int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &
       LOG_WARN("fail to get mview last refresh info", K(ret), K(src_mview_ids), K(tenant_id));
     }
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && OB_FAIL(ERRSIM_GET_WRONG_CACHE)) {
+    LOG_WARN("errsim get wrong cache", K(ret), K(mview_refresh_scns));
+    const uint64_t two_day_ns = 172800000000000; // 2 * 24 * 60 * 60 * 1000 * 1000 * 1000;
+    for (int idx = 0; idx < mview_refresh_scns.count(); idx++) {
+      if (mview_refresh_scns.at(idx) > two_day_ns) {
+        mview_refresh_scns.at(idx) -= two_day_ns;
+      }
+      LOG_INFO("reduce mview refresh scn", K(idx), K(mview_refresh_scns.at(idx)));
+    }
+    ret = OB_SUCCESS;
+  }
+#endif
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     LOG_INFO("get_mview_refresh_info", K(ret), K(src_mview_ids), K(mview_ids),
             K(tenant_id), K(hit_cache),
@@ -428,5 +448,17 @@ int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &
   }
   return ret;
 }
+
+int ObMViewMaintenanceService::get_min_mview_mds_snapshot(share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  for (ObMViewMaintenanceService::MViewMdsOpMap::iterator it =mview_mds_map_.begin();OB_SUCC(ret) && it != mview_mds_map_.end(); it++) {
+    if (it->second.read_snapshot_ > 0 && (!scn.is_valid() || it->second.read_snapshot_ < scn.get_val_for_tx())) {
+      scn.convert_for_tx(it->second.read_snapshot_);
+    }
+  }
+  return ret;
+}
+
 } // namespace rootserver
 } // namespace oceanbase

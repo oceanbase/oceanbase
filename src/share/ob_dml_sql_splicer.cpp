@@ -14,10 +14,7 @@
 
 #include "share/ob_dml_sql_splicer.h"
 #include "lib/container/ob_se_array_iterator.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/hash/ob_hashmap.h"
-#include "common/object/ob_object.h"
 
 namespace oceanbase
 {

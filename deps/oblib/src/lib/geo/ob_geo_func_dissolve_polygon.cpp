@@ -13,11 +13,8 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_dispatcher.h"
-#include "lib/geo/ob_geo_func_dissolve_polygon.h"
-#include "lib/geo/ob_geo_func_disjoint.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_func_utils.h"
+#include "ob_geo_func_dissolve_polygon.h"
+#include "deps/oblib/src/lib/geo/ob_geo_func_register.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

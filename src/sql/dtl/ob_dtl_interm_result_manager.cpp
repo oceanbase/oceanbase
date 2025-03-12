@@ -11,16 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_DTL
-#include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
 #include "ob_dtl_interm_result_manager.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
-#include "sql/dtl/ob_dtl_linked_buffer.h"
-#include "sql/dtl/ob_dtl_msg_type.h"
 #include "share/detect/ob_detect_manager_utils.h"
-#include "deps/oblib/src/lib/hash/ob_hashtable.h"
 
 using namespace oceanbase;
 using namespace common;

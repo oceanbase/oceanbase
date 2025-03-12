@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_tablet_autoincrement_param.h"
-#include "share/schema/ob_table_param.h"
 
 namespace oceanbase
 {

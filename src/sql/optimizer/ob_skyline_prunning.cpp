@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_skyline_prunning.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 
 namespace oceanbase

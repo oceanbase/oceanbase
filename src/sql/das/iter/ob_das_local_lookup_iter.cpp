@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_local_lookup_iter.h"
-#include "sql/das/iter/ob_das_scan_iter.h"
-#include "sql/das/iter/ob_das_doc_id_merge_iter.h"
-#include "sql/das/iter/ob_das_vid_merge_iter.h"
 #include "sql/das/iter/ob_das_functional_lookup_iter.h"
-#include "sql/das/ob_das_scan_op.h"
+#include "sql/das/iter/ob_das_domain_id_merge_iter.h"
 #include "sql/das/ob_das_ir_define.h"
-#include "sql/das/ob_das_vec_define.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
@@ -179,18 +175,15 @@ int ObDASLocalLookupIter::add_rowkey()
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN ||
-            data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE ||
-            data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE ||
-            data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP);
+            data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP ||
+            data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE);
   ObDASScanIter *scan_iter = nullptr;
   if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
     scan_iter = static_cast<ObDASScanIter *>(data_table_iter_);
-  } else if (data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE) {
-    scan_iter = static_cast<ObDASDocIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   } else if (data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP) {
     scan_iter = static_cast<ObDASFuncLookupIter *>(data_table_iter_)->get_index_scan_iter();
-  } else if (data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE) {
-    scan_iter = static_cast<ObDASVIdMergeIter *>(data_table_iter_)->get_data_table_iter();
+  } else if (data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE) {
+    scan_iter = static_cast<ObDASDomainIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   }
   storage::ObTableScanParam &scan_param = scan_iter->get_scan_param();
   ObNewRange lookup_range;
@@ -264,9 +257,8 @@ int ObDASLocalLookupIter::do_index_lookup()
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN ||
-            data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE ||
-            data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE ||
-            data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP);
+            data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP ||
+            data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE);
   if (is_first_lookup_) {
     is_first_lookup_ = false;
     if (OB_FAIL(init_scan_param(lookup_param_, lookup_ctdef_, lookup_rtdef_))) {
@@ -295,18 +287,15 @@ int ObDASLocalLookupIter::check_index_lookup()
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN ||
-            data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE ||
-            data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE ||
-            data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP);
+            data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP ||
+            data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE);
   ObDASScanIter *scan_iter = nullptr;
   if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
     scan_iter = static_cast<ObDASScanIter*>(data_table_iter_);
-  } else if (data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE) {
-    scan_iter = static_cast<ObDASDocIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   } else if (data_table_iter_->get_type() == DAS_ITER_FUNC_LOOKUP) {
     scan_iter = static_cast<ObDASFuncLookupIter *>(data_table_iter_)->get_index_scan_iter();
-  } else {
-    scan_iter = static_cast<ObDASVIdMergeIter *>(data_table_iter_)->get_data_table_iter();
+  } else if (data_table_iter_->get_type() == DAS_ITER_DOMAIN_ID_MERGE) {
+    scan_iter = static_cast<ObDASDomainIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   }
   if (GCONF.enable_defensive_check() &&
       lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {

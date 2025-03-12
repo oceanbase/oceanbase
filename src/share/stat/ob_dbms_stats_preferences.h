@@ -332,6 +332,19 @@ class ObAutoSampleRowCountPrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "5000000"; }
 };
 
+class ObGatherStatBatchSizePrefs : public ObStatPrefs
+{
+  public:
+    ObGatherStatBatchSizePrefs() : ObStatPrefs() {}
+    ObGatherStatBatchSizePrefs(ObIAllocator *alloc,
+                                  ObSQLSessionInfo *session_info,
+                                  const ObString &pvalue) :
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "GATHER_STATS_BATCH_SIZE"; }
+    virtual const char* get_stat_pref_default_value() const { return "0"; }
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)
@@ -383,6 +396,8 @@ public:
   static int get_extra_stats_perfs_for_upgrade(ObSqlString &sql);
 
   static int get_extra_stats_perfs_for_upgrade_425(ObSqlString &sql);
+
+  static int get_extra_stats_perfs_for_upgrade_4351(ObSqlString &sql);
 
 private:
   static int do_get_prefs(ObMySQLProxy *mysql_proxy,

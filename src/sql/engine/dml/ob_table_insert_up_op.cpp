@@ -13,14 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_table_insert_up_op.h"
-#include "sql/engine/ob_operator_reg.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_insert_op.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -47,7 +43,8 @@ OB_DEF_SERIALIZE(ObTableInsertUpSpec)
   OB_UNIS_ENCODE(conflict_checker_ctdef_);
   OB_UNIS_ENCODE(all_saved_exprs_);
   OB_UNIS_ENCODE(has_global_unique_index_);
-  OB_UNIS_ENCODE(auto_inc_expr_);
+  OB_UNIS_ENCODE(ins_auto_inc_expr_);
+  OB_UNIS_ENCODE(upd_auto_inc_expr_);
   return ret;
 }
 
@@ -70,7 +67,8 @@ OB_DEF_DESERIALIZE(ObTableInsertUpSpec)
   OB_UNIS_DECODE(conflict_checker_ctdef_);
   OB_UNIS_DECODE(all_saved_exprs_);
   OB_UNIS_DECODE(has_global_unique_index_);
-  OB_UNIS_DECODE(auto_inc_expr_);
+  OB_UNIS_DECODE(ins_auto_inc_expr_);
+  OB_UNIS_DECODE(upd_auto_inc_expr_);
   return ret;
 }
 
@@ -91,7 +89,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertUpSpec)
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
   OB_UNIS_ADD_LEN(all_saved_exprs_);
   OB_UNIS_ADD_LEN(has_global_unique_index_);
-  OB_UNIS_ADD_LEN(auto_inc_expr_);
+  OB_UNIS_ADD_LEN(ins_auto_inc_expr_);
+  OB_UNIS_ADD_LEN(upd_auto_inc_expr_);
   return len;
 }
 
@@ -446,7 +445,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
         LOG_WARN("do_handle_before_row failed", K(ret));
       } else if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
         LOG_WARN("process update failed", K(ret), K(upd_ctdef));
-      } else if (upd_ctdef.is_heap_table_ &&
+      } else if (upd_ctdef.is_table_without_pk_ &&
           OB_FAIL(set_heap_table_new_pk(upd_ctdef, upd_rtdef))) {
         LOG_WARN("set heap table hidden_pk failed", K(ret), K(upd_ctdef));
       } else if (OB_FAIL(conflict_checker_.convert_exprs_to_stored_row(get_primary_table_upd_new_row(),
@@ -506,14 +505,20 @@ int ObTableInsertUpOp::do_insert_up_cache()
 int ObTableInsertUpOp::guarantee_last_insert_id()
 {
   int ret = OB_SUCCESS;
-  if (!has_guarantee_last_insert_id_ && OB_NOT_NULL(MY_SPEC.auto_inc_expr_)) {
-    int64_t last_insert_id = 0;
+  if (!has_guarantee_last_insert_id_ && OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
+    bool is_zero = false;
+    uint64_t casted_value = 0;
     ObDatum *auto_inc_id_datum = nullptr;
     ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-    if (OB_FAIL(MY_SPEC.auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+    if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
       LOG_WARN("eval auto_inc_expr failed", K(ret));
+    } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.ins_auto_inc_expr_,
+                                                            auto_inc_id_datum,
+                                                            is_zero,
+                                                            casted_value))) {
+      LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
     } else {
-      plan_ctx->set_last_insert_id_cur_stmt(auto_inc_id_datum->get_int());
+      plan_ctx->set_last_insert_id_cur_stmt(casted_value);
       has_guarantee_last_insert_id_ = true;
     }
   }
@@ -526,13 +531,20 @@ int ObTableInsertUpOp::get_last_insert_id_in_try_ins(int64_t &last_insert_id)
   ObDatum *auto_inc_id_datum = nullptr;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   if (!record_last_insert_id_try_ins_ && !has_guarantee_last_insert_id_) {
-    if (OB_NOT_NULL(MY_SPEC.auto_inc_expr_)) {
+    if (OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
+      bool is_zero = false;
+      uint64_t casted_value = 0;
       ObDatum *auto_inc_id_datum = nullptr;
       ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-      if (OB_FAIL(MY_SPEC.auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+      if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
         LOG_WARN("eval auto_inc_expr failed", K(ret));
+      } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.ins_auto_inc_expr_,
+                                                              auto_inc_id_datum,
+                                                              is_zero,
+                                                              casted_value))) {
+        LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
       } else {
-        last_insert_id = auto_inc_id_datum->get_int();
+        last_insert_id = casted_value;
         record_last_insert_id_try_ins_ = true;
       }
     }
@@ -592,7 +604,7 @@ int ObTableInsertUpOp::try_insert_row(bool &is_skipped)
       break;
     } else if (OB_FAIL(calc_insert_tablet_loc(ins_ctdef, ins_rtdef, tablet_loc))) {
       LOG_WARN("calc insert partition key failed", K(ret));
-    } else if (ins_ctdef.is_heap_table_ &&
+    } else if (ins_ctdef.is_table_without_pk_ &&
         OB_FAIL(ObDMLService::set_heap_table_hidden_pk(ins_ctdef, tablet_loc->tablet_id_, eval_ctx_))) {
       LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc));
     } else if (OB_FAIL(insert_row_to_das(ins_ctdef, ins_rtdef, tablet_loc, modify_row))) {

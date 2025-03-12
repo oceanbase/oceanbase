@@ -197,10 +197,6 @@ int ObDASFuncLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       LOG_WARN("failed to get next row from function lookup iter", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_UNLIKELY(lookup_row_cnt_ != lookup_rowkey_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected lookup row count", K_(lookup_row_cnt), K_(lookup_rowkey_cnt), K(ret));
-  }
   return ret;
 }
 

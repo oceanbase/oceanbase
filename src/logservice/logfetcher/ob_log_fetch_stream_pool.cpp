@@ -17,7 +17,6 @@
 #include "ob_log_fetch_stream_pool.h"
 
 #include "share/ob_define.h"                  // OB_SERVER_TENANT_ID
-#include "lib/allocator/ob_mod_define.h"    // ObModIds
 #include "lib/utility/ob_macro_utils.h"     // OB_FAIL
 #include "lib/oblog/ob_log_module.h"        // LOG_ERROR
 

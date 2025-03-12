@@ -33,10 +33,16 @@ public:
   uint32_t get_key() { return ATOMIC_LOAD(&futex_.uval()); }
   void wait(uint32_t key, int64_t timeout) {
     if (timeout > 0 && get_key() == key) {
-      ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
-      ATOMIC_FAA(&n_waiters_, 1);
-      futex_.wait(key, timeout);
-      ATOMIC_FAA(&n_waiters_, -1);
+      if (ObWaitEventIds::DEFAULT_COND_WAIT != event_no_) {
+        ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
+        ATOMIC_FAA(&n_waiters_, 1);
+        futex_.wait(key, timeout);
+        ATOMIC_FAA(&n_waiters_, -1);
+      } else {
+        ATOMIC_FAA(&n_waiters_, 1);
+        futex_.wait(key, timeout);
+        ATOMIC_FAA(&n_waiters_, -1);
+      }
     }
   }
 
@@ -57,16 +63,20 @@ private:
 struct SCondReadyFlag
 {
 public:
-  SCondReadyFlag(): ready_(0), lock_(0) {}
+  SCondReadyFlag(): lock_(0) {}
   ~SCondReadyFlag() {}
-  void set_ready() { if (ATOMIC_LOAD(&ready_) == 0) { ATOMIC_STORE(&ready_, 1); } }
-  bool lock() {
-    int64_t* addr = (int64_t*)this;
-    return ATOMIC_LOAD(addr) == 1 && ATOMIC_BCAS(addr, 1, 1l<<32);
+  bool trylock() {
+    bool bool_ret = false;
+    int value = ATOMIC_LOAD(&lock_);
+    if (value <= 0) {
+      if (ATOMIC_BCAS(&lock_, value, 1)) {
+        bool_ret = true;
+      }
+    }
+    return bool_ret;
   }
   void unlock() { ATOMIC_STORE(&lock_, 0); }
 private:
-  int ready_;
   int lock_;
 } CACHE_ALIGNED;
 
@@ -93,7 +103,7 @@ public:
     int64_t count_ CACHE_ALIGNED;
   };
   SCondCounter() {}
-  void add(uint32_t x) { ATOMIC_FAA(&count_[icpu_id() % CPU_COUNT].count_, x); }
+  void add(uint32_t x, uint32_t icpu_id) { ATOMIC_FAA(&count_[icpu_id % CPU_COUNT].count_, x); }
   uint32_t fetch() {
     int64_t sum = 0;
     for(int i = 0; i < CPU_COUNT; i++) {
@@ -122,16 +132,22 @@ public:
   typedef SCondSimpleIdGen IdGen;
   enum { CPU_COUNT = OB_MAX_CPU_NUM, COND_COUNT = CPU_COUNT, LOOP_LIMIT = 8 };
   void signal(uint32_t x = 1, int prio=0) {
+    uint32_t icpu_id = id_gen_.get();
     for (int p = PRIO-1; p >= prio && x > 0; p--) {
-      x -= conds_[id_gen_.get() % COND_COUNT][p].signal(x);
+      x -= conds_[icpu_id % COND_COUNT][p].signal(x);
     }
     if (x > 0) {
-      n2wakeup_.add(x);
-      lock_.set_ready();
+      n2wakeup_.add(x, icpu_id);
       int64_t loop_cnt = 0;
-      while(loop_cnt++ < LOOP_LIMIT && lock_.lock()) {
-        do_wakeup();
-        lock_.unlock();
+      while(loop_cnt < LOOP_LIMIT) {
+        if (lock_.trylock()) {
+          do_wakeup();
+          lock_.unlock();
+          break;
+        } else {
+          PAUSE();
+          loop_cnt++;
+        }
       }
       if (loop_cnt > LOOP_LIMIT) {
         do_wakeup();

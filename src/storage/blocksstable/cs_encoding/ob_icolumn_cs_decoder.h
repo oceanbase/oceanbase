@@ -131,6 +131,13 @@ public:
     UNUSEDx(ctx, row_ids, row_cap, group_by_cell);
     return OB_NOT_SUPPORTED;
   }
+
+  virtual bool is_new_column() const { return false; }
+
+  static bool need_padding(const bool is_padding_mode, const ObObjMeta &obj_meta)
+  {
+    return is_padding_mode && obj_meta.is_fixed_len_char_type();
+  }
 };
 
 class ObNoneExistColumnCSDecoder : public ObIColumnCSDecoder
@@ -147,7 +154,6 @@ public:
   virtual ObCSColumnHeader::Type get_type() const { return type_; }
   virtual bool can_vectorized() const override { return false; }
 };
-
 
 } // end namespace blocksstable
 } // end namespace oceanbase

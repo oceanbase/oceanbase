@@ -11,12 +11,7 @@
  */
 
 #include "mds_table_handler.h"
-#include "lib/lock/ob_small_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "mds_table_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 
 using namespace oceanbase::common;
 

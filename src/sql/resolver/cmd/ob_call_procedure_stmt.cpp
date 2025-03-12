@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "ob_call_procedure_stmt.h"
-#include "pl/ob_pl_type.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 

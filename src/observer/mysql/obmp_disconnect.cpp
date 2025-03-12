@@ -14,11 +14,6 @@
 
 #include "obmp_disconnect.h"
 
-#include "lib/stat/ob_session_stat.h"
-#include "rpc/ob_request.h"
-#include "observer/ob_server_struct.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/ob_sql_trans_control.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

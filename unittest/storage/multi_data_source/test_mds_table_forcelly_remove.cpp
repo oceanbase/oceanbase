@@ -14,34 +14,7 @@ static bool MDS_FLUSHER_ALLOW_ALLOC = true;
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/utility/utility.h"
-#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
-#include "share/ob_ls_id.h"
-#include "storage/multi_data_source/mds_writer.h"
-#include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include <exception>
-#include "lib/ob_errno.h"
-#include "share/ob_errno.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
-#include "lib/allocator/ob_malloc.h"
-#include "storage/multi_data_source/mds_node.h"
-#include "common/ob_clock_generator.h"
-#include "storage/multi_data_source/mds_row.h"
-#include "storage/multi_data_source/mds_unit.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/multi_data_source/mds_table_handler.h"
-#include "storage/tx/ob_trans_define.h"
-#include <algorithm>
-#include <numeric>
-#include "storage/multi_data_source/runtime_utility/mds_lock.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/multi_data_source/mds_table_mgr.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/multi_data_source/mds_table_order_flusher.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {
 namespace storage {

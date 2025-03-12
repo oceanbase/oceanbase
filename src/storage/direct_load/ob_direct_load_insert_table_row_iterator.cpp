@@ -14,9 +14,10 @@
 
 #include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
-#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 
 namespace oceanbase
 {
@@ -65,6 +66,7 @@ int ObDirectLoadInsertTableRowIterator::init(
       } else if (OB_UNLIKELY(!row_iter->is_valid() || row_iter->get_row_flag().get_column_count(
                                                         row_iter->get_column_count()) !=
                                                         insert_tablet_ctx->get_column_count())) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected row iter", KR(ret), KPC(row_iter));
       }
     }
@@ -127,7 +129,7 @@ int ObDirectLoadInsertTableRowIterator::inner_get_next_row(ObDatumRow *&result_r
 {
   int ret = OB_SUCCESS;
   result_row = nullptr;
-  const ObDatumRow *datum_row = nullptr;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
   while (OB_SUCC(ret) && nullptr == result_row) {
     if (pos_ >= row_iters_->count()) {
       ret = OB_ITER_END;
@@ -145,7 +147,7 @@ int ObDirectLoadInsertTableRowIterator::inner_get_next_row(ObDatumRow *&result_r
         LOG_WARN("unexpected datum row is null", KR(ret));
       } else {
         ObDatumRow *datum_row2 =
-          datum_row->row_flag_.is_delete() ? &delete_datum_row_ : &insert_datum_row_;
+          datum_row->is_delete_ ? &delete_datum_row_ : &insert_datum_row_;
         // rowkey cols
         if (row_iter->get_row_flag().uncontain_hidden_pk_) {
           uint64_t pk_seq = OB_INVALID_ID;
@@ -160,7 +162,7 @@ int ObDirectLoadInsertTableRowIterator::inner_get_next_row(ObDatumRow *&result_r
           }
         }
         // normal cols
-        if (OB_SUCC(ret) && !datum_row->row_flag_.is_delete()) {
+        if (OB_SUCC(ret) && !datum_row->is_delete_) {
           for (int64_t
                  i = row_iter->get_row_flag().uncontain_hidden_pk_ ? 0 : rowkey_column_count_,
                  j = rowkey_column_count_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
@@ -169,7 +171,11 @@ int ObDirectLoadInsertTableRowIterator::inner_get_next_row(ObDatumRow *&result_r
           }
         }
         if (OB_SUCC(ret) && nullptr != dml_row_handler_) {
-          if (OB_FAIL(dml_row_handler_->handle_insert_row_with_multi_version(insert_tablet_ctx_->get_tablet_id(), *datum_row2))) {
+          // 只有堆表insert阶段会走到这里
+          if (OB_UNLIKELY(datum_row->is_delete_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected delete row", KR(ret), KPC(datum_row));
+          } else if (OB_FAIL(dml_row_handler_->handle_insert_row(insert_tablet_ctx_->get_tablet_id(), *datum_row2))) {
             LOG_WARN("fail to handle insert row", KR(ret), KPC(datum_row2));
           }
         }

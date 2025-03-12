@@ -17,20 +17,8 @@
 
 #define private public
 #define protected public
-#include <sys/stat.h>
-#include <sys/vfs.h>
-#include <sys/types.h>
-#include <gmock/gmock.h>
-#include "lib/thread/threads.h"
-#include "lib/random/ob_random.h"
 #include "test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "storage/shared_storage/micro_cache/ob_ss_mem_data_manager.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_meta_manager.h"
-#include "storage/shared_storage/micro_cache/ob_ss_physical_block_manager.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
-#include "storage/shared_storage/micro_cache/task/ob_ss_micro_cache_task_runner.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 
 namespace oceanbase

@@ -134,6 +134,7 @@ enum ObExprInfoFlag
   IS_AUTO_PART_EXPR,
   IS_ATTR_EXPR,  // collection attr expr
   IS_EXISTS,
+  IS_CUT_CALC_EXPR,
 };
 
 #define IS_INFO_MASK_BEGIN  IS_CONST

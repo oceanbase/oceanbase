@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_dbms_crypto.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/ob_encryption_util.h"
-#include "ob_expr_extract.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

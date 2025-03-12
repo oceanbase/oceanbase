@@ -12,19 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "ob_ls_recovery_stat_operator.h"
 
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/string/ob_sql_string.h"//ObSqlString
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
-#include "lib/utility/ob_tracepoint.h"
-#include "common/ob_timeout_ctx.h"
-#include "share/ob_share_util.h"
+#include "ob_ls_recovery_stat_operator.h"
 #include "share/ls/ob_ls_status_operator.h"
-#include "share/scn.h"
-#include "logservice/palf/log_meta_info.h"//LogConfigVersion
 
 using namespace oceanbase;
 using namespace oceanbase::common;

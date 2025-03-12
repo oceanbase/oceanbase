@@ -269,7 +269,7 @@ public:
 
   common::ObIAllocator &get_allocator() { return allocator_; }
 
-  inline bool is_heap_table() const { return is_heap_table_; }
+  inline bool is_table_with_hidden_pk_column() const { return is_table_with_hidden_pk_column_; }
 
   inline uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
 
@@ -333,7 +333,7 @@ public:
 
 public:
   TO_STRING_KV(K_(rowkey_info),
-      K_(is_heap_table),
+      K_(is_table_with_hidden_pk_column),
       K_(user_column_idx_array),
       K_(user_column_idx_array_cnt),
       K_(column_schema_array),
@@ -351,7 +351,7 @@ private:
   {
     return OB_INVALID_ID != column_id
         && (OB_APP_MIN_COLUMN_ID <= column_id
-            || (is_heap_table_ && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id));
+            || (is_table_with_hidden_pk_column_ && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id));
   }
   int set_column_schema_info_for_column_id_(
       const uint64_t column_id,
@@ -381,7 +381,7 @@ private:
   bool                 is_inited_;
   common::ObIAllocator &allocator_;
 
-  bool               is_heap_table_;
+  bool               is_table_with_hidden_pk_column_;
   uint64_t           aux_lob_meta_tid_;
   ObLogRowkeyInfo    rowkey_info_;
 

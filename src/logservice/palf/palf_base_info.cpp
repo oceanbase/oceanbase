@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
 #include "palf_base_info.h"
 
 namespace oceanbase

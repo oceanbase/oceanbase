@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/ob_define.h"
 #include "sql/engine/ob_physical_plan.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_priv_attribute_access.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/geo/ob_sdo_geo_object.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 

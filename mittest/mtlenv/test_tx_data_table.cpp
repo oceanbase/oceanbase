@@ -13,27 +13,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define protected public
 #define private public
 #define UNITTEST
 
-#include <iostream>
-#include <thread>
-#include "lib/oblog/ob_log.h"
-#include "storage/ls/ob_freezer.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/tx_table/ob_tx_data_memtable_mgr.h"
-#include "storage/tx_table/ob_tx_data_table.h"
-#include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
-#include "storage/blocksstable/ob_datum_row.h"
 #undef private
 #undef protected
 

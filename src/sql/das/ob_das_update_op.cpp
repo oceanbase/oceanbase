@@ -12,14 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_update_op.h"
-#include "share/ob_scanner.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/dml/ob_dml_service.h"
-#include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_domain_utils.h"
-#include "storage/tx_storage/ob_access_service.h"
+#include "src/sql/engine/px/ob_dfo.h"
+#include "sql/engine/dml/ob_dml_service.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace common
@@ -55,29 +51,41 @@ public:
       old_row_(nullptr),
       new_row_(nullptr),
       domain_iter_(nullptr),
+      ft_doc_word_info_(nullptr),
       got_old_row_(false),
       iter_has_built_(false),
+      is_main_table_in_fts_ddl_(das_ctdef->is_main_table_in_fts_ddl_),
       allocator_(alloc)
   {
   }
   virtual ~ObDASUpdIterator();
   virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
-  int rewind(const ObDASDMLBaseCtDef *das_ctdef)
+  int rewind(const ObDASDMLBaseCtDef *das_ctdef, const ObFTDocWordInfo *ft_doc_word_info)
   {
     int ret = common::OB_SUCCESS;
     old_row_ = nullptr;
     new_row_ = nullptr;
     got_old_row_ = false;
     iter_has_built_ = false;
+    ft_doc_word_info_ = ft_doc_word_info;
     das_ctdef_ = static_cast<const ObDASUpdCtDef*>(das_ctdef);
     if (OB_NOT_NULL(domain_iter_)) {
       if (!das_ctdef->table_param_.get_data_table().is_domain_index()) {
         // This table isn't domain index, nothing to do.
       } else if (domain_iter_->is_same_domain_type(das_ctdef)) {
         // The das_ctdef and das_ctdef_ are either full-text search or multi-value index.
-        domain_iter_->set_ctdef(das_ctdef_, &(got_old_row_ ? das_ctdef_->new_row_projector_
-                                                           : das_ctdef_->old_row_projector_));
+        ObDomainDMLMode mode = ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT;
+        if (das_ctdef->table_param_.get_data_table().is_fts_index()) {
+          static_cast<ObFTDMLIterator *>(domain_iter_)->set_ft_doc_word_info(ft_doc_word_info_);
+          if (!got_old_row_ && !is_main_table_in_fts_ddl_) {
+            mode = ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+          }
+        }
+        domain_iter_->set_ctdef(das_ctdef_,
+                                &(got_old_row_ ? das_ctdef_->new_row_projector_
+                                               : das_ctdef_->old_row_projector_),
+                                mode);
         if (OB_FAIL(domain_iter_->rewind())) {
           LOG_WARN("fail to rewind for domain iterator", K(ret));
         }
@@ -99,8 +107,10 @@ private:
   blocksstable::ObDatumRow *new_row_;
   ObDASWriteBuffer::Iterator result_iter_;
   ObDomainDMLIterator *domain_iter_;
+  const ObFTDocWordInfo *ft_doc_word_info_;
   bool got_old_row_;
   bool iter_has_built_;
+  bool is_main_table_in_fts_ddl_;
   common::ObIAllocator &allocator_;
 };
 
@@ -192,11 +202,18 @@ int ObDASUpdIterator::get_next_domain_index_row(ObDatumRow *&row)
     }
   }
   if (OB_SUCC(ret)) {
-    const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
-    if (OB_ISNULL(domain_iter_) && OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(
-           allocator_, &cur_proj, result_iter_, das_ctdef_, nullptr/*main_ctdef*/, domain_iter_))) {
-      LOG_WARN("fail to create domain index dml iterator", K(ret));
-    } else if (OB_FAIL(domain_iter_->get_next_domain_row(row))) {
+    if (OB_ISNULL(domain_iter_)){
+      const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
+      ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, nullptr/*main_ctdef*/);
+      if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !got_old_row_) {
+        param.mode_ = is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+        param.ft_doc_word_info_ = ft_doc_word_info_;
+      }
+      if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {
+        LOG_WARN("fail to create domain index dml iterator", K(ret));
+      }
+    }
+    if (FAILEDx(domain_iter_->get_next_domain_row(row))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next domain row", K(ret), KPC(domain_iter_));
       } else if (!got_old_row_) {
@@ -204,6 +221,11 @@ int ObDASUpdIterator::get_next_domain_index_row(ObDatumRow *&row)
         iter_has_built_ = false;
         got_old_row_ = true;
         domain_iter_->set_row_projector(&(das_ctdef_->new_row_projector_));
+        if (OB_FAIL(domain_iter_->change_domain_dml_mode(ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT))) {
+          LOG_WARN("fail to change domain dml mode", K(ret));
+        } else {
+          ret = OB_ITER_END;
+        }
       }
     }
   }
@@ -290,6 +312,8 @@ int ObDASUpdateOp::open_op()
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  common::ObSEArray<ObFTDocWordInfo, 4> doc_word_infos;
+  doc_word_infos.set_attr(lib::ObMemAttr(MTL_ID(), "FTDocWInfo"));
   ObDASUpdIterator upd_iter(upd_ctdef_, write_buffer_, op_alloc_);
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator> upd_adaptor;
   upd_adaptor.tx_desc_ = trans_desc_;
@@ -303,7 +327,12 @@ int ObDASUpdateOp::open_op()
   upd_adaptor.ls_id_ = ls_id_;
   upd_adaptor.related_tablet_ids_ = &related_tablet_ids_;
   upd_adaptor.das_allocator_ = &op_alloc_;
-  if (OB_FAIL(upd_adaptor.write_tablet(upd_iter, affected_rows))) {
+  upd_adaptor.ft_doc_word_infos_ = &doc_word_infos;
+  if (OB_FAIL(ObDASDomainUtils::build_ft_doc_word_infos(ls_id_, snapshot_, related_ctdefs_, related_tablet_ids_,
+          upd_ctdef_->is_main_table_in_fts_ddl_, doc_word_infos))) {
+    LOG_WARN("fail to build fulltext doc word infos", K(ret), K(ls_id_), KPC(snapshot_), K(related_ctdefs_),
+        K(related_tablet_ids_));
+  } else if (OB_FAIL(upd_adaptor.write_tablet(upd_iter, affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("update row to partition storage failed", K(ret));
     }

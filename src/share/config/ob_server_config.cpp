@@ -11,23 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE_CONFIG
-#include <string>
-#include <sstream>
 
-#include "share/config/ob_server_config.h"
-#include "common/ob_common_utility.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/utility/utility.h"
-#include "lib/net/ob_net_util.h"
-#include "common/ob_record_header.h"
-#include "common/ob_zone.h"
+#include "ob_server_config.h"
 #include "observer/ob_server.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/unit/ob_unit_resource.h"     // ObUnitResource
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/ob_rpc_struct.h"
-#include "observer/ob_server_struct.h"
 extern "C" {
 #include "ussl-hook.h"
 #include "auth-methods.h"
@@ -209,49 +195,6 @@ double ObServerConfig::get_sys_tenant_default_max_cpu()
     }
   }
   return max_cpu;
-}
-
-int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  if (data_len - pos < MIN_LENGTH) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else {
-    /*
-     * Extra 'OB_UNIS_VERSION' and 'len' field are added by using new version
-     * serialization framework, which makes it hard to use header.version_ for
-     * compatible distinguish, also makes codes bellow ugly.
-     * TODO: remove this code after 2.2
-     */
-    const int64_t saved_pos = pos;
-    if (OB_FAIL(deserialize(buf, data_len, pos))) {
-      /* try old version */
-      pos = saved_pos;
-      ObRecordHeader header;
-      const char *const p_header = buf + pos;
-      const char *const p_data = p_header + header.get_serialize_size();
-      const int64_t pos_data = pos + header.get_serialize_size();
-      if (OB_FAIL(header.deserialize(buf, data_len, pos))) {
-        LOG_ERROR("deserialize header failed", K(ret));
-      } else if (OB_FAIL(header.check_header_checksum())) {
-        LOG_ERROR("check header checksum failed", K(ret));
-      } else if (OB_CONFIG_MAGIC != header.magic_) {
-        ret = OB_INVALID_DATA;
-        LOG_ERROR("check magic number failed", K_(header.magic), K(ret));
-      } else if (data_len - pos_data != header.data_zlength_) {
-        ret = OB_INVALID_DATA;
-        LOG_ERROR("check data len failed",
-                  K(data_len), K(pos_data), K_(header.data_zlength), K(ret));
-      } else if (OB_FAIL(header.check_payload_checksum(p_data, data_len - pos_data))) {
-        LOG_ERROR("check data checksum failed", K(ret));
-      } else if (OB_FAIL(add_extra_config(buf + pos, 0, false))) {
-        LOG_ERROR("Read server config failed", K(ret));
-      } else {
-        pos += header.data_length_;
-      }
-    } // if
-  }
-  return ret;
 }
 
 ObServerMemoryConfig::ObServerMemoryConfig()

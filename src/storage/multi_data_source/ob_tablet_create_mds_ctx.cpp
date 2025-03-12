@@ -11,11 +11,8 @@
  */
 
 #include "storage/multi_data_source/ob_tablet_create_mds_ctx.h"
-#include "lib/utility/serialization.h"
-#include "storage/ls/ob_ls_get_mod.h"
-#include "storage/tx_storage/ob_empty_shell_task.h"
+#include "src/storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 
 #define USING_LOG_PREFIX MDS
 

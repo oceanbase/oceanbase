@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log.h"
 #include "ob_rb_memory_mgr.h"
-#include "observer/ob_server.h"
 
 namespace oceanbase
 {

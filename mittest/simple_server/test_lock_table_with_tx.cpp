@@ -22,12 +22,7 @@
 #include "env/ob_simple_server_restart_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "logservice/ob_log_base_type.h"
-#include "mtlenv/tablelock/table_lock_tx_common_env.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
-#include "share/schema/ob_schema_getter_guard.h"
 #include "storage/tablelock/ob_table_lock_service.h"
-#include "share/ob_ls_id.h"
 
 static const char *TEST_FILE_NAME = "test_lock_table_with_tx";
 static const char *BORN_CASE_NAME = "ObLockTableBeforeRestartTest";

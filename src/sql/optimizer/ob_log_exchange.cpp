@@ -15,12 +15,7 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_join.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_distinct.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -411,7 +406,7 @@ int ObLogExchange::compute_op_parallel_and_server_info()
   } else {
     // set_exchange_info not set these info, use child parallel and server info.
     if (OB_FAIL(ret)) {
-    } else if (is_pq_hash_dist()) {
+    } else if (is_pq_hash_dist() || is_pq_random()) {
       server_list_.reuse();
       common::ObAddr all_server_list;
       all_server_list.set_max(); // a special ALL server list indicating hash data distribution
@@ -890,8 +885,7 @@ int ObLogExchange::add_px_table_location(ObLogicalOperator *op,
         const ObDMLStmt *cur_stmt = NULL;
         const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(
             get_plan()->get_optimizer_context().get_session_info());
-        int64_t ref_table_id = table_scan->get_is_index_global() ? table_scan->get_index_table_id() :
-            table_scan->get_ref_table_id();
+        int64_t ref_table_id = table_scan->get_index_table_id();
         if (cur_idx >= stmts.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("stmts idx is unexpected", K(cur_idx), K(stmts.count()));

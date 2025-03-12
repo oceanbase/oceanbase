@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_datum.h"
-#include "share/schema/ob_table_param.h"
-#include "share/ob_force_print_log.h"
 #include "storage/ob_i_store.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
 
 namespace oceanbase
 {

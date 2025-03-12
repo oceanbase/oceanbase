@@ -47,6 +47,7 @@ protected:
   // check this type of table_schema should build column_group or not
   uint64_t gen_column_group_id();
   virtual int resolve_column_group(const ParseNode *cg_node) final;
+  int resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node);
 protected:
   uint64_t cur_column_group_id_;
 };

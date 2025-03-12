@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_object_construct.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_user_type.h"
-#include "sql/ob_spi.h"
 #include "pl/ob_pl_resolver.h"
 
 namespace oceanbase
@@ -254,7 +247,8 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
         tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
       }
       if (OB_SUCCESS != tmp_ret) {
-        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
       }
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }

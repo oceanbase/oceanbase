@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_audit.h"
-#include "observer/ob_server_struct.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -63,6 +61,10 @@ StmtType ObTableAuditUtils::get_stmt_type(ObTableOperationType::Type op_type)
     }
     case ObTableOperationType::PUT: {
       stmt_type = StmtType::T_KV_PUT;
+      break;
+    }
+    case ObTableOperationType::REDIS: {
+      stmt_type = StmtType::T_REDIS;
       break;
     }
     default: {

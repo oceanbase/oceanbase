@@ -11,26 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "lib/utility/ob_utility.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_optimizer_trace_impl.h"
 #include "share/ob_version.h"
-#include "sql/resolver/ddl/ob_explain_stmt.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_values.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/file/file_directory_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/optimizer/ob_dynamic_sampling.h"
 #include "sql/optimizer/ob_skyline_prunning.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 
@@ -582,12 +565,18 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append_ptr(path);
     new_line();
     append("tables:", path->parent_);
+    new_line();
     if (path->is_access_path()) {
       const AccessPath& ap = static_cast<const AccessPath&>(*path);
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
-      append("index id:", ap.index_id_, ",global index:", ap.is_global_index_, ", use column store:", ap.use_column_store_);
+      if (ap.is_index_merge_path()) {
+        const IndexMergePath& index_merge_path = static_cast<const IndexMergePath&>(ap);
+        append("is index merge: True, index merge conditions:", index_merge_path.root_);
+      } else {
+        append("is index merge: False, index id:", ap.index_id_, ", global index:", ap.is_global_index_, ", unique index:", index_info.is_unique_index_);
+      }
       new_line();
-      append("use das:", ap.use_das_, ",unique index:", index_info.is_unique_index_, ",index back:", index_info.is_index_back_);
+      append("use column store:", ap.use_column_store_, ", use das:", ap.use_das_, ", index back:", index_info.is_index_back_);
       new_line();
       append("table rows:", ap.get_table_row_count(), ",phy_query_range_row_count:", ap.get_phy_query_range_row_count());
       new_line();
@@ -951,6 +940,15 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
 int ObOptimizerTraceImpl::append(const ObTabletID& id)
 {
   return append(id.id());
+}
+
+int ObOptimizerTraceImpl::append(const ObIndexMergeNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(node)) {
+    append(node->filter_);
+  }
+  return ret;
 }
 
 int ObOptimizerTraceImpl::append(const ObVersionRange& version_range)

@@ -14,10 +14,8 @@
 
 #include "ob_anonymous_block_resolver.h"
 #include "ob_anonymous_block_stmt.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {
@@ -113,6 +111,21 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(
                               false,
                               false,
                               p_param_list);
+    if (params_.param_list_ != NULL && params_.param_list_->count() > 0) {
+      if (params_.param_list_->count() != params_.query_ctx_->question_marks_count_) {
+        if (params_.param_list_->count() < params_.query_ctx_->question_marks_count_) {
+          ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
+          LOG_WARN("ORA-01008: not all variables bound",
+                    K(ret), K(params_.param_list_->count()),
+                    K(params_.query_ctx_->question_marks_count_));
+        } else {
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("ORA-01006: bind variable does not exist",
+                    K(ret), K(params_.param_list_->count()),
+                    K(params_.query_ctx_->question_marks_count_));
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->question_marks_count_; ++i) {
       ObObjParam param = ObObjParam(ObObj(ObNullType));
       const_cast<ObObjMeta&>(param.get_param_meta()).reset();

@@ -15,12 +15,8 @@
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_diff.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/timezone/ob_timezone_info.h"
 #undef private
 
-#include <sys/time.h>    
 using namespace std;
 namespace oceanbase {
 namespace common {

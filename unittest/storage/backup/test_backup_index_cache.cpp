@@ -11,15 +11,11 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "storage/backup/ob_backup_tmp_file.h"
-#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_index_cache.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "lib/random/ob_random.h"
 #include "test_backup.h"
 
 using namespace oceanbase;

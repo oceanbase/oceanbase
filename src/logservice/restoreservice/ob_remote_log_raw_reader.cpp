@@ -11,16 +11,8 @@
  */
 
 #include "ob_remote_log_raw_reader.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/restore/ob_storage_info.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "share/backup/ob_archive_path.h"
-#include "share/backup/ob_backup_struct.h"      // ObBackupPath
-#include "logservice/palf/log_define.h"
 #include "logservice/ob_log_external_storage_handler.h"     // ObLogExternalStorageHandler
-#include "ob_log_archive_piece_mgr.h"
 
 namespace oceanbase
 {

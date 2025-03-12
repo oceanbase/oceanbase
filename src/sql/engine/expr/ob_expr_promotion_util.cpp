@@ -14,8 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
 
 namespace oceanbase
 {

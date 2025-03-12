@@ -15,104 +15,25 @@
 
 #include "observer/table/ob_table_context.h"
 #include "share/table/ob_table_rpc_struct.h"
-#include "observer/table/ob_table_trans_utils.h"
-#include "share/table/ob_redis_common.h"
+#include "share/table/redis/ob_redis_common.h"
+#include "share/table/redis/ob_redis_util.h"
+#include "ob_redis_context.h"
+#include "group/ob_redis_group_struct.h"
 
 namespace oceanbase
 {
 namespace table
 {
-// The context of the redis service, including the server information required for table_ctx and redis command
-// execution
-class ObRedisCtx
-{
-public:
-  explicit ObRedisCtx(common::ObIAllocator &allocator,
-                      const ObTableOperationRequest &table_request,
-                      ObTableOperationResult &table_result)
-      : allocator_(allocator),
-        tb_ctx_(allocator_),
-        request_(allocator_, table_request),
-        response_(allocator_, table_result),
-        retry_count_(0),
-        audit_ctx_(retry_count_, user_client_addr_, false/* need_audit */)
-  {
-    reset();
-  }
-  virtual ~ObRedisCtx()
-  {}
-  TO_STRING_KV(K_(tb_ctx),
-              K_(table_id),
-              K_(tablet_id),
-              K_(ls_id),
-              K_(timeout_ts),
-              K_(consistency_level),
-              KPC_(credential),
-              K_(request),
-              K_(response));
-  bool valid() const;
-
-  void reset()
-  {
-    stat_event_type_ = nullptr;
-    trans_param_ = nullptr;
-    credential_ = nullptr;
-    entity_factory_ = nullptr;
-    consistency_level_ = ObTableConsistencyLevel::EVENTUAL;
-    table_id_ = common::OB_INVALID_ID;
-    tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
-    ls_id_ = share::ObLSID::INVALID_LS_ID;
-    timeout_ts_ = 0;
-    tb_ctx_.reset();
-    rpc_req_ = nullptr;
-    retry_count_ = 0;
-  }
-  int decode_request();
-
-  OB_INLINE const ObITableEntity &get_entity() const
-  {
-    return request_.get_entity();
-  }
-
-  OB_INLINE int64_t get_request_db() const
-  {
-    return request_.get_db();
-  }
-
-public:
-  common::ObIAllocator &allocator_;
-  ObITableEntityFactory *entity_factory_;
-  int32_t *stat_event_type_;
-  // for init tb_ctx
-  ObTableCtx tb_ctx_;
-  uint64_t table_id_;
-  common::ObTabletID tablet_id_;
-  share::ObLSID ls_id_;
-  int64_t timeout_ts_;
-  ObTableApiCredential *credential_;
-  // for transaction
-  ObTableTransParam *trans_param_;
-  ObTableConsistencyLevel consistency_level_;
-  // for redis command
-  ObRedisRequest request_;
-  ObRedisResponse response_;
-  rpc::ObRequest *rpc_req_;  // rpc request
-  // for sql audit start
-  int32_t retry_count_;
-  common::ObAddr user_client_addr_;
-  ObTableAuditCtx audit_ctx_;
-  // for sql audit end
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObRedisCtx);
-};
+class RedisCommand;
+class ObRedisOp;
+class ObRedisAttr;
 
 class ObTableRedisEndTransCb : public ObTableAPITransCb
 {
 public:
   ObTableRedisEndTransCb(rpc::ObRequest *req)
-      : allocator_(ObMemAttr(MTL_ID(), "RedisCbAlloc")), response_sender_(req, &result_)
+      : allocator_(ObMemAttr(MTL_ID(), "RedisCbAlloc")), result_(nullptr), response_sender_(req, result_)
   {
-    result_.set_type(ObTableOperationType::REDIS);
   }
   virtual ~ObTableRedisEndTransCb() = default;
 
@@ -130,13 +51,12 @@ public:
   {
     return sql::ASYNC_CALLBACK_TYPE;
   }
-  int assign_execute_result(const ObTableOperationResult &result);
+  int assign_execute_result(const ObITableResult &result);
 
 private:
-  ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
-  ObTableOperationResult result_;
-  obrpc::ObTableRpcResponseSender<ObTableOperationResult> response_sender_;
+  ObITableResult *result_;
+  obrpc::ObTableRpcResponseSender response_sender_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableRedisEndTransCb);
@@ -145,27 +65,31 @@ private:
 class ObTableRedisCbFunctor : public ObTableCreateCbFunctor
 {
 public:
-  ObTableRedisCbFunctor() : req_(nullptr), result_(nullptr)
+  ObTableRedisCbFunctor() : req_(nullptr), response_(nullptr)
   {}
   virtual ~ObTableRedisCbFunctor() = default;
 
 public:
-  int init(rpc::ObRequest *req, const ObTableOperationResult *result);
+  int init(rpc::ObRequest *req, const ObRedisResponse *response);
   virtual ObTableAPITransCb *new_callback() override;
 
 private:
   rpc::ObRequest *req_;
-  const ObTableOperationResult *result_;
+  const ObRedisResponse *response_;
 };
 
 class ObRedisService
 {
 public:
-  static int execute(ObRedisCtx &ctx);
-private:
-  static int cover_to_redis_err(ObRedisCtx &ctx, int ob_ret);
+  static int execute(ObRedisSingleCtx &ctx);
+  static int execute_cmd_single(ObRedisSingleCtx &ctx);
+  static int execute_cmd_group(ObRedisSingleCtx &ctx);
+  static int init_group_ctx(ObTableGroupCtx &group_ctx, const ObRedisSingleCtx &ctx, ObRedisOp &cmd, ObRedisCmdKey *key);
   static int start_trans(ObRedisCtx &redis_ctx, bool need_snapshot);
-  static int end_trans(ObRedisCtx &redis_ctx, bool need_snapshot, bool is_rollback);
+  static observer::ObTableProccessType get_stat_process_type(const RedisCommandType &cmd_type);
+private:
+  static int cover_to_redis_err(int ob_ret);
+  static int end_trans(ObRedisSingleCtx &redis_ctx, bool need_snapshot, bool is_rollback);
   DISALLOW_COPY_AND_ASSIGN(ObRedisService);
 };
 

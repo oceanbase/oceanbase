@@ -11,19 +11,12 @@
  */
 #define USING_LOG_PREFIX STORAGETEST
 
-#include <gtest/gtest.h>
-#include <sys/stat.h>
-#include <sys/vfs.h>
-#include <sys/types.h>
 #include <gmock/gmock.h>
 #define protected public
 #define private public
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "storage/shared_storage/prewarm/ob_ha_prewarm_struct.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "test_ss_common_util.h"
-#include "storage/ls/ob_ls.h"
 #include "unittest/storage/init_basic_struct.h"
 #undef private
 #undef protected

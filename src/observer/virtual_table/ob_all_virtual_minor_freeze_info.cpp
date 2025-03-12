@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "observer/ob_server.h"
 #include "observer/virtual_table/ob_all_virtual_minor_freeze_info.h"
-#include "storage/memtable/ob_memtable.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::common;

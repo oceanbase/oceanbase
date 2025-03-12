@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_single_mysql_connection_pool.h"
 
 namespace oceanbase

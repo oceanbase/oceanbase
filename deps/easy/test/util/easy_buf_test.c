@@ -1,4 +1,3 @@
-#include "util/easy_buf.h"
 #include <easy_test.h>
 
 // easy_buf_t *easy_buf_create(easy_pool_t *pool, uint32_t size)

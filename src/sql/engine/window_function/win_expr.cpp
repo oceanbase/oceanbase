@@ -12,10 +12,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "win_expr.h"
-#include "share/aggregate/iaggregate.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 #include "sql/engine/expr/ob_expr_truncate.h"
-#include "lib/timezone/ob_time_convert.h"
 
 namespace oceanbase
 {
@@ -775,7 +773,7 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   aggregate::RemovalInfo &removal_info = ctx.win_col_.agg_ctx_->removal_info_;
   LOG_DEBUG("aggregate expr process window", K(frame), K(removal_info), K(row_start));
   char *res_buf = nullptr;
-  int total_calc_size = 0, calc_cnt = 0;
+  int total_calc_size = 0, pushdown_skip_cnt = 0;
   while (OB_SUCC(ret) && total_size > 0) {
     op.clear_evaluated_flag();
     int64_t batch_size = std::min(total_size, op.get_spec().max_batch_size_);
@@ -784,12 +782,13 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
     tmp_brs.end_ = false;
     tmp_brs.skip_ = &eval_skip;
     total_calc_size += batch_size;
-    calc_cnt += 1;
     if (OB_FAIL(ctx.input_rows_.attach_rows(op.get_all_expr(), input_row_meta, eval_ctx, row_start,
                                             row_start + batch_size, false))) {
       LOG_WARN("attach rows failed", K(ret));
     } else if (OB_FAIL(calc_pushdown_skips(ctx, batch_size, eval_skip, tmp_brs.all_rows_active_))) {
       LOG_WARN("calc pushdown skips failed", K(ret));
+    } else if (!tmp_brs.all_rows_active_) {
+      pushdown_skip_cnt += tmp_brs.skip_->accumulate_bit_cnt(batch_size);
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(aggr_processor_->eval_aggr_param_batch(tmp_brs))) {
@@ -827,16 +826,19 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
     }
   } // end while
   if (OB_SUCC(ret)) {
+    const_cast<Frame &>(frame).skip_cnt_ = pushdown_skip_cnt;
     if (OB_FAIL(aggr_processor_->advance_collect_result(eval_ctx.get_batch_idx(),
                                                         ctx.win_col_.wf_res_row_meta_, agg_row))) {
       LOG_WARN("advance collect failed", K(ret));
     }
   }
+  LOG_DEBUG("aggregate process window", K(frame), K(frame.is_accum_frame_), K(frame.skip_cnt_),
+            K(removal_info.null_cnt_), K(removal_info.enable_removal_opt_));
   if (OB_FAIL(ret)) {
   } else if (aggregate::agg_res_not_null(ctx.win_col_.wf_info_.func_type_)) {
     ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).set(0);
   } else if (removal_info.enable_removal_opt_ && !frame.is_accum_frame_) {
-    if (removal_info.null_cnt_ == frame.tail_ - frame.head_) {
+    if (removal_info.null_cnt_ == frame.tail_ - frame.head_ - frame.skip_cnt_) {
       ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).unset(0);
     } else {
       ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).set(0);
@@ -965,6 +967,7 @@ int AggrExpr::accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame,
       LOG_WARN("copy aggr row failed", K(ret));
     }
   }
+  int64_t frame_skip_cnt = 0;
   if (OB_FAIL(ret)) { // TODO: if frame size is small, should `add_one_row` for `process_window` @optimize
   } else if (!new_frame.is_empty()
              && OB_FAIL(process_window(ctx, new_frame, row_idx, agg_row, is_null))) {
@@ -974,9 +977,12 @@ int AggrExpr::accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame,
              && OB_FAIL(process_window(ctx, new_frame2, row_idx, agg_row, is_null))) {
     LOG_WARN("process window failed", K(ret));
   }
+  if (OB_SUCC(ret)) {
+    frame_skip_cnt = new_frame.skip_cnt_ + new_frame2.skip_cnt_;
+  }
   if (OB_SUCC(ret) && !aggregate::agg_res_not_null(ctx.win_col_.wf_info_.func_type_)
       && removal_info.enable_removal_opt_) {
-    if (removal_info.null_cnt_ == cur_frame.tail_ - cur_frame.head_) {
+    if (removal_info.null_cnt_ == cur_frame.tail_ - cur_frame.head_ - frame_skip_cnt) {
       ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).unset(0);
     } else {
       ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).set(0);
@@ -1003,6 +1009,8 @@ int AggrExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
   int32_t output_size = 0;
   if (OB_FAIL(iagg->collect_batch_group_results(agg_ctx, 0, 0, 0, batch_size, output_size, &skip))) {
     LOG_WARN("collect batch group results failed", K(ret));
+  } else {
+    agg_ctx.aggr_infos_.at(0).expr_->set_evaluated_projected(agg_ctx.eval_ctx_);
   }
   return ret;
 }
@@ -2048,6 +2056,7 @@ int cmp_prev_row(WinExprEvalCtx &ctx, const int64_t cur_idx, int &cmp_ret)
   return ret;
 }
 
+
 template<>
 struct int_trunc<VEC_TC_NUMBER>
 {
@@ -2250,6 +2259,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
       LOG_WARN("invalid partition", K(part_start), K(part_end), K(row_start), K(row_end));
     } else if (OB_UNLIKELY(part_start >= part_end || row_start >= row_end)) {
       LOG_DEBUG("empty partition", K(part_start), K(part_end), K(row_start), K(row_end));
+    } else if (OB_UNLIKELY(skip.accumulate_bit_cnt(row_end - row_start) == row_end - row_start)) {
+      // do nothing
     } else {
       const ObCompactRow *prev_row = nullptr, *cur_row = nullptr;
       Frame prev_frame, cur_frame;
@@ -2268,6 +2279,15 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         }
         // TODO: maybe prefetch agg rows is a good idea
         int prev_calc_idx = -1;
+
+        // Only Group Concat without distinct and order by can avoid use the whole frame
+        bool group_concat_whole_frame = false;
+        if (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_GROUP_CONCAT
+            && (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_distinct_
+                || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_order_by_)) {
+          group_concat_whole_frame = true;
+        }
+
         for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
           int32_t batch_idx = row_idx - row_start;
           if (skip.at(batch_idx)) {
@@ -2291,7 +2311,7 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
             if (OB_FAIL(copy_aggr_row(ctx, copied_row, agg_row))) {
               LOG_WARN("copy aggr row failed", K(ret));
             }
-          } else if (whole_frame) {
+          } else if (whole_frame || group_concat_whole_frame) {
             ctx.win_col_.agg_ctx_->removal_info_.reset_for_new_frame();
             if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx, agg_row, is_null))) {
               LOG_WARN("eval aggregate function failed", K(ret));

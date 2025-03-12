@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_set.h"
-#include "sql/optimizer/ob_log_sort.h"
-#include "sql/optimizer/ob_log_granule_iterator.h"
-#include "ob_opt_est_cost.h"
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_log_distinct.h"

@@ -598,7 +598,9 @@ public:
   static int mdatetime_to_year(ObMySQLDateTime mdt_value, uint8_t &y_value);
   static int date_to_datetime(int32_t d_value, const ObTimeConvertCtx &cvrt_ctx, int64_t &dt_value);
   static int date_to_mdatetime(int32_t d_value, ObMySQLDateTime &mdt_value);
-  static int mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvertCtx &cvrt_ctx, int64_t &dt_value, const ObDateSqlMode date_sql_mode);
+  static int mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvertCtx &cvrt_ctx,
+                               int64_t &dt_value, const ObDateSqlMode date_sql_mode,
+                               bool gen_query_range = false);
   static int mdate_to_mdatetime(ObMySQLDate md_value, ObMySQLDateTime &mdt_value);
   static int mdate_to_date(ObMySQLDate md_value, int32_t &d_value, const ObDateSqlMode date_sql_mode);
   static int date_to_mdate(int32_t d_value, ObMySQLDate &md_value);

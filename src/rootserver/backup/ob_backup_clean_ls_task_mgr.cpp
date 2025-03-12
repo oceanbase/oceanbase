@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX RS
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "share/backup/ob_backup_clean_operator.h"
-#include "share/backup/ob_backup_clean_struct.h"
-#include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
 
 namespace oceanbase

@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "share/ls/ob_ls_table.h"      // for functions in this cpp
-#include "share/ls/ob_ls_info.h"       // for ObLSInfo
-#include "storage/tx_storage/ob_ls_service.h" // ObLSService
+#include "ob_ls_table.h"
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
 
 namespace oceanbase
 {

@@ -13,10 +13,14 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
+#define USING_LOG_PREFIX STORAGE
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include <storage/ob_i_table.h>
+#include "lib/allocator/ob_malloc.h"
+#include "storage/ob_i_table.h"
+#include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/blocksstable/ob_bloom_filter_cache.h"
+#include "storage/blocksstable/ob_sstable.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_empty_read_bucket.h"
@@ -38,6 +42,8 @@ public:
   virtual void TearDown() {}
   static void SetUpTestCase();
   static void TearDownTestCase();
+  void prepare_valid_read_handle(storage::ObSSTableReadHandle &read_handle, const int64_t rowkey_datum_cnt);
+  void prepare_valid_sstable_key(storage::ObITable::TableKey &sstable_key);
 public:
   ObArenaAllocator allocator_;
   ObStorageDatumUtils datum_utils_;
@@ -66,6 +72,36 @@ void TestBloomFilterCache::TearDownTestCase()
   MockTenantModuleEnv::get_instance().destroy();
 }
 
+void TestBloomFilterCache::prepare_valid_read_handle(storage::ObSSTableReadHandle &read_handle,
+                                                     const int64_t rowkey_datum_cnt)
+{
+  int ret = OB_SUCCESS;
+  // prepare row header
+  ObIndexBlockRowHeader * tmp_row_header = OB_NEWx(ObIndexBlockRowHeader, &allocator_);
+  tmp_row_header->is_macro_node_ = 1;
+  tmp_row_header->has_macro_block_bloom_filter_ = 0;
+  read_handle.index_block_info_.row_header_ = tmp_row_header;
+  // prepare rowkey
+  ObDatumRowkey * tmp_rowkey = OB_NEWx(ObDatumRowkey, &allocator_);
+  tmp_rowkey->datum_cnt_ = rowkey_datum_cnt;
+  read_handle.rowkey_ = tmp_rowkey;
+  // prepare index block info
+  read_handle.index_block_info_.endkey_.type_ = ObCommonDatumRowkey::RowkeyType::COMPACT;
+  read_handle.index_block_info_.endkey_.key_ptr_ = static_cast<void *>(tmp_rowkey);
+  // double check
+  ASSERT_EQ(true, read_handle.index_block_info_.row_header_->is_valid());
+  ASSERT_EQ(true, read_handle.index_block_info_.is_valid());
+  ASSERT_EQ(true, read_handle.is_valid());
+}
+
+void TestBloomFilterCache::prepare_valid_sstable_key(storage::ObITable::TableKey &sstable_key)
+{
+  sstable_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+  sstable_key.tablet_id_ = 1;
+  sstable_key.version_range_.snapshot_version_ = 1;
+  ASSERT_EQ(true, sstable_key.is_valid());
+}
+
 TEST_F(TestBloomFilterCache, test_invalid)
 {
   int ret = OB_SUCCESS;
@@ -82,11 +118,17 @@ TEST_F(TestBloomFilterCache, test_invalid)
   EXPECT_NE(OB_SUCCESS, ret);
   EXPECT_TRUE(may_contain);
 
-  ret = bf_cache.put_bloom_filter(tenant_id, block_id, bf_value,true);
+  ret = bf_cache.put_bloom_filter(tenant_id, block_id, bf_value, true);
   EXPECT_NE(OB_SUCCESS, ret);
 
   MacroBlockId macro_block_id;
-  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, macro_block_id, 2);
+  /* Mock Variable */
+  share::ObLSID ls_id(1);
+  storage::ObSSTableReadHandle read_handle;
+  prepare_valid_read_handle(read_handle, 2);
+  storage::ObITable::TableKey sstable_key;
+  prepare_valid_sstable_key(sstable_key);
+  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, macro_block_id, 2, &read_handle);
   EXPECT_NE(OB_SUCCESS, ret);
 
   bf_cache.destroy();
@@ -138,15 +180,23 @@ TEST_F(TestBloomFilterCache, test_normal)
   ret = bf_cache.put_bloom_filter(tenant_id, block_id, bf_value);
   EXPECT_EQ(OB_SUCCESS, ret);
 
+  /* Mock Variable */
+  share::ObLSID ls_id(1);
+  storage::ObSSTableReadHandle read_handle;
+  prepare_valid_read_handle(read_handle, rowkey.get_datum_cnt());
+  storage::ObITable::TableKey sstable_key;
+  prepare_valid_sstable_key(sstable_key);
+
   storage::ObEmptyReadCell *cell;
   ObBloomFilterCacheKey bf_key(tenant_id, block_id, rowkey.get_datum_cnt());
-  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, block_id, rowkey.get_datum_cnt());
+  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, block_id, rowkey.get_datum_cnt(), &read_handle);
   EXPECT_EQ(OB_SUCCESS, ret);
   MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);
   EXPECT_EQ(1, cell->count_);
 
-  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, block_id, rowkey.get_datum_cnt());
+  prepare_valid_read_handle(read_handle, rowkey.get_datum_cnt());
+  ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, ls_id, sstable_key, block_id, rowkey.get_datum_cnt(), &read_handle);
   EXPECT_EQ(OB_SUCCESS, ret);
   MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);

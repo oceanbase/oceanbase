@@ -332,8 +332,7 @@ public:
   virtual int open_sstable_slice(
       const bool is_data_tablet_process_for_lob,
       const blocksstable::ObMacroDataSeq &start_seq,
-      const int64_t context_id,
-      const int64_t slice_id);
+      const ObDirectLoadSliceInfo &slice_info);
   virtual int fill_sstable_slice(
       const ObDirectLoadSliceInfo &slice_info,
       const share::SCN &start_scn,
@@ -409,7 +408,7 @@ public:
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
   bool is_schema_item_ready() { return is_schema_item_ready_; }
   bool get_micro_index_clustered() { return micro_index_clustered_; }
-  bool get_tablet_transfer_seq() { return tablet_transfer_seq_; }
+  int64_t get_tablet_transfer_seq() { return tablet_transfer_seq_; }
   int prepare_storage_schema(ObTabletHandle &tablet_handle);
   int64_t get_task_cnt() { return task_cnt_; }
   int64_t get_cg_cnt() {return cg_cnt_; }
@@ -417,7 +416,8 @@ public:
   int init_column_store_params(
       const ObTablet &tablet,
       const ObStorageSchema &storage_schema,
-      const ObDirectLoadType new_direct_load_type);
+      const ObDirectLoadType new_direct_load_type,
+      const int64_t tenant_data_version);
   /*
    * For full data direct load, row store table and column store table take diffrent way.
    * 1. row store table: take the same way with offline ddl;

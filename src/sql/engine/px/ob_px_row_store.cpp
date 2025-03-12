@@ -13,14 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_row_store.h"
-#include "common/object/ob_object.h"
-#include "common/cell/ob_cell_writer.h"
-#include "common/cell/ob_cell_reader.h"
 #include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_tenant_mem_manager.h"
-#include "share/vector/ob_continuous_base.h"
-#include "share/vector/ob_fixed_length_base.h"
-#include "share/vector/ob_uniform_base.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
 

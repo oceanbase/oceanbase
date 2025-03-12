@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/ls/ob_ls.h"
+#include "ob_ls_member_list_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
-#include "storage/high_availability/ob_ls_member_list_service.h"
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase

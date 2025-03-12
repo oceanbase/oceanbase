@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_block_header.h"
-#include "lib/checksum/ob_crc64.h"
 
 namespace oceanbase
 {

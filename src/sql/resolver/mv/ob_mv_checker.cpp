@@ -11,11 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "lib/utility/ob_template_utils.h"
 
 
 namespace oceanbase
@@ -29,7 +29,8 @@ int ObMVChecker::check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
                                             ObRawExprFactory *expr_factory,
                                             ObSQLSessionInfo *session_info,
                                             ObTableSchema &container_table_schema,
-                                            ObMVRefreshableType &refresh_type)
+                                            ObMVRefreshableType &refresh_type,
+                                            FastRefreshableNotes &note)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *copied_stmt = NULL;
@@ -44,15 +45,13 @@ int ObMVChecker::check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(expr_factory, session_info, true))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else {
-    FastRefreshableNotes notes;
     ObMVChecker checker(*static_cast<ObSelectStmt *>(copied_stmt), *expr_factory, session_info,
-                        container_table_schema);
-    checker.set_fast_refreshable_note(&notes);
+                        container_table_schema, note);
     if (OB_FAIL(checker.check_mv_refresh_type())) {
       LOG_WARN("failed to check mv refresh type", K(ret));
     } else {
       refresh_type = checker.get_refersh_type();
-      LOG_INFO("check mv fast refresh type", KR(ret), K(refresh_type), K(notes));
+      LOG_INFO("check mv fast refresh type", KR(ret), K(refresh_type));
     }
   }
   return ret;
@@ -83,48 +82,31 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  if (OB_SUCC(ret) && stmt.is_set_stmt()) {
+  if (stmt.is_set_stmt()) {
     is_valid = false;
-    append_fast_refreshable_note("set query not support");
+    fast_refreshable_error_.assign_fmt("query with set operators UNION/INTERSECT/EXCEPT/MINUS is not supported");
+  } else if (stmt.has_subquery()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("query with subquery is not supported");
+  } else if (stmt.has_order_by() || stmt.has_limit()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("query with order by or limit operators is not supported");
+  } else if ((stmt.has_rollup() || stmt.has_cube() || stmt.has_grouping_sets() ||
+              stmt.get_having_expr_size() > 0)) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("query with rollup/grouping sets/cube/having operators is not supported");
+  } else if (stmt.is_hierarchical_query()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("hierarchical query is not supported");
+  } else if (stmt.has_window_function()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("query with window functions is not supported");
+  } else if (stmt.is_contains_assignment()) {
+    is_valid = false;
+    fast_refreshable_error_.assign_fmt("query with assignment operators is not supported");
   }
 
-  if (OB_SUCC(ret) && (stmt.has_subquery())) {
-    is_valid = false;
-    append_fast_refreshable_note("subquery not support");
-  }
-
-  if (OB_SUCC(ret) && (stmt.has_order_by() || stmt.has_limit())) {
-    is_valid = false;
-    append_fast_refreshable_note("order by and limit not support");
-  }
-
-  if (OB_SUCC(ret) && (stmt.has_rollup() || stmt.has_cube() || stmt.has_grouping_sets()
-                       || stmt.get_having_expr_size() > 0)) {
-    is_valid = false;
-    append_fast_refreshable_note("rollup/grouping sets/cube and having not support");
-  }
-
-  if (OB_SUCC(ret) && stmt.is_hierarchical_query()) {
-    is_valid = false;
-    append_fast_refreshable_note("hierarchical query not support");
-  }
-
-  if (OB_SUCC(ret) && stmt.has_window_function()) {
-    is_valid = false;
-    append_fast_refreshable_note("window function not support");
-  }
-
-  if (OB_SUCC(ret) && stmt.is_contains_assignment()) {
-    is_valid = false;
-    append_fast_refreshable_note("assignment not support");
-  }
-
-  if (OB_SUCC(ret) && stmt.has_sequence()) {
-    is_valid = false;
-    append_fast_refreshable_note("sequence not support");
-  }
-
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && is_valid) {
     bool has_rownum = false;
     bool is_deterministic_query = true;
     bool has_cur_time = false;
@@ -135,21 +117,21 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
       LOG_WARN("failed to check has rownum", K(ret));
     } else if (has_rownum || stmt.has_ora_rowscn()) {
       is_valid = false;
-      append_fast_refreshable_note("rownum/ora_rowscn not support");
+      fast_refreshable_error_.assign_fmt("query with rownum/ora_rowscn pseudocolumns is not supported");
     } else if (OB_FAIL(stmt.is_query_deterministic(is_deterministic_query))) {
       LOG_WARN("failed to check mv stmt use special expr", K(ret));
     } else if (!is_deterministic_query) {
       is_valid = false;
-      append_fast_refreshable_note("no deterministic query not support");
+      fast_refreshable_error_.assign_fmt("non-deterministic query is not supported");
     } else if (OB_FAIL(stmt.has_special_expr(CNT_CUR_TIME, has_cur_time))) {
       LOG_WARN("failed to check stmt has special expr", K(ret));
     } else if (has_cur_time) {
       is_valid = false;
-      append_fast_refreshable_note("cur_time not support");
+      fast_refreshable_error_.assign_fmt("query with current time expression is not supported");
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && is_valid) {
     bool table_type_valid = false;
     if (OB_FAIL(check_mv_table_type_valid(stmt, table_type_valid))) {
       LOG_WARN("failed to check mv table mlog", K(ret));
@@ -158,7 +140,7 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && is_valid) {
     bool has_dup_exprs = false;
     if (OB_FAIL(check_mv_duplicated_exprs(stmt, has_dup_exprs))) {
       LOG_WARN("failed to check mv table mlog", K(ret));
@@ -179,7 +161,7 @@ int ObMVChecker::check_mv_duplicated_exprs(const ObSelectStmt &stmt, bool &has_d
   for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
     if (has_exist_in_array(tmp_exprs, select_items.at(i).expr_)) {
       has_dup_exprs = true;
-      append_fast_refreshable_note("duplicated select output");
+      fast_refreshable_error_.assign_fmt("query with duplicted select items is not supported");
       LOG_WARN("fast refresh not support due to duplicated select output", K(i), K(select_items.at(i)));
     } else if (OB_FAIL(tmp_exprs.push_back(select_items.at(i).expr_))) {
       LOG_WARN("failed to push back", K(ret));
@@ -190,7 +172,7 @@ int ObMVChecker::check_mv_duplicated_exprs(const ObSelectStmt &stmt, bool &has_d
   for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
     if (has_exist_in_array(tmp_exprs, group_exprs.at(i))) {
       has_dup_exprs = true;
-      append_fast_refreshable_note("duplicated group by expr");
+      fast_refreshable_error_.assign_fmt("query with duplicated group by items is not supported");
       LOG_WARN("fast refresh not support due to duplicated group by expr", K(i), KPC(group_exprs.at(i)));
     } else if (OB_FAIL(tmp_exprs.push_back(group_exprs.at(i)))) {
       LOG_WARN("failed to push back", K(ret));
@@ -221,17 +203,67 @@ int ObMVChecker::check_mv_table_type_valid(const ObSelectStmt &stmt, bool &is_va
         LOG_WARN("unexpected table", K(ret), KPC(table));
       } else if (OB_UNLIKELY(!table->is_basic_table())) {
         is_valid = false;
-        append_fast_refreshable_note("basic table allowed only");
+        fast_refreshable_error_.assign_fmt("query has invalid table type(%s). only basic table "
+                                           "and materialized view are supported",
+                                           get_table_type_str(table->type_));
       } else if (OB_NOT_NULL(table->flashback_query_expr_)) {
         is_valid = false;
-        append_fast_refreshable_note("flashback query not support");
+        fast_refreshable_error_.assign_fmt("flashback query is not supported");
       } else if (OB_UNLIKELY(!table->part_ids_.empty())) {
         is_valid = false;
-        append_fast_refreshable_note("define mview use table with partition hint not support");
+        fast_refreshable_error_.assign_fmt("query with partition specification for table is not supported");
       }
     }
   }
   return ret;
+}
+
+const char *ObMVChecker::get_table_type_str(const TableItem::TableType type)
+{
+  const char *type_str = NULL;
+  switch (type) {
+  case TableItem::BASE_TABLE:
+    type_str = "BASE_TABLE";
+    break;
+  case TableItem::ALIAS_TABLE:
+    type_str = "ALIAS_TABLE";
+    break;
+  case TableItem::GENERATED_TABLE:
+    type_str = "GENERATED_TABLE";
+    break;
+  case TableItem::JOINED_TABLE:
+    type_str = "JOIN_TABLE";
+    break;
+  case TableItem::CTE_TABLE:
+    type_str = "CTE_TABLE";
+    break;
+  case TableItem::FUNCTION_TABLE:
+    type_str = "FUNCTION_TABLE";
+    break;
+  case TableItem::UNPIVOT_TABLE:
+    type_str = "UNPIVOT_TABLE";
+    break;
+  case TableItem::TEMP_TABLE:
+    type_str = "TEMP_TABLE";
+    break;
+  case TableItem::LINK_TABLE:
+    type_str = "LINK_TABLE";
+    break;
+  case TableItem::JSON_TABLE:
+    type_str = "JSON_TABLE";
+    break;
+  case TableItem::VALUES_TABLE:
+    type_str = "VALUES_TABLE";
+    break;
+  case TableItem::LATERAL_TABLE:
+    type_str = "LATERAL_TABLE";
+    break;
+  default:
+    type_str = "UNKNOWN_TABLE_TYPE";
+    break;
+  }
+
+  return type_str;
 }
 
 int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool &is_valid)
@@ -264,12 +296,13 @@ int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool 
       } else if (OB_FAIL(sql_schema_guard->get_table_mlog_schema(table->ref_id_, mlog_schema))
                  || OB_ISNULL(mlog_schema)) {
         is_valid = false;
-        append_fast_refreshable_note("need create mlog table for table in mv");
+        fast_refreshable_error_.assign_fmt("base table %s doesn't have mlog table",
+                                     table_schema->get_table_name());
+        LOG_WARN("fail to get mlog schema", K(table_schema->get_table_name()));
         ret = OB_SUCCESS;
       } else if (OB_FAIL(check_mlog_table_valid(table_schema, stmt.get_column_items(), *mlog_schema, is_valid))) {
         LOG_WARN("failed to get and check mlog table", K(ret));
       } else if (!is_valid) {
-        append_fast_refreshable_note("need add column used in mv to mlog table");
       } else if (OB_FAIL(mlog_tables_.push_back(std::make_pair(table, mlog_schema)))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -307,7 +340,7 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(table_schema));
-  } else if (!table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_with_pk()) {
     if (OB_FAIL(table_schema->get_rowkey_column_ids(unique_col_ids))) {
       LOG_WARN("failed to get rowkey column ids", KR(ret));
     }
@@ -329,6 +362,9 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
     if (columns.at(i).base_tid_ == table_schema->get_table_id()) {
       mlog_cid = ObTableSchema::gen_mlog_col_id_from_ref_col_id(columns.at(i).base_cid_);
       is_valid = NULL != mlog_schema.get_column_schema(mlog_cid);
+      if (!is_valid) {
+        fast_refreshable_error_.assign_fmt("column %s of table %s used in mv is required in the coresponding mlog table", columns.at(i).column_name_.ptr(), table_schema->get_table_name());
+      }
       LOG_DEBUG("check mlog_table column is valid", K(is_valid), K(i), K(mlog_cid), K(columns));
     }
   }
@@ -356,7 +392,6 @@ int ObMVChecker::check_mav_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
   } else if (is_valid) {  // join MAV
     refresh_type = OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV;
   } else {
-    append_fast_refreshable_note("group by with multi table not support now", OB_MV_FAST_REFRESH_SIMPLE_MAV);
     refresh_type = OB_MV_COMPLETE_REFRESH;
   }
   return ret;
@@ -370,12 +405,12 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
   if (!stmt.is_scala_group_by() && OB_FAIL(get_mav_default_count(stmt.get_aggr_items(), default_count))) {
     LOG_WARN("failed to check target aggr exist", K(ret));
   } else if (!stmt.is_scala_group_by() && NULL == default_count) {
-    append_fast_refreshable_note("need count(*) as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+    fast_refreshable_error_.assign_fmt("a count(*) item is required to be added to the select item list");
     is_valid = false;
   } else if (lib::is_mysql_mode() && OB_FAIL(check_is_standard_group_by(stmt, is_valid))) {
     LOG_WARN("failed to check is standard group by", K(ret));
   } else if (!is_valid) {
-    append_fast_refreshable_note("select output is not standard group by for mysql mode", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+    fast_refreshable_error_.assign_fmt("the select item list contains columns that are not in the group by clause");
   } else if (OB_FAIL(check_mv_dependency_mlog_tables(stmt, is_valid))) {
     LOG_WARN("failed to check mv table mlog", KR(ret));
   } else if (is_valid) {
@@ -385,7 +420,7 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
       is_valid = stmt.check_is_select_item_expr(group_exprs.at(i));
     }
     if (!is_valid) {
-      append_fast_refreshable_note("group by column need add to select list", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+      fast_refreshable_error_.assign_fmt("all group by column are required in the select item list");
     }
   }
   return ret;
@@ -492,13 +527,14 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
     LOG_WARN("unexpected null", K(ret), K(aggr));
   } else if (aggr->is_param_distinct() || aggr->in_inner_stmt()) { // 这里判断完全没有has_nested_aggr_的时候in_inner_stmt 才会为true
     is_valid = false;
-    append_fast_refreshable_note("nested aggr and aggr with distinct param not support", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+    fast_refreshable_error_.assign_fmt("query with nested aggregate functions or distinct keyword is not supported");
   } else {
     const int64_t orig_aggr_count = all_aggrs.count();
     switch (aggr->get_expr_type()) {
       case T_FUN_COUNT: {
         if (!stmt.check_is_select_item_expr(aggr)) {
-          append_fast_refreshable_note("count aggr need add as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+          fast_refreshable_error_.assign_fmt("a standalone count expression is required in the select item list when using expressions that derive from that count operation");
+          LOG_WARN("need count item", KPC(aggr));
         } else {
           is_valid = true;
         }
@@ -507,11 +543,11 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
       case T_FUN_SUM: {
         const ObAggFunRawExpr *dependent_aggr = NULL;
         if (!stmt.check_is_select_item_expr(aggr)) {
-          append_fast_refreshable_note("sum aggr need add as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+          fast_refreshable_error_.assign_fmt("a standalone sum expression is required in the select item list when using expressions that derive from that sum operation");
         } else if (OB_FAIL(get_dependent_aggr_of_fun_sum(stmt, aggr->get_param_expr(0), dependent_aggr))) {
           LOG_WARN("failed to check sum aggr fast refresh valid", K(ret));
         } else if (NULL == dependent_aggr) {
-          append_fast_refreshable_note("dependent aggr of sum aggr need add as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+          fast_refreshable_error_.assign_fmt("when using sum/avg/stddev/variance functions, a standalone count function of the corresponding column is required in the select item list");
         } else {
           is_valid = true;
         }
@@ -532,7 +568,7 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
           /* expand aggr generate new aggr, can not fast refresh */
           is_valid = false;
           LOG_TRACE("aggr can not fast refresh", KPC(aggr), KPC(replace_expr), K(orig_aggr_count), K(all_aggrs));
-          append_fast_refreshable_note("dependent aggr of some aggr need add as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+          fast_refreshable_error_.assign_fmt("when using sum/avg/stddev/variance functions, a standalone count function of the corresponding column is required in the select item list");
           ObOptimizerUtil::revert_items(all_aggrs, orig_aggr_count);
         } else if (OB_FAIL(expand_aggrs.push_back(std::make_pair(aggr, replace_expr)))) {
           LOG_WARN("failed to push back", K(ret));
@@ -546,7 +582,7 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
       case T_FUN_MIN:
       default : {
         is_valid = false;
-        append_fast_refreshable_note("min/max and other aggr not support", OB_MV_FAST_REFRESH_SIMPLE_MAV);
+        fast_refreshable_error_.assign_fmt("the aggregate function type is not supported yet (only count/sum/avg/stddev/variance is supported)");
         break;
       }
     }
@@ -719,25 +755,25 @@ int ObMVChecker::check_join_mv_fast_refresh_valid(const ObSelectStmt &stmt,
   bool select_valid = false;
 
   if (stmt.get_table_size() <= 1) {
-    append_fast_refreshable_note("table size not support");
+    fast_refreshable_error_.assign_fmt("single table query without group by clause is not supported");
   // } else if (stmt.get_table_size() > 5) {
   //   append_fast_refreshable_note("join table size more than 5 not support");
   } else if (OB_FAIL(check_mv_join_type(stmt, join_type_valid))) {
     LOG_WARN("failed to check mv join type", K(ret));
   } else if (!join_type_valid) {
-    append_fast_refreshable_note("outer join not support");
+    fast_refreshable_error_.assign_fmt("outer join query is not supported");
   } else if (OB_FAIL(check_select_contains_all_tables_primary_key(stmt, all_table_exists_rowkey, select_valid))) {
     LOG_WARN("failed to check select contains all tables primary key", K(ret));
   } else if (for_join_mav) {
     if (all_table_exists_rowkey) {
       is_valid = true;
     } else {
-      append_fast_refreshable_note("base table need primary key for join MAV");
+      fast_refreshable_error_.assign_fmt("primary key definition is required for all base tables");
     }
   } else if (select_valid) {
     is_valid = true;
   } else {
-    append_fast_refreshable_note("base table primary key need in select for MJV");
+    fast_refreshable_error_.assign_fmt("primary keys of all base tables are required in the select item list");
   }
   return ret;
 }
@@ -799,7 +835,7 @@ int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid table schema", K(ret), K(table_schema));
-      } else if (table_schema->is_heap_table()) {
+      } else if (table_schema->is_table_without_pk()) {
         all_table_exists_rowkey = false;
       } else {
         all_rowkey_size += table_schema->get_rowkey_info().get_size();
@@ -831,35 +867,6 @@ int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt
     }
   }
   return ret;
-}
-
-void ObMVChecker::append_fast_refreshable_note(const char *str,
-                                               const ObMVRefreshableType type /* default OB_MV_COMPLETE_REFRESH */)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == fast_refreshable_note_) {
-    /* do nothing */
-  } else if (OB_FAIL(fast_refreshable_note_->inner_errcode_)) {
-    /* do nothing */
-  } else {
-    ObSqlString *sql_str = NULL;
-    switch (type) {
-      case OB_MV_COMPLETE_REFRESH: // record basic info for fast refresh
-        sql_str = &fast_refreshable_note_->basic_; break;
-      case OB_MV_FAST_REFRESH_SIMPLE_MAV:
-        sql_str = &fast_refreshable_note_->simple_mav_; break;
-      default:
-        sql_str = NULL;
-    }
-    if (OB_ISNULL(sql_str)) {
-      /* do nothing */
-    } else if (OB_FAIL(sql_str->append(str))) {
-      LOG_WARN("failed to append sql string", K(ret));
-    } else if (OB_FAIL(sql_str->append("; "))) {
-      LOG_WARN("failed to append sql string", K(ret));
-    }
-    fast_refreshable_note_->inner_errcode_ = ret;
-  }
 }
 
 int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is_match)
@@ -897,6 +904,10 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
   } else if (is_match && OB_FAIL(check_left_table_partition_rule_valid(
                              stmt, joined_table->left_table_, left_table_schema, is_match))) {
     LOG_WARN("failed to check partition rule valid", KR(ret));
+  } else if (is_match && OB_FAIL(check_select_item_valid(stmt, joined_table->get_join_conditions(),
+                                                         joined_table->left_table_->table_id_,
+                                                         is_match))) {
+    LOG_WARN("failed to check select item valid", KR(ret));
   } else if (is_match && OB_FAIL(check_left_table_rowkey_valid(stmt, left_table_schema, is_match))) {
     LOG_WARN("failed to check left table rowkey valid", KR(ret));
   } else if (is_match && OB_FAIL(check_broadcast_table_valid(stmt, right_table_schema, is_match))) {
@@ -908,6 +919,41 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
 
   LOG_INFO("[MAJ_REF_MV] check match major refresh mv", K(is_match));
 
+  return ret;
+}
+
+int ObMVChecker::check_select_item_valid(const ObSelectStmt &stmt,
+                                         const ObIArray<ObRawExpr*> &on_conds,
+                                         const uint64_t left_table_id,
+                                         bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  ObSEArray<ObRawExpr*, 8> exprs;
+  const ObColumnRefRawExpr *col_expr = NULL;
+  const ObIArray<SelectItem> &select_items = stmt.get_select_items();
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(stmt.get_condition_exprs(), exprs))
+      || OB_FAIL(ObRawExprUtils::extract_column_exprs(on_conds, exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret), K(on_conds), K(stmt.get_condition_exprs()));
+  }
+  for(int64_t i = 0; is_match && OB_SUCC(ret) && i < select_items.count(); ++i) {
+    if (OB_ISNULL(select_items.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL", K(ret), K(i), K(select_items));
+    } else {
+      is_match = select_items.at(i).expr_->is_column_ref_expr();
+    }
+  }
+  for (int64_t i = 0; is_match && OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_ISNULL(col_expr = dynamic_cast<ObColumnRefRawExpr*>(exprs.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL", K(ret), K(i), K(exprs));
+    } else if (col_expr->get_table_id() != left_table_id) {
+      /* do nothing */
+    } else {
+      is_match = stmt.check_is_select_item_expr(col_expr);
+    }
+  }
   return ret;
 }
 

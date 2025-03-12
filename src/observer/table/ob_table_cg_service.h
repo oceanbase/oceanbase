@@ -19,7 +19,6 @@
 #include "ob_table_insert_up_executor.h"
 #include "ob_table_replace_executor.h"
 #include "ob_table_lock_executor.h"
-#include "ob_table_context.h"
 #include "share/table/ob_table.h" // for ObTableQuery
 #include "sql/engine/dml/ob_conflict_checker.h" // for ObConflictCheckerCtdef
 #include "ob_table_executor_factory.h"
@@ -28,9 +27,14 @@ namespace oceanbase
 {
 namespace table
 {
+class ObTableExprCgService;
+class ObTableFtsTscCgService;
+
 // 构造表达式的静态类
 class ObTableExprCgService
 {
+public:
+  friend class ObTableFtsExprCgService;
 public:
   // 构造表达式
   static int generate_exprs(ObTableCtx &ctx,
@@ -85,6 +89,8 @@ private:
 
   static int generate_filter_exprs(ObTableCtx &ctx);
 
+  static int generate_aggregate_exprs(ObTableCtx &ctx);
+
   static int generate_delta_expr(ObTableCtx &ctx, ObTableAssignment &assign);
 
   static int generate_assign_expr(ObTableCtx &ctx, ObTableAssignment &assign);
@@ -95,6 +101,8 @@ private:
                                          sql::ObRawExpr *&expr,
                                          const bool is_inc_or_append = false,
                                          sql::ObRawExpr *delta_expr = nullptr);
+
+  static int generate_count_expr(ObTableCtx &ctx, sql::ObAggFunRawExpr *&expr);
 
   static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
                                            const ObTableColumnItem &item,
@@ -130,6 +138,7 @@ private:
 private:
   static int write_datum(ObTableCtx &ctx,
                          common::ObIAllocator &allocator,
+                         const ObTableColumnInfo &col_info,
                          const sql::ObExpr &expr,
                          sql::ObEvalCtx &eval_ctx,
                          const ObObj &obj);
@@ -146,9 +155,10 @@ private:
 class ObTableLocCgService
 {
 public:
-  static int generate_table_loc_meta(const ObTableCtx &ctx,
-                                     ObTableIndexInfo &index_info,
-                                     sql::ObDASTableLocMeta &loc_meta);
+static int generate_table_loc_meta(const ObTableCtx &ctx,
+                                   const ObSimpleTableSchemaV2 &simple_table_schema,
+                                   ObDASTableLocMeta &loc_meta,
+                                   ObIArray<ObTableID> *related_index_tids);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLocCgService);
 };
@@ -224,7 +234,13 @@ private:
                                        ObTableIndexInfo &index_info,
                                        ObIAllocator &allocator,
                                        ObTableUpdCtDef &udp_ctdef);
+  static int generate_assign_row(ObTableCtx &ctx,
+                                 ObTableIndexInfo &index_info,
+                                 ObIArray<ObRawExpr*> &new_row,
+                                 ObIArray<ObRawExpr*> &full_row,
+                                 ObIArray<ObRawExpr*> &delta_row);
   static int generate_das_base_ctdef(uint64_t index_tid,
+                                     ObTableIndexInfo &index_info,
                                      ObTableCtx &ctx,
                                      ObDASDMLBaseCtDef &base_ctdef);
   static int generate_column_info(ObTableID index_tid,
@@ -280,8 +296,7 @@ private:
                                   ObTableIndexInfo &index_info,
                                   common::ObIAllocator &allocator,
                                   sql::ColContentFixedArray &column_infos);
-  static int generate_tablet_id_dep_exprs(ObIArray<sql::ObRawExpr *> &raw_exprs,
-                                          ObIArray<sql::ObRawExpr *> &dep_exprs);
+  static int generate_calc_raw_exprs(ObIArray<sql::ObRawExpr *> &raw_exprs, ObIArray<sql::ObRawExpr *> &calc_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };
@@ -390,16 +405,18 @@ private:
 class ObTableTscCgService
 {
 public:
+  friend class ObTableFtsTscCgService;
+public:
   ObTableTscCgService() {}
   virtual ~ObTableTscCgService() {}
   static int generate_tsc_ctdef(const ObTableCtx &ctx,
                                 ObIAllocator &allocator,
                                 ObTableApiScanCtDef &tsc_ctdef);
-  static int generate_table_loc_meta(const ObTableCtx &ctx,
-                                     sql::ObDASTableLocMeta &loc_meta,
-                                     bool is_lookup);
   static int generate_das_result_output(sql::ObDASScanCtDef &das_tsc_ctdef,
                                         const common::ObIArray<uint64_t> &output_cids);
+  static int generate_table_param(const ObTableCtx &ctx,
+                                  sql::ObDASScanCtDef &das_tsc_ctdef,
+                                  const bool query_cs_replica = false);
 private:
   static int generate_das_tsc_ctdef(const ObTableCtx &ctx,
                                     ObIAllocator &allocator,
@@ -409,12 +426,22 @@ private:
                                   common::ObIArray<sql::ObRawExpr*> &access_exprs);
   static int generate_output_exprs(const ObTableCtx &ctx,
                                    common::ObIArray<sql::ObExpr *> &output_exprs);
+
+  static int generate_pushdown_aggr_ctdef(const ObTableCtx &ctx,
+                                          sql::ObDASScanCtDef &das_tsc_ctdef);
+
   static int generate_access_ctdef(const ObTableCtx &ctx,
                                    ObIAllocator &allocator,
                                    sql::ObDASScanCtDef &das_tsc_ctdef);
-  static int generate_table_param(const ObTableCtx &ctx,
-                                  sql::ObDASScanCtDef &das_tsc_ctdef,
-                                  const bool query_cs_replica = false);
+  static int extract_select_output_column_ids(const ObTableCtx &ctx,
+                                              ObDASScanCtDef &das_tsc_ctdef,
+                                              const ObTableSchema *table_schema,
+                                              ObIArray<uint64_t> &tsc_out_cols);
+  static int generate_table_lookup_ctdef(const ObTableCtx &ctx,
+                                         ObIAllocator &allocator,
+                                         ObTableApiScanCtDef &tsc_ctdef,
+                                         ObDASBaseCtDef *scan_ctdef,
+                                         ObDASTableLookupCtDef *&lookup_ctdef);
   static OB_INLINE bool is_in_array(const common::ObIArray<sql::ObRawExpr*> &array,
                                     const sql::ObRawExpr *expr)
   {

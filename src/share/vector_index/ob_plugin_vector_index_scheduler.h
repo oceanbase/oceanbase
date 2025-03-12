@@ -192,6 +192,7 @@ public:
       need_do_for_switch_(false),
       is_stopped_(false),
       is_logging_(false),
+      need_refresh_(true),
       tenant_id_(OB_INVALID_TENANT_ID),
       ttl_tablet_timer_tg_id_(0),
       interval_factor_(1),
@@ -277,7 +278,7 @@ public:
   int safe_to_destroy(bool &is_safe);
 
   TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
-               K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
+               K_(need_refresh), K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
                K_(basic_period), K_(current_memory_config), K_(dag_ref_cnt),
                KP_(vector_index_service), KP_(ls),
                K_(local_schema_version), K_(local_tenant_task));
@@ -306,6 +307,7 @@ private:
   bool is_stopped_;
 
   bool is_logging_;
+  bool need_refresh_;
   common::ObSpinLock logging_lock_;
   uint64_t tenant_id_;
   int ttl_tablet_timer_tg_id_;

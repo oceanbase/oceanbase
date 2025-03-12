@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <vector>
-#include <memory>
-#include <limits>
 #include <random>
-#include <cmath>
 
-#include "lib/codec/ob_codecs.h"
 #include "lib/codec/ob_composite_codec.h"
 #include "lib/codec/ob_simd_fixed_pfor.h"
 

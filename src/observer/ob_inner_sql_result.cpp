@@ -14,11 +14,6 @@
 
 #include "ob_inner_sql_result.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/rc/context.h"
-#include "lib/signal/ob_signal_struct.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/ob_req_time_service.h"
 #include "omt/ob_tenant.h"
 #include "observer/ob_inner_sql_connection.h"
 

@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/config/ob_server_config.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/utility/ob_defer.h"
+#include "ob_common_config.h"
 #include "lib/utility/ob_sort.h"
-#include "common/ob_record_header.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase

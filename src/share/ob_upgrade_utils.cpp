@@ -12,23 +12,13 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_service_epoch_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "rootserver/ob_root_service.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ls/ob_ls_status_operator.h"//get max ls id
-#include "share/ob_tenant_info_proxy.h"//update max ls id
 #include "ob_upgrade_utils.h"
-#include "share/config/ob_config_helper.h"
+#include "share/ob_service_epoch_proxy.h"
+#include "rootserver/ob_root_service.h"
+#include "src/pl/ob_pl.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
-#include "share/stat/ob_dbms_stats_preferences.h"
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 
 namespace oceanbase
 {
@@ -540,7 +530,7 @@ int ObUpgradeUtils::upgrade_sys_stat(
     LOG_WARN("fail to init sys stat", KR(ret), K(tenant_id));
   } else if (OB_FAIL(filter_sys_stat(sql_client, tenant_id, sys_stat))) {
     LOG_WARN("fail to filter sys stat", KR(ret), K(tenant_id), K(sys_stat));
-  } else if (OB_FAIL(ObDDLOperator::replace_sys_stat(tenant_id, sys_stat, sql_client))) {
+  } else if (OB_FAIL(ObTenantDDLService::replace_sys_stat(tenant_id, sys_stat, sql_client))) {
     LOG_WARN("fail to add sys stat", KR(ret), K(tenant_id), K(sys_stat));
   } else {
     LOG_INFO("[UPGRADE] upgrade sys stat", KR(ret), K(tenant_id), K(sys_stat));
@@ -1611,7 +1601,6 @@ int ObUpgradeFor4330Processor::post_upgrade_for_optimizer_stats()
 {
   int ret = OB_SUCCESS;
   ObSqlString extra_stats_perfs_sql;
-  ObSqlString add_async_stats_job_sql;
   int64_t affected_rows = 0;
   bool is_primary_tenant = false;
   if (sql_proxy_ == NULL) {
@@ -1626,13 +1615,8 @@ int ObUpgradeFor4330Processor::post_upgrade_for_optimizer_stats()
   } else if (OB_FAIL(sql_proxy_->write(tenant_id_, extra_stats_perfs_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to write", K(ret));
   } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(sql_proxy_,
-                                                                                          tenant_id_,
-                                                                                          add_async_stats_job_sql))) {
+                                                                                          tenant_id_))) {
     LOG_WARN("failed to get async gather stats job for upgrade", K(ret));
-  } else if (OB_UNLIKELY(add_async_stats_job_sql.empty())) {
-    LOG_INFO("failed to add async stats job in upgrade, perhaps the join already exists, need check after the upgrade.");
-  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, add_async_stats_job_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to write", K(ret));
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("[UPGRADE] post upgrade for optimizer stats failed", KR(ret), K_(tenant_id));
@@ -1720,8 +1704,6 @@ int ObUpgradeFor4350Processor::add_spm_stats_scheduler_job()
   bool job_exists = false;
   ObSchemaGetterGuard schema_guard;
   const ObSysVariableSchema *var_schema = NULL;
-  ObSqlString insert_sql;
-  int64_t affected_rows = 0;
   if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", KR(ret), KP_(sql_proxy), KP_(schema_service), K_(tenant_id));
@@ -1745,11 +1727,8 @@ int ObUpgradeFor4350Processor::add_spm_stats_scheduler_job()
   } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_spm_stats_upgrade_jobs_sql(sql_proxy_,
                                                                                   *var_schema,
                                                                                   tenant_id_,
-                                                                                  lib::Worker::CompatMode::ORACLE == compat_mode,
-                                                                                  insert_sql))) {
+                                                                                  lib::Worker::CompatMode::ORACLE == compat_mode))) {
     LOG_WARN("failed to get spm stats upgrade jobs sql");
-  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to write spm stats job", K(ret), K(tenant_id_), K(affected_rows), K(insert_sql));
   }
 
   return ret;
@@ -1782,6 +1761,45 @@ int ObUpgradeFor4350Processor::post_upgrade_for_optimizer_stats()
 }
 
 /* =========== 4350 upgrade processor end ============= */
+
+/* =========== 4351 upgrade processor start ============= */
+int ObUpgradeFor4351Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_optimizer_stats())) {
+    LOG_WARN("fail to post upgrade for optimizer stats", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4351Processor::post_upgrade_for_optimizer_stats()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString extra_stats_perfs_sql;
+  int64_t affected_rows = 0;
+  bool is_primary_tenant = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant isn't primary standby, no refer to gather stats, skip", K(tenant_id_));
+  } else if (OB_FAIL(ObDbmsStatsPreferences::get_extra_stats_perfs_for_upgrade_4351(extra_stats_perfs_sql))) {
+    LOG_WARN("failed to get extra stats perfs for upgrade", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, extra_stats_perfs_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] post upgrade for optimizer stats failed", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("[UPGRADE] post upgrade for optimizer stats succeed", K_(tenant_id));
+  }
+  return ret;
+}
+/* =========== 4351 upgrade processor end ============= */
 
 } // end share
 } // end oceanbase

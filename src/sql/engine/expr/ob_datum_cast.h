@@ -32,7 +32,46 @@ namespace sql
 class ObPhysicalPlanCtx;
 struct ObUserLoggingCtx;
 
-class ObOdpsDataTypeCastUtil
+class ObDataTypeCastUtil
+{
+public:
+  static int common_string_decimalint_wrap(const ObExpr &expr, const ObString &in_str,
+                                          const ObUserLoggingCtx *user_logging_ctx,
+                                          ObDecimalIntBuilder &res_val);
+  static int common_string_number_wrap(const ObExpr &expr,
+                                      const ObString &in_str,
+                                      ObIAllocator &alloc,
+                                      number::ObNumber &nmb);
+  static int common_uint_int_wrap(const ObExpr &expr, const ObObjType &out_type, uint64_t in_val,
+                                  ObEvalCtx &ctx, int64_t &out_val);
+  static int common_double_float_wrap(const ObExpr &expr, const double in_val, float &out_val);
+  static int common_double_int_wrap(const double in, int64_t &out,
+                                    const int64_t trunc_min_value, const int64_t trunc_max_value);
+  static int common_number_datetime_wrap(const number::ObNumber nmb, const ObTimeConvertCtx &cvrt_ctx,
+                                         int64_t &out_val, const ObCastMode cast_mode,
+                                         bool is_mysql_compat_dates);
+  static int common_number_date_wrap(const number::ObNumber &nmb, const ObCastMode cast_mode,
+                                     int32_t &out_val, bool is_mysql_compat_dates);
+  static int common_string_float_wrap(const ObExpr &expr, const ObString &in_str, float &out_val);
+
+  template <typename IN_TYPE>
+  static int common_floating_number_wrap(const IN_TYPE in_val,
+                                         const ob_gcvt_arg_type arg_type,
+                                         ObIAllocator &alloc,
+                                         number::ObNumber &number,
+                                         ObEvalCtx &ctx,
+                                         const ObCastMode cast_mode);
+  template<typename IN_TYPE>
+  static int common_floating_decimalint_wrap(const IN_TYPE in_val,
+                                             const ob_gcvt_arg_type arg_type,
+                                             ObIAllocator &alloc,
+                                             ObDecimalInt *&decint,
+                                             int32_t &int_bytes,
+                                             int16_t &scale,
+                                             int16_t &precision);
+};
+
+class ObOdpsDataTypeCastUtil : public ObDataTypeCastUtil
 {
 public:
   static int common_int_number_wrap(const ObExpr &expr,
@@ -42,10 +81,6 @@ public:
   static int common_string_decimalint_wrap(const ObExpr &expr, const ObString &in_str,
                                           const ObUserLoggingCtx *user_logging_ctx,
                                           ObDecimalIntBuilder &res_val);
-  static int common_string_number_wrap(const ObExpr &expr,
-                                      const ObString &in_str,
-                                      ObIAllocator &alloc,
-                                      number::ObNumber &nmb);
   static int common_string_string_wrap(const ObExpr &expr,
                                       const ObObjType in_type,
                                       const ObCollationType in_cs_type,
@@ -70,6 +105,62 @@ public:
                                         ObDatum &res_datum,
                                         bool &has_set_res);
 };
+
+template <typename IN_TYPE, typename OUT_TYPE>
+static OB_INLINE int common_floating_int(IN_TYPE &in_val, OUT_TYPE &out_val)
+{
+  static constexpr double ROUND_DOUBLE = 0.5;
+  int ret = OB_SUCCESS;
+  out_val = 0;
+  if (in_val < 0) {
+    out_val = static_cast<OUT_TYPE>(in_val - ROUND_DOUBLE);
+  } else if (in_val > 0) {
+    out_val = static_cast<OUT_TYPE>(in_val + ROUND_DOUBLE);
+  } else {
+    out_val = static_cast<OUT_TYPE>(in_val);
+  }
+  return ret;
+}
+
+template <typename IN_TYPE>
+static bool is_ieee754_nan_inf(const IN_TYPE in_val,
+                               char buf[], int64_t &length)
+{
+  bool is_nan_inf = true;
+  if (lib::is_oracle_mode()) {
+    // buf size is 256, nan or infinity string length is no more than 4 bytes.
+    // Never hit overflow
+    if (in_val == -INFINITY) {
+      length = strlen("-Inf");
+      strncpy(buf, "-Inf", length);
+    } else if (in_val == INFINITY) {
+      length = strlen("Inf");
+      strncpy(buf, "Inf", length);
+    } else if (isnan(in_val)) {
+      length = strlen("Nan");
+      strncpy(buf, "Nan", length);
+    } else {
+      is_nan_inf = false;
+    }
+  } else {
+    is_nan_inf = false;
+  }
+  return is_nan_inf;
+}
+
+int time_usec_scale_check(const ObCastMode &cast_mode,
+                          const ObAccuracy &accuracy,
+                          const int64_t value);
+
+int string_length_check(const ObExpr &expr,
+                        const ObCastMode &cast_mode,
+                        const ObAccuracy &accuracy,
+                        const ObObjType type,
+                        const ObCollationType cs_type,
+                        ObEvalCtx &ctx,
+                        const ObDatum &in_datum,
+                        ObDatum &res_datum,
+                        int &warning);
 
 // extract accuracy info from %expr and call datum_accuracy_check() below.
 int datum_accuracy_check(const ObExpr &expr,
@@ -355,9 +446,6 @@ int common_string_double(const ObExpr &expr,
                          const ObString &in_str,
                          ObDatum &res_datum);
 
-int common_string_float_wrap(const ObExpr &expr,
-                             const ObString &in_str,
-                             float &out_val);
 
 int get_cast_ret_wrap(const ObCastMode &cast_mode, int ret, int &warning);
 

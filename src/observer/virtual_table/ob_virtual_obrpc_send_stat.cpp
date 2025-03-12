@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_virtual_obrpc_send_stat.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "rpc/obrpc/ob_rpc_stat.h"
-#include "share/config/ob_server_config.h"
 #include "observer/ob_server_utils.h"
-#include "lib/alloc/memory_dump.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::rpc;

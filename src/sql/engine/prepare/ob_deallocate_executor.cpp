@@ -14,7 +14,6 @@
 #include "ob_deallocate_executor.h"
 #include "sql/resolver/prepare/ob_deallocate_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

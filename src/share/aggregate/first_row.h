@@ -54,6 +54,7 @@ public:
     const char *payload = nullptr;
     bool null_cell = false;
     int32_t data_len = 0;
+    bool has_data = false;
 #ifndef NDEBUG
     helper::print_input_rows(row_sel, skip, bound, agg_ctx.aggr_infos_.at(agg_col_id), true,
                              agg_ctx.eval_ctx_, this, agg_col_id);
@@ -77,6 +78,7 @@ public:
           } else {
             data_vec->get_payload(i, payload, data_len);
           }
+          has_data = true;
           break;
         }
       }
@@ -92,10 +94,11 @@ public:
         } else {
           aggr_info.expr_->get_vector(ctx)->get_payload(row_sel.index(i), payload, data_len);
         }
+        has_data = true;
         break;
       }
     }
-    if (OB_SUCC(ret) && (payload != nullptr || null_cell)) {
+    if (OB_SUCC(ret) && has_data) {
       if (null_cell) {
         agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_id, agg_cell);
       } else if (aggr_info.expr_->is_nested_expr() && data_len > 0) {

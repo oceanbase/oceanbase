@@ -12,8 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "lib/oblog/ob_easy_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/profile/ob_profile_log.h"
+#include "deps/oblib/src/lib/net/ob_addr.h"
 #include "test_profile_utils.h"
 namespace oceanbase
 {

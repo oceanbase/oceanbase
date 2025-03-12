@@ -185,6 +185,7 @@ private:
   static bool should_contain_order_by_clause(const ObItemType func_type);
   int resolve_udf_node(const ParseNode *node, ObUDFInfo &udf_info);
   int process_sqlerrm_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_sqlcode_node(const ParseNode *node, ObRawExpr *&expr);
   int process_plsql_var_node(const ParseNode *node, ObRawExpr *&expr);
   int process_call_param_node(const ParseNode *node, ObRawExpr *&expr);
 

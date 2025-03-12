@@ -10,21 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define protected public
 #define private public
 #include "sql/test_sql_utils.h"
-#include "lib/utility/ob_test_util.h"
-#include "sql/rewrite/ob_query_range.h"
 #include "sql/ob_sql_init.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "common/ob_clock_generator.h"
-#include "lib/json/ob_json_print_utils.h"
-#include "lib/geo/ob_s2adapter.h"
 #define private public
 #include "observer/ob_server.h"
 #undef private
-#include <fstream>
 #undef protected
 #undef private
 using namespace oceanbase;

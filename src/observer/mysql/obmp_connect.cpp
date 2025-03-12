@@ -12,33 +12,10 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <stdlib.h>
 #include "util/easy_mod_stat.h"
 #include "observer/mysql/obmp_connect.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "common/object/ob_object.h"
-#include "common/ob_string_buf.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/packet/ompk_error.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/ob_sql.h"
 #include "observer/ob_server.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/ob_req_time_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"      //ObWeakReadUtil
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/monitor/ob_security_audit_utils.h"
@@ -46,8 +23,8 @@
 #endif
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "lib/utility/ob_backtrace.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -377,8 +354,8 @@ int ObMPConnect::process()
       LOG_WARN("client session has been killed", K(ret));
     } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
       LOG_WARN("update transmisson checksum flag failed", K(ret));
-    } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-      LOG_WARN("update_proxy_sys_vars failed", K(ret));
+    } else if (OB_FAIL(update_proxy_and_client_sys_vars(*session))) {
+      LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
     } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
       LOG_WARN("fail to update charset sys vars", K(ret));
     } else if (OB_FAIL(setup_user_resource_group(*conn, tenant_id, session))) {
@@ -405,6 +382,9 @@ int ObMPConnect::process()
       conn->set_auth_phase();
       conn->set_logined(true);
       session->get_autocommit(autocommit);
+    }
+    if (FAILEDx(execute_trigger(tenant_id, *session))) {
+      LOG_WARN("execute trigger failed");
     }
 
     int proc_ret = ret;
@@ -638,6 +618,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         }
       }
       share::schema::ObSessionPrivInfo session_priv;
+      EnableRoleIdArray enable_role_id_array;
       const ObSysVariableSchema *sys_variable_schema = NULL;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, user_name_))) {
@@ -786,8 +767,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
-
+        } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, enable_role_id_array, ssl_st, user_info))) {
           int inner_ret = OB_SUCCESS;
           bool is_unlocked = false;
           if (ORACLE_MODE == session.get_compatibility_mode()
@@ -827,7 +807,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
             } else if (OB_SUCCESS == inner_ret) {
               //schema刷新成功，并且内部执行也没有出错，尝试重新登录
               if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                    ssl_st, user_info))) {
+                    enable_role_id_array, ssl_st, user_info))) {
                 LOG_WARN("User access denied", K(login_info), K(ret));
               }
             }
@@ -838,7 +818,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
               reset_inner_proxyro_scramble(*conn, login_info);
               int pre_ret = ret;
               if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                    ssl_st, user_info))) {
+                    enable_role_id_array, ssl_st, user_info))) {
                 LOG_WARN("User access denied", K(login_info), K(pre_ret),K(ret));
               }
             } else {
@@ -895,7 +875,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         session.set_capability(hsr_.get_capability_flags());
         session.set_user_priv_set(session_priv.user_priv_set_);
         session.set_db_priv_set(session_priv.db_priv_set_);
-        session.set_enable_role_array(session_priv.enable_role_id_array_);
+        session.set_enable_role_array(enable_role_id_array);
         host_name = session_priv.host_name_;
         uint64_t db_id = OB_INVALID_ID;
         const ObTenantSchema *tenant_schema = NULL;
@@ -934,6 +914,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                                                  session))) {
           LOG_WARN("failed to load audit log filter", K(ret));
         } else if (OB_FAIL(get_client_attribute_capability(client_attr_cap_flags))) {
+          LOG_WARN("failed to get client attribute capability", K(ret));
+        } else if (OB_FAIL(check_update_client_capability(client_attr_cap_flags))) {
           LOG_WARN("failed to get client attribute capability", K(ret));
         } else {
           session.set_client_attrbuite_capability(client_attr_cap_flags);
@@ -1863,6 +1845,27 @@ int ObMPConnect::get_client_attribute_capability(uint64_t &cap) const
   return ret;
 }
 
+int ObMPConnect::check_update_client_capability(uint64_t &cap) const
+{
+  int ret = OB_SUCCESS;
+
+  // set client_capability_ to tell client which features observer supports
+  ObClientAttributeCapabilityFlags server_client_cap_flag;
+  // version control need change 425
+  server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2 = 1;
+  if (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0
+      || GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_5_0) {
+    server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA = 1;
+  } else {
+    server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA = 0;
+  }
+
+  cap = (server_client_cap_flag.capability_ & cap);//if old java client, set it 0
+
+  LOG_DEBUG("debug client capability", K(cap));
+  return ret;
+}
+
 int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
 {
   int ret = OB_SUCCESS;
@@ -2551,6 +2554,22 @@ int ObMPConnect::set_service_name(const uint64_t tenant_id, ObSQLSessionInfo &se
     LOG_WARN("fail to set service_name", KR(ret), K(service_name), K(tenant_id));
   } else if (OB_FAIL(session.check_service_name_and_failover_mode(tenant_id))) {
     LOG_WARN("fail to execute check_service_name_and_failover_mode", KR(ret), K(service_name), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObMPConnect::execute_trigger(const uint64_t tenant_id,
+                                 sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(gctx_.schema_service_));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(TriggerHandle::calc_system_trigger_logon(session))) {
+    LOG_WARN("calc system trigger failed", K(ret));
   }
   return ret;
 }

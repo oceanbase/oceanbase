@@ -20,7 +20,6 @@
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

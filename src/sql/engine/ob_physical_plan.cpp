@@ -11,29 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/ob_physical_plan.h"
-#include "share/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/serialization.h"
-#include "lib/alloc/malloc_hook.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/ob_result_set.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_sql_expression.h"
-#include "sql/engine/ob_phy_operator_type.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-#include "sql/engine/ob_operator.h"
+#include "ob_physical_plan.h"
 #include "sql/engine/ob_operator_factory.h"
-#include "share/stat/ob_opt_stat_manager.h"
 #include "share/ob_truncated_string.h"
-#include "sql/spm/ob_spm_evolution_plan.h"
-#include "sql/engine/ob_exec_feedback_info.h"
-#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/monitor/ob_sql_plan.h"
 
@@ -157,7 +137,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     insertup_can_do_gts_opt_(false),
     px_node_policy_(ObPxNodePolicy::INVALID),
     px_node_addrs_(&allocator_),
-    px_node_count_(ObGlobalHint::UNSET_PX_NODE_COUNT)
+    px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT)
 {
 }
 
@@ -270,7 +250,7 @@ void ObPhysicalPlan::reset()
   direct_load_need_sort_ = false;
   insertup_can_do_gts_opt_ = false;
   px_node_policy_ = ObPxNodePolicy::INVALID;
-  px_node_count_ = ObGlobalHint::UNSET_PX_NODE_COUNT;
+  px_node_count_ = ObPxNodeHint::UNSET_PX_NODE_COUNT;
   px_node_addrs_.reset();
 }
 void ObPhysicalPlan::destroy()
@@ -942,10 +922,12 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
       }
     } else if (OB_FAIL(table_locations_.push_back(tl))) {
       LOG_WARN("fail to push table location", K(ret), K(i));
-    } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), tl.get_ref_table_id(), table_schema))) {
-      LOG_WARN("get table schema failed", K(ret), K(tl.get_ref_table_id()));
-    } else {
-      contain_index_location_ |= table_schema->is_index_table();
+    } else if (!is_external_object_id(tl.get_ref_table_id())) {
+      if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), tl.get_ref_table_id(), table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(tl.get_ref_table_id()));
+      } else {
+        contain_index_location_ |= table_schema->is_index_table();
+      }
     }
     LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
   }
@@ -1560,42 +1542,43 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
   if (OB_FAIL(logical_plan_.uncompress_logical_plan(ctx.get_allocator(), plan_items))) {
     LOG_WARN("failed to uncompress logical plan", K(ret));
   } else if (feedback_nodes.count() != plan_items.count()) {
-    ret = OB_SUCCESS;
+    //ignore error code
     LOG_WARN("unexpect feedback node count", K(ret));
-  } else if (!feedback_nodes.empty()) {
-    plan_open_time = feedback_nodes.at(0).op_open_time_;
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
-    const ObExecFeedbackNode &feedback_node = feedback_nodes.at(i);
-    ObSqlPlanItem *plan_item = plan_items.at(i);
-    if (OB_ISNULL(plan_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null plan item", K(ret));
-    } else if (feedback_node.op_id_ != plan_item->id_) {
-       ret = OB_SUCCESS;
-      LOG_WARN("unexpect feedback node info", K(ret));
-    } else {
-      int64_t real_cost = 0;
-      if (0 != feedback_node.output_row_count_ &&
-          0 != feedback_node.op_last_row_time_) {
-        real_cost = feedback_node.op_last_row_time_ - plan_open_time;
-      } else if (0 != feedback_node.op_close_time_) {
-        real_cost = feedback_node.op_close_time_ - plan_open_time;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
+      const ObExecFeedbackNode &feedback_node = feedback_nodes.at(i);
+      ObSqlPlanItem *plan_item = plan_items.at(i);
+      if (0 == i) {
+        plan_open_time = feedback_node.op_open_time_;
       }
-      plan_item->real_cardinality_ = feedback_node.output_row_count_;
-      plan_item->real_cost_ = real_cost;
-      plan_item->cpu_cost_ = feedback_node.db_time_;
-      plan_item->io_cost_ = feedback_node.block_time_;
-      plan_item->search_columns_ = feedback_node.worker_count_;
+      if (OB_ISNULL(plan_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null plan item", K(ret));
+      } else if (feedback_node.op_id_ != plan_item->id_) {
+        ret = OB_SUCCESS;
+        LOG_WARN("unexpect feedback node info", K(ret));
+      } else {
+        int64_t real_cost = 0;
+        if (0 != feedback_node.output_row_count_ &&
+            0 != feedback_node.op_last_row_time_) {
+          real_cost = feedback_node.op_last_row_time_ - plan_open_time;
+        } else if (0 != feedback_node.op_close_time_) {
+          real_cost = feedback_node.op_close_time_ - plan_open_time;
+        }
+        plan_item->real_cardinality_ = feedback_node.output_row_count_;
+        plan_item->real_cost_ = real_cost;
+        plan_item->cpu_cost_ = feedback_node.db_time_;
+        plan_item->io_cost_ = feedback_node.block_time_;
+        plan_item->search_columns_ = feedback_node.worker_count_;
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    ObLogicalPlanRawData new_logical_plan;
-    if (OB_FAIL(new_logical_plan.compress_logical_plan(ctx.get_allocator(), plan_items))) {
-      LOG_WARN("failed to compress logical plan", K(ret));
-    } else if (OB_FAIL(set_logical_plan(new_logical_plan))) {
-      LOG_WARN("failed to set logical plan", K(ret));
+    if (OB_SUCC(ret)) {
+      ObLogicalPlanRawData new_logical_plan;
+      if (OB_FAIL(new_logical_plan.compress_logical_plan(ctx.get_allocator(), plan_items))) {
+        LOG_WARN("failed to compress logical plan", K(ret));
+      } else if (OB_FAIL(set_logical_plan(new_logical_plan))) {
+        LOG_WARN("failed to set logical plan", K(ret));
+      }
     }
   }
   return ret;
@@ -1632,6 +1615,16 @@ bool ObPhysicalPlan::try_record_plan_info()
   bool expected = true;
   bool b_ret = can_set_feedback_info_.compare_exchange_strong(expected, false);
   return b_ret;
+}
+
+int ObPhysicalPlan::set_px_node_addrs(
+          const common::ObIArray<common::ObAddr> &px_node_addrs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(px_node_addrs_.assign(px_node_addrs))) {
+    LOG_WARN("failed to assign px_node_addrs", K(ret));
+  }
+  return ret;
 }
 
 } //namespace sql

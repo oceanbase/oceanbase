@@ -492,7 +492,7 @@ public:
   ObSysVarFactory(const int64_t tenant_id = OB_SERVER_TENANT_ID);
   virtual ~ObSysVarFactory();
   void destroy();
-  int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var);
+  int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var, int64_t store_idx = -1);
   int create_all_sys_vars();
   int free_sys_var(ObBasicSysVar *sys_var, int64_t sys_var_idx);
   static int create_sys_var(ObIAllocator &allocator_, ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var_ptr);
@@ -1001,14 +1001,13 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
   return ret;
 }
 
-int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var)
+int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var, int64_t store_idx)
 {
   int ret = OB_SUCCESS;
-  int64_t store_idx = -1;
   ObBasicSysVar *sys_var_ptr = NULL;
   if (OB_FAIL(try_init_store_mem())) {
     LOG_WARN("fail to init", K(ret));
-  } else if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
+  } else if (-1 == store_idx && OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
     LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
   } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
     ret = OB_ERR_UNEXPECTED;

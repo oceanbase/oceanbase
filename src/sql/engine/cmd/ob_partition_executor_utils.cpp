@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 

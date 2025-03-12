@@ -11,18 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/ls/ob_ls_ddl_log_handler.h"
-#include "lib/oblog/ob_log_module.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ddl/ob_ddl_clog.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
+#include "ob_ls_ddl_log_handler.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/ddl/ob_ddl_replay_executor.h"
-#include "logservice/ob_log_base_header.h"
-#include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase

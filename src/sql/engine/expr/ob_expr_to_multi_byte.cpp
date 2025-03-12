@@ -12,10 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/ob_name_def.h"
 #include "sql/engine/expr/ob_expr_to_multi_byte.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 namespace oceanbase
 {
@@ -90,31 +90,42 @@ int calc_to_multi_byte_expr(const ObString &input, const ObCollationType cs_type
       pos = output.length();
     }
   } else {
-    ObStringScanner scanner(input, cs_type);
-    ObString encoding;
-    int32_t wc = 0;
     char *ptr = buf;
+    struct Functor {
+      Functor(const ObCollationType cs_type, char *&ptr, char *&buf, const int64_t buf_len)
+        : cs_type(cs_type), ptr(ptr), buf(buf), buf_len(buf_len) {}
+      const ObCollationType cs_type;
+      char *&ptr;
+      char *&buf;
+      int64_t buf_len;
 
-    while (OB_SUCC(ret)
-           && scanner.next_character(encoding, wc, ret)) {
-      int32_t length = 0;
+      int operator() (const ObString &encoding, ob_wc_t wc) {
+        int ret = OB_SUCCESS;
+        int32_t length = 0;
 
-      if (wc == 0x20) { //处理空格
-        wc = 0x3000;
-      //smart quote not support https://gerry.lamost.org/blog/?p=295757
-      //} else if (wc == 0x22) { //" --> ” smart double quote
-      //  wc = 0x201D;
-      //} else if (wc == 0x27) { //' --> ’ smart single quote
-      //  wc = 0x2019;
-      } else if (wc >= 0x21 && wc <= 0x7E) {
-        wc += 65248;
-      } else {
-        //do nothing
-      }
-      OZ (ObCharset::wc_mb(cs_type, wc, ptr, buf + buf_len - ptr, length));
-      ptr += length;
-      LOG_DEBUG("process char", K(ret), K(wc));
-    }
+        if (wc == 0x20) { //处理空格
+          wc = 0x3000;
+        //smart quote not support https://gerry.lamost.org/blog/?p=295757
+        //} else if (wc == 0x22) { //" --> ” smart double quote
+        //  wc = 0x201D;
+        //} else if (wc == 0x27) { //' --> ’ smart single quote
+        //  wc = 0x2019;
+        } else if (wc >= 0x21 && wc <= 0x7E) {
+          wc += 65248;
+        } else {
+          //do nothing
+        }
+        OZ (ObCharset::wc_mb(cs_type, wc, ptr, buf + buf_len - ptr, length));
+        ptr += length;
+        LOG_DEBUG("process char", K(ret), K(wc));
+
+        return ret;
+      };
+    };
+
+    Functor temp_handler(cs_type, ptr, buf, buf_len);
+    ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
+    OZ(ObFastStringScanner::foreach_char(input, charset_type, temp_handler));
     pos = ptr - buf;
   }
 

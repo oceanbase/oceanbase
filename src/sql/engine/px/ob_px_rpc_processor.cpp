@@ -12,19 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_rpc_processor.h"
-#include "ob_px_sub_coord.h"
-#include "ob_px_task_process.h"
-#include "ob_px_admission.h"
 #include "ob_px_sqc_handler.h"
-#include "lib/signal/ob_signal_struct.h"
-#include "lib/ash/ob_active_session_guard.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/dtl/ob_dtl_channel_group.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
-#include "share/detect/ob_detect_callback.h"
 #include "share/detect/ob_detect_manager_utils.h"
 
 using namespace oceanbase::common;

@@ -14,13 +14,10 @@
 
 #include "observer/table_load/ob_table_load_client_task.h"
 #include "observer/ob_server.h"
-#include "observer/table_load/ob_table_load_exec_ctx.h"
-#include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
-#include "observer/table_load/ob_table_load_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/schema/ob_part_mgr_util.h"
 

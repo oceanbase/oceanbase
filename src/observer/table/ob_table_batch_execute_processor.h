@@ -56,7 +56,7 @@ protected:
 private:
   int init_single_op_tb_ctx(table::ObTableCtx &ctx,
                             const table::ObTableOperation &table_operation);
-  void init_batch_ctx();
+  int init_batch_ctx();
   int start_trans();
   int end_trans(bool is_rollback);
 private:

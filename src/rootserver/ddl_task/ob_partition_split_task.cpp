@@ -14,14 +14,9 @@
 
 #include "ob_partition_split_task.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "common/ob_tablet_id.h"
 #include "share/ob_ddl_checksum.h"
-#include "share/ob_ddl_common.h"
 #include "rootserver/ob_root_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/ob_freeze_info_proxy.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 
 using namespace oceanbase::rootserver;
@@ -1605,6 +1600,14 @@ int ObPartitionSplitTask::delete_src_part_stat_info(const uint64_t table_id,
     common::ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
         LOG_WARN("fail to start transaction", K(ret));
+    // if the table is none-partitioned-table before spliting, then __all_table_stat fill the partition_id with it's table_id
+    // and we need to remove those records, if there exist
+    } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, table_id))) {
+      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+    } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, table_id))) {
+      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+    } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_HISTOGRAM_STAT_TNAME, table_id, table_id))) {
+      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, src_part_id))) {
       LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, src_part_id))) {

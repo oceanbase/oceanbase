@@ -11,13 +11,10 @@
  * This file contains interface support for the xml tree abstraction.
  */
 #define USING_LOG_PREFIX LIB
-#include "lib/utility/ob_hang_fatal_error.h"
+#include "ob_xml_tree.h"
 #include "common/ob_smart_call.h"
-#include "lib/ob_errno.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/xml/ob_xml_bin.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xml_parser.h"
+#include "deps/oblib/src/lib/xml/ob_xpath.h"
 
 namespace oceanbase {
 namespace common {

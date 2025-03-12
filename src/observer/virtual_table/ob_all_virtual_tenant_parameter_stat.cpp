@@ -13,10 +13,7 @@
 #include "ob_all_virtual_tenant_parameter_stat.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "common/ob_tenant_data_version_mgr.h"
 
 namespace oceanbase
 {

@@ -14,7 +14,6 @@
 
 #include "sql/engine/set/ob_hash_set_vec_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/basic/ob_hp_infras_vec_op.h"
 
 namespace oceanbase
 {

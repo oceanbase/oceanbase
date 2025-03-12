@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_io_worker_wrapper.h"
-#include "lib/ob_define.h"
-#include "share/rc/ob_tenant_base.h"          // mtl_free
-#include "log_define.h"
 
 namespace oceanbase
 {

@@ -10,10 +10,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_info.h"
-#include "observer/ob_server.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 
 namespace oceanbase
@@ -58,15 +54,26 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
   } else if (OB_ISNULL(cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
-  } else if (OB_FAIL(get_next_tablet())) {
-    if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "get_next_table failed", K(ret));
-    }
-  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "tablet is null", K(ret), K(tablet_handle_));
+  } else {
+    // get next valid tablet;
+    do {
+      if (OB_FAIL(get_next_tablet())) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "get_next_table failed", K(ret));
+        }
+      } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "tablet is null", K(ret), K(tablet_handle_));
+      } else if (!tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+        ret = OB_EAGAIN;
+        LOG_DEBUG("query all_virtual_tablet_compaction_info, tablet_data not complete", K(ret), K(tablet->get_tablet_id()), K(tablet->get_ls_id()));
+      }
+    // quit while, excepted errcode : OB_ITER_END, OB_SUCCESS
+    } while(OB_EAGAIN == ret);
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_info_list))) {
-    SERVER_LOG(WARN, "tablet read medium info list failed", K(ret), K(tablet_handle_));
+    SERVER_LOG(WARN, "tablet read medium info list failed", K(ret), K(tablet_handle_), KPC(tablet_handle_.get_obj()));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     SERVER_LOG(WARN,"fail to fetch table store", K(ret));
   } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {

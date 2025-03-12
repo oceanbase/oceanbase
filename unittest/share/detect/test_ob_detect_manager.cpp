@@ -16,8 +16,6 @@
 #define private public
 #define protected public
 #include "share/detect/ob_detect_manager.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/thread/thread_mgr.h"
 #include "lib/alloc/memory_dump.h"
 #include "share/detect/ob_detect_manager_utils.h"
 

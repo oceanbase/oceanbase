@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_multi_part_update_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::common;
@@ -206,12 +204,12 @@ int ObPxMultiPartUpdateOp::write_rows(ObExecContext &ctx,
       } else {
         if (upd_rtdef_.ddel_rtdef_ != nullptr) {
           //update rows across partitions, need to add das delete op's affected rows
-          op_monitor_info_.otherstat_6_value_ += upd_rtdef_.ddel_rtdef_->affected_rows_;
+          op_monitor_info_.otherstat_5_value_ += upd_rtdef_.ddel_rtdef_->affected_rows_;
         }
         if (upd_rtdef_.dlock_rtdef_ != nullptr) {
-          op_monitor_info_.otherstat_6_value_ += upd_rtdef_.dlock_rtdef_->affected_rows_;
+          op_monitor_info_.otherstat_5_value_ += upd_rtdef_.dlock_rtdef_->affected_rows_;
         }
-        op_monitor_info_.otherstat_6_value_ += upd_rtdef_.dupd_rtdef_.affected_rows_;
+        op_monitor_info_.otherstat_5_value_ += upd_rtdef_.dupd_rtdef_.affected_rows_;
       }
     }
     if (!(MY_SPEC.is_pdml_index_maintain_)) {
@@ -225,7 +223,7 @@ int ObPxMultiPartUpdateOp::write_rows(ObExecContext &ctx,
     LOG_TRACE("pdml update ok", K(MY_SPEC.is_pdml_index_maintain_),
               K(op_monitor_info_.otherstat_1_value_), K(op_monitor_info_.otherstat_2_value_),
               K(op_monitor_info_.otherstat_3_value_), K(op_monitor_info_.otherstat_4_value_),
-              K(op_monitor_info_.otherstat_6_value_));
+              K(op_monitor_info_.otherstat_5_value_));
     upd_rtdef_.found_rows_ = 0;
     upd_rtdef_.dupd_rtdef_.affected_rows_ = 0;
     if (upd_rtdef_.ddel_rtdef_ != nullptr) {

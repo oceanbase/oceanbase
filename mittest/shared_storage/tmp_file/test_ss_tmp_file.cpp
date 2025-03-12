@@ -32,7 +32,7 @@ using namespace tmp_file;
 using namespace storage;
 using namespace share::schema;
 /* ------------------------------ Mock Parameter ---------------------------- */
-static const int64_t TENANT_MEMORY = 8L * 1024L * 1024L * 1024L /* 8 GB */;
+static const int64_t TENANT_MEMORY = 16L * 1024L * 1024L * 1024L /* 16 GB */;
 static constexpr int64_t IO_WAIT_TIME_MS = 60 * 1000L; // 60s
 /********************************* Mock WBP *************************** */
 static const int64_t WBP_BLOCK_SIZE = ObTmpWriteBufferPool::WBP_BLOCK_SIZE; // each wbp block has 253 pages (253 * 8KB == 2024KB)
@@ -339,6 +339,19 @@ TEST_F(TestTmpFile, test_read)
   handle.reset();
   delete[] read_buf;
 
+  read_buf = new char [wbp_begin_offset];
+  io_info.buf_ = read_buf;
+  io_info.size_ = wbp_begin_offset;
+  io_info.disable_block_cache_ = false;
+  io_info.disable_page_cache_ = true;
+  ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, 0, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(io_info.size_, handle.get_done_size());
+  cmp = memcmp(handle.get_buffer(), write_buf, io_info.size_);
+  ASSERT_EQ(0, cmp);
+  handle.reset();
+  delete[] read_buf;
+
   // 3. read both disk and memory data
   int64_t read_size = wbp_begin_offset / 2 + 9 * 1024;
   int64_t read_offset = wbp_begin_offset / 2 + 1024;
@@ -559,6 +572,138 @@ TEST_F(TestTmpFile, test_cached_read)
 
   LOG_INFO("io time", K(write_time), K(read_time));
   STORAGE_LOG(INFO, "=======================test_cached_read end=======================");
+}
+
+TEST_F(TestTmpFile, test_prefetch_read)
+{
+  STORAGE_LOG(INFO, "=======================test_prefetch_read begin=======================");
+  int ret = OB_SUCCESS;
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_ss_file_manager().wbp_;
+  // const int64_t write_size = 8 * 1024 * 1024; // 8MB
+  const int64_t write_size = 9 * 1024 * 1024 + 37 * 1024; // 8MB
+  const int64_t wbp_mem_limit = wbp.get_memory_limit();
+  wbp.default_wbp_memory_limit_ = 10 * WBP_BLOCK_SIZE;
+  char *write_buf = new char [write_size];
+  for (int64_t i = 0; i < write_size;) {
+    int64_t random_length = generate_random_int(1024, 8 * 1024);
+    int64_t random_int = generate_random_int(0, 256);
+    for (int64_t j = 0; j < random_length && i + j < write_size; ++j) {
+      write_buf[i + j] = random_int;
+    }
+    i += random_length;
+  }
+
+  int64_t dir = -1;
+  int64_t fd = -1;
+  ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
+  std::cout << "open temporary file: " << fd << std::endl;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  tmp_file::ObITmpFileHandle file_handle;
+  ret = MTL(ObTenantTmpFileManager *)->get_tmp_file(fd, file_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = SMALL_WBP_IDX_CACHE_MAX_CAPACITY;
+
+  ObTmpFileIOInfo io_info;
+  io_info.fd_ = fd;
+  io_info.io_desc_.set_wait_event(2);
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+
+  // 1. Write data and wait flushing over
+  int64_t write_time = ObTimeUtility::current_time();
+  ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+  write_time = ObTimeUtility::current_time() - write_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  sleep(2);
+
+  int64_t wash_size = 0;
+  ObSSTmpFileFlushManager &flush_mgr = MTL(ObTenantTmpFileManager *)->ss_file_manager_.flush_mgr_;
+  ObSSTmpFileAsyncFlushWaitTaskHandle task_handle;
+  common::ObIOFlag io_desc;
+  io_desc.set_wait_event(ObWaitEventIds::TMP_FILE_WRITE);
+  ASSERT_EQ(OB_SUCCESS, flush_mgr.wash(INT64_MAX, io_desc, task_handle, wash_size));
+  task_handle.wait(30 * 1000);
+  while (file_handle.get()->cached_page_nums_ > 0) {
+    task_handle.reset();
+    ASSERT_EQ(OB_SUCCESS, flush_mgr.wash(INT64_MAX, io_desc, task_handle, wash_size)); // flush twice to make sure all pages are flushed
+    task_handle.wait(30 * 1000);
+  }
+  EXPECT_EQ(file_handle.get()->cached_page_nums_, 0);
+  LOG_INFO("wash all page complete");
+
+  // 2. enable prefetch and read data from disk
+  ObTmpFileIOHandle handle;
+  int64_t read_size = 0;
+  int64_t read_offset = 0;
+  char *read_buf = nullptr;
+  const int64_t BLOCK_NUM = upper_align(write_size, ObTmpFileGlobal::SN_BLOCK_SIZE) / ObTmpFileGlobal::SN_BLOCK_SIZE;
+  for (int i = 0; i < BLOCK_NUM + 1; ++i) {
+    if (i != BLOCK_NUM) {
+      read_size = ObTmpFileGlobal::PAGE_SIZE / 2;
+      read_offset = i * ObTmpFileGlobal::SN_BLOCK_SIZE;
+    } else {
+      read_size = 10;
+      read_offset = write_size - 20;
+    }
+    LOG_INFO("test_prefetch_read pread", K(i), K(read_offset));
+    read_buf = new char [read_size];
+    io_info.buf_ = read_buf;
+    io_info.size_ = read_size;
+    io_info.disable_page_cache_ = false;
+    io_info.disable_block_cache_ = true;
+    io_info.prefetch_ = true;
+    ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, read_offset, handle);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(io_info.size_, handle.get_done_size());
+    int cmp = memcmp(handle.get_buffer(), write_buf + read_offset, io_info.size_);
+    ASSERT_EQ(0, cmp);
+    handle.reset();
+    delete[] read_buf;
+  }
+
+  // 3. check ALL pages are present in the kv_cache
+  int64_t begin_block_id = 0;
+  int64_t wbp_begin_offset = file_handle.get()->cal_wbp_begin_offset();
+  int64_t end_block_id = common::upper_align(wbp_begin_offset, ObTmpFileGlobal::SS_BLOCK_SIZE) / ObTmpFileGlobal::SS_BLOCK_SIZE - 1 ;
+  for (int64_t seg_id = begin_block_id; seg_id <= end_block_id && OB_SUCC(ret); ++seg_id) {
+    const int64_t end_page_id = MIN((seg_id + 1) * ObTmpFileGlobal::SS_BLOCK_SIZE,
+                                    common::upper_align(wbp_begin_offset, ObTmpFileGlobal::PAGE_SIZE)) / ObTmpFileGlobal::PAGE_SIZE
+                                - seg_id * ObTmpFileGlobal::SS_BLOCK_PAGE_NUMS;
+    for (int64_t page_id = 0; page_id < end_page_id && OB_SUCC(ret); page_id++) {
+      const int64_t virtual_page_id = seg_id * ObTmpFileGlobal::SS_BLOCK_PAGE_NUMS + page_id;
+      tmp_file::ObTmpPageCacheKey key(fd, 0, virtual_page_id, MTL_ID());
+      if (virtual_page_id == write_size / ObTmpFileGlobal::PAGE_SIZE) {
+        key.unfilled_page_length_ = write_size % ObTmpFileGlobal::PAGE_SIZE;
+      }
+      tmp_file::ObTmpPageValueHandle handle;
+      ret = tmp_file::ObTmpPageCache::get_instance().get_page(key, handle);
+      if (OB_FAIL(ret)) {
+        std::cout << "get cached page failed\n"
+                  << "wbp_begin_offset: " << wbp_begin_offset << " "
+                  << "block_id: " << seg_id << " "
+                  << "page_id: " << page_id << " "
+                  << "end_page_id: " << end_page_id << " "
+                  << "begin_block_id: " << begin_block_id << " "
+                  << "end_block_id: " << end_block_id << " "
+                  << std::endl;
+        ob_abort();
+      }
+      ASSERT_EQ(OB_SUCCESS, ret);
+      int64_t cmp_size = MIN(ObTmpFileGlobal::PAGE_SIZE, ObTmpFileGlobal::PAGE_SIZE - key.unfilled_page_length_);
+      int cmp = memcmp(handle.value_->get_buffer(), write_buf + virtual_page_id * ObTmpFileGlobal::PAGE_SIZE, cmp_size);
+      ASSERT_EQ(0, cmp);
+    }
+  }
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  file_handle.reset();
+  ret = MTL(ObTenantTmpFileManager *)->remove(fd);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  check_final_status();
+
+  STORAGE_LOG(INFO, "=======================test_prefetch_read end=======================");
 }
 
 // 1. append write a uncompleted tail page in memory

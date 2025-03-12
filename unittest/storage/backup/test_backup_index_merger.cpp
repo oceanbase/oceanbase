@@ -11,24 +11,14 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "gtest/gtest.h"
 #define private public
 #define protected public
 
-#include <string>
-#include <algorithm>
 
-#include "lib/ob_errno.h"
-#include "storage/backup/ob_backup_tmp_file.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/backup/ob_backup_iterator.h"
 #include "storage/backup/ob_backup_index_merger.h"
-#include "storage/backup/ob_backup_index_store.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "test_backup.h"
 #include "test_backup_include.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "share/ob_device_manager.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 using namespace testing;

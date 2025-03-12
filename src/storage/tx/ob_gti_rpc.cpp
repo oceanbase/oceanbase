@@ -13,8 +13,6 @@
 #include "ob_gti_rpc.h"
 #include "ob_trans_id_service.h"
 #include "ob_trans_service.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {

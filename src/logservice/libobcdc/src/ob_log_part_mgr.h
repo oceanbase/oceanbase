@@ -481,6 +481,7 @@ private:
   // INDEX_TYPE_UNIQUE_LOCAL
   // INDEX_TYPE_UNIQUE_GLOBAL
   // INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE
+  // INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY
   // where INDEX_TYPE_UNIQUE_GLOBAL is a globally unique index
   bool is_unique_index_table_but_expect_global_unqiue_index_(const ObSimpleTableSchemaV2 &table_schema) const;
 

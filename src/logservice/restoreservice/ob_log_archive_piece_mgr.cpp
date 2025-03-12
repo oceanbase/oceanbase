@@ -11,31 +11,11 @@
  */
 
 #include "ob_log_archive_piece_mgr.h"
-#include "lib/container/ob_se_array.h"            // ObSEArray
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"                 // ObString
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
 #include "logservice/archiveservice/ob_archive_define.h"
 #include "logservice/archiveservice/ob_archive_file_utils.h"      // ObArchiveFileUtils
 #include "logservice/archiveservice/ob_archive_util.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry.h"
-#include "logservice/palf/log_iterator_storage.h"
-#include "logservice/palf/lsn.h"
-#include "logservice/palf/palf_iterator.h"
 #include "rootserver/restore/ob_restore_util.h"  // ObRestoreUtil
-#include "share/backup/ob_backup_path.h"         // ObBackupPath
-#include "share/backup/ob_backup_store.h"        // ObBackupStore
-#include "share/backup/ob_archive_store.h"
-#include "share/backup/ob_archive_piece.h"        // ObArchivePiece
-#include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
-#include "share/rc/ob_tenant_base.h"
-#include "share/backup/ob_archive_struct.h"       // ObArchiveLSMetaType
-#include "share/ob_errno.h"
-#include <cstdint>
 
 namespace oceanbase
 {

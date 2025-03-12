@@ -11,10 +11,6 @@
  */
 #define USING_LOG_PREFIX STORAGETEST
 
-#include <gtest/gtest.h>
-#include <sys/stat.h>
-#include <sys/vfs.h>
-#include <sys/types.h>
 #include <gmock/gmock.h>
 #define protected public
 #define private public

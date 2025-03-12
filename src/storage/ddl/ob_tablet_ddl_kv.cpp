@@ -12,25 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ddl/ob_ddl_struct.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "share/scn.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_object_manager.h"
-#include "share/ob_force_print_log.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "ob_tablet_ddl_kv.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/blocksstable/ob_datum_rowkey.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv_multi_version_row_iterator.h"
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -265,7 +250,6 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle)
 int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
 {
   int ret = OB_SUCCESS;
-  meta_array.reset();
   blocksstable::DDLBtreeIterator tmp_iter;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -277,8 +261,6 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, datum_utils_),
                                                false))) {
     LOG_WARN("locate range failed", K(ret));
-  } else if (OB_FAIL(meta_array.reserve(macro_blocks_.count()))) {
-    LOG_WARN("reserve meta array failed", K(ret), K(macro_blocks_.count()));
   } else {
     while (OB_SUCC(ret)) {
       ObDatumRowkeyWrapper rowkey_wrapper;
@@ -303,12 +285,6 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
         if (OB_FAIL(meta_array.push_back(ddl_block_meta))) {
           LOG_WARN("push back block meta failed", K(ret), K(ddl_block_meta));
         }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (meta_array.count() != macro_blocks_.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("meta array count not euqal with macro_block count", K(ret), K(meta_array.count()), K(macro_blocks_.count()));
       }
     }
   }
@@ -841,7 +817,7 @@ ObDDLKV::ObDDLKV()
     tablet_id_(), ddl_start_scn_(SCN::min_scn()), ddl_snapshot_version_(0), data_format_version_(0), trans_id_(),
     data_schema_version_(0), column_count_(0),
     min_scn_(SCN::max_scn()), max_scn_(SCN::min_scn()), pending_cnt_(0),
-    macro_block_count_(0)
+    macro_block_count_(0), merge_slice_idx_(0)
 {
 
 }
@@ -917,6 +893,7 @@ void ObDDLKV::reset()
   macro_block_count_ = 0;
   ddl_memtables_.reset();
   arena_allocator_.reset();
+  merge_slice_idx_ = 0;
 
   ObITabletMemtable::reset();
 }
@@ -951,7 +928,7 @@ int ObDDLKV::create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &tab
   return ret;
 }
 
-int ObDDLKV::get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable)
+int ObDDLKV::get_ddl_memtable(const int64_t slice_idx, const int64_t cg_idx, ObDDLMemtable *&ddl_memtable)
 {
   int ret = OB_SUCCESS;
   ddl_memtable = nullptr;
@@ -959,16 +936,16 @@ int ObDDLKV::get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(cg_idx < 0)) {
+  } else if (OB_UNLIKELY(slice_idx < 0 || cg_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(cg_idx));
+    LOG_WARN("invalid argument", K(ret), K(slice_idx), K(cg_idx));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !have_found && i < ddl_memtables_.count(); ++i) {
       ObDDLMemtable *cur_ddl_memtable = ddl_memtables_.at(i);
       if (OB_ISNULL(cur_ddl_memtable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("current ddl memtable is null", K(ret), K(i), K(cur_ddl_memtable));
-      } else if (cur_ddl_memtable->get_column_group_id() == cg_idx) {
+      } else if (cur_ddl_memtable->get_key().get_slice_idx() == slice_idx && cur_ddl_memtable->get_column_group_id() == cg_idx) {
         ddl_memtable = cur_ddl_memtable;
         have_found = true;
       }
@@ -1076,7 +1053,7 @@ int ObDDLKV::set_macro_block(
       }
 #endif
       // 1. try find the ddl memtable
-      if (OB_FAIL(get_ddl_memtable(ddl_memtable_key.get_column_group_id(), ddl_memtable))) {
+      if (OB_FAIL(get_ddl_memtable(ddl_memtable_key.get_slice_idx(), ddl_memtable_key.get_column_group_id(), ddl_memtable))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("get ddl memtable failed", K(ret));
         } else {
@@ -1125,6 +1102,7 @@ int ObDDLKV::set_macro_block(
       } else if (OB_FAIL(ddl_memtable->insert_block_meta_tree(macro_block.block_handle_, data_macro_meta, macro_block.end_row_id_))) {
         LOG_WARN("insert block meta tree faield", K(ret));
       } else {
+        merge_slice_idx_ = MAX(merge_slice_idx_, macro_block.merge_slice_idx_);
         min_scn_ = SCN::min(min_scn_, macro_block.scn_);
         max_scn_ = SCN::max(max_scn_, macro_block.scn_);
         ++macro_block_count_;
@@ -1262,7 +1240,7 @@ int ObDDLKV::full_load_freeze_(const SCN &freeze_scn)
         LOG_WARN("fail to set end scn", K(ret), K(final_freeze_scn));
       } else {
         ATOMIC_SET(&is_independent_freezed_, true);
-        LOG_INFO("ddl kv freezed", K(ret), K(ls_id_), K(tablet_id_), K(get_macro_block_cnt()));
+        LOG_INFO("ddl kv freezed", K(ret), K(ls_id_), K(tablet_id_), K(get_macro_block_cnt()), K(final_freeze_scn), K(freeze_scn));
       }
     }
   }

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
 #include "ob_debug_sync_point.h"
 

@@ -13,19 +13,11 @@
 #define USING_LOG_PREFIX SERVER_OMT
 
 #include "ob_worker_processor.h"
-#include "share/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_trace_log.h"
 #include "lib/profile/ob_perf_event.h"  // SET_PERF_EVENT
-#include "lib/profile/ob_trace_id_adaptor.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "rpc/ob_request.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/frame/ob_req_processor.h"
-#include "share/config/ob_server_config.h"
 #include "observer/omt/ob_th_worker.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;

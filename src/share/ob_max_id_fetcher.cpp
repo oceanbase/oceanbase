@@ -14,16 +14,6 @@
 
 #include "share/ob_max_id_fetcher.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "common/ob_zone.h"
-#include "common/object/ob_object.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_schema_status_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
 
@@ -85,7 +75,8 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   /* the following ObMaxIdType will be persisted. */
   { "ob_max_used_service_name_id", "max used service name id"},
   { "ob_max_used_storage_id", "max used storage id"},
-  { "ob_max_used_storage_op_id", "max used storage op id"}
+  { "ob_max_used_storage_op_id", "max used storage op id"},
+  { "ob_max_used_catalog_id", "max used catalog id"}
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];

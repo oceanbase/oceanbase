@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_header.h"
-#include "common/ob_store_format.h"
 #include "ob_block_sstable_struct.h"
 
 namespace oceanbase

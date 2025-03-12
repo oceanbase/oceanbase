@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_point_location_visitor.h"
 #include "ob_geo_topology_calculate.h"
-#include "ob_point_location_analyzer.h"
 
 namespace oceanbase {
 namespace common {

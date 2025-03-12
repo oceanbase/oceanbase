@@ -45,41 +45,46 @@ inline int ObExprReverse::calc_result_type1(ObExprResType &type,
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  type1.set_calc_type(common::ObVarcharType);
-  type1.set_calc_collation_type(type1.get_collation_type());
-  if (lib::is_mysql_mode()) {
-    if (ObTextType == type1.get_type()
-        || ObMediumTextType == type1.get_type()
-        || ObLongTextType == type1.get_type()) {
-      type1.set_calc_type(type1.get_type());
-      type.set_type(ObLongTextType);
-      const int32_t mbmaxlen = 4;
-      const int32_t default_text_length =
-            ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType].get_length() / mbmaxlen;
-      type.set_length(default_text_length);
-    } else {
-      type.set_varchar();
-      if (ObTinyTextType == type1.get_type()) {
-        type.set_length(OB_MAX_TINYTEXT_LENGTH - 1);
-      } else {
-        type.set_length(type1.get_length());
-      }
-    }
-    ret = aggregate_charsets_for_string_result(type, &type1, 1, type_ctx);
+  if (lib::is_mysql_mode() && ob_is_collection_sql_type(type1.get_type())) {
+    type.set_collection(type1.get_subschema_id());
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType]).get_length());
   } else {
-    if (ob_is_character_type(type1.get_type(), type1.get_collation_type())
-        || ob_is_varbinary_or_binary(type1.get_type(), type1.get_collation_type())
-        || ObNullType == type1.get_type()) {
-      type.set_type(type1.get_type());
-      type.set_collation_type(type1.get_collation_type());
-      type.set_collation_level(type1.get_collation_level());
-      type.set_length(type1.get_length());
-      type.set_length_semantics(type1.get_length_semantics());
+    type1.set_calc_type(common::ObVarcharType);
+    type1.set_calc_collation_type(type1.get_collation_type());
+    if (lib::is_mysql_mode()) {
+      if (ObTextType == type1.get_type()
+          || ObMediumTextType == type1.get_type()
+          || ObLongTextType == type1.get_type()) {
+        type1.set_calc_type(type1.get_type());
+        type.set_type(ObLongTextType);
+        const int32_t mbmaxlen = 4;
+        const int32_t default_text_length =
+              ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType].get_length() / mbmaxlen;
+        type.set_length(default_text_length);
+      } else {
+        type.set_varchar();
+        if (ObTinyTextType == type1.get_type()) {
+          type.set_length(OB_MAX_TINYTEXT_LENGTH - 1);
+        } else {
+          type.set_length(type1.get_length());
+        }
+      }
+      ret = aggregate_charsets_for_string_result(type, &type1, 1, type_ctx);
     } else {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP,
-                    ob_obj_type_str(ObCharType),
-                    ob_obj_type_str(type1.get_type()));
+      if (ob_is_character_type(type1.get_type(), type1.get_collation_type())
+          || ob_is_varbinary_or_binary(type1.get_type(), type1.get_collation_type())
+          || ObNullType == type1.get_type()) {
+        type.set_type(type1.get_type());
+        type.set_collation_type(type1.get_collation_type());
+        type.set_collation_level(type1.get_collation_level());
+        type.set_length(type1.get_length());
+        type.set_length_semantics(type1.get_length_semantics());
+      } else {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP,
+                      ob_obj_type_str(ObCharType),
+                      ob_obj_type_str(type1.get_type()));
+      }
     }
   }
   return ret;

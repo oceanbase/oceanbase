@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX RS
 #include "observer/ob_inner_sql_connection.h"  //ObInnerSQLConnection
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_ddl_sql_service.h"
-#include "share/ob_max_id_fetcher.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h" //ObLockObjRequest
 #include "storage/tablelock/ob_lock_inner_connection_util.h" //ObInnerConnectionLockUtil
 
 using namespace oceanbase::lib;

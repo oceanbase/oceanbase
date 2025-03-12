@@ -12,23 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_connection_mgr.h"
-#include "rpc/ob_rpc_request_operator.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
+#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
-
-void ObTableConnection::update_last_active_time(int64_t last_active_time)
-{
-  this->last_active_time_ = last_active_time;
-}
-
-void ObTableConnection::update_all_ids(int64_t tenant_id, int64_t database_id, int64_t user_id)
-{
-  this->tenant_id_ = tenant_id;
-  this->database_id_ = database_id;
-  this->user_id_ = user_id;
-}
+using namespace oceanbase::lib;
 
 int ObTableConnection::init(const common::ObAddr &addr, int64_t tenant_id, int64_t database_id, int64_t user_id)
 {
@@ -85,7 +74,12 @@ int ObTableConnectionMgr::init()
   ObMemAttr node_attr(OB_SERVER_TENANT_ID, "TableConnNode");
   if (OB_FAIL(connection_map_.create(CONN_INFO_MAP_BUCKET_SIZE, bucket_attr, node_attr))) {
     LOG_WARN("fail to create table connection map", K(ret));
-  } else { /* do nothing */ }
+  } else {
+    const ObMemAttr attr(OB_SERVER_TENANT_ID, "TbleConnMgr");
+    if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
+      LOG_WARN("fail to init allocator", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -94,18 +88,42 @@ int ObTableConnectionMgr::init()
 int ObTableConnectionMgr::update_table_connection(const common::ObAddr &client_addr, int64_t tenant_id, int64_t database_id, int64_t user_id)
 {
   int ret = OB_SUCCESS;
+
   if (!client_addr.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid client address", K(ret), K(client_addr));
   } else {
-    ObTableConnUpdater updater(tenant_id, database_id, user_id);
-    ObTableConnection conn;
-    if (OB_FAIL(conn.init(client_addr, tenant_id, database_id, user_id))) {
-      LOG_WARN("fail to init connection", K(ret), K(client_addr), K(tenant_id), K(database_id), K(user_id));
-    } else if (OB_FAIL(connection_map_.set_or_update(client_addr, conn, updater))) {
-      LOG_WARN("fail to set or update connection", K(ret), K(conn));
-    } else {/* do nothing */}
+    ObTableConnection *conn = nullptr;
+    if (OB_FAIL(connection_map_.get_refactored(client_addr, conn))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("fail to get connection", K(ret), K(client_addr));
+      } else { // not eixst, create
+        conn = static_cast<ObTableConnection*>(allocator_.alloc(sizeof(ObTableConnection)));
+        if (OB_ISNULL(conn)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObTableConnection)));
+        } else if (OB_FAIL(conn->init(client_addr, tenant_id, database_id, user_id))) {
+          LOG_WARN("fail to init connection", K(ret), K(client_addr), K(tenant_id), K(database_id), K(user_id));
+        } else if (OB_FAIL(connection_map_.set_refactored(client_addr, conn))) {
+          if (OB_HASH_EXIST != ret) {
+            LOG_WARN("fail to set_refactored", K(ret), K(client_addr));
+          } else { // already set by other thread
+            allocator_.free(conn);
+            conn = nullptr;
+          }
+        }
+
+        if (OB_FAIL(ret) && OB_NOT_NULL(conn)) {
+          allocator_.free(conn);
+          conn = nullptr;
+        }
+      }
+    } else { // already exist, update it
+      conn->set_last_active_time(ObTimeUtility::fast_current_time());
+      conn->update_all_ids(tenant_id, database_id, user_id);
+    }
   }
+
   LOG_DEBUG("update table connection", K(ret), K(client_addr), K(tenant_id), K(database_id),
             K(user_id), K(connection_map_.size()));
   return ret;
@@ -117,6 +135,9 @@ int ObTableConnectionMgr::update_table_connection(const rpc::ObRequest *req, int
   if (OB_ISNULL(req)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null request", K(ret));
+  } else if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant id", K(ret), K(tenant_id));
   } else {
     const ObAddr &client_addr = RPC_REQ_OP.get_peer(req);
     if (OB_FAIL(update_table_connection(client_addr, tenant_id, database_id, user_id))) {
@@ -134,22 +155,21 @@ void ObTableConnectionMgr::on_conn_close(easy_connection_t *c)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("easy connection is null", K(ret));
   } else {
+    ObTableConnection *conn = nullptr;
     easy_addr_t &ez = c->addr;
     if (!ez2ob_addr(addr, ez)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("fail to convert easy_addr to ob_addr", K(ret));
-    } else if (OB_FAIL(connection_map_.erase_refactored(addr))) {
+    } else if (OB_FAIL(connection_map_.erase_refactored(addr, &conn))) {
       if (OB_HASH_NOT_EXIST != ret) {
         LOG_ERROR("fail to remove table connection stat", K(ret), K(addr));
       }
     } else {
+      if (OB_NOT_NULL(conn)) {
+        allocator_.free(conn);
+      }
       LOG_INFO("table connection on close", K(ret), K(c), K(addr), K(connection_map_.size()));
     }
   }
 }
 
-void ObTableConnUpdater::operator() (common::hash::HashMapPair<common::ObAddr, ObTableConnection> &entry)
-{
-  entry.second.update_last_active_time(ObTimeUtility::fast_current_time());
-  entry.second.update_all_ids(tenant_id_, database_id_, user_id_);
-}

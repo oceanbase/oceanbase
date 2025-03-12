@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "ob_tenant_schema_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
 

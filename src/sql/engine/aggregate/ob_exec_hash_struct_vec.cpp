@@ -12,8 +12,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_exec_hash_struct_vec.h"
-#include "common/row/ob_row_store.h"
-#include "share/aggregate/processor.h"
 #include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
 
 namespace oceanbase

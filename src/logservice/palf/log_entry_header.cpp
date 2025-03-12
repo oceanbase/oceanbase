@@ -11,14 +11,10 @@
  */
 
 #include "log_entry_header.h"
-#include "lib/checksum/ob_crc64.h"          // ob_crc64
 #include "lib/checksum/ob_parity_check.h"   // parity_check
-#include "lib/ob_errno.h"                   // errno
-#include "lib/checksum/ob_crc16.h"          // ob_crc16
 #include "share/ob_cluster_version.h"       // GET_MIN_DATA_VERSION
 #include "share/rc/ob_tenant_base.h"        // MTL_ID
 #include "logservice/ob_log_base_header.h"  // ObLogBaseHeader
-#include "lib/hash/xxhash.h"                // XXH64
 
 namespace oceanbase
 {

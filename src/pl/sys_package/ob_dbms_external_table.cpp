@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/sys_package/ob_dbms_external_table.h"
-#include "pl/ob_pl_package_manager.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "ob_dbms_external_table.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 
 namespace oceanbase

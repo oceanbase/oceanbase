@@ -727,6 +727,7 @@ public:
   int get_regexp_time_limit(int64_t &v) const;
   int get_regexp_session_vars(ObExprRegexpSessionVariables &vars) const;
   int get_activate_all_role_on_login(bool &v) const;
+  int get_mview_refresh_dop(uint64_t &v) const;
   int update_timezone_info();
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_wrap_.get_time_zone_info(); }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
@@ -849,6 +850,7 @@ public:
     thread_data_.dis_state_ = dis_state;
   }
   int set_session_state(ObSQLSessionState state);
+  void set_session_state_for_trigger(ObSQLSessionState state);
   int check_session_status();
   ObDisconnectState get_disconnect_state() const { return thread_data_.dis_state_;}
   ObSQLSessionState get_session_state() const { return thread_data_.state_;}
@@ -964,7 +966,8 @@ public:
                         const common::ObObj &min_val,
                         const common::ObObj &max_val,
                         const int64_t flags,
-                        bool is_from_sys_table);
+                        bool is_from_sys_table,
+                        int64_t store_idx = -1);
   int load_sys_variable(common::ObIAllocator &calc_buf,
                         const common::ObString &name,
                         const int64_t dtype,
@@ -1211,6 +1214,7 @@ public:
 
   inline void set_capability(const obmysql::ObMySQLCapabilityFlags cap) { capability_ = cap; }
   inline void set_client_attrbuite_capability(const uint64_t cap) { client_attribute_capability_.capability_ = cap; }
+  inline uint64_t get_client_attrbuite_capability() { return client_attribute_capability_.capability_; }
   inline obmysql::ObMySQLCapabilityFlags get_capability() const { return capability_; }
   inline bool is_track_session_info() const { return capability_.cap_flags_.OB_CLIENT_SESSION_TRACK; }
 
@@ -1232,6 +1236,11 @@ public:
   inline bool is_client_support_lob_locatorv2() const
   {
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2;
+  }
+
+  inline bool is_support_new_result_meta_data() const
+  {
+    return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA;
   }
 
   void set_proxy_cap_flags(const obmysql::ObProxyCapabilityFlags &proxy_capability)
@@ -1262,6 +1271,7 @@ public:
   int set_partition_hit(const bool is_hit);
   int set_proxy_user_privilege(const int64_t user_priv_set);
   int set_proxy_capability(const uint64_t proxy_cap);
+  int set_client_capability();
   int set_trans_specified(const bool is_spec);
   int set_init_connect(const common::ObString &init_sql);
   int save_trans_status();
@@ -1746,12 +1756,13 @@ public:
         runtime_filter_max_in_num_(0),
         runtime_bloom_filter_max_size_(INT_MAX32),
         enable_rich_vector_format_(false),
-        ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
+        ncharacter_set_connection_(ObCharsetType::CHARSET_SESSION_CACHE_NOT_LOADED_MARK),
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
         enable_sql_plan_monitor_(false),
         ob_enable_parameter_anonymous_block_(false),
-        current_default_catalog_(0)
+        current_default_catalog_(0),
+        security_version_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1819,6 +1830,7 @@ public:
       compat_version_ = 0;
       enable_sql_plan_monitor_ = false;
       ob_enable_parameter_anonymous_block_ = false;
+      security_version_ = 0;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1870,7 +1882,8 @@ public:
             default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_ &&
             compat_type_ == other.compat_type_ &&
             compat_version_ == other.compat_version_ &&
-            ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_;
+            ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_ &&
+            security_version_ == other.security_version_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2057,6 +2070,7 @@ public:
     bool enable_sql_plan_monitor_;
     bool ob_enable_parameter_anonymous_block_;
     uint64_t current_default_catalog_;
+    uint64_t security_version_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2177,6 +2191,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
+    DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2194,7 +2209,7 @@ private:
     // base_data 是 ObSysVariables 里的 hardcode 变量值
     static SysVarsCacheData base_data_;
     SysVarsCacheData inc_data_;
-    union {
+    union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
       struct {
         bool inc_auto_increment_increment_:1;
@@ -2253,6 +2268,7 @@ private:
         bool inc_compat_version_:1;
         bool inc_enable_sql_plan_monitor_:1;
         bool inc_ob_enable_parameter_anonymous_block_:1;
+        bool inc_security_version_:1;
       };
     };
   };

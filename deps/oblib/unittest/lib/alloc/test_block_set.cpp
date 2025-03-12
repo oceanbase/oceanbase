@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 
-#include "lib/alloc/block_set.h"
 #include "lib/allocator/ob_malloc.h"
 
 using namespace std;

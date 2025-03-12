@@ -14,11 +14,8 @@
 
 #include "ob_table_iter.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_print_utils.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_mgr.h"
 
 namespace oceanbase
 {

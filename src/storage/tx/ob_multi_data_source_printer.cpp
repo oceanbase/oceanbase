@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_multi_data_source_printer.h"
+#include "ob_multi_data_source_printer.h"
 #include "storage/tx/ob_multi_data_source.h"
 #include "storage/tx/ob_committer_define.h"
 
@@ -48,6 +48,7 @@ const char *ObMultiDataSourcePrinter::to_str_mds_type(const ObTxDataSourceType &
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, START_TRANSFER_OUT_V2);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TRANSFER_MOVE_TX_CTX);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TRANSFER_DEST_PREPARE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, UNBIND_LOB_TABLET);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, CHANGE_TABLET_TO_TABLE_MDS);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TRANSFER_IN_ABORTED);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TABLET_SPLIT);
@@ -56,6 +57,7 @@ const char *ObMultiDataSourcePrinter::to_str_mds_type(const ObTxDataSourceType &
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_NOTICE_SAFE);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_UPDATE_SCN);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_MERGE_SCN);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MVIEW_MDS_OP);
 
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MAX_TYPE);
   }

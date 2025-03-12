@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_log_policy.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {

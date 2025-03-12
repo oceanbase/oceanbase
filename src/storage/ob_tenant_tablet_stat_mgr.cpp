@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_thread_mgr.h"
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "ob_tenant_tablet_stat_mgr.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/access/ob_global_iterator_pool.h"
-#include "observer/ob_server_struct.h"
-#include "src/storage/tablet/ob_tablet.h"
 #include "observer/ob_server.h"
-#include <sys/sysinfo.h>
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -637,7 +629,7 @@ ObTenantTabletStatMgr::ObTenantTabletStatMgr()
     sys_stat_(),
     report_cursor_(0),
     pending_cursor_(0),
-    report_tg_id_(0),
+    report_tg_id_(-1),
     is_inited_(false)
 {
 }
@@ -666,11 +658,6 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TabletStatRpt, report_tg_id_))) {
     LOG_WARN("failed to create TabletStatRpt thread", K(ret));
-  } else {
-    // just for unittest test_tenant_tablet_stat_mgr, do not set error code
-    NEW_AND_SET_TIMER_SERVICE(tenant_id);
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(TG_START(report_tg_id_))) {
     LOG_WARN("failed to start stat TabletStatRpt thread", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(report_tg_id_, report_stat_task_, TABLET_STAT_PROCESS_INTERVAL, repeat))) {
@@ -724,7 +711,7 @@ void ObTenantTabletStatMgr::reset()
     stream_pool_.destroy();
     report_cursor_ = 0;
     pending_cursor_ = 0;
-    report_tg_id_ = 0;
+    report_tg_id_ = -1;
     is_inited_ = false;
   }
   bucket_lock_.destroy();

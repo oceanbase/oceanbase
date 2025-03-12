@@ -24,9 +24,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     END LOOP;
   END;
 
-  -- ------------------------------------------------------------------------
-  -- purge_log
-
   PROCEDURE do_purge_log(
     master                IN     VARCHAR2,
     num                   IN     BINARY_INTEGER := 1,
@@ -45,9 +42,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     do_purge_log(master, num, flag, purge_log_parallel);
   END;
 
-  -- ------------------------------------------------------------------------
-  -- refresh
-
   PROCEDURE do_refresh(
     list                   IN     VARCHAR2,
     method                 IN     VARCHAR2       := NULL,
@@ -61,7 +55,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1);
+    refresh_parallel       IN     BINARY_INTEGER := 0);
   PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH);
 
   PROCEDURE refresh(
@@ -77,7 +71,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1)
+    refresh_parallel       IN     BINARY_INTEGER := 0)
   IS
   BEGIN
     COMMIT;
@@ -109,7 +103,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1)
+    refresh_parallel       IN     BINARY_INTEGER := 0)
   IS
   list                VARCHAR2(4000);
   BEGIN

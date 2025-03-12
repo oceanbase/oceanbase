@@ -42,11 +42,15 @@ public:
   ~ObMVProvider() {}
 
   int init_mv_provider(ObSchemaGetterGuard *schema_guard, ObSQLSessionInfo *session_info)
-  { return init_mv_provider(share::SCN(), share::SCN(), schema_guard, session_info);  }
+  {
+    FastRefreshableNotes note;
+    return init_mv_provider(share::SCN(), share::SCN(), schema_guard, session_info, note);
+  }
   int init_mv_provider(const share::SCN &last_refresh_scn,
                        const share::SCN &refresh_scn,
                        ObSchemaGetterGuard *schema_guard,
-                       ObSQLSessionInfo *session_info);
+                       ObSQLSessionInfo *session_info,
+                       FastRefreshableNotes &fast_refreshable_note);
   int init_mv_provider(const share::SCN &last_refresh_scn,
                        const share::SCN &refresh_scn,
                        ObSchemaGetterGuard *schema_guard,
@@ -64,6 +68,8 @@ public:
                                           const ObSQLSessionInfo &session,
                                           const bool gen_error,
                                           bool &is_vars_matched);
+  OB_INLINE bool is_major_refresh_mview()
+  { return ObMVRefreshableType::OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refreshable_type_; }
 private:
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt,
                            ObSQLSessionInfo &session);

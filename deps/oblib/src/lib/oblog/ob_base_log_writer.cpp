@@ -11,23 +11,9 @@
  */
 
 #include "ob_base_log_writer.h"
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/time.h>
-#include <errno.h>
-#include <stdio.h>
-#include <linux/prctl.h>
-#include "lib/ob_errno.h"
-#include "lib/atomic/ob_atomic.h"
 #include "lib/lock/ob_scond.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_utility.h"
-#include "lib/oblog/ob_log_print_kv.h"
-#include "lib/worker.h"
+#include "deps/oblib/src/lib/rc/context.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/thread/thread.h"
-#include "lib/thread/protected_stack_allocator.h"
 #include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::lib;

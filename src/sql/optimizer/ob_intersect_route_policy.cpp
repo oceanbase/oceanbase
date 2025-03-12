@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_intersect_route_policy.h"
-#include "sql/optimizer/ob_replica_compare.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/optimizer/ob_log_plan.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;

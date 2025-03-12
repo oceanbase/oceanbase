@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_inner_sql_rpc_processor.h"
-#include "ob_inner_sql_connection.h"
-#include "ob_inner_sql_connection_pool.h"
 #include "ob_inner_sql_result.h"
 #include "ob_resource_inner_sql_connection_pool.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/container/ob_iarray.h"
-#include "storage/tx/ob_multi_data_source.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 
 using namespace oceanbase::common;

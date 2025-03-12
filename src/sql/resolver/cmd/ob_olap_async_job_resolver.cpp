@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include <inttypes.h>
 
 namespace oceanbase
 {
@@ -210,11 +207,9 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.cowner_ = stmt.get_job_database();
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString(OLAP_ASYNC_JOB_CLASS);
-      job_info.what_ = stmt.get_job_action();
+      job_info.job_class_ = ObString("OLAP_ASYNC_JOB_CLASS"); // for compat old version
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
-      job_info.interval_ = job_info.repeat_interval_;
       job_info.repeat_interval_ = job_info.repeat_interval_;
       job_info.enabled_ = true;
       job_info.auto_drop_ = true;
@@ -222,6 +217,7 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.interval_ts_ = 0;
       job_info.exec_env_ = stmt.get_exec_env();
       job_info.comments_ = ObString("olap async job");
+      job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::OLAP_ASYNC_JOB;
 
       #ifdef ERRSIM
       if (OB_SUCCESS != ERRSIM_SUBMIT_ERR_JOB_NAME) { //注入一个错误的JOB NAME

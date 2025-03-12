@@ -8,9 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #include "observer/virtual_table/ob_virtual_table_tablet_iter.h"
-#include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 using namespace oceanbase;
 using namespace common;

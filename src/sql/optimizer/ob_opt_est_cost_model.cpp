@@ -12,17 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/optimizer/ob_opt_est_cost_model.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/optimizer/ob_optimizer_context.h"
+#include "ob_opt_est_cost_model.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
-#include "ob_opt_cost_model_parameter.h"
 #include "sql/optimizer/ob_opt_est_cost_model_vector.h"
 #include "sql/optimizer/ob_opt_est_parameter_vector.h"
-#include <math.h>
 #define DEFAULT_BATCH_SIZE  256
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -1836,7 +1829,7 @@ int ObOptEstCostModel::cost_range_get(const ObCostTableScanInfo &est_cost_info,
     double fetch_row_cost = cost_params_.get_fetch_row_rnd_cost(sys_stat_) * row_count;
     OPT_TRACE_COST_MODEL(KV(fetch_row_cost), "=", cost_params_.get_fetch_row_rnd_cost(sys_stat_), "*", KV(row_count));
     range_get_cost = cpu_cost + io_cost + fetch_row_cost + memtable_cost + memtable_merge_cost;
-    OPT_TRACE_COST_MODEL(KV(range_get_cost), "=", KV(cpu_cost), "+", KV(io_cost), "+", KV(fetch_row_cost),
+    OPT_TRACE_COST_MODEL(KV(range_get_cost), "=", KV(cpu_cost), "+", KV(io_cost), "+", KV(fetch_row_cost), "+",
                          KV(memtable_cost), "+", KV(memtable_merge_cost));
     LOG_TRACE("OPT:[COST RANGE GET]", K(is_scan_index), K(row_count), K(range_get_cost),
             K(io_cost), K(cpu_cost), K(fetch_row_cost), K(memtable_cost), K(memtable_merge_cost));

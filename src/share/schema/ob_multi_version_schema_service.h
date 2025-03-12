@@ -278,6 +278,9 @@ public:
   int check_if_tenant_has_been_dropped(
       const uint64_t tenant_id,
       bool &is_dropped);
+  // check user tenant and meta tenant both created by tenant_id, only used in creating tenant stage
+  int check_if_tenant_created_for_creating_tenant(const uint64_t tenant_id, const bool auto_update,
+      bool &is_created);
   int check_if_tenant_schema_has_been_refreshed(
     const uint64_t tenant_id,
     bool &is_refreshed);

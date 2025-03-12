@@ -16,13 +16,9 @@
 
 #include "ob_log_schema_getter.h"
 
-#include "lib/mysqlclient/ob_mysql_server_provider.h"     // ObMySQLServerProvider
-#include "share/config/ob_common_config.h"                // ObCommonConfig
-#include "share/ob_get_compat_mode.h"                     // ObCompatModeGetter
 #include "share/inner_table/ob_inner_table_schema.h"      // OB_CORE_SCHEMA_VERSION
 
 #include "ob_log_utils.h"                                 // is_mysql_client_errno
-#include "ob_log_common.h"                                // GET_SCHEMA_TIMEOUT_ON_START_UP
 #include "ob_log_config.h"                                // TCONF
 
 // NOTICE: retry will exist if func return error code OB_TENANT_HAS_BEEN_DROPPED

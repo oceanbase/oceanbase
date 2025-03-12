@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_task.h"
-#include "sql/dtl/ob_dtl_channel.h"
 #include "sql/dtl/ob_dtl.h"
 
 using namespace oceanbase::common;

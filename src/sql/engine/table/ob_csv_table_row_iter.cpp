@@ -169,6 +169,12 @@ int ObCSVTableRowIterator::open_next_file()
     int64_t start_line = 0;
     int64_t end_line = 0;
     int64_t task_idx = state_.file_idx_++;
+    if (state_.file_idx_ == 1) {
+      // Skip to handle first file
+    } else {
+      LOG_TRACE("print lastest csv file state infos", K(ret), K(state_));
+      state_.duration_ = 0;
+    }
 
     file_size = 0;
     url_.reuse();
@@ -203,6 +209,7 @@ int ObCSVTableRowIterator::open_next_file()
                                         file_url.length(), file_url.ptr()));
       // skip empty file and non-exist file
       OZ (file_reader_.get_data_access_driver().get_file_size(url_.string(), file_size));
+      state_.cur_file_size_ = file_size;
       if (OB_SUCC(ret) && file_reader_.get_storage_type() == OB_STORAGE_FILE) {
         ObSqlString full_name;
         if (state_.ip_port_len_ == 0) {
@@ -260,7 +267,9 @@ int ObCSVTableRowIterator::load_next_buf()
       // time we read the original file data and decompress it, we get
       // 0 bytes, and the second time we read it to know that we have
       // reached the end of the file.
+      int64_t start_read_time = ObTimeUtility::current_time();
       OZ (file_reader_.read(next_load_pos, next_buf_len, read_size));
+      state_.duration_ += ObTimeUtility::current_time() - start_read_time;
       if (OB_SUCC(ret)) {
         state_.pos_ = state_.buf_;
         state_.data_end_ = next_load_pos + read_size;
@@ -277,8 +286,8 @@ int ObCSVTableRowIterator::skip_lines()
   ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
   int64_t nrows = 0;
   struct Functor {
-    int operator()(ObIArray<ObCSVGeneralParser::FieldValue> &arr) {
-      UNUSED(arr);
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+      UNUSED(param);
       return OB_SUCCESS;
     }
   };
@@ -328,7 +337,7 @@ int ObCSVTableRowIterator::get_next_row()
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
 
-    int operator()(ObIArray<ObCSVGeneralParser::FieldValue> &arr) {
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
         ObDatum &datum = file_column_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
@@ -350,13 +359,13 @@ int ObCSVTableRowIterator::get_next_row()
           }
         } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
           int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
-          if (OB_UNLIKELY(loc_idx < 0 || loc_idx > arr.count())) {
+          if (OB_UNLIKELY(loc_idx < 0 || loc_idx > param.fields_.count())) {
             ret = OB_ERR_UNEXPECTED;
           } else {
-            if (arr.at(loc_idx).is_null_ || (0 == arr.at(loc_idx).len_ && is_oracle_mode_)) {
+            if (param.fields_.at(loc_idx).is_null_ || (0 == param.fields_.at(loc_idx).len_ && is_oracle_mode_)) {
               datum.set_null();
             } else {
-              datum.set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+              datum.set_string(param.fields_.at(loc_idx).ptr_, param.fields_.at(loc_idx).len_);
             }
           }
         }
@@ -456,7 +465,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
 
-    int operator()(ObIArray<ObCSVGeneralParser::FieldValue> &arr) {
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
     for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
       ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
@@ -481,13 +490,13 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         }
       } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
         int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
-        if (OB_UNLIKELY(loc_idx < 0 || loc_idx > arr.count())) {
+        if (OB_UNLIKELY(loc_idx < 0 || loc_idx > param.fields_.count())) {
           ret = OB_ERR_UNEXPECTED;
         } else {
-          if (arr.at(loc_idx).is_null_ || (0 == arr.at(loc_idx).len_ && is_oracle_mode_)) {
+          if (param.fields_.at(loc_idx).is_null_ || (0 == param.fields_.at(loc_idx).len_ && is_oracle_mode_)) {
             datums[returned_row_cnt_].set_null();
           } else {
-            datums[returned_row_cnt_].set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+            datums[returned_row_cnt_].set_string(param.fields_.at(loc_idx).ptr_, param.fields_.at(loc_idx).len_);
           }
         }
       }
@@ -582,7 +591,9 @@ DEF_TO_STRING(ObCSVIteratorState)
        K_(line_count_limit),
        K_(cur_file_name),
        K_(line_count_limit),
-       K_(ip_port_len));
+       K_(ip_port_len),
+       K_(duration),
+       K_(cur_file_size));
   J_OBJ_END();
   return pos;
 }

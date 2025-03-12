@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
 #include "rpc/obmysql/ob_sql_sock_processor.h"
-#include "rpc/frame/ob_req_translator.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_sql_nio.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 
 namespace oceanbase

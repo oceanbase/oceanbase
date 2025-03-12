@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "ob_resource_mgr.h"
-#include <new>
-#include <stdlib.h>
 
-#include "lib/alloc/memory_sanity.h"
-#include "lib/alloc/ob_malloc_time_monitor.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_diagnose_info.h"
+#include "ob_resource_mgr.h"
 #include "lib/utility/utility.h"
-#include "lib/alloc/alloc_failed_reason.h"
 
 namespace oceanbase
 {

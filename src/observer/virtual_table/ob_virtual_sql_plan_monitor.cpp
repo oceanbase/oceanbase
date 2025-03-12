@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_virtual_sql_plan_monitor.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-#include <algorithm> // std::sort
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -780,10 +774,10 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       CASE_OTHERSTAT(4);
       CASE_OTHERSTAT(5);
       CASE_OTHERSTAT(6);
-      CASE_OTHERSTAT_RESERVED(7);
-      CASE_OTHERSTAT_RESERVED(8);
-      CASE_OTHERSTAT_RESERVED(9);
-      CASE_OTHERSTAT_RESERVED(10);
+      CASE_OTHERSTAT(7);
+      CASE_OTHERSTAT(8);
+      CASE_OTHERSTAT(9);
+      CASE_OTHERSTAT(10);
       case THREAD_ID: {
         int64_t thread_id = node.get_thread_id();
         cells[cell_idx].set_int(thread_id);
@@ -855,13 +849,13 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         break;
       }
       case SQL_ID: {
-        cells[cell_idx].set_varchar("");
+        cells[cell_idx].set_varchar(node.sql_id_);
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                     ObCharset::get_default_charset()));
         break;
       }
       case PLAN_HASH_VALUE: {
-        cells[cell_idx].set_uint64(0);
+        cells[cell_idx].set_uint64(node.plan_hash_value_);
         break;
       }
       default: {

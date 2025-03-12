@@ -14,10 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_truncate.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "objit/common/ob_item_type.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
 
 #define GET_SCALE_FOR_CALC(scale) (scale < 0 ? max((-1) * OB_MAX_DECIMAL_PRECISION, scale) : \
                                    min(OB_MAX_DECIMAL_SCALE, scale))

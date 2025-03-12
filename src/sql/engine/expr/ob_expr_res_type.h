@@ -190,7 +190,6 @@ public:
     return accuracy_.get_accuracy();
   }
 
-  /* meta info for client */
   OB_INLINE int get_length_for_meta_in_bytes(common::ObLength &length) const
   {
     int ret = common::OB_SUCCESS;
@@ -199,6 +198,28 @@ public:
       if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
                                                        get_accuracy(),
                                                        get_collation_type(),
+                                                       length))) {
+        SQL_RESV_LOG(WARN, "failed to get length of varchar", K(ret));
+      }
+    } else {
+      if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
+                                                       get_accuracy(),
+                                                       common::CS_TYPE_INVALID,
+                                                       length))) {
+        SQL_RESV_LOG(WARN, "failed to get length of non-varchar", K(ret), K(common::lbt()), N_TYPE, get_type());
+      }
+    }
+    return ret;
+  }
+  /* meta info for client */
+  OB_INLINE int get_length_for_meta_in_bytes(common::ObLength &length, ObCollationType collation_type) const
+  {
+    int ret = common::OB_SUCCESS;
+    length = -1;
+    if (is_string_or_lob_locator_type() || is_enum_or_set() || is_enumset_inner_type() || is_json() || is_geometry()) {
+      if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
+                                                       get_accuracy(),
+                                                       collation_type,
                                                        length))) {
         SQL_RESV_LOG(WARN, "failed to get length of varchar", K(ret));
       }

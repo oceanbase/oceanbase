@@ -12,12 +12,6 @@
 
 #include "obsm_utils.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "lib/charset/ob_dtoa.h"
-#include "common/ob_field.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_udt_info.h"
-#include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
@@ -134,6 +128,7 @@ int ObSMUtils::cell_str(
     int64_t cell_idx, char *bitmap,
     const ObDataTypeCastParams &dtc_params,
     const ObField *field,
+    const sql::ObSQLSessionInfo &session,
     ObSchemaGetterGuard *schema_guard,
     uint64_t tenant_id)
 {
@@ -260,12 +255,12 @@ int ObSMUtils::cell_str(
           } else if (OB_ISNULL(udt_info)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "udt info is null", K(ret));
-          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
             OB_LOG(WARN, "faild to transform to pl type", K(ret));
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "user type is null", K(ret));
-          } else if (OB_FAIL(user_type->serialize(*schema_guard, dtc_params.tz_info_, type, src, buf, len, pos))) {
+          } else if (OB_FAIL(user_type->serialize(*schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
             OB_LOG(WARN, "failed to serialize", K(ret));
           }
         } else if (field->type_owner_.empty() || field->type_name_.empty()) {
@@ -296,7 +291,7 @@ int ObSMUtils::cell_str(
                         || PL_ASSOCIATIVE_ARRAY_TYPE == obj.get_meta().get_extend_type()
                         || PL_RECORD_TYPE == obj.get_meta().get_extend_type())) {
               if (OB_FAIL(extend_cell_str(buf, len, src, type, pos,
-                                 dtc_params, field, schema_guard, tenant_id))) {
+                                 dtc_params, field, session, schema_guard, tenant_id))) {
                 OB_LOG(WARN, "extend type cell string fail.", K(ret));
               }
             } else if (BINARY == type && PL_NESTED_TABLE_TYPE == obj.get_meta().get_extend_type()) {
@@ -321,9 +316,9 @@ int ObSMUtils::cell_str(
                 if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
                   OB_LOG(WARN,"failed to get udt info", K(ret), K(tenant_id), K(udt_id));
                 } else if (OB_ISNULL(udt_info)) {
-                  ret = OB_ERR_UNEXPECTED;
+                  ret = OB_ERR_EXPRESSION_WRONG_TYPE;
                   OB_LOG(WARN,"udt info is null", K(ret), K(udt_id));
-                }  else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, elem_user_type))) {
+                }  else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, *schema_guard, elem_user_type))) {
                   OB_LOG(WARN,"failed to transform to pl type", K(ret), KPC(udt_info));
                 } else if (OB_ISNULL(elem_user_type)) {
                   ret = OB_ERR_UNEXPECTED;
@@ -338,7 +333,7 @@ int ObSMUtils::cell_str(
               }
               if (OB_FAIL(ret)){
               } else if (OB_FAIL(nested_type->serialize(
-                                  *schema_guard, dtc_params.tz_info_, type, src, buf, len, pos))) {
+                                  *schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
                 OB_LOG(WARN, "failed to serialize anonymous collection", K(ret));
               } else {
                 OB_LOG(DEBUG, "success to serialize anonymous collection", K(ret));
@@ -376,12 +371,12 @@ int ObSMUtils::cell_str(
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
             OB_LOG(WARN, "faild to transform to pl type", K(ret));
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "user type is null", K(ret));
-          } else if (OB_FAIL(user_type->serialize(*schema_guard, dtc_params.tz_info_, type, src, buf, len, pos))) {
+          } else if (OB_FAIL(user_type->serialize(*schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
             OB_LOG(WARN, "failed to serialize", K(ret));
           }
         }
@@ -657,6 +652,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
                                MYSQL_PROTOCOL_TYPE type, int64_t &pos,
                                const ObDataTypeCastParams &dtc_params,
                                const ObField *field,
+                               const sql::ObSQLSessionInfo &session,
                                ObSchemaGetterGuard *schema_guard,
                                uint64_t tenant_id)
 {
@@ -670,7 +666,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
   } else if (NULL == udt_info) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "faild to get udt info.", K(ret));
-  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
     OB_LOG(WARN, "faild to transform to pl type", K(ret));
   } else if (NULL == user_type) {
     ret = OB_ERR_UNEXPECTED;
@@ -689,7 +685,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
     MEMCPY(tmp_buf + tmp_pos, "(", 1);
     tmp_pos += 1;
     const_cast<pl::ObUserDefinedType *>(user_type)->set_charset(static_cast<ObCollationType>(field->charsetnr_));
-    if (OB_FAIL(user_type->serialize(*schema_guard, dtc_params.tz_info_, type, src, tmp_buf, len, tmp_pos))) {
+    if (OB_FAIL(user_type->serialize(*schema_guard, session, dtc_params.tz_info_, type, src, tmp_buf, len, tmp_pos))) {
       OB_LOG(WARN, "failed to serialize", K(ret));
     } else if (len - pos > tmp_pos + 1) {
       MEMCPY(tmp_buf + tmp_pos, ")", 1);

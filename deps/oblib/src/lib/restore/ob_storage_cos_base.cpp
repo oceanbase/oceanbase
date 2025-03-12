@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/restore/ob_storage_cos_base.h"
-#include <stdlib.h>
-#include <libgen.h>
-#include "common/ob_string_buf.h"
-#include "apr_errno.h"
+#include "ob_storage_cos_base.h"
 #include "ob_storage.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

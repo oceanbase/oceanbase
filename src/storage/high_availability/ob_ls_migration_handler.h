@@ -124,7 +124,7 @@ private:
       const ObLSMigrationTask &task);
   int report_result_();
   int report_meta_table_();
-  int report_to_rs_();
+  int report_to_disaster_recovery_();
   int check_can_skip_prepare_status_(bool &can_skip);
   int check_before_do_task_();
   int check_disk_space_(const ObMigrationOpArg &arg);
@@ -137,6 +137,9 @@ private:
   int get_ls_migration_task_with_nolock_(ObLSMigrationTask &task) const;
   int check_task_exist_with_nolock_(const share::ObTaskId &task_id, bool &is_exist) const;
   int switch_next_stage_with_nolock_(const int32_t result);
+  int generate_build_tablet_dag_net_();
+  int schedule_build_tablet_dag_net_(
+      const ObLSMigrationTask &task);
 
 private:
   bool is_inited_;

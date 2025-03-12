@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_tablet_location_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
 #include "share/location_cache/ob_tablet_ls_service.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;

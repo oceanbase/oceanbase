@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_aggregated_store.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
-#include "storage/access/ob_table_access_param.h"
-#include "storage/access/ob_table_access_context.h"
-#include "storage/lob/ob_lob_manager.h"
 namespace oceanbase
 {
 namespace storage

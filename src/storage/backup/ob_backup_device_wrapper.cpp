@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_device_wrapper.h"
-#include "storage/backup/ob_backup_data_struct.h"
+#include "ob_backup_device_wrapper.h"
 #include "storage/backup/ob_backup_factory.h"
-#include "lib/restore/ob_object_device.h"
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
-#include "share/backup/ob_backup_path.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

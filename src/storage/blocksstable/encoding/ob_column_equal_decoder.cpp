@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_column_equal_decoder.h"
-#include "ob_encoding_util.h"
 
 namespace oceanbase
 {

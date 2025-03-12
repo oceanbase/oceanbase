@@ -97,6 +97,9 @@ public:
       const common::ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
       bool &is_empty_directory);
+  static int is_directory(const common::ObString &uri,
+                          const share::ObBackupStorageInfo *storage_info,
+                          bool &is_directory);
   static int list_files(
       const common::ObString &dir_path,
       const share::ObBackupStorageInfo *storage_info,

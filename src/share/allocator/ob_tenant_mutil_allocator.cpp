@@ -11,11 +11,6 @@
  */
 
 #include "ob_tenant_mutil_allocator.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/rc/context.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "logservice/palf/log_io_task.h"
-#include "logservice/palf/fetch_log_engine.h"
 #include "logservice/palf/log_shared_task.h"
 #include "logservice/replayservice/ob_replay_status.h"
 #ifdef OB_BUILD_SHARED_STORAGE

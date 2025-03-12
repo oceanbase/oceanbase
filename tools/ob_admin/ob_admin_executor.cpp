@@ -14,18 +14,9 @@
 
 #include "ob_admin_executor.h"
 #include "lib/net/ob_net_util.h"
-#include "share/ob_local_device.h"
 #include "share/ob_device_manager.h"
-#include "share/io/ob_io_define.h"
 #include "share/io/ob_io_manager.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_io_device_helper.h"
-#include "common/storage/ob_io_device.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "observer/ob_server_struct.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/ob_file_system_router.h"
 

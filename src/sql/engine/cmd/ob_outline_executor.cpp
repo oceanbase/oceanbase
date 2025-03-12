@@ -13,29 +13,12 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_outline_executor.h"
 
-#include "lib/string/ob_string.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "observer/ob_server_struct.h" //能获取mysql_proxy
 #include "sql/ob_sql.h"
 #include "sql/resolver/ddl/ob_create_outline_stmt.h"
 #include "sql/resolver/ddl/ob_alter_outline_stmt.h"
 #include "sql/resolver/ddl/ob_drop_outline_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/parser/ob_parser.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/rewrite/ob_transformer_impl.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "sql/monitor/ob_sql_plan.h"
 namespace oceanbase
 {
 

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_join_filter.h"
-#include "ob_expr_extract.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
@@ -214,6 +212,7 @@ int ObExprJoinFilter::check_rf_ready(
         join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
         join_filter_ctx->slide_window_.start_to_work();
         join_filter_ctx->is_active_ = rf_msg->is_active();
+        join_filter_ctx->by_pass_count_before_ready_ = join_filter_ctx->total_count_;
       }
     }
   } else if (join_filter_ctx->need_check_ready() && rf_msg->check_ready()) {
@@ -221,6 +220,7 @@ int ObExprJoinFilter::check_rf_ready(
     join_filter_ctx->is_ready_ = true;
     join_filter_ctx->slide_window_.start_to_work();
     join_filter_ctx->is_active_ = rf_msg->is_active();
+    join_filter_ctx->by_pass_count_before_ready_ = join_filter_ctx->total_count_;
   }
   return ret;
 }

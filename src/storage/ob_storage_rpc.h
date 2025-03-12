@@ -88,6 +88,21 @@ enum ObCopyMacroBlockDataType {
   MAX
 };
 
+struct ObCopyMacroBlockInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCopyMacroBlockInfo();
+  ~ObCopyMacroBlockInfo() {}
+  void reset();
+  bool is_valid() const;
+
+  TO_STRING_KV(K_(logical_id), K_(data_type));
+public:
+  ObLogicMacroBlockId logical_id_;
+  ObCopyMacroBlockDataType data_type_;
+};
+
 struct ObCopyMacroBlockRangeArg final
 {
   OB_UNIS_VERSION(2);
@@ -108,6 +123,7 @@ public:
   storage::ObCopyMacroRangeInfo copy_macro_range_info_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  ObSArray<ObCopyMacroBlockInfo> copy_macro_block_infos_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };
 
@@ -936,6 +952,24 @@ private:
 };
 #endif
 
+struct ObRebuildTabletSSTableInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRebuildTabletSSTableInfoArg();
+  ~ObRebuildTabletSSTableInfoArg();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
+      K_(dest_major_sstable_snapshot), K_(version));
+
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  int64_t dest_major_sstable_snapshot_;
+  uint64_t version_;
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -953,6 +987,8 @@ public:
   RPC_SS(PR5 fetch_micro_block, OB_HA_FETCH_MICRO_BLOCK, (ObMigrateWarmupKeySet), common::ObDataBuffer);
   RPC_SS(PR5 fetch_replica_prewarm_micro_block, OB_REPLICA_PREWARM_FETCH_MICRO_BLOCK, (ObSSLSFetchMicroBlockArg), common::ObDataBuffer);
 #endif
+  RPC_SS(PR5 fetch_rebuild_tablet_sstable_info, OB_HA_REBUILD_TABLET_SSTABLE_INFO, (ObRebuildTabletSSTableInfoArg), common::ObDataBuffer);
+  //single
   RPC_S(PR5 fetch_ls_member_list, OB_HA_FETCH_LS_MEMBER_LIST, (ObFetchLSMemberListArg), ObFetchLSMemberListInfo);
   RPC_S(PR5 fetch_ls_meta_info, OB_HA_FETCH_LS_META_INFO, (ObFetchLSMetaInfoArg), ObFetchLSMetaInfoResp);
   RPC_S(PR5 fetch_ls_info, OB_HA_FETCH_LS_INFO, (ObCopyLSInfoArg), ObCopyLSInfo);
@@ -973,6 +1009,7 @@ public:
   RPC_S(PR5 get_micro_block_cache_info, OB_HA_GET_MICRO_BLOCK_CACHE_INFO, (ObGetMicroBlockCacheInfoArg), ObGetMicroBlockCacheInfoRes);
   RPC_S(PR5 get_migration_cache_job_info, OB_HA_GET_MIGRATION_CACHE_JOB_INFO, (ObGetMigrationCacheJobInfoArg), ObGetMigrationCacheJobInfoRes);
 #endif
+
 
   // RPC_AP stands for asynchronous RPC.
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
@@ -1271,6 +1308,7 @@ protected:
 private:
   int process_read();
   int process_getlength();
+  int64_t get_timeout() const;
 };
 
 // Stream get ls meta and all tablet meta
@@ -1459,6 +1497,18 @@ protected:
 };
 #endif
 
+class ObRebuildTabletSSTableInfoP :
+    public ObStorageStreamRpcP<OB_HA_REBUILD_TABLET_SSTABLE_INFO>
+{
+public:
+  explicit ObRebuildTabletSSTableInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObRebuildTabletSSTableInfoP() {}
+protected:
+  int process();
+private:
+  int build_sstable_info_(ObLS *ls);
+};
+
 } // obrpc
 
 
@@ -1491,8 +1541,6 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       obrpc::ObFetchLSMemberListInfo &ls_info) = 0;
-  virtual int post_ls_disaster_recovery_res(const common::ObAddr &server,
-                           const obrpc::ObDRTaskReplyResult &res) = 0;
 
   // Notify follower restore some tablets from leader.
   virtual int notify_restore_tablets(
@@ -1591,8 +1639,6 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       obrpc::ObFetchLSMemberListInfo &ls_info);
-  virtual int post_ls_disaster_recovery_res(const common::ObAddr &server,
-                           const obrpc::ObDRTaskReplyResult &res);
 
   // Notify follower restore some tablets from leader.
   virtual int notify_restore_tablets(

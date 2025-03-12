@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_ddl_checksum.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_sim_point.h"
 #include "observer/ob_server_struct.h"
 

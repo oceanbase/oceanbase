@@ -12,32 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_root_inspection.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_zone_info.h"
-#include "share/system_variable/ob_system_variable_factory.h"
-#include "share/system_variable/ob_system_variable_init.h"
-#include "rootserver/ob_root_utils.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_ddl_operator.h"
+#include "ob_root_inspection.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/ob_primary_zone_util.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/rc/ob_context.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
-#include "share/ob_tenant_info_proxy.h" // ObAllTenantInfoProxy
-#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {
@@ -58,11 +36,6 @@ int ObTenantChecker::inspect(bool &passed, const char* &warning_info)
   if (OB_SUCCESS != (tmp_ret = alter_tenant_primary_zone_())) {
     ret = OB_SUCC(ret) ? tmp_ret : ret;
     LOG_WARN("fail to alter tenant primary_zone", KR(ret), KR(tmp_ret));
-  }
-
-  if (OB_SUCCESS != (tmp_ret = check_create_tenant_end_())) {
-    ret = OB_SUCC(ret) ? tmp_ret : ret;
-    LOG_WARN("fail to check create tenant end", KR(ret), KR(tmp_ret));
   }
 
   if (OB_SUCCESS != (tmp_ret = check_garbage_tenant_(passed))) {
@@ -111,63 +84,6 @@ int ObTenantChecker::alter_tenant_primary_zone_()
           ROOTSERVICE_EVENT_ADD("inspector", "alter_tenant_primary_zone",
                                 "tenant_id", tenant_schema->get_tenant_id(),
                                 "tenant", tenant_schema->get_tenant_name());
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTenantChecker::check_create_tenant_end_()
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  ObArray<uint64_t> tenant_ids;
-  if (OB_ISNULL(schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service not init", K(ret));
-  } else if (!schema_service_->is_sys_full_schema()) {
-    // skip
-  } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
-    LOG_WARN("get_tenant_ids failed", K(ret));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rootservice is null", KR(ret));
-  } else {
-    const ObSimpleTenantSchema *tenant_schema = NULL;
-    int64_t schema_version = OB_INVALID_VERSION;
-    int64_t baseline_schema_version = OB_INVALID_VERSION;
-    FOREACH_CNT(tenant_id, tenant_ids) {
-      // overwrite ret
-      if (!GCTX.root_service_->is_full_service()) {
-        ret = OB_CANCELED;
-        LOG_WARN("rs is not in full service", KR(ret));
-        break;
-      } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(*tenant_id, schema_guard))) {
-        LOG_WARN("get_schema_guard failed", KR(ret), K(*tenant_id));
-      } else if (OB_FAIL(schema_guard.get_schema_version(*tenant_id, schema_version))) {
-        LOG_WARN("fail to get tenant schema version", KR(ret), K(*tenant_id));
-      } else if (!share::schema::ObSchemaService::is_formal_version(schema_version)) {
-        // tenant is still in creating
-      } else if (OB_FAIL(schema_guard.get_tenant_info(*tenant_id, tenant_schema))) {
-        LOG_WARN("fail to get tenant schema", KR(ret), K(*tenant_id));
-      } else if (OB_ISNULL(tenant_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant not exist", KR(ret), K(*tenant_id));
-      } else if (OB_FAIL(schema_service_->get_baseline_schema_version(*tenant_id, false/*auto update*/,
-                                                                      baseline_schema_version))) {
-        LOG_WARN("fail to get baseline schema_version", KR(ret), K(*tenant_id));
-      } else if (OB_INVALID_VERSION == baseline_schema_version) {
-        //baseline_schema_version is not valid, just skip to create this kind of tenant
-      } else if (tenant_schema->is_creating()) {
-        obrpc::ObCreateTenantEndArg arg;
-        arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
-        arg.tenant_id_ = *tenant_id;
-        if (OB_FAIL(rpc_proxy_.create_tenant_end(arg))) {
-          LOG_WARN("fail to execute create tenant end", KR(ret), K(*tenant_id));
-        } else {
-          LOG_INFO("execute create_tenant_end", KR(ret), K(*tenant_id), K(schema_version));
-          ROOTSERVICE_EVENT_ADD("inspector", "tenant_checker", "info", "execute create_tenant_end", "tenant_id", *tenant_id);
         }
       }
     }

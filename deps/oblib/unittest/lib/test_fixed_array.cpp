@@ -11,12 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_serialization.h"
-#include "lib/container/ob_fixed_array.h"
-#include "lib/allocator/page_arena.h"
 #include "common/object/ob_object.h"
-#include "lib/container/ob_se_array.h"
 namespace oceanbase
 {
 namespace common

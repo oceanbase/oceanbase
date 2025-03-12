@@ -11,7 +11,6 @@
  */
 
 #include "ob_dynamic_thread_pool.h"
-#include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
 

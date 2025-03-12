@@ -1,3 +1,4 @@
+
 /**
  * Copyright (c) 2024 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -44,19 +45,21 @@ protected:
   virtual int check_arg() override;
   virtual void reset_ctx() override;
   virtual uint64_t get_request_checksum() override;
-  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
+  virtual table::ObTableEntityType get_entity_type() override { return table::ObTableEntityType::ET_REDIS; }
   virtual bool is_kv_processor() override { return true; }
 
 private:
   int init_redis_ctx();
-  void init_tb_ctx_common(table::ObTableCtx &ctx);
+  void init_redis_common(table::ObRedisCtx &ctx);
+  int check_tenant_version();
 
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  table::ObRedisCtx redis_ctx_;
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;
+  table::ObRedisResult redis_result_;
+  table::ObRedisSingleCtx redis_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObRedisExecuteP);
 };
 

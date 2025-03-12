@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_redis_parser.h"
-#include "lib/utility/utility.h"
-#include "src/share/ob_errno.h"
-#include "lib/utility/ob_fast_convert.h"
 
 using namespace oceanbase::common;
 

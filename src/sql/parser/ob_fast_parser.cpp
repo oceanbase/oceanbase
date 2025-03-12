@@ -15,6 +15,7 @@
 #include "share/ob_define.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/worker.h"
+#include "sql/parser/parse_malloc.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -78,7 +79,6 @@ int ObFastParser::parse(const common::ObString &stmt,
       LOG_WARN("failed to fast parser", K(stmt));
     } else {
       fp_result.question_mark_ctx_ = fp.get_question_mark_ctx();
-      fp_result.values_tokens_.set_capacity(fp.get_values_tokens().count());
       for (int64_t i = 0; OB_SUCC(ret) && i < fp.get_values_tokens().count(); ++i) {
         if (OB_FAIL(fp_result.values_tokens_.push_back(ObValuesTokenPos(
                                                      fp.get_values_tokens().at(i).no_param_sql_pos_,

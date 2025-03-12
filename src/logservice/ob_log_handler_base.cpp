@@ -11,8 +11,6 @@
  */
 
 #include "ob_log_handler_base.h"
-#include "common/ob_role.h"
-#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {

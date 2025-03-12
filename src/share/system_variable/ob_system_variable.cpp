@@ -11,32 +11,15 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/system_variable/ob_system_variable_factory.h"
-#include "share/system_variable/ob_system_variable.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "ob_system_variable.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_time_zone_info_manager.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/sql_mode/ob_sql_mode.h"
 #include "share/ob_version.h"
-#include "lib/utility/utility.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "sql/ob_sql_utils.h"
-#include "share/object/ob_obj_cast.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_service.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "ob_nls_system_variable.h"
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "lib/locale/ob_locale_type.h"
-#include "share/ob_compatibility_control.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_warning.h"
 #endif
@@ -2988,7 +2971,12 @@ int ObSysVarOnUpdateFuncs::start_trans_by_set_trans_char_(
                KPC(session.get_tx_desc()), K(isolation), K(stmt_expire_ts));
       // rollback tx because of prepare snapshot fail
       int save_ret = ret;
-      if (OB_FAIL(ObSqlTransControl::end_trans(ctx, true, true, NULL))) {
+      if (OB_FAIL(ObSqlTransControl::end_trans(ctx.get_my_session(),
+                                               ctx.get_need_disconnect_for_update(),
+                                               ctx.get_trans_state(),
+                                               true,
+                                               true,
+                                               NULL))) {
         LOG_WARN("rollback tx fail", K(ret), KPC(session.get_tx_desc()));
       }
       // rollback tx fail, need report to user, because session is corrupt

@@ -16,7 +16,7 @@
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "share/table/ob_table_load_define.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_insert_data_table_ctx.h"
 
 namespace oceanbase
 {
@@ -135,7 +135,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   int ret = OB_SUCCESS;
   ObTableLoadSchema table_load_schema;
   ObDirectLoadInsertTableParam insert_table_param;
-  ObDirectLoadInsertTableContext tmp_insert_table_ctx;
+  ObDirectLoadInsertDataTableContext tmp_insert_table_ctx;
   if (OB_FAIL(table_load_schema.init(MTL_ID(), table_id))) {
     LOG_WARN("fail to init table load schema", KR(ret));
   }
@@ -150,8 +150,8 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.column_count_ = table_load_schema.store_column_count_;
   insert_table_param.lob_inrow_threshold_ = table_load_schema.lob_inrow_threshold_;
   insert_table_param.is_partitioned_table_ = table_load_schema.is_partitioned_table_;
-  insert_table_param.is_heap_table_ = table_load_schema.is_heap_table_;
-  insert_table_param.is_column_store_ = table_load_schema.is_column_store_;
+  insert_table_param.is_table_without_pk_ = table_load_schema.is_table_without_pk_;
+  insert_table_param.is_table_with_hidden_pk_column_ = table_load_schema.is_table_with_hidden_pk_column_;
   insert_table_param.online_opt_stat_gather_ = false;
   insert_table_param.is_incremental_ = false;
   insert_table_param.datum_utils_ = &(table_load_schema.datum_utils_);
@@ -161,6 +161,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.online_sample_percent_ = 1.0;
   insert_table_param.is_no_logging_ = ddl_param.is_no_logging_;
   insert_table_param.max_batch_size_ = 256;
+  insert_table_param.is_index_table_ = table_load_schema.is_index_table_;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(tmp_insert_table_ctx.init(insert_table_param,
@@ -177,9 +178,9 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
       LOG_WARN("insert tablet ctx is nullptr", KR(ret));
     } else if (OB_FAIL(insert_tablet_ctx->open())) {
       LOG_WARN("fail to open tablet ctx", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, 0/*slice_idx*/, slice_id))) {
       LOG_WARN("fail to open sstable slice", KR(ret), K(block_start_seq), K(slice_id));
-    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/))) {
       LOG_WARN("fail to close sstable slice", KR(ret), K(slice_id));
     } else if (OB_FAIL(insert_tablet_ctx->close())) {
       LOG_WARN("fail to close tablet ctx", KR(ret));

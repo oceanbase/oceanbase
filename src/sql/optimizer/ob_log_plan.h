@@ -253,6 +253,7 @@ public:
   int add_explain_note();
   int add_parallel_explain_note();
   int add_direct_load_explain_note();
+  int add_non_standard_comparison_explain_note();
 
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
@@ -266,19 +267,12 @@ public:
   int update_re_est_cost(ObLogicalOperator *op);
 
   int collect_table_location(ObLogicalOperator *op);
-
+  int collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
+                                              TableLocRelInfo& rel_info);
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
   int check_das_need_scan_with_domain_id(ObLogicalOperator *op);
-
-  int set_major_refresh_mview_dep_table_scan(ObLogicalOperator *op);
-  int set_major_refresh_mview_dep_table_scan(bool for_fast_refresh,
-                                             bool for_rt_mview,
-                                             ObLogicalOperator *op);
-  int is_major_refresh_rt_mview(const ObDMLStmt *set_stmt,
-                                const ObSqlSchemaGuard *sql_schema_guard,
-                                bool &is_mr_rt_mview);
 
   int gen_das_table_location_info(ObLogTableScan *table_scan,
                                   ObTablePartitionInfo *&table_partition_info);
@@ -445,7 +439,7 @@ public:
       candidate_plans_.reuse();
       is_final_sort_ = false;
     }
-    int get_best_plan(ObLogicalOperator *&best_plan)
+    int get_best_plan(ObLogicalOperator *&best_plan) const
     {
       int ret = common::OB_SUCCESS;
       best_plan = NULL;
@@ -485,7 +479,8 @@ public:
       rollup_grouping_id_expr_(nullptr),
       enable_hash_rollup_(true),
       force_hash_rollup_(false),
-      dup_expr_pairs_()
+      dup_expr_pairs_(),
+      grouping_dop_(ObGlobalHint::UNSET_PARALLEL)
     {
     }
     virtual ~GroupingOpHelper() {}
@@ -553,6 +548,7 @@ public:
     bool enable_hash_rollup_;
     bool force_hash_rollup_;
     ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8> dup_expr_pairs_;
+    int64_t grouping_dop_;
 
     TO_STRING_KV(K_(can_storage_pushdown),
                  K_(can_basic_pushdown),
@@ -579,7 +575,8 @@ public:
                  K_(distinct_aggr_items),
                  K_(non_distinct_aggr_items),
                  K_(enable_hash_rollup),
-                 K_(force_hash_rollup));
+                 K_(force_hash_rollup),
+                 K_(grouping_dop));
   };
 
   /**
@@ -815,6 +812,21 @@ public:
                           const bool is_from_povit,
                           GroupingOpHelper &groupby_helper);
 
+  int compute_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
+                                      const ObIArray<ObRawExpr*> &rollup_exprs,
+                                      const GroupingOpHelper &groupby_helper,
+                                      int64_t &dop) const;
+  int inner_compute_three_stage_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
+                                                        const GroupingOpHelper &groupby_helper,
+                                                        const int64_t server_cnt,
+                                                        int64_t &dop) const;
+  int get_three_stage_groupby_number_of_copies(const ObIArray<ObAggFunRawExpr*> &non_distinct_aggrs,
+                                               const ObIArray<ObAggFunRawExpr*> &distinct_aggrs,
+                                               int64_t &number_of_copies) const;
+  int get_parallel_info_from_candidate_plans(int64_t &server_cnt, int64_t &dop) const;
+  int check_candi_plan_need_calc_dop(bool &need_calc_dop) const;
+  int check_op_need_calc_dop(const ObLogicalOperator *cur_op, bool &need_calc) const;
+
   int calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_rollup_exprs, GroupingOpHelper &groupby_helper);
 
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
@@ -837,6 +849,10 @@ public:
                                      const ObIArray<ObRawExpr *> &group_exprs,
                                      ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                      bool &can_push);
+
+  int check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
+                                       const ObSelectStmt &stmt,
+                                       bool &can_pushdown);
 
   int check_table_columns_can_storage_pushdown(const uint64_t tenant_id,
                                                const uint64_t table_id,
@@ -1493,8 +1509,6 @@ public:
   common::ObIArray<ObRawExpr *> &get_new_or_quals() { return new_or_quals_; }
 
   int construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op);
-
-  int prepare_vector_index_info(ObLogicalOperator *scan);
   int prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &scan_match_exprs,
                                   const ObIArray<ObRawExpr *> &scan_match_filters,
                                   const ObIArray<ObRawExpr *> &all_match_filters,
@@ -1503,6 +1517,19 @@ public:
   int prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup_match_exprs,
                                     const ObIArray<uint64_t> &lookup_index_ids,
                                     ObLogicalOperator *scan);
+  int prepare_text_retrieval_merge(const ObIArray<ObRawExpr *> &merge_match_exprs,
+                                   const ObIArray<uint64_t> &merge_index_ids,
+                                   ObLogicalOperator *scan);
+  int prepare_vector_index_info(AccessPath *ap, ObLogicalOperator *scan);
+  int prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                    const ObTableSchema &table_schema,
+                                    const uint64_t& vec_col_id,
+                                    ObLogTableScan *table_scan);
+
+  int prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                    const ObTableSchema &table_schema,
+                                    const uint64_t& vec_col_id,
+                                    ObLogTableScan *table_scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
   int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                     ObRawExpr *topn_expr,
@@ -1538,7 +1565,8 @@ protected:
 
   int add_candidate_plan(common::ObIArray<CandidatePlan> &current_plans,
                          const CandidatePlan &new_plan);
-
+  int remove_match_all_fake_cte_plan(ObIArray<CandidatePlan> &all_candidate_plans,
+                                     ObIArray<CandidatePlan> &candidate_plans);
   int compute_plan_relationship(const CandidatePlan &first_plan,
                                 const CandidatePlan &second_plan,
                                 DominateRelation &relation);

@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
+#include "ob_sql_plan_monitor_node_list.h"
 #include "lib/rc/ob_rc.h"
-#include "share/ob_thread_mgr.h"
-#include "common/ob_smart_call.h"
-#include "sql/engine/ob_operator.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;
@@ -23,7 +20,6 @@ using namespace oceanbase::sql;
 using namespace oceanbase::lib;
 
 const char *ObPlanMonitorNodeList::MOD_LABEL = "SqlPlanMon";
-
 ObPlanMonitorNodeList::ObPlanMonitorNodeList() :
   inited_(false),
   destroyed_(false),
@@ -279,6 +275,21 @@ int ObSqlPlanMonitorRecycleTask::init(ObPlanMonitorNodeList *node_list)
     ret = OB_ERR_UNEXPECTED;
   } else {
     node_list_ = node_list;
+  }
+  return ret;
+}
+
+int ObMonitorNode::set_sql_id(const ObString &sql_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sql_id.ptr())) {
+    sql_id_[0] = '\0';
+  } else if (sql_id.length() > common::OB_MAX_SQL_ID_LENGTH) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql id length unexpected", K(ret), K(sql_id.length()));
+  } else {
+    MEMCPY(sql_id_, sql_id.ptr(), sql_id.length());
+    sql_id_[sql_id.length()] = '\0';
   }
   return ret;
 }

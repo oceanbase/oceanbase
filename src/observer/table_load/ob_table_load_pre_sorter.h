@@ -9,98 +9,70 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef _OB_TABLE_LOAD_PRE_SORT_H_
-#define _OB_TABLE_LOAD_PRE_SORT_H_
-#include "observer/table_load/ob_table_load_table_ctx.h"
-#include "observer/table_load/ob_table_load_parallel_merge_ctx.h"
-#include "observer/table_load/ob_table_load_table_compactor.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
+
+#pragma once
+
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_mem_context.h"
-#include "storage/direct_load/ob_direct_load_merge_ctx.h"
-#include "observer/table_load/ob_table_load_mem_chunk_manager.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObDirectLoadTableStore;
+} // namespace storage
 namespace observer
 {
-  class ObTableLoadTableCtx;
-} /* namespace observer */
-namespace observer
-{
+class ObTableLoadTableCtx;
+class ObTableLoadStoreCtx;
+class ObTableLoadMemChunkManager;
+class ObITableLoadTaskScheduler;
+
 class ObTableLoadPreSorter
 {
+  class SampleTaskProcessor;
+  class DumpTaskProcessor;
+  class CloseChunkTaskProcessor;
+  class PreSortTaskCallback;
+  class FinishTaskProcessor;
+  class FinishTaskCallback;
+
+  friend class ObTableLoadPreSortWriter;
 public:
-  using ObTableLoadTablePreSortResult = ObTableLoadTableCompactResult;
-  ObTableLoadPreSorter(ObTableLoadTableCtx *ctx,
-                       ObTableLoadStoreCtx *store_ctx);
+  ObTableLoadPreSorter(ObTableLoadStoreCtx *store_ctx);
   ~ObTableLoadPreSorter();
+  void reset();
   int init();
   int start();
-  int set_all_trans_finished();
+  int close();
   void stop();
+  void wait();
+  bool is_stopped() const;
   void set_has_error() { mem_ctx_.has_error_ = true; }
+  int get_table_store(ObDirectLoadTableStore &table_store);
 private:
-  int init_task_count();
   int init_mem_ctx();
-  int init_sample_task_scheduler();
   int init_chunks_manager();
+  int init_sample_task_scheduler();
   int start_sample();
   int start_dump();
-  int handle_pre_sort_task_finish(int ret_code);
-  int prepare_parallel_merge(); // dump 结束之后开启parallel_merge工作
-  int add_table_to_parallel_merge_ctx();
-  int start_parallel_merge();
-  int handle_parallel_merge_success();
-  int build_merge_param(ObDirectLoadMergeParam& merge_param);
-  int build_merge_ctx_for_multiple_mode(ObDirectLoadMergeParam& merge_param,
-                                        ObTableLoadMerger *merger,
-                                        ObTableLoadTableCompactResult &result);
-  int build_merge_ctx_for_non_multiple_mode(ObDirectLoadMergeParam& merge_param,
-                                            ObTableLoadMerger *merger,
-                                            ObTableLoadTableCompactResult &result);
-  int build_parallel_merge_result();
-  int handle_pre_sort_success();
+  int start_close_chunk();
+  int start_finish();
+  int get_next_unclosed_chunk_id(int64_t &chunk_id);
+  int handle_pre_sort_thread_finish();
   int finish();
-  int build_merge_ctx();
-  int start_merge();
 private:
-  class PreSortSampleTaskProcessor;
-  class PreSortDumpTaskProcessor;
-  class PreSortParallelMergeTaskProcessor;
-  class PreSortFinishTaskProcessor;
-private:
-  class PreSortTaskCallback;
-  class PreSortParallelMergeTaskCallback;
-  class PreSortFinishTaskCallback;
-public:
-  int64_t finish_task_count_;
-  int64_t finish_write_task_count_;
-  int64_t running_write_task_count_;
+  ObTableLoadTableCtx *ctx_;
+  ObTableLoadStoreCtx *store_ctx_;
+  ObArenaAllocator allocator_;
   ObDirectLoadMemContext mem_ctx_;
   ObTableLoadMemChunkManager *chunks_manager_;
-  observer::ObTableLoadTableCtx *ctx_;
-  observer::ObTableLoadStoreCtx *store_ctx_;
-  int32_t other_task_count_;
-  int32_t dump_task_count_;
-private:
-  class ParallelMergeCb : public ObTableLoadParallelMergeCb
-  {
-  public:
-    ParallelMergeCb(ObTableLoadPreSorter *pre_sorter_) : pre_sorter_(pre_sorter_) {}
-    int on_success() override;
-  private:
-    ObTableLoadPreSorter *pre_sorter_;
-  };
-private:
   ObITableLoadTaskScheduler *sample_task_scheduler_;
-  ObTableLoadParallelMergeCtx parallel_merge_ctx_;
-  ParallelMergeCb parallel_merge_cb_;
-  bool all_trans_finished_;
+  ObArray<int64_t> unclosed_chunk_ids_;
+  int64_t unclosed_chunk_id_pos_;
+  int64_t finish_thread_cnt_;
   bool is_inited_;
-  bool is_start_;
 };
-} /* namespace storage */
-} /* namespace oceanbase */
 
-#endif /*_OB_TABLE_LOAD_PRE_SORT_H_*/
+} // namespace observer
+} // namespace oceanbase

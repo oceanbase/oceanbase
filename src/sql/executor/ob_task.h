@@ -201,7 +201,8 @@ public:
     exec_ctx_(NULL),
     inner_alloc_("RemoteTask"),
     dependency_tables_(&inner_alloc_),
-    snapshot_()
+    snapshot_(),
+    ls_list_()
   {
   }
   ~ObRemoteTask() = default;
@@ -213,6 +214,9 @@ public:
   }
   int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
   int64_t get_sys_schema_version() const { return sys_schema_version_; }
+  int assign_ls_list(const share::ObLSArray ls_ids);
+  const share::ObLSArray &get_all_ls() const { return ls_list_; }
+  bool check_ls_list(share::ObLSArray &ls_ids) const;
   void set_session(ObSQLSessionInfo *session_info) { session_info_ = session_info; }
   void set_runner_svr(const common::ObAddr &runner_svr) { runner_svr_ = runner_svr; }
   const common::ObAddr &get_runner_svr() const { return runner_svr_; }
@@ -241,7 +245,8 @@ public:
                K_(ctrl_svr),
                K_(task_id),
                KPC_(remote_sql_info),
-               K_(snapshot));
+               K_(snapshot),
+               K_(ls_list));
   DECLARE_TO_YSON_KV;
 private:
   int64_t tenant_schema_version_;
@@ -260,6 +265,8 @@ private:
   common::ModulePageAllocator inner_alloc_;
   DependenyTableStore dependency_tables_;
   transaction::ObTxReadSnapshot snapshot_;
+  // remote执行前保存的ls
+  share::ObLSArray ls_list_;
 };
 }
 }

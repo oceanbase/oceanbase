@@ -45,6 +45,9 @@
 #define INVALID_COLLATION 0
 #define INVALID_INDEX -1
 
+#define PACKAGE_KEY_PREFIX_V1  "pkg."
+#define PACKAGE_KEY_PREFIX_V2  "pkg.v2."
+
 #define YYLEX_PARAM result->yyscan_info_
 
 #define JOIN_MERGE_NODES(node1, node2)                                                  \
@@ -72,35 +75,21 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
-#define YYABORT_NO_MEMORY                                       \
+#define YYABORT_WITH_ERROR(err_code)                            \
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
     } else if (OB_PARSER_SUCCESS == result->extra_errno_) {     \
-      result->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;           \
+      result->extra_errno_ = err_code;           \
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
   } while(0)
 
-#define YYABORT_UNEXPECTED                           \
-  do {                                               \
-    if (OB_UNLIKELY(NULL == result)) {                                    \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {     \
-      result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED;          \
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
-
-#define YYABORT_TOO_BIG_DISPLAYWIDTH                           \
-  do {                                               \
-    if (OB_UNLIKELY(NULL == result)) {                                    \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {     \
-      result->extra_errno_ = OB_PARSER_ERR_TOO_BIG_DISPLAYWIDTH;          \
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
+#define YYABORT_NO_MEMORY YYABORT_WITH_ERROR(OB_PARSER_ERR_NO_MEMORY)
+#define YYABORT_UNEXPECTED YYABORT_WITH_ERROR(OB_PARSER_ERR_UNEXPECTED)
+#define YYABORT_TOO_BIG_DISPLAYWIDTH YYABORT_WITH_ERROR(OB_PARSER_ERR_TOO_BIG_DISPLAYWIDTH)
+#define YYABORT_UNDECLARE_VAR YYABORT_WITH_ERROR(OB_PARSER_ERR_UNDECLARED_VAR)
+#define YYABORT_NOT_VALID_ROUTINE_NAME YYABORT_WITH_ERROR(OB_PARSER_ERR_NOT_VALID_ROUTINE_NAME)
 
 #define YYABORT_STRING_LITERAL_TOO_LONG(result)                 \
   do {                                                          \
@@ -113,38 +102,16 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
     return ERROR;                                               \
   } while(0)
 
-#define YYABORT_UNDECLARE_VAR                 \
-  do {                                                          \
-    if (OB_UNLIKELY(NULL == result)) {                          \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {     \
-      result->extra_errno_ = OB_PARSER_ERR_UNDECLARED_VAR;\
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
-
-#define YYABORT_NOT_VALID_ROUTINE_NAME                          \
-  do {                                                          \
-    if (OB_UNLIKELY(NULL == result)) {                          \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {     \
-      result->extra_errno_ = OB_PARSER_ERR_NOT_VALID_ROUTINE_NAME;\
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
-
 #define YYABORT_PARSE_SQL_ERROR YYERROR
 
 #define check_malloc(val_ptr)                                                      \
 do {                                                                               \
   if (OB_UNLIKELY(NULL == val_ptr))                                                \
   {                                                                                \
-    ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;              \
-    yyerror(yylloc, yyextra, "No more space for malloc, start_col:%d, end_col:%d, line:%d", \
-                             ((ParseResult *)yyextra)->start_col_,                  \
+    YY_FATAL_ERROR("No more space for malloc, start_col:%d, end_col:%d, line:%d",  \
+                             ((ParseResult *)yyextra)->start_col_,                 \
                              ((ParseResult *)yyextra)->end_col_,                   \
                              ((ParseResult *)yyextra)->line_);                     \
-    return ERROR;                                                                  \
   }                                                                                \
 } while (0);
 
@@ -494,9 +461,10 @@ do {                                                                            
         store_pl_symbol(node, result->param_nodes_, result->tail_param_node_); \
       } else if (is_add_alas_name) { \
         int64_t idx = INVALID_INDEX; \
-        if (NULL != node->children_[0] && T_COLUMN_REF == node->children_[0]->type_ && OB_UNLIKELY(0 != lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx))) { \
+        int lookup_pl_symbol_ret = OB_PARSER_SUCCESS; \
+        if (NULL != node->children_[0] && T_COLUMN_REF == node->children_[0]->type_ && OB_UNLIKELY(0 != (lookup_pl_symbol_ret = lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx)))) { \
           yyerror(NULL, result, "failed to lookup pl symbol\n");    \
-          YYABORT_UNEXPECTED; \
+          YYABORT_WITH_ERROR(lookup_pl_symbol_ret); \
         } else if (NULL != node->children_[0] && T_COLUMN_REF == node->children_[0]->type_ && INVALID_INDEX == idx) { \
           /*do nothing*/ \
         } else {\
@@ -513,9 +481,10 @@ do {                                                                            
       } \
       else { \
         int64_t idx = INVALID_INDEX; \
-        if (OB_UNLIKELY(0 != lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx))) { \
+        int lookup_pl_symbol_ret = OB_PARSER_SUCCESS; \
+        if (OB_UNLIKELY(0 != (lookup_pl_symbol_ret = lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx)))) { \
           yyerror(NULL, result, "failed to lookup pl symbol\n");    \
-          YYABORT_UNEXPECTED; \
+          YYABORT_WITH_ERROR(lookup_pl_symbol_ret); \
         } else if (INVALID_INDEX != idx) { \
           copy_and_skip_symbol(result, start, end); \
           check_need_malloc(result, 21); \
@@ -581,9 +550,7 @@ extern ParseNode *new_node(void *malloc_pool, ObItemType type, int num);
 #define malloc_new_node(node, malloc_pool, type, num)                              \
 do {                                                                               \
   if (OB_UNLIKELY(NULL == (node = new_node(malloc_pool, type, num)))) {            \
-    ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;              \
-    yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);        \
-    return ERROR;                                                                  \
+    YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);                  \
   }                                                                                \
 } while (0);
 
@@ -921,9 +888,7 @@ for (int32_t _i = 0; _i < _yyleng; ++_i) {                                      
     if ('-' == param_node->str_value_[0]) {                              \
       char *copied_str = parse_strndup(param_node->str_value_, param_node->str_len_, malloc_pool);   \
       if (OB_ISNULL(copied_str)) {                                       \
-        ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;\
-        yyerror(NULL, yyextra, "No more space for mallocing");           \
-        return ERROR;                                                    \
+        YY_FATAL_ERROR("No more space for mallocing");                   \
       } else {                                                           \
         int pos = 1;                                                     \
         for (; pos < param_node->str_len_ && ISSPACE(copied_str[pos]); pos++) ;                           \
@@ -951,9 +916,7 @@ for (int32_t _i = 0; _i < _yyleng; ++_i) {                                      
     if ('-' == param_node->str_value_[0]) {                              \
       char *copied_str = parse_strndup(param_node->str_value_, param_node->str_len_, malloc_pool);   \
       if (OB_ISNULL(copied_str)) {                                       \
-        ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;\
-        yyerror(NULL, yyextra, "No more space for mallocing");           \
-        return ERROR;                                                    \
+        YY_FATAL_ERROR("No more space for mallocing");                   \
       } else {                                                           \
         int pos = 1;                                                     \
         for (; pos < param_node->str_len_ && ISSPACE(copied_str[pos]); pos++) ;                           \
@@ -1057,22 +1020,23 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
 
 #define CHECK_VALID_PACKAGE_VARIABLE_NAME(node)                             \
   do {                                                                      \
+    int64_t len = strlen(PACKAGE_KEY_PREFIX_V1);                        \
     if (OB_UNLIKELY(NULL == node || NULL == node->str_value_)) {            \
       yyerror(NULL, result, "invalid arguments node: %p", node);            \
       YYABORT_UNEXPECTED;                                                   \
-    } else if ((49 + 4) != node->str_len_) {                                \
-      /* A valid package variable name like this: */                        \
-      /*   pkg.019280808000eb8780808020018480808000d84ea84f0107 */          \
-      yyerror(NULL, result, "invalid arguments node");                      \
-    } else if (strncmp(node->str_value_, "pkg.", 4) != 0) {                 \
+    } else if (strncmp(node->str_value_, PACKAGE_KEY_PREFIX_V1, 4) != 0) { \
       yyerror(NULL, result, "invalid arguments node,not start with 'pkg.'");\
       YYABORT_UNEXPECTED;                                                   \
-    } else {                                                                \
-      for (int32_t i = 4; i < node->str_len_; ++i) {                        \
-        if (!(node->str_value_[i] >= 0                                      \
-              && node->str_value_[i] <= 9                                   \
-              && node->str_value_[i] >= 'a'                                 \
-              && node->str_value_[i] <= 'z')) {                             \
+    } else {                                     \
+      int64_t len2 = strlen(PACKAGE_KEY_PREFIX_V2);                        \
+      if (0 == strncmp(node->str_value_, PACKAGE_KEY_PREFIX_V2, len2)) {   \
+        len = len2;                                  \
+      }        \
+      for (int32_t i = len; i < node->str_len_; ++i) {                        \
+        if (!((node->str_value_[i] >= '0'                                   \
+               && node->str_value_[i] <= '9')                                  \
+            || (node->str_value_[i] >= 'a'                                 \
+               && node->str_value_[i] <= 'z'))) {                             \
           yyerror(NULL, result, "invalid arguments node, include invalid char"); \
           YYABORT_UNEXPECTED;                                               \
         }                                                                   \

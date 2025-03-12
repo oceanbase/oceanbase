@@ -14,25 +14,6 @@
 
 #include "sql/executor/ob_executor_rpc_processor.h"
 
-#include "lib/stat/ob_session_stat.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
-#include "sql/executor/ob_task_runner_notifier_service.h"
-#include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/monitor/ob_exec_stat_collector.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "observer/ob_server.h"
-#include "lib/stat/ob_session_stat.h"
-#include "sql/ob_sql.h"
-#include "sql/engine/px/ob_granule_pump.h"
-#include "sql/executor/ob_mini_task_executor.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "rootserver/ob_root_service.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 
 namespace oceanbase

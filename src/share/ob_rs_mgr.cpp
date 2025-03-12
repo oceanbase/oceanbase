@@ -12,18 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_rs_mgr.h"
+#include "ob_rs_mgr.h"
+#include "deps/oblib/src/lib/container/ob_se_array.h"
 
-#include "lib/profile/ob_trace_id.h"
-#include "common/ob_role_mgr.h"
-#include "rpc/obrpc/ob_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_share_util.h"
-#include "share/config/ob_server_config.h"
-#include "observer/ob_server_struct.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 
 namespace oceanbase

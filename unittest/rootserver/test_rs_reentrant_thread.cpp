@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #define private public
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
 #include "share/ob_cluster_version.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 

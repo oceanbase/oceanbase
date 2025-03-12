@@ -1247,7 +1247,17 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = meta.column_type_.get_collation_type();
     ObCastCtx cast_ctx(&allocator_, &dtc_params_, cur_datetime_, CM_WARN_ON_FAIL, collation_type);
+    cast_ctx.exec_ctx_ = &exec_ctx_;
     ObExpectType expect_type;
+    if (meta.column_type_.is_enum_set_with_subschema()) {
+      const ObEnumSetMeta *enum_set_meta = NULL;
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(
+            meta.column_type_, exec_ctx_.get_my_session(), enum_set_meta))) {
+        LOG_WARN("fail to extrac enum set meta", K(ret));
+      } else {
+        expect_type.set_type_infos(enum_set_meta->get_str_values());
+      }
+    }
     expect_type.set_type(meta.column_type_.get_type());
     expect_type.set_collation_type(collation_type);
     ObAccuracy res_acc;
@@ -1282,6 +1292,7 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
         }
         cast_ctx.res_accuracy_ = &res_acc;
       }
+      cast_ctx.gen_query_range_ = true;
       if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, value, tmp_dest_obj, dest_val))) {
         LOG_WARN("failed to cast object to expect_type", K(ret), K(value), K(expect_type));
       }
@@ -1293,8 +1304,9 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
       if (OB_ISNULL(dest_val)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null value");
-      } else if (ob_is_double_tc(expect_type.get_type())) {
+      } else if (ob_is_double_tc(expect_type.get_type()) || ob_is_enumset_tc(expect_type.get_type())) {
         const_cast<ObObj *>(dest_val)->set_scale(meta.column_type_.get_accuracy().get_scale());
+        const_cast<ObObj *>(dest_val)->set_subschema_id(meta.column_type_.get_subschema_id());
       }
     }
     if (OB_SUCC(ret)) {

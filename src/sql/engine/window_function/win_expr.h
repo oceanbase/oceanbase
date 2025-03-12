@@ -78,9 +78,12 @@ struct RemovalInfo
 struct Frame
 {
   Frame(const int64_t head = -1, const int64_t tail = -1, bool is_accum_frame = false) :
-    head_(head), tail_(tail), is_accum_frame_(is_accum_frame)
+    head_(head), tail_(tail), is_accum_frame_(is_accum_frame), skip_cnt_(0)
   {}
-  Frame(const Frame &other): head_(other.head_), tail_(other.tail_), is_accum_frame_(other.is_accum_frame_) {}
+  Frame(const Frame &other) :
+    head_(other.head_), tail_(other.tail_), is_accum_frame_(other.is_accum_frame_),
+    skip_cnt_(other.skip_cnt_)
+  {}
   bool operator==(const Frame &other) const
   {
     return same_frame(*this, other);
@@ -141,12 +144,14 @@ struct Frame
   void reset()
   {
     head_ = tail_ = -1;
+    skip_cnt_ = 0;
   }
-  TO_STRING_KV(K(head_), K(tail_));
+  TO_STRING_KV(K(head_), K(tail_), K(is_accum_frame_), K(skip_cnt_));
 
   int64_t head_;
   int64_t tail_; // !!! not included
   bool is_accum_frame_;
+  int64_t skip_cnt_; // skipped rows in this frame
 };
 
 struct WinExprEvalCtx

@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SERVER
-#include "ob_heartbeat_handler.h"
 
+#include "ob_heartbeat_handler.h"
 #include "observer/ob_server.h"
-#include "share/ob_version.h"
-#include "observer/ob_service.h"
 
 namespace oceanbase
 {

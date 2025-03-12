@@ -13,39 +13,22 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
-#include "common/ob_region.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_time_utility2.h"
-#include "share/ob_encryption_util.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_encrypt_kms.h"
 #endif
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_zone_table_operation.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/restore/ob_import_table_struct.h"
 #include "share/restore/ob_recover_table_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
-#include "sql/resolver/cmd/ob_system_cmd_stmt.h"
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
-#include "sql/resolver/ddl/ob_alter_table_stmt.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/ob_server.h"
-#include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_config.h"
-#include "share/object_storage/ob_object_storage_struct.h"
 #include "observer/mysql/ob_query_response_time.h"
-#include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
-#include "sql/resolver/cmd/ob_kill_stmt.h"
-#include "share/table/ob_table_config_util.h"
 #include "share/restore/ob_import_util.h"
+#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {
@@ -2545,6 +2528,53 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                             }
                           }
                         }
+                      } else if (0 == config_name.case_compare(DEFAULT_TABLE_ORAGNIZATION)) {
+                        ObSArray<uint64_t> tenant_ids;
+                        bool affect_all = false;
+                        bool affect_all_user = false;
+                        bool affect_all_meta = false;
+                        if (OB_FAIL(ObAlterSystemResolverUtil::resolve_tenant(*n,
+                                                                              tenant_id,
+                                                                              tenant_ids,
+                                                                              affect_all,
+                                                                              affect_all_user,
+                                                                              affect_all_meta))) {
+                          LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
+                        } else if (affect_all_meta) {
+                          ret = OB_NOT_SUPPORTED;
+                          LOG_WARN("all_meta is not supported by ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION",
+                                  KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                                        "use all_meta in 'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax is");
+                        } else if (tenant_ids.empty()) {
+                          if (!affect_all && !affect_all_user) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_WARN("error unexpected", "item", item, K(ret), K(i), K(tenant_id));
+                          }
+                        }
+                        if (OB_SUCC(ret) && !tenant_ids.empty()) {
+                          bool valid = true;
+                          ObSchemaGetterGuard schema_guard;
+                          if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+                            LOG_WARN("get_schema_guard failed", K(ret));
+                          }
+                          for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count() && valid; i++) {
+                            const uint64_t tenant_id = tenant_ids.at(i);
+                            lib::Worker::CompatMode compat_mode;
+                            valid = valid && ObConfigDefaultTableOrganizationChecker::check(item);
+                            if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+                              LOG_WARN("fail to get compat mode", K(ret));
+                            } else if (!valid) {
+                              ret = OB_OP_NOT_ALLOW;
+                              LOG_WARN("can not set defdefault_table_organization", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
+                            } else if (lib::Worker::CompatMode::ORACLE == compat_mode || OB_SYS_TENANT_ID == tenant_id) {
+                              LOG_WARN("can not set default_table_organization in oracle and sys tenants",
+                                       "item", item, K(i), K(tenant_id), K(compat_mode));
+                              LOG_USER_NOTE(OB_NOT_SUPPORTED,
+                                            "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in oracle or sys tenant is");
+                            }
+                          }
+                        }
                       }
                     }
                   } else {
@@ -2557,6 +2587,17 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                   if (!valid) {
                     ret = OB_OP_NOT_ALLOW;
                     LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
+                  }
+                } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORAGNIZATION))) {
+                  bool valid = ObConfigDefaultTableOrganizationChecker::check(item);
+                  if (!valid) {
+                    ret = OB_OP_NOT_ALLOW;
+                    LOG_WARN("can not set default_table_organization", "item", item, K(ret));
+                  } else if (OB_SYS_TENANT_ID == item.exec_tenant_id_) {
+                    LOG_WARN("can not set default_table_organization in the sys tenant",
+                              "item", item,"tenant_id", item.exec_tenant_id_);
+                    LOG_USER_NOTE(OB_NOT_SUPPORTED,
+                                  "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in the sys tenant is");
                   }
                 }
 
@@ -4169,6 +4210,9 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
       } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
                  rootserver::JOB_TYPE_UPGRADE_ALL))) {
         stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_ALL;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_FINISH))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_FINISH;
       } else {
         // UPGRADE_POST_ACTION
         if (OB_FAIL(ObClusterVersion::get_version(str, version))) {
@@ -4995,6 +5039,9 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
                       ret = OB_OP_NOT_ALLOW;
                       LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
                     }
+                  } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORAGNIZATION))) {
+                    LOG_WARN("can not set default_table_organization", "item", item, "tenant_id", item.exec_tenant_id_);
+                    LOG_USER_NOTE(OB_NOT_SUPPORTED, "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in the oracle tenant is");
                   }
                 }
               }
@@ -7521,5 +7568,210 @@ int ObServiceNameResolver::resolve(const ParseNode &parse_tree)
   }
   return ret;
 }
+
+ObRebuildTabletResolver::ObRebuildTabletResolver(ObResolverParams &params)
+  : ObSystemCmdResolver(params),
+    target_tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    tablet_id_array_(),
+    dest_(),
+    src_()
+{
+}
+
+int ObRebuildTabletResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_ID;
+  ObRebuildTabletStmt *stmt = create_stmt<ObRebuildTabletStmt>();
+  uint64_t data_version = 0;
+
+  if (OB_UNLIKELY(T_REBUILD_TABLET != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REBUILD_TABLET", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(MAX_CHILD_NUM != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else if (FALSE_IT(tenant_id = session_info_->get_login_tenant_id())) {
+  } else if (!is_sys_tenant(tenant_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only sys tenant can run rebuild tablet", K(ret), K(tenant_id));
+  } else if (OB_FAIL(resolve_by_type_(parse_tree))) {
+    LOG_WARN("failed to resolve by type", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(target_tenant_id_, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret), K(target_tenant_id_), K(data_version));
+  } else if (data_version < MOCK_DATA_VERSION_4_2_5_0 || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_5_1)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rebuild tablet under data version 4_3_5_0", K(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild tablet is");
+  } else if (OB_FAIL(stmt->set_param(target_tenant_id_, ls_id_, tablet_id_array_, dest_, src_))) {
+    LOG_WARN("Failed to set param", K(ret), K(target_tenant_id_), K(ls_id_), K(tablet_id_array_), K(dest_), K(src_));
+  } else {
+    stmt_ = stmt;
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_by_type_(
+    const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resolve_ls_id_(parse_tree.children_[0]))) {
+    LOG_WARN("failed to resolve ls id", K(ret));
+  } else if (OB_FAIL(resolve_tablet_list_expr_(parse_tree.children_[1]))) {
+    LOG_WARN("failed to resolve tablet list expr", K(ret));
+  } else if (OB_FAIL(resolve_dest_(parse_tree.children_[2]))) {
+    LOG_WARN("failed to resolve dest", K(ret));
+  } else if (OB_FAIL(resolve_src_(parse_tree.children_[3]))) {
+    LOG_WARN("failed to resolve src", K(ret));
+  } else if (OB_FAIL(resolve_tenant_id_(parse_tree.children_[4]))) {
+    LOG_WARN("failed to resolve tenant id", K(ret));
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_tenant_id_(
+    const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("resolve tenant id node should not be NULL", K(ret), KP(node));
+  } else if (OB_FAIL(ObAlterSystemResolverUtil::get_and_verify_tenant_name(
+      node, session_info_->get_effective_tenant_id(), target_tenant_id_))) {
+    LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+        K(session_info_->get_effective_tenant_id()), KP(node));
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_ls_id_(
+    const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_ls_id = 0;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("resolve ls id node should not be NULL", K(ret), KP(node));
+  } else if (OB_FAIL(Util::resolve_ls_id(node, tmp_ls_id))) {
+    LOG_WARN("failed to resolve tenant id", K(ret));
+  } else {
+    ls_id_ = tmp_ls_id;
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_tablet_list_expr_(
+    const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  ObString tablet_id_list_exptr;
+
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("resolve tablet list expr node should not be NULL", K(ret), KP(node));
+  } else if (OB_FAIL(Util::resolve_string(node, tablet_id_list_exptr))) {
+    LOG_WARN("resolve string failed", K(ret));
+  } else if (OB_FAIL(resolve_tablet_list_(tablet_id_list_exptr, tablet_id_array_))) {
+    LOG_WARN("failed to resolve tablet list", K(ret));
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_tablet_list_(
+    const ObString &tablet_list_expr, common::ObIArray<common::ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  tablet_id_array.reset();
+
+  if (tablet_list_expr.length() > MAX_TABLET_LIST_EXPR_SIZE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tablet list expr size is unexpected", K(ret), K(tablet_list_expr));
+  } else if (0 == tablet_list_expr.length()) {
+    //do nothing
+  } else {
+    ObArenaAllocator allocator;
+    char *tablet_list_str = NULL;
+    if (OB_ISNULL(tablet_list_str = reinterpret_cast<char *>(allocator.alloc(tablet_list_expr.length() + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", KR(ret));
+    } else {
+      MEMCPY(tablet_list_str, tablet_list_expr.ptr(), tablet_list_expr.length());
+      tablet_list_str[tablet_list_expr.length()] = '\0';
+    }
+
+    char *item_str = NULL;
+    char *save_ptr = NULL;
+    while (OB_SUCC(ret)) {
+      item_str = strtok_r((NULL == item_str ? tablet_list_str : NULL), ",", &save_ptr);
+      if (NULL != item_str) {
+        if (OB_FAIL(generate_tablet_id_(item_str, tablet_id_array))) {
+          LOG_WARN("failed to generate tablet id", K(ret));
+        }
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::generate_tablet_id_(const char *buf,
+    common::ObIArray<common::ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t id_value = 0;
+  ObTabletID tablet_id;
+
+  if (nullptr == buf) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("generate tablet id get invalid argument", K(ret), K(buf));
+  } else if (OB_FAIL(ob_atoll(buf, id_value))) {
+    LOG_WARN("failed to atoll from str", K(ret));
+  } else if (FALSE_IT(tablet_id = id_value)) {
+  } else if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
+    LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_dest_(
+    const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("resolve tablet list expr node should not be NULL", K(ret), KP(node));
+  } else if (OB_UNLIKELY(T_VARCHAR != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_VARCHAR", "type", get_type_name(node->type_));
+  } else if (OB_FAIL(dest_.resolve_location(node->str_value_))) {
+    LOG_WARN("failed to resoleve dest location");
+  }
+  return ret;
+}
+
+int ObRebuildTabletResolver::resolve_src_(
+    const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("resolve tablet list expr node should not be NULL", K(ret), KP(node));
+  } else if (OB_UNLIKELY(T_VARCHAR != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_VARCHAR", "type", get_type_name(node->type_));
+  } else if (OB_FAIL(src_.resolve_location(node->str_value_))) {
+    LOG_WARN("failed to resoleve src location");
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

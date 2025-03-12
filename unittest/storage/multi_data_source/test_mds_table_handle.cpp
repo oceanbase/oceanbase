@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "share/ob_errno.h"
 #include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX STORAGE
@@ -18,7 +17,6 @@
 #define private public
 
 #include "lib/guard/ob_light_shared_gaurd.h"
-#include "storage/multi_data_source/mds_table_impl.h"
 #include "storage/tablet/ob_tablet_meta.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {

@@ -31,9 +31,9 @@ enum ObDASIterType : uint32_t
   DAS_ITER_TEXT_RETRIEVAL,
   DAS_ITER_SORT,
   DAS_ITER_TEXT_RETRIEVAL_MERGE,
-  DAS_ITER_VEC_VID_MERGE,
+  DAS_ITER_VEC_VID_MERGE, /* abandoned */
   DAS_ITER_INDEX_MERGE,
-  DAS_ITER_DOC_ID_MERGE,
+  DAS_ITER_DOC_ID_MERGE, /* abandoned */
   DAS_ITER_FUNC_LOOKUP,
   DAS_ITER_FUNC_DATA,
   DAS_ITER_MVI_LOOKUP,
@@ -65,7 +65,7 @@ enum ObDASIterTreeType : uint32_t
   ITER_TREE_PARTITION_SCAN,
   ITER_TREE_LOCAL_LOOKUP,
   ITER_TREE_GIS_LOOKUP,
-  ITER_TREE_DOMAIN_LOOKUP,
+  ITER_TREE_DOMAIN_LOOKUP,  // discarded
   ITER_TREE_TEXT_RETRIEVAL,
   ITER_TREE_INDEX_MERGE,
   ITER_TREE_FUNC_LOOKUP,
@@ -78,9 +78,15 @@ enum ObDASIterTreeType : uint32_t
 struct ObDASFTSTabletID
 {
 public:
+  ObDASFTSTabletID()
+    : inv_idx_tablet_id_(),
+      fwd_idx_tablet_id_(),
+      doc_id_idx_tablet_id_()
+  {}
   common::ObTabletID inv_idx_tablet_id_;
   common::ObTabletID fwd_idx_tablet_id_;
   common::ObTabletID doc_id_idx_tablet_id_;
+
   void reset()
   {
     inv_idx_tablet_id_.reset();
@@ -98,6 +104,7 @@ public:
     ITER_TREE_FUNC_LOOKUP == (_type)    ||               \
     ITER_TREE_INDEX_MERGE == (_type)    ||               \
     ITER_TREE_MVI_LOOKUP == (_type)     ||               \
+    ITER_TREE_VEC_LOOKUP == (_type)     ||               \
     ITER_TREE_GIS_LOOKUP == (_type);                     \
 })
 
@@ -105,11 +112,12 @@ struct ObDASRelatedTabletID
 {
 public:
   ObDASRelatedTabletID(common::ObIAllocator &alloc)
-    : index_merge_tablet_ids_(alloc)
+    : index_merge_tablet_ids_(alloc),
+      domain_tablet_ids_(alloc)
   { reset(); }
 
   common::ObTabletID lookup_tablet_id_;
-  common::ObTabletID aux_lookup_tablet_id_;
+  common::ObTabletID doc_rowkey_tablet_id_;
   common::ObTabletID rowkey_doc_tablet_id_;
   common::ObTabletID rowkey_vid_tablet_id_;
 
@@ -123,14 +131,29 @@ public:
   common::ObFixedArray<common::ObTabletID, ObIAllocator> index_merge_tablet_ids_;
   /* used by index merge */
 
-  /* used by function lookup index (special fulltext)*/
+  /* record tablet ids for fulltext index, use ir_rtdef->fts_idx_ to locate */
   common::ObSEArray<ObDASFTSTabletID, 2> fts_tablet_ids_;
-  /* used by function lookup index (special fulltext)*/
+  /* record tablet ids for fulltext index */
+
+  /* used by domain id merge */
+  common::ObFixedArray<common::ObTabletID, ObIAllocator> domain_tablet_ids_;
+  /* used by domain id merge */
+
+  /* used by vector index */
+  common::ObTabletID delta_buf_tablet_id_;
+  common::ObTabletID index_id_tablet_id_;
+  common::ObTabletID snapshot_tablet_id_;
+    // for ivf
+  common::ObTabletID centroid_tablet_id_;
+  common::ObTabletID cid_vec_tablet_id_;
+  common::ObTabletID rowkey_cid_tablet_id_;
+  common::ObTabletID special_aux_tablet_id_;
+  /* used by vector index */
 
   void reset()
   {
     lookup_tablet_id_.reset();
-    aux_lookup_tablet_id_.reset();
+    doc_rowkey_tablet_id_.reset();
     rowkey_doc_tablet_id_.reset();
     rowkey_vid_tablet_id_.reset();
     inv_idx_tablet_id_.reset();
@@ -138,6 +161,10 @@ public:
     doc_id_idx_tablet_id_.reset();
     index_merge_tablet_ids_.reset();
     fts_tablet_ids_.reset();
+    domain_tablet_ids_.reset();
+    delta_buf_tablet_id_.reset();
+    index_id_tablet_id_.reset();
+    snapshot_tablet_id_.reset();
   }
 };
 

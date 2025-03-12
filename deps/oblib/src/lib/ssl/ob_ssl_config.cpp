@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <openssl/evp.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
-#include <openssl/err.h>
 #include <openssl/engine.h>
 #include "ob_ssl_config.h"
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/lock/ob_spin_rwlock.h"
 
 namespace oceanbase {

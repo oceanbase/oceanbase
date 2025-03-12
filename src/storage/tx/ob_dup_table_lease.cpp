@@ -8,14 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-// #include "lib/utility/ob_print_utils.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tx/ob_dup_table_base.h"
-#include "storage/tx/ob_dup_table_lease.h"
-#include "storage/tx/ob_dup_table_ts_sync.h"
-#include "storage/tx/ob_dup_table_util.h"
-#include "storage/tx/ob_location_adapter.h"
+#include "ob_dup_table_lease.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

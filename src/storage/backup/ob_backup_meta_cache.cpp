@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_meta_cache.h"
-#include "lib/oblog/ob_log_module.h"
 #include "ob_backup_restore_util.h"
 
 using namespace oceanbase::share;

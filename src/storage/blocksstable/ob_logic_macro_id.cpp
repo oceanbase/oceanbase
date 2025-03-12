@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/blocksstable/ob_logic_macro_id.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

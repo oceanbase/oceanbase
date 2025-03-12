@@ -10,20 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_trans_factory.h"
-#include "lib/objectpool/ob_resource_pool.h"
-#include "ob_trans_rpc.h"
-#include "ob_trans_define.h"
 
-#include "ob_trans_ctx.h"
+#include "ob_trans_factory.h"
 #include "ob_trans_part_ctx.h"
-#include "ob_trans_ctx_mgr.h"
-#include "ob_trans_version_mgr.h"
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "storage/tx/ob_dup_table.h"
-#include "storage/tx/ob_gts_rpc.h"
 #include "storage/tx/ob_gti_rpc.h"
-#include "storage/tx/ob_trans_end_trans_callback.h"
 #include "storage/tx/ob_leak_checker.h"
 #include "observer/ob_server.h"
 

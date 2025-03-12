@@ -11,7 +11,6 @@
  */
 #define USING_LOG_PREFIX STORAGETEST
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define protected public
 #define private public

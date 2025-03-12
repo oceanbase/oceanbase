@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_late_materialization.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_join.h"
@@ -352,7 +350,8 @@ int ObTransformLateMaterialization::get_accessible_index(const ObSelectStmt &sel
             INDEX_TYPE_UNIQUE_GLOBAL == index_type ||
             INDEX_TYPE_PRIMARY == index_type ||
             INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type ||
-            INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type) {
+            INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type ||
+            INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type) {
           if (OB_FAIL(tmp_index_schemas.push_back(index_schema))) {
             LOG_WARN("failed to push back", K(ret));
           }

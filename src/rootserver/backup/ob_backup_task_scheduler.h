@@ -71,7 +71,10 @@ public:
   void reset();
   int dump_statistics();
   int64_t get_task_cnt() const { return task_map_.size(); }
+  int update_task_last_alive_time(const ObBackupScheduleTask *task);
+
 private:
+  int push_task_without_lock_(const ObBackupScheduleTask &task);
   virtual int get_backup_region_and_zone_(ObIArray<share::ObBackupZone> &backup_zone,
                                           ObIArray<share::ObBackupRegion> &backup_region);
   virtual int get_all_servers_(const ObIArray<share::ObBackupZone> &backup_zone,

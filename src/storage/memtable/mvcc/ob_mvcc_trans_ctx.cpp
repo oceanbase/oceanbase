@@ -11,21 +11,8 @@
  */
 
 #include "ob_mvcc_trans_ctx.h"
-#include "ob_mvcc_ctx.h"
-#include "ob_mvcc_row.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/ob_memtable_util.h"
-#include "storage/memtable/ob_memtable_mutator.h"
-#include "lib/atomic/atomic128.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx/ob_trans_ctx.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_tx_stat.h"
-#include "ob_mvcc_ctx.h"
-#include "storage/memtable/ob_memtable_interface.h"
 
 namespace oceanbase
 {
@@ -2034,7 +2021,10 @@ int ObMvccRowCallback::log_sync_fail(const share::SCN max_committed_scn)
 {
   int ret = OB_SUCCESS;
   ObRowLatchGuard guard(value_.latch_);
-  unlink_trans_node();
+  if (nullptr != tnode_) {
+    tnode_->set_aborted();
+    unlink_trans_node();
+  }
   memtable_->set_max_end_scn(max_committed_scn, true);
   return ret;
 }
@@ -2047,7 +2037,10 @@ int ObMvccRowCallback::clean_unlog_cb()
   // or fail). So we add defensive code here for safety.
 
   if (need_submit_log_) {
-    unlink_trans_node();
+    if (nullptr != tnode_) {
+      tnode_->set_aborted();
+      unlink_trans_node();
+    }
     need_submit_log_ = false;
     dec_unsubmitted_cnt_();
   }

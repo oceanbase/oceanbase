@@ -11,7 +11,6 @@
  */
 
 #include "logservice/ob_switch_leader_adapter.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "logservice/leader_coordinator/table_accessor.h"
 
 namespace oceanbase

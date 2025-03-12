@@ -14,13 +14,11 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_log_fetcher_dead_pool.h"
 
+#include "ob_log_fetcher_dead_pool.h"
 #include "lib/oblog/ob_log_module.h"      // LOG_ERROR
-#include "lib/allocator/ob_mod_define.h"  // ObModIds
 
 #include "ob_log_fetcher_err_handler.h"   // IObLogErrHandler
-#include "ob_log_ls_fetch_mgr.h"          // IObLogLSFetchMgr
 #include "ob_log_fetcher.h"               // IObLogFetcher
 
 namespace oceanbase

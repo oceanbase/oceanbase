@@ -11,7 +11,6 @@
  */
 
 #include "ob_log_rpc_req.h"
-#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {
@@ -33,7 +32,8 @@ LogConfigChangeCmd::LogConfigChangeCmd()
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(),
-    removed_list_() { }
+    removed_list_(),
+    new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -55,7 +55,8 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(),
-    removed_list_() { }
+    removed_list_(),
+    new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -77,7 +78,8 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(),
-    removed_list_() { }
+    removed_list_(),
+    new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
                                        const int64_t palf_id,
@@ -96,7 +98,8 @@ LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
       lock_owner_(lock_owner),
       config_version_(),
       added_list_(),
-      removed_list_() { }
+      removed_list_(),
+      new_member_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -117,7 +120,29 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
     config_version_(),
     added_list_(added_list),
-    removed_list_(removed_list) { }
+    removed_list_(removed_list),
+    new_member_list_() { }
+
+LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
+                                       const int64_t palf_id,
+                                       const common::ObMemberList &new_member_list,
+                                       const int64_t new_replica_num,
+                                       const LogConfigChangeCmdType cmd_type,
+                                       const int64_t timeout_us)
+  : src_(src),
+    palf_id_(palf_id),
+    added_member_(),
+    removed_member_(),
+    curr_member_list_(),
+    curr_replica_num_(0),
+    new_replica_num_(new_replica_num),
+    cmd_type_(cmd_type),
+    timeout_us_(timeout_us),
+    lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+    config_version_(),
+    added_list_(),
+    removed_list_(),
+    new_member_list_(new_member_list) { }
 
 LogConfigChangeCmd::~LogConfigChangeCmd()
 {
@@ -145,6 +170,8 @@ bool LogConfigChangeCmd::is_valid() const
       (palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER != lock_owner_) : true);
   bool_ret = bool_ret && ((REPLACE_LEARNERS_CMD == cmd_type_)? (added_list_.is_valid()    \
       && removed_list_.is_valid()): true);
+  bool_ret = bool_ret && ((FORCE_SET_MEMBER_LIST_CMD == cmd_type_) ? (new_member_list_.is_valid()  \
+      && new_replica_num_ == new_member_list_.get_member_number()) : true);
   return bool_ret;
 }
 
@@ -175,7 +202,8 @@ bool LogConfigChangeCmd::is_set_new_replica_num() const
   return ADD_MEMBER_CMD == cmd_type_
         || REMOVE_MEMBER_CMD == cmd_type_
         || SWITCH_TO_LEARNER_CMD == cmd_type_
-        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_;
+        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_
+        || FORCE_SET_MEMBER_LIST_CMD == cmd_type_;
 }
 
 void LogConfigChangeCmd::reset()
@@ -193,6 +221,7 @@ void LogConfigChangeCmd::reset()
   config_version_.reset();
   added_list_.reset();
   removed_list_.reset();
+  new_member_list_.reset();
 }
 
 OB_SERIALIZE_MEMBER(LogConfigChangeCmd, src_, palf_id_, added_member_, removed_member_,

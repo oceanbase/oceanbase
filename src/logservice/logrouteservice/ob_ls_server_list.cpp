@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX  OBLOG_FETCHER
 
 #include "ob_ls_server_list.h"
-#include "lib/container/ob_se_array_iterator.h"  // begin/end
 #include "lib/utility/ob_sort.h"
 
 using namespace oceanbase::common;

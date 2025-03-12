@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "rootserver/ddl_task/ob_drop_vec_index_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_ddl_error_message_table_operator.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "rootserver/ob_root_service.h"
-#include "share/vector_index/ob_vector_index_util.h"
-#include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::share;
 

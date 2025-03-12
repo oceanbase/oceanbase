@@ -11,8 +11,6 @@
  */
 
 #include "common_define.h"
-#include "object/ob_object.h"
-#include "share/datum/ob_datum.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 namespace oceanbase

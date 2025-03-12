@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
-#include "share/scn.h"
 #define FAST_FAIL() \
   do {                                                          \
   if (OB_FAIL(ret)) {                                           \

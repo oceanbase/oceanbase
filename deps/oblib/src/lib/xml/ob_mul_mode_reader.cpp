@@ -11,11 +11,7 @@
  * This file contains interface implement for multi mode reader abstraction.
  */
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/xml/ob_mul_mode_reader.h"
+#include "ob_mul_mode_reader.h"
 #include "lib/xml/ob_xml_util.h"
 
 namespace oceanbase {

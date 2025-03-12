@@ -342,6 +342,17 @@ public:
   // @brief: force set self as single replica.
   virtual int force_set_as_single_replica() = 0;
 
+  // @brief: force set member list.
+  // @param[in] const common::ObMemberList &new_member_list: members which will be set forcely
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after forcing to set member list
+  // @return
+  // - OB_SUCCESS: force_set_member_list successfully
+  // - OB_TIMEOUT: force_set_member_list timeout because of config log persistence
+  // - OB_NOT_RUNNING: log stream is stopped
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - other: bug
+  virtual int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num) = 0;
+
   // @brief, add a member into paxos group
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'
@@ -880,6 +891,8 @@ public:
   int get_election_leader(common::ObAddr &addr) const;
   int get_parent(common::ObAddr &parent) const;
   int force_set_as_single_replica() override final;
+  int force_set_member_list(const common::ObMemberList &member_list,
+                            const int64_t new_replica_num) override final;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
@@ -1283,6 +1296,7 @@ private:
                                     const bool is_rebuild);
   int get_election_leader_without_lock_(ObAddr &addr) const;
   int update_self_region_();
+  int force_set_member_list_(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,
@@ -1310,6 +1324,7 @@ private:
   void report_set_initial_member_list_(const int64_t paxos_replica_num, const common::ObMemberList &member_list);
   void report_set_initial_member_list_with_arb_(const int64_t paxos_replica_num, const common::ObMemberList &member_list, const common::ObMember &arb_member);
   void report_force_set_as_single_replica_(const int64_t prev_replica_num, const int64_t curr_replica_num, const ObMember &member);
+  void report_force_set_member_list(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
   void report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
   void report_add_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &added_member);
   void report_remove_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &removed_member);

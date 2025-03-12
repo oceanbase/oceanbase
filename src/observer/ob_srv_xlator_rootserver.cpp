@@ -11,35 +11,10 @@
  */
 #define USING_LOG_PREFIX SERVER
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
-#include "share/schema/ob_schema_service_rpc_proxy.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "share/rpc/ob_batch_processor.h"
-#include "share/rpc/ob_blacklist_req_processor.h"
-#include "share/rpc/ob_blacklist_resp_processor.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/cmd/ob_load_data_rpc.h"
-#include "sql/engine/px/ob_px_rpc_processor.h"
-#include "sql/dtl/ob_dtl_rpc_processor.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
-#include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_ts_response_handler.h"
-#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
 #include "rootserver/ob_rs_rpc_processor.h"
-#include "observer/ob_rpc_processor_simple.h"
-#include "observer/ob_srv_task.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
-#include "observer/table/ob_table_execute_processor.h"
-#include "observer/table/ob_table_batch_execute_processor.h"
-#include "observer/table/ob_table_query_processor.h"
-#include "observer/table/ob_table_query_and_mutate_processor.h"
 
 /* given the efficiency of compiling, we split all rpc records into multiple files.
  * when more than 200 records appears in a single file, another split is recommended
@@ -85,6 +60,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcMergeResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterResourceTenantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTenantP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcParallelCreateNormalTenantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTenantEndP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcModifyTenantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcLockTenantP, *gctx_.root_service_);
@@ -125,6 +101,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcRootMinorFreezeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObUpdateIndexTableStatusP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObUpdateIndexStatusP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObDropLobP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateOutlineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterOutlineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropOutlineP, *gctx_.root_service_);
@@ -286,7 +263,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     RPC_PROCESSOR(rootserver::ObRpcCreateDirectoryP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropDirectoryP, *gctx_.root_service_);
-    RPC_PROCESSOR(rootserver::ObRpcDisasterRecoveryTaskReplyP, *gctx_.root_service_);
 
 #ifdef OB_BUILD_SPM
     // sql plan baseline
@@ -311,4 +287,5 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 #endif
     RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
+    RPC_PROCESSOR(rootserver::ObRpcRebuildTabletP, *gctx_.root_service_);
 }

@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ob_i_tablet_memtable.h"
 
-#include "storage/compaction/ob_compaction_diagnose.h"
+#include "ob_i_tablet_memtable.h"
 #include "storage/ls/ob_freezer.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 

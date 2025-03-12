@@ -10,9 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/utility/serialization.h"
-#include "common/log/ob_log_entry.h"
 #include "common/log/ob_log_cursor.h"
 
 namespace oceanbase

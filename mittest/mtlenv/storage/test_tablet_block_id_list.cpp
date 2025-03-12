@@ -15,16 +15,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/tablet/ob_tablet_block_aggregated_info.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "mittest/mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 #include "storage/schema_utils.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
-#include "storage/blocksstable/ob_object_manager.h"
 
 using namespace oceanbase::blocksstable;
 namespace oceanbase

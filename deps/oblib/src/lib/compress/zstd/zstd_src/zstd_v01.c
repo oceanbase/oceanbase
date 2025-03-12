@@ -11,7 +11,6 @@
 /******************************************
 *  Includes
 ******************************************/
-#include <stddef.h>    /* size_t, ptrdiff_t */
 #include "zstd_v01.h"
 #include "error_private.h"
 
@@ -157,7 +156,6 @@ typedef struct
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
-#include <stdio.h>      /* printf (debug) */
 
 
 #ifndef MEM_ACCESS_MODULE
@@ -1247,7 +1245,6 @@ static size_t HUF_decompress (void* dst, size_t maxDstSize, const void* cSrc, si
 *********************************************************/
 #include <stdlib.h>      /* calloc */
 #include <string.h>      /* memcpy, memmove */
-#include <stdio.h>       /* debug : printf */
 
 
 /********************************************************

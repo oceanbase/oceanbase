@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_replace_executor.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/das/ob_das_insert_op.h"
 #include "ob_table_cg_service.h"
-#include "sql/engine/dml/ob_dml_service.h"
 
 namespace oceanbase
 {
@@ -332,7 +329,6 @@ int ObTableApiReplaceExecutor::cache_insert_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache insert row is null", K(ret));
   }
-
   return ret;
 }
 

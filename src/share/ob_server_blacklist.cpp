@@ -11,8 +11,6 @@
  */
 
 #include "ob_server_blacklist.h"
-#include "common/ob_clock_generator.h"
-#include "lib/time/ob_time_utility.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

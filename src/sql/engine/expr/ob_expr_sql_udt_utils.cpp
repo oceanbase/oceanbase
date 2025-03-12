@@ -12,14 +12,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_user_type.h"
 #include "src/pl/ob_pl_resolver.h"
-#include "lib/udt/ob_array_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -893,7 +887,7 @@ int ObSqlUdtUtils::convert_collection_to_string(ObObj &coll_obj, const ObSqlColl
   } else {
     if (OB_FAIL(arr_obj->init(coll_data))) {
       LOG_WARN("failed to init array", K(ret));
-    } else if (OB_FAIL(arr_obj->print(arr_type->element_type_, buf))) {
+    } else if (OB_FAIL(arr_obj->print(buf))) {
       LOG_WARN("failed to format array", K(ret));
     } else {
       res_str.assign_ptr(buf.ptr(), buf.length());

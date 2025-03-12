@@ -13,6 +13,8 @@
 
 #include "lib/container/ob_array.h"
 #include "share/detect/ob_detectable_id.h"
+#include "share/interrupt/ob_global_interrupt_call.h"
+#include "sql/das/ob_das_task_result.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
 
 namespace oceanbase {
@@ -71,6 +73,20 @@ public:
                                                      uint64_t &node_sequence_id_);
   static void p2p_datahub_unregister_check_item_from_dm(const common::ObDetectableId &detectable_id,
                                                         uint64_t node_sequence_id);
+
+  // for das task
+  static int das_task_register_detectable_id_into_dm(common::ObDetectableId &detectable_id, uint64_t tenant_id);
+
+  static void das_task_unregister_detectable_id_from_dm(const common::ObDetectableId &detectable_id);
+
+  static int das_task_register_check_item_into_dm(const common::ObRegisterDmInfo &register_dm_info,
+                                                  const ObInterruptibleTaskID &interrupt_id,
+                                                  const sql::DASTCBInfo &key,
+                                                  uint64_t &node_sequence_id);
+
+  static void das_task_unregister_check_item_from_dm(const common::ObDetectableId &detectable_id,
+                                                     uint64_t node_sequence_id);
+
 };
 
 } // end namespace common

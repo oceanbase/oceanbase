@@ -18,13 +18,8 @@
 #define protected public
 #define private public
 
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "mtlenv/storage/medium_info_helper.h"
-#include "share/io/ob_io_manager.h"
-#include "storage/tablet/ob_tablet_mds_data.h"
-#include "storage/tablet/ob_tablet_obj_load_helper.h"
 
 #define BUILD_AND_WRITE_MEDIUM_INFO(id) \
         { \

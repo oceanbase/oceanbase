@@ -33,6 +33,7 @@ public:
   void destroy();
   // for TimerTask
   void runTimerTask() override;
+  int check_space_occupy_(bool &space_danger);
   static const int64_t MVIEW_PUSH_SNAPSHOT_INTERVAL = 60 * 1000 * 1000; // 1min
 private:
   bool is_inited_;

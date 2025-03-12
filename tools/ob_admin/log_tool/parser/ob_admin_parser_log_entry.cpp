@@ -12,28 +12,18 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_admin_parser_log_entry.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
-#include "share/ob_rpc_struct.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
-#include "storage/ddl/ob_ddl_clog.h"
-#include "storage/tx/ob_tx_log.h"
-#include "share/ob_admin_dump_helper.h"
 #include "storage/tx/ob_id_service.h"
 #include "storage/memtable/ob_memtable_mutator.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 #include "storage/tx/ob_dup_table_dump.h"
-#include "logservice/ob_log_base_header.h"
 #include "logservice/ob_garbage_collector.h"
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
 #include "logservice/ob_log_compression.h"
 #endif
 #include "logservice/data_dictionary/ob_data_dict_iterator.h"     // ObDataDictIterator
-#include "share/scn.h"
 #include "share/vector_index/ob_plugin_vector_index_scheduler.h"
 
-#include <rapidjson/prettywriter.h>
-#include <rapidjson/stringbuffer.h>
 
 namespace oceanbase
 {

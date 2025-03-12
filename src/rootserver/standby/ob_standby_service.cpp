@@ -14,28 +14,12 @@
 
 #include "ob_standby_service.h"              // ObStandbyService
 
-#include "lib/oblog/ob_log_module.h"              // LOG_*
-#include "lib/utility/ob_print_utils.h"             // TO_STRING_KV
 #include "rootserver/ob_cluster_event.h"          // CLUSTER_EVENT_ADD_CONTROL
 #include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
-#include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/ob_ls_service_helper.h"//ObTenantLSInfo
-#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
-#include "share/ls/ob_ls_recovery_stat_operator.h"// ObLSRecoveryStatOperator
-#include "share/ls/ob_ls_life_manager.h" //ObLSLifeAgentManager
-#include "share/ls/ob_ls_operator.h" //ObLSAttr
-#include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
-#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
-//#include "share/resource_manager/ob_group_list.h"//group id
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
-#include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
-#include "storage/tx/ob_trans_service.h" //ObTransService
-#include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
-#include "common/ob_tenant_data_version_mgr.h"
-#include "share/schema/ob_mview_info.h"
-#include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreSyncStatus
 
 namespace oceanbase
 {

@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "encoding/ob_micro_block_decoder.h"
-#include "cs_encoding/ob_micro_block_cs_decoder.h"
-#include "index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_bare_iterator.h"
-#include "ob_micro_block_reader.h"
-#include "ob_datum_rowkey.h"
 #include "ob_data_store_desc.h"
 
 namespace oceanbase

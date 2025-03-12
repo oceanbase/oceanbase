@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_vertical_partition_builder.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/ob_index_builder_util.h"
 
 namespace oceanbase
@@ -68,6 +67,7 @@ int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
         LOG_WARN("set_table_name failed", K(aux_vp_table_name), K(ret));
       } else {
         aux_vp_table_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
+        aux_vp_table_schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
       }
     }
   }

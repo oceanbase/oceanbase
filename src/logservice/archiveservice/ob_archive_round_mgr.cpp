@@ -11,12 +11,7 @@
  */
 
 #include "ob_archive_round_mgr.h"
-#include "lib/atomic/ob_atomic.h"   // ATOMIC*
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "ob_archive_define.h"      // *ID
 #include "observer/ob_server_event_history_table_operator.h"   // SERVER_EVENT
-#include <cstdint>
 
 namespace oceanbase
 {

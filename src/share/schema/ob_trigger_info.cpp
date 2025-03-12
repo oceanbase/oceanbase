@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_trigger_info.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/parser/ob_parser.h"
-#include "sql/ob_sql_utils.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/resolver/ddl/ob_trigger_resolver.h"
 
 namespace oceanbase
 {
@@ -297,6 +295,47 @@ int64_t ObTriggerInfo::get_convert_size() const
   BODY_END
 /************************* oracle compound trigger *************************/
 
+/************************* oracle system trigger *************************/
+#define SPEC_CALC_WHEN_SYS \
+  "FUNCTION calc_when RETURN BOOL;\n"
+
+#define SPEC_TRG_BODY_SYS \
+  "PROCEDURE trg_body_sys;\n"
+
+#define PACKAGE_SPEC_FMT_SYS  \
+  SPEC_BEGIN \
+  SPEC_CALC_WHEN_SYS  \
+  SPEC_TRG_BODY_SYS \
+  SPEC_END
+
+#define BODY_CALC_WHEN_SYS \
+  "FUNCTION calc_when RETURN BOOL IS\n" \
+  "BEGIN\n" \
+  "  RETURN (%.*s);\n" \
+  "END;\n"
+
+#define BODY_TRG_BODY_SYS \
+  "PROCEDURE trg_body_sys IS\n" \
+  "%.*s\n" \
+  "%.*s" \
+  "BEGIN\n" \
+  "%.*s" \
+  "%.*s\n"  \
+  "END;\n"
+
+#define AUTO_TRANS_DECALRE  \
+  "PRAGMA AUTONOMOUS_TRANSACTION;"
+
+#define AUTO_TRANS_COMMIT \
+  "COMMIT;"
+
+#define PACKAGE_BODY_FMT_SYS  \
+  BODY_BEGIN \
+  BODY_CALC_WHEN_SYS  \
+  BODY_TRG_BODY_SYS \
+  BODY_END
+/************************* oracle system trigger *************************/
+
 #define MODE_DELIMITER  (lib::is_oracle_mode() ? '"' : '`')
 
 /************************* mysql mode package *************************/
@@ -394,24 +433,35 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
       OV (T_TG_SOURCE == trigger_source_node->type_, trigger_source_node->type_);
       OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
       if (OB_FAIL(ret)) {
+      } else if (trigger_info->is_dml_type()) {
+        if (lib::is_oracle_mode()) {
 #ifdef OB_BUILD_ORACLE_PL
-      } else if (lib::is_oracle_mode()) {
-        OV (5 == trigger_define_node->num_child_);
-        OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[4]));
+          OV (5 == trigger_define_node->num_child_);
+          OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[4]));
 #endif
+        } else {
+          OV (4 == trigger_define_node->num_child_);
+          OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
+        }
+        OZ (schema_guard.get_simple_table_schema(tenant_id, trigger_info->get_base_object_id(), table_schema));
+        CK (OB_NOT_NULL(table_schema));
+        OZ (schema_guard.get_database_schema(tenant_id, table_schema->get_database_id(), base_db_schema));
+        CK (OB_NOT_NULL(base_db_schema));
       } else {
         OV (4 == trigger_define_node->num_child_);
         OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
       }
-      OZ (schema_guard.get_simple_table_schema(tenant_id, trigger_info->get_base_object_id(), table_schema));
-      CK (OB_NOT_NULL(table_schema));
-      OZ (schema_guard.get_database_schema(tenant_id, table_schema->get_database_id(), base_db_schema));
-      CK (OB_NOT_NULL(base_db_schema));
-      if (OB_SUCC(ret) && trigger_info->is_compound_dml_type()) {
+      if (OB_FAIL(ret)) {
+      } else if (trigger_info->is_compound_dml_type()) {
         OZ (gen_package_source_compound(*trigger_info, base_db_schema->get_database_name_str(),
                                         table_schema->get_table_name_str(), *trigger_body_node,
                                         ObDataTypeCastParams(), spec_source, body_source,
                                         alloc, is_header ? SPEC_ONLY : BODY_ONLY));
+      } else if (trigger_info->is_system_type()) {
+        OZ (gen_package_source_system(*trigger_info, "",
+                                      "", *trigger_body_node,
+                                      ObDataTypeCastParams(), spec_source, body_source,
+                                      alloc, is_header ? SPEC_ONLY : BODY_ONLY));
       } else {
         OZ (gen_package_source_simple(*trigger_info, base_db_schema->get_database_name_str(),
                                       table_schema->get_table_name_str(), *trigger_body_node,
@@ -439,6 +489,10 @@ int ObTriggerInfo::gen_package_source(const ObString &base_object_database,
     OZ (gen_package_source_compound(*this, base_object_database, base_object_name,
                                     parse_node, dtc_params,
                                     spec_source, body_source, *get_allocator()));
+  } else if (is_system_type()) {
+    OZ (gen_package_source_system(*this, base_object_database, base_object_name,
+                                  parse_node, dtc_params,
+                                  spec_source, body_source, *get_allocator()));
   } else {
     OZ (gen_package_source_simple(*this, base_object_database, base_object_name,
                                   parse_node, dtc_params,
@@ -512,6 +566,7 @@ int ObTriggerInfo::gen_package_source_simple(const ObTriggerInfo &trigger_info,
     OV (OB_NOT_NULL(declare_node->str_value_) && declare_node->str_len_ > 0);
     OX (declare_str->assign_ptr(declare_node->str_value_,
                                 static_cast<int32_t>(declare_node->str_len_)));
+    OZ (ObTriggerResolver::resolve_has_auto_trans(*declare_node, const_cast<ObTriggerInfo &>(trigger_info)));
     OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(alloc, dtc_params, *declare_str));
     OX (LOG_DEBUG("TRIGGER", K(*declare_str)));
   }
@@ -603,6 +658,45 @@ int ObTriggerInfo::gen_package_source_compound(const ObTriggerInfo &trigger_info
   return ret;
 }
 
+int ObTriggerInfo::gen_package_source_system(const ObTriggerInfo &trigger_info,
+                                             const common::ObString &base_object_database,
+                                             const common::ObString &base_object_name,
+                                             const ParseNode &parse_node,
+                                             const common::ObDataTypeCastParams &dtc_params,
+                                             common::ObString &spec_source,
+                                             common::ObString &body_source,
+                                             common::ObIAllocator &alloc,
+                                             const PackageSouceType type)
+{
+  int ret = OB_SUCCESS;
+  OZ (gen_package_source_simple(trigger_info, base_object_database, base_object_name,
+                                parse_node, dtc_params,
+                                spec_source, body_source, alloc, type));
+
+
+  return ret;
+}
+
+int ObTriggerInfo::fill_system_trigger_body(const ObTriggerInfo &trigger_info,
+                                            const TriggerContext &trigger_ctx,
+                                            char *buf,
+                                            int64_t buf_len,
+                                            int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  bool has_auto_trans = trigger_info.is_has_auto_trans();
+  OZ (BUF_PRINTF(BODY_TRG_BODY_SYS,
+                 has_auto_trans ? 0 : (int32_t)STRLEN(AUTO_TRANS_DECALRE),
+                 has_auto_trans ? "" : AUTO_TRANS_DECALRE,
+                 trigger_ctx.before_stmt_declare_.length(),
+                 trigger_ctx.before_stmt_declare_.ptr(),
+                 trigger_ctx.before_stmt_execute_.length(),
+                 trigger_ctx.before_stmt_execute_.ptr(),
+                 has_auto_trans ? 0 : (int32_t)STRLEN(AUTO_TRANS_COMMIT),
+                 has_auto_trans ? "" : AUTO_TRANS_COMMIT));
+  return ret;
+}
+
 int ObTriggerInfo::fill_compound_declare_body(const char *body_fmt,
                                               const common::ObString &body_declare,
                                               char *buf, int64_t buf_len, int64_t &pos)
@@ -621,7 +715,16 @@ void ObTriggerInfo::calc_package_source_size(const ObTriggerInfo &trigger_info,
   bool is_ora = lib::is_oracle_mode();
   int64_t spec_params_size = 0;
   int64_t body_params_size = 0;
-  if (is_ora) {
+  bool is_sys_type = trigger_info.is_system_type();
+  if (is_sys_type) {
+    spec_params_size = trigger_info.get_trigger_name().length();
+    body_params_size = spec_params_size +
+                       trigger_info.get_when_condition().length() +
+                       trigger_info.get_trigger_body().length();
+    if (!trigger_info.is_has_auto_trans()) {
+      body_params_size += (STRLEN(AUTO_TRANS_DECALRE) + STRLEN(AUTO_TRANS_COMMIT));
+    }
+  } else if (is_ora) {
     // instead trigger before row 第二个参数属性为 "IN", 其他类型trigger的属性为"IN OUT"
     int64_t in_out_size = (trigger_info.is_instead_dml_type() 
                            || (trigger_info.is_compound_dml_type() && trigger_info.has_instead_row())) ? 2 : 6;
@@ -641,12 +744,17 @@ void ObTriggerInfo::calc_package_source_size(const ObTriggerInfo &trigger_info,
                        base_object_name.length() * 4;
     body_params_size = spec_params_size + trigger_info.get_trigger_body().length();
   }
-  spec_size = STRLEN(lib::is_oracle_mode() ? PACKAGE_SPEC_FMT : PACKAGE_SPEC_FMT_MYSQL)
-              + spec_params_size;
-  body_size = STRLEN(lib::is_oracle_mode() ? (trigger_info.is_compound_dml_type() ? PACKAGE_BODY_FMT_COMPOUND 
-                                                                                  : PACKAGE_BODY_FMT) 
-                                           : PACKAGE_BODY_FMT_MYSQL)
-              + body_params_size;
+  if (is_sys_type) {
+    spec_size = STRLEN(PACKAGE_SPEC_FMT_SYS) + spec_params_size;
+    body_size = STRLEN(PACKAGE_BODY_FMT_SYS) + body_params_size;
+  } else {
+    spec_size = STRLEN(lib::is_oracle_mode() ? PACKAGE_SPEC_FMT : PACKAGE_SPEC_FMT_MYSQL)
+                + spec_params_size;
+    body_size = STRLEN(lib::is_oracle_mode() ? (trigger_info.is_compound_dml_type() ? PACKAGE_BODY_FMT_COMPOUND
+                                                                                    : PACKAGE_BODY_FMT)
+                                            : PACKAGE_BODY_FMT_MYSQL)
+                + body_params_size;
+  }
   return;
 }
 
@@ -667,20 +775,22 @@ int ObTriggerInfo::fill_package_spec_source(const ObTriggerInfo &trigger_info,
   OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
   OZ (BUF_PRINTF(is_ora ? SPEC_BEGIN : SPEC_BEGIN_MYSQL,
                  delimiter, trigger_name.length(), trigger_name.ptr(), delimiter));
-  if (is_ora) {
-    OZ (fill_row_routine_spec(SPEC_CALC_WHEN, trigger_info,
-                              base_object_database, base_object_name,
-                              buf, buf_len, pos, false));
-    OZ (BUF_PRINTF(SPEC_BEFORE_STMT));
-  }
-  OZ (fill_row_routine_spec(is_ora ? SPEC_BEFORE_ROW : SPEC_BEFORE_ROW_MYSQL,
-                            trigger_info, base_object_database,
-                            base_object_name, buf, buf_len, pos, true));
-  OZ (fill_row_routine_spec(is_ora ? SPEC_AFTER_ROW : SPEC_AFTER_ROW_MYSQL,
-                            trigger_info, base_object_database,
-                            base_object_name, buf, buf_len, pos, false));
-  if (is_ora) {
-    OZ (BUF_PRINTF(SPEC_AFTER_STMT));
+  if (OB_SUCC(ret) && !trigger_info.is_system_type()) {
+    if (is_ora) {
+      OZ (fill_row_routine_spec(SPEC_CALC_WHEN, trigger_info,
+                                base_object_database, base_object_name,
+                                buf, buf_len, pos, false));
+      OZ (BUF_PRINTF(SPEC_BEFORE_STMT));
+    }
+    OZ (fill_row_routine_spec(is_ora ? SPEC_BEFORE_ROW : SPEC_BEFORE_ROW_MYSQL,
+                              trigger_info, base_object_database,
+                              base_object_name, buf, buf_len, pos, true));
+    OZ (fill_row_routine_spec(is_ora ? SPEC_AFTER_ROW : SPEC_AFTER_ROW_MYSQL,
+                              trigger_info, base_object_database,
+                              base_object_name, buf, buf_len, pos, false));
+    if (is_ora) {
+      OZ (BUF_PRINTF(SPEC_AFTER_STMT));
+    }
   }
   OZ (BUF_PRINTF(is_ora ? SPEC_END : SPEC_END_MYSQL));
   OX (spec_source.assign_ptr(buf, static_cast<int32_t>(pos)));
@@ -707,23 +817,31 @@ int ObTriggerInfo::fill_package_body_source(const ObTriggerInfo &trigger_info,
   OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
   OZ (BUF_PRINTF(is_ora ? BODY_BEGIN : BODY_BEGIN_MYSQL,
                  delimiter, trigger_name.length(), trigger_name.ptr(), delimiter));
-  if (is_ora) {
-    OZ (fill_when_routine_body(BODY_CALC_WHEN, trigger_info,
-                               base_object_database, base_object_name,
-                               when_condition.empty() ?
-                                WHEN_TRUE : when_condition,
-                               buf, buf_len, pos));
-    if (OB_SUCC(ret) && trigger_info.is_compound_dml_type()) {
-      OZ (fill_compound_declare_body(BODY_DECLARE_COMPOUND, trigger_ctx.compound_declare_, buf, buf_len, pos));
+  if (OB_FAIL(ret)) {
+  } else if (trigger_info.is_system_type()) {
+    OZ (BUF_PRINTF(BODY_CALC_WHEN_SYS,
+                   when_condition.empty() ? (int32_t)STRLEN(WHEN_TRUE) : when_condition.length(),
+                   when_condition.empty() ? WHEN_TRUE : when_condition.ptr()));
+    OZ (fill_system_trigger_body(trigger_info, trigger_ctx, buf, buf_len, pos));
+  } else {
+    if (is_ora) {
+      OZ (fill_when_routine_body(BODY_CALC_WHEN, trigger_info,
+                                base_object_database, base_object_name,
+                                when_condition.empty() ?
+                                  WHEN_TRUE : when_condition,
+                                buf, buf_len, pos));
+      if (OB_SUCC(ret) && trigger_info.is_compound_dml_type()) {
+        OZ (fill_compound_declare_body(BODY_DECLARE_COMPOUND, trigger_ctx.compound_declare_, buf, buf_len, pos));
+      }
+      OZ (fill_stmt_routine_body(trigger_info, trigger_ctx, buf, buf_len, pos, true));
     }
-    OZ (fill_stmt_routine_body(trigger_info, trigger_ctx, buf, buf_len, pos, true));
-  }
-  OZ (fill_row_routine_body(trigger_info, base_object_database, base_object_name,
-                            trigger_ctx, buf, buf_len, pos, true));
-  OZ (fill_row_routine_body(trigger_info, base_object_database, base_object_name,
-                            trigger_ctx, buf, buf_len, pos, false));
-  if (is_ora) {
-    OZ (fill_stmt_routine_body(trigger_info, trigger_ctx, buf, buf_len, pos, false));
+    OZ (fill_row_routine_body(trigger_info, base_object_database, base_object_name,
+                              trigger_ctx, buf, buf_len, pos, true));
+    OZ (fill_row_routine_body(trigger_info, base_object_database, base_object_name,
+                              trigger_ctx, buf, buf_len, pos, false));
+    if (is_ora) {
+      OZ (fill_stmt_routine_body(trigger_info, trigger_ctx, buf, buf_len, pos, false));
+    }
   }
   OZ (BUF_PRINTF(is_ora ? BODY_END : BODY_END_MYSQL));
   OX (body_source.assign_ptr(buf, static_cast<int32_t>(pos)));
@@ -924,7 +1042,7 @@ void ObTriggerInfo::TriggerContext::dispatch_decalare_execute(const ObTriggerInf
                                                               ObString *&simple_execute,
                                                               ObString *&tg_body)
 {
-  if (trigger_info.has_before_stmt_point()) {
+  if (trigger_info.has_before_stmt_point() || trigger_info.is_system_type()) {
     simple_declare = &before_stmt_declare_;
     simple_execute = &before_stmt_execute_;
   } else if (trigger_info.has_before_row_point()) {

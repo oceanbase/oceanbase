@@ -218,7 +218,6 @@ private:
       const ObMigrationSSTableParam &param,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
-
 };
 
 class ObStorageHACancelDagNetUtils

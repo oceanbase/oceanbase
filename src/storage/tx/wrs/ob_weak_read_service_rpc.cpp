@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX  TRANS
 
-#include "share/ob_errno.h"
 #include "ob_weak_read_service_rpc.h"
 
-#include "rpc/obrpc/ob_rpc_result_code.h"     // ObRpcResultCode
 
 namespace oceanbase
 {

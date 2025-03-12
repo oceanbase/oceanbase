@@ -39,6 +39,8 @@ int QSchedCallback::handle(TCRequest* tc_req)
   } else if (OB_ISNULL(result)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret), K(req));
+  } else if (OB_UNLIKELY(req.is_canceled())) {
+    ret = OB_CANCELED;
   } else if (OB_FAIL(req.prepare())) {
     LOG_WARN("prepare io request failed", K(ret), K(req));
   } else if (FALSE_IT(time_guard.click("prepare_req"))) {

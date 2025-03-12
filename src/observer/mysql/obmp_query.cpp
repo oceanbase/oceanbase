@@ -14,50 +14,13 @@
 
 #include "observer/mysql/obmp_query.h"
 
-#include "lib/allocator/ob_sql_mem_leak_checker.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/worker.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/profile/ob_perf_event.h"
-#include "share/ob_debug_sync.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "share/ob_resource_limit.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/packet/ompk_error.h"
-#include "rpc/obmysql/packet/ompk_resheader.h"
-#include "rpc/obmysql/packet/ompk_field.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/packet/ompk_row.h"
-#include "sql/ob_sql_context.h"
-#include "sql/ob_sql.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/resolver/cmd/ob_variable_set_stmt.h"
-#include "sql/engine/px/ob_px_admission.h"
-#include "observer/mysql/ob_mysql_result_set.h"
-#include "rpc/obmysql/obsm_struct.h"
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/mysql/ob_async_plan_driver.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_server.h"
-#include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
-#include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "sql/monitor/ob_security_audit.h"
-#include "lib/rc/context.h"
-#include "sql/monitor/ob_security_audit_utils.h"
-#include "observer/mysql/obmp_utils.h"
-#include "lib/ash/ob_active_session_guard.h"
-#include "lib/trace/ob_trace.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
@@ -91,7 +54,6 @@ int ObMPQuery::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = NULL;
-  uint32_t sessid = 0;
   bool need_response_error = true;
   bool need_disconnect = true;
   bool async_resp_used = false; // 由事务提交线程异步回复客户端
@@ -134,13 +96,11 @@ int ObMPQuery::process()
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.init_use_rich_format();
+    session.set_proxy_version(conn->is_proxy_ ? conn->proxy_version_ : 0);
     int64_t val = 0;
     const bool check_throttle = !is_root_user(sess->get_user_id());
-
-    if (check_throttle &&
-        !sess->is_inner() &&
-        sess->get_raw_audit_record().try_cnt_ == 0 &&
-        lib::Worker::WS_OUT_OF_THROTTLE == THIS_THWORKER.check_rate_limiter()) {
+    if (check_throttle && !sess->is_inner() && sess->get_raw_audit_record().try_cnt_ == 0
+               && lib::Worker::WS_OUT_OF_THROTTLE == THIS_THWORKER.check_rate_limiter()) {
       ret = OB_KILLED_BY_THROTTLING;
       LOG_WARN("query is throttled", K(ret), K(sess->get_user_id()));
       need_disconnect = false;
@@ -157,13 +117,13 @@ int ObMPQuery::process()
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
-      sessid = conn->sessid_;
       int64_t tenant_version = 0;
       int64_t sys_version = 0;
       session.set_thread_id(GETTID());
       const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
       int64_t packet_len = pkt.get_clen();
       req_->set_trace_point(ObRequest::OB_EASY_REQUEST_MPQUERY_PROCESS);
+      const bool enable_flt = session.get_control_info().is_valid();
       if (OB_UNLIKELY(!session.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid session", K_(sql), K(ret));
@@ -198,20 +158,28 @@ int ObMPQuery::process()
         need_disconnect = false;
         ret = OB_ERR_NET_PACKET_TOO_LARGE;
         LOG_WARN("packet too large than allowed for the session", K_(sql), K(ret));
-      } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
-                              conn->proxy_cap_flags_.is_full_link_trace_support()))) {
+      } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(),
+                              session,
+                              conn->proxy_cap_flags_.is_full_link_trace_support(),
+                              enable_flt))) {
         LOG_WARN("failed to update flt extra info", K(ret));
+      } else if (OB_FAIL(session.check_tenant_status())) {
+        need_disconnect = false;
+        LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()), K(sql_));
       } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
-        LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
+        LOG_WARN("fail to generate configuration strings that can influence execution plan",
+                 K(ret));
       } else {
-        FLTSpanGuard(com_query_process);
-        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
-        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
-                    receive_ts, get_receive_timestamp(),
-                    client_info, session.get_client_info(),
-                    module_name, session.get_module_name(),
-                    action_name, session.get_action_name(),
-                    sess_id, session.get_sessid());
+        FLTSpanGuardIfEnable(com_query_process, enable_flt);
+        if (enable_flt) {
+          char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+          FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
+                      receive_ts, get_receive_timestamp(),
+                      client_info, session.get_client_info(),
+                      module_name, session.get_module_name(),
+                      action_name, session.get_action_name(),
+                      sess_id, session.get_sessid());
+        }
 
         THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
         retry_ctrl_.set_tenant_global_schema_version(tenant_version);
@@ -228,7 +196,6 @@ int ObMPQuery::process()
                         session.get_sql_mode(), session.get_charsets4parser());
         //为了性能优化考虑，减少数组长度，降低无用元素的构造和析构开销
         ObSEArray<ObString, 1> queries;
-        ObSEArray<ObString, 1> ins_queries;
         ObMPParseStat parse_stat;
         if (GCONF.enable_record_trace_id) {
           PreParseResult pre_parse_result;
@@ -361,7 +328,7 @@ int ObMPQuery::process()
                                       need_disconnect);
           }
         }
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret) && enable_flt) {
           FLT_SET_TAG(err_code, ret);
         }
       }
@@ -480,6 +447,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT)
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
@@ -508,13 +476,23 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   } else {
     //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
     ObThreadLogLevelUtils::init(session.get_log_id_level_map());
+    bool is_trans_ctrl_cmd = false;
+    bool do_trans_ctrl_opt = false;
+    stmt::StmtType stmt_type = stmt::T_NONE;
+    if (ERRSIM_BEGIN_COMMIT_OPT && !multi_stmt_item.is_part_of_multi_stmt()) {
+      check_is_trans_ctrl_cmd(multi_stmt_item.get_sql(), is_trans_ctrl_cmd, stmt_type);
+      if (is_trans_ctrl_cmd && !session.associated_xa()) {
+        do_trans_ctrl_opt = true;
+      }
+    }
+
     // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
     // observer will force refresh schema if local_schema_version < last_schema_version;
-    if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
+    if (!do_trans_ctrl_opt && OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
                                          session.get_effective_tenant_id(),
                                          &session))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
-    } else if (OB_FAIL(session.update_timezone_info())) {
+    } else if (!do_trans_ctrl_opt && OB_FAIL(session.update_timezone_info())) {
       LOG_WARN("fail to update time zone info", K(ret));
     } else {
       need_response_error = false;
@@ -534,7 +512,15 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
         retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
         bool first_exec_sql = session.get_is_in_retry() ? false :
             (multi_stmt_item.is_part_of_multi_stmt() ? multi_stmt_item.get_seq_num() <= 1 : true);
-        if (OB_LIKELY(first_exec_sql)) {
+        if (do_trans_ctrl_opt) {
+          ret = do_process_trans_ctrl(session,
+                                      has_more_result,
+                                      force_sync_resp,
+                                      async_resp_used,
+                                      need_disconnect,
+                                      stmt_type);
+          ctx_.clear();
+        } else if (OB_LIKELY(first_exec_sql)) {
           ret = do_process(session,
                            has_more_result,
                            force_sync_resp,
@@ -579,7 +565,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   // 也不需要在这里设置结束时间，因为这已经相当于事务的最后一条语句了。
   // 最后，需要判断ret错误码，只有成功执行的sql才记录结束时间
   if (session.get_in_transaction() && !async_resp_used && OB_SUCC(ret)) {
-    session.set_curr_trans_last_stmt_end_time(common::ObTimeUtility::current_time());
+    session.set_curr_trans_last_stmt_end_time(ObClockGenerator::getClock());
   }
 
   // need_response_error这个变量保证仅在
@@ -680,6 +666,312 @@ OB_INLINE int ObMPQuery::get_tenant_schema_info_(const uint64_t tenant_id,
   return ret;
 }
 
+void ObMPQuery::check_is_trans_ctrl_cmd(const ObString &sql,
+                                        bool &is_trans_ctrl_cmd,
+                                        stmt::StmtType &stmt_type)
+{
+  is_trans_ctrl_cmd = false;
+  const uint32_t cmd_len = sql.length();
+  if (5 <= cmd_len && cmd_len <=8) {
+    if (cmd_len == 5) {
+      if (0 == sql.case_compare("begin")) {
+        is_trans_ctrl_cmd = true;
+        stmt_type = stmt::T_START_TRANS;
+      }
+    } else if (cmd_len == 6) {
+      if (0 == sql.case_compare("commit")) {
+        is_trans_ctrl_cmd = true;
+        stmt_type = stmt::T_END_TRANS;
+      }
+    } else if (cmd_len == 8) {
+      if (0 == sql.case_compare("rollback")) {
+        is_trans_ctrl_cmd = true;
+        stmt_type = stmt::T_END_TRANS;
+      }
+    }
+  }
+  LOG_DEBUG("check is trans ctrl cmd ", K(sql), K(is_trans_ctrl_cmd), K(stmt_type));
+}
+
+OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
+                                               bool has_more_result,
+                                               bool force_sync_resp,
+                                               bool &async_resp_used,
+                                               bool &need_disconnect,
+                                               stmt::StmtType stmt_type)
+{
+  int ret = OB_SUCCESS;
+  ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
+  audit_record.try_cnt_++;
+  bool is_diagnostics_stmt = false;
+  bool need_response_error = true;
+  const ObString &sql = ctx_.multi_stmt_item_.get_sql();
+  const bool enable_perf_event = lib::is_diagnose_info_enabled();
+  const bool enable_sql_audit =
+    GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
+  single_process_timestamp_ = ObTimeUtility::current_time();
+  /* !!!
+   * 注意req_timeinfo_guard一定要放在result前面
+   * !!!
+   */
+  ObReqTimeGuard req_timeinfo_guard;
+  ObTenantCachedSchemaGuardInfo &cached_schema_info = session.get_cached_schema_guard_info();
+  int64_t tenant_version = 0;
+  int64_t sys_version = 0;
+  SQL_INFO_GUARD(sql, session.get_cur_sql_id());
+  need_disconnect = false;
+
+  if (OB_FAIL(update_transmission_checksum_flag(session))) {
+    LOG_WARN("update transmisson checksum flag failed", K(ret));
+  } else {
+    session.reset_plsql_exec_time();
+    session.set_stmt_type(stmt_type);
+  }
+
+  ObWaitEventStat total_wait_desc;
+  if (OB_SUCC(ret)) {
+    ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_start();
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_start_value();
+      sqlstat_record.set_is_in_retry(false);
+      session.sql_sess_record_sql_stat_start_value(sqlstat_record);
+    }
+    ctx_.enable_sql_resource_manage_ = true;
+    if (OB_FAIL(set_session_active(sql, session, single_process_timestamp_))) {
+      LOG_WARN("fail to set session active", K(ret));
+    } else {
+      // generate sql_id with sql cmd
+      (void)ObSQLUtils::md5(sql, ctx_.sql_id_, (int32_t)sizeof(ctx_.sql_id_));
+      session.set_cur_sql_id(ctx_.sql_id_);
+
+      //监控项统计开始
+      exec_start_timestamp_ = ObTimeUtility::current_time();
+      need_response_error = false;
+      is_diagnostics_stmt = false;
+      ctx_.is_show_trace_stmt_ = false;
+
+      // exec cmd
+      FLTSpanGuard(sql_execute);
+      bool is_rollback = (0 == sql.case_compare("rollback"));
+      if (OB_FAIL(process_trans_ctrl_cmd(session,
+                                         need_disconnect,
+                                         async_resp_used,
+                                         is_rollback,
+                                         force_sync_resp,
+                                         stmt_type))) {
+        need_response_error = true;
+        LOG_WARN("fail to execute trans ctrl cmd", KR(ret), K(sql));
+      }
+
+      // 如果没有异步提交，且执行成功，则发送ok包给客户端
+      if (!async_resp_used && OB_SUCC(ret)) {
+        ObOKPParam ok_param;
+        ok_param.affected_rows_ = 0;
+        ok_param.is_partition_hit_ = session.partition_hit().get_bool();
+        ok_param.has_more_result_ = has_more_result;
+        if (OB_FAIL(send_ok_packet(session, ok_param))) {
+          LOG_WARN("fail to send ok packt", KR(ret), K(ok_param));
+        }
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_INFO("query info:", K(sql_),
+               "sess_id", session.get_sessid(),
+               "database_id", session.get_database_id(),
+               "database_name", session.get_database_name(),
+               "trans_id", audit_record.trans_id_);
+    }
+
+    //监控项统计结束
+    exec_end_timestamp_ = ObTimeUtility::current_time();
+
+    // some statistics must be recorded for plan stat, even though sql audit disabled
+    bool first_record = (1 == audit_record.try_cnt_);
+    ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+    audit_record.exec_timestamp_.update_stage_time();
+
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_end();
+      record_stat(stmt_type, exec_end_timestamp_, session, ret);
+      audit_record.stmt_type_ = stmt_type;
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_rows_processed(0);
+      sqlstat_record.set_partition_cnt(0);
+      sqlstat_record.set_is_route_miss(session.partition_hit().get_bool()? 0 : 1);
+      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+    }
+
+    // store the warning message from the most recent statement in the current session
+    if ((OB_SUCC(ret) && is_diagnostics_stmt) || async_resp_used) {
+      // If diagnostic stmt execute successfully, it dosen't clear the warning message.
+      // Or if it response to client asynchronously, it doesn't clear the warning message here,
+      // but will do it in the callback thread.
+      session.update_show_warnings_buf();
+    } else {
+      session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
+    }
+
+    if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid()) {
+      LOG_WARN("query failed", K(ret), K(session), K(sql));
+      // 这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
+      // 则需要在下面回复一个error_packet作为收尾。
+      // 否则后面没人帮忙发错误包给客户端了，可能会导致客户端挂起等回包。
+      bool is_partition_hit = session.get_err_final_partition_hit(ret);
+      int err = send_error_packet(ret, NULL, is_partition_hit, (void *)ctx_.get_reroute_info());
+      if (OB_SUCCESS != err) {  // 发送error包
+        LOG_WARN("send error packet failed", K(ret), K(err));
+      }
+    }
+  }
+
+  audit_record.status_ = (0 == ret || OB_ITER_END == ret)
+      ? REQUEST_SUCC : (ret);
+  if (enable_sql_audit) {
+    audit_record.seq_ = 0;  //don't use now
+    audit_record.execution_id_ = session.get_current_execution_id();
+    audit_record.client_addr_ = session.get_peer_addr();
+    audit_record.user_client_addr_ = session.get_user_client_addr();
+    audit_record.user_group_ = THIS_WORKER.get_group_id();
+    MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+    MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
+    audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+
+    if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
+      // normally trans_id is set in the `start-stmt` phase,
+      // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
+      audit_record.trans_id_ = session.get_tx_id();
+    }
+    // for begin/commit/rollback, the following values are 0
+    audit_record.affected_rows_ = 0;
+    audit_record.return_rows_ = 0;
+    audit_record.partition_cnt_ = 0;
+    audit_record.expected_worker_cnt_ = 0;
+    audit_record.used_worker_cnt_ = 0;
+
+    audit_record.is_executor_rpc_ = false;
+    audit_record.is_inner_sql_ = false;
+    audit_record.is_hit_plan_cache_ = false;
+    audit_record.is_multi_stmt_ = session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
+    audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
+    if (audit_record.params_value_ == nullptr) {
+      audit_record.params_value_ = params_value_;
+      audit_record.params_value_len_ = params_value_len_;
+    }
+    audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+    audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+  }
+  // reset thread waring buffer in sync mode
+  if (!async_resp_used) {
+    clear_wb_content(session);
+  }
+
+  need_disconnect = (need_disconnect && !is_query_killed_return(ret));//明确是kill query时，不应该断连接
+  if (need_disconnect) {
+    LOG_WARN("need disconnect", K(ret), K(need_disconnect));
+  }
+  bool is_need_retry = false;
+  (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session, ctx_.is_sensitive_);
+
+  return ret;
+}
+
+int ObMPQuery::process_trans_ctrl_cmd(ObSQLSessionInfo &session,
+                                      bool &need_disconnect,
+                                      bool &async_resp_used,
+                                      const bool is_rollback,
+                                      const bool force_sync_resp,
+                                      stmt::StmtType stmt_type)
+{
+  int ret = OB_SUCCESS;
+  if (stmt_type == stmt::T_START_TRANS) {
+    bool read_only = session.get_tx_read_only();
+    transaction::ObTxParam tx_param;
+    TransState trans_state;
+    // stmt is T_START_TRANS and not xa cmd, try to end trans before start trans
+    if (OB_FAIL(ObSqlTransControl::end_trans_before_cmd_execute(session,
+                                                                need_disconnect,
+                                                                trans_state,
+                                                                stmt_type))) {
+      LOG_WARN("end trans before start fail", KR(ret), K(need_disconnect), K(read_only));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObSqlTransControl::explicit_start_trans(&session,
+                                                                        tx_param,
+                                                                        need_disconnect,
+                                                                        read_only))) {
+      LOG_WARN("explicit start trans fail", KR(ret), K(need_disconnect), K(read_only));
+    }
+  } else if (stmt_type == stmt::T_END_TRANS) {
+    bool is_async_end_trans = false;
+    bool need_end_trans_callback = false;
+    ObEndTransAsyncCallback *callback = nullptr;
+    TransState trans_state;
+    ObEndTransCbPacketParam pkt_param;
+
+    if (session.get_has_temp_table_flag() || session.has_tx_level_temp_table()) {
+      // temporary table will be committed synchronously, and then drop_temp_tables will be called to delete the data.
+      need_end_trans_callback = false;
+    } else {
+      need_end_trans_callback = true;
+    }
+
+#ifndef OB_BUILD_SPM
+    bool need_trans_cb  = need_end_trans_callback && (!force_sync_resp);
+#else
+    bool need_trans_cb  = need_end_trans_callback &&
+                          (!force_sync_resp) &&
+                          (!ctx_.spm_ctx_.check_execute_status_);
+#endif
+    if (need_trans_cb) {
+      is_async_end_trans = true;
+      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
+      ObCurTraceId::TraceId *cur_trace_id = NULL;
+      if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("current trace id is NULL", K(ret));
+      } else if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) {
+        LOG_WARN("failed to init sql end callback", K(ret));
+      } else if (OB_FAIL(sql_end_cb.set_packet_param(pkt_param.fill("\0", // message
+                                                                    0,  // affected_rows
+                                                                    0,  // last_insert_id_to_client
+                                                                    session.partition_hit().get_bool(),
+                                                                    *cur_trace_id)))) {
+        LOG_WARN("fail to set packet param", K(ret));
+      } else {
+        callback = &session.get_end_trans_cb();
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(ObSqlTransControl::end_trans(&session,
+                                                    need_disconnect,
+                                                    trans_state,
+                                                    is_rollback,
+                                                    true, // is_explicit
+                                                    callback))) {
+      LOG_WARN("explicit end trans fail", K(ret));
+    }
+    if (trans_state.is_end_trans_executed() && trans_state.is_end_trans_success()) {
+      async_resp_used = true;
+    }
+  }
+  return ret;
+}
+
 OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
                                     bool has_more_result,
                                     bool force_sync_resp,
@@ -709,9 +1001,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
   SQL_INFO_GUARD(sql, session.get_cur_sql_id());
-  ObSqlFatalErrExtraInfoGuard extra_info_guard;
-  extra_info_guard.set_cur_sql(sql);
-  extra_info_guard.set_tenant_id(session.get_effective_tenant_id());
   ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator();
   SMART_VAR(ObMySQLResultSet, result, session, allocator) {
     if (OB_FAIL(get_tenant_schema_info_(session.get_effective_tenant_id(),
@@ -736,7 +1025,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       ctx_.schema_guard_ = schema_guard;
       retry_ctrl_.set_tenant_local_schema_version(tenant_version);
       retry_ctrl_.set_sys_local_schema_version(sys_version);
-      extra_info_guard.set_exec_context(&(result.get_exec_context()));
     }
 
     ObWaitEventStat total_wait_desc;
@@ -770,7 +1058,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         LOG_WARN("fail to set session active", K(ret));
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx_, result))) {
         exec_start_timestamp_ = ObTimeUtility::current_time();
-        session.reset_plsql_exec_time();
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
           retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
@@ -802,7 +1089,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       } else {
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
-        session.reset_plsql_exec_time();
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
@@ -810,7 +1096,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
         ctx_.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
         plan = result.get_physical_plan();
-        extra_info_guard.set_cur_plan(plan);
 
         if (get_is_com_filed_list()) {
           result.set_is_com_filed_list();

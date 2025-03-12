@@ -8,12 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
-#include "storage/ls/ob_ls_storage_clog_handler.h"
-#include "storage/tx_storage/ob_ls_handle.h"
+#include "ob_ls_storage_clog_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/ob_log_base_type.h"
-#include "logservice/ob_log_base_header.h"
-#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

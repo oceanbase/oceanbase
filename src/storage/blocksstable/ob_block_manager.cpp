@@ -12,31 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE_BLKMGR
 
-#include "storage/blocksstable/ob_block_manager.h"
-#include "common/storage/ob_io_device.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/worker.h"
-#include "observer/ob_server_struct.h"
+#include "ob_block_manager.h"
 #include "observer/ob_server_utils.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_io_device_helper.h"
-#include "share/ob_unit_getter.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/ob_super_block_struct.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
-#include "lib/worker.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
 
 using namespace oceanbase::common;
@@ -162,10 +145,10 @@ int ObBlockManager::init(ObIODevice *io_device, const int64_t block_size) {
                          ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, ", K(ret), KP(io_device), K(block_size));
+  } else if (OB_FAIL(timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
+    LOG_WARN("fail to set_run_wrapper for timer", K(ret));
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
-  } else if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
-    LOG_WARN("fail to set_run_wrapper for timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT,
                                        ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
@@ -552,22 +535,6 @@ int ObBlockManager::get_macro_block_info(
     }
   }
 
-  return ret;
-}
-
-int ObBlockManager::get_all_macro_ids(ObArray<MacroBlockId> &ids_array) {
-  int ret = OB_SUCCESS;
-  ids_array.reset();
-  ObBlockManager::GetAllMacroBlockIdFunctor getter(ids_array);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ids_array.reserve(block_map_.count()))) {
-    LOG_WARN("fail to reserver macro id array", K(ret), "block count",
-             block_map_.count());
-  } else if (OB_FAIL(block_map_.for_each(getter))) {
-    LOG_WARN("fail to for each block map", K(ret));
-  }
   return ret;
 }
 

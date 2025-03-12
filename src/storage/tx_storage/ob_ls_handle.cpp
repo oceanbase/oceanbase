@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tx_storage/ob_ls_handle.h"
 
-#include "share/rc/ob_tenant_base.h"
+#include "ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase

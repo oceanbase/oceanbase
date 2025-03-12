@@ -103,14 +103,18 @@ public:
   }
 
   static int gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
+                              ObIArray<ObExprConstraint> &constraints,
                               ObIArray<ObRawExpr *> &rollup_exprs,
                               ObIArray<ObRawExpr *> &gby_exprs,
                               ObIArray<DupRawExprPair> &dup_expr_pairs);
 
   static int dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
+                                                ObIArray<ObExprConstraint> &constraints,
                                                 const ObIArray<ObRawExpr *> &rollup_exprs,
                                                 const ObIArray<ObAggFunRawExpr *> &aggr_items,
                                                 ObIArray<DupRawExprPair> &dup_expr_pairs);
+
+  static int unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprConstraint> &constraints);
   TO_STRING_KV(K_(expand_exprs));
 
 private:

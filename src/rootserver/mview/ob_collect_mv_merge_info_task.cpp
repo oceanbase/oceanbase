@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
-#include "lib/ob_define.h"
-#include "observer/ob_server.h"
-#include "observer/ob_server_struct.h"
 #include "src/storage/high_availability/ob_storage_ha_src_provider.h"
 #include "share/ob_global_stat_proxy.h"
 

@@ -11,7 +11,7 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/direct_load/ob_direct_load_multiple_sstable.h"
+#include "ob_direct_load_multiple_sstable.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_block_meta_scanner.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_rowkey_scanner.h"
@@ -150,6 +150,7 @@ ObDirectLoadMultipleSSTable::ObDirectLoadMultipleSSTable()
 {
   allocator_.set_tenant_id(MTL_ID());
   fragments_.set_tenant_id(MTL_ID());
+  table_type_ = ObDirectLoadTableType::MULTIPLE_SSTABLE;
 }
 
 ObDirectLoadMultipleSSTable::~ObDirectLoadMultipleSSTable()
@@ -199,11 +200,6 @@ int ObDirectLoadMultipleSSTable::init(const ObDirectLoadMultipleSSTableCreatePar
     }
   }
   return ret;
-}
-
-void ObDirectLoadMultipleSSTable::release_data()
-{
-  fragments_.reset();
 }
 
 int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)

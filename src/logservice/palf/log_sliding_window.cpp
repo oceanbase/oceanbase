@@ -12,22 +12,9 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_sliding_window.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/queue/ob_link_queue.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "share/ob_define.h"
-#include "palf_callback_wrapper.h"
-#include "log_writer_utils.h"
-#include "log_entry_header.h"
-#include "log_group_entry_header.h"
-#include "log_entry_header.h"
 #include "log_engine.h"
 #include "log_io_task_cb_utils.h"
 #include "log_config_mgr.h"
-#include "log_state_mgr.h"
 #include "log_mode_mgr.h"
 namespace oceanbase
 {

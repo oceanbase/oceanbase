@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "lib/trace/ob_trace_event.h"
-#include "share/rc/ob_tenant_base.h"    // MTL_ID
-#include "share/scn.h"//SCN
-#include "share/ob_all_server_tracer.h"       // ObAllServerTracer
 #include "share/ob_global_stat_proxy.h"
-#include "observer/ob_server_struct.h"          // GCTX
 #include "rootserver/ob_tenant_info_loader.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "storage/tx/ob_ts_mgr.h" // OB_TS_MGR
 

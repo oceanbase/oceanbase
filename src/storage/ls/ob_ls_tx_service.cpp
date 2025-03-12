@@ -10,24 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #define USING_LOG_PREFIX TRANS
 
 #include "ob_ls_tx_service.h"
 #include "share/throttle/ob_throttle_unit.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tablelock/ob_table_lock_common.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_tx_replay_executor.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_tx_retain_ctx_mgr.h"
-#include "logservice/ob_log_base_header.h"
-#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_tx_leak_checker.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -351,7 +341,6 @@ int ObLSTxService::check_all_readonly_tx_clean_up() const
   } else if ((active_readonly_request_count = mgr_->get_total_active_readonly_request_count()) > 0) {
     if (REACH_TIME_INTERVAL(5000000)) {
       TRANS_LOG(INFO, "readonly requests are active", K(active_readonly_request_count));
-      mgr_->dump_readonly_request(3);
       READ_CHECKER_PRINT(ls_id_);
     }
     ret = OB_EAGAIN;

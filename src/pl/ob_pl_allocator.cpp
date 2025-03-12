@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "ob_pl_allocator.h"
-#include "ob_pl_package_state.h"
+#include "src/pl/ob_pl_allocator.h"
 
 namespace oceanbase
 {

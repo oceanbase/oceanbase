@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_recover_table_job_scheduler.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "rootserver/standby/ob_standby_service.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/restore/ob_physical_restore_table_operator.h"
 #include "share/restore/ob_import_util.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "observer/ob_inner_sql_connection.h"
@@ -630,7 +626,8 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
         "initiator_job_id", job.get_job_id(), "initiator_tenant_id", job.get_tenant_id());
   } else if (OB_FAIL(ban_multi_version_recycling_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to ban multi version cecycling", K(ret));
-  } else if (OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
+  } else if (restore_history_info.get_restore_type().is_full_restore()
+    && OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to failover to primary", K(ret), K(restore_history_info));
   }
   if (OB_FAIL(ret)) {

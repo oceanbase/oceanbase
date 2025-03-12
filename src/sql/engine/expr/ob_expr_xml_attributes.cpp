@@ -15,7 +15,7 @@
 #include "ob_expr_xml_attributes.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // may need json for kv pairs
-#include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "deps/oblib/src/lib/xml/ob_xml_parser.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 

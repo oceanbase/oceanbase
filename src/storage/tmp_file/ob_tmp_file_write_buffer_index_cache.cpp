@@ -14,8 +14,6 @@
 
 #include "storage/tmp_file/ob_tmp_file_write_buffer_index_cache.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
-#include "storage/tmp_file/ob_tmp_file_global.h"
-#include "share/ob_errno.h"
 #include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase

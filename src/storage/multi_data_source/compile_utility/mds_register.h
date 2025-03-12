@@ -80,6 +80,8 @@
   #include "src/share/ob_standby_upgrade.h"
   #include "src/storage/mview/ob_major_mv_merge_info.h"
   #include "src/storage/truncate_info/ob_truncate_info.h"
+  #include "src/storage/mview/ob_mview_mds.h"
+  #include "src/storage/tablet/ob_tablet_ddl_complete_mds_data.h"
 #endif
 /**************************************************************************************************/
 
@@ -164,10 +166,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObTransferDestPrepareTxCtx,\
                                           28,\
                                           TRANSFER_DEST_PREPARE)
-  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletUnbindLobMdsHelper,\
-  //                                         ::oceanbase::storage::mds::MdsCtx,\
-  //                                         29,\
-  //                                         UNBIND_LOB_TABLET)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletUnbindLobMdsHelper,\
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          29,\
+                                          UNBIND_LOB_TABLET)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObChangeTabletToTableHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           30,\
@@ -208,10 +210,14 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObUnUseCtx, \
                                           39,\
                                           MV_MERGE_SCN)
-  //GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObMViewMdsOpHelper,\
-  //                                        ::oceanbase::storage::ObMViewMdsOpCtx, \
-  //                                        40,\
-  //                                        MVIEW_MDS_OP)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObMViewMdsOpHelper,\
+                                          ::oceanbase::storage::ObMViewMdsOpCtx, \
+                                          40,\
+                                          MVIEW_MDS_OP)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDDLCompleteMdsHelper,\
+  //                                         ::oceanbase::storage::mds::MdsCtx,\
+  //                                         41,\
+  //                                         DDL_COMPLETE_MDS)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
@@ -282,6 +288,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
                     false)
   GENERATE_MDS_UNIT(::oceanbase::storage::ObTruncateInfoKey,\
                     ::oceanbase::storage::ObTruncateInfo,\
+                    false)
+  GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+                    ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
                     false)
   // # 余留位置（此行之前占位）
 #endif

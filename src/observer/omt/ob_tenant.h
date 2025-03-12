@@ -400,7 +400,7 @@ public:
   void start() { ATOMIC_STORE(&stopped_, 0); }
   int try_wait();
   void destroy();
-  bool has_stopped() const { return ATOMIC_LOAD(&stopped_) != 0; }
+  bool has_stopped() const { return stopped_ != 0; }
 
   ObTenantMeta get_tenant_meta();
   bool is_hidden();
@@ -460,7 +460,6 @@ public:
                K_(recv_task_cnt),
                K_(recv_large_req_cnt),
                K_(tt_large_quries),
-               K_(pop_normal_cnt),
                "workers", workers_.get_size(),
                "nesting workers", nesting_workers_.get_size(),
                K_(req_queue),
@@ -586,7 +585,6 @@ protected:
   volatile uint64_t recv_retry_on_lock_rpc_cnt_;
   volatile uint64_t recv_retry_on_lock_mysql_cnt_;
   volatile uint64_t tt_large_quries_;
-  volatile uint64_t pop_normal_cnt_;
 
 private:
   GroupMap group_map_;

@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/ddl_task/ob_vec_index_build_task.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ob_index_builder.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_vec_index_builder_util.h"
 

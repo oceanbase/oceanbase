@@ -97,6 +97,18 @@ public:
       const share::schema::ObTableSchema &data_table_schema,
       ObMySQLTransaction &trans);
 
+  static int lock_for_online_drop_column_in_trans(
+      const share::schema::ObTableSchema &table_schema,
+      ObMySQLTransaction &trans);
+  static int lock_for_drop_lob(
+      const share::schema::ObTableSchema &data_table_schema,
+      const transaction::tablelock::ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+  static int unlock_for_drop_lob(
+      const share::schema::ObTableSchema &data_table_schema,
+      const transaction::tablelock::ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+
   static int lock_for_add_partition_in_trans(
       const share::schema::ObTableSchema &table_schema,
       ObMySQLTransaction &trans);

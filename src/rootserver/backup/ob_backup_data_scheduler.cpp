@@ -16,16 +16,9 @@
 #include "ob_backup_data_ls_task_mgr.h"
 #include "ob_backup_data_set_task_mgr.h"
 #include "ob_backup_task_scheduler.h"
-#include "ob_backup_service.h"
-#include "ob_backup_schedule_task.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "rootserver/ob_root_utils.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_backup_helper.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/ob_tenant_info_proxy.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/restore/ob_restore_util.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/schema/ob_mview_info.h"
@@ -1634,7 +1627,9 @@ int ObUserTenantBackupJobMgr::select_mview_for_update_(const uint64_t tenant_id)
         LOG_INFO("major_refresh_mv_merge_scn has not been set", K(tenant_id));
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id));
+        LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id), K(OB_EAGAIN));
+        // convert ret for backup retry
+        ret = OB_EAGAIN;
       }
     } else if (OB_UNLIKELY(!major_refresh_mv_merge_scn.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

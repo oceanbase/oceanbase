@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/object/ob_obj_compare.h"
-#include "lib/timezone/ob_time_convert.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase

@@ -11,7 +11,6 @@
  */
 
 #include "ob_stat_template.h"
-#include "lib/atomic/ob_atomic.h"
 
 namespace oceanbase
 {

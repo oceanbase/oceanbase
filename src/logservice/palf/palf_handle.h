@@ -259,6 +259,16 @@ public:
                          const int64_t timeout_us);
   // @brief: force set self as single member
   int force_set_as_single_replica();
+  // @brief: force set member list.
+  // @param[in] const common::ObMemberList &new_member_list: members which will be added
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after forcing to set member list
+  // @return
+  // - OB_SUCCESS: force_set_member_list successfully
+  // - OB_TIMEOUT: force_set_member_list timeout
+  // - OB_NOT_RUNNING: log stream is stopped
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - other: bug
+  int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
 
   int get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                          common::GlobalLearnerList &degraded_list) const;

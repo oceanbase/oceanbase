@@ -87,11 +87,31 @@ public:
   bool using_ipv4() const { return IPV4 == version_; }
   bool using_ipv6() const { return IPV6 == version_; }
   bool using_unix() const { return UNIX == version_; }
-  int64_t to_string(char *buffer, const int64_t size) const;
-  bool ip_to_string(char *buffer, const int32_t size) const;
-  int ip_port_to_string(char *buffer, const int32_t size) const;
-  int addr_to_buffer(char *buffer, const int32_t size, int32_t &ret_len) const;
   int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;
+
+  template<size_t N>
+  int64_t to_string(char (&buffer)[N], const int64_t size) const;
+  template <typename T, typename DUMP_T=
+            typename std::enable_if<std::is_convertible<T, char*>::value>::type>
+  int64_t to_string(T buffer, const int64_t size) const;
+
+  template<size_t N>
+  int ip_to_string(char (&buffer)[N], const int32_t size) const;
+  template <typename T, typename DUMP_T=
+            typename std::enable_if<std::is_convertible<T, char*>::value>::type>
+  bool ip_to_string(T buffer, const int32_t size) const;
+
+  template<size_t N>
+  int ip_port_to_string(char (&buffer)[N], const int32_t size) const;
+  template <typename T, typename DUMP_T=
+            typename std::enable_if<std::is_convertible<T, char*>::value>::type>
+  int ip_port_to_string(T buffer, const int32_t size) const;
+
+  template<size_t N>
+  int addr_to_buffer(char (&buffer)[N], const int32_t size, int32_t &ret_len) const;
+  template <typename T, typename DUMP_T=
+            typename std::enable_if<std::is_convertible<T, char*>::value>::type>
+  int addr_to_buffer(T buffer, const int32_t size, int32_t &ret_len) const;
 
   bool set_ip_addr(const char *ip, const int32_t port);
   bool set_ip_addr(const ObString &ip, const int32_t port);
@@ -145,6 +165,10 @@ private:
   int convert_ipv6_addr(const char *ip);
   bool set_ipv4_addr(const char *ip, const int32_t port);
   bool set_ipv6_addr(const char *ip, const int32_t port);
+  int64_t inner_to_string(char *buffer, const int64_t size) const;
+  bool inner_ip_to_string(char *buffer, const int32_t size) const;
+  int inner_ip_port_to_string(char *buffer, const int32_t size) const;
+  int inner_addr_to_buffer(char *buffer, const int32_t size, int32_t &ret_len) const;
 
 private:
   VER version_;
@@ -262,6 +286,62 @@ inline int ObAddr::compare(const ObAddr &rv) const
   }
 
   return compare_ret;
+}
+
+template<size_t N>
+int64_t ObAddr::to_string(char (&buffer)[N], const int64_t size) const
+{
+  STATIC_ASSERT(N >= MAX_IP_PORT_LENGTH,
+                "buffer size is not enough for an ip string");
+  return inner_to_string(buffer, size);
+}
+
+template<size_t N>
+int ObAddr::ip_to_string(char (&buffer)[N], const int32_t size) const
+{
+  STATIC_ASSERT(N >= MAX_IP_ADDR_LENGTH,
+                "buffer size is not enough for an ip string");
+  return inner_ip_to_string(buffer, size);
+}
+
+template<size_t N>
+int ObAddr::addr_to_buffer(char (&buffer)[N], const int32_t size, int32_t &ret_len) const
+{
+  STATIC_ASSERT(N >= MAX_IP_PORT_LENGTH,
+                "buffer size is not enough for an ip string");
+  return inner_addr_to_buffer(buffer, size, ret_len);
+}
+
+template<size_t N>
+int ObAddr::ip_port_to_string(char (&buffer)[N], const int32_t size) const
+{
+  STATIC_ASSERT(N >= MAX_IP_PORT_LENGTH,
+                "buffer size is not enough for an ip string");
+  return inner_ip_port_to_string(buffer, size);
+}
+
+template <typename T, typename DUMP_T>
+int64_t ObAddr::to_string(T buffer, const int64_t size) const
+{
+  return inner_to_string(buffer, size);
+}
+
+template <typename T, typename DUMP_T>
+bool ObAddr::ip_to_string(T buffer, const int32_t size) const
+{
+  return inner_ip_to_string(buffer, size);
+}
+
+template <typename T, typename DUMP_T>
+int ObAddr::ip_port_to_string(T buffer, const int32_t size) const
+{
+  return inner_ip_port_to_string(buffer, size);
+}
+
+template <typename T, typename DUMP_T>
+int ObAddr::addr_to_buffer(T buffer, const int32_t size, int32_t &ret_len) const
+{
+  return inner_addr_to_buffer(buffer, size, ret_len);
 }
 
 //for ofs proxy service,server addr and seq present a life cycle for one server

@@ -15,7 +15,6 @@
 #include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_schema.h"

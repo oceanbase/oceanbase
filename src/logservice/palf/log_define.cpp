@@ -11,8 +11,6 @@
  */
 
 #include "log_define.h"
-#include "lib/list/ob_dlist.h"
-#include "share/ob_errno.h"
 #include "log_block_pool_interface.h"
 
 namespace oceanbase

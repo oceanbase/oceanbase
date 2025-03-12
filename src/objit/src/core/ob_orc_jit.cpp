@@ -10,43 +10,16 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_CG
+#define USING_LOG_PREFIX PL
 #include "core/ob_orc_jit.h"
-
-#include <iostream>
-#include <algorithm>
-#include <memory>
-#include <string>
-#include <vector>
-#include <map>
-#include <cassert>
-
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_os_ostream.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/RuntimeDyld.h"
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/IR/DataLayout.h"
-#include "llvm/IR/Mangler.h"
-#include "llvm/IR/Verifier.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/AsmParser/Parser.h"
-#include "llvm/Bitcode/BitcodeWriter.h"
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
-#include "llvm/Object/ELFObjectFile.h"
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
 
 #ifdef CPP_STANDARD_20
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #else
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #endif
+#include "core/ob_pl_ir_compiler.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -91,6 +64,17 @@ int ObOrcJit::init()
       ObjLinkingLayer->registerJITEventListener(NotifyLoaded);
       return ObjLinkingLayer;
     });
+
+    ObEngineBuilder.setCompileFunctionCreator(
+      [this] (JITTargetMachineBuilder JTMB)
+          -> Expected<std::unique_ptr<IRCompileLayer::IRCompiler>> {
+        auto tm = JTMB.createTargetMachine();
+        if (!tm) {
+          return tm.takeError();
+        }
+        return std::make_unique<ObPLIRCompiler>(*this, std::move(*tm));
+      }
+    );
 
     auto tm_builder_wrapper = JITTargetMachineBuilder::detectHost();
 

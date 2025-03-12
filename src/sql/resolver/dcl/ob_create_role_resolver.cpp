@@ -14,9 +14,7 @@
 #include "sql/resolver/dcl/ob_create_role_resolver.h"
 #include "sql/resolver/dcl/ob_create_role_stmt.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_service.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

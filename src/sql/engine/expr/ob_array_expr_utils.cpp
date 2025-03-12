@@ -14,9 +14,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_array_cast.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_array_cast.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_minus.h"
 
 
 using namespace oceanbase::common;
@@ -673,7 +674,7 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObStrin
   return ret;
 }
 
-int ObVectorFloatArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const
+int ObVectorElemArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const
 {
   UNUSED(type);
   int ret = OB_SUCCESS;
@@ -709,18 +710,41 @@ int ObVectorFloatArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObD
      LOG_WARN("array type is null", K(ret), K(subschema_id));
   } else if (OB_FAIL(ObArrayTypeObjFactory::construct(tmp_allocator, *arr_type, arr_res))) {
     LOG_WARN("construct array obj failed", K(ret), K(subschema_id), K(coll_info));
+  } else if (arr_type->element_type_->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported vector element type", K(ret), K(arr_type->element_type_->type_id_));
   } else {
-    const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
-    const uint32_t size = arr_l->size();
-    ObVectorData *float_array = static_cast<ObVectorData *>(arr_res);
-    for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-      const float float_res = data_l[i] / data_r; // only support div now
-      if (isinff(float_res) != 0) {
-        ret = OB_OPERATE_OVERFLOW;
-        LOG_WARN("value overflow", K(ret), K(i), K(data_l[i]), K(data_r));
-      } else if (OB_FAIL(float_array->push_back(float_res))) {
-        LOG_WARN("failed to push back value", K(ret), K(float_res));
+    ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
+    ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
+    if (obj_type == ObFloatType) {
+      const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
+      const uint32_t size = arr_l->size();
+      ObVectorF32Data *float_array = static_cast<ObVectorF32Data *>(arr_res);
+      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+        const float float_res = data_l[i] / data_r; // only support div now
+        if (isinff(float_res) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("value overflow", K(ret), K(i), K(data_l[i]), K(data_r));
+        } else if (OB_FAIL(float_array->push_back(float_res))) {
+          LOG_WARN("failed to push back value", K(ret), K(float_res));
+        }
       }
+    } else if (obj_type == ObUTinyIntType) {
+      const uint8_t *data_l = reinterpret_cast<const uint8_t*>(arr_l->get_data());
+      const uint32_t size = arr_l->size();
+      ObVectorU8Data *uint8_array = static_cast<ObVectorU8Data *>(arr_res);
+      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+        const uint8_t uint8_res = data_l[i] / data_r; // only support div now
+        if (isinff(uint8_res) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("value overflow", K(ret), K(i), K(data_l[i]), K(data_r));
+        } else if (OB_FAIL(uint8_array->push_back(uint8_res))) {
+          LOG_WARN("failed to push back value", K(ret), K(uint8_res));
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported vector element type", K(ret), K(obj_type), K(subschema_id), K(coll_info));
     }
     ObString res_str;
     if (OB_FAIL(ret)) {
@@ -1323,7 +1347,6 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
     } else if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       if (type2.get_type() != static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
         ObObjMeta calc_meta = type2.get_obj_meta();
-        // ObObjType calc_type = type2.get_type();
         if (type2.get_type() == ObDecimalIntType || type2.get_type() == ObNumberType || type2.get_type() == ObUNumberType) {
           calc_meta.set_type(ObDoubleType);
           if (get_decimalint_type(type2.get_precision()) == DECIMAL_INT_32) {
@@ -1458,29 +1481,310 @@ int ObNestedVectorFunc::construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, co
   return ret;
 }
 
-int ObArrayExprUtils::get_basic_elem_obj(ObIArrayType *src, ObCollectionTypeBase *elem_type, uint32_t idx, ObObj &elem_obj, bool &is_null)
+int ObArrayExprUtils::get_basic_elem(ObIArrayType *src, uint32_t idx, ObObj &elem_obj, bool &is_null)
 {
   int ret = OB_SUCCESS;
-  is_null = false;
-  if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-    const ObCollectionBasicType *basic_type = static_cast<const ObCollectionBasicType *>(elem_type);
-    if (src->get_format() != ArrayFormat::Vector && src->is_null(idx)) {
-      is_null = true;
-    } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, basic_type, idx, elem_obj))) {
-      LOG_WARN("failed to cast get element", K(ret));
-    }
-  } else if (elem_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  if (src->is_nested_array()) {
     ObArrayNested *arr_nested = static_cast<ObArrayNested *>(src);
-    const ObCollectionArrayType *array_type = static_cast<const ObCollectionArrayType *>(elem_type);
-    if (OB_FAIL(get_basic_elem_obj(arr_nested->get_child_array(), array_type->element_type_, idx, elem_obj, is_null))) {
+    if (OB_FAIL(get_basic_elem(arr_nested->get_child_array(), idx, elem_obj, is_null))) {
       LOG_WARN("failed to cast get element", K(ret));
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported elem type", K(ret), K(elem_type->type_id_));
+    if (src->is_null(idx)) {
+      is_null = true;
+    } else if (OB_FAIL(src->elem_at(idx, elem_obj))) {
+      LOG_WARN("get elem obj failed", K(ret));
+    }
   }
   return ret;
 }
+
+int ObArrayExprUtils::set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_null(obj.get_type())) {
+    vec->set_null(idx);
+  } else if (ob_is_int_tc(obj.get_type())) {
+    vec->set_int(idx, obj.get_int());
+  } else if (ob_is_uint_tc(obj.get_type())) {
+    vec->set_uint(idx, obj.get_uint64());
+  } else if (ob_is_float_tc(obj.get_type())) {
+    vec->set_float(idx, obj.get_float());
+  } else if (ob_is_double_tc(obj.get_type())) {
+    vec->set_double(idx, obj.get_double());
+  } else if (ObVarcharType == obj.get_type()) {
+    vec->set_string(idx, obj.get_string());
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected object type", K(ret), K(obj.get_type()));
+  }
+  return ret;
+}
+
+template <typename T1, typename T>
+int ObArrayExprUtils::calc_array_sum_by_type(uint32_t data_len, uint32_t len, const char *data_ptr,
+                                             uint8_t *null_bitmaps, T &sum)
+{
+  int ret = OB_SUCCESS;
+  if (data_len / sizeof(T1) != len) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected array length", K(ret), K(len), K(data_len));
+  } else {
+    T1 *data = reinterpret_cast<T1 *>(const_cast<char *>(data_ptr));
+    for (uint32_t i = 0; i < len; ++i) {
+      if (null_bitmaps != nullptr && null_bitmaps[i] > 0) {
+        /* do nothing */
+      } else if (OB_FAIL(raw_check_add<T>(sum + data[i], static_cast<T>(data[i]), sum))) {
+        LOG_WARN("array_sum overflow", K(ret), K(sum), K(data[i]));
+        break;
+      } else {
+        sum += static_cast<T>(data[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+int ObArrayExprUtils::calc_array_sum(uint32_t len, uint8_t *nullbitmaps, const char *data_ptr,
+                                   uint32_t data_len, ObCollectionArrayType *arr_type, T &sum)
+{
+  int ret = OB_SUCCESS;
+
+  ObCollectionBasicType *elem_type = NULL;
+  if (OB_ISNULL(elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("source array collection element type is null", K(ret));
+  } else if (arr_type->element_type_->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported element type", K(ret), K(arr_type->element_type_->type_id_));
+  } else {
+    ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
+    switch (obj_type) {
+    case ObTinyIntType: {
+      ret = calc_array_sum_by_type<int8_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObSmallIntType: {
+      ret = calc_array_sum_by_type<int16_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObInt32Type: {
+      ret = calc_array_sum_by_type<int32_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObIntType: {
+      ret = calc_array_sum_by_type<int64_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObUTinyIntType: {
+      ret = calc_array_sum_by_type<uint8_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObUSmallIntType: {
+      ret = calc_array_sum_by_type<uint16_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObUInt32Type: {
+      ret = calc_array_sum_by_type<uint32_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObUInt64Type: {
+      ret = calc_array_sum_by_type<uint64_t>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObUFloatType:
+    case ObFloatType: {
+      ret = calc_array_sum_by_type<float>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    case ObUDoubleType:
+    case ObDoubleType: {
+      ret = calc_array_sum_by_type<double>(data_len, len, data_ptr, nullbitmaps, sum);
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "not supported element type", K(ret), K(elem_type->basic_meta_.get_type_class()));
+    }
+    } // end switch
+  }
+
+  return ret;
+}
+
+int ObArrayExprUtils::get_array_data(ObString &data_str,
+                        ObCollectionArrayType *arr_type,
+                        uint32_t &len,
+                        uint8_t *&null_bitmaps,
+                        const char *&data,
+                        uint32_t &data_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  char *raw_str = nullptr;
+  len = 0, data_len = 0;
+  null_bitmaps = nullptr, data = nullptr;
+
+  if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    raw_str = data_str.ptr();
+    len = *reinterpret_cast<uint32_t *>(raw_str);
+    pos += sizeof(len);
+    null_bitmaps = reinterpret_cast<uint8_t *>(raw_str + pos);
+    pos += sizeof(uint8_t) * len;
+  } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+    raw_str = data_str.ptr();
+    len = data_str.length() / sizeof(float);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected array type", K(ret));
+  }
+  if (pos > data_str.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "raw data len is invalid", K(ret), K(pos), K(len), K(data_str.length()));
+  } else {
+    data = raw_str + pos;
+    data_len = data_str.length() - pos;
+  }
+
+  return ret;
+}
+
+int ObArrayExprUtils::get_array_data(ObIVector *len_vec,
+                                   ObIVector *nullbitmap_vec,
+                                   ObIVector *data_vec,
+                                   int64_t idx,
+                                   ObCollectionArrayType *arr_type,
+                                   uint32_t &len,
+                                   uint8_t *&null_bitmaps,
+                                   const char *&data,
+                                   uint32_t &data_len)
+{
+  int ret = OB_SUCCESS;
+  const char *payload = nullptr;
+  ObLength payload_len = 0;
+  len = 0, data_len = 0;
+  null_bitmaps = nullptr, data = nullptr;
+  len_vec->get_payload(idx, payload, payload_len);
+  len = *(reinterpret_cast<const uint32_t *>(payload));
+
+  if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    nullbitmap_vec->get_payload(idx, payload, payload_len);
+    null_bitmaps = const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(payload));
+    if (len != payload_len / sizeof(uint8_t)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected array length", K(ret), K(len), K(payload_len));
+    }
+  } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+    // do nothing
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected array type", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    data_vec->get_payload(idx, payload, payload_len);
+    data = payload;
+    data_len = payload_len;
+  }
+
+  return ret;
+}
+
+template<typename T>
+int ObArrayExprUtils::raw_check_add(const T &res, const T &l, const T &r) {
+  int ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support array check add", K(res), K(l), K(r));
+  return ret;
+}
+
+template<>
+int ObArrayExprUtils::raw_check_add<int64_t>(const int64_t &res, const int64_t &l, const int64_t &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprAdd::is_int_int_out_of_range(l, r, res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "BIGINT");
+  }
+  return ret;
+}
+template<>
+int ObArrayExprUtils::raw_check_add<uint64_t>(const uint64_t &res, const uint64_t &l, const uint64_t &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprAdd::is_uint_uint_out_of_range(l, r, res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "BIGINT UNSIGNED");
+  }
+  return ret;
+}
+template<>
+int ObArrayExprUtils::raw_check_add<float>(const float &res, const float &l, const float &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprAdd::is_float_out_of_range(res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "FLOAT");
+  }
+  return ret;
+}
+template<>
+int ObArrayExprUtils::raw_check_add<double>(const double &res, const double &l, const double &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprAdd::is_double_out_of_range(res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "DOUBLE");
+  }
+  return ret;
+}
+
+template int ObArrayExprUtils::raw_check_add<int8_t>(const int8_t &res, const int8_t &l, const int8_t &r);
+template int ObArrayExprUtils::raw_check_add<int16_t>(const int16_t &res, const int16_t &l, const int16_t &r);
+template int ObArrayExprUtils::raw_check_add<int32_t>(const int32_t &res, const int32_t &l, const int32_t &r);
+
+template<typename T>
+int ObArrayExprUtils::raw_check_minus(const T &res, const T &l, const T &r) {
+  int ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support array check", K(res), K(l), K(r));
+  return ret;
+}
+
+template<>
+int ObArrayExprUtils::raw_check_minus<int64_t>(const int64_t &res, const int64_t &l, const int64_t &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprMinus::is_int_int_out_of_range(l, r, res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "BIGINT");
+  }
+  return ret;
+}
+template<>
+int ObArrayExprUtils::raw_check_minus<uint64_t>(const uint64_t &res, const uint64_t &l, const uint64_t &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprMinus::is_uint_uint_out_of_range(l, r, res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "BIGINT UNSIGNED");
+  }
+  return ret;
+}
+template<>
+int ObArrayExprUtils::raw_check_minus<float>(const float &res, const float &l, const float &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprMinus::is_float_out_of_range(res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "FLOAT");
+  }
+  return ret;
+}
+template<>
+int ObArrayExprUtils::raw_check_minus<double>(const double &res, const double &l, const double &r) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObExprMinus::is_double_out_of_range(res))) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Array", "DOUBLE");
+  }
+  return ret;
+}
+
+template int ObArrayExprUtils::raw_check_minus<int8_t>(const int8_t &res, const int8_t &l, const int8_t &r);
+template int ObArrayExprUtils::raw_check_minus<int16_t>(const int16_t &res, const int16_t &l, const int16_t &r);
+template int ObArrayExprUtils::raw_check_minus<int32_t>(const int32_t &res, const int32_t &l, const int32_t &r);
 
 } // sql
 } // oceanbase

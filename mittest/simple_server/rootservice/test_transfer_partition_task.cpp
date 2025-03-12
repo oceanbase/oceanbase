@@ -15,18 +15,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #define  private public
 #include "share/balance/ob_transfer_partition_task_table_operator.h"
-#include "share/transfer/ob_transfer_info.h"
-#include "share/ob_ls_id.h"
-#include "share/unit/ob_unit_info.h"
-#include "share/ls/ob_ls_status_operator.h"
-#include "share/ls/ob_ls_i_life_manager.h"
 
 
 

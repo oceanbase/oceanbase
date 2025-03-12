@@ -12,9 +12,6 @@
  */
 #define USING_LOG_PREFIX LIB
 
-#include "lib/string/ob_string_buffer.h"
-#include "lib/xml/ob_multi_mode_interface.h"
-#include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_multi_mode_bin.h"
 
 namespace oceanbase {

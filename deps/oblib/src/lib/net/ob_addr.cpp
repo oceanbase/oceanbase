@@ -12,15 +12,10 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/net/ob_addr.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
+#include "ob_addr.h"
 #include "lib/utility/utility.h"
 #include "lib/net/ob_net_util.h"
-#include "include/easy_define.h"
 
 namespace oceanbase
 {
@@ -166,11 +161,17 @@ bool ObAddr::set_unix_addr(const char *unix_path)
   return ret;
 }
 
-int64_t ObAddr::to_string(char *buffer, const int64_t size) const
+int64_t ObAddr::inner_to_string(char *buffer, const int64_t size) const
 {
   int64_t pos = 0;
   if (nullptr != buffer && size > 0) {
     //databuff_printf(buffer, size, pos, "version=%d ", version_);
+#ifdef ENABLE_DEBUG_LOG
+    if (size < MAX_IP_PORT_LENGTH && (version_ == IPV4 || version_ == IPV6)) {
+      LOG_ERROR_RET(OB_BUF_NOT_ENOUGH, "buffer size is not enough for an ip string",
+                    K(size));
+    }
+#endif
     if (version_ == IPV4) {
       if (port_ > 0) {
         databuff_printf(buffer, size, pos, "\"%d.%d.%d.%d:%d\"",
@@ -211,10 +212,15 @@ int64_t ObAddr::to_string(char *buffer, const int64_t size) const
   return pos;
 }
 
-bool ObAddr::ip_to_string(char *buffer, const int32_t size) const
+bool ObAddr::inner_ip_to_string(char *buffer, const int32_t size) const
 {
   bool res = false;
   if (nullptr != buffer && size > 0) {
+#ifdef ENABLE_DEBUG_LOG
+    if (size < MAX_IP_ADDR_LENGTH && (version_ == IPV4 || version_ == IPV6)) {
+      LOG_ERROR_RET(OB_BUF_NOT_ENOUGH, "buffer size is not enough for an ip string", K(size));
+    }
+#endif
     if (version_ == IPV4) {
       snprintf(buffer, size, "%d.%d.%d.%d",
                (ip_.v4_ >> 24) & 0XFF,
@@ -239,10 +245,16 @@ bool ObAddr::ip_to_string(char *buffer, const int32_t size) const
   return res;
 }
 
-int ObAddr::ip_port_to_string(char *buffer, const int32_t size) const
+int ObAddr::inner_ip_port_to_string(char *buffer, const int32_t size) const
 {
   int ret = OB_SUCCESS;
   int ret_len = 0;
+#ifdef ENABLE_DEBUG_LOG
+  if (size < MAX_IP_PORT_LENGTH) {
+    LOG_ERROR_RET(OB_BUF_NOT_ENOUGH, "buffer size is not enough for an ip string",
+                  K(size));
+  }
+#endif
   if (NULL == buffer || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (version_ == IPV6) {
@@ -274,9 +286,15 @@ int ObAddr::ip_port_to_string(char *buffer, const int32_t size) const
   return ret;
 }
 
-int ObAddr::addr_to_buffer(char *buffer, const int32_t size, int32_t &ret_len) const
+int ObAddr::inner_addr_to_buffer(char *buffer, const int32_t size, int32_t &ret_len) const
 {
   int ret = OB_SUCCESS;
+#ifdef ENABLE_DEBUG_LOG
+  if (size < MAX_IP_PORT_LENGTH) {
+    LOG_ERROR_RET(OB_BUF_NOT_ENOUGH, "buffer size is not enough for an ip string",
+                  K(size));
+  }
+#endif
   if (NULL == buffer || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (version_ == IPV6) {

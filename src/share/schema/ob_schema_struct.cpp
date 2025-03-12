@@ -12,36 +12,13 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_schema_struct.h"
-#include "ob_schema_mgr.h"        // ObSimpleTableSchemaV2
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_serialization_helper.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/ob_zone_type.h"
-#include "share/ob_ddl_common.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/ob_primary_zone_util.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_parser.h"
-#include "rootserver/ob_locality_util.h"
-#include "rootserver/ob_root_utils.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_minus.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/ob_encryption_util.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -6544,6 +6521,67 @@ int ObPartitionUtils::get_tablet_and_part_id(
   return ret;
 }
 
+int ObPartitionUtils::get_tablet_and_part_id(
+    const share::schema::ObTableSchema &table_schema,
+    const common::ObObjectID &target_part_id,
+    common::ObTabletID &tablet_id,
+    common::ObObjectID &part_id,
+    RelatedTableInfo *related_table /*= NULL*/)
+{
+  int ret = OB_SUCCESS;
+  const ObPartition *partition = NULL;
+  ObSEArray<PartitionIndex, 1> partition_indexes;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObSEArray<ObObjectID, 1> part_ids;
+  ObPartitionLevel part_level = table_schema.get_part_level();
+  const uint64_t table_id = table_schema.get_table_id();
+  tablet_id.reset();
+  part_id = OB_INVALID_ID;
+  if (OB_FAIL(check_param_valid_(table_schema, related_table))) {
+    LOG_WARN("fail to check param", KR(ret), K(table_schema), KP(related_table));
+  } else if (PARTITION_LEVEL_ONE == part_level
+             || PARTITION_LEVEL_TWO == part_level) {
+    int64_t part_idx = OB_INVALID_ID;
+    if (OB_FAIL(table_schema.get_partition_index_by_id(
+              target_part_id, CHECK_PARTITION_MODE_NORMAL, part_idx))) {
+      LOG_WARN("fail to get part_idx by part_id", KR(ret), K(target_part_id));
+    } else if (OB_UNLIKELY(OB_INVALID_ID == part_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition not exist", KR(ret), K(target_part_id), K(part_idx));
+    } else if (OB_FAIL(partition_indexes.push_back(PartitionIndex(part_idx, OB_INVALID_INDEX)))) {
+      LOG_WARN("failed to push back part idx");
+    }
+
+    const bool fill_tablet_id = (PARTITION_LEVEL_ONE == part_level);
+    if (FAILEDx(fill_tablet_and_object_ids_(
+        fill_tablet_id, OB_INVALID_INDEX /*part_idx*/,
+        partition_indexes, table_schema, related_table,
+        tablet_ids, part_ids))) {
+      LOG_WARN("fail to fill tablet and part_ids", KR(ret), K(fill_tablet_id),
+               K(table_id), K(partition_indexes));
+    } else if (1 < part_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part_ids count is invalid", KR(ret), K(part_ids));
+    } else if (part_ids.count() > 0) {
+      part_id = part_ids.at(0);
+      if (!fill_tablet_id) {
+        // skip
+      } else if (1 != tablet_ids.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet_ids count is invalid", KR(ret), K(tablet_ids));
+      } else {
+        tablet_id = tablet_ids.at(0);
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported part level", KR(ret), K(table_id), K(part_level));
+  }
+  LOG_TRACE("table schema get tablet and part id", K(table_id), K(tablet_ids), K(part_ids), K(partition_indexes));
+  return ret;
+}
+
+
 int ObPartitionUtils::get_tablet_and_subpart_id(
       const share::schema::ObTableSchema &table_schema,
       const common::ObPartID &part_id,
@@ -6683,6 +6721,76 @@ int ObPartitionUtils::get_tablet_and_subpart_id(
     }
     const bool fill_tablet_id = true;
     if (FAILEDx(fill_tablet_and_object_ids_(
+        fill_tablet_id, part_idx, partition_indexes, table_schema,
+        related_table, tablet_ids, subpart_ids))) {
+      LOG_WARN("fail to fill tablet and subpart_ids", KR(ret),
+               K(fill_tablet_id), K(table_id), K(partition_indexes));
+    } else if (1 < subpart_ids.count()
+               || subpart_ids.count() != tablet_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subpart_ids/tablet_ids count is invalid",
+               KR(ret), K(subpart_ids), K(tablet_ids));
+    } else if (subpart_ids.count() > 0) {
+      subpart_id = subpart_ids.at(0);
+      tablet_id = tablet_ids.at(0);
+    }
+    LOG_TRACE("table schema get tablet and subpart id",
+               K(table_id), K(tablet_ids), K(subpart_ids));
+  }
+  return ret;
+}
+
+int ObPartitionUtils::get_tablet_and_subpart_id(
+    const share::schema::ObTableSchema &table_schema,
+    const common::ObPartID &part_id,
+    const common::ObObjectID &target_part_id,
+    common::ObTabletID &tablet_id,
+    common::ObObjectID &subpart_id,
+    RelatedTableInfo *related_table /*= NULL*/)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<PartitionIndex, 1> partition_indexes;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObSEArray<ObObjectID, 1> subpart_ids;
+  ObPartitionLevel part_level = table_schema.get_part_level();
+  const uint64_t table_id = table_schema.get_table_id();
+  tablet_id.reset();
+  subpart_id = OB_INVALID_ID;
+  const ObPartition *partition = NULL;
+  int64_t part_idx = OB_INVALID_ID;
+  if (OB_FAIL(check_param_valid_(table_schema, related_table))) {
+    LOG_WARN("fail to check param", KR(ret), K(table_schema), KP(related_table));
+  } else if (PARTITION_LEVEL_TWO != part_level) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported part level", KR(ret), K(part_level));
+  } else if (OB_FAIL(table_schema.get_partition_index_by_id(
+             part_id, CHECK_PARTITION_MODE_NORMAL, part_idx))) {
+    LOG_WARN("fail to get part_idx by part_id", KR(ret), K(part_id));
+  } else if (OB_FAIL(table_schema.get_partition_by_partition_index(
+             part_idx, CHECK_PARTITION_MODE_NORMAL, partition))) {
+    LOG_WARN("fail to get partition by part_idx", KR(ret), K(part_idx));
+  } else if (OB_ISNULL(partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition not exist", KR(ret), K(part_id), K(part_idx));
+  } else {
+    ObSubPartition * const* subpartition_array = partition->get_subpart_array();
+    int64_t subpartition_num = partition->get_subpartition_num();
+    for (int64_t i = 0; OB_SUCC(ret) && i < subpartition_num; ++i) {
+      if (target_part_id == subpartition_array[i]->get_sub_part_id()) {
+        if (OB_FAIL(partition_indexes.push_back(PartitionIndex(OB_INVALID_INDEX, i)))) {
+          LOG_WARN("failed to push back partition index");
+        } else {
+          break;
+        }
+      }
+    }
+
+    const bool fill_tablet_id = true;
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(partition_indexes.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not valid subpartition id", K(part_id), K(target_part_id));
+    } else if (OB_FAIL(fill_tablet_and_object_ids_(
         fill_tablet_id, part_idx, partition_indexes, table_schema,
         related_table, tablet_ids, subpart_ids))) {
       LOG_WARN("fail to fill tablet and subpart_ids", KR(ret),
@@ -11901,7 +12009,7 @@ ObForeignKeyInfo::ObForeignKeyInfo(ObIAllocator *allocator)
     rely_flag_(false),
     is_modify_rely_flag_(false),
     is_modify_fk_state_(false),
-    ref_cst_type_(CONSTRAINT_TYPE_INVALID),
+    fk_ref_type_(FK_REF_TYPE_INVALID),
     ref_cst_id_(common::OB_INVALID_ID),
     is_modify_fk_name_flag_(false),
     is_parent_table_mock_(false),
@@ -11930,7 +12038,7 @@ int ObForeignKeyInfo::assign(const ObForeignKeyInfo &other)
     rely_flag_ = other.rely_flag_;
     is_modify_rely_flag_ = other.is_modify_rely_flag_;
     is_modify_fk_state_ = other.is_modify_fk_state_;
-    ref_cst_type_ = other.ref_cst_type_;
+    fk_ref_type_ = other.fk_ref_type_;
     ref_cst_id_ = other.ref_cst_id_;
     foreign_key_name_ = other.foreign_key_name_; // Shallow copy
     is_modify_fk_name_flag_ = other.is_modify_fk_name_flag_;
@@ -11984,7 +12092,7 @@ OB_SERIALIZE_MEMBER(ObForeignKeyInfo,
                     update_action_,
                     delete_action_,
                     foreign_key_name_,
-                    ref_cst_type_,
+                    fk_ref_type_, // FARM COMPAT WHITELIST for ref_cst_type_
                     ref_cst_id_,
                     is_modify_fk_name_flag_,
                     is_parent_table_mock_,
@@ -13896,10 +14004,11 @@ int ObRlsPolicySchema::rebuild_with_table_schema(const ObRlsPolicySchema &src_sc
   OX (tmp_column_cnt = column_cnt_);
   OX (column_cnt_ = 0);
   for (int64_t i = 0; OB_SUCC(ret) && i < tmp_column_cnt; ++i) {
+    const ObColumnSchemaV2 *column_schema = nullptr;
     if (OB_ISNULL(sec_column_array_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rls sec column is null", KR(ret));
-    } else if (NULL == table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) {
+    } else if (NULL == (column_schema = table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) || column_schema->is_unused()) {
       // do nothing
     } else {
       sec_column_array_[column_cnt_++] = sec_column_array_[i];

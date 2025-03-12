@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_plan_cache_callback.h"
-#include "sql/plan_cache/ob_plan_cache_value.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -63,8 +61,7 @@ deleting plan x                  |
 void ObCacheObjAtomicOp::operator()(ObjKV &entry)
 {
   if (NULL != entry.second) {
-    int64_t ref_cnt = entry.second->inc_ref_count(ref_handle_);
-    if (ref_cnt > 1) {
+    if (entry.second->try_inc_ref_count(ref_handle_)) {
       cache_obj_ = entry.second;
     } else {
       cache_obj_ = nullptr;

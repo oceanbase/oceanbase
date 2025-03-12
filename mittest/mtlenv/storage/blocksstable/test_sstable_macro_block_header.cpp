@@ -18,8 +18,6 @@
 #define private public
 #define protected public
 
-#include "storage/blocksstable/ob_sstable_macro_block_header.h"
-#include "storage/blocksstable/ob_macro_block.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 
 using namespace oceanbase::blocksstable;

@@ -11,15 +11,6 @@
  */
 
 #include "ob_log_restore_define.h"
-#include "lib/net/ob_addr.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_string.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/log_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include <cstdint>
 
 namespace oceanbase
 {

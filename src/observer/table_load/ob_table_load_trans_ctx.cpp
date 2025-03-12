@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_trans_ctx.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -85,6 +84,7 @@ int ObTableLoadTransCtx::set_trans_status_abort()
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard guard(rwlock_);
   trans_status_ = ObTableLoadTransStatusType::ABORT;
+  error_code_ = (error_code_ == OB_SUCCESS ? OB_CANCELED : error_code_);
   return ret;
 }
 

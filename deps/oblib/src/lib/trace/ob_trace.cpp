@@ -12,14 +12,8 @@
 
 #include "ob_trace.h"
 
-#include <cstdlib>
-#include <ctime>
 #include <random>
 
-#include "lib/oblog/ob_log_level.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
-#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

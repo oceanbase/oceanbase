@@ -11,16 +11,6 @@
  */
 
 #include "ob_all_virtual_mds_node_stat.h"
-#include "lib/container/ob_tuple.h"
-#include "lib/function/ob_function.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
-#include "share/ob_ls_id.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/multi_data_source/runtime_utility/common_define.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/ls/ob_ls.h"
 
 namespace oceanbase

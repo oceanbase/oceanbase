@@ -13,117 +13,44 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/ob_server.h"
-#include <sys/statvfs.h>
-#include "common/log/ob_log_constants.h"
-#include "common/ob_tenant_data_version_mgr.h"
-#include "lib/allocator/ob_libeasy_mem_pool.h"
 #include "lib/alloc/memory_dump.h"
-#include "lib/thread/protected_stack_allocator.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/lock/ob_latch.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/oblog/ob_base_log_buffer.h"
 #include "lib/oblog/ob_log_compressor.h"
-#include "lib/ob_running_mode.h"
-#include "lib/profile/ob_active_resource_list.h"
-#include "lib/profile/ob_profile_log.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/resource/ob_resource_mgr.h"
-#include "lib/restore/ob_storage_oss_base.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/string/ob_sql_string.h"
 #include "lib/task/ob_timer_monitor.h"
-#include "lib/thread/thread_mgr.h"
-#include "lib/thread/ob_dynamic_thread_pool.h"
 #include "lib/task/ob_timer_service.h" // ObTimerService
-#include "lib/compress/ob_compressor_pool.h"
-#include "lib/compress/zlib_lite/ob_zlib_lite_compressor.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_rpc_extra_payload.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "observer/table/ob_table_rpc_processor.h"
-#include "observer/mysql/ob_query_retry_ctrl.h"
-#include "rpc/obrpc/ob_rpc_handler.h"
-#include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "share/cache/ob_cache_name_define.h"
-#include "share/object_storage/ob_object_storage_struct.h"
 #include "share/object_storage/ob_device_connectivity.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
 #include "share/ob_bg_thread_monitor.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_define.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/ob_global_autoinc_service.h"
-#include "share/ob_io_device_helper.h"
-#include "share/io/ob_io_calibration.h"
-#include "share/ob_task_define.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/resource_manager/ob_resource_manager.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/sequence/ob_sequence_cache.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
-#include "sql/engine/px/ob_px_worker.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/ob_sql_init.h"
 #include "sql/ob_sql_task.h"
-#include "storage/ob_i_store.h"
-#include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "storage/tablelock/ob_table_lock_service.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/tx_table/ob_tx_data_cache.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
-#include "common/log/ob_log_constants.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
 #include "share/ob_device_manager.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_tenant_memory_printer.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/ob_file_system_router.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_leak_checker.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "share/ob_server_blacklist.h"
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
-#include "logservice/palf/election/interface/election.h"
 #include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/fts/ob_fts_plugin_mgr.h"
 #include "observer/ob_server_utils.h"
-#include "observer/table_load/ob_table_load_partition_calc.h"
-#include "observer/virtual_table/ob_mds_event_buffer.h"
-#include "observer/ob_startup_accel_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
-#include "observer/table/ttl/ob_table_ttl_task.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_service.h"
-#include "logservice/palf/log_cache.h"
 #include "share/ob_device_credential_task.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
@@ -146,7 +73,10 @@
 #endif
 #include "storage/backup/ob_backup_meta_cache.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "storage/fts/dict/ob_ft_cache.h"
 #include "common/ob_target_specific.h"
+#include "storage/fts/dict/ob_gen_dic_loader.h"
+#include "plugin/sys/ob_plugin_mgr.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -156,6 +86,7 @@ using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::transaction;
 using namespace oceanbase::logservice;
+using namespace oceanbase::plugin;
 
 extern "C" void ussl_stop();
 extern "C" void ussl_wait();
@@ -308,15 +239,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   }
 #endif
 
-  // start ObTimerService first, because some timers depend on it
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
-      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
-    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
-      LOG_ERROR("start timer service failed", KR(ret));
-    }
-  }
-
   // server parameters be inited here.
   if (OB_SUCC(ret) && OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
@@ -333,6 +255,15 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   }
   // set large page param
   ObLargePageHelper::set_param(config_.use_large_pages);
+
+  // start ObTimerService first, because some timers depend on it
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
+    }
+  }
 
   if (is_arbitration_mode()) {
 #ifdef OB_BUILD_ARBITRATION
@@ -435,6 +366,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init interrupt failed", KR(ret));
     } else if (OB_FAIL(init_zlib_lite_compressor())) {
       LOG_ERROR("init zlib lite compressor failed", KR(ret));
+    } else if (OB_FAIL(init_plugin())) {
+      LOG_ERROR("init plugin failed", KR(ret));
     } else if (OB_FAIL(rs_mgr_.init(&srv_rpc_proxy_, &config_, &sql_proxy_))) {
       LOG_ERROR("init rs_mgr_ failed", KR(ret));
     } else if (OB_FAIL(server_tracer_.init(rs_rpc_proxy_, sql_proxy_))) {
@@ -460,9 +393,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(location_service_.init(lst_operator_,
                                               schema_service_,
                                               sql_proxy_,
-                                              server_tracer_,
                                               rs_mgr_,
-                                              rs_rpc_proxy_,
                                               srv_rpc_proxy_))) {
       LOG_ERROR("init location service failed", KR(ret));
     } else if (OB_FAIL(init_autoincrement_service())) {
@@ -479,8 +410,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObMasterKeyGetter::instance().init(&sql_proxy_))) {
       LOG_ERROR("init get master key server failed", KR(ret));
 #endif
-    } else if (OB_FAIL(ObTenantFTPluginMgr::register_plugins())) {
-      LOG_ERROR("init fulltext plugins failed", K(ret));
+      //} else if (OB_FAIL(ObTenantFTPluginMgr::register_plugins())) {
+      //     LOG_ERROR("init fulltext plugins failed", K(ret));
     } else if (OB_FAIL(init_storage())) {
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
@@ -574,12 +505,17 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init backup index cache failed", KR(ret));
     } else if (OB_FAIL(OB_BACKUP_META_CACHE.init())) {
       LOG_ERROR("init backup meta cache failed", KR(ret));
+    } else if (OB_FAIL(ObDictCache::get_instance().init("dict_cache"))) {
+      LOG_ERROR("init dict cache failed", KR(ret));
     } else if (OB_FAIL(ObActiveSessHistList::get_instance().init())) {
       LOG_ERROR("init ASH failed", KR(ret));
-    } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_, net_frame_.get_req_transport()))) {
+    } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_,
+                                                              net_frame_.get_req_transport()))) {
       LOG_ERROR("init server blacklist failed", KR(ret));
     } else if (OB_FAIL(ObLongopsMgr::get_instance().init())) {
       LOG_WARN("init longops mgr fail", KR(ret));
+    } else if (OB_FAIL(ObGenDicLoader::get_instance().init())) {
+      LOG_WARN("init dictionary loader failed", K(ret));
     } else if (OB_FAIL(ObDDLRedoLock::get_instance().init())) {
       LOG_WARN("init ddl redo lock failed", K(ret));
 #ifdef ERRSIM
@@ -872,10 +808,6 @@ void ObServer::destroy()
     multi_tenant_.destroy();
     FLOG_INFO("wait destroy multi tenant success");
 
-    FLOG_INFO("begin to unregister fulltext plugins");
-    ObTenantFTPluginMgr::unregister_plugins();
-    FLOG_INFO("fulltext plugins unregistered");
-
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -895,6 +827,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy backup meta cache");
     OB_BACKUP_META_CACHE.destroy();
     FLOG_INFO("backup meta cache destroyed");
+
+    FLOG_INFO("begin to destroy dict cache");
+    ObDictCache::get_instance().destroy();
+    FLOG_INFO("dict cache destroyed");
 
     FLOG_INFO("begin to destroy log block mgr");
     log_block_mgr_.destroy();
@@ -960,6 +896,8 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy cgroup service");
     cgroup_ctrl_.destroy();
     FLOG_INFO("cgroup service destroyed");
+
+    deinit_plugin();
 
     deinit_zlib_lite_compressor();
 
@@ -2254,6 +2192,11 @@ int ObServer::init_opts_config(bool has_config_file)
     config_.use_ipv6.set_version(start_time_);
   }
 
+  if (opts_.plugins_load_) {
+    config_.plugins_load.set_value(opts_.plugins_load_);
+    config_.plugins_load.set_version(start_time_);
+  }
+
   return ret;
 }
 
@@ -2673,6 +2616,50 @@ int ObServer::init_interrupt()
   return ret;
 }
 
+int ObServer::init_plugin()
+{
+  int ret = OB_SUCCESS;
+  ObPluginMgr *mgr = nullptr;
+  ObString plugin_dir = ObSysVariables::get_value(ObSysVarsToIdxMap::get_store_idx(SYS_VAR_PLUGIN_DIR));
+
+  if (plugin_dir.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("plugin dir is invalid", KR(ret), K(plugin_dir));
+  } else {
+    LOG_INFO("got plugin dir", K(plugin_dir));
+
+    if (OB_ISNULL(mgr = new ObPluginMgr())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to create plugin manager instance", KR(ret));
+    } else if (OB_FAIL(mgr->init(plugin_dir))) {
+      LOG_ERROR("failed to init plugin manager", KR(ret));
+    } else if (OB_FAIL(mgr->load_builtin_plugins())) {
+      LOG_ERROR("failed to load builtin plugins", KR(ret));
+    } else if (OB_FAIL(mgr->load_dynamic_plugins(config_.plugins_load.get_value()))) {
+      LOG_ERROR("failed to load dynamic plugins", KR(ret));
+    } else {
+      GCTX.plugin_mgr_ = mgr;
+      LOG_INFO("plugin init done");
+    }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(mgr)) {
+    delete mgr;
+  }
+  return ret;
+}
+
+void ObServer::deinit_plugin()
+{
+  ObPluginMgr *mgr = GCTX.plugin_mgr_;
+  if (OB_NOT_NULL(mgr)) {
+    mgr->destroy();
+    delete mgr;
+    GCTX.plugin_mgr_ = nullptr;
+  }
+  LOG_INFO("plugin deinit done");
+}
+
 int ObServer::init_zlib_lite_compressor()
 {
   int ret = OB_SUCCESS;
@@ -3047,6 +3034,7 @@ int ObServer::init_global_context()
   if (is_valid_server_id(gctx_.get_server_id())) {
     LOG_INFO("this observer has had a valid server_id", K(gctx_.get_server_id()));
   }
+  gctx_.in_bootstrap_ = false;
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {
     ret = OB_INVALID_ARGUMENT;
@@ -4123,6 +4111,9 @@ int ObServer::clean_up_invalid_tables_by_tenant(
           drop_table_arg.tenant_id_ = table_schema->get_tenant_id();
           drop_table_arg.exec_tenant_id_ = table_schema->get_tenant_id();
           drop_table_arg.table_type_ = table_schema->get_table_type();
+          if (TMP_TABLE_ORA_SESS == drop_table_arg.table_type_ || TMP_TABLE_ORA_TRX == drop_table_arg.table_type_) {
+            drop_table_arg.table_type_ = share::schema::USER_TABLE;
+          }
           drop_table_arg.session_id_ = table_schema->get_session_id();
           drop_table_arg.to_recyclebin_ = false;
           drop_table_arg.compat_mode_ = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;

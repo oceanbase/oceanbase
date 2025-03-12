@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/lock/ob_rwlock.h"
+#include "ob_rwlock.h"
 #include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase;

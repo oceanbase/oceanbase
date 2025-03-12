@@ -1287,6 +1287,8 @@ public:
                                              ARRAY_SIZE,
                                              sizeof(hashbucket),
                                              *bucket_allocer_)))) {
+      buckets_ = old_buckets;
+      bucket_num_ = old_bucket_num;
       HASH_WRITE_LOG(HASH_WARNING, "create buckets fail, ret=%d", ret);
     } else {
       for (int64_t i = 0; i < old_bucket_num && OB_SUCC(ret); i++) {

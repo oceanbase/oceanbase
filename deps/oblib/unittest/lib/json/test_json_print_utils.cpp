@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX LIB
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
 #include "lib/json/ob_json_print_utils.h"
 
 namespace oceanbase

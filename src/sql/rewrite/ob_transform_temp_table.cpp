@@ -13,19 +13,6 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_temp_table.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/rewrite/ob_predicate_deduce.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "ob_transform_min_max.h"
 #include "sql/rewrite/ob_transformer_impl.h"
@@ -1651,6 +1638,11 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
     } else if (OB_FAIL(apply_temp_table_columns(context, map_info, temp_table_query, view,
                                                 old_view_columns, new_temp_columns))) {
       LOG_WARN("failed to apply temp table columns", K(ret));
+    } else if (OB_FAIL(update_table_id_for_pseudo_columns(view, temp_table_query, map_info))) {
+      // Since the mapping of pseudo-columns is not established in map_info,
+      // and the same_as interface currently cannot correct it either, the table information
+      // recorded in the pseudo-columns added to the temp table during merge is incorrect and needs to be corrected.
+      LOG_WARN("failed to update table id for pseudo columns", K(ret));
     } else if (OB_FAIL(apply_temp_table_select_list(context, map_info, parent_stmt,
                                                     temp_table_query, view, view_table,
                                                     old_view_columns, new_temp_columns))) {
@@ -1741,6 +1733,55 @@ int ObTransformTempTable::apply_temp_table_columns(ObStmtCompareContext &context
             LOG_WARN("failed to add column item", K(ret));
           } else if (OB_FAIL(new_column_list.push_back(col_ref))) {
             LOG_WARN("failed to push back expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::update_table_id_for_pseudo_columns(ObSelectStmt *view,
+                                                             ObSelectStmt *temp_table_query,
+                                                             const ObStmtMapInfo& map_info)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> relation_exprs;
+  ObSEArray<ObRawExpr *, 8> pseudo_column_like_exprs;
+  if (OB_ISNULL(temp_table_query)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret), K(temp_table_query));
+  } else if (OB_FAIL(view->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(relation_exprs,
+                                                                       pseudo_column_like_exprs))) {
+    LOG_WARN("failed to extract pseudo column like expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pseudo_column_like_exprs.count(); ++i) {
+      ObPseudoColumnRawExpr *pseudo_column_like_expr = NULL;
+      TableItem *table_item = NULL;
+      if (OB_ISNULL(pseudo_column_like_exprs.at(i)) ||
+          OB_UNLIKELY(!pseudo_column_like_exprs.at(i)->is_pseudo_column_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret), K(pseudo_column_like_expr));
+      } else if (OB_FALSE_IT(pseudo_column_like_expr =
+                 static_cast<ObPseudoColumnRawExpr *>(pseudo_column_like_exprs.at(i)))) {
+      } else {
+        uint64_t table_id = OB_INVALID_ID;
+        ObRelIds table_set;
+        if (OB_FAIL(ObStmtComparer::get_map_table(map_info, view, temp_table_query,
+                                                  pseudo_column_like_expr->get_table_id(), table_id))) {
+          LOG_WARN("failed to get map table", K(ret));
+        } else if (OB_INVALID_ID == table_id) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect invalid table id", K(ret));
+        } else if (OB_FAIL(temp_table_query->get_table_rel_ids(table_id, table_set))) {
+          LOG_WARN("failed to get table rel ids", K(ret));
+        } else {
+          pseudo_column_like_expr->set_table_id(table_id);
+          pseudo_column_like_expr->get_relation_ids().reuse();
+          if (OB_FAIL(pseudo_column_like_expr->get_relation_ids().add_members(table_set))) {
+            LOG_WARN("failed to add members", K(ret));
           }
         }
       }

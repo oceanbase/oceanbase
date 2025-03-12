@@ -12,7 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_server_storage.h"
 #include "observer/ob_server.h"
-#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {

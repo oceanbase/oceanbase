@@ -12,11 +12,6 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_st_asgeojson.h"
-#include "share/object/ob_obj_cast_util.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/json_type/ob_json_parse.h"
-#include "observer/omt/ob_tenant_srs.h"
-#include "lib/utility/ob_fast_convert.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_wkb_to_json_bin_visitor.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"

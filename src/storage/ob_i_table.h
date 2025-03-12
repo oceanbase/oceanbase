@@ -117,6 +117,20 @@ public:
 
   OB_INLINE static bool is_table_type_valid(const TableType &type);
 
+  struct SliceRange
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    SliceRange() : start_slice_idx_(0), end_slice_idx_(0) {}
+    void reset() { start_slice_idx_ = 0; end_slice_idx_ = 0; }
+    bool operator ==(const SliceRange &other) const { return start_slice_idx_ == other.start_slice_idx_ && end_slice_idx_ == other.end_slice_idx_; }
+    bool is_merge_slice() const { return 0 == start_slice_idx_ && end_slice_idx_ > 0; }
+    TO_STRING_KV(K_(start_slice_idx), K_(end_slice_idx));
+  public:
+    int32_t start_slice_idx_;
+    int32_t end_slice_idx_;
+  };
+
   struct TableKey
   {
     OB_UNIS_VERSION(1);
@@ -170,16 +184,18 @@ public:
       return version_range_.snapshot_version_;
     }
     OB_INLINE uint16_t get_column_group_id() const { return column_group_idx_; }
+    OB_INLINE uint16_t get_slice_idx() const { return slice_range_.end_slice_idx_; }
     OB_INLINE TableKey& operator=(const TableKey &key)
     {
       table_type_ = key.table_type_;
       column_group_idx_ = key.column_group_idx_;
       tablet_id_ = key.tablet_id_;
       scn_range_ = key.scn_range_;
+      slice_range_ = key.slice_range_;
       return *this;
     }
 
-    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_),
+    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), K_(slice_range), "table_type", get_table_type_name(table_type_),
         K_(scn_range));
 
   public:
@@ -190,6 +206,7 @@ public:
     };
     uint16_t column_group_idx_;
     ObITable::TableType table_type_;
+    SliceRange slice_range_;
   };
 
   ObITable();
@@ -256,6 +273,7 @@ public:
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;
   OB_INLINE uint16_t get_column_group_id() const { return key_.get_column_group_id(); }
+  OB_INLINE uint16_t get_slice_idx() const { return key_.get_slice_idx(); }
   OB_INLINE common::ObNewVersionRange &get_version_range() { return key_.version_range_; }
   virtual void inc_ref();
   virtual int64_t dec_ref();
@@ -654,7 +672,8 @@ bool ObITable::TableKey::operator ==(const TableKey &table_key) const
   bool bret = table_type_ == table_key.table_type_
       && column_group_idx_ == table_key.column_group_idx_
       && tablet_id_ == table_key.tablet_id_
-      && scn_range_ == table_key.scn_range_;
+      && scn_range_ == table_key.scn_range_
+      && slice_range_ == table_key.slice_range_;
   return bret;
 }
 

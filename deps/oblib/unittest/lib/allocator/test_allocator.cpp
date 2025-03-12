@@ -11,9 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/alloc/ob_malloc_allocator.h"
 #define private public
-#include "lib/allocator/ob_page_manager.h"
 #include "lib/allocator/ob_allocator_v2.h"
 #undef private
 

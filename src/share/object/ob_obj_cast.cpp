@@ -12,42 +12,21 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/object/ob_obj_cast.h"
-#include <math.h>
-#include <float.h>
-#include "lib/charset/ob_dtoa.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "lib/worker.h"
+#include "ob_obj_cast.h"
 #include "share/object/ob_obj_cast_util.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/ob_json_access_utils.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/json_type/ob_json_parse.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_array_cast.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "src/storage/lob/ob_lob_manager.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
@@ -4046,7 +4025,7 @@ static int mdatetime_datetime(const ObObjType expect_type, ObObjCastParams &para
       ret = ObTimeConverter::mdatetime_to_datetime(in.get_mysql_datetime(), value, date_sql_mode);
     }
 
-    if (OB_FAIL(ret)) {
+    if (CAST_FAIL(ret)) {
     } else {
       out.set_datetime(expect_type, value);
     }
@@ -4145,7 +4124,7 @@ static int mdatetime_date(const ObObjType expect_type, ObObjCastParams &params,
     const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
     int32_t value = 0;
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
-    if (OB_FAIL(ObTimeConverter::mdatetime_to_date(in.get_mysql_datetime(), value, date_sql_mode))) {
+    if (CAST_FAIL(ObTimeConverter::mdatetime_to_date(in.get_mysql_datetime(), value, date_sql_mode))) {
       LOG_WARN("mdatetime to date failed", K(ret), K(in.get_mysql_datetime()), K(out.get_type()));
     } else {
       out.set_date(value);
@@ -4822,8 +4801,8 @@ static int mdate_datetime(const ObObjType expect_type, ObObjCastParams &params,
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
     int64_t value = 0;
-    if (OB_FAIL(ObTimeConverter::mdate_to_datetime(in.get_mysql_date(), cvrt_ctx, value,
-                                                   date_sql_mode))) {
+    if (CAST_FAIL(ObTimeConverter::mdate_to_datetime(in.get_mysql_date(), cvrt_ctx, value,
+                                                   date_sql_mode,  params.gen_query_range_))) {
       LOG_WARN("date_to_datetime failed", K(ret), K(in.get_date()));
     } else {
       out.set_datetime(expect_type, value);
@@ -4947,7 +4926,7 @@ static int mdate_date(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
     int32_t value = 0;
-    if (OB_FAIL(ObTimeConverter::mdate_to_date(in.get_mysql_date(), value, date_sql_mode))) {
+    if (CAST_FAIL(ObTimeConverter::mdate_to_date(in.get_mysql_date(), value, date_sql_mode))) {
       LOG_WARN("date_to_date failed", K(ret), K(in.get_datetime()), K(in.is_mysql_date()));
     } else {
       out.set_date(value);
@@ -7159,6 +7138,7 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
   bool is_null_result = false;
   bool is_different_charset_type = (ObCharset::charset_type_by_coll(in.get_collation_type())
                                     != ObCharset::charset_type_by_coll(params.expect_obj_collation_));
+  bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
   if (is_different_charset_type) {
     if (OB_FAIL(string_string(expect_type, params, in, tmp_out, cast_mode))) {
       LOG_WARN("fail to cast string to longtext", K(ret), K(in));
@@ -7172,8 +7152,15 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("Failed to get string from in obj", K(ret), K(tmp_out));
   } else { /* do nothing */ }
 
-  if (OB_SUCC(ret) && !is_null_result) {
-    bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
+  if (OB_FAIL(ret)) {
+  } else if (is_null_result) {
+  } else if (has_lob_header && lib::is_mysql_mode() && nullptr == lob_locator) {
+    // fast path for mysql string_text
+    out = tmp_out; // copy meta
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(params, res_str, expect_type, out))) {
+      LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expect_type), K(in));
+    }
+  } else {
     sql::ObTextStringObObjResult str_result(expect_type, &params, &out, has_lob_header);
     if (lob_locator == NULL) {
       if (OB_FAIL(str_result.init(res_str.length()))) {
@@ -11271,8 +11258,15 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
       if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
         LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+      } else if (dst_coll_info->collection_meta_->is_vector_type()) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+          LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+        }
       } else if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
         LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
         LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
         if (ret == OB_ERR_INVALID_VECTOR_DIM) {
@@ -16563,13 +16557,8 @@ int obj_collation_check(const bool is_strict_mode, const ObCollationType cs_type
         if (OB_FAIL(obj.get_string(str))) {
           LOG_WARN("Failed to get payload from string", K(ret), K(obj));
         }
-      } else {
-        ObTextStringIter instr_iter(obj);
-        if (OB_FAIL(instr_iter.init(0, NULL, &allocator))) {
-          LOG_WARN("fail to init lob str iter", K(ret));
-        } else if (OB_FAIL(instr_iter.get_full_data(str))) {
-          LOG_WARN("fail to get full data", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, obj, str))) {
+        LOG_WARN("read_real_string_data fail", K(ret), K(obj));
       }
     }
 

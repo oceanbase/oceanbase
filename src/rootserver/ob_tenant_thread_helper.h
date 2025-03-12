@@ -105,6 +105,8 @@ public:
                               const share::schema::ObTenantSchema &tenant_schema,
                               common::ObSqlString &primary_zone_str);
 protected:
+ int wait_tenant_schema_ready_(
+     const uint64_t tenant_id);
  int wait_tenant_schema_and_version_ready_(
      const uint64_t tenant_id, const uint64_t &data_version);
  int wait_tenant_data_version_ready_(

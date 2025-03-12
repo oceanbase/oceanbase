@@ -11,9 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "common/ob_range.h"
-#include "common/ob_store_range.h"
-#include "lib/hash_func/ob_hash_func.h"
 #include "share/ob_i_tablet_scan.h"
 #include "sql/engine/expr/ob_expr.h"
 

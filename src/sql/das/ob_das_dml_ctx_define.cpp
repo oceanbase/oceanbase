@@ -11,14 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/engine/ob_operator.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/das/ob_das_dml_ctx_define.h"
+#include "ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "storage/access/ob_dml_param.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
 namespace oceanbase
 {
@@ -111,10 +107,17 @@ ObDASDMLIterator::~ObDASDMLIterator()
 int ObDASDMLIterator::get_next_domain_index_row(ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(domain_iter_) && OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(
-          allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_, domain_iter_))) {
-    LOG_WARN("fail to create domain index dml iterator", K(ret));
-  } else if (OB_FAIL(domain_iter_->get_next_domain_row(row))) {
+  if (OB_ISNULL(domain_iter_)) {
+    ObDomainDMLParam param(allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_);
+    if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !das_ctdef_->old_row_projector_.empty()) {
+      param.mode_ = main_ctdef_->is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+      param.ft_doc_word_info_ = ft_doc_word_info_;
+    }
+    if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {
+      LOG_WARN("fail to create domain index dml iterator", K(ret));
+    }
+  }
+  if (FAILEDx(domain_iter_->get_next_domain_row(row))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next domain_row", K(ret));
     }
@@ -125,10 +128,17 @@ int ObDASDMLIterator::get_next_domain_index_row(ObDatumRow *&row)
 int ObDASDMLIterator::get_next_domain_index_rows(ObDatumRow *&rows, int64_t &row_count)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(domain_iter_) && OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(
-          allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_, domain_iter_))) {
-    LOG_WARN("fail to create domain index dml iterator", K(ret));
-  } else if (OB_FAIL(domain_iter_->get_next_domain_rows(rows, row_count))) {
+  if (OB_ISNULL(domain_iter_)) {
+    ObDomainDMLParam param(allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_);
+    if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !das_ctdef_->old_row_projector_.empty()) {
+      param.mode_ = main_ctdef_->is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+      param.ft_doc_word_info_ = ft_doc_word_info_;
+    }
+    if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {
+      LOG_WARN("fail to create domain index dml iterator", K(ret));
+    }
+  }
+  if (FAILEDx(domain_iter_->get_next_domain_rows(rows, row_count))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next domain rows", K(ret));
     }
@@ -232,11 +242,12 @@ int ObDASDMLIterator::get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &ro
   return ret;
 }
 
-int ObDASDMLIterator::rewind(const ObDASDMLBaseCtDef *das_ctdef)
+int ObDASDMLIterator::rewind(const ObDASDMLBaseCtDef *das_ctdef, const ObFTDocWordInfo *ft_doc_word_info)
 {
   int ret = common::OB_SUCCESS;
   cur_datum_row_ = nullptr;
   cur_datum_rows_ = nullptr;
+  ft_doc_word_info_ = ft_doc_word_info;
   set_ctdef(das_ctdef);
   if (OB_NOT_NULL(domain_iter_)) {
     if (OB_FAIL(domain_iter_->rewind())) {
@@ -257,7 +268,14 @@ void ObDASDMLIterator::set_ctdef(const ObDASDMLBaseCtDef *das_ctdef)
       // This table isn't domain index, nothing to do.
     } else if (domain_iter_->is_same_domain_type(das_ctdef)) {
       // The das_ctdef and das_ctdef_ are either full-text search or multi-value index.
-      domain_iter_->set_ctdef(das_ctdef, row_projector_);
+      ObDomainDMLMode mode = ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT;
+      if (das_ctdef->table_param_.get_data_table().is_fts_index()) {
+        static_cast<ObFTDMLIterator *>(domain_iter_)->set_ft_doc_word_info(ft_doc_word_info_);
+        if (!das_ctdef_->old_row_projector_.empty() && !main_ctdef_->is_main_table_in_fts_ddl_) {
+          mode = ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+        }
+      }
+      domain_iter_->set_ctdef(das_ctdef, row_projector_, mode);
     } else {
       // need to reset domain iter
       domain_iter_->~ObDomainDMLIterator();

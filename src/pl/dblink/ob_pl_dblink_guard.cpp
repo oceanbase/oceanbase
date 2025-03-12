@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_dblink_guard.h"
-#include "share/rc/ob_tenant_base.h"
-#include "pl/ob_pl_type.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "pl/ob_pl_stmt.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "lib/oracleclient/ob_oci_metadata.h"
@@ -747,6 +743,27 @@ int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
   return ret;
 }
 #endif
+
+int ObPLDbLinkGuard::get_dblink_table_by_type_id(const uint64_t type_id,
+                                                 const ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  table_schema = NULL;
+  uint64_t dblink_id = extract_package_id(type_id) & ~common::OB_MOCK_DBLINK_UDT_ID_MASK;
+  uint64_t table_id = extract_type_id(type_id);
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == table_schema && i < table_schemas_.count(); i++) {
+    const ObTableSchema *t_schema = table_schemas_.at(i);
+    CK (OB_NOT_NULL(t_schema));
+    if (OB_SUCC(ret)
+        && t_schema->get_dblink_id() == dblink_id
+        && t_schema->get_table_id() == table_id) {
+      table_schema = t_schema;
+    }
+  }
+#endif
+  return ret;
+}
 
 }
 }

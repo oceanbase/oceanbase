@@ -13,12 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_treat.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/json_type/ob_json_parse.h"
-#include "lib/json_type/ob_json_base.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_json_pl_utils.h"

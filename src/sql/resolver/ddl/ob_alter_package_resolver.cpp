@@ -13,12 +13,13 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_alter_package_resolver.h"
 #include "ob_alter_package_stmt.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "pl/parser/parse_stmt_item_type.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
 #include "sql/resolver/ddl/ob_create_package_resolver.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_package_type.h"
+#endif
 
 namespace oceanbase
 {
@@ -115,6 +116,14 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
                                               false /* is_for_trigger */))) {
+#ifdef OB_BUILD_ORACLE_PL
+    if (package_info->is_package()) {
+      int tmp_ret = ObPLPackageType::update_package_type_info(*package_info, package_ast, true);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("delete package type info failed", K(tmp_ret), K(ret));
+      }
+    }
+#endif
     ObPL::insert_error_msg(ret);
     switch (ret) {
     case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
@@ -170,6 +179,11 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                           share::schema::PACKAGE_TYPE,
                                           compatible_mode,
                                           package_spec_info));
+    OZ (ob_add_ddl_dependency(package_spec_info->get_package_id(),
+                              PACKAGE_SCHEMA,
+                              package_spec_info->get_schema_version(),
+                              package_spec_info->get_tenant_id(),
+                              pkg_arg));
     OZ (package_spec_ast.init(db_name,
                               package_spec_info->get_package_name(),
                               PL_PACKAGE_SPEC,
@@ -240,6 +254,12 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         OZ (error_info.delete_error(package_spec_info));
       }
     } else {
+      CK (OB_NOT_NULL(package_body_info));
+      OZ (ob_add_ddl_dependency(package_body_info->get_package_id(),
+                                PACKAGE_SCHEMA,
+                                package_body_info->get_schema_version(),
+                                package_body_info->get_tenant_id(),
+                                pkg_arg));
       bool body_has_error = false;
       OZ (package_body_ast.init(db_name,
                                 package_name,
@@ -298,6 +318,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                                   pkg_arg.dependency_infos_,
                                                   ObObjectType::PACKAGE_BODY,
                                                   0, dep_attr, dep_attr));
+          OZ (ob_add_ddl_dependency(package_body_ast.get_dependency_table(), pkg_arg));
         }
       }
       COLLECT_PACKAGE_INFO(pkg_arg, package_body_info);

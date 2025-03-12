@@ -1014,6 +1014,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigVectorMemoryChecker);
 };
 
+class ObConfigDefaultTableOrganizationChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultTableOrganizationChecker() {}
+  virtual ~ObConfigDefaultTableOrganizationChecker() {}
+  static bool check(const obrpc::ObAdminSetConfigItem &t);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultTableOrganizationChecker);
+};
+
 class ObConfigEnableHashRollupChecker: public ObConfigChecker
 {
 public:
@@ -1024,6 +1034,40 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEnableHashRollupChecker);
+};
+
+class ObConfigPxNodePolicyChecker: public ObConfigChecker
+{
+public:
+  ObConfigPxNodePolicyChecker()
+  {}
+  virtual ~ObConfigPxNodePolicyChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigPxNodePolicyChecker);
+};
+
+class ObConfigPluginsLoadChecker : public ObConfigChecker
+{
+public:
+  ObConfigPluginsLoadChecker() = default;
+  virtual ~ObConfigPluginsLoadChecker() = default;
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigPluginsLoadChecker);
+};
+
+class ObConfigNonStdCmpLevelChecker: public ObConfigChecker
+{
+public:
+  ObConfigNonStdCmpLevelChecker()
+  {}
+  virtual ~ObConfigNonStdCmpLevelChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigNonStdCmpLevelChecker);
 };
 
 class ObConfigJavaParamsChecker
@@ -1037,15 +1081,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
 };
 
-class ObConfigDefaultOrganizationChecker : public ObConfigChecker
+class ObConfigEnableAutoSplitChecker : public ObConfigChecker
 {
 public:
-  ObConfigDefaultOrganizationChecker() {}
-  virtual ~ObConfigDefaultOrganizationChecker() {}
+  ObConfigEnableAutoSplitChecker() {}
+  virtual ~ObConfigEnableAutoSplitChecker() {}
   bool check(const ObConfigItem &t) const;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultOrganizationChecker);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigEnableAutoSplitChecker);
 };
+
+class ObConfigAutoSplitTabletSizeChecker : public ObConfigChecker
+{
+public:
+  ObConfigAutoSplitTabletSizeChecker() {}
+  virtual ~ObConfigAutoSplitTabletSizeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAutoSplitTabletSizeChecker);
+};
+
+
 } // namespace common
 } // namespace oceanbase
 

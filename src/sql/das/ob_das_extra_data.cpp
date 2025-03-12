@@ -66,6 +66,7 @@ int ObDASExtraData::fetch_result()
     LOG_WARN("das extra data fetch result timeout", KR(ret), K(timeout_ts_), K(timeout));
   } else if (OB_FAIL(req.init(tenant_id, task_id_))) {
     LOG_WARN("init das data fetch request failed", KR(ret));
+  } else if (FALSE_IT(rpc_proxy_.set_detect_session_killed(true))) {
   } else if (OB_FAIL(rpc_proxy_
                      .to(result_addr_)
                      .by(tenant_id)

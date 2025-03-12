@@ -12,22 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/mysql/obmp_reset_connection.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/mysql/ob_mysql_end_trans_cb.h"
-#include "lib/string/ob_sql_string.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-//#include "share/schema/ob_schema_getter_guard.h"
-//#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "sql/ob_sql.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "sql/session/ob_basic_session_info.h"
 #include "storage/tablelock/ob_table_lock_live_detector.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 
@@ -87,8 +72,8 @@ int ObMPResetConnection::process()
       LOG_WARN("load system variables failed", K(ret));
     } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
       OB_LOG(WARN, "failed to update database variables", K(ret));
-    } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-      LOG_WARN("update_proxy_sys_vars failed", K(ret));
+    } else if (OB_FAIL(update_proxy_and_client_sys_vars(*session))) {
+      LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
     } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
       LOG_WARN("fail to update charset sys vars", K(ret));
     } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {

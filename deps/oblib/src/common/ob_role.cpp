@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "common/ob_role.h"
-#include "lib/ob_define.h"
 #include "lib/string/ob_string.h" // ObString
 
 namespace oceanbase

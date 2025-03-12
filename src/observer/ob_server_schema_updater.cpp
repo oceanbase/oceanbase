@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_server_schema_updater.h"
-#include "lib/thread/thread_mgr.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema.h"
+#include "ob_server_schema_updater.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;

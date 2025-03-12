@@ -12,8 +12,6 @@
 
 #include "ob_all_virtual_shared_storage_quota.h"
 #include "src/observer/net/ob_shared_storage_net_throt_rpc_struct.h"
-#include "src/rootserver/ob_root_utils.h"
-#include "src/share/io/ob_io_manager.h"
 namespace oceanbase
 {
 using namespace lib;

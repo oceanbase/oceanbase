@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_storage_object_rw_info.h"
+#include "ob_storage_object_rw_info.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
 
 namespace oceanbase

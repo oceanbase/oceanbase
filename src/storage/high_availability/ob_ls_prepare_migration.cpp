@@ -13,12 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_prepare_migration.h"
 #include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "logservice/ob_log_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_transfer_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "ob_rebuild_service.h"
 #include "ob_storage_ha_utils.h"
 

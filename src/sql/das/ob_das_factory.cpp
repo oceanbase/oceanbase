@@ -11,18 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_factory.h"
-#include "sql/das/ob_das_scan_op.h"
+#include "ob_das_factory.h"
 #include "sql/das/ob_das_insert_op.h"
 #include "sql/das/ob_das_delete_op.h"
 #include "sql/das/ob_das_update_op.h"
 #include "sql/das/ob_das_lock_op.h"
 #include "sql/das/ob_das_simple_op.h"
-#include "sql/das/ob_das_extra_data.h"
-#include "sql/das/ob_das_def_reg.h"
 #include "sql/das/ob_das_rpc_processor.h"
-#include "sql/das/ob_das_ref.h"
-#include "sql/das/ob_das_attach_define.h"
 #include "sql/das/ob_das_ir_define.h"
 #include "sql/das/ob_das_vec_define.h"
 #include "share/datum/ob_datum_util.h"

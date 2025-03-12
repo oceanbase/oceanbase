@@ -51,6 +51,7 @@ struct ObCurTraceId
       id_.is_user_request_ = 0;
       id_.is_ipv6_ = ip_port.using_ipv6();
       id_.reserved_ = 0;
+      id_.inner_sql_id_ = 0;
       id_.sub_task_ = 0;
       id_.port_ = static_cast<uint16_t>(ip_port.get_port());
       if (ip_port.using_ipv6()) {
@@ -157,9 +158,19 @@ struct ObCurTraceId
       return ret;
     }
 
+    inline void set_inner_sql_id(const int64_t inner_sql_id)
+    {
+      id_.inner_sql_id_ = inner_sql_id & ((1 << 4) - 1);
+    }
+
+    inline int64_t get_execution_id() const
+    {
+      return id_.inner_sql_id_;
+    }
+
     inline void set_sub_id(const int32_t sub_id)
     {
-      id_.sub_task_ = sub_id & ((1 << 12) - 1);
+      id_.sub_task_ = sub_id & ((1 << 8) - 1);
     }
 
     inline int64_t hash() const
@@ -196,7 +207,8 @@ struct ObCurTraceId
             uint8_t is_user_request_: 1;
             uint8_t is_ipv6_: 1;
             uint16_t reserved_: 2;
-            uint16_t sub_task_: 12;
+            uint16_t inner_sql_id_: 4; // FARM COMPAT WHITELIST
+            uint16_t sub_task_: 8;
           };
           uint32_t bytes_no_ip_;
         };
@@ -228,6 +240,14 @@ struct ObCurTraceId
     TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->set(new_trace_id);
+    }
+  }
+
+  inline static void set_inner_sql_id(const int64_t execution_id)
+  {
+    TraceId *trace_id = get_trace_id();
+    if (nullptr != trace_id) {
+      trace_id->set_inner_sql_id(execution_id);
     }
   }
 

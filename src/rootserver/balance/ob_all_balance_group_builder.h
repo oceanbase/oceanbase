@@ -27,6 +27,48 @@ namespace oceanbase
 {
 namespace rootserver
 {
+class ObPartitionHelper
+{
+public:
+  class ObPartInfo {
+  public:
+    ObPartInfo() {}
+    int init(common::ObTabletID tablet_id, common::ObObjectID part_id)
+    {
+      int ret = OB_SUCCESS;
+      tablet_id_ = tablet_id;
+      part_id_ = part_id;
+      return ret;
+    }
+    common::ObTabletID get_tablet_id() { return tablet_id_; }
+    common::ObObjectID get_part_id() { return part_id_; }
+    TO_STRING_KV(K_(tablet_id), K_(part_id));
+  private:
+    common::ObTabletID tablet_id_;
+    common::ObObjectID part_id_;
+  };
+  static int get_part_info(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      ObPartInfo &part_info);
+  static int get_sub_part_num(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      int64_t &sub_part_num);
+  static int get_sub_part_info(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      int64_t sub_part_idx,
+      ObPartInfo &part_info);
+  static int check_partition_option(
+      const share::schema::ObSimpleTableSchemaV2 &t1,
+      const share::schema::ObSimpleTableSchemaV2 &t2,
+      bool is_subpart, bool &is_matched);
+  static int check_partition_match(
+      const share::schema::ObSimpleTableSchemaV2 &t1,
+      const share::schema::ObSimpleTableSchemaV2 &t2,
+      bool &match);
+};
 
 // Tenant all balance group builder
 //
@@ -135,11 +177,9 @@ private:
   int build_bg_for_partlevel_two_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int add_new_part_(
       const ObBalanceGroup &bg,
-      const common::ObObjectID table_id,
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
       const common::ObObjectID part_object_id,
       const common::ObTabletID tablet_id,
-      share::ObLSID &dest_ls_id,
-      bool &in_new_partition_group,
       const uint64_t part_group_uid);
   int prepare_tablet_data_size_();
   int prepare_related_tablets_map_();
@@ -147,6 +187,10 @@ private:
       const share::schema::ObSimpleTableSchemaV2 &primary_table_schema,
       const share::schema::ObSimpleTableSchemaV2 &related_table_schema);
   int get_data_size_with_related_tablets_(const ObTabletID &tablet_id, uint64_t &data_size);
+  // defensive check
+  int check_table_schemas_in_tablegroup_(
+      const ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_dup_to_normal_dest_ls_id_(share::ObLSID &dest_ls_id);
   int add_part_to_bg_for_tablegroup_sharding_none_(
       const ObBalanceGroup &bg,
       const ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
@@ -162,6 +206,13 @@ private:
   bool inited_;
   const char* mod_;
   uint64_t tenant_id_;
+  share::ObLSID dup_ls_id_;
+  // previous info is used for all_new_part_
+  share::ObLSID pre_dest_ls_id_;
+  share::ObLSID pre_dup_to_normal_dest_ls_id_;
+  ObBalanceGroupID pre_bg_id_;
+  int64_t pre_part_group_uid_;
+
   NewPartitionCallback *callback_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

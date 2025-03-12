@@ -15,11 +15,6 @@
 #include "share/ob_occam_timer.h"
 #include <gtest/gtest.h>
 #include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include "common/ob_clock_generator.h"
-#include "share/ob_occam_time_guard.h"
 
 namespace oceanbase {
 namespace unittest {

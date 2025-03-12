@@ -11,14 +11,7 @@
  */
 
 #include "log_block_handler.h"
-#include "lib/ob_define.h"                              // some constexpr
-#include "lib/ob_errno.h"                               // OB_SUCCESS...
 #include "lib/stat/ob_session_stat.h"         // Session
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"                 // some macros
-#include "lib/utility/ob_tracepoint.h"                  // ERRSIM
-#include "lib/utility/ob_utility.h"                     // ob_pwrite
-#include "share/ob_errno.h"                             // errno
 #include "share/rc/ob_tenant_base.h"                    // mtl_malloc
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "log_io_utils.h"                               // close_with_ret

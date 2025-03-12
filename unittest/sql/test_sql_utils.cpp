@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX SQL
 #include "test_sql_utils.h"
-#include "lib/stat/ob_session_stat.h"
-#include "share/ob_cluster_version.h"
 #include "observer/ob_server.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include "share/ob_tenant_mgr.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "optimizer/ob_mock_opt_stat_manager.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #define CLUSTER_VERSION_2100 (oceanbase::common::cal_version(2, 1, 0, 0))
@@ -174,7 +166,9 @@ TestSqlUtils::TestSqlUtils()
     memset(schema_file_path_, '\0', 128);
     exec_ctx_.set_sql_ctx(&sql_ctx_);
 
+    static ObTimerService timer_service(sys_tenant_id_);
     static ObTenantBase tenant_ctx(sys_tenant_id_);
+    tenant_ctx.set(&timer_service);
     ObTenantEnv::set_tenant(&tenant_ctx);
 
     auto& cluster_version = ObClusterVersion::get_instance();

@@ -14,18 +14,8 @@
 #include "ob_common_ls_service.h"
 #include "ob_ls_service_helper.h"
 #include "ob_balance_ls_primary_zone.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_errno.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
 #include "share/ls/ob_ls_creator.h" //ObLSCreator
-#include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
-#include "share/ob_common_rpc_proxy.h"//common_rpc_proxy
-#include "observer/ob_server_struct.h"//GCTX
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
+#include "src/share/ob_common_rpc_proxy.h"
 
 namespace oceanbase
 {

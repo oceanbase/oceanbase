@@ -12,18 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_and_mutate_processor.h"
-#include "ob_table_rpc_processor_util.h"
-#include "observer/ob_service.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "ob_table_end_trans_cb.h"
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "ob_htable_utils.h"
-#include "ob_table_cg_service.h"
-#include "ob_htable_filter_operator.h"
-#include "ob_table_filter.h"
-#include "ob_table_op_wrapper.h"
 #include "ob_table_query_and_mutate_helper.h"
 
 using namespace oceanbase::observer;
@@ -86,7 +74,6 @@ int ObTableQueryAndMutateP::check_arg()
     LOG_WARN("should have at least one mutation operation", K(ret), K(mutations));
   } else {
     // these options are meaningless for QueryAndMutate users but we should control them internally
-    query.set_batch(1);  // mutate for each row
     query.set_max_result_size(-1);
 
     hfilter.set_max_versions(1);
@@ -120,9 +107,10 @@ int ObTableQueryAndMutateP::before_process()
   return ParentType::before_process();
 }
 
-int32_t ObTableQueryAndMutateP::get_process_type(bool is_hkv, table::ObTableOperationType::Type type)
+int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check_and_execute, ObTableOperationType::Type type)
 {
   int32_t process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+
   if (is_hkv) {
     switch (type) {
       case table::ObTableOperationType::DEL: {
@@ -147,7 +135,11 @@ int32_t ObTableQueryAndMutateP::get_process_type(bool is_hkv, table::ObTableOper
       }
     }
   } else { // tableapi
-    process_type = ObTableProccessType::TABLE_API_QUERY_AND_MUTATE;
+    if (is_check_and_execute) {
+      process_type = ObTableProccessType::TABLE_API_CHECK_AND_INSERT_UP;
+    } else {
+      process_type = ObTableProccessType::TABLE_API_QUERY_AND_MUTATE;
+    }
   }
   return process_type;
 }
@@ -161,12 +153,17 @@ int ObTableQueryAndMutateP::try_process()
   const ObTableQuery &query = arg_.query_and_mutate_.get_query();
   int64_t affected_rows = 0;
   const bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
-  stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
   ObHTableLockHandle *lock_handle = nullptr;
   ObLSID ls_id;
   bool exist_global_index = false;
   table_id_ = arg_.table_id_;
-  stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
+  stat_process_type_ = get_stat_process_type(is_hkv,
+                                             arg_.query_and_mutate_.is_check_and_execute(),
+                                             arg_.query_and_mutate_.get_mutations().at(0).type());
+  if (ObTableProccessType::TABLE_API_HBASE_INCREMENT != stat_process_type_ &&
+      ObTableProccessType::TABLE_API_HBASE_APPEND != stat_process_type_) {
+    arg_.query_and_mutate_.get_query().set_batch(1);
+  }
 
   if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));

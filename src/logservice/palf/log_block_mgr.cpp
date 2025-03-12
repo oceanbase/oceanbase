@@ -11,16 +11,7 @@
  */
 
 #include "log_block_mgr.h"
-#include <algorithm>                                    // std::sort
-#include <cstdio>                                       // renameat
-#include <fcntl.h>                                      // ::open
-#include "lib/ob_define.h"                              // some constexpr
-#include "lib/ob_errno.h"                               // OB_SUCCESS...
-#include "lib/container/ob_se_array_iterator.h"         // ObSEArrayIterator
-#include "log_define.h"                                 // convert_sys_errno
-#include "share/ob_errno.h"                             // OB_NO_SUCH_FILE_OR_DIRECTORY
 #include "log_writer_utils.h"                           // LogWriteBuf
-#include "lsn.h"                                        // LSN
 #include "log_io_utils.h"                               // openat_with_retry
 #include "log_io_adapter.h"                             // LogIOAdapter
 

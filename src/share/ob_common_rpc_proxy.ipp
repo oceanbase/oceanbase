@@ -15,8 +15,9 @@
   RPC_S(PR3 fetch_alive_server, obrpc::OB_FETCH_ALIVE_SERVER, (ObFetchAliveServerArg), ObFetchAliveServerResult);
   // RPC_S(PR5 fetch_active_server_status, obrpc::OB_FETCH_ACTIVE_SERVER_STATUS, (ObFetchAliveServerArg), ObFetchActiveServerAddrResult);
 
-  RPC_S(PRD create_tenant, obrpc::OB_CREATE_TENANT, (ObCreateTenantArg), UInt64);
+  RPC_S(PRD create_tenant, obrpc::OB_CREATE_TENANT, (ObCreateTenantArg), ObCreateTenantSchemaResult);
   RPC_S(PRD create_tenant_end, obrpc::OB_CREATE_TENANT_END, (ObCreateTenantEndArg));
+  RPC_AP(PRD parallel_create_normal_tenant, obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, (obrpc::ObParallelCreateNormalTenantArg), NoneT);
   RPC_S(PRD drop_tenant, obrpc::OB_DROP_TENANT, (ObDropTenantArg));
   RPC_S(PRD modify_tenant, obrpc::OB_MODIFY_TENANT, (ObModifyTenantArg));
   RPC_S(PRD lock_tenant, obrpc::OB_LOCK_TENANT, (ObLockTenantArg));
@@ -172,6 +173,7 @@
   RPC_S(PRD update_index_status, obrpc::OB_UPDATE_INDEX_TABLE_STATUS, (ObUpdateIndexStatusArg));
   RPC_S(PRD update_mview_status, obrpc::OB_UPDATE_MVIEW_TABLE_STATUS, (ObUpdateMViewStatusArg));
   RPC_S(PRD parallel_update_index_status, obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS, (ObUpdateIndexStatusArg), ObParallelDDLRes);
+  RPC_S(PRD drop_lob, obrpc::OB_DROP_LOB, (ObDropLobArg));
 
   // define system admin rpc (alter system ...)
   RPC_S(PR5 root_minor_freeze, obrpc::OB_ROOT_MINOR_FREEZE, (ObRootMinorFreezeArg));
@@ -235,7 +237,6 @@
   RPC_S(PR5 abort_redef_table, obrpc::OB_ABORT_REDEF_TABLE, (obrpc::ObAbortRedefTableArg));
   RPC_S(PR5 update_ddl_task_active_time, obrpc::OB_UPDATE_DDL_TASK_ACTIVE_TIME, (obrpc::ObUpdateDDLTaskActiveTimeArg));
 
-  RPC_S(PR5 disaster_recovery_task_reply, OB_DISASTER_RECOVERY_TASK_REPLY, (ObDRTaskReplyResult));
   RPC_S(PR5 backup_compl_log_res, obrpc::OB_BACKUP_COMPL_LOG_RES, (ObBackupTaskRes));
 
   RPC_S(PRD commit_alter_tenant_locality, OB_COMMIT_ALTER_TENANT_LOCALITY, (rootserver::ObCommitAlterTenantLocalityArg));
@@ -303,3 +304,5 @@
   RPC_S(PR5 reload_master_key, obrpc::OB_RELOAD_MASTER_KEY, (obrpc::ObReloadMasterKeyArg), obrpc::ObReloadMasterKeyResult);
 #endif
   RPC_S(PRD alter_user_proxy, obrpc::OB_ALTER_USER_PROXY, (ObAlterUserProxyArg), obrpc::ObAlterUserProxyRes);
+  //Rebuild Tablet
+  RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));
