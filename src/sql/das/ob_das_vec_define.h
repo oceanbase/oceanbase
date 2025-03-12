@@ -89,6 +89,7 @@ public:
   double row_count_;
   bool access_pk_;
   bool can_use_vec_pri_opt_;
+  int64_t extra_column_count_; // for hnsw
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef
