@@ -1378,7 +1378,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbContains::eval_rb_contains, /* 840 */
   NULL, // ObExprCurrentCatalog::eval_current_catalog,                 /* 841 */
   NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
-
+  NULL, // ObExprMap::eval_map,                                        /* 843 */
+  NULL, // ObExprSparseVectorIPDistance::calc_inner_product,           /* 844 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

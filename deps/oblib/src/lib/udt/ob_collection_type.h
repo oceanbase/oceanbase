@@ -26,6 +26,8 @@ enum ObNestedType {
   OB_BASIC_TYPE = 0,
   OB_ARRAY_TYPE = 1,
   OB_VECTOR_TYPE = 2,
+  OB_MAP_TYPE = 3,
+  OB_SPARSE_VECTOR_TYPE = 4,
 };
 
 class ObCollectionTypeBase {
