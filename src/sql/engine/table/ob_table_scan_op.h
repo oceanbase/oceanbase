@@ -473,6 +473,7 @@ public:
   common::ObString parser_name_; // word segment for ddl.
   common::ObString parser_properties_;
   ObCostTableScanSimpleInfo est_cost_simple_info_;
+  ExprFixedArray pseudo_column_exprs_;
 };
 
 class ObTableScanOp : public ObOperator

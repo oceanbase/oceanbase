@@ -601,7 +601,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     partition_id_calc_type_(0),
     parser_name_(),
     parser_properties_(),
-    est_cost_simple_info_()
+    est_cost_simple_info_(),
+    pseudo_column_exprs_(alloc)
 {
 }
 
@@ -628,7 +629,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     tenant_id_col_idx_,
                     partition_id_calc_type_,
                     parser_name_,
-                    parser_properties_);
+                    parser_properties_,
+                    pseudo_column_exprs_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
