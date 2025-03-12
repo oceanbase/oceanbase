@@ -360,7 +360,8 @@ OB_SERIALIZE_MEMBER(ObTxDesc,
                     parts_,
                     xid_,
                     flags_.for_serialize_v_,
-                    seq_base_);
+                    seq_base_,
+                    client_sid_);
 OB_SERIALIZE_MEMBER(ObTxParam,
                     timeout_us_,
                     lock_timeout_us_,
@@ -426,6 +427,7 @@ ObTxDesc::ObTxDesc()
     snapshot_scn_(),
     sess_id_(0),
     assoc_sess_id_(0),
+    client_sid_(0),
     global_tx_type_(ObGlobalTxType::PLAIN),
     op_sn_(0),                          // default is from 0
     state_(State::INVL),

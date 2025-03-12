@@ -576,6 +576,7 @@ protected:
   ObTxSEQ snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id of txn start, for XA it is XA_START session id
   uint32_t assoc_sess_id_;             // the session which associated with
+  uint32_t client_sid_;                // client session id, which is produced by proxy
   ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
 
   uint64_t op_sn_;                     // Tx level operation sequence No
@@ -760,6 +761,7 @@ public:
                K_(tenant_id),
                "session_id", sess_id_,
                "assoc_session_id", assoc_sess_id_,
+               "client_sid", client_sid_,
                "xid", PC((!xid_.empty() ? &xid_ : (ObXATransID*)nullptr)),
                "xa_mode", xid_.empty() ? "" : (xa_tightly_couple_ ? "tightly" : "loosely"),
                K_(xa_start_addr),
@@ -815,6 +817,7 @@ public:
   uint64_t get_cluster_id() const { return cluster_id_; }
   uint32_t get_session_id() const { return sess_id_; }
   uint32_t get_assoc_session_id() const { return assoc_sess_id_; }
+  uint32_t get_client_sid() const { return client_sid_; }
   ObAddr get_addr() const { return addr_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   ObTxConsistencyType get_tx_consistency_type() const { return tx_consistency_type_; }
@@ -880,6 +883,7 @@ public:
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
   void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
   void set_assoc_sessid(const uint32_t session_id) { assoc_sess_id_ = session_id; }
+  void set_client_sid(const uint32_t client_sid) { client_sid_ = client_sid; }
   const ObXATransID &get_xid() const { return xid_; }
   void reset_xid() { xid_.reset(); }
   bool is_xa_trans() const { return !xid_.empty(); }
