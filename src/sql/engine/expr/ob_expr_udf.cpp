@@ -414,27 +414,28 @@ int ObExprUDF::process_singal_out_param(int64_t i,
                                         const ObIArray<ObExprResType> &params_type)
 {
   int ret = OB_SUCCESS;
-  if (dones.at(i)) {
+  pl::ObPLExecCtx *ctx = nullptr;
+  ObIAllocator *symbol_alloc = nullptr;
+  ObIAllocator *cur_expr_allocator = nullptr;
+  ObObjParam tmp;
+  if (OB_NOT_NULL(exec_ctx.get_my_session()->get_pl_context())) {
+    ctx = exec_ctx.get_my_session()->get_pl_context()->get_current_ctx();
+    CK (OB_NOT_NULL(ctx));
+    OX (symbol_alloc = ctx->allocator_);
+    OX (cur_expr_allocator = ctx->get_top_expr_allocator());
+    CK (OB_NOT_NULL(cur_expr_allocator));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (dones.at(i)) {
     // already process, do nothing
   } else if (params_desc.at(i).is_local_out()) { //out param in paramstore of caller
     if (nocopy_params.count() > 0 && nocopy_params.at(i) != OB_INVALID_INDEX) {
       // nocopy parameter already process before, do nothing ....
     } else {
-      pl::ObPLExecCtx *ctx = nullptr;
-      ObIAllocator *symbol_alloc = nullptr;
-      ObIAllocator *cur_expr_allocator = nullptr;
       const ParamStore &param_store = exec_ctx.get_physical_plan_ctx()->get_param_store();
       int64_t position = params_desc.at(i).get_index();
       ObObjParam *modify = NULL;
       ObObjParam result;
-      ObObjParam tmp;
-      if (OB_NOT_NULL(exec_ctx.get_my_session()->get_pl_context())) {
-        ctx = exec_ctx.get_my_session()->get_pl_context()->get_current_ctx();
-        CK (OB_NOT_NULL(ctx));
-        OX (symbol_alloc = ctx->allocator_);
-        OX (cur_expr_allocator = ctx->get_top_expr_allocator());
-        CK (OB_NOT_NULL(cur_expr_allocator));
-      }
       CK (position < param_store.count());
       CK (OB_NOT_NULL(modify = const_cast<ObObjParam*>(&(param_store.at(position)))));
       // ext type cannot convert. just copy it.
@@ -483,20 +484,30 @@ int ObExprUDF::process_singal_out_param(int64_t i,
       OX (dones.at(i) = true);
     }
   } else if (params_desc.at(i).is_package_var_out()) {
+    OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
+                                        nullptr != cur_expr_allocator ? cur_expr_allocator : &alloc,
+                                        iparams.at(i),
+                                        params_type.at(i),
+                                        tmp));
     OZ (ObSPIService::spi_set_package_variable(
       &exec_ctx,
       NULL,
       params_desc.at(i).get_package_id(),
       params_desc.at(i).get_index(),
-      iparams.at(i)));
+      tmp));
     OX (dones.at(i) = true);
   } else if (params_desc.at(i).is_subprogram_var_out()) {
+    OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
+                                        nullptr != cur_expr_allocator ? cur_expr_allocator : &alloc,
+                                        iparams.at(i),
+                                        params_type.at(i),
+                                        tmp));
     OZ (pl::ObPLContext::set_subprogram_var_from_local(
       *exec_ctx.get_my_session(),
       params_desc.at(i).get_package_id(),
       params_desc.at(i).get_subprogram_id(),
       params_desc.at(i).get_index(),
-      iparams.at(i)));
+      tmp));
     OX (dones.at(i) = true);
   } else if (params_desc.at(i).is_obj_access_out() &&
              OB_INVALID_ID != params_desc.at(i).get_package_id() &&

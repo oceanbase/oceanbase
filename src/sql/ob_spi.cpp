@@ -940,8 +940,8 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         OZ (get_result_type(*ctx, *expr, result_type));
         OX (result->set_param_meta(result_type));
         /* 如果本层是udf, 本次计算的表达式中含有udf;
-           如果内层udf失败，由udf内部来回滚, 如果内层udf成功, 发生了强转失败等问题, 此处不回滚,
-           由本层udf的destory接口来保证回滚, 兼容mysql */
+          如果内层udf失败，由udf内部来回滚, 如果内层udf成功, 发生了强转失败等问题, 此处不回滚,
+          由本层udf的destory接口来保证回滚, 兼容mysql */
         if (lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
           if (OB_SUCCESS != ret && ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
             int tmp_ret = OB_SUCCESS;
@@ -952,7 +952,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
                   (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, expr_savepoint_name))) {
                 LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
               }
-#ifdef OB_BUILD_ORACLE_PL
+  #ifdef OB_BUILD_ORACLE_PL
             } else if (ctx->exec_ctx_->get_my_session()->associated_xa()) {
               if (OB_TRANS_XA_BRANCH_FAIL != ret) {
                 tmp_ret = ObDbmsXA::xa_rollback_savepoint(*ctx->exec_ctx_);
@@ -961,7 +961,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
                           K(tmp_ret), KPC(ctx->exec_ctx_->get_my_session()->get_tx_desc()));
                 }
               }
-#endif
+  #endif
             } else if (ctx->exec_ctx_->get_my_session()->get_in_transaction()) {
               tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, true);
             }
@@ -969,38 +969,13 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
           } else if (ctx->exec_ctx_->get_my_session()->get_local_autocommit() && !explicit_trans) {
             if (!ctx->exec_ctx_->get_my_session()->associated_xa()) {
               int tmp_ret = OB_SUCCESS;
-              if (has_implicit_savepoint) {
-                DISABLE_SQL_MEMLEAK_GUARD;
-                const ObString expr_savepoint_name("PL expr savepoint");
-                if (OB_SUCCESS !=
-                    (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, expr_savepoint_name))) {
-                  LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
+              if (OB_SUCCESS == ret) {
+                if (OB_SUCCESS != (tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, false, true))) {
+                  // 不覆盖原来的错误码
+                  LOG_WARN("failed to explicit end trans", K(ret), K(tmp_ret));
                 }
-  #ifdef OB_BUILD_ORACLE_PL
-              } else if (ctx->exec_ctx_->get_my_session()->associated_xa()) {
-                if (OB_TRANS_XA_BRANCH_FAIL != ret) {
-                  tmp_ret = ObDbmsXA::xa_rollback_savepoint(*ctx->exec_ctx_);
-                  if (OB_SUCCESS != tmp_ret) {
-                    LOG_WARN("xa trans roll back to save point failed",
-                            K(tmp_ret), KPC(ctx->exec_ctx_->get_my_session()->get_tx_desc()));
-                  }
-                }
-  #endif
-              } else if (ctx->exec_ctx_->get_my_session()->get_in_transaction()) {
-                tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, true);
               }
               ret = OB_SUCCESS == ret ? tmp_ret : ret;
-            } else if (ctx->exec_ctx_->get_my_session()->get_local_autocommit() && !explicit_trans) {
-              if (!ctx->exec_ctx_->get_my_session()->associated_xa()) {
-                int tmp_ret = OB_SUCCESS;
-                if (OB_SUCCESS == ret) {
-                  if (OB_SUCCESS != (tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, false, true))) {
-                    // 不覆盖原来的错误码
-                    LOG_WARN("failed to explicit end trans", K(ret), K(tmp_ret));
-                  }
-                }
-                ret = OB_SUCCESS == ret ? tmp_ret : ret;
-              }
             }
           }
         }
