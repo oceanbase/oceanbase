@@ -334,6 +334,7 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
     } else {
       OZ (param_assign_after_convert_int2number(params_->at(i), *(data + pos)));
     }
+    params_->at(i).set_param_meta();
   }
   return ret;
 }
