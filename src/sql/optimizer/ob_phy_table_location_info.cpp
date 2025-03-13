@@ -403,18 +403,22 @@ int ObCandiTableLoc::all_select_local_replica_or_leader(bool &is_on_same_server,
   ObLSReplicaLocation replica_location;
   int64_t replica_idx = OB_INVALID_INDEX;
   int64_t local_replica_idx = OB_INVALID_INDEX;
+  ObAddr replica_addr;
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs_.count(); ++i) {
     replica_location.reset();
     replica_idx = OB_INVALID_INDEX;
     local_replica_idx = OB_INVALID_INDEX;
     ObCandiTabletLoc &phy_part_loc_info = candi_tablet_locs_.at(i);
+    replica_addr.reset();
     if (OB_FAIL(phy_part_loc_info.get_partition_location().get_strong_leader(replica_location, replica_idx))) {
       LOG_WARN("fail to get leader", K(ret), K(phy_part_loc_info.get_partition_location()));
     } else {
+      replica_addr = replica_location.get_server();
       if (phy_part_loc_info.is_server_in_replica(local_server, local_replica_idx)) {
         if (replica_idx != local_replica_idx) {
           LOG_TRACE("about to choose local replica rather than leader replica for duplicate table", K(replica_idx), K(local_replica_idx));
           replica_idx = local_replica_idx;
+          replica_addr = local_server;
         }
       }
     }
@@ -429,8 +433,8 @@ int ObCandiTableLoc::all_select_local_replica_or_leader(bool &is_on_same_server,
       LOG_WARN("fail to set selected replica idx", K(ret), K(replica_idx), K(phy_part_loc_info));
     } else {
       if (0 == i) {
-        first_server = replica_location.get_server();
-      } else if (first_server != replica_location.get_server()) {
+        first_server = replica_addr;
+      } else if (first_server != replica_addr) {
         is_on_same_server = false;
       }
     }
