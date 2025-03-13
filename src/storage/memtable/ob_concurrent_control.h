@@ -36,7 +36,8 @@ struct ObWriteFlag
   #define OBWF_BIT_UPDATE_UK        1
   #define OBWF_BIT_UPDATE_PK_DOP    1
   #define OBWF_BIT_IMMEDIATE_CHECK  1
-  #define OBWF_BIT_RESERVED         52
+  #define OBWF_BIT_DELETE_INSERT    1
+  #define OBWF_BIT_RESERVED         51
 
   static const uint64_t OBWF_MASK_TABLE_API = (0x1UL << OBWF_BIT_TABLE_API) - 1;
   static const uint64_t OBWF_MASK_TABLE_LOCK = (0x1UL << OBWF_BIT_TABLE_LOCK) - 1;
@@ -63,6 +64,7 @@ struct ObWriteFlag
       uint64_t is_update_uk_        : OBWF_BIT_UPDATE_UK;        // 0: false(default), 1: true
       uint64_t is_update_pk_dop_    : OBWF_BIT_UPDATE_PK_DOP;    // 0: false(default), 1: true
       uint64_t immediate_row_check_ : OBWF_BIT_IMMEDIATE_CHECK;  // 0: false(default), 1: true
+      uint64_t is_delete_insert_    : OBWF_BIT_DELETE_INSERT;    // 0: false(default), 1: true
       uint64_t reserved_            : OBWF_BIT_RESERVED;
     };
   };
@@ -94,6 +96,8 @@ struct ObWriteFlag
   inline bool is_update_pk_dop() const { return is_update_pk_dop_; }
   inline void set_immediate_row_check() { immediate_row_check_ = true; }
   inline bool is_immediate_row_check() const { return immediate_row_check_; }
+  inline void set_is_delete_insert() { is_delete_insert_ = true; }
+  inline bool is_delete_insert() const { return is_delete_insert_; }
 
   TO_STRING_KV("is_table_api", is_table_api_,
                "is_table_lock", is_table_lock_,
@@ -105,7 +109,9 @@ struct ObWriteFlag
                "is_lob_aux", is_lob_aux_,
                "is_skip_flush_redo", is_skip_flush_redo_,
                "is_update_uk", is_update_uk_,
-               "is_update_pk_dop", is_update_pk_dop_);
+               "is_update_pk_dop", is_update_pk_dop_,
+               "immediate_row_check",  immediate_row_check_,
+               "is_delete_insert", is_delete_insert_);
 
   OB_UNIS_VERSION(1);
 };
