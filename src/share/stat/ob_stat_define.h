@@ -57,7 +57,8 @@ enum StatOptionFlags
   OPT_HIST_EST_PERCENT = 1 << 17,
   OPT_HIST_BLOCK_SAMPLE = 1 << 18,
   OPT_AUTO_SAMPLE_ROW_COUNT = 1 << 19,
-  OPT_STAT_OPTION_ALL  = (1 << 20) -1
+  OPT_SKIP_RATE_SAMPLE_COUNT = 1 << 20,
+  OPT_STAT_OPTION_ALL  = (1 << 21) -1
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;

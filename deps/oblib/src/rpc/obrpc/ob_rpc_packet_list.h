@@ -566,6 +566,7 @@ PCODE_DEF(OB_DAS_ASYNC_ACCESS, 0x52B) //das async rpc
 PCODE_DEF(OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, 0x52C) //add dependency for synonym during upgrade
 PCODE_DEF(OB_CLEAN_DTL_INTERM_RESULT, 0x52D) //add dependency for synonym during upgrade
 PCODE_DEF(OB_CANCEL_GATHER_STATS, 0x52E)//used to cancel gather stats by rpc
+PCODE_DEF(OB_ESTIMATE_SKIP_RATE, 0x52F) //use to gather column group skip rate
 
 PCODE_DEF(OB_SQL_PCODE_END, 0x54F) // as a guardian
 
