@@ -148,9 +148,10 @@ int ObLS::init(const share::ObLSID &ls_id,
                                    restore_status,
                                    create_scn))) {
     LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls_freezer_.init(this))) {
+    LOG_WARN("init freezer failed", K(ret), K(tenant_id), K(ls_id));
   } else {
     rs_reporter_ = reporter;
-    ls_freezer_.init(this);
     transaction::ObTxPalfParam tx_palf_param(get_log_handler(), &dup_table_ls_handler_);
 
     // tx_table_.init() should after ls_table_svr.init()
