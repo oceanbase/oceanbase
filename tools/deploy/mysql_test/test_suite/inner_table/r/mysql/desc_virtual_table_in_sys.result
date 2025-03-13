@@ -5344,6 +5344,7 @@ spare5	varchar(4096)	YES		NULL
 spare6	varchar(4096)	YES		NULL	
 cg_macro_blk_cnt	bigint(20)	NO		0	
 cg_micro_blk_cnt	bigint(20)	NO		0	
+cg_skip_rate	double	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5491,6 +5492,7 @@ spare5	varchar(4096)	YES		NULL
 spare6	varchar(4096)	YES		NULL	
 cg_macro_blk_cnt	bigint(20)	NO		0	
 cg_micro_blk_cnt	bigint(20)	NO		0	
+cg_skip_rate	double	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_stat_history;
 IF(count(*) >= 0, 1, 0)
 1

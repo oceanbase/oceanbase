@@ -3260,7 +3260,8 @@ def_table_schema(
       ('spare5', 'varchar:MAX_VALUE_LENGTH', 'true'),
       ('spare6', 'varchar:MAX_VALUE_LENGTH', 'true'),
       ('cg_macro_blk_cnt', 'int', 'false', '0'),
-      ('cg_micro_blk_cnt', 'int', 'false', '0')
+      ('cg_micro_blk_cnt', 'int', 'false', '0'),
+      ('cg_skip_rate', 'double', 'true')
   ],
 )
 
@@ -3389,7 +3390,8 @@ def_table_schema(
       ('spare5', 'varchar:MAX_VALUE_LENGTH', 'true'),
       ('spare6', 'varchar:MAX_VALUE_LENGTH', 'true'),
       ('cg_macro_blk_cnt', 'int', 'false', '0'),
-      ('cg_micro_blk_cnt', 'int', 'false', '0')
+      ('cg_micro_blk_cnt', 'int', 'false', '0'),
+      ('cg_skip_rate', 'double', 'true')
   ],
 )
 
