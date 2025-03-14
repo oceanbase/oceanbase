@@ -3837,6 +3837,7 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
     ObString ident_name;
     ObRawExpr *default_expr = NULL;
     bool default_construct = false;
+    bool has_access_external_state = false;
     const ObStmtNodeTree *name_node = parse_tree->children_[0];
     const ObStmtNodeTree *type_node = parse_tree->children_[1];
     const ObStmtNodeTree *default_node = parse_tree->children_[2];
@@ -3927,6 +3928,10 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
             }
           }
         }
+        if (OB_SUCC(ret) && OB_NOT_NULL(default_expr)) {
+          OZ (check_access_external_state(default_expr,
+                                          has_access_external_state));
+        }
       } else if (OB_NOT_NULL(data_type.get_data_type())) { // 基础类型如果, 没有默认值, 设置为NULL
         common::ObIArray<common::ObString>* type_info = NULL;
         OZ (data_type.get_type_info(type_info));
@@ -3973,7 +3978,7 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
           OZ (stmt->add_index(unit_ast.get_symbol_table().get_count()));
         }
         OZ (current_block_->get_namespace().add_symbol(
-              name, data_type, default_expr, constant, not_null, default_construct));
+              name, data_type, default_expr, constant, not_null, default_construct, false, has_access_external_state));
       }
     }
   }
@@ -10121,6 +10126,31 @@ int ObPLResolver::set_cm_warn_on_fail(ObRawExpr *&expr)
     } else if (T_FUN_SUBQUERY == expr->get_expr_type()) {
       ObPlQueryRefRawExpr *subquery_expr = static_cast<ObPlQueryRefRawExpr *>(expr);
       subquery_expr->set_ignore_fail();
+    }
+  }
+  return ret;
+}
+
+int ObPLResolver::check_access_external_state(ObRawExpr *&expr,
+                                              bool &has_access_external_state)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(expr));
+  if (OB_FAIL(ret)) {
+  } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
+    OX (has_access_external_state = true);
+  } else if (T_FUN_UDF == expr->get_expr_type() ||
+             T_OP_GET_SYS_VAR == expr->get_expr_type() ||
+             T_OP_GET_USER_VAR == expr->get_expr_type() ||
+             (T_FUN_SUBQUERY == expr->get_expr_type() && lib::is_mysql_mode())) {
+    OX (has_access_external_state = true);
+  } else {
+    for (int64_t i = 0;
+         OB_SUCC(ret) &&
+         !has_access_external_state &&
+         i < expr->get_param_count();
+         ++i) {
+      OZ (check_access_external_state(expr->get_param_expr(i), has_access_external_state));
     }
   }
   return ret;

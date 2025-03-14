@@ -798,6 +798,8 @@ private:
                      const ObPLDataType *expected_type = NULL);
   int get_actually_pl_type(const ObPLDataType *&type);
   int set_cm_warn_on_fail(ObRawExpr *&expr);
+  int check_access_external_state(ObRawExpr *&expr,
+                                  bool &has_access_external_state);
   int analyze_expr_type(ObRawExpr *&expr,
                         ObPLCompileUnitAST &unit_ast);
   int set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number);

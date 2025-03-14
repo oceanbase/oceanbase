@@ -41,6 +41,7 @@ int ObPLVar::deep_copy(const ObPLVar &var, ObIAllocator &allocator)
       is_dup_declare_ = var.is_dup_declare();
       is_formal_param_ = var.is_formal_param();
       is_referenced_ = var.is_referenced();
+      is_default_expr_access_external_state_ = var.is_default_expr_access_external_state();
     }
   }
   return ret;
@@ -62,7 +63,8 @@ int ObPLSymbolTable::add_symbol(const ObString &name,
                                 const bool not_null,
                                 const bool default_construct,
                                 const bool is_formal_param,
-                                const bool is_dup_declare)
+                                const bool is_dup_declare,
+                                const bool has_access_external_state)
 {
   int ret = OB_SUCCESS;
   ObPLVar var;
@@ -74,6 +76,7 @@ int ObPLSymbolTable::add_symbol(const ObString &name,
   var.set_default_construct(default_construct);
   var.set_is_formal_param(is_formal_param);
   var.set_dup_declare(is_dup_declare);
+  var.set_is_default_expr_has_reroute_factor(has_access_external_state);
   OZ (variables_.push_back(var), var, variables_.count());
   return ret;
 }
@@ -982,7 +985,8 @@ int ObPLBlockNS::add_symbol(const ObString &name,
                             const bool read_only,
                             const bool not_null,
                             const bool default_construct,
-                            const bool is_formal_param)
+                            const bool is_formal_param,
+                            const bool has_access_external_state)
 {
   int ret = OB_SUCCESS;
   bool is_dup = false;
@@ -1007,7 +1011,8 @@ int ObPLBlockNS::add_symbol(const ObString &name,
                                        not_null,
                                        default_construct,
                                        is_formal_param,
-                                       is_dup));
+                                       is_dup,
+                                       has_access_external_state));
     if (OB_SUCC(ret) && OB_NOT_NULL(expr)) {
       OZ (exprs_->push_back(const_cast<ObRawExpr*>(expr)));
     }
