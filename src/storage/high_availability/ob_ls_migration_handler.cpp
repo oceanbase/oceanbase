@@ -1224,9 +1224,14 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(arg.dst_.get_replica_type())) {
     LOG_INFO("dst has no ssstore, no need check disk space", K(arg));
   } else if (OB_TMP_FAIL(get_ls_required_size_(arg, required_size))) {
+    // use OB_TMP_FAIL to ignore return value because when tenant is restoring,
+    // inner table may not created yet, which is not readable,
+    // get_ls_required_size may fail, migration task could fail all the time,
+    // so we have to ignore the return value
     LOG_WARN("failed to get ls required size", KR(tmp_ret), K(arg));
   }
-  if (required_size > 0) {
+  if (OB_FAIL(ret)) {
+  } else if (required_size > 0) {
     if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
       // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE
       FLOG_ERROR( "failed to check_is_disk_full, cannot migrate in",
@@ -1256,7 +1261,8 @@ int ObLSMigrationHandler::get_ls_required_size_(
     LOG_WARN("invalid argument", KR(ret), K(arg));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
-  } else if (DATA_VERSION_4_3_3_0 >= data_version) {
+  } else if (MOCK_DATA_VERSION_4_2_5_3 > data_version
+             || (DATA_VERSION_4_3_0_0 <= data_version && DATA_VERSION_4_3_3_0 >= data_version)) {
     LOG_TRACE("data version not promoted, do no check required size", K(tenant_id), K(data_version));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
