@@ -39,7 +39,10 @@ public:
   int init(const blocksstable::ObStorageDatumUtils &datum_utils);
   int compare(const blocksstable::ObDatumRowkey *lhs, const blocksstable::ObDatumRowkey *rhs,
               int &cmp_ret);
+  int compare(const blocksstable::ObDatumRowkey &lhs, const blocksstable::ObDatumRowkey &rhs,
+              int &cmp_ret);
   bool operator()(const blocksstable::ObDatumRowkey *lhs, const blocksstable::ObDatumRowkey *rhs);
+  bool operator()(const blocksstable::ObDatumRowkey &lhs, const blocksstable::ObDatumRowkey &rhs);
   int get_error_code() const { return result_code_; }
 
 public:

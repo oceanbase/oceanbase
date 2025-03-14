@@ -44,9 +44,29 @@ public:
   };
 };
 
+struct ObDirectLoadSampleMode
+{
+#define OB_DIRECT_LOAD_SAMPLE_MODE_DEF(DEF) \
+  DEF(NO_SAMPLE, = 0)                       \
+  DEF(DATA_BLOCK_SAMPLE, = 1)               \
+  DEF(ROW_SAMPLE, = 2)                      \
+  DEF(MAX_SAMPLE_MODE, )
+
+  DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_SAMPLE_MODE_DEF, static);
+
+  static bool is_type_valid(const Type type) { return type >= NO_SAMPLE && type < MAX_SAMPLE_MODE; }
+  static bool is_sample_enabled(const Type type)
+  {
+    return type > NO_SAMPLE && type < MAX_SAMPLE_MODE;
+  }
+  static bool is_data_block_sample(const Type type) { return DATA_BLOCK_SAMPLE == type; }
+  static bool is_row_sample(const Type type) { return ROW_SAMPLE == type; }
+};
+
 struct ObDirectLoadTableDataDesc
 {
   static const int64_t DEFAULT_EXTRA_BUF_SIZE = (2LL << 20); // 2M
+  static const int64_t DEFAULT_ROWS_PER_SAMPLE = 10000; // 1w行采样1个
 public:
   ObDirectLoadTableDataDesc();
   ~ObDirectLoadTableDataDesc();
@@ -54,7 +74,8 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(rowkey_column_num), K_(column_count), K_(external_data_block_size),
                K_(sstable_index_block_size), K_(sstable_data_block_size), K_(extra_buf_size),
-               K_(compressor_type), K_(is_shared_storage), K_(row_flag));
+               K_(compressor_type), K_(row_flag),
+               "sample_mode", ObDirectLoadSampleMode::get_type_string(sample_mode_), K_(num_per_sample));
 public:
   int64_t rowkey_column_num_;
   int64_t column_count_;
@@ -63,8 +84,9 @@ public:
   int64_t sstable_data_block_size_;
   int64_t extra_buf_size_;
   common::ObCompressorType compressor_type_;
-  bool is_shared_storage_; // 共享存储模式, multiple sstable会额外写一份rowkey数据
   ObDirectLoadRowFlag row_flag_;
+  ObDirectLoadSampleMode::Type sample_mode_; // 采样模式
+  int64_t num_per_sample_; // 采样间隔
 };
 
 } // namespace storage

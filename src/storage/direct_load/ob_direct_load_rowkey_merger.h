@@ -25,7 +25,7 @@ class ObDirectLoadRowkeyMerger : public ObIDirectLoadRowkeyIterator<Rowkey>
 public:
   ObDirectLoadRowkeyMerger();
   virtual ~ObDirectLoadRowkeyMerger() = default;
-  int init(const common::ObIArray<RowkeyIterator *> &iters, Compare *compare);
+  int init(const common::ObIArray<RowkeyIterator *> &iters, Compare *compare, int step = 1);
   int get_next_rowkey(const Rowkey *&rowkey);
 private:
   int direct_get_next_rowkey(const Rowkey *&rowkey);
@@ -54,8 +54,9 @@ private:
   };
 private:
   HeapCompare compare_;
+  int step_;
   common::ObBinaryHeap<HeapItem, HeapCompare, 64> heap_;
-  const common::ObIArray<RowkeyIterator *> *iters_;
+  common::ObArray<RowkeyIterator *> iters_;
   int64_t last_iter_idx_;
   bool is_inited_;
 };
@@ -85,25 +86,29 @@ bool ObDirectLoadRowkeyMerger<Rowkey, Compare>::HeapCompare::operator()(const He
 
 template <class Rowkey, class Compare>
 ObDirectLoadRowkeyMerger<Rowkey, Compare>::ObDirectLoadRowkeyMerger()
-  : heap_(compare_), iters_(nullptr), last_iter_idx_(-1), is_inited_(false)
+  : step_(0), heap_(compare_), last_iter_idx_(-1), is_inited_(false)
 {
+  iters_.set_tenant_id(MTL_ID());
 }
 
 template <class Rowkey, class Compare>
 int ObDirectLoadRowkeyMerger<Rowkey, Compare>::init(const common::ObIArray<RowkeyIterator *> &iters,
-                                                    Compare *compare)
+                                                    Compare *compare,
+                                                    int step)
 {
   int ret = common::OB_SUCCESS;
   if (IS_INIT) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadMacroBlockEndRowkeyMerger init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(OB_ISNULL(compare))) {
+  } else if (OB_UNLIKELY(OB_ISNULL(compare) || step <= 0)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", KR(ret), K(iters.count()), KP(compare));
+    STORAGE_LOG(WARN, "invalid args", KR(ret), K(iters.count()), KP(compare), K(step));
   } else {
     compare_.compare_ = compare;
-    iters_ = &iters;
-    if (iters_->count() > 1 && OB_FAIL(build_heap())) {
+    step_ = step;
+    if (OB_FAIL(iters_.assign(iters))) {
+      STORAGE_LOG(WARN, "fail to assign iters", KR(ret));
+    } else if (iters_.count() > 1 && OB_FAIL(build_heap())) {
       STORAGE_LOG(WARN, "fail to build heap", KR(ret));
     } else {
       is_inited_ = true;
@@ -119,19 +124,23 @@ int ObDirectLoadRowkeyMerger<Rowkey, Compare>::get_next_rowkey(const Rowkey *&ro
   if (IS_NOT_INIT) {
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDirectLoadRowkeyMerger not init", KR(ret), KP(this));
+  } else if (0 == iters_.count()) {
+    ret = OB_ITER_END;
   } else {
-    if (0 == iters_->count()) {
-      ret = OB_ITER_END;
-    } else if (1 == iters_->count()) {
-      if (OB_FAIL(direct_get_next_rowkey(rowkey))) {
-        if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
-          STORAGE_LOG(WARN, "fail to direct get next rowkey", KR(ret));
+    int cnt = 0;
+    while (OB_SUCC(ret) && cnt < step_) {
+      ++cnt;
+      if (1 == iters_.count()) {
+        if (OB_FAIL(direct_get_next_rowkey(rowkey))) {
+          if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
+            STORAGE_LOG(WARN, "fail to direct get next rowkey", KR(ret));
+          }
         }
-      }
-    } else {
-      if (OB_FAIL(heap_get_next_rowkey(rowkey))) {
-        if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
-          STORAGE_LOG(WARN, "fail to heap get next rowkey", KR(ret));
+      } else {
+        if (OB_FAIL(heap_get_next_rowkey(rowkey))) {
+          if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
+            STORAGE_LOG(WARN, "fail to heap get next rowkey", KR(ret));
+          }
         }
       }
     }
@@ -143,11 +152,11 @@ template <class Rowkey, class Compare>
 int ObDirectLoadRowkeyMerger<Rowkey, Compare>::direct_get_next_rowkey(const Rowkey *&rowkey)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(1 != iters_->count())) {
+  if (OB_UNLIKELY(1 != iters_.count())) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(iters_->count()));
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(iters_.count()));
   } else {
-    ret = iters_->at(0)->get_next_rowkey(rowkey);
+    ret = iters_.at(0)->get_next_rowkey(rowkey);
   }
   return ret;
 }
@@ -156,14 +165,14 @@ template <class Rowkey, class Compare>
 int ObDirectLoadRowkeyMerger<Rowkey, Compare>::build_heap()
 {
   int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(iters_->count() <= 1)) {
+  if (OB_UNLIKELY(iters_.count() <= 1)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(iters_->count()));
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(iters_.count()));
   } else {
     const Rowkey *rowkey = nullptr;
     HeapItem heap_item;
-    for (int64_t i = 0; OB_SUCC(ret) && i < iters_->count(); ++i) {
-      if (OB_FAIL(iters_->at(i)->get_next_rowkey(rowkey))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); ++i) {
+      if (OB_FAIL(iters_.at(i)->get_next_rowkey(rowkey))) {
         if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
           STORAGE_LOG(WARN, "fail to get next item", KR(ret), K(i));
         } else {
@@ -190,11 +199,11 @@ template <class Rowkey, class Compare>
 int ObDirectLoadRowkeyMerger<Rowkey, Compare>::heap_get_next_rowkey(const Rowkey *&rowkey)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(iters_->count() <= 1)) {
+  if (OB_UNLIKELY(iters_.count() <= 1)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(iters_->count()));
-  } else if (last_iter_idx_ >= 0 && last_iter_idx_ < iters_->count()) {
-    RowkeyIterator *iter = iters_->at(last_iter_idx_);
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(iters_.count()));
+  } else if (last_iter_idx_ >= 0 && last_iter_idx_ < iters_.count()) {
+    RowkeyIterator *iter = iters_.at(last_iter_idx_);
     HeapItem heap_item;
     heap_item.idx_ = last_iter_idx_;
     if (OB_FAIL(iter->get_next_rowkey(heap_item.item_))) {

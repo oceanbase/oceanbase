@@ -33,6 +33,7 @@ public:
   int init(int64_t data_block_size, common::ObCompressorType compressor_type);
   int open(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset, int64_t size);
   int get_next_item(const T *&item) override;
+  OB_INLINE bool is_opened() const { return is_opened_; }
   OB_INLINE int64_t get_block_count() const { return block_count_; }
 protected:
   virtual int prepare_read_block() { return common::OB_SUCCESS; }

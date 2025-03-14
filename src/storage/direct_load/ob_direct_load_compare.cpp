@@ -48,6 +48,39 @@ int ObDirectLoadDatumRowkeyCompare::compare(const ObDatumRowkey *lhs, const ObDa
   return ret;
 }
 
+int ObDirectLoadDatumRowkeyCompare::compare(const ObDatumRowkey &lhs, const ObDatumRowkey &rhs,
+                                            int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(datum_utils_) || OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(datum_utils_), K(lhs), K(rhs));
+  } else {
+    if (OB_FAIL(lhs.compare(rhs, *datum_utils_, cmp_ret))) {
+      LOG_WARN("fail to compare rowkey", KR(ret), K(lhs), K(rhs), K(datum_utils_));
+    }
+  }
+  return ret;
+}
+
+bool ObDirectLoadDatumRowkeyCompare::operator()(const ObDatumRowkey &lhs, const ObDatumRowkey &rhs)
+{
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  if (OB_ISNULL(datum_utils_)|| OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(datum_utils_), K(lhs), K(rhs));
+  } else {
+    if (OB_FAIL(lhs.compare(rhs, *datum_utils_, cmp_ret))) {
+      LOG_WARN("fail to compare rowkey", KR(ret), K(lhs), K(rhs), K(datum_utils_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    result_code_ = ret;
+  }
+  return cmp_ret < 0;
+}
+
 bool ObDirectLoadDatumRowkeyCompare::operator()(const ObDatumRowkey *lhs, const ObDatumRowkey *rhs)
 {
   int ret = OB_SUCCESS;

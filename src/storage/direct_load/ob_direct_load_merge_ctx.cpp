@@ -422,9 +422,9 @@ int ObDirectLoadTabletMergeCtx::build_origin_data_merge_task(
     ObDirectLoadTableHandleArray empty_table_array;
     ObDirectLoadMergeRangeSplitter range_splitter;
     if (OB_FAIL(range_splitter.init(tablet_id_, &origin_table_, empty_table_array, table_data_desc,
-                                    param_->datum_utils_, *param_->col_descs_))) {
+                                    param_->datum_utils_, *param_->col_descs_, max_parallel_degree))) {
       LOG_WARN("fail to init range splitter", KR(ret));
-    } else if (OB_FAIL(range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
+    } else if (OB_FAIL(range_splitter.split_range(range_array_, allocator_))) {
       LOG_WARN("fail to split range", KR(ret));
     } else if (OB_UNLIKELY(range_array_.count() > max_parallel_degree)) {
       ret = OB_ERR_UNEXPECTED;
@@ -468,9 +468,9 @@ int ObDirectLoadTabletMergeCtx::build_origin_data_unrescan_merge_task(
     ObDirectLoadTableHandleArray empty_table_array;
     ObDirectLoadMergeRangeSplitter range_splitter;
     if (OB_FAIL(range_splitter.init(tablet_id_, &origin_table_, empty_table_array, table_data_desc,
-                                    param_->datum_utils_, *param_->col_descs_))) {
+                                    param_->datum_utils_, *param_->col_descs_, max_parallel_degree))) {
       LOG_WARN("fail to init range splitter", KR(ret));
-    } else if (OB_FAIL(range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
+    } else if (OB_FAIL(range_splitter.split_range(range_array_, allocator_))) {
       LOG_WARN("fail to split range", KR(ret));
     } else if (OB_UNLIKELY(range_array_.count() > max_parallel_degree)) {
       ret = OB_ERR_UNEXPECTED;
@@ -552,10 +552,10 @@ int ObDirectLoadTabletMergeCtx::build_merge_task_for_sstable(
       ObDirectLoadMergeRangeSplitter range_splitter;
       if (OB_FAIL(range_splitter.init(
             tablet_id_, (merge_with_origin_data() ? &origin_table_ : nullptr), sstable_array,
-            table_data_desc, param_->datum_utils_, *param_->col_descs_))) {
+            table_data_desc, param_->datum_utils_, *param_->col_descs_, max_parallel_degree))) {
         LOG_WARN("fail to init range splitter", KR(ret));
       } else if (OB_FAIL(
-                   range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
+                   range_splitter.split_range(range_array_, allocator_))) {
         LOG_WARN("fail to split range", KR(ret));
       } else if (OB_UNLIKELY(range_array_.count() > max_parallel_degree)) {
         ret = OB_ERR_UNEXPECTED;

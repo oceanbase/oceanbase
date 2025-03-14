@@ -51,7 +51,6 @@ ObDirectLoadMultipleSSTableBuilder::DataBlockFlushCallback::DataBlockFlushCallba
     rowkey_block_writer_(nullptr),
     data_block_count_per_rowkey_(0),
     data_block_count_(0),
-    rowkey_count_(0),
     need_write_rowkey_(false),
     is_mark_close_(false),
     is_inited_(false)
@@ -113,7 +112,6 @@ int ObDirectLoadMultipleSSTableBuilder::DataBlockFlushCallback::write(char *buf,
       } else if (OB_FAIL(rowkey_block_writer_->append_row(row.rowkey_))) {
         LOG_WARN("fail to append row", KR(ret));
       } else {
-        ++rowkey_count_;
         data_block_count_ = 0;
       }
     }
@@ -128,7 +126,6 @@ int ObDirectLoadMultipleSSTableBuilder::DataBlockFlushCallback::write(char *buf,
 ObDirectLoadMultipleSSTableBuilder::ObDirectLoadMultipleSSTableBuilder()
   : allocator_("TLD_MSST_Build"),
     last_rowkey_allocator_("TLD_LastPK"),
-    row_count_(0),
     is_closed_(false),
     is_inited_(false)
 {
@@ -163,8 +160,8 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     } else if (OB_FAIL(callback_.init(&index_block_writer_,
                                       &data_block_writer_,
                                       &rowkey_block_writer_,
-                                      ObDirectLoadSSTableIndexBlock::get_entries_per_block(param_.table_data_desc_.sstable_index_block_size_), // 一个索引块保留一个rowkey
-                                      param_.table_data_desc_.is_shared_storage_ // 共享存储模式才写rowkey
+                                      param_.table_data_desc_.num_per_sample_,
+                                      ObDirectLoadSampleMode::is_data_block_sample(param_.table_data_desc_.sample_mode_)
                                       ))) {
       LOG_WARN("fail to init data block callback", KR(ret));
     } else if (OB_FAIL(index_block_writer_.init(param_.table_data_desc_.sstable_index_block_size_,
@@ -243,13 +240,8 @@ int ObDirectLoadMultipleSSTableBuilder::append_row(const RowType &row)
       LOG_WARN("fail to check rowkey order", KR(ret), K(row.rowkey_));
     } else if (OB_FAIL(data_block_writer_.append_row(row))) {
       LOG_WARN("fail to append row", KR(ret));
-    } else if (OB_FAIL(save_last_rowkey(row.rowkey_))) {
+    } else if (OB_FAIL(save_rowkey(row.rowkey_))) {
       LOG_WARN("fail to save rowkey", KR(ret), K(row.rowkey_));
-    } else if (first_rowkey_.is_min_rowkey() &&
-               OB_FAIL(first_rowkey_.deep_copy(row.rowkey_, allocator_))) {
-      LOG_WARN("fail to deep copy rowkey", KR(ret));
-    } else {
-      ++row_count_;
     }
   }
   return ret;
@@ -271,12 +263,18 @@ int ObDirectLoadMultipleSSTableBuilder::check_rowkey_order(const RowkeyType &row
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableBuilder::save_last_rowkey(const RowkeyType &rowkey)
+int ObDirectLoadMultipleSSTableBuilder::save_rowkey(const RowkeyType &rowkey)
 {
   int ret = OB_SUCCESS;
   last_rowkey_allocator_.reuse();
-  if (OB_FAIL(last_rowkey_.deep_copy(rowkey, last_rowkey_allocator_))) {
+  if (first_rowkey_.is_min_rowkey() && OB_FAIL(first_rowkey_.deep_copy(rowkey, allocator_))) {
     LOG_WARN("fail to deep copy rowkey", KR(ret));
+  } else if (OB_FAIL(last_rowkey_.deep_copy(rowkey, last_rowkey_allocator_))) {
+    LOG_WARN("fail to deep copy rowkey", KR(ret));
+  } else if (ObDirectLoadSampleMode::is_row_sample(param_.table_data_desc_.sample_mode_) &&
+             0 == data_block_writer_.get_item_count() % param_.table_data_desc_.num_per_sample_ &&
+             OB_FAIL(rowkey_block_writer_.append_row(rowkey))) {
+    LOG_WARN("fail to append rowkey", KR(ret));
   }
   return ret;
 }
@@ -291,8 +289,14 @@ int ObDirectLoadMultipleSSTableBuilder::close()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multiple sstable builder is closed", KR(ret));
   } else {
+    // mark_close是为了在数据块采样模式能记录最后一个未填满的索引块的endkey
     callback_.mark_close();
-    if (OB_FAIL(data_block_writer_.close())) {
+    // 行采样模式记录最后一行的rowkey
+    if (ObDirectLoadSampleMode::is_row_sample(param_.table_data_desc_.sample_mode_) &&
+        0 != data_block_writer_.get_item_count() % param_.table_data_desc_.num_per_sample_ &&
+        OB_FAIL(rowkey_block_writer_.append_row(last_rowkey_))) {
+      LOG_WARN("fail to append rowkey", KR(ret));
+    } else if (OB_FAIL(data_block_writer_.close())) {
       LOG_WARN("fail to close data block writer", KR(ret));
     } else if (OB_FAIL(index_block_writer_.close())) {
       LOG_WARN("fail to close index block writer", KR(ret));
@@ -315,7 +319,7 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(ObDirectLoadTableHandleArray 
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multiple sstable builder is not closed", KR(ret));
-  } else if (row_count_ == 0) {
+  } else if (data_block_writer_.get_item_count() == 0) {
     // do nothing
   } else {
     ObDirectLoadMultipleSSTableFragment fragment;
@@ -326,8 +330,8 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(ObDirectLoadTableHandleArray 
     fragment.index_file_size_ = index_block_writer_.get_file_size();
     fragment.data_file_size_ = data_block_writer_.get_file_size();
     fragment.rowkey_file_size_ = rowkey_block_writer_.get_file_size();
-    fragment.row_count_ = row_count_;
-    fragment.rowkey_count_ = callback_.get_rowkey_count();
+    fragment.row_count_ = data_block_writer_.get_item_count();
+    fragment.rowkey_count_ = rowkey_block_writer_.get_item_count();
     fragment.max_data_block_size_ = data_block_writer_.get_max_block_size();
     create_param.tablet_id_ = param_.tablet_id_;
     create_param.rowkey_column_num_ = param_.table_data_desc_.rowkey_column_num_;
@@ -338,8 +342,8 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(ObDirectLoadTableHandleArray 
     create_param.index_block_count_ = index_block_writer_.get_block_count();
     create_param.data_block_count_ = data_block_writer_.get_block_count();
     create_param.rowkey_block_count_ = rowkey_block_writer_.get_block_count();
-    create_param.row_count_ = row_count_;
-    create_param.rowkey_count_ = callback_.get_rowkey_count();
+    create_param.row_count_ = data_block_writer_.get_item_count();
+    create_param.rowkey_count_ = rowkey_block_writer_.get_item_count();
     create_param.max_data_block_size_ = data_block_writer_.get_max_block_size();
     create_param.start_key_ = first_rowkey_;
     create_param.end_key_ = last_rowkey_;

@@ -90,15 +90,18 @@ int ObDirectLoadMultipleSSTableRowkeyScanner::switch_next_fragment()
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObDirectLoadMultipleSSTableFragment> &fragments = sstable_->get_fragments();
-  if (fragment_idx_ >= fragments.count()) {
-    ret = OB_ITER_END;
-  } else {
-    const ObDirectLoadMultipleSSTableFragment &fragment = fragments.at(fragment_idx_);
-    data_block_reader_.reuse();
-    if (OB_FAIL(data_block_reader_.open(fragment.rowkey_file_handle_, 0, fragment.rowkey_file_size_))) {
-      LOG_WARN("fail to open fragment", KR(ret), K(fragment));
+  data_block_reader_.reuse();
+  while (OB_SUCC(ret) && !data_block_reader_.is_opened()) {
+    if (fragment_idx_ >= fragments.count()) {
+      ret = OB_ITER_END;
     } else {
-      ++fragment_idx_;
+      const ObDirectLoadMultipleSSTableFragment &fragment = fragments.at(fragment_idx_);
+      if (fragment.rowkey_file_size_ > 0 &&
+          OB_FAIL(data_block_reader_.open(fragment.rowkey_file_handle_, 0, fragment.rowkey_file_size_))) {
+        LOG_WARN("fail to open fragment", KR(ret), K(fragment));
+      } else {
+        ++fragment_idx_;
+      }
     }
   }
   return ret;
