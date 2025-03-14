@@ -50,6 +50,10 @@ public:
   {
     return append(exec_params_, exec_params);
   }
+  inline const ObQueryRefRawExpr* get_subquery_expr(int64_t idx) const
+  {
+    return (idx >= 0 && idx < subquery_exprs_.count()) ? subquery_exprs_.at(idx) : NULL;
+  }
   /**
    *  Get the exec params
    */

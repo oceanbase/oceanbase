@@ -1600,6 +1600,15 @@ ObRawExpr *&ObQueryRefRawExpr::get_param_expr(int64_t index)
   }
 }
 
+const ObExecParamRawExpr *ObQueryRefRawExpr::get_exec_param(int64_t index) const
+{
+  if (index >= 0 && index < exec_params_.count()) {
+    return exec_params_.at(index);
+  } else {
+    return NULL;
+  }
+}
+
 ObExecParamRawExpr *ObQueryRefRawExpr::get_exec_param(int64_t index)
 {
   if (index >= 0 && index < exec_params_.count()) {

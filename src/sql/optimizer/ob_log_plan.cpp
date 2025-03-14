@@ -4222,24 +4222,6 @@ int ObLogPlan::get_subplan(const ObRawExpr *expr, SubPlanInfo *&info)
   return ret;
 }
 
-int ObLogPlan::get_subplan(const ObStmt *stmt, SubPlanInfo *&info)
-{
-  int ret = OB_SUCCESS;
-  info = NULL;
-  bool found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !found && i < get_subplans().count(); ++i) {
-    if (OB_ISNULL(get_subplans().at(i)) ||
-        OB_ISNULL(get_subplans().at(i)->subplan_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get_subplans().at(i) returns null", K(ret), K(i));
-    } else if (get_subplans().at(i)->subplan_->get_stmt() == stmt) {
-      info = get_subplans().at(i);
-      found = true;
-    } else { /* Do nothing */ }
-  }
-  return ret;
-}
-
 int ObLogPlan::find_base_rel(ObIArray<ObJoinOrder *> &base_level, int64_t table_idx, ObJoinOrder *&base_rel)
 {
   int ret = OB_SUCCESS;

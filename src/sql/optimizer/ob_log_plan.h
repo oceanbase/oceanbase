@@ -387,7 +387,6 @@ public:
   int select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_list);
 
   int get_subplan(const ObRawExpr *expr, SubPlanInfo *&info);
-  int get_subplan(const ObStmt *stmt, SubPlanInfo *&info);
 
   /**
    *  Get plan signature (hash value)

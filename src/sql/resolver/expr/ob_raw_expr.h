@@ -2454,6 +2454,7 @@ public:
   virtual int64_t get_param_count() const override;
   virtual const ObRawExpr *get_param_expr(int64_t index) const override;
   virtual ObRawExpr *&get_param_expr(int64_t index) override;
+  const ObExecParamRawExpr *get_exec_param(int64_t index) const;
   ObExecParamRawExpr *get_exec_param(int64_t index);
   const ObIArray<ObExecParamRawExpr *> &get_exec_params() const { return exec_params_; }
   ObIArray<ObExecParamRawExpr *> &get_exec_params() { return exec_params_; }
