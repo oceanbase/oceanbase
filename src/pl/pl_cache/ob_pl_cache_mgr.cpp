@@ -26,6 +26,8 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_get_pl_object);
   ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
+  FLT_SET_TAG(pl_cache_key_id, pc_ctx.key_.key_id_);
+  FLT_SET_TAG(pl_cache_key_name, pc_ctx.key_.name_);
   //guard.get_cache_obj() = NULL;
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
@@ -71,7 +73,7 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
       lib_cache->inc_access_cnt();
     }
   }
-
+  FLT_SET_TAG(pl_hit_pl_cache, (OB_NOT_NULL(guard.get_cache_obj()) && OB_SUCC(ret)));
   return ret;
 }
 
@@ -138,6 +140,8 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_add_pl_object);
+  FLT_SET_TAG(pl_cache_key_id, pc_ctx.key_.key_id_);
+  FLT_SET_TAG(pl_cache_key_name, pc_ctx.key_.name_);
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_ISNULL(lib_cache)) {
     ret = OB_ERR_UNEXPECTED;
@@ -185,8 +189,10 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
       }
     } else {
       (void)lib_cache->inc_mem_used(pl_object->get_mem_size());
+      FLT_SET_TAG(pl_add_cache_object_size, pl_object->get_mem_size());
     }
   }
+  FLT_SET_TAG(pl_add_cache_plan, OB_SUCCESS == ret);
   return ret;
 }
 

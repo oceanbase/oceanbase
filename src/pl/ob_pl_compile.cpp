@@ -235,6 +235,7 @@ int ObPLCompiler::compile(
   FLTSpanGuard(pl_compile);
   int64_t compile_start = ObTimeUtility::current_time();
   uint64_t block_hash = OB_INVALID_ID;
+  int64_t resolve_end = 0;
   ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
 
   //Step 1：构造匿名块的ObPLFunctionAST
@@ -252,6 +253,7 @@ int ObPLCompiler::compile(
                            is_prepare_protocol));
 
     //Step 2：Resolver
+    int64_t init_end = ObTimeUtility::current_time();
     if (OB_SUCC(ret)) {
       ObPLResolver resolver(allocator_, session_info_, schema_guard_, package_guard_, sql_proxy_,
                             func_ast.get_expr_factory(), NULL/*parent ns*/, is_prepare_protocol,
@@ -282,6 +284,8 @@ int ObPLCompiler::compile(
       func.set_ns(ObLibCacheNameSpace::NS_ANON);
       OZ (func.get_exec_env().load(session_info_, &(func.get_allocator())));
     }
+    resolve_end = ObTimeUtility::current_time();
+    FLT_SET_TAG(pl_compile_resolve_time, resolve_end - init_end);
     //Step 3：Code Generator
     if (OB_SUCC(ret)) {
   #ifdef USE_MCJIT
@@ -359,6 +363,7 @@ int ObPLCompiler::compile(
   int64_t compile_end = ObTimeUtility::current_time();
   OX (func.get_stat_for_update().compile_time_ = compile_end - compile_start);
   OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
+  FLT_SET_TAG(pl_compile_cg_time, compile_end - resolve_end);
   LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(ret), K(stmt_id), K(compile_end - compile_start));
   return ret;
 }
@@ -497,7 +502,7 @@ int ObPLCompiler::compile(
 
   int64_t parse_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Parse Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(parse_end - init_end));
-
+  FLT_SET_TAG(pl_compile_parser_time, parse_end - init_end);
   //Step 3: Resolver
   if (OB_SUCC(ret)) {
     bool is_prepare_protocol = false;
@@ -529,7 +534,7 @@ int ObPLCompiler::compile(
 
   int64_t resolve_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Resolve Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(resolve_end - parse_end));
-
+  FLT_SET_TAG(pl_compile_resolve_time, resolve_end - parse_end);
   //Step 4: Code Generator
   if (OB_SUCC(ret)) {
 
@@ -563,7 +568,7 @@ int ObPLCompiler::compile(
                                && !cg.get_profile_mode()
                                && !exist_same_name_obj_with_public_synonym
                                && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
-
+      FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
       OZ (cg.init());
       OZ (read_dll_from_disk(enable_persistent, routine_storage, func_ast, cg, routine, func, op));
       if (OB_SUCC(ret) && 0 == func.get_action()) { // not in disk
@@ -592,7 +597,7 @@ int ObPLCompiler::compile(
 
   int64_t cg_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>CG Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(cg_end - resolve_end));
-
+  FLT_SET_TAG(pl_compile_cg_time, cg_end - resolve_end);
   int64_t final_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Final Compile Routine Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(final_end - init_start));
 
@@ -844,6 +849,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
                                  && session_info_.get_pl_profiler() == nullptr
                                  && !exist_same_name_obj_with_public_synonym
                                  && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID);
+      FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));
       OZ (generate_package_conditions(package_ast.get_condition_table(), package));
@@ -890,6 +896,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                                   ObPLPackage &package)
 {
   int ret = OB_SUCCESS;
+  FLTSpanGuard(pl_compile);
   bool saved_trigger_flag = session_info_.is_for_trigger_package();
   ObString source;
 
@@ -933,6 +940,8 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
         allocator_, session_info_.get_dtc_params(), source));
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger()));
+  int64_t resolve_end = ObTimeUtility::current_time();
+  FLT_SET_TAG(pl_compile_resolve_time, resolve_end - compile_start);
 #ifdef OB_BUILD_ORACLE_PL
   if (package_info.is_package()) {
     int tmp_ret = OB_SUCCESS;
@@ -1067,7 +1076,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   } else {
     OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_TYPE);
   }
-
+  FLT_SET_TAG(pl_compile_cg_time, compile_end - resolve_end);
   LOG_INFO(">>>>>>>>Final Compile Package Time: ", K(package.get_id()), K(package.get_name()), K(compile_end - compile_start));
   return ret;
 }

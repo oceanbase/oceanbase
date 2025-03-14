@@ -1564,6 +1564,7 @@ int ObPL::execute(ObExecContext &ctx,
                   bool is_called_from_sql)
 {
   int ret = OB_SUCCESS;
+  FLTSpanGuard(pl_execute);
   int64_t execute_start = ObTimeUtility::current_time();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
@@ -1924,6 +1925,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
     }
   }
   // generate sql_id using paramiterized sql, and overwrite privious sql_id
+  FLT_SET_TAG(pl_anony_parameter_sql_text, pc_key);
   OZ (ObSQLUtils::md5(pc_key, ctx.get_sql_ctx()->sql_id_,
                       (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_)));
   OX (ctx.get_my_session()->set_cur_sql_id(ctx.get_sql_ctx()->sql_id_));
@@ -1970,14 +1972,14 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_entry);
+  CK (OB_NOT_NULL(block));
+  OX (FLT_SET_TAG(pl_entry_sql_text, ObString(block->str_len_, block->str_value_)));
   lib::MemoryContext mem_context = NULL;
   lib::ContextParam param;
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
-  bool is_forbid_anony_parameter =
-         block->is_forbid_anony_parameter_
-          || (params.count() > 0)
-          || lib::is_mysql_mode();
+  bool is_forbid_anony_parameter = false;
+  OX (is_forbid_anony_parameter = block->is_forbid_anony_parameter_ || (params.count() > 0) || lib::is_mysql_mode());
 
   int64_t old_worker_timeout_ts = 0;
   ObPLASHGuard guard(ObPLResolver::ANONYMOUS_VIRTUAL_OBJECT_ID, OB_INVALID_ID);
@@ -1994,7 +1996,7 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
                                     || ctx.get_my_session()->is_pl_debug_on()
                                     || ctx.get_my_session()->get_pl_profiler() != nullptr
                                     || !ctx.get_my_session()->get_local_ob_enable_parameter_anonymous_block());
-
+  OX (FLT_SET_TAG(pl_is_forbid_anony_parameter, is_forbid_anony_parameter));
   OX (param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(),
                          ObModIds::OB_PL_TEMP,
                          ObCtxIds::DEFAULT_CTX_ID));
@@ -2098,6 +2100,9 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
           throw;
         }
       }
+      if (nullptr != ctx.get_my_session()) {
+        FLT_SET_TAG(pl_plsql_exec_time, ctx.get_my_session()->get_plsql_exec_time());
+      }
     }
   }
 
@@ -2127,6 +2132,8 @@ int ObPL::execute(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_entry);
+  FLT_SET_TAG(pl_entry_sql_text, sql);
+  FLT_SET_TAG(pl_entry_stmt_id, stmt_id);
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
   int64_t old_worker_timeout_ts = 0;
@@ -2202,6 +2209,9 @@ int ObPL::execute(ObExecContext &ctx,
         throw;
       }
     }
+    if (nullptr != ctx.get_my_session()) {
+      FLT_SET_TAG(pl_plsql_exec_time, ctx.get_my_session()->get_plsql_exec_time());
+    }
   }
 
   return ret;
@@ -2226,6 +2236,20 @@ int ObPL::execute(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_entry);
+  if(ctx.get_my_session()->get_control_info().is_valid()) {
+    ObSqlString subprogram_path_str;
+    for (int64_t i = 0; OB_SUCC(ret) && i < subprogram_path.count() - 1; ++i) {
+       subprogram_path_str.append_fmt("subprogram_path[%ld] is %ld,", i,  subprogram_path.at(i));
+    }
+    if (0 < subprogram_path.count()) {
+       subprogram_path_str.append_fmt("subprogram_path[%ld] is %ld", subprogram_path.count() - 1,  subprogram_path.at(subprogram_path.count() - 1));
+    }
+
+    FLT_SET_TAG(pl_entry_subprogram_path, subprogram_path_str.string());
+  }
+  FLT_SET_TAG(pl_entry_package_id, package_id);
+  FLT_SET_TAG(pl_entry_routine_id, routine_id);
+  FLT_SET_TAG(pl_entry_dblink_id, dblink_id);
   bool debug_mode = false;
   ObPLFunction *routine = NULL;
   ObPLFunction *local_routine = NULL;
@@ -2428,6 +2452,9 @@ int ObPL::execute(ObExecContext &ctx,
     UNPREPARE();
 
 #undef UNPREPARE
+  }
+  if (nullptr != ctx.get_my_session()) {
+    FLT_SET_TAG(pl_plsql_exec_time, ctx.get_my_session()->get_plsql_exec_time());
   }
 
   return ret;

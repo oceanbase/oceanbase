@@ -46,13 +46,16 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
 
   // **** for pl ****
   FLT_DEF_SPAN(pl_entry, "pl process")
-    FLT_DEF_SPAN(pl_compile, "compile one pl object")
-    FLT_DEF_SPAN(pc_get_pl_object, "get pl object from plan cache")
-    FLT_DEF_SPAN(pc_add_pl_object, "add pl object to plan cache")
-    FLT_DEF_SPAN(pl_execute, "execute pl object")
-      FLT_DEF_SPAN(pl_spi_query, "execute pl spi query")
-      FLT_DEF_SPAN(pl_spi_prepare, "prepare phase of pl execution")
-      FLT_DEF_SPAN(pl_spi_execute, "execute phase of pl execution")
+  FLT_DEF_SPAN(pc_get_pl_object, "get pl object from plan cache")
+  FLT_DEF_SPAN(pl_compile, "compile one pl object")
+  FLT_DEF_SPAN(pc_add_pl_object, "add pl object to plan cache")
+  FLT_DEF_SPAN(pl_execute, "execute pl object")
+  FLT_DEF_SPAN(pl_spi_prepare, "prepare phase of pl execution")
+  FLT_DEF_SPAN(pl_spi_inner_execute, "pl spi inner execute")
+  FLT_DEF_SPAN(pl_spi_cursor_open, "pl spi open cursor")
+  FLT_DEF_SPAN(pl_spi_cursor_close, "pl spi close cursor")
+  FLT_DEF_SPAN(pl_spi_execute_immediate, "pl spi execute dynamic SQL")
+  FLT_DEF_SPAN(pl_prepare_dynamic, "pl prepare dynamic SQL")
   // **** for pl end ****
 
   // **** for inner sql ****
@@ -143,6 +146,9 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
 #endif // __MIDDLE_LEVEL_SPAN
 
 #ifdef __LOW_LEVEL_SPAN
+  // PL
+  FLT_DEF_SPAN(pl_spi_calc_expr, "pl spi expression calculation")
+  FLT_DEF_SPAN(pl_spi_cursor_fetch, "pl spi fetch cursor")
 #endif // __LOW_LEVEL_SPAN
 
 #endif
@@ -225,15 +231,56 @@ FLT_DEF_TAG(ddl_ret_code, "return value")
 
 // debug
 FLT_DEF_TAG(span_back_trace, "full link tracing debug")
+
+// PL
+FLT_DEF_TAG(pl_entry_sql_text, "PL entry SQL text")
+FLT_DEF_TAG(pl_entry_package_id, "PL entry package id")
+FLT_DEF_TAG(pl_entry_routine_id, "PL entry routine id")
+FLT_DEF_TAG(pl_entry_stmt_id, "PL entry stmt id")
+FLT_DEF_TAG(pl_entry_dblink_id, "PL entry dblink id")
+FLT_DEF_TAG(pl_entry_subprogram_path, "PL entrysubprogram path")
+FLT_DEF_TAG(pl_plsql_exec_time, "PL execution time after removing SQL execution time")
+FLT_DEF_TAG(pl_cache_key_id, "PL cache key id")
+FLT_DEF_TAG(pl_cache_key_name, "PL cache key name")
+FLT_DEF_TAG(pl_hit_pl_cache, "PL hit plan cache")
+FLT_DEF_TAG(pl_prepare_sql_text, "PL prepare SQL text")
+FLT_DEF_TAG(pl_add_cache_plan, "PL plan cache add plan")
+FLT_DEF_TAG(pl_add_cache_object_size, "PL compile product size")
+FLT_DEF_TAG(pl_spi_inner_execute_sql_text, "PL spi inner execute SQL text")
+FLT_DEF_TAG(pl_spi_inner_execute_pssql_text, "PL spi inner execute ps SQL text")
+FLT_DEF_TAG(pl_spi_inner_execute_stmt_type, "PL spi inner execute stmt type")
+FLT_DEF_TAG(pl_spi_cursor_sql_text, "PL spi cursor SQL text")
+FLT_DEF_TAG(pl_spi_cursor_pssql_text, "PL spi cursor ps SQL text")
+FLT_DEF_TAG(pl_spi_cursor_package_id, "PL spi cursor package id")
+FLT_DEF_TAG(pl_spi_cursor_routine_id, "PL spi cursor routine id")
+FLT_DEF_TAG(pl_spi_cursor_index, "PL spi cursor index")
+FLT_DEF_TAG(pl_spi_cursor_declare_loc, "PL spi cursor declare local")
+FLT_DEF_TAG(pl_spi_streaming_cursor, "PL spi cursor type (streaming or non-streaming)")
+FLT_DEF_TAG(pl_compile_is_persist, "PL Compile whether to persistent to disk")
+FLT_DEF_TAG(pl_handle_sql_execute_time, "PL handle sql execute time")
+FLT_DEF_TAG(pl_handle_sql_execute_sql, "PL handle sql execute SQL text")
 #endif // __HIGH_LEVEL_TAG
 
 #ifdef __MIDDLE_LEVEL_TAG
+// PL
+FLT_DEF_TAG(pl_is_forbid_anony_parameter, "PL check whether the current anonymous block is forbid to parameterization")
+FLT_DEF_TAG(pl_anony_parameter_sql_text, "PL anonymous block parameterized sql text")
 #endif // __MIDDLE_LEVEL_TAG
 
 #ifdef __LOW_LEVEL_TAG
 FLT_DEF_TAG(table_id, "place holder")
 FLT_DEF_TAG(partition_id, "place holder")
 FLT_DEF_TAG(column_id, "place holder")
+// PL
+FLT_DEF_TAG(pl_calc_expr_type, "Type of the current expression calculation in PL")
+FLT_DEF_TAG(pl_compile_parser_time, "PL compile parser time")
+FLT_DEF_TAG(pl_compile_resolve_time, "PL compile resolve time")
+FLT_DEF_TAG(pl_compile_cg_time, "PL compile gc time")
+FLT_DEF_TAG(pl_spi_fetch_cursor_package_id, "PL spi cursor package id")
+FLT_DEF_TAG(pl_spi_fetch_cursor_routine_id, "PL spi cursor routine id")
+FLT_DEF_TAG(pl_spi_fetch_cursor_index, "PL spi cursor index")
+FLT_DEF_TAG(pl_spi_fetch_cursor_declare_loc, "PL spi cursor declare local")
+FLT_DEF_TAG(pl_spi_fetch_cursor_type, "PL spi cursor type (streaming or non-streaming)")
 #endif // __LOW_LEVEL_TAG
 
 #endif
