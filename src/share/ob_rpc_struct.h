@@ -2324,7 +2324,8 @@ public:
       is_alter_mview_attributes_(false),
       alter_mview_arg_(),
       is_alter_mlog_attributes_(false),
-      alter_mlog_arg_()
+      alter_mlog_arg_(),
+      part_storage_cache_policy_()
   {
   }
   virtual ~ObAlterTableArg()
@@ -2387,6 +2388,15 @@ public:
                                                   nls_timestamp_tz_format};
     return set_nls_formats(tmp_str);
   }
+
+  void set_part_storage_cache_policy(const common::ObString &part_storage_cache_policy)
+  {
+    part_storage_cache_policy_ = part_storage_cache_policy;
+  }
+  const common::ObString &get_part_storage_cache_policy() const
+  {
+    return part_storage_cache_policy_;
+  }
   TO_STRING_KV(K_(session_id),
                K_(index_arg_list),
                K_(foreign_key_arg_list),
@@ -2422,7 +2432,8 @@ public:
                K_(is_alter_mview_attributes),
                K_(alter_mview_arg),
                K_(is_alter_mlog_attributes),
-               K_(alter_mlog_arg));
+               K_(alter_mlog_arg),
+               K_(part_storage_cache_policy));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2468,6 +2479,7 @@ public:
   ObAlterMViewArg alter_mview_arg_;
   bool is_alter_mlog_attributes_;
   ObAlterMLogArg alter_mlog_arg_;
+  common::ObString part_storage_cache_policy_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
