@@ -115,7 +115,6 @@ public:
   int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfo &info);
 
   int64_t get_min_reserved_snapshot_for_tx();
-  void set_global_broadcast_scn(const share::SCN &global_broadcast_scn) { global_broadcast_scn_ = global_broadcast_scn; }
   int get_min_reserved_snapshot(
       const ObTabletID &tablet_id,
       const int64_t merged_version,
@@ -194,7 +193,6 @@ private:
   common::RWLock lock_;
   int64_t cur_idx_;
   int64_t last_change_ts_;
-  share::SCN global_broadcast_scn_;
   uint64_t tenant_id_;
   int tg_id_;
   bool inited_;
