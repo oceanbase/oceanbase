@@ -22,12 +22,69 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "storage/direct_load/ob_direct_load_mem_sample.h"
 #include "storage/direct_load/ob_direct_load_table_store.h"
+#include "storage/direct_load/ob_direct_load_mem_worker.h"
 namespace oceanbase
 {
 namespace observer
 {
 using namespace storage;
 using namespace common;
+
+class ObTableLoadPreSorter::ChunkSorter : public ObDirectLoadMemWorker
+{
+  using ChunkType = storage::ObDirectLoadExternalMultiPartitionRowChunk;
+  using CompareType = storage::ObDirectLoadExternalMultiPartitionRowCompare;
+public:
+  ChunkSorter(ObDirectLoadMemContext *mem_ctx,
+              ObTableLoadPreSorter *pre_sorter,
+              ObTableLoadMemChunkManager *chunk_mgr,
+              int64_t chunk_node_id);
+  virtual ~ChunkSorter();
+  virtual int add_table(const ObDirectLoadTableHandle &table_handle) override { return OB_SUCCESS; }
+  virtual int work() override;
+  VIRTUAL_TO_STRING_KV(KP(mem_ctx_), K_(chunk_node_id));
+private:
+  ObDirectLoadMemContext *mem_ctx_;
+  observer::ObTableLoadPreSorter *pre_sorter_;
+  observer::ObTableLoadMemChunkManager *chunk_mgr_;
+  int64_t chunk_node_id_;
+};
+
+ObTableLoadPreSorter::ChunkSorter::ChunkSorter(ObDirectLoadMemContext *mem_ctx,
+                                               ObTableLoadPreSorter *pre_sorter,
+                                               ObTableLoadMemChunkManager *chunk_mgr,
+                                               int64_t chunk_node_id)
+  : mem_ctx_(mem_ctx),
+    pre_sorter_(pre_sorter),
+    chunk_mgr_(chunk_mgr),
+    chunk_node_id_(chunk_node_id)
+{
+  pre_sorter_->inc_sort_chunk_task_cnt();
+
+}
+
+ObTableLoadPreSorter::ChunkSorter::~ChunkSorter()
+{
+}
+
+int ObTableLoadPreSorter::ChunkSorter::work()
+{
+  int ret = OB_SUCCESS;
+  CompareType compare;
+  if (OB_ISNULL(chunk_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("chunk mgr is nullptr", KR(ret));
+  } else if (OB_FAIL(chunk_mgr_->close_chunk(chunk_node_id_))) {
+    LOG_WARN("fail to sort chunk", KR(ret), K(chunk_node_id_));
+  } else {
+    bool all_trans_finished = ATOMIC_LOAD(&pre_sorter_->all_trans_finished_);
+    int64_t cur_sort_chunk_task_cnt = pre_sorter_->dec_sort_chunk_task_cnt();
+    if (all_trans_finished && 0 == cur_sort_chunk_task_cnt) {
+      mem_ctx_->load_thread_cnt_ = 0; // 用于让sample线程退出
+    }
+  }
+  return ret;
+}
 
 ObTableLoadPreSorter::ObTableLoadPreSorter(ObTableLoadStoreCtx *store_ctx)
   : ctx_(store_ctx->ctx_),
@@ -37,6 +94,8 @@ ObTableLoadPreSorter::ObTableLoadPreSorter(ObTableLoadStoreCtx *store_ctx)
     sample_task_scheduler_(nullptr),
     unclosed_chunk_id_pos_(0),
     finish_thread_cnt_(0),
+    sort_chunk_task_cnt_(0),
+    all_trans_finished_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -67,9 +126,10 @@ void ObTableLoadPreSorter::reset()
     allocator_.free(chunks_manager_);
     chunks_manager_ = nullptr;
   }
-  unclosed_chunk_ids_.reset();
   unclosed_chunk_id_pos_ = 0;
   finish_thread_cnt_ = 0;
+  sort_chunk_task_cnt_ = 0;
+  all_trans_finished_ = false;
   // 分配器最后reset
   allocator_.reset();
 }
@@ -110,15 +170,10 @@ int ObTableLoadPreSorter::init_mem_ctx()
   mem_ctx_.mem_chunk_size_ = store_ctx_->mem_chunk_size_;
   mem_ctx_.heap_table_mem_chunk_size_ = store_ctx_->heap_table_mem_chunk_size_;
 
-  // dump thread count 80%, other thread count 20%
   mem_ctx_.total_thread_cnt_ = store_ctx_->thread_cnt_;
-  mem_ctx_.dump_thread_cnt_ = MAX(mem_ctx_.total_thread_cnt_ * 4 / 5, 1);
-  mem_ctx_.load_thread_cnt_ = mem_ctx_.total_thread_cnt_ - mem_ctx_.dump_thread_cnt_; // 用来最后close chunk
-  if (OB_UNLIKELY(mem_ctx_.load_thread_cnt_ <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("load thread cannot be zero", KR(ret), K(mem_ctx_.total_thread_cnt_),
-             K(mem_ctx_.dump_thread_cnt_), K(mem_ctx_.load_thread_cnt_));
-  } else if (OB_FAIL(mem_ctx_.init())) {
+  mem_ctx_.dump_thread_cnt_ = mem_ctx_.total_thread_cnt_;
+  mem_ctx_.load_thread_cnt_ = mem_ctx_.total_thread_cnt_;
+  if (OB_FAIL(mem_ctx_.init())) {
     LOG_WARN("fail to init mem ctx", KR(ret));
   }
   return ret;
@@ -169,13 +224,24 @@ int ObTableLoadPreSorter::start()
 int ObTableLoadPreSorter::close()
 {
   int ret = OB_SUCCESS;
+  ObArray<int64_t> unclosed_chunk_ids;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadPreSorter not init", KR(ret));
-  } else if (OB_FAIL(chunks_manager_->get_unclosed_chunks(unclosed_chunk_ids_))) {
+  } else if (OB_FAIL(chunks_manager_->get_unclosed_chunks(unclosed_chunk_ids))) {
     LOG_WARN("fail to get unclosed chunks", KR(ret));
-  } else if (OB_FAIL(start_close_chunk())) {
-    LOG_WARN("fail to start close chunk", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < unclosed_chunk_ids.count(); i++) {
+      if (OB_FAIL(close_chunk(unclosed_chunk_ids.at(i)))) {
+        LOG_WARN("fail to close chunk", KR(ret), K(i),K(unclosed_chunk_ids.at(i)));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    all_trans_finished_ = true;
+    if (0 == get_sort_chunk_task_cnt()) {
+      mem_ctx_.load_thread_cnt_ = 0;
+    }
   }
   return ret;
 }
@@ -192,6 +258,34 @@ int ObTableLoadPreSorter::get_table_store(ObDirectLoadTableStore &table_store)
     table_store.set_multiple_sstable();
     if (OB_FAIL(table_store.add_tables(mem_ctx_.tables_handle_))) {
       LOG_WARN("fail to add tables", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadPreSorter::close_chunk(int64_t chunk_node_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadPreSorter is not init", KR(ret));
+  } else {
+    ObMemAttr mem_attr(MTL_ID(), "TLD_ChunkSort");
+    ChunkSorter *chunk_sorter = nullptr;
+    if (OB_ISNULL(chunk_sorter = OB_NEW(ChunkSorter,
+                                        mem_attr,
+                                        &mem_ctx_,
+                                        this,
+                                        chunks_manager_,
+                                        chunk_node_id))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ChunkSorter", KR(ret));
+    } else if (OB_FAIL(mem_ctx_.mem_dump_queue_.push(chunk_sorter))) {
+      LOG_WARN("fail to push sort chunk task", KR(ret));
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(chunk_sorter)) {
+      chunk_sorter->~ChunkSorter();
+      ob_free(chunk_sorter);
     }
   }
   return ret;
@@ -221,36 +315,12 @@ int ObTableLoadPreSorter::start_sample()
 int ObTableLoadPreSorter::start_dump()
 {
   int ret = OB_SUCCESS;
-  const int64_t dump_thread_start_idx = mem_ctx_.load_thread_cnt_;
   for (int64_t i = 0; OB_SUCC(ret) && i < mem_ctx_.dump_thread_cnt_; ++i) {
     ObTableLoadTask *task = nullptr;
     if (OB_FAIL(ctx_->alloc_task(task))) {
       LOG_WARN("fail to alloc task", KR(ret));
     } else if (OB_FAIL(task->set_processor<DumpTaskProcessor>(ctx_, &mem_ctx_))) {
       LOG_WARN("fail to set dump task processor", KR(ret));
-    } else if (OB_FAIL(task->set_callback<PreSortTaskCallback>(ctx_, this))) {
-      LOG_WARN("fail to set pre sort task callback", KR(ret));
-    } else if (OB_FAIL(store_ctx_->task_scheduler_->add_task(dump_thread_start_idx + i, task))) {
-      LOG_WARN("fail to add task", KR(ret), KPC(task));
-    }
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(task)) {
-        ctx_->free_task(task);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadPreSorter::start_close_chunk()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < mem_ctx_.load_thread_cnt_; ++i) {
-    ObTableLoadTask *task = nullptr;
-    if (OB_FAIL(ctx_->alloc_task(task))) {
-      LOG_WARN("fail to alloc task", KR(ret));
-    } else if (OB_FAIL(task->set_processor<CloseChunkTaskProcessor>(ctx_, this))) {
-      LOG_WARN("fail to set close chunk task callback", KR(ret));
     } else if (OB_FAIL(task->set_callback<PreSortTaskCallback>(ctx_, this))) {
       LOG_WARN("fail to set pre sort task callback", KR(ret));
     } else if (OB_FAIL(store_ctx_->task_scheduler_->add_task(i, task))) {
@@ -311,19 +381,6 @@ void ObTableLoadPreSorter::wait()
 bool ObTableLoadPreSorter::is_stopped() const
 {
   return (nullptr == sample_task_scheduler_ || sample_task_scheduler_->is_stopped());
-}
-
-int ObTableLoadPreSorter::get_next_unclosed_chunk_id(int64_t &chunk_id)
-{
-  int ret = OB_SUCCESS;
-  chunk_id = -1;
-  const int64_t pos = ATOMIC_FAA(&unclosed_chunk_id_pos_, 1);
-  if (pos >= unclosed_chunk_ids_.count()) {
-    ret = OB_ITER_END;
-  } else {
-    chunk_id = unclosed_chunk_ids_.at(pos);
-  }
-  return ret;
 }
 
 int ObTableLoadPreSorter::handle_pre_sort_thread_finish()
@@ -409,12 +466,12 @@ public:
         LOG_WARN("fail to pop", KR(ret));
       } else {
         if (OB_NOT_NULL(tmp)) {
-          ObDirectLoadMemDump *mem_dump = static_cast<ObDirectLoadMemDump *>(tmp);
-          if (OB_FAIL(mem_dump->do_dump())) {
+          ObDirectLoadMemWorker *worker = static_cast<ObDirectLoadMemWorker *>(tmp);
+          if (OB_FAIL(worker->work())) {
             LOG_WARN("fail to do dump", KR(ret));
           }
-          mem_dump->~ObDirectLoadMemDump();
-          ob_free(mem_dump);
+          worker->~ObDirectLoadMemWorker();
+          ob_free(worker);
         } else {
           if (OB_FAIL(mem_ctx_->mem_dump_queue_.push(nullptr))) {
             LOG_WARN("fail to push nullptr", KR(ret));
@@ -429,47 +486,6 @@ public:
 private:
   ObTableLoadTableCtx *ctx_;
   ObDirectLoadMemContext *mem_ctx_;
-};
-
-class ObTableLoadPreSorter::CloseChunkTaskProcessor : public ObITableLoadTaskProcessor
-{
-public:
-  CloseChunkTaskProcessor(ObTableLoadTask &task,
-                          ObTableLoadTableCtx *ctx,
-                          ObTableLoadPreSorter *pre_sorter)
-    : ObITableLoadTaskProcessor(task),
-      ctx_(ctx),
-      pre_sorter_(pre_sorter),
-      mem_ctx_(&pre_sorter->mem_ctx_),
-      chunks_manager_(pre_sorter_->chunks_manager_)
-  {
-    ctx_->inc_ref_count();
-  }
-  virtual ~CloseChunkTaskProcessor() { ObTableLoadService::put_ctx(ctx_); }
-  int process() override
-  {
-    int ret = OB_SUCCESS;
-    int64_t chunk_id = -1;
-    while (OB_SUCC(ret) && OB_LIKELY(!mem_ctx_->has_error_)) {
-      if (OB_FAIL(pre_sorter_->get_next_unclosed_chunk_id(chunk_id))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("fail to get next unclosed chunk id", KR(ret));
-        } else {
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else if (OB_FAIL(chunks_manager_->close_chunk(chunk_id))) {
-        LOG_WARN("fail to close chunk", KR(ret), K(chunk_id));
-      }
-    }
-    ATOMIC_AAF(&(mem_ctx_->finish_load_thread_cnt_), 1);
-    return ret;
-  }
-private:
-  ObTableLoadTableCtx *ctx_;
-  ObTableLoadPreSorter *pre_sorter_;
-  ObDirectLoadMemContext *mem_ctx_;
-  ObTableLoadMemChunkManager *chunks_manager_;
 };
 
 class ObTableLoadPreSorter::PreSortTaskCallback : public ObITableLoadTaskCallback

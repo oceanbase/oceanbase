@@ -113,15 +113,14 @@ int ObTableLoadMemChunkManager::get_unclosed_chunks(ObIArray<int64_t> &chunk_nod
     for (int64_t i = 0; OB_SUCC(ret) && i < chunk_nodes_.count(); ++i) {
       ObTableLoadChunkNode &chunk_node = chunk_nodes_.at(i);
       if (OB_UNLIKELY(chunk_node.is_used())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected chunk already is used", KR(ret), K(i), K(chunk_node));
+        continue;
       } else if (nullptr == chunk_node.chunk_) {
         // do nothing
       } else if (OB_UNLIKELY(!chunk_node.set_used())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected set chunk node used failed", KR(ret), K(i), K(chunk_node));
       } else if (OB_FAIL(chunk_node_ids.push_back(i))) {
-        LOG_WARN("fail to push back", KR(ret));
+        LOG_WARN("fail to push back", KR(ret), K(i));
       }
     }
   }

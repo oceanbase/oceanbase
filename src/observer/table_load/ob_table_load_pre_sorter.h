@@ -32,10 +32,10 @@ class ObTableLoadPreSorter
 {
   class SampleTaskProcessor;
   class DumpTaskProcessor;
-  class CloseChunkTaskProcessor;
   class PreSortTaskCallback;
   class FinishTaskProcessor;
   class FinishTaskCallback;
+  class ChunkSorter;
 
   friend class ObTableLoadPreSortWriter;
 public:
@@ -50,15 +50,18 @@ public:
   bool is_stopped() const;
   void set_has_error() { mem_ctx_.has_error_ = true; }
   int get_table_store(ObDirectLoadTableStore &table_store);
+public:
+  int64_t inc_sort_chunk_task_cnt() { return ATOMIC_AAF(&sort_chunk_task_cnt_, 1); }
+  int64_t dec_sort_chunk_task_cnt() { return ATOMIC_AAF(&sort_chunk_task_cnt_, -1); }
+  int64_t get_sort_chunk_task_cnt() { return ATOMIC_LOAD(&sort_chunk_task_cnt_); }
 private:
   int init_mem_ctx();
   int init_chunks_manager();
   int init_sample_task_scheduler();
   int start_sample();
   int start_dump();
-  int start_close_chunk();
   int start_finish();
-  int get_next_unclosed_chunk_id(int64_t &chunk_id);
+  int close_chunk(int64_t chunk_node_id);
   int handle_pre_sort_thread_finish();
   int finish();
 private:
@@ -68,9 +71,10 @@ private:
   ObDirectLoadMemContext mem_ctx_;
   ObTableLoadMemChunkManager *chunks_manager_;
   ObITableLoadTaskScheduler *sample_task_scheduler_;
-  ObArray<int64_t> unclosed_chunk_ids_;
   int64_t unclosed_chunk_id_pos_;
   int64_t finish_thread_cnt_;
+  int64_t sort_chunk_task_cnt_;
+  bool all_trans_finished_;
   bool is_inited_;
 };
 

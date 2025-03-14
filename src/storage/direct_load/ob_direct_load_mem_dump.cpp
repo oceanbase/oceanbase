@@ -435,6 +435,11 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
   return ret;
 }
 
+int ObDirectLoadMemDump::work()
+{
+  return do_dump();
+}
+
 int ObDirectLoadMemDump::do_dump()
 {
   int ret = OB_SUCCESS;

@@ -183,8 +183,8 @@ int ObTableLoadPreSortWriter::append_row(const ObTabletID &tablet_id,
           LOG_WARN("fail to add item", KR(ret));
         } else {
           ret = OB_SUCCESS;
-          if (OB_FAIL(chunks_manager_->close_chunk(chunk_node_id_))) {
-            LOG_WARN("fail to close chunk", KR(ret));
+          if (OB_FAIL(pre_sorter_->close_chunk(chunk_node_id_))) {
+            LOG_WARN("fail to init sort chunk task", KR(ret));
           } else {
             chunk_node_id_ = -1;
             chunk_ = nullptr;

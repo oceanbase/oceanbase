@@ -98,7 +98,7 @@ public:
 
   int64_t total_thread_cnt_; // 总的线程数目
   int64_t dump_thread_cnt_; // dump线程数目
-  int64_t load_thread_cnt_; // load线程数目, 在pre_sort中是close线程数目
+  int64_t load_thread_cnt_; // load线程数目, 在pre_sort中没有实际意义, 只用做sample线程退出标志
 
   int64_t finish_load_thread_cnt_; // 已经结束的load线程数目
   int64_t running_dump_task_cnt_; // 还在运行的dump任务数目

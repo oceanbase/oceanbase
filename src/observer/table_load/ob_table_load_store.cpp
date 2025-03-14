@@ -200,14 +200,8 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    if (ctx_->store_ctx_->write_ctx_.enable_pre_sort_) {
-      if (OB_FAIL(ctx_->store_ctx_->write_ctx_.pre_sorter_->close())) {
-        LOG_WARN("fail to close pre sorter", KR(ret));
-      }
-    } else {
-      if (OB_FAIL(ctx_->store_ctx_->start_merge())) {
-        LOG_WARN("fail to start merge", KR(ret));
-      }
+    if (OB_FAIL(ctx_->store_ctx_->start_merge())) {
+      LOG_WARN("fail to start merge", KR(ret));
     }
     return ret;
   }
@@ -296,6 +290,10 @@ int ObTableLoadStore::start_merge()
     LOG_INFO("store start merge");
     if (OB_FAIL(store_ctx_->set_status_merging())) {
       LOG_WARN("fail to set store status merging", KR(ret));
+    } else if (ctx_->store_ctx_->write_ctx_.enable_pre_sort_) {
+      if (OB_FAIL(ctx_->store_ctx_->write_ctx_.pre_sorter_->close())) {
+        LOG_WARN("fail to close pre sorter", KR(ret));
+      }
     } else {
       ObTableLoadTask *task = nullptr;
       // 1. 分配task

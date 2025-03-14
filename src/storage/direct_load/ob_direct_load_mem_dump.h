@@ -18,6 +18,7 @@
 #include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_sstable_builder.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_mem_worker.h"
 
 namespace oceanbase
 {
@@ -25,7 +26,7 @@ namespace storage
 {
 class ObDirectLoadITable;
 
-class ObDirectLoadMemDump
+class ObDirectLoadMemDump : public ObDirectLoadMemWorker
 {
   typedef ObDirectLoadConstExternalMultiPartitionRow RowType;
   typedef ObDirectLoadExternalMultiPartitionRowChunk ChunkType;
@@ -66,9 +67,11 @@ public:
                       ObDirectLoadMemContext *mem_ctx,
                       const RangeType &range,
                       table::ObTableLoadHandle<Context> context_ptr, int64_t range_idx);
-  ~ObDirectLoadMemDump();
+  virtual ~ObDirectLoadMemDump();
+  virtual int add_table(const ObDirectLoadTableHandle &table_handle) override { return OB_SUCCESS; }
+  virtual int work();
   int do_dump();
-
+  VIRTUAL_TO_STRING_KV(KP(mem_ctx_), K_(range));
 private:
   // dump tables
   int new_table_builder(const ObTabletID &tablet_id,
