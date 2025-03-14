@@ -50,16 +50,16 @@ create or replace package body utl_recomp AS
                               object_type varchar2(23));
   TYPE OBJECT_INFO_ARRAY IS TABLE OF OBJECT_INFO;
 
-  procedure check_privilege as
-  begin
-    if user != 'SYS' then
-      raise valid_routine_name;
-    end if;
-  end;
-
   procedure dynamic_execute(sql_str varchar2) as
   begin
     execute immediate sql_str;
+  end;
+
+  procedure grant_privilege(table_name varchar2) as
+  begin
+    if user != 'SYS' then
+      dynamic_execute('grant select on '|| table_name || ' to ' || user);
+    end if;
   end;
 
   procedure check_table_exist(table_name varchar2, is_exist out bool) as
@@ -113,7 +113,6 @@ create or replace package body utl_recomp AS
   PROCEDURE truncate_utl_recomp_skip_list(flags PLS_INTEGER := 0) as
     is_exist boolean := false;
   begin
-    check_privilege();
     check_table_exist(skip_list_table, is_exist);
     if is_exist then
       if (flags = USE_EXIST_TABLE) then
@@ -128,14 +127,16 @@ create or replace package body utl_recomp AS
     else
       dynamic_execute(skip_list_table_ddl);
     end if;
+    grant_privilege(skip_list_table);
   end;
 
   PROCEDURE populate_utl_recomp_skip_list(flags PLS_INTEGER := 0) as
     dml_str varchar2(500);
   begin
-    check_privilege();
     prepare_table(skip_list_table, skip_list_table_ddl, flags);
     prepare_table(compiled_table, compiled_table_ddl, flags);
+    grant_privilege(skip_list_table);
+    grant_privilege(compiled_table);
     dml_str := 'insert into sys.utl_recomp_skip_list select object_id from sys.all_objects o
                 where o.status != ''VALID''
                       and o.object_id not in
@@ -160,7 +161,6 @@ create or replace package body utl_recomp AS
     batch_no int := flags;
     error_msg varchar2(4000);
   begin
-    check_privilege();
     execute immediate 'select o.object_id, o.owner, o.object_name, o.object_type, null, null, null
                         from sys.all_objects o
                         join sys.utl_recomp_sorted s on o.object_id = s.obj# and s.batch# = :1
@@ -324,11 +324,14 @@ create or replace package body utl_recomp AS
   procedure recomp_parallel(threads PLS_INTEGER := NULL, schema varchar2 := NULL, flags PLS_INTEGER := 0) as
   begin
     current_batch := 0;
-    check_privilege();
     prepare_table(skip_list_table, skip_list_table_ddl, flags);
     prepare_table(sorted_table, sorted_table_ddl, flags);
     prepare_table(compiled_table, compiled_table_ddl, flags);
     prepare_table(errors_table, errors_table_ddl, flags);
+    grant_privilege(skip_list_table);
+    grant_privilege(sorted_table);
+    grant_privilege(compiled_table);
+    grant_privilege(errors_table);
 
     init(schema);
     COMPUTE_NUM_THREADS(threads);
