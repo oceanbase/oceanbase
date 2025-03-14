@@ -261,8 +261,11 @@ int ObGenDicLoader::gen_dic_loader(
       }
       default: {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the charset is");
-        LOG_WARN("not support the charset", K(ret), K(charset));
+        ObSqlString message;
+        message.append_fmt("%s with the %s charset is",
+                           ObFTSLiteral::PARSER_NAME_IK, ObCharset::charset_name(charset));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, message.ptr());
+        LOG_WARN("not support the charset", K(ret), K(charset), KCSTRING(lbt()));
         break;
       }
     }

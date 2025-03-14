@@ -82,7 +82,12 @@ int ObPluginHelper::find_ftparser(const ObString &parser_name, ObIFTParserDesc *
   param = nullptr;
   ObPluginEntryHandle *entry_handle = nullptr;
   if (OB_FAIL(find_ftparser_entry(parser_name, entry_handle))) {
-    LOG_DEBUG("failed to find parser", K(parser_name), K(ret));
+    if (OB_FUNCTION_NOT_DEFINED == ret) {
+      LOG_USER_ERROR(OB_FUNCTION_NOT_DEFINED, parser_name.length(), parser_name.ptr());
+      LOG_DEBUG("no such parser", K(parser_name));
+    } else {
+      LOG_WARN("failed to find ftparser", K(parser_name), K(ret));
+    }
   } else if (OB_ISNULL(entry_handle->entry().plugin_handle)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("find a plugin entry without plugin handle", K(ret), KPC(entry_handle));

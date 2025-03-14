@@ -60,6 +60,7 @@ public:
   virtual int segment(ObFTParserParam *param, ObITokenIterator *&iter) const override;
   virtual void free_token_iter(ObFTParserParam *param, ObITokenIterator *&iter) const override;
   virtual int get_add_word_flag(storage::ObAddWordFlag &flag) const override;
+  virtual int check_if_charset_supported(const ObCharsetInfo *cs) const override;
 
 private:
   bool             inited_ = false;

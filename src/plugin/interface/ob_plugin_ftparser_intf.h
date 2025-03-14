@@ -149,13 +149,6 @@ public:
   virtual int segment(ObFTParserParam *param, ObITokenIterator *&iter) const = 0;
 
   /**
-   * get AddWordFlag
-   * @details ref to ObAddWordFlag for more details
-   * @param[out] flag the AddWordFlag
-   */
-  virtual int get_add_word_flag(storage::ObAddWordFlag &flag) const = 0;
-
-  /**
    * Release resources held by the iterator and free token iterator.
    * @param[in] param the fulltext parameter
    * @param[out] iter The token iterator which retrieve tokens
@@ -166,6 +159,15 @@ public:
       iter->~ObITokenIterator();
     }
   }
+
+  /**
+   * get AddWordFlag
+   * @details ref to ObAddWordFlag for more details
+   * @param[out] flag the AddWordFlag
+   */
+  virtual int get_add_word_flag(storage::ObAddWordFlag &flag) const = 0;
+
+  virtual int check_if_charset_supported(const ObCharsetInfo *cs) const { return OB_SUCCESS; }
 };
 
 } // namespace plugin

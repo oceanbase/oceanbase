@@ -136,5 +136,18 @@ int ObFtParserAdaptor::get_add_word_flag(ObAddWordFlag &flag) const
   return ret;
 }
 
+int ObFtParserAdaptor::check_if_charset_supported(const ObCharsetInfo *cs) const
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(ftparser_.check_if_charset_supported)) {
+    // do nothing
+  } else {
+    ret = ftparser_.check_if_charset_supported((ObPluginCharsetInfoPtr)cs);
+  }
+  return ret;
+}
+
 } // namespace plugin
 } // namespace oceanbase

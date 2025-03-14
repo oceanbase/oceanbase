@@ -27,11 +27,13 @@
  */
 #define OBP_FTPARSER_INTERFACE_VERSION OBP_MAKE_VERSION(0, 1, 0)
 
+#define OBP_FTPARSER_INTERFACE_VERSION_0_2_0 OBP_MAKE_VERSION(0, 2, 0)
+
 /**
  * current full text parser interface version
  * @note you should change this value if you add some new routines in interface struct.
  */
-#define OBP_FTPARSER_INTERFACE_VERSION_CURRENT OBP_FTPARSER_INTERFACE_VERSION
+#define OBP_FTPARSER_INTERFACE_VERSION_CURRENT OBP_FTPARSER_INTERFACE_VERSION_0_2_0
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,6 +82,17 @@ struct OBP_PUBLIC_API ObPluginFTParser
 
   /**< return the add_word_flag */
   int (*get_add_word_flag)(uint64_t *flag);
+
+  /**
+   * check whether the charset is supported
+   * @since 0.2.0
+   * @details The charset is supported if this iterface is null.
+   * @return
+   * - OBP_SUCCESS for supporting
+   * - OBP_NOT_SUPPORTED for not supported
+   * - others for error
+   */
+  int (*check_if_charset_supported)(ObPluginCharsetInfoPtr cs);
 };
 
 /**< return the version of this parser */

@@ -1788,6 +1788,33 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_property(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      plugin::ObIFTParserDesc *ftparser_desc = nullptr;
+      plugin::ObPluginParam *param = nullptr;
+      storage::ObFTParser parser;
+      const ObCharsetInfo *cs = nullptr;
+      if (OB_ISNULL(cs = ObCharset::get_charset(collation_type))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no such charset", K(collation_type), K(ret));
+      } else if (OB_FAIL(parser.parse_from_str(arg.index_option_.parser_name_.ptr(),
+                                               arg.index_option_.parser_name_.length()))) {
+        LOG_WARN("failed to parser name and version", K(arg.index_option_.parser_name_), K(ret));
+      } else if (OB_FAIL(plugin::ObPluginHelper::find_ftparser(parser.get_parser_name().str(), ftparser_desc, param))) {
+        LOG_WARN("failed to find ftparser", K(parser), K(ret));
+      } else if (OB_ISNULL(ftparser_desc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("find ftparser success but got null", K(arg.index_option_.parser_name_));
+      } else if (OB_FAIL(ftparser_desc->check_if_charset_supported(cs))) {
+        if (OB_NOT_SUPPORTED == ret) {
+          ObSqlString message;
+          message.append_fmt("%.*s with the %s charset is",
+                             parser.get_parser_name().len(), parser.get_parser_name().str(), cs->csname);
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, message.ptr());
+        }
+        LOG_WARN("ftparser doesn't support charset", K(collation_type), K(ret));
+      }
+    }
+
     storage::ObFTParserJsonProps json_props;
 
     if (FAILEDx(json_props.init())) {
@@ -1867,6 +1894,7 @@ int ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(
           charset_type = col->get_charset_type();
         }
       }
+
       if (OB_SUCC(ret)) {
         ObTenantDicLoaderHandle dic_loader_handle;
         if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
