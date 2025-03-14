@@ -373,7 +373,9 @@ ObIOTimeLog::ObIOTimeLog()
     callback_enqueue_ts_(0),
     callback_dequeue_ts_(0),
     callback_finish_ts_(0),
-    end_ts_(0)
+    end_ts_(0),
+    group_throttle_delay_(0),
+    tenant_throttle_delay_(0)
 {
 }
 
@@ -393,6 +395,8 @@ void ObIOTimeLog::reset()
   callback_dequeue_ts_ = 0;
   callback_finish_ts_ = 0;
   end_ts_ = 0;
+  group_throttle_delay_ = 0;
+  tenant_throttle_delay_ = 0;
 }
 
 int64_t oceanbase::common::get_io_interval(const int64_t &end_time, const int64_t &begin_time)
@@ -1110,7 +1114,9 @@ void ObIOHandle::estimate()
           K(callback_queue_delay),
           K(callback_process_delay),
           K(finish_notify_delay),
-          K(request_delay));
+          K(request_delay),
+          "group_throttle_delay", time_log.group_throttle_delay_,
+          "tenant_throttle_delay", time_log.tenant_throttle_delay_);
     }
   }
 }

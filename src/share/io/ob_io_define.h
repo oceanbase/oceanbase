@@ -230,7 +230,8 @@ public:
   ~ObIOTimeLog();
   void reset();
   TO_STRING_KV(K(begin_ts_), K(enqueue_ts_), K(dequeue_ts_), K(submit_ts_), K(return_ts_),
-      K(callback_enqueue_ts_), K(callback_dequeue_ts_), K(callback_finish_ts_), K(end_ts_));
+      K(callback_enqueue_ts_), K(callback_dequeue_ts_), K(callback_finish_ts_), K(end_ts_),
+      K(group_throttle_delay_), K(tenant_throttle_delay_));
 public:
   int64_t begin_ts_;
   int64_t enqueue_ts_;
@@ -241,6 +242,8 @@ public:
   int64_t callback_dequeue_ts_;
   int64_t callback_finish_ts_;
   int64_t end_ts_;
+  int64_t group_throttle_delay_;
+  int64_t tenant_throttle_delay_;
 };
 
 int64_t get_io_interval(const int64_t &end_time, const int64_t &begin_time);

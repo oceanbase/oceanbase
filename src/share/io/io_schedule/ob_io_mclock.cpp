@@ -286,7 +286,7 @@ void ObTenantIOClock::destroy()
   io_usage_ = nullptr;
 }
 
-int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIORequest &req)
+int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   const int64_t current_ts = ObTimeUtility::fast_current_time();
@@ -294,6 +294,9 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIOReques
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_ISNULL(phy_queue)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(phy_queue));
   } else if (OB_UNLIKELY(!req.get_flag().is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(req));
@@ -322,6 +325,12 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIOReques
       } else {
         // ensure not exceed max iops of the tenant
         unit_clock_.atom_update(current_ts, iops_scale, phy_queue->tenant_limitation_ts_);
+      }
+      if (phy_queue->group_limitation_ts_ > current_ts) {
+        req.time_log_.group_throttle_delay_ = phy_queue->group_limitation_ts_ - current_ts;
+      }
+      if (phy_queue->tenant_limitation_ts_ > current_ts) {
+        req.time_log_.tenant_throttle_delay_ = phy_queue->tenant_limitation_ts_ - current_ts;
       }
     }
   }

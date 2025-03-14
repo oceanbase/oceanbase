@@ -62,7 +62,7 @@ public:
   virtual ~ObTenantIOClock();
   int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage);
   void destroy();
-  int calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
+  int calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req);
   static int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
   int sync_tenant_clock(ObTenantIOClock *ioclock);
   int try_sync_tenant_clock(ObTenantIOClock *ioclock);
