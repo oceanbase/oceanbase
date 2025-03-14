@@ -102,6 +102,15 @@ struct ObPCUserVarMeta
 {
 public:
   ObPCUserVarMeta(): precision_(-1), obj_meta_() {}
+  ObPCUserVarMeta(const ObPrecision precision, const ObObjType type,
+                  const ObCollationLevel coll_level,
+                  const ObCollationType coll_type):
+  precision_(precision), obj_meta_()
+  {
+    obj_meta_.set_type(type);
+    obj_meta_.set_collation_level(coll_level);
+    obj_meta_.set_collation_type(coll_type);
+  }
   ObPCUserVarMeta(const ObSessionVariable &sess_var)
   {
     obj_meta_ = sess_var.meta_;
@@ -131,6 +140,10 @@ public:
   {
     return !this->operator==(other);
   }
+  inline void parse_from_variable(const ObSessionVariable &sess_var)
+  {
+    *this = ObPCUserVarMeta(sess_var);
+  }
   TO_STRING_KV(K_(precision), K_(obj_meta));
 
 private:
@@ -143,6 +156,7 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet>
 {
   friend struct ObPhyLocationGetter;
 public:
+  static const ObPCUserVarMeta UNKNOWN_VAR_DEFAULT_META;
   explicit ObPlanSet(ObPlanSetType type)
       : alloc_(common::ObNewModIds::OB_SQL_PLAN_CACHE),
         plan_cache_value_(NULL),
@@ -266,6 +280,7 @@ private:
                                          bool &is_same);
 
   bool match_decint_precision(const ObParamInfo &param_info, ObPrecision other_prec) const;
+  int get_variable_meta(const ObSQLSessionInfo *session_info, const ObString &var_name, ObPCUserVarMeta &meta);
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanSet);
   friend class ::test::TestPlanSet_basic_Test;
