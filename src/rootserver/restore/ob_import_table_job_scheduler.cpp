@@ -449,7 +449,13 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
       arg.task_id_ = task.get_task_id();
       arg.tenant_id_ = task.get_tenant_id();
       bool is_exist = false;
-      if (task.get_status().is_finish()) {
+      /* Before canceling the doing import table tasks, we refresh the status of import table
+      *  tasks that are in the DOING status but have actual finshed first. */
+      if(task.get_status().is_doing() && OB_FAIL(process_import_table_task_(task))) {
+        LOG_WARN("failed refresh the status of import table tasks", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (task.get_status().is_finish()) {
         if (task.get_result().is_succeed()) {
           succeed_task_cnt ++;
         }
