@@ -235,18 +235,18 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
         case WBP_PAGE_HITS:
           cur_row_.cells_[i].set_int(tmp_file_info->read_info_.wbp_page_read_hits_);
           break;
-      #ifdef OB_BUILD_SHARED_STORAGE
         /* columns in ss modes begin */
         case AGGREGATE_READ_IO_CNT:
+      #ifdef OB_BUILD_SHARED_STORAGE
           if (GCTX.is_shared_storage_mode()) {
             tmp_file::ObSSTmpFileInfo *ss_tmp_file_info = static_cast<tmp_file::ObSSTmpFileInfo *>(tmp_file_info);
             if (OB_FAIL(fill_ss_column_(i, ss_tmp_file_info))) {
               SERVER_LOG(WARN, "fail to fill ss column", KR(ret), K(i), KPC(ss_tmp_file_info));
             }
           }
+      #endif
           break;
         /* columns in ss modes end */
-      #endif
         /* columns in sn modes begin */
         case META_TREE_EPOCH:
         case META_TREE_LEVELS:
