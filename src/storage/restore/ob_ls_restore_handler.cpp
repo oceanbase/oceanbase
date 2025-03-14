@@ -3229,6 +3229,7 @@ void ObLSRestoreResultMgr::set_result(const int result, const share::ObTaskId &t
       failed_type_ = failed_type;
     }
     retry_cnt_++;
+    LOG_INFO("[RESTORE] set result", KPC(this), K(lbt()));
   }
   last_err_ts_ = ObTimeUtility::current_time();
 }
