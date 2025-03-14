@@ -594,6 +594,9 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     PalfHandleImplGuard *a_handle = palf_list[leader_idx];
     PalfHandleImplGuard *b_handle = palf_list[b_idx];
     PalfHandleImplGuard *d_handle = palf_list[d_idx];
+    // wait until d has received newest config log
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_,
+        d_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_);
 
     const LSN &add_e_barrier = leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_end_lsn_;
     sleep(2);
@@ -624,9 +627,6 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     EXPECT_GT(remove_e_barrier, leader.palf_handle_impl_->sw_.committed_end_lsn_) << \
     remove_e_barrier.val_ << leader.palf_handle_impl_->sw_.committed_end_lsn_.val_;
 
-    // wait until d has received newest config log
-    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_,
-        d_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_);
     // D has been elected to be the leader
     for (auto srv: get_cluster()) {
       srv->set_leader(id, d_addr);

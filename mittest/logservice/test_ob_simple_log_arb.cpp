@@ -578,6 +578,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
   ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
   PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
   LogEngine *log_engine = &arb_palf->log_engine_;
+  // Note: use this trick to forbid concurrent meta write from IOWorker
+  log_engine->is_inited_ = false;
   LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
   LogStorage *meta_storage = &log_engine->log_meta_storage_;
   {
@@ -591,6 +593,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
   }
   meta_tail = log_engine->log_meta_storage_.log_tail_;
   ASSERT_EQ(meta_tail, LSN(log_engine->log_meta_storage_.logical_block_size_));
+  log_engine->is_inited_ = true;
   revert_cluster_palf_handle_guard(palf_list);
   arb_guard.reset();
   leader.reset();
@@ -604,10 +607,12 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
+    log_engine->is_inited_ = false;
     LogStorage *meta_storage = &log_engine->log_meta_storage_;
     EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_engine->log_meta_));
     LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
     ASSERT_NE(meta_tail, LSN(log_engine->log_meta_storage_.logical_block_size_));
+    log_engine->is_inited_ = true;
   }
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
   {
@@ -619,6 +624,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
+    log_engine->is_inited_ = false;
     LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
     LogStorage *meta_storage = &log_engine->log_meta_storage_;
     while (1) {
@@ -628,6 +634,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
         break;
       }
     }
+    log_engine->is_inited_ = true;
   }
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
   {
@@ -639,6 +646,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
+    log_engine->is_inited_ = false;
     LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
     LogStorage *meta_storage = &log_engine->log_meta_storage_;
     while (1) {
@@ -648,6 +656,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
         break;
       }
     }
+    log_engine->is_inited_ = true;
   }
   delete_paxos_group(id);
   PALF_LOG(INFO, "end test_mutli_meta_block", K(id));
