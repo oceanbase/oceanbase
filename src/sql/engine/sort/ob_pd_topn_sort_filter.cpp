@@ -52,15 +52,14 @@ int ObPushDownTopNFilter::init(const ObSortVecOpContext &ctx,
                                       lib::MemoryContext &mem_context)
 {
   return init(ctx.is_fetch_with_ties_, ctx.pd_topn_filter_info_, ctx.tenant_id_, ctx.sk_collations_,
-              ctx.exec_ctx_, mem_context, true /*use_rich_format*/);
+              ctx.exec_ctx_, mem_context);
 }
 
 int ObPushDownTopNFilter::init(bool is_fetch_with_ties,
                                const ObPushDownTopNFilterInfo *pd_topn_filter_info,
                                uint64_t tenant_id,
                                const ObIArray<ObSortFieldCollation> *sort_collations,
-                               ObExecContext *exec_ctx, lib::MemoryContext &mem_context,
-                               bool use_rich_format /*=false*/)
+                               ObExecContext *exec_ctx, lib::MemoryContext &mem_context)
 {
   int ret = OB_SUCCESS;
   ObP2PDatahubMsgBase *p2p_msg = nullptr;
@@ -89,8 +88,7 @@ int ObPushDownTopNFilter::init(bool is_fetch_with_ties,
                                               exec_ctx, px_seq_id, is_fetch_with_ties))) {
     LOG_WARN("failed to init pushdown topn filter msg");
   } else if (!pd_topn_filter_info_->is_shuffle_
-             && OB_FAIL(create_pd_topn_filter_ctx(pd_topn_filter_info, exec_ctx, use_rich_format,
-                                                  px_seq_id))) {
+             && OB_FAIL(create_pd_topn_filter_ctx(pd_topn_filter_info, exec_ctx, px_seq_id))) {
     // for local topn filter pushdown, we directly create filter_ctx here;
     // for global topn filter pushdown, we need add a topn filter use operator and
     // create filter_ctx in topn filter use operator;
@@ -141,8 +139,7 @@ int ObPushDownTopNFilter::update_filter_data(ObChunkDatumStore::StoredRow *store
 }
 
 int ObPushDownTopNFilter::create_pd_topn_filter_ctx(
-    const ObPushDownTopNFilterInfo *pd_topn_filter_info, ObExecContext *exec_ctx,
-    bool use_rich_format, int64_t px_seq_id)
+    const ObPushDownTopNFilterInfo *pd_topn_filter_info, ObExecContext *exec_ctx, int64_t px_seq_id)
 {
   int ret = OB_SUCCESS;
   // TODO XUNSI: if pushdown to the right table with join key but not sort key not from right table,
@@ -167,15 +164,13 @@ int ObPushDownTopNFilter::create_pd_topn_filter_ctx(
       topn_filter_ctx->topn_filter_key_ = dh_key;
       topn_filter_ctx->slide_window_.set_adptive_ratio_thresheld(
           pd_topn_filter_info->adaptive_filter_ratio_);
-      if (use_rich_format) {
-        int64_t max_batch_size = pd_topn_filter_info->max_batch_size_;
-        void *buf = nullptr;
-        if (OB_ISNULL(buf = exec_ctx->get_allocator().alloc((sizeof(uint16_t) * max_batch_size)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate selector_", K(max_batch_size));
-        } else {
-          topn_filter_ctx->row_selector_ = static_cast<uint16_t *>(buf);
-        }
+      int64_t max_batch_size = pd_topn_filter_info->max_batch_size_;
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = exec_ctx->get_allocator().alloc((sizeof(uint16_t) * max_batch_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate selector_", K(max_batch_size));
+      } else {
+        topn_filter_ctx->row_selector_ = static_cast<uint16_t *>(buf);
       }
     }
   } else {

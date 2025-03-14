@@ -49,7 +49,7 @@ public:
   int init(const ObSortVecOpContext &ctx, lib::MemoryContext &mem_context);
   int init(bool is_fetch_with_ties, const ObPushDownTopNFilterInfo *pd_topn_filter_info,
            uint64_t tenant_id, const ObIArray<ObSortFieldCollation> *sort_collations,
-           ObExecContext *exec_ctx, lib::MemoryContext &mem_context, bool use_rich_format = false);
+           ObExecContext *exec_ctx, lib::MemoryContext &mem_context);
 
   int update_filter_data(ObCompactRow *compact_row, const RowMeta *row_meta_);
   int update_filter_data(ObChunkDatumStore::StoredRow *store_row);
@@ -60,8 +60,7 @@ public:
 
 private:
   int create_pd_topn_filter_ctx(const ObPushDownTopNFilterInfo *pd_topn_filter_info,
-                                ObExecContext *exec_ctx, bool use_rich_format,
-                                int64_t px_seq_id);
+                                ObExecContext *exec_ctx, int64_t px_seq_id);
   // publish topn msg to consumer
   int publish_topn_msg();
 
