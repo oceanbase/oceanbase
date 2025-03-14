@@ -743,6 +743,7 @@ int ObTransformLateMaterialization::generate_late_materialization_view(
     LOG_WARN("get unexpected null", K(ret));
   } else {
     view_stmt->get_select_items().reset();
+    view_stmt->set_select_into(nullptr);
     for (int64_t i = 0; OB_SUCC(ret) && i < select_col_ids.count(); i++) {
       ObRawExpr *raw_expr = view_stmt->get_column_expr_by_id(table_item_inner->table_id_,
                                                              select_col_ids.at(i));
