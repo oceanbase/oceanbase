@@ -6287,14 +6287,6 @@ int ObPLResolver::resolve_execute_immediate(
             if (OB_ISNULL(expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("expr is NULL", K(ret));
-            } else if (expr->is_obj_access_expr()) {
-              pl::ObPLDataType final_type;
-              const ObObjAccessRawExpr *access_expr = static_cast<const ObObjAccessRawExpr *>(expr);
-              OZ(access_expr->get_final_type(final_type));
-              if (OB_SUCC(ret) && final_type.is_type_record() && stmt->is_out(i)) {
-                ret =OB_ERR_EXPRESSION_WRONG_TYPE;
-                LOG_WARN("expr is wrong type", K(ret));
-              }
             }
 
             if (OB_SUCC(ret) && stmt->is_out(i)) {
