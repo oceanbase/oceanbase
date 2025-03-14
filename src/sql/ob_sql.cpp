@@ -757,7 +757,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (context->session_info_->is_varparams_sql_prepare()) {
+        if (context->session_info_->is_varparams_sql_prepare() && !context->is_dbms_sql_) {
           // question mark expr has no valid result type in prepare stage
         } else if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
