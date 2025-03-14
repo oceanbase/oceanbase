@@ -549,6 +549,25 @@ int ObPxTaskProcess::record_user_error_msg(int retcode)
         }
       }
     }
+    //append pl_exact_err_msg
+    CK (OB_NOT_NULL(arg_.exec_ctx_));
+    CK (OB_NOT_NULL(arg_.exec_ctx_->get_my_session()));
+    if (OB_SUCC(ret)) {
+      ObSqlString &pl_exact_err_msg = arg_.exec_ctx_->get_my_session()->get_pl_exact_err_msg();
+      if (pl_exact_err_msg.is_valid()) {
+        uint32_t curr_len = STRLEN(rcode.msg_);
+        if (curr_len == 0) {
+          if (retcode >= OB_MIN_RAISE_APPLICATION_ERROR
+              && retcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
+            // do nothing ...
+          } else {
+            (void)snprintf(rcode.msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", ob_errpkt_strerror(retcode, lib::is_oracle_mode()));
+          }
+        }
+        curr_len = STRLEN(rcode.msg_);
+        (void)snprintf(rcode.msg_ + curr_len, common::OB_MAX_ERROR_MSG_LEN - curr_len, "%s", pl_exact_err_msg.ptr());
+      }
+    }
   }
   return ret;
 }
