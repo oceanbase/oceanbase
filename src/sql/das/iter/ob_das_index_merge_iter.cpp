@@ -873,6 +873,7 @@ int ObDASIndexMergeIter::union_get_next_rows(int64_t &count, int64_t capacity)
     int64_t child_rows_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
       IndexMergeRowStore &child_store = child_stores_.at(i);
+      child_rows_cnt = 0;
       if (!child_store.have_data()) {
         if (!child_store.iter_end_) {
           ObDASIter *child_iter = child_iters_.at(i);
