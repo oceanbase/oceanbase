@@ -3044,13 +3044,13 @@ int ObTabletFullDirectLoadMgr::commit(
   } else if (start_scn < get_start_scn()) {
     ret = OB_TASK_EXPIRED;
     LOG_INFO("skip ddl commit log", K(start_scn), K(*this));
-  } else if (OB_FAIL(set_commit_scn(commit_scn))) {
-    LOG_WARN("failed to set commit scn", K(ret));
   } else if (OB_FAIL(tablet.get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
     start_scn, table_key_.get_snapshot_version(), data_format_version_, commit_scn))) {
     LOG_WARN("failed to start prepare", K(ret), K(tablet_id_), K(commit_scn));
+  } else if (OB_FAIL(set_commit_scn(commit_scn))) {
+    LOG_WARN("failed to set commit scn", K(ret));
   } else {
     ret = OB_EAGAIN;
     while (OB_EAGAIN == ret) {
@@ -3109,13 +3109,13 @@ int ObTabletFullDirectLoadMgr::replay_commit(
   } else if (start_scn < get_start_scn()) {
     ret = OB_TASK_EXPIRED;
     LOG_INFO("skip ddl commit log", K(start_scn), K(*this));
-  } else if (OB_FAIL(set_commit_scn(commit_scn))) {
-    LOG_WARN("failed to set commit scn", K(ret));
   } else if (OB_FAIL(tablet.get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
     start_scn, table_key_.get_snapshot_version(), data_format_version_, commit_scn))) {
     LOG_WARN("failed to start prepare", K(ret), K(tablet_id_), K(commit_scn));
+  } else if (OB_FAIL(set_commit_scn(commit_scn))) {
+    LOG_WARN("failed to set commit scn", K(ret));
   } else {
     ret = OB_EAGAIN;
     while (OB_EAGAIN == ret) {
