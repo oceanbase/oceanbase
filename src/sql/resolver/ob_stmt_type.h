@@ -320,7 +320,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_CHECK_AND_PUT, err_stmt_type_priv, 354)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_CHECK_AND_DELETE, err_stmt_type_priv, 355)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_HYBRID_BATCH, err_stmt_type_priv, 356)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_OTHER, err_stmt_type_priv, 357)
-
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ALTER_LS, get_sys_tenant_alter_system_priv, 370)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 

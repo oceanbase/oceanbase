@@ -102,6 +102,7 @@ ob_set_subtarget(ob_rootserver common
   ob_shrink_expand_resource_pool_checker.cpp
   ob_transfer_partition_command.cpp
   ob_service_name_command.cpp
+  ob_alter_ls_command.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

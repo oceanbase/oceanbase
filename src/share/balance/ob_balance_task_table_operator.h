@@ -423,6 +423,8 @@ public:
    * */
   static int get_job_task_cnt(const uint64_t tenant_id, const ObBalanceJobID job_id,
   int64_t &task_cnt, ObISQLClient &client);
+  static int get_ls_task_cnt(const uint64_t tenant_id, const ObLSID ls_id,
+      int64_t &task_cnt, ObISQLClient &client);
   /*
    * @description: update ls part list before set to transfer
    * @param[in] tenant_id : user_tenant_id
@@ -464,6 +466,9 @@ public:
   static int load_need_transfer_task(const uint64_t tenant_id,
                                        ObBalanceTaskIArray &task_array,
                                        ObISQLClient &client);
+private:
+  static int execute_task_cnt_sql_(const uint64_t tenant_id, const ObSqlString &sql,
+      int64_t &task_cnt, ObISQLClient &client);
 
 };
 #undef IS_BALANCE_TASK

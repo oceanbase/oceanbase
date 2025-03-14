@@ -22,6 +22,7 @@
 #include "observer/net/ob_net_endpoint_ingress_rpc_struct.h"
 #include "share/ob_heartbeat_struct.h"
 #include "observer/table_load/control/ob_table_load_control_rpc_struct.h"
+#include "share/ls/ob_alter_ls_struct.h"
 
 namespace oceanbase
 {
@@ -244,6 +245,7 @@ public:
   RPC_S(PR5 dispatch_ttl, OB_TABLE_TTL, (obrpc::ObTTLRequestArg), obrpc::ObTTLResponseArg);
   RPC_S(PR5 admin_unlock_member_list_op, OB_HA_UNLOCK_MEMBER_LIST, (obrpc::ObAdminUnlockMemberListOpArg));
   RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
+  RPC_S(PR5 admin_alter_ls, OB_ADMIN_ALTER_LS, (share::ObAlterLSArg), share::ObAlterLSRes);
   RPC_AP(PR5 tablet_location_send, OB_TABLET_LOCATION_BROADCAST, (obrpc::ObTabletLocationSendArg), obrpc::ObTabletLocationSendResult);
   RPC_S(PR5 force_set_tenant_log_disk, OB_LOG_FORCE_SET_TENANT_LOG_DISK, (obrpc::ObForceSetTenantLogDiskArg));
   RPC_S(PR5 dump_server_usage, OB_FORCE_DUMP_SERVER_USAGE, (obrpc::ObDumpServerUsageRequest), obrpc::ObDumpServerUsageResult);

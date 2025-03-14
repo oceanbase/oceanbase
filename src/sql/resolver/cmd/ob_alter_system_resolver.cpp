@@ -6369,8 +6369,9 @@ int resolve_transfer_partition_to_ls(
   return ret;
 }
 
-int get_and_verify_tenant_name(
+int ObAlterSystemResolverUtil::get_and_verify_tenant_name(
     const ParseNode *parse_node,
+    const bool allow_sys_meta_tenant,
     const uint64_t exec_tenant_id,
     uint64_t &target_tenant_id,
     const char * const op_str)
@@ -6412,7 +6413,7 @@ int get_and_verify_tenant_name(
       ret = OB_TENANT_NOT_EXIST;
       LOG_USER_ERROR(OB_TENANT_NOT_EXIST, tenant_name.length(), tenant_name.ptr());
     }
-  } else if (OB_UNLIKELY(!is_user_tenant(target_tenant_id))) {
+  } else if (!allow_sys_meta_tenant && !is_user_tenant(target_tenant_id)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support user tenant", KR(ret), K(target_tenant_id));
     if (OB_TMP_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos,
@@ -6447,8 +6448,9 @@ int ret = OB_SUCCESS;
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parse node is null", KR(ret),  KP(parse_tree.children_[0]));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[1],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Transfer partition"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
@@ -6535,8 +6537,9 @@ int ret = OB_SUCCESS;
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parse node is null", KR(ret),  KP(parse_tree.children_[0]));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[1],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Cancel transfer partition"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
@@ -6585,8 +6588,9 @@ int ret = OB_SUCCESS;
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
         KP(session_info_));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[0],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Cancel balance job"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
@@ -6620,8 +6624,9 @@ int ObServiceNameResolver::resolve(const ParseNode &parse_tree)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
         KP(parse_tree.children_[0]), KP(parse_tree.children_[1]), KP(session_info_));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[2],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id,
       "Service name related command"))) {

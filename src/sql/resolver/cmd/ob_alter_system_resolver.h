@@ -68,6 +68,12 @@ public:
   static int get_and_verify_tenant_name(const ParseNode* tenant_name_node,
                                         const uint64_t exec_tenant_id,
                                         uint64_t &target_tenant_id);
+  static int get_and_verify_tenant_name(
+      const ParseNode *parse_node,
+      const bool allow_sys_meta_tenant,
+      const uint64_t exec_tenant_id,
+      uint64_t &target_tenant_id,
+      const char * const op_str);
   static int check_and_get_data_source(const ParseNode* data_source_node,
                                        common::ObAddr& data_source);
   static int check_and_get_server_addr(const ParseNode* server_addr_node,

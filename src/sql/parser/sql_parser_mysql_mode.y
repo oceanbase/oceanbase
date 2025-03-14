@@ -496,7 +496,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_reference_option_list reference_option require_specification tls_option_list tls_option
 %type <node> opt_resource_option resource_option_list resource_option
 %type <ival> reference_action
-%type <node> alter_foreign_key_action
+%type <node> alter_foreign_key_action alter_ls_stmt
 %type <node> analyze_stmt analyze_statistics_clause opt_analyze_for_clause opt_analyze_for_clause_list opt_analyze_for_clause_element opt_analyze_sample_clause sample_option for_all opt_indexed_hiddden opt_size_clause size_clause for_columns for_columns_list for_columns_item column_clause
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
@@ -524,6 +524,7 @@ END_P SET_VAR DELIMITER
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
 %type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> service_name_stmt service_op
+%type <node> ls_attr_list ls_attr
 
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
@@ -691,6 +692,7 @@ stmt:
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
+  | alter_ls_stmt           { $$ = $1; check_question_mark($$, result); }
   | service_name_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
@@ -18158,6 +18160,66 @@ part_info
 | ALL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ALL);
+}
+;
+/*===========================================================
+ *
+ * 日志流运维命令
+ *
+ *===========================================================*/
+alter_ls_stmt:
+ALTER SYSTEM CREATE LS ls_attr_list opt_tenant_name
+{
+ (void)($1);
+ ParseNode *ls_attr = NULL;
+ merge_nodes(ls_attr, result, T_LS_ATTR_LIST, $5);
+ ParseNode *op_node = NULL;
+ malloc_terminal_node(op_node, result->malloc_pool_, T_INT);
+ op_node->value_ = 1;
+ malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LS, 3, op_node, ls_attr, $6);
+}
+| ALTER SYSTEM MODIFY ls ls_attr_list opt_tenant_name
+{
+  (void)($1);
+  ParseNode *ls_attr = NULL;
+  merge_nodes(ls_attr, result, T_LS_ATTR_LIST, $5);
+  ParseNode *op_node = NULL;
+  malloc_terminal_node(op_node, result->malloc_pool_, T_INT);
+  op_node->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LS, 4, op_node, $4, ls_attr, $6);
+
+}
+| ALTER SYSTEM DROP ls opt_tenant_name
+{
+  (void)($1);
+  ParseNode *op_node = NULL;
+  malloc_terminal_node(op_node, result->malloc_pool_, T_INT);
+  op_node->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LS, 3, op_node, $4, $5);
+}
+;
+
+ls_attr_list:
+ls_attr
+{
+  $$ = $1;
+}
+| ls_attr_list ',' ls_attr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+ls_attr:
+UNIT_GROUP opt_equal_mark INTNUM
+{
+  (void)($2); /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNIT_GROUP, 1, $3)
+}
+| PRIMARY_ZONE opt_equal_mark relation_name_or_string
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_ZONE, 1, $3);
 }
 ;
 /*===========================================================

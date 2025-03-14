@@ -131,6 +131,7 @@
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
+#include "sql/resolver/cmd/ob_alter_ls_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -1190,6 +1191,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_SERVICE_NAME: {
         REGISTER_STMT_RESOLVER(ServiceName);
+        break;
+      }
+      case T_ALTER_LS: {
+        REGISTER_STMT_RESOLVER(AlterLS);
         break;
       }
       default: {

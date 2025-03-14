@@ -968,7 +968,6 @@ int ObBalanceTaskTableOperator::get_job_task_cnt(const uint64_t tenant_id,
     const ObBalanceJobID job_id, int64_t &task_cnt, ObISQLClient &client)
 {
   int ret = OB_SUCCESS;
-  task_cnt = 0;
   ObSqlString sql;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || ! job_id.is_valid())) {
@@ -977,23 +976,47 @@ int ObBalanceTaskTableOperator::get_job_task_cnt(const uint64_t tenant_id,
   } else if (OB_FAIL(sql.assign_fmt("select count(*) as task_cnt from %s where job_id = %ld",
                                     OB_ALL_BALANCE_TASK_TNAME, job_id.id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(job_id), K(sql));
-  } else {
-    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(client.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("failed to read", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get sql result", KR(ret));
-      } else if (OB_FAIL(result->next())) {
-        LOG_WARN("failed to get balance task", KR(ret), K(sql));
-      } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "task_cnt", task_cnt, int64_t);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to task cnt", KR(ret), K(sql));
-        }
+  } else if (OB_FAIL(execute_task_cnt_sql_(tenant_id, sql, task_cnt, client))) {
+    LOG_WARN("fail to execute task_cnt sql", KR(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+int ObBalanceTaskTableOperator::execute_task_cnt_sql_(
+    const uint64_t tenant_id, const ObSqlString &sql, int64_t &task_cnt, ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  task_cnt = 0;
+  HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("failed to read", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get sql result", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("failed to get balance task", KR(ret), K(sql));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "task_cnt", task_cnt, int64_t);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to task cnt", KR(ret), K(sql));
       }
     }
+  }
+  return ret;
+}
+int ObBalanceTaskTableOperator::get_ls_task_cnt(const uint64_t tenant_id,
+    const ObLSID ls_id, int64_t &task_cnt, ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(sql.assign_fmt("select count(*) as task_cnt from %s "
+      "where src_ls = %ld or dest_ls = %ld", OB_ALL_BALANCE_TASK_TNAME, ls_id.id(), ls_id.id()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(ls_id), K(sql));
+  } else if (OB_FAIL(execute_task_cnt_sql_(tenant_id, sql, task_cnt, client))) {
+    LOG_WARN("fail to execute task_cnt sql", KR(ret), K(tenant_id), K(sql));
   }
   return ret;
 }

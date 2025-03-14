@@ -213,7 +213,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_context_executor.cpp
   engine/cmd/ob_table_direct_insert_ctx.cpp
   engine/cmd/ob_table_direct_insert_service.cpp
-
+  engine/cmd/ob_alter_ls_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml
@@ -967,7 +967,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp
   resolver/cmd/ob_variable_set_stmt.cpp
-  resolver/cmd/ob_alter_system_resolver.cpp
+  resolver/cmd/ob_alter_ls_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

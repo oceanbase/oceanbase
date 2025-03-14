@@ -329,6 +329,7 @@ ob_set_subtarget(ob_share ls
   ls/ob_ls_creator.cpp
   ls/ob_ls_election_reference_info_operator.cpp
   ls/ob_ls_log_stat_info.cpp
+  ls/ob_alter_ls_struct.cpp
 )
 
 ob_set_subtarget(ob_share ash

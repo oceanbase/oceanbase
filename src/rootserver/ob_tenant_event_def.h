@@ -125,6 +125,16 @@
                 TARGET_SERVERS_LIST,
                 SUCCESS_SERVERS_LIST);
   };
+  class LS_COMMAND {
+    public:
+      DEF_MODULE(LS_COMMAND, "LS COMMAND");
+      DEF_EVENT(LS_COMMAND, MODIFY_LS, "MODIFY LS",
+                ARGS,
+                LS_ID,
+                LS_GROUP_ID,
+                UNIT_GROUP_ID,
+                PRIMARY_ZONE);
+  };
 #endif
 #endif
 ////////////////////////////////////////////////////////////////
