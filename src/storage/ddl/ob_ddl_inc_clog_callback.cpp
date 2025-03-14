@@ -158,6 +158,7 @@ int ObDDLIncRedoClogCb::on_success()
       macro_block.table_key_ = redo_info_.table_key_;
       macro_block.end_row_id_ = redo_info_.end_row_id_;
       macro_block.trans_id_ = redo_info_.trans_id_;
+      macro_block.seq_no_ = redo_info_.seq_no_;
       const int64_t snapshot_version = redo_info_.table_key_.get_snapshot_version();
       const uint64_t data_format_version = redo_info_.data_format_version_;
       if (OB_FAIL(tablet_handle_.get_obj()->set_macro_block(macro_block, snapshot_version, data_format_version))) {

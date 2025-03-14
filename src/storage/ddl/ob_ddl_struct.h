@@ -79,7 +79,8 @@ public:
                KPC_(data_macro_meta),
                KP_(buf),
                K_(size),
-               K_(merge_slice_idx));
+               K_(merge_slice_idx),
+               K_(seq_no));
 public:
   ObArenaAllocator allocator_; // used to hold data_macro_meta_
   ObDDLMacroHandle block_handle_;
@@ -94,6 +95,7 @@ public:
   const char* buf_; // only used for warm up
   int64_t size_;
   int64_t merge_slice_idx_;
+  transaction::ObTxSEQ seq_no_; // for incremental direct load only
 };
 
 class ObDDLKV;
@@ -233,7 +235,8 @@ public:
                K_(macro_block_id),
                K_(parallel_cnt),
                K_(cg_cnt),
-               K_(merge_slice_idx));
+               K_(merge_slice_idx),
+               K_(seq_no));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
@@ -250,6 +253,7 @@ public:
   int64_t parallel_cnt_;
   int64_t cg_cnt_;
   int64_t merge_slice_idx_;
+  transaction::ObTxSEQ seq_no_; // for incremental direct load only
 };
 
 class ObTabletDirectLoadMgr;

@@ -128,7 +128,8 @@ public:
       transaction::ObTxDesc *tx_desc,
       const transaction::ObTransID &trans_id,
       const int64_t parallel_cnt,
-      const int64_t cg_cnt);
+      const int64_t cg_cnt,
+      const transaction::ObTxSEQ seq_no);
   void reset();
   int write(
       const blocksstable::ObStorageObjectHandle &macro_handle,
@@ -152,6 +153,7 @@ private:
   transaction::ObTransID trans_id_;
   int64_t parallel_cnt_;
   int64_t cg_cnt_;
+  transaction::ObTxSEQ seq_no_; // for incremental direct load
 };
 
 }  // end namespace storage

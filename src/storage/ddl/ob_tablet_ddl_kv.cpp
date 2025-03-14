@@ -20,6 +20,7 @@
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
+#include "storage/tx/ob_trans_define.h"
 #endif
 
 using namespace oceanbase::storage;
@@ -877,6 +878,7 @@ void ObDDLKV::reset()
   ddl_snapshot_version_ = 0;
   data_format_version_ = 0;
   trans_id_.reset();
+  seq_no_.reset();
   data_schema_version_ = 0;
   column_count_ = 0;
 
@@ -1022,6 +1024,7 @@ int ObDDLKV::set_macro_block(
       ddl_snapshot_version_ = snapshot_version;
       data_format_version_ = data_format_version;
       trans_id_ = macro_block.trans_id_;
+      seq_no_ = macro_block.seq_no_;
     }
     if (macro_block.ddl_start_scn_ != ddl_start_scn_) {
       if (is_inc_ddl_kv_) {
@@ -1875,6 +1878,35 @@ int ObDDLKV::multi_scan(
     LOG_WARN("not support get for full direct load", K(ret));
   } else {
     ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowMultiScanner, &ranges, row_iter);
+  }
+  return ret;
+}
+
+int ObDDLKV::check_can_access(ObTableAccessContext &context, bool &can_access)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObTransID trans_id;
+  transaction::ObTxSEQ seq_no;
+  SCN max_scn;
+  {
+    TCRLockGuard guard(lock_);
+    trans_id = trans_id_;
+    seq_no = seq_no_;
+    max_scn = max_scn_;
+  }
+  can_access = true;
+  if (seq_no.is_valid()) {
+    memtable::ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+    storage::ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
+    transaction::ObLockForReadArg lock_for_read_arg(mvcc_acc_ctx,
+                                                    trans_id,
+                                                    seq_no,
+                                                    context.query_flag_.read_latest_,
+                                                    context.query_flag_.iter_uncommitted_row_,
+                                                    max_scn);
+    if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_access, max_scn))) {
+      LOG_WARN("fail to lock for read", KR(ret), K(lock_for_read_arg));
+    }
   }
   return ret;
 }

@@ -1761,13 +1761,14 @@ int ObMacroBlockSliceStore::init(
     const ObWholeDataStoreDesc &data_desc = tablet_direct_load_mgr->get_sqc_build_ctx().data_block_desc_;
     ObTxDesc *tx_desc = tablet_direct_load_mgr->get_sqc_build_ctx().build_param_.runtime_only_param_.tx_desc_;
     const ObTransID &trans_id = tablet_direct_load_mgr->get_sqc_build_ctx().build_param_.runtime_only_param_.trans_id_;
+    const ObTxSEQ seq_no = ObTxSEQ::cast_from_int(tablet_direct_load_mgr->get_sqc_build_ctx().build_param_.runtime_only_param_.seq_no_);
     if (is_incremental_direct_load(direct_load_type)) {
       if (OB_ISNULL(ddl_redo_callback_ = OB_NEW(ObDDLIncRedoLogWriterCallback, ObMemAttr(MTL_ID(), "DDL_MBSS")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
       } else if (OB_FAIL(static_cast<ObDDLIncRedoLogWriterCallback *>(ddl_redo_callback_)->init(
           ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn, data_format_version, direct_load_type, tx_desc, trans_id,
-          tablet_direct_load_mgr->get_task_cnt(), tablet_direct_load_mgr->get_cg_cnt()))) {
+          tablet_direct_load_mgr->get_task_cnt(), tablet_direct_load_mgr->get_cg_cnt(), seq_no))) {
         LOG_WARN("fail to init inc ddl_redo_callback_", K(ret));
       }
     } else {

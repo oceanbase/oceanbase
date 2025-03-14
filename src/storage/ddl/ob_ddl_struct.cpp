@@ -85,7 +85,8 @@ ObDDLMacroBlock::ObDDLMacroBlock()
     data_macro_meta_(nullptr),
     buf_(nullptr),
     size_(0),
-    merge_slice_idx_(0)
+    merge_slice_idx_(0),
+    seq_no_()
 {
 }
 
@@ -113,6 +114,8 @@ int ObDDLMacroBlock::deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator 
     dst_block.buf_ = nullptr;
     dst_block.size_ = 0;
     dst_block.merge_slice_idx_ = merge_slice_idx_;
+    dst_block.trans_id_ = trans_id_;
+    dst_block.seq_no_ = seq_no_;
   }
 
   if (OB_FAIL(ret) || !GCTX.is_shared_storage_mode() || ObDDLMacroBlockType::DDL_MB_INDEX_TYPE != block_type_) {
@@ -405,7 +408,8 @@ ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
     macro_block_id_(MacroBlockId::mock_valid_macro_id()),
     parallel_cnt_(0),
     cg_cnt_(0),
-    merge_slice_idx_(0)
+    merge_slice_idx_(0),
+    seq_no_()
 {
 }
 
@@ -425,6 +429,7 @@ void ObDDLMacroBlockRedoInfo::reset()
   parallel_cnt_ = 0;
   cg_cnt_ = 0;
   merge_slice_idx_ = 0;
+  seq_no_.reset();
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
@@ -486,7 +491,8 @@ OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
                     macro_block_id_,
                     parallel_cnt_,
                     cg_cnt_,
-                    merge_slice_idx_);
+                    merge_slice_idx_,
+                    seq_no_);
 
 ObTabletDirectLoadMgrHandle::ObTabletDirectLoadMgrHandle()
   : tablet_mgr_(nullptr)

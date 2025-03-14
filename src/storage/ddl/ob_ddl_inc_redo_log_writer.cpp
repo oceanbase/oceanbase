@@ -657,7 +657,8 @@ ObDDLIncRedoLogWriterCallback::ObDDLIncRedoLogWriterCallback()
     tx_desc_(nullptr),
     trans_id_(),
     parallel_cnt_(0),
-    cg_cnt_(0)
+    cg_cnt_(0),
+    seq_no_()
 {
 }
 
@@ -678,7 +679,8 @@ int ObDDLIncRedoLogWriterCallback::init(
     ObTxDesc *tx_desc,
     const ObTransID &trans_id,
     const int64_t parallel_cnt,
-    const int64_t cg_cnt)
+    const int64_t cg_cnt,
+    const ObTxSEQ seq_no)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -686,10 +688,11 @@ int ObDDLIncRedoLogWriterCallback::init(
     LOG_WARN("inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || block_type == DDL_MB_INVALID_TYPE ||
                          !table_key.is_valid() || task_id == 0 || data_format_version < 0 ||
-                         !is_valid_direct_load(direct_load_type) || OB_ISNULL(tx_desc) || !trans_id.is_valid())) {
+                         !is_valid_direct_load(direct_load_type) || OB_ISNULL(tx_desc) || !trans_id.is_valid() ||
+                         !seq_no.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(block_type), K(table_key), K(task_id), K(data_format_version),
-        K(direct_load_type), KP(tx_desc), K(trans_id));
+        K(direct_load_type), KP(tx_desc), K(trans_id), K(seq_no));
   } else if (OB_FAIL(ddl_inc_writer_.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init ddl_inc_writer_", K(ret), K(ls_id), K(tablet_id));
   } else {
@@ -701,6 +704,7 @@ int ObDDLIncRedoLogWriterCallback::init(
     direct_load_type_ = direct_load_type;
     tx_desc_ = tx_desc;
     trans_id_ = trans_id;
+    seq_no_ = seq_no;
     parallel_cnt_ =  parallel_cnt;
     cg_cnt_ = cg_cnt;
     is_inited_ = true;
@@ -725,6 +729,7 @@ void ObDDLIncRedoLogWriterCallback::reset()
   parallel_cnt_ = 0;
   cg_cnt_ = 0;
   trans_id_.reset();
+  seq_no_.reset();
 }
 
 int ObDDLIncRedoLogWriterCallback::write(
@@ -755,6 +760,7 @@ int ObDDLIncRedoLogWriterCallback::write(
     redo_info_.macro_block_id_.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
     redo_info_.parallel_cnt_ = parallel_cnt_;
     redo_info_.cg_cnt_ = cg_cnt_;
+    redo_info_.seq_no_ = seq_no_;
     redo_info_.with_cs_replica_ = false; // TODO(chengkong): placeholder for column store replica feature
     if (OB_FAIL(ddl_inc_writer_.write_inc_redo_log_with_retry(redo_info_, macro_block_id_, task_id_, tx_desc_))) {
       LOG_WARN("write ddl inc redo log fail", K(ret));

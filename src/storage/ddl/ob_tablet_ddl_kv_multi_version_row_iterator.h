@@ -256,15 +256,22 @@ public:
     } else {
       ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(table);
       IteratorInitializer initializer(iterator_, param, context, query_range);
-      if (OB_FAIL(ddl_kv->access_first_ddl_memtable(initializer))) {
+      bool can_access = false;
+      if (OB_FAIL(ddl_kv->check_can_access(context, can_access))) {
+        STORAGE_LOG(WARN, "fail to check ddl kv can access", KR(ret));
+      } else if (!can_access) {
+        is_empty_ = true;
+      } else if (OB_FAIL(ddl_kv->access_first_ddl_memtable(initializer))) {
         if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
           STORAGE_LOG(WARN, "fail to access first ddl memtable", K(ret));
         } else {
           ret = OB_SUCCESS;
           is_empty_ = true;
-          if (OB_FAIL(empty_iterator_.init(param, context, nullptr, query_range))) {
-            STORAGE_LOG(WARN, "fail to init empty ddl memtable", K(ret));
-          }
+        }
+      }
+      if (OB_SUCC(ret) && is_empty_) {
+        if (OB_FAIL(empty_iterator_.init(param, context, nullptr, query_range))) {
+          STORAGE_LOG(WARN, "fail to init empty ddl memtable", K(ret));
         }
       }
     }

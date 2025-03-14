@@ -333,6 +333,7 @@ public:
   // const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   uint64_t get_data_format_version() const { return data_format_version_; }
   const transaction::ObTransID &get_trans_id() const { return trans_id_; }
+  const transaction::ObTxSEQ &get_seq_no() const { return seq_no_; }
   int64_t get_memory_used() const;
   OB_INLINE bool is_inc_ddl_kv() const { return is_inc_ddl_kv_; }
 
@@ -347,6 +348,7 @@ public:
   // for inc_ddl_kv only
   template<class _callback>
   int access_first_ddl_memtable(_callback &callback) const;
+  int check_can_access(ObTableAccessContext &context, bool &can_access);
 
   INHERIT_TO_STRING_KV("ObITabletMemtable",
                        ObITabletMemtable,
@@ -382,7 +384,6 @@ private:
 #endif
 
   int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
-
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
   static const int64_t HOLD_LIMIT = 10 * 1024 * 1024 * 1024L;
@@ -397,6 +398,7 @@ private:
   int64_t ddl_snapshot_version_; // the snapshot version for major sstable which is completed by ddl
   uint64_t data_format_version_;
   transaction::ObTransID trans_id_; // for incremental direct load only
+  transaction::ObTxSEQ seq_no_; // for incremental direct load only
   int64_t data_schema_version_;
   int64_t column_count_;
 

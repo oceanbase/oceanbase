@@ -365,6 +365,7 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     macro_block.end_row_id_ = redo_info.end_row_id_;
     macro_block.trans_id_ = redo_info.trans_id_;
     macro_block.merge_slice_idx_ = redo_info.merge_slice_idx_;
+    macro_block.seq_no_ = redo_info.seq_no_;
     if (is_incremental_direct_load(redo_info.type_)) {
       if (OB_FAIL(do_inc_replay_(tablet_handle, write_info, macro_block))) {
         LOG_WARN("fail to do inc replay", K(ret));
