@@ -3742,6 +3742,11 @@ int ObAlterTableResolver::resolve_alter_primary(const ParseNode &action_node_lis
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
       }
+      if (OB_SUCC(ret) && column_list->num_child_ > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+        ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+        LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+      }
+
       obrpc::ObColumnSortItem sort_item;
       const ObColumnSchemaV2 *col = NULL;
       for (int32_t i = 0; OB_SUCC(ret) && i < column_list->num_child_; ++i) {
@@ -3815,6 +3820,11 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
     }
+    if (OB_SUCC(ret) && column_list->num_child_ > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+      ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+      LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    }
+
     obrpc::ObColumnSortItem sort_item;
     const ObColumnSchemaV2 *col = NULL;
     for (int32_t i = 0; OB_SUCC(ret) && i < column_list->num_child_; ++i) {
