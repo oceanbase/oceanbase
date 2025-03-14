@@ -2133,12 +2133,12 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(GCTX.sql_engine_));
         OZ (pl_prepare_result.init(session));
         CK (OB_NOT_NULL(pl_prepare_result.result_set_));
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(GCTX.sql_engine_->handle_pl_prepare(
-                prepare_result.route_sql_, pl_prepare_ctx, pl_prepare_result))) {
-            LOG_WARN("query failed", K(ret), K(sql));
-          }
-        }
+#ifdef ERRSIM
+        OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
+#endif
+        OZ (GCTX.sql_engine_->handle_pl_prepare(
+          prepare_result.route_sql_, pl_prepare_ctx, pl_prepare_result), K(sql));
+
         LOG_TRACE("execute sql", K(sql), K(ret));
 
         if (OB_SUCC(ret)) {
@@ -2311,7 +2311,10 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
       OZ (pl_prepare_result.init(session));
       CK (OB_NOT_NULL(pl_prepare_result.result_set_));
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(GCTX.sql_engine_->handle_pl_prepare(sql, pl_prepare_ctx, pl_prepare_result))) {
+#ifdef ERRSIM
+        ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS;
+#endif
+        if (FAILEDx(GCTX.sql_engine_->handle_pl_prepare(sql, pl_prepare_ctx, pl_prepare_result))) {
           LOG_WARN("query failed", K(ret), K(start), K(sql));
         }
       }
@@ -2390,7 +2393,10 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
               CK (OB_NOT_NULL(tmp_pl_prepare_result.result_set_));
               // 如果当前语句含有INTO, 则resultset中没有输出列, 我们使用reconstruct的route_sql来构造recordtype
               CK (!pl_prepare_result.result_set_->get_route_sql().empty());
-              OZ(GCTX.sql_engine_->handle_pl_prepare(route_sql, tmp_pl_prepare_ctx, tmp_pl_prepare_result, params));
+#ifdef ERRSIM
+              OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
+#endif
+              OZ (GCTX.sql_engine_->handle_pl_prepare(route_sql, tmp_pl_prepare_ctx, tmp_pl_prepare_result, params));
               CK (OB_NOT_NULL(tmp_pl_prepare_result.result_set_->get_field_columns()));
               OZ (spi_build_record_type(allocator,
                                         session,
@@ -2547,7 +2553,10 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
     SMART_VAR(PLPrepareResult, pl_prepare_result) {
       OZ (pl_prepare_result.init(*session));
       CK (OB_NOT_NULL(pl_prepare_result.result_set_));
-      OZ(GCTX.sql_engine_->handle_pl_prepare(sql_str.string(), pl_prepare_ctx, pl_prepare_result,
+#ifdef ERRSIM
+      OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
+#endif
+      OZ (GCTX.sql_engine_->handle_pl_prepare(sql_str.string(), pl_prepare_ctx, pl_prepare_result,
                                               lib::is_mysql_mode() ? nullptr : params));
 
       OX (stmt_type = static_cast<stmt::StmtType>(pl_prepare_result.result_set_->get_stmt_type()));
@@ -6621,6 +6630,9 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
         WITH_CONTEXT(spi_result.get_memory_ctx()) {
           if (exec_params.count() <= 0 && !sql.empty()) {
             spi_result.get_result_set()->set_user_sql(true);
+#ifdef ERRSIM
+            OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
+#endif
             OZ (GCTX.sql_engine_->handle_pl_execute(sql,
                                                     *session,
                                                     exec_params,
@@ -6630,6 +6642,9 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     false /* is_dynamic_sql*/), K(sql), K(ps_sql), K(exec_params));
           } else {
             spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
+#ifdef ERRSIM
+            OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
+#endif
             OZ (GCTX.sql_engine_->handle_pl_execute(ps_sql,
                                                     *session,
                                                     exec_params,
@@ -6739,12 +6754,19 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(session->get_pl_sqlcode_info()));
   CK (OB_NOT_NULL(result_set));
   if (OB_SUCC(ret)) {
     int64_t time_gap = ObTimeUtility::current_time() - last_exec_time;
     int64_t old_query_start_time = session->get_query_start_time();
     int64_t old_timeout_ts = THIS_WORKER.get_timeout_ts();
     int64_t min_timeout_ts = old_timeout_ts;
+
+    if (result_set->get_errcode() != OB_SUCCESS && result_set->get_errcode() != OB_ITER_END) {
+      ret = OB_READ_NOTHING;
+      session->get_pl_sqlcode_info()->set_sqlcode(OB_SUCCESS);
+      LOG_WARN("cursor result set already failed, will return OB_READ_NOTHING", K(ret), K(result_set->get_errcode()));
+    }
 
     CK (result_set->get_exec_context().get_physical_plan_ctx() != NULL);
     OX (min_timeout_ts = MIN(old_timeout_ts,
@@ -7431,7 +7453,11 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
       ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       if (lib::is_oracle_mode()) { // ORACLE Mode: only iterate to end
         const ObNewRow *row = NULL;
-        while (OB_SUCC(ob_result_set->get_next_row(row))) {
+        while (
+#ifdef ERRSIM
+              OB_SUCC(OB_E(EventTable::EN_SPI_GET_NEXT_ROW) OB_SUCCESS) &&
+#endif
+              OB_SUCC(ob_result_set->get_next_row(row))) {
           row_count++;
         }
         implicit_cursor->set_rowcount(row_count);
@@ -8490,7 +8516,10 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < orc_max_ret_rows; i++) {
-      if (OB_FAIL(result_set.get_next_row(row))) {
+#ifdef ERRSIM
+      ret = OB_E(EventTable::EN_SPI_GET_NEXT_ROW) OB_SUCCESS;
+#endif
+      if (FAILEDx(result_set.get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -8553,7 +8582,10 @@ int ObSPIService::fetch_row(void *result_set,
   } else {
     ObResultSet *ob_result_set = static_cast<ObResultSet*>(result_set);
     const ObNewRow *row = NULL;
-    if (OB_FAIL(ob_result_set->get_next_row(row))) {
+#ifdef ERRSIM
+    ret = OB_E(EventTable::EN_SPI_GET_NEXT_ROW) OB_SUCCESS;
+#endif
+    if (FAILEDx(ob_result_set->get_next_row(row))) {
       //上层判断返回值，这里不打印信息
     } else {
       cur_row = *row;
