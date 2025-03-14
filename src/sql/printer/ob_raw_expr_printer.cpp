@@ -1001,13 +1001,19 @@ int ObRawExprPrinter::print(ObCaseOpRawExpr *expr)
     DATA_PRINTF("(case");
     if (OB_SUCC(ret)) {
       ObRawExpr *arg_expr = expr->get_arg_param_expr();
+      bool need_bool_param = true;
       if (NULL != arg_expr) {
         DATA_PRINTF(" ");
         PRINT_EXPR(arg_expr);
+        need_bool_param = false;
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_when_expr_size(); ++i) {
         DATA_PRINTF(" when ");
-        PRINT_BOOL_EXPR(expr->get_when_param_expr(i));
+        if (need_bool_param) {
+          PRINT_BOOL_EXPR(expr->get_when_param_expr(i));
+        } else {
+          PRINT_EXPR(expr->get_when_param_expr(i));
+        }
         DATA_PRINTF(" then ");
         PRINT_EXPR(expr->get_then_param_expr(i));
       }
