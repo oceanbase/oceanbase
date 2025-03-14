@@ -1014,6 +1014,8 @@ typedef enum ObItemType
   T_FUN_SYS_RB_AND_CARDINALITY_AGG = 2070,
   T_FUN_SYS_RB_TO_ARRAY = 2071,
   T_FUN_SYS_RB_CONTAINS = 2072,
+  T_FUN_INNER_PREFIX_MIN = 2073,
+  T_FUN_INNER_PREFIX_MAX = 2074,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
