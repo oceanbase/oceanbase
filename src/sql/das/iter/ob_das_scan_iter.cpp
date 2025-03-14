@@ -95,6 +95,9 @@ int ObDASScanIter::rescan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr scan param", K(ret));
   } else if (OB_FAIL(tsc_service_->table_rescan(*scan_param_, result_))) {
+      if (OB_SNAPSHOT_DISCARDED == ret && scan_param_->fb_snapshot_.is_valid()) {
+        ret = OB_INVALID_QUERY_TIMESTAMP;
+      }
     LOG_WARN("failed to rescan tablet", K(scan_param_->tablet_id_), K(ret));
   } else {
     // reset need_switch_param_ after real rescan.
