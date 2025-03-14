@@ -1166,8 +1166,8 @@ Outputs & filters:
       access([t0.c0]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t0.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t0.c0]), filter([cast(0, INT(0, 0)) = 1 XOR 1 OR cast(cast(0, INT(0, 0)), DOUBLE(-1, -1)) = cast(t0.c0, DOUBLE(-1, -1)) OR cast(0, INT(0, 
-      0)) = cast('', BIGINT(0, 0)) IS NULL]), rowset=16
+  2 - output([t0.c0]), filter([cast(0, BIGINT(0, 0)) = 1 XOR 1 OR cast(cast(0, BIGINT(0, 0)), DOUBLE(-1, -1)) = cast(t0.c0, DOUBLE(-1, -1)) OR cast(0, BIGINT(0,
+       0)) = cast('', BIGINT(0, 0)) IS NULL]), rowset=16
       access([t0.c0]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t0.__pk_increment]), range(MIN ; MAX)always true

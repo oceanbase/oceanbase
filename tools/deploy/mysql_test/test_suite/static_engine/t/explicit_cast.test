@@ -182,3 +182,47 @@ select cast('+-4' as double) from dual;
 select cast('+4' as double) from dual;
 
 drop table t1;
+
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t1_signed;
+drop table if exists t1_unsigned;
+drop table if exists t2_signed;
+drop table if exists t2_unsigned;
+
+drop view if exists v1_signed;
+drop view if exists v1_unsigned;
+drop view if exists v2_signed;
+drop view if exists v2_unsigned;
+--enable_warnings
+
+create table t1 (c1 tinyint, c2 smallint, c3 mediumint, c4 int, c5 bigint);
+create table t2 (c1 tinyint unsigned, c2 smallint unsigned, c3 mediumint unsigned, c4 int unsigned, c5 bigint unsigned);
+explain select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t1;
+create table t1_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t1;
+desc t1_signed;
+explain select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t1;
+create table t1_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t1;
+desc t1_unsigned;
+
+explain select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t2;
+create table t2_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t2;
+desc t2_signed;
+explain select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t2;
+create table t2_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t2;
+desc t2_unsigned;
+
+create view v1_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t1;
+desc v1_signed;
+create view v1_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t1;
+desc v1_unsigned;
+
+create view v2_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t2;
+desc v2_signed;
+create view v2_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t2;
+desc v2_unsigned;
+
+drop table t1, t2, t1_signed, t1_unsigned, t2_signed, t2_unsigned;
+drop view v1_signed, v1_unsigned, v2_signed, v2_unsigned;
+
