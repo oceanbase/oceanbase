@@ -10749,6 +10749,9 @@ int ObDDLService::alter_table_update_aux_column(
             new_aux_column_schema.set_autoincrement(false);
             //save the rowkey postion and aux postion
             if (is_index) {
+              if (origin_column_schema->is_user_specified_storing_column()) {
+                new_aux_column_schema.add_column_flag(USER_SPECIFIED_STORING_COLUMN_FLAG);
+              }
               new_aux_column_schema.set_rowkey_position(origin_column_schema->get_rowkey_position());
               new_aux_column_schema.set_index_position(origin_column_schema->get_index_position());
               new_aux_column_schema.set_tbl_part_key_pos(origin_column_schema->get_tbl_part_key_pos());
