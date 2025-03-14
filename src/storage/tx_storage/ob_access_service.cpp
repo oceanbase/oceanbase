@@ -179,6 +179,7 @@ int ObAccessService::pre_check_lock(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_OB_NOT_MASTER_IN_TABLELOCK)
 int ObAccessService::lock_obj(
     const share::ObLSID &ls_id,
     transaction::ObTxDesc &tx_desc,
@@ -192,7 +193,9 @@ int ObAccessService::lock_obj(
     concurrent_control::ObWriteFlag write_flag;
   write_flag.set_is_table_lock();
 
-  if (IS_NOT_INIT) {
+  if (OB_FAIL(EN_OB_NOT_MASTER_IN_TABLELOCK)) {
+    FLOG_INFO("meet errsim", KR(ret));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid())

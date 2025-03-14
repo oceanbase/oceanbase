@@ -104,10 +104,16 @@ int ObLockMemCtx::rollback_table_lock_(const ObTxSEQ to_seq_no, const ObTxSEQ fr
                  curr->lock_op_.lock_seq_no_.get_branch() != to_seq_no.get_branch()) {
         // branch missmatch
       } else {
-        memtable->remove_lock_record(curr->lock_op_);
-        (void)lock_list_.remove(curr);
-        curr->~ObMemCtxLockOpLinkNode();
-        free_lock_link_node_(curr);
+        if (curr->lock_op_.op_type_ == OUT_TRANS_LOCK || curr->lock_op_.op_type_ == OUT_TRANS_UNLOCK) {
+          ret = OB_TRANS_NEED_ROLLBACK;
+          LOG_INFO("rollback trans because has OUT_TRANS_LOCK", KR(ret), K(to_seq_no), K(from_seq_no), K(lock_list_));
+          break;
+        } else {
+          memtable->remove_lock_record(curr->lock_op_);
+          (void)lock_list_.remove(curr);
+          curr->~ObMemCtxLockOpLinkNode();
+          free_lock_link_node_(curr);
+        }
       }
     }
   }
