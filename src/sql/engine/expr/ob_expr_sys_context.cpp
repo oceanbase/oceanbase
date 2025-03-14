@@ -762,7 +762,11 @@ int ObExprSysContext::eval_application_context(const ObExpr &expr, ObDatum &res,
   }
   if (OB_SUCC(ret)) {
     if (exist) {
-      OX(res.set_string(out_value));
+      if (out_value.empty()) {
+        res.set_null();
+      } else {
+        res.set_string(out_value);
+      }
     } else {
       res.set_null();
     }
