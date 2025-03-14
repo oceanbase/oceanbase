@@ -67,18 +67,10 @@ int ObExprArraySlice::calc_result_typeN(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(arr_type->get_type()));
   } else if (ob_is_null(offset_type->get_type())) {
     is_null = true;
-  } else if (!ob_is_numeric_type(offset_type->get_type())
-         && !ob_is_varchar_or_char(offset_type->get_type(), offset_type->get_collation_type())) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "OFFSET", ob_obj_type_str(offset_type->get_type()));
   } else if (param_num == 3) {
     ObExprResType *len_type = &types[2];
     if (ob_is_null(len_type->get_type())) {
       is_null = true;
-    } else if (!ob_is_numeric_type(len_type->get_type())
-           && !ob_is_varchar_or_char(len_type->get_type(), len_type->get_collation_type())) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "LEN", ob_obj_type_str(len_type->get_type()));
     } else {
       len_type->set_calc_type(ObIntType);
     }

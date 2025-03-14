@@ -63,10 +63,6 @@ int ObExprArrayRange::calc_result_typeN(ObExprResType& type,
   for (int64_t i = 0; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
     if (types_stack[i].is_null()) {
       is_null_res = true;
-    } else if (!ob_is_numeric_type(types_stack[i].get_type())
-           && !ob_is_varchar_or_char(types_stack[i].get_type(), types_stack[i].get_collation_type())) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("invalid data type", K(ret), K(types_stack[i].get_type()));
     } else {
       types_stack[i].set_calc_type(ObIntType);
     }

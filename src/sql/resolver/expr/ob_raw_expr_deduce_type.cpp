@@ -3649,7 +3649,12 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
       ObExecContext *exec_ctx = session->get_cur_exec_ctx();
       ObDataType elem_type;
       uint16_t subschema_id;
-      elem_type.set_meta_type(param_expr->get_result_meta());
+      ObObjMeta meta = param_expr->get_result_meta();
+      if (ob_is_null(meta.get_type())) {
+        elem_type.meta_.set_utinyint();
+      } else {
+        elem_type.set_meta_type(meta);
+      }
       if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
         if (OB_FAIL(ObArrayExprUtils::deduce_nested_array_subschema_id(exec_ctx, elem_type, subschema_id))) {
           LOG_WARN("failed to deduce nested array subschema id", K(ret));

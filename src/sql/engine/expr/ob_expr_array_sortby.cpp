@@ -62,6 +62,8 @@ int ObExprArraySortby::calc_result_typeN(ObExprResType& type,
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
+  } else if (ob_is_null(lambda_type)) {
+    is_null_res = true;
   } else if (!ob_is_array_supported_type(lambda_type)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid data type", K(ret), K(lambda_type));
@@ -69,16 +71,16 @@ int ObExprArraySortby::calc_result_typeN(ObExprResType& type,
     // will support when array compare is available
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support nested array", K(ret), K(lambda_type));
-  } else if (lambda_type== ObDecimalIntType || lambda_type == ObNumberType) {
+  } else if (lambda_type== ObDecimalIntType || lambda_type == ObNumberType || lambda_type == ObUNumberType) {
     // decimalint isn't supported in array, so cast to supported type
     if (types_stack[0].get_scale() != 0) {
       types_stack[0].set_calc_type(ObDoubleType);
     } else {
-      types_stack[0].set_calc_type(ObDoubleType);
+      types_stack[0].set_calc_type(ObIntType);
     }
   }
   // check the array params
-  for (int64_t i = 1; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
+  for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {

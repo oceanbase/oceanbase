@@ -59,16 +59,16 @@ int ObExprArrayFirst::calc_result_typeN(ObExprResType& type,
   const ObSqlCollectionInfo *coll_info = NULL;
   ObCollectionArrayType *arr_type = NULL;
   bool is_null_res = false;
+  ObObjType lambda_type = types_stack[0].get_type();
 
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
-  } else if (!ob_is_int_uint_tc(types_stack[0].get_type())) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("invalid data type", K(ret), K(types_stack[0].get_type()));
+  } else if (ob_is_null(lambda_type)) {
+    is_null_res = true;
   }
 
-  for (int64_t i = 1; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
+  for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {
@@ -80,6 +80,9 @@ int ObExprArrayFirst::calc_result_typeN(ObExprResType& type,
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
     type.set_null();
+  } else if (!ob_is_int_uint_tc(lambda_type)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid data type", K(ret), K(lambda_type));
   } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(types_stack[1].get_subschema_id(), arr_meta))) {
     LOG_WARN("failed to get elem meta.", K(ret), K(types_stack[1].get_subschema_id()));
   } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {

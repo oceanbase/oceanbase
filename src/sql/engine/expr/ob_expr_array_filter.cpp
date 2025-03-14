@@ -64,13 +64,10 @@ int ObExprArrayFilter::calc_result_typeN(ObExprResType& type,
     LOG_WARN("exec ctx is null", K(ret));
   } else if (ob_is_null(lambda_type)) {
     is_null_res = true;
-  } else if (!ob_is_int_uint_tc(lambda_type)) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("invalid data type", K(ret), K(lambda_type));
   }
 
   // check the array params
-  for (int64_t i = 1; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
+  for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {
@@ -82,6 +79,9 @@ int ObExprArrayFilter::calc_result_typeN(ObExprResType& type,
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
     type.set_null();
+  } else if (!ob_is_int_uint_tc(lambda_type)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid data type", K(ret), K(lambda_type));
   } else {
     // result type same as the first array
     type.set_collection(types_stack[1].get_subschema_id());

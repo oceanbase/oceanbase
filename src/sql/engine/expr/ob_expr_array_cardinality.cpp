@@ -41,7 +41,9 @@ int ObExprArrayCardinality::calc_result_type1(ObExprResType &type,
                                      ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (!ob_is_collection_sql_type(type1.get_type())) {
+  if (type1.is_null()) {
+    type.set_null();
+  } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
   } else {

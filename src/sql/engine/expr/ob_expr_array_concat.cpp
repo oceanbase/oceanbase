@@ -62,13 +62,13 @@ int ObExprArrayConcat::calc_result_typeN(ObExprResType& type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   }
-  for (int64_t i = 0; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
+  for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("invalid data type", K(ret), K(types_stack[i].get_type()));
-    } else if (i > 0 && OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, deduce_type, types_stack[i], deduce_type))) {
+    } else if (i > 0 && !is_null_res && OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, deduce_type, types_stack[i], deduce_type))) {
       LOG_WARN("deduce calc type failed", K(ret));
     }
   } // end for

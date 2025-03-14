@@ -462,11 +462,15 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
   ObDataType elem_type;
   uint16_t subschema_id;
   bool is_null_res = false;
+  ObObjType lambda_type = types_stack[0].get_type();
+
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
+  } else if (ob_is_null(lambda_type)) {
+    is_null_res = true;
   }
-  for (int64_t i = 1; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
+  for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {

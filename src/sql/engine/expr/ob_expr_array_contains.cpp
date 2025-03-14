@@ -421,7 +421,9 @@ int ObExprArrayContains::cg_expr(ObExprCGCtx &expr_cg_ctx,
       ObObjType elem_type;
       uint32_t unused;
       bool is_vec = false;
-      if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, sub_id, elem_type, unused, is_vec))) {
+      if (ob_is_null(rt_expr.datum_meta_.type_)) {
+        // do nothing
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, sub_id, elem_type, unused, is_vec))) {
         LOG_WARN("failed to get collection elem type", K(ret), K(sub_id));
       } else {
         right_tc = ob_obj_type_class(elem_type);

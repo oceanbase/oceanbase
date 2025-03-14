@@ -55,15 +55,15 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   } else if (OB_ISNULL(exec_ctx = session->get_cur_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObExecContext is null", K(ret));
+  } else if (type1.is_null()) {
+    type.set_null();
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
-  } else if (!ob_is_numeric_type(type2.get_type())
-         && !ob_is_varchar_or_char(type2.get_type(), type2.get_collation_type())) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "INTEGER", ob_obj_type_str(type2.get_type()));
   } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(type1.get_subschema_id(), arr_meta))) {
     LOG_WARN("failed to get elem meta.", K(ret), K(type1.get_subschema_id()));
+  } else if (type2.is_null()) {
+    type.set_null();
   } else {
     type2.set_calc_type(ObIntType);
     const ObSqlCollectionInfo *coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_);
