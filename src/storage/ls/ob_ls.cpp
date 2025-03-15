@@ -142,11 +142,11 @@ int ObLS::init(const share::ObLSID &ls_id,
                                    major_mv_merge_info,
                                    store_format))) {
     LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(major_mv_merge_info));
+  } else if (OB_FAIL(ls_freezer_.init(this))) {
+    LOG_WARN("init freezer failed", K(ret), K(tenant_id), K(ls_id));
   } else {
     rs_reporter_ = reporter;
-    ls_freezer_.init(this);
     ObTxPalfParam tx_palf_param(get_log_handler(), &dup_table_ls_handler_);
-
     if (OB_FAIL(txs_svr->create_ls(ls_id, *this, &tx_palf_param, nullptr))) {
       LOG_WARN("create trans service failed.", K(ret), K(ls_id));
     } else if (OB_FAIL(ls_tablet_svr_.init(this))) {
