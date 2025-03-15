@@ -65,7 +65,8 @@ public:
     end_ret_(OB_SUCCESS), reference_count_(1), notifier_(nullptr), exec_ctx_(nullptr),
     des_phy_plan_(nullptr), sqc_init_args_(nullptr), sub_coord_(nullptr), rpc_level_(INT32_MAX),
     node_sequence_id_(0), has_interrupted_(false),
-    part_ranges_spin_lock_(common::ObLatchIds::PX_TENANT_TARGET_LOCK) {
+    part_ranges_spin_lock_(common::ObLatchIds::PX_TENANT_TARGET_LOCK),
+    is_session_query_locked_(false) {
   }
   ~ObPxSqcHandler() = default;
   static constexpr const char *OP_LABEL = ObModIds::ObModIds::OB_SQL_SQC_HANDLER;
@@ -164,6 +165,7 @@ private:
   bool has_interrupted_;
   Ob2DArray<ObPxTabletRange> part_ranges_;
   SpinRWLock part_ranges_spin_lock_;
+  bool is_session_query_locked_;
 };
 
 }

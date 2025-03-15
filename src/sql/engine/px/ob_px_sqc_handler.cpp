@@ -221,6 +221,7 @@ void ObPxSqcHandler::reset()
   process_flags_ = 0;
   end_ret_ = OB_SUCCESS;
   reference_count_ = 1;
+  is_session_query_locked_ = false;
   part_ranges_.reset();
   call_dtor(sub_coord_);
   call_dtor(sqc_init_args_);
@@ -257,16 +258,33 @@ int ObPxSqcHandler::init_env()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = nullptr;
+  ObSQLSessionInfo *session = NULL;
+  int tmp_ret = OB_SUCCESS;
   if (OB_ISNULL(sqc_init_args_->exec_ctx_)
       || OB_ISNULL(sqc_init_args_->op_spec_root_)
       || OB_ISNULL(sqc_init_args_->des_phy_plan_)
       || OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(*sqc_init_args_->exec_ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sqc args should not be NULL", K(ret));
+  } else if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deserialized exec ctx without phy plan session set. Unexpected", K(ret));
   } else if (OB_FAIL(sub_coord_->init_exec_env(*sqc_init_args_->exec_ctx_))) {
     LOG_WARN("Failed to init env", K(ret));
+  } else if (OB_UNLIKELY(common::OB_SUCCESS != (tmp_ret = session->get_query_lock().lock()))) {
+    LOG_ERROR("Fail to lock, ", K(tmp_ret));
   } else {
+    is_session_query_locked_ = true;
     init_flt_content();
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(session->is_zombie())) {
+    // session has been killed some moment ago
+    // we don't need explicitly cll unlock() here, we do it in
+    // ObPxSqcHandler::destroy_sqc()
+    ret = OB_ERR_SESSION_INTERRUPTED;
+    LOG_WARN("session has been killed", K(session->get_session_state()), K(session->get_sessid()),
+             "proxy_sessid", session->get_proxy_sessid(), K(ret));
   }
   return ret;
 }
@@ -366,6 +384,15 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
     // 没有走正常收尾流程时则依赖于这里来进行释放.
     if (OB_NOT_NULL(ch) && OB_FAIL(dtl::ObDtlChannelGroup::unlink_channel(ci))) {
       LOG_WARN("Failed to unlink channel", K(ret));
+    }
+  }
+
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
+    LOG_WARN("session is null, which is unexpected!", K(ret));
+  } else if (is_session_query_locked_) {
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session->get_query_lock().unlock()))) {
+      LOG_ERROR("Fail to unlock, ", K(tmp_ret));
     }
   }
   return ret;

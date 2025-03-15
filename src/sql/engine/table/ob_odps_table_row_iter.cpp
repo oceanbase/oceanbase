@@ -16,6 +16,7 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "src/share/external_table/ob_external_table_utils.h"
 #include "src/sql/engine/expr/ob_datum_cast.h"
+#include "odps/odps_api.h"
 
 namespace oceanbase {
 namespace sql {
@@ -2556,6 +2557,7 @@ int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneral
   apsara::odps::sdk::Configuration conf;
   apsara::odps::sdk::OdpsTunnel tunnel;
   const char* account_type = "";
+  bool need_create_partition = false;
   try {
     conf.SetEndpoint(std::string(odps_format.endpoint_.ptr(), odps_format.endpoint_.length()));
     conf.SetUserAgent("OB_ACCESS_ODPS");
@@ -2589,21 +2591,61 @@ int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneral
       LOG_WARN("unsupported access type", K(ret), K(odps_format.access_type_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "this ODPS access type");
     }
+
     if (OB_SUCC(ret)) {
       apsara::odps::sdk::Account account(std::string(account_type),
-                                       std::string(odps_format.access_id_.ptr(), odps_format.access_id_.length()),
-                                       std::string(odps_format.access_key_.ptr(), odps_format.access_key_.length()));
+          std::string(odps_format.access_id_.ptr(), odps_format.access_id_.length()),
+          std::string(odps_format.access_key_.ptr(), odps_format.access_key_.length()));
       conf.SetAccount(account);
       tunnel.Init(conf);
-      if (OB_UNLIKELY(!(upload = tunnel.CreateUpload(
-                              std::string(odps_format.project_.ptr(), odps_format.project_.length()),
-                              std::string(odps_format.table_.ptr(), odps_format.table_.length()),
-                              std::string(external_partition.ptr(), external_partition.length()),
-                              "",
-                              is_overwrite,
-                              std::string(odps_format.schema_.ptr(), odps_format.schema_.length()))))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexcepted null ptr", K(ret));
+      try {
+        upload = tunnel.CreateUpload(
+            std::string(odps_format.project_.ptr(), odps_format.project_.length()),
+            std::string(odps_format.table_.ptr(), odps_format.table_.length()),
+            std::string(external_partition.ptr(), external_partition.length()),
+            "",
+            is_overwrite,
+            std::string(odps_format.schema_.ptr(), odps_format.schema_.length()));
+      } catch (apsara::odps::sdk::OdpsException& ex) {
+        if (ex.GetErrorCode() == "NoSuchPartition") {
+          need_create_partition = true;
+        } else {
+          throw ex;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && need_create_partition) {
+      apsara::odps::sdk::IODPSPtr odps = apsara::odps::sdk::IODPS::Create(
+            conf, std::string(odps_format.project_.ptr(), odps_format.project_.length()));
+      apsara::odps::sdk::ISQLTaskPtr sqlTaskPtr = apsara::odps::sdk::ISQLTask::Create();
+      ObSqlString ddl_sql;
+      if (OB_FAIL(ddl_sql.append_fmt("ALTER TABLE %.*s ADD IF NOT EXISTS PARTITION (%.*s);",
+                                     odps_format.table_.length(), odps_format.table_.ptr(),
+                                     external_partition.length(), external_partition.ptr()))) {
+        LOG_WARN("fail to append format", K(ret));
+      } else {
+        apsara::odps::sdk::IODPSInstancePtr instancePtr = sqlTaskPtr->Run(odps, ddl_sql.ptr());
+        apsara::odps::sdk::InstanceStatus status;
+        uint32_t sleepTimeMs = 0;
+
+        while (OB_SUCC(ret) && (status = instancePtr->AcquireStatus(false)) != apsara::odps::sdk::InstanceStatus::TERMINATED) {
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("session is invalid", K(ret));
+          } else {
+            sleepTimeMs += 1000;
+            usleep(1000 * 1000);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          instancePtr->WaitForSuccess(0);
+          upload = tunnel.CreateUpload(
+              std::string(odps_format.project_.ptr(), odps_format.project_.length()),
+              std::string(odps_format.table_.ptr(), odps_format.table_.length()),
+              std::string(external_partition.ptr(), external_partition.length()),
+              "",
+              is_overwrite,
+              std::string(odps_format.schema_.ptr(), odps_format.schema_.length()));
+        }
       }
     }
   } catch (apsara::odps::sdk::OdpsException& ex) {
@@ -2622,6 +2664,13 @@ int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneral
     if (OB_SUCC(ret)) {
       ret = OB_ODPS_ERROR;
       LOG_WARN("caught exception when create odps upload session", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(!(upload))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null ptr", K(ret));
     }
   }
   return ret;
