@@ -1112,6 +1112,11 @@ public:
             dml_rtdef_(dml_rtdef),
             dml_event_(dml_event)
   {}
+
+  TO_STRING_KV(KPC_(new_row),
+               KPC_(old_row),
+               KPC_(full_row),
+               K_(dml_event));
   ObChunkDatumStore::StoredRow *new_row_;
   ObChunkDatumStore::StoredRow *old_row_;
   ObChunkDatumStore::StoredRow *full_row_;

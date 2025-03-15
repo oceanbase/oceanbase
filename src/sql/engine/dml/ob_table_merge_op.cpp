@@ -461,6 +461,62 @@ int ObTableMergeOp::check_is_distinct(bool &conflict)
   return ret;
 }
 
+int ObTableMergeOp::process_update_before_delete()
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_alloc;
+  ObMemAttr mem_attr;
+  mem_attr.tenant_id_ = MTL_ID();
+  mem_attr.label_ = "mergeUpdTmpFkCk";
+  tmp_alloc.set_attr(mem_attr);
+  dml_rtctx_.get_exec_ctx().set_dml_event(ObDmlEventType::DE_UPDATING);
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.merge_ctdefs_.count(); ++i) {
+    ObMergeCtDef *merge_ctdef = MY_SPEC.merge_ctdefs_.at(i);
+    const ObUpdCtDef *upd_ctdef = NULL;
+    bool is_skipped = false;
+    ObDASTabletLoc *old_tablet_loc = nullptr;
+    ObDASTabletLoc *new_tablet_loc = nullptr;
+    ObUpdRtDef &upd_rtdef = merge_rtdefs_.at(i).upd_rtdef_;
+    ObDMLModifyRowNode modify_row(this, merge_ctdef->upd_ctdef_, &upd_rtdef, ObDmlEventType::DE_UPDATING);
+    ObChunkDatumStore::StoredRow* stored_row = nullptr;
+    if (OB_ISNULL(merge_ctdef)) {
+      // merge_ctdef can't be NULL
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("merge_ctdef can't be NULL", K(ret));
+    } else if (OB_ISNULL(upd_ctdef = merge_ctdef->upd_ctdef_)) {
+      // some global index table maybe not need to update
+      LOG_DEBUG("this global index not need to update", K(ret), K(i));
+    } else if (OB_FAIL(ObDMLService::process_update_row(*upd_ctdef, upd_rtdef, is_skipped, *this))) {
+      LOG_WARN("process update row failed", K(ret));
+    } else if (OB_UNLIKELY(is_skipped)) {
+      // In the merge_into semantics, there is no scenario where skip is true at this location in the code
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected skipped", K(ret));
+    } else if (need_after_row_process(*upd_ctdef)) {
+      if (OB_FAIL(ObDMLService::convert_exprs_to_stored_row(tmp_alloc,
+                                                                   dml_rtctx_.get_eval_ctx(),
+                                                                   upd_ctdef->full_row_,
+                                                                   modify_row.full_row_))) {
+        LOG_WARN("fail to convert full_row", K(ret));
+      } else if (OB_FAIL(ObDMLService::convert_exprs_to_stored_row(tmp_alloc,
+                                                                   dml_rtctx_.get_eval_ctx(),
+                                                                   upd_ctdef->new_row_,
+                                                                   modify_row.new_row_))) {
+        LOG_WARN("fail to convert full_row", K(ret));
+      } else if (OB_FAIL(ObDMLService::convert_exprs_to_stored_row(tmp_alloc,
+                                                                   dml_rtctx_.get_eval_ctx(),
+                                                                   upd_ctdef->full_row_,
+                                                                   modify_row.old_row_))) {
+        LOG_WARN("fail to convert full_row", K(ret));
+      } else if (OB_FAIL(ObDMLService::handle_after_processing_single_row(modify_row))) {
+        LOG_WARN("failed to handle row after process", K(ret), K(modify_row));
+      }
+    }
+
+  }
+  return ret;
+}
+
 int ObTableMergeOp::do_update()
 {
   int ret = OB_SUCCESS;
@@ -477,7 +533,9 @@ int ObTableMergeOp::do_update()
     } else {
       if (need_delete) {
         // 此处调用dml_service的delete相关的处理接口
-        if (OB_SUCC(ret) && OB_FAIL(delete_row_das())) {
+        if (OB_FAIL(process_update_before_delete())) {
+          LOG_WARN("fail to process update before delete", K(ret));
+        } else if (OB_SUCC(ret) && OB_FAIL(delete_row_das())) {
           LOG_WARN("fail to update row by das ", K(ret));
         }
       } else {
@@ -496,7 +554,6 @@ int ObTableMergeOp::do_update()
 int ObTableMergeOp::update_row_das()
 {
   int ret = OB_SUCCESS;
-  // 这里只设置dml_event,没有init_column_columns是因为在ObDMLService::init_upd_rtdef里已经设置了
   dml_rtctx_.get_exec_ctx().set_dml_event(ObDmlEventType::DE_UPDATING);
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.merge_ctdefs_.count(); ++i) {
     ObMergeCtDef *merge_ctdef = MY_SPEC.merge_ctdefs_.at(i);

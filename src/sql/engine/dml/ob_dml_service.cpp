@@ -2809,6 +2809,43 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
   return ret;
 }
 
+int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter for batch post row processing", K(ret));
+  } else if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter for batch post row processing", K(ret));
+  } else {
+    ObTableModifyOp &op = *modify_row.dml_op_;
+    const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
+    ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
+    const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
+    const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
+    const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
+    const ObDmlEventType dml_event = modify_row.dml_event_;
+    if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid trigger event", K(ret));
+    } else {
+      if (t_update == dml_event) {
+        // for update op, Foreign key checks need to be performed only if the value has changed
+        if (reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_ && OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+          LOG_WARN("failed to handle foreign key constraints", K(ret));
+        }
+      } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+        LOG_WARN("failed to handle foreign key constraints", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
+      LOG_WARN("failed to handle after trigger", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows)
 {
   int ret = OB_SUCCESS;
@@ -2819,36 +2856,8 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_mo
   ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
   for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
     ObDMLModifyRowNode &modify_row = *row_iter;
-    if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid parameter for batch post row processing", K(ret));
-    } else if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid parameter for batch post row processing", K(ret));
-    } else {
-      ObTableModifyOp &op = *modify_row.dml_op_;
-      const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
-      ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
-      const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
-      const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
-      const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
-      const ObDmlEventType dml_event = modify_row.dml_event_;
-      if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid trigger event", K(ret));
-      } else {
-        if (t_update == dml_event) {
-          // for update op, Foreign key checks need to be performed only if the value has changed
-          if (reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_ && OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
-            LOG_WARN("failed to handle foreign key constraints", K(ret));
-          }
-        } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
-          LOG_WARN("failed to handle foreign key constraints", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
-        LOG_WARN("failed to handle after trigger", K(ret));
-      }
+    if (OB_FAIL(handle_after_processing_single_row(modify_row))) {
+      LOG_WARN("fail to handle after row process", K(ret), K(modify_row));
     }
   }
   return ret;
