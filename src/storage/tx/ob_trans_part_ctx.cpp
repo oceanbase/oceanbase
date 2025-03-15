@@ -2213,6 +2213,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
   bool handle_fast_commit = false;
   bool try_submit_next_log = false;
   bool need_return_log_cb = false;
+  bool retry_submit_mds = false;
   {
     // allow fill redo concurrently with log callback
     CtxLockGuard guard(lock_, is_committing_() ? CtxLockGuard::MODE::ALL : CtxLockGuard::MODE::CTX);
@@ -2314,6 +2315,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
       }
       handle_fast_commit = !(sub_state_.is_state_log_submitted() || log_cb->get_callbacks().count() == 0);
       try_submit_next_log = !ObTxLogTypeChecker::is_state_log(log_cb->get_last_log_type()) && is_committing_();
+      retry_submit_mds = ObTxLogTypeChecker::is_mds_log(log_cb->get_last_log_type());
       busy_cbs_.remove(log_cb);
       need_return_log_cb = true;
     }
@@ -2338,6 +2340,16 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     // in commiting, acquire CTX lock is enough, because redo flushing must finished
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     try_submit_next_log_(false);
+  }
+
+  if (retry_submit_mds) {
+    CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
+    if (OB_TMP_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
+      TRANS_LOG(WARN, "submit mds log failed in on_success", K(ret), K(tmp_ret), K(trans_id_),
+                K(ls_id_), K(exec_info_.state_), K(upstream_state_), K(ctx_tx_data_), K(mds_cache_),
+                K(exec_info_.multi_data_source_), K(busy_cbs_.get_size()), K(free_cbs_.get_size()),
+                KP(log_cb));
+    }
   }
 
   if (ObTimeUtility::fast_current_time() - cur_ts > LOG_CB_ON_SUCC_TIME_LIMIT) {
@@ -7517,12 +7529,17 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
 int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   if (OB_SUCC(ret)) {
 
     if (is_commit && mds_cache_.count() > 0
         && OB_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
       TRANS_LOG(WARN, "submit multi data souce log failed", K(ret));
+
+      if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+        TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(ret), KR(tmp_ret), KPC(this));
+      }
     } else if (OB_FAIL(mds_cache_.generate_final_notify_array(exec_info_.multi_data_source_,
                                                                true /*need_merge_cache*/,
                                                                true /*allow_log_overflo*/))) {
@@ -7703,7 +7720,9 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
   ObString data;
   // void *ptr = nullptr;
   ObTxBufferNodeArray tmp_array;
+  ObTxPrintTimeGuard tx_print_guard;
 
+  tx_print_guard.click_start("ctx_lock_time", 0);
   bool need_lock = true;
 
   if (try_lock) {
@@ -7719,6 +7738,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
   if (OB_SUCC(ret)) {
     CtxLockGuard guard(lock_, need_lock);
 
+    tx_print_guard.click_end(0);
     if (OB_UNLIKELY(nullptr == buf || len <= 0 || data_source_type <= ObTxDataSourceType::UNKNOWN
                     || data_source_type >= ObTxDataSourceType::MAX_TYPE)) {
       ret = OB_INVALID_ARGUMENT;
@@ -7745,6 +7765,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       TRANS_LOG(WARN, "can not register mds in committing part_ctx", K(ret), KPC(this));
     } else if (OB_FAIL(mds_cache_.try_recover_max_register_no(exec_info_.multi_data_source_))) {
       TRANS_LOG(WARN, "recover max register no failed", K(ret), K(mds_cache_), KPC(this));
+    } else if (OB_FALSE_IT(tx_print_guard.click_start("register_mds", 1))) {
+      // do nothing
     } else if (OB_FAIL(mds_cache_.alloc_mds_node(this, buf, len, data))) {
       TRANS_LOG(WARN, "alloc mds node from the mds_cache_ failed", K(ret), K(mds_cache_), KPC(this));
     } else {
@@ -7771,6 +7793,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       } else if (OB_FAIL(mds_cache_.insert_mds_node(node))) {
         TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(data_source_type),
                   K(*this));
+      } else if (OB_FALSE_IT(tx_print_guard.click_end(1))) {
+        // do nothing
       }
 
       if (OB_FAIL(ret)) {
@@ -7785,6 +7809,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         }
 
         TRANS_LOG(WARN, "notify data source for register_succ failed", K(tmp_ret));
+      } else if (OB_FALSE_IT(tx_print_guard.click_start("submit_mds", 2))) {
+        // do nothing
       } else if (mds_cache_.get_unsubmitted_size() < ObTxMultiDataSourceLog::MAX_PENDING_BUF_SIZE
                  && !register_flag.need_flush_redo_instantly_
                  && (OB_SUCCESS == TX_FORCE_WRITE_CLOG)) {
@@ -7801,6 +7827,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         }
         TRANS_LOG(WARN, "submit mds log failed", K(tmp_ret), K(ret), K(register_flag),
                   K(data_source_type), KPC(this));
+      } else if (OB_FALSE_IT(tx_print_guard.click_end(2))) {
+        // do nothing
       } else {
         TRANS_LOG(DEBUG, "submit mds log success", K(tmp_ret));
       }
@@ -7808,8 +7836,13 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
   }
 
   if (OB_FAIL(ret)) {
+    tx_print_guard.get_diff();
     TRANS_LOG(WARN, "register MDS redo in part_ctx failed", K(ret), K(trans_id_), K(ls_id_),
-              K(data_source_type), K(len), K(register_flag), K(mds_cache_), K(*this), K(lbt()));
+              K(data_source_type), K(len), K(register_flag), K(mds_cache_), K(*this),
+              K(tx_print_guard), K(lbt()));
+  } else if (tx_print_guard.get_diff() > 1 * 1000 * 1000) {
+    TRANS_LOG(INFO, "register MDS redo in ctx", K(ret), K(trans_id_), K(ls_id_), K(data_source_type),
+              K(len), K(register_flag), K(tx_print_guard));
   }
 
   REC_TRANS_TRACE_EXT2(tlog_, register_multi_data_source, OB_ID(ret), ret, OB_ID(type),

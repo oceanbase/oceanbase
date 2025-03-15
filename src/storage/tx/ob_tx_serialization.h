@@ -253,6 +253,53 @@ private:
   }
 
 
+
+class ObTxPrintTimeGuard
+{
+public:
+  ObTxPrintTimeGuard()
+  {
+    start_ts_ = ObTimeUtility::fast_current_time();
+    end_ts_ = 0;
+    memset(click_str_, 0, sizeof(const char *) * MAX_CLICK_COUNT);
+    memset(click_start_ts_, 0, sizeof(int64_t) * MAX_CLICK_COUNT);
+    memset(click_end_ts_, 0, sizeof(int64_t) * MAX_CLICK_COUNT);
+  }
+
+  void click_start(const char * str, const int64_t click_index)
+  {
+    click_str_[click_index] = str;
+    click_start_ts_[click_index] = ObTimeUtility::fast_current_time();
+  }
+
+  void click_end(const int64_t click_index)
+  {
+    click_end_ts_[click_index] = ObTimeUtility::fast_current_time();
+  }
+
+  int64_t get_diff()
+  {
+    end_ts_ =  ObTimeUtility::fast_current_time();
+    return end_ts_ -  start_ts_;
+  }
+
+  ~ObTxPrintTimeGuard()
+  {
+    end_ts_ = ObTimeUtility::fast_current_time();
+  }
+
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+
+private:
+  static const int64_t MAX_CLICK_COUNT = 16;
+private:
+  const char * click_str_[MAX_CLICK_COUNT];
+  int start_ts_;
+  int end_ts_;
+  int64_t click_start_ts_[MAX_CLICK_COUNT];
+  int64_t click_end_ts_[MAX_CLICK_COUNT];
+};
+
 } // namespace transaction
 } // namespace oceanbase
 

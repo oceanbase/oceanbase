@@ -784,7 +784,8 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   const int64_t MAX_RETRY_CNT = 5;
   const int64_t RETRY_INTERVAL = 400 * 1000;
 
-  ObTimeGuard time_guard("register mds", 1 * 1000 * 1000);
+  ObTxPrintTimeGuard tx_print_guard;
+  // ObTimeGuard time_guard("register mds", 1 * 1000 * 1000);
 
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -831,7 +832,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
                               register_flag))) {
     TRANS_LOG(WARN, "rpc arg init failed", KR(ret), K(tx_desc), K(ls_id), K(type));
   } else {
-    time_guard.click("start register");
+    tx_print_guard.click_start("total register", 0);
     do {
       result.reset();
       tx_result.reset();
@@ -851,7 +852,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
       } else if (ls_leader_addr == self_) {
         local_retry_cnt = 0;
 
-        time_guard.click("register in ctx begin");
+        tx_print_guard.click_start("register_in_ctx", 1);
         do {
           if (OB_FAIL(register_mds_into_ctx_(*(arg.tx_desc_), ls_id, type, buf, buf_len, seq_no, register_flag))) {
             TRANS_LOG(WARN, "register msd into ctx failed", K(ret));
@@ -870,7 +871,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
             }
           }
         } while (OB_EAGAIN == ret);
-        time_guard.click("register in ctx end");
+        tx_print_guard.click_end(1);
 
         // collect participants regardless of register error
         if (OB_TMP_FAIL(collect_tx_exec_result(*(arg.tx_desc_), result.tx_result_))) {
@@ -892,7 +893,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
                   "The follower receive a register request. we will return err_code to scheduler",
                   K(ret), K(tx_desc), K(ls_id), K(type), K(buf_len), K(request_id));
       } else if (OB_FALSE_IT(arg.inc_request_id(-1))) {
-      } else if (OB_FALSE_IT(time_guard.click("register by rpc begin"))) {
+      } else if (OB_FALSE_IT(tx_print_guard.click_start("register_by_rpc", 2))) {
       } else if (OB_FALSE_IT(remain_timeout_us = tx_desc.expire_ts_ - ObTimeUtil::fast_current_time())) {
       } else if (OB_FAIL(rpc_proxy_->to(ls_leader_addr)
                              .by(tx_desc.tenant_id_)
@@ -900,8 +901,8 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
                              .register_tx_data(arg, result))) {
         TRANS_LOG(WARN, "register_tx_fata failed", KR(ret), K(ls_leader_addr), K(arg), K(tx_desc),
                   K(ls_id), K(result));
-        time_guard.click("register by rpc end");
-      } else if (OB_FALSE_IT(time_guard.click("register by rpc end"))) {
+        tx_print_guard.click_end(2);
+      } else if (OB_FALSE_IT(tx_print_guard.click_end(2))) {
       } else if (OB_FAIL(result.result_)) {
         TRANS_LOG(WARN, "register tx data failed in remote", KR(ret), K(tx_desc), K(ls_id),
                   K(type));
@@ -920,6 +921,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
       }
     } while (OB_NOT_MASTER == ret && this->self_ == tx_desc.addr_);
 
+    tx_print_guard.click_start("handle_tx_result", 3);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(add_tx_exec_result(tx_desc, tx_result))) {
         TRANS_LOG(WARN, "add tx exec result failed", K(ret), K(tx_desc), K(tx_result));
@@ -934,10 +936,11 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
         TRANS_LOG(WARN, "rollback to savepoint fail", K(tmp_ret), K(savepoint), K(expire_ts));
       }
     }
+    tx_print_guard.click_end(3);
   }
 
   TRANS_LOG(INFO, "register multi data source result", KR(ret), K(arg), K(result), K(tx_desc),
-            K(local_retry_cnt), K(retry_cnt), K(request_id), K(time_guard));
+            K(local_retry_cnt), K(retry_cnt), K(request_id), K(tx_print_guard));
   return ret;
 }
 

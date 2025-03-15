@@ -175,6 +175,10 @@ public:
   {
     return ObTxLogType::TX_START_WORKING_LOG == log_type;
   }
+  static bool is_mds_log(const ObTxLogType log_type)
+  {
+    return ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type;
+  }
   static bool can_be_spilt(const ObTxLogType log_type)
   {
     return ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type

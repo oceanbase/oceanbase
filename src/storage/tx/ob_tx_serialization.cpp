@@ -238,5 +238,32 @@ int ObTxSerCompatByte::deserialize(const char *buf, const int64_t data_len, int6
 int64_t ObTxSerCompatByte::get_serialize_size(void) const { return total_byte_cnt_; }
 
 
+int64_t ObTxPrintTimeGuard::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+
+  double total_diff = end_ts_ - start_ts_;
+  if (total_diff > 0) {
+    databuff_printf(buf, buf_len, pos, " [Total : %f ms] ", total_diff / 1000);
+  }
+
+  for (int i = 0; i < MAX_CLICK_COUNT; i++) {
+
+    double tmp_diff = click_end_ts_[i] - click_start_ts_[i];
+    if (tmp_diff > 0) {
+
+      databuff_printf(buf, buf_len, pos, " [%s : %f ms] ", click_str_[i], tmp_diff / 1000);
+    }
+  }
+
+  if (pos == 0 || OB_FAIL(ret)) {
+    pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "invalid TxPrintTimeGuard");
+  }
+
+  return pos;
+}
+
 } // namespace transacation
 } // namespace oceanbase
