@@ -4805,29 +4805,15 @@ int ObPLResolver::resolve_cursor_for_loop(
     // 解析cursor
     if (OB_SUCC(ret)) {
       int64_t cursor_index = OB_INVALID_ID;
-      if (T_OBJ_ACCESS_REF == cursor_node->type_) {
-        CK (cursor_node->num_child_ >= 1);
-        CK (OB_NOT_NULL(cursor_node->children_[0]));
-        OX (cursor_node = T_FUN_SYS == cursor_node->children_[0]->type_ ?
-          cursor_node->children_[0] : cursor_node);
 
-        // 解析Cursor
-        OZ (resolve_cursor(
-          (T_FUN_SYS == cursor_node->type_) ? cursor_node->children_[0] : cursor_node,
-          current_block_->get_namespace(), cursor_index, func));
+      if (T_OBJ_ACCESS_REF == cursor_node->type_) {
+        const ObStmtNodeTree *param_node = NULL;
+        OZ (resolve_obj_access_ref_for_cursor_param_node(cursor_node, param_node));
+        OZ (resolve_cursor(cursor_node, current_block_->get_namespace(), cursor_index, func));
         OX (stmt->set_cursor_index(cursor_index));
 
         //解析实参
         if (OB_SUCC(ret)) {
-          const ObStmtNodeTree *param_node = NULL;
-          if (T_FUN_SYS == cursor_node->type_ && cursor_node->num_child_ > 1) {
-            param_node = cursor_node->children_[1];
-          } else if (T_OBJ_ACCESS_REF == cursor_node->type_
-                     && cursor_node->children_[1] != NULL
-                     && T_FUN_SYS == cursor_node->children_[1]->children_[0]->type_
-                     && cursor_node->children_[1]->children_[0]->num_child_ > 1) {
-            param_node = cursor_node->children_[1]->children_[0]->children_[1];
-          }
           OZ (resolve_cursor_actual_params(param_node, stmt, func));
         }
         if (OB_SUCC(ret)) {
@@ -8194,11 +8180,11 @@ int ObPLResolver::resolve_declare_cursor(
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(resolve_cursor(name,
-                                   current_block_->get_namespace(),
-                                   cursor_index,
-                                   func,
-                                   true/*check mode*/))) {
+        if (OB_FAIL(resolve_local_cursor(name,
+                                         current_block_->get_namespace(),
+                                         cursor_index,
+                                         func,
+                                         true/*check mode*/))) {
           LOG_WARN("failed to resolve cursor", K(ret), K(name));
         } else if (lib::is_mysql_mode() && OB_INVALID_INDEX != cursor_index) {
           ret = OB_ERR_SP_DUP_CURSOR;
@@ -11605,7 +11591,7 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
           }
         }
       } else if (T_SP_OBJ_ACCESS_REF == node.children_[1]->type_) {
-        if (OB_FAIL(resolve_obj_access_idents(*(node.children_[1]), obj_access_idents, func))) {
+        if (OB_FAIL(SMART_CALL(resolve_obj_access_idents(*(node.children_[1]), obj_access_idents, func)))) {
           LOG_WARN("resolve obj access idents failed", K(ret));
         }
       } else {
@@ -16255,12 +16241,12 @@ int ObPLResolver::resolve_external_types_from_expr(ObRawExpr &expr)
           get_resolve_ctx(),
           get_current_namespace()));
       if (NULL != obj_access_expr.get_access_idxs().at(i).get_sysfunc_) {
-        OZ (resolve_external_types_from_expr(*obj_access_expr.get_access_idxs().at(i).get_sysfunc_));
+        OZ (SMART_CALL(resolve_external_types_from_expr(*obj_access_expr.get_access_idxs().at(i).get_sysfunc_)));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
       CK (OB_NOT_NULL(expr.get_param_expr(i)));
-      OZ (resolve_external_types_from_expr(*expr.get_param_expr(i)));
+      OZ (SMART_CALL(resolve_external_types_from_expr(*expr.get_param_expr(i))));
     }
   }
   return ret;
@@ -16350,188 +16336,203 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
   return ret;
 }
 
-int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
-                                 const ObPLBlockNS &ns,
-                                 const ObString &database_name,
-                                 const ObString &package_name,
-                                 const ObString &cursor_name,
-                                 int64_t &index)
+int ObPLResolver::resolve_obj_access_ref_for_cursor_param_node(
+  const ObStmtNodeTree *node, const ObStmtNodeTree *&param_node)
 {
   int ret = OB_SUCCESS;
-  const ObPLCursor *cursor = NULL;
-  // package name is not null and not equal to current ns, search global
-  uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
-  int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
-                                                  : COMPATIBLE_MYSQL_MODE;
-  const ObPackageInfo *package_info = NULL;
-  ObPLPackageManager &package_manager =
-    resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
-  ObString db_name =
-    database_name.empty() ? resolve_ctx_.session_info_.get_database_name() : database_name;
-  uint64_t database_id = OB_INVALID_ID;
-  int64_t idx = OB_INVALID_INDEX;
-  CK (!package_name.empty());
-  CK (!cursor_name.empty());
-  OX (cursor = NULL);
-  OZ (resolve_ctx_.schema_guard_.get_database_id(tenant_id, db_name, database_id));
-  OZ (resolve_ctx_.schema_guard_.get_package_info(
-      tenant_id, database_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
-  if (OB_SUCC(ret)
-      && OB_ISNULL(package_info) && 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
-    OZ (resolve_ctx_.schema_guard_.get_package_info(
-      OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
-      package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
-  }
-  if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
-    ObSchemaChecker checker;
-    ObSynonymChecker synonym_checker;
-    ObString new_package_name;
-    bool is_exist = false;
-    ObSEArray<ObSchemaObjVersion, 1> deps;
-    OZ (checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
-    OZ (ObResolverUtils::resolve_synonym_object_recursively(
-      checker, synonym_checker, tenant_id, database_id, package_name, database_id, new_package_name, is_exist));
-    if (OB_SUCC(ret) && is_exist) {
-      OZ (resolve_ctx_.schema_guard_.get_package_info(
-        tenant_id, database_id, new_package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
-      OZ (ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker, resolve_ctx_.schema_guard_, &deps));
-      OZ (ObPLDependencyUtil::add_dependency_objects(&func.get_dependency_table(), deps));
-    }
-    if (OB_SUCC(ret)
-        && OB_ISNULL(package_info) && OB_SYS_DATABASE_ID == database_id) {
-      OZ (resolve_ctx_.schema_guard_.get_package_info(
-        OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, new_package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
-    }
-  }
-  if ((OB_SUCC(ret) && OB_ISNULL(package_info)) || OB_SYNONYM_NOT_EXIST == ret) {
-    ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
-    LOG_WARN("package not exist", K(ret), K(package_name), K(db_name));
-    LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, "PACKAGE",
-                           db_name.length(), db_name.ptr(),
-                           package_name.length(), package_name.ptr());
-  }
+  CK (OB_NOT_NULL(node));
+  CK (T_OBJ_ACCESS_REF == node->type_
+      && 2 == node->num_child_
+      && OB_NOT_NULL(node->children_)
+      && OB_NOT_NULL(node->children_[0]));
+  OX (param_node = NULL);
   if (OB_FAIL(ret)) {
-  } else if (OB_NOT_NULL(package_info)
-            && database_id == resolve_ctx_.session_info_.get_database_id()
-            && package_info->get_package_name() == ns.get_package_name()) {
-    // search local again, package name may synonym.
-    OZ (resolve_cursor(cursor_name, ns, index, func, false, true), K(cursor_name));
-  } else {
-    OZ (package_manager.get_package_cursor(
-          resolve_ctx_, package_info->get_package_id(), cursor_name, cursor, idx));
-    if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
-      ret = OB_ERR_SP_CURSOR_MISMATCH;
-      LOG_WARN("can not found cursor",
-               K(resolve_ctx_.session_info_.get_database_name()),
-               K(db_name), K(package_name), K(cursor_name));
-      LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
+  } else if (OB_NOT_NULL(node->children_[1])) { // not last obj access ref
+    OZ (SMART_CALL(resolve_obj_access_ref_for_cursor_param_node(node->children_[1], param_node)));
+  } else if (T_FUN_SYS == node->children_[0]->type_) { // last ref, get last ref`s param node
+    CK (OB_NOT_NULL(node->children_[0]->children_[0]));
+    if (2 == node->children_[0]->num_child_) {
+      OX (param_node = node->children_[0]->children_[1]);
+      OX (node->children_[0] = node->children_[0]->children_[0]); // replace last func node to ident node
+    } else {
+      OX (node->children_[0] = node->children_[0]->children_[0]);
     }
-    OZ (ObPLDependencyUtil::add_dependency_objects(&func.get_dependency_table(), cursor->get_value().get_ref_objects()));
-    if (OB_SUCC(ret)) {
-      ObSchemaObjVersion obj_version;
-      obj_version.object_id_ = package_info->get_package_id();
-      obj_version.object_type_ = DEPENDENCY_PACKAGE;
-      obj_version.version_ = package_info->get_schema_version();
-      OZ (ObPLDependencyUtil::add_dependency_object_impl(func.get_dependency_table(), obj_version));
-      OX (func.set_rps());
-    }
-    CK (OB_NOT_NULL(cursor));
-    CK (OB_NOT_NULL(current_block_));
-    OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
   }
   return ret;
 }
 
-int ObPLResolver::resolve_cursor(
-  const ObStmtNodeTree *parse_tree, const ObPLBlockNS &ns,
-  int64_t &index, ObPLCompileUnitAST &func)
+int ObPLResolver::resolve_obj_access_ref_for_cursor_node(
+  const ObStmtNodeTree *node, ObIArray<ObObjAccessIdent> &access_idents)
 {
   int ret = OB_SUCCESS;
-  OX (index = OB_INVALID_INDEX);
-  CK (OB_NOT_NULL(parse_tree));
-  if (OB_FAIL(ret)) {
-  } else if (T_SP_ACCESS_NAME == parse_tree->type_) {
-    ObSchemaChecker schema_checker;
-    ObString db_name;
-    ObString package_name;
-    ObString cursor_name;
-    ObString dblink_name;
-    ObSEArray<ObSchemaObjVersion, 1> deps;
-    OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
-    OZ (ObResolverUtils::resolve_sp_access_name(
-      schema_checker, resolve_ctx_.session_info_.get_effective_tenant_id(),
-      resolve_ctx_.session_info_.get_database_name(),
-      *parse_tree, db_name, package_name, cursor_name, dblink_name, &deps));
-    OZ (ObPLDependencyUtil::add_dependency_objects(&func.get_dependency_table(), deps));
-    if (OB_FAIL(ret)) {
-    } else if (package_name.empty()) {
-      if (!db_name.empty()
-          && db_name != resolve_ctx_.session_info_.get_database_name()) {
+
+  ObArray<ObQualifiedName> columns;
+  ObArray<ObVarInfo> sys_vars;
+  ObArray<ObAggFunRawExpr*> aggr_exprs;
+  ObArray<ObWinFunRawExpr*> win_exprs;
+  ObArray<ObSubQueryInfo> sub_query_info;
+  ObArray<ObUDFInfo> udf_info;
+  ObArray<ObOpRawExpr*> op_exprs;
+  ObRawExpr *expr = NULL;
+
+  // cursor_for_loop syntax like 'for idx in cursor loop null; end loop;'
+  // here, cursor can only be like 'label1.label2.label3.cursor[(params)]', we do check on this function.
+  CK (T_OBJ_ACCESS_REF == node->type_);
+  OZ (ObPLResolver::build_raw_expr(
+    *node, expr, columns, sys_vars, aggr_exprs, win_exprs, sub_query_info, udf_info, op_exprs, false));
+  CK (OB_NOT_NULL(expr));
+  if (OB_SUCC(ret)
+    && (columns.count() != 1
+        || expr->get_expr_type() != T_REF_COLUMN
+        || !sys_vars.empty()
+        || !aggr_exprs.empty()
+        || !win_exprs.empty()
+        || !sub_query_info.empty()
+        || !udf_info.empty()
+        || !op_exprs.empty())) {
+    ret = OB_ERR_SP_CURSOR_MISMATCH;
+    LOG_WARN("unexpected for loop cursor node",
+      K(ret), KPC(expr), K(columns.count()), K(sys_vars.count()), K(aggr_exprs.count()),
+      K(win_exprs.count()), K(sub_query_info.count()), K(udf_info.count()), K(op_exprs.count()));
+  }
+
+  if (OB_SUCC(ret)) {
+    OZ (access_idents.assign(columns.at(0).access_idents_));
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_idents.count() - 1; ++i) {
+      if (access_idents.at(i).has_brackets_) {
         ret = OB_ERR_SP_CURSOR_MISMATCH;
-        LOG_WARN("can not found cursor",
-                 K(resolve_ctx_.session_info_.get_database_name()),
-                 K(db_name), K(package_name), K(cursor_name));
-        LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
-      } else {
-        OZ (resolve_cursor(cursor_name, ns, index, func), K(cursor_name));
+        LOG_WARN("unexpected for loop cursor node", K(ret));
       }
-    } else if (db_name == resolve_ctx_.session_info_.get_database_name()
-               && package_name == ns.get_package_name()) {
-      // package_name is not null and equal to current ns, search local
-      OZ (resolve_cursor(cursor_name, ns, index, func, false, true), K(cursor_name));
-    } else {
-      // search global cursor
-      OZ (resolve_cursor(func, ns, db_name, package_name, cursor_name, index));
     }
-  } else if (T_OBJ_ACCESS_REF == parse_tree->type_) {
-    CK (2 == parse_tree->num_child_);
-    if (OB_SUCC(ret) && parse_tree->children_[1] != nullptr) {
-      ObString db_name;
-      ObString package_name;
-      ObString cursor_name;
-      const ObStmtNodeTree *package_node = parse_tree->children_[0];
-      const ObStmtNodeTree *cursor_node = parse_tree->children_[1]->children_[0];
-      package_name.assign_ptr(package_node->str_value_, static_cast<int32_t>(package_node->str_len_));
-      if (T_FUN_SYS == cursor_node->type_
-          && OB_NOT_NULL(cursor_node->children_[0])
-          && T_IDENT == cursor_node->children_[0]->type_) {
-        cursor_name.assign_ptr(cursor_node->children_[0]->str_value_, static_cast<int32_t>(cursor_node->children_[0]->str_len_));
-      } else {
-        cursor_name.assign_ptr(cursor_node->str_value_, static_cast<int32_t>(cursor_node->str_len_));
-      }
-      db_name = resolve_ctx_.session_info_.get_database_name();
-      if (OB_FAIL(ret)) {
-      } else if (package_name.empty()) {
+    ObObjAccessIdent &last_ident = access_idents.at(access_idents.count() - 1);
+    for (int64_t i = 0; OB_SUCC(ret) && i < last_ident.params_.count(); ++i) {
+      std::pair<ObRawExpr *, int64_t> &param = last_ident.params_.at(i);
+      if (param.second != 0) {
         ret = OB_ERR_SP_CURSOR_MISMATCH;
-        LOG_WARN("can not found cursor",
-                 K(resolve_ctx_.session_info_.get_database_name()),
-                 K(db_name), K(package_name), K(cursor_name));
-        LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
-      } else if (package_name == ns.get_package_name()) {
-        OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
-      } else {
-        // search global cursor
-        OZ (resolve_cursor(func, ns, db_name, package_name, cursor_name, index));
+        LOG_WARN("unexpected for loop cursor node", K(ret));
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObPLResolver::resolve_cursor(
+  const ObStmtNodeTree *parse_tree, const ObPLBlockNS &ns, int64_t &index, ObPLCompileUnitAST &func)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(parse_tree));
+  OX (index = OB_INVALID_INDEX);
+  if (OB_FAIL(ret)) {
+  } else if (T_SP_OBJ_ACCESS_REF == parse_tree->type_ || T_OBJ_ACCESS_REF == parse_tree->type_) {
+    ObSEArray<ObObjAccessIdent, 3> obj_access_idents;
+    ObSEArray<ObObjAccessIdx, 3> obj_access_idxs;
+    if (T_SP_OBJ_ACCESS_REF == parse_tree->type_) {
+      OZ (resolve_obj_access_idents(*parse_tree, obj_access_idents, func));
     } else {
-      const ObStmtNodeTree *cursor_name = parse_tree->children_[0];
-      if (T_IDENT == cursor_name->type_) {
-        OZ (resolve_cursor(ObString(cursor_name->str_len_, cursor_name->str_value_), ns, index, func));
-      } else if (T_QUESTIONMARK == cursor_name->type_) {
-        OZ (resolve_questionmark_cursor(cursor_name->value_, current_block_->get_namespace(), index));
+      OZ (resolve_obj_access_ref_for_cursor_node(parse_tree, obj_access_idents));
+    }
+    CK (obj_access_idents.count() > 0);
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count() - 1; ++i) {
+      OZ (resolve_access_ident(obj_access_idents.at(i),
+                               ns,
+                               expr_factory_,
+                               &resolve_ctx_.session_info_,
+                               obj_access_idxs,
+                               func));
+    }
+    if (OB_SUCC(ret)) {
+      ObObjAccessIdent &cursor_ident = obj_access_idents.at(obj_access_idents.count() - 1);
+      if (obj_access_idxs.empty()) {
+        if (cursor_ident.is_pl_var() && cursor_ident.access_name_.empty()) {
+          OZ (resolve_questionmark_cursor(cursor_ident.access_index_, current_block_->get_namespace(), index));
+        } else {
+          OZ (resolve_local_cursor(cursor_ident.access_name_, ns, index, func, false, false), K(cursor_ident));
+        }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected cursor node type", K(ret), K(cursor_name->type_));
+        ObObjAccessIdx &last_idx = obj_access_idxs.at(obj_access_idxs.count() - 1);
+        if (ObObjAccessIdx::IS_LABEL_NS == last_idx.access_type_) {
+          const ObPLBlockNS *next_ns = NULL;
+          CK (OB_NOT_NULL(last_idx.label_ns_));
+          if (OB_FAIL(ret)) {
+          } else if (ObPLBlockNS::BLOCK_ROUTINE == last_idx.label_ns_->get_block_type()) {
+            OZ (ObPLBlockNS::search_parent_next_ns(last_idx.label_ns_, &ns, next_ns));
+            CK (OB_NOT_NULL(next_ns));
+            OZ (resolve_local_cursor(cursor_ident.access_name_, *next_ns, index, func, false, false));
+          } else {
+            OX (next_ns = last_idx.label_ns_);
+            CK (ObPLBlockNS::BLOCK_PACKAGE_SPEC == next_ns->get_block_type());
+            OZ (resolve_local_cursor(cursor_ident.access_name_, *next_ns, index, func, false, true));
+            if ((OB_SUCC(ret) && OB_INVALID_INDEX == index) || OB_ERR_SP_CURSOR_MISMATCH == ret) {
+              OZ (ObPLBlockNS::search_parent_next_ns(last_idx.label_ns_, &ns, next_ns));
+              CK (OB_NOT_NULL(next_ns));
+              if (OB_SUCC(ret) && ObPLBlockNS::BLOCK_PACKAGE_BODY == next_ns->get_block_type()) {
+                OZ (resolve_local_cursor(cursor_ident.access_name_, *next_ns, index, func, false, true));
+              }
+            }
+          }
+        } else if (ObObjAccessIdx::ObObjAccessIdx::IS_PKG_NS == last_idx.access_type_) {
+          if (last_idx.var_index_ == ns.get_package_id()) {
+            OZ (resolve_local_cursor(cursor_ident.access_name_, ns, index, func, false, true));
+          } else {
+            const ObPLBlockNS *top_ns = &ns;
+            while (OB_NOT_NULL(top_ns->get_external_ns())
+                   && OB_NOT_NULL(top_ns->get_external_ns()->get_parent_ns())) {
+              top_ns = top_ns->get_external_ns()->get_parent_ns();
+            }
+            if (top_ns->get_package_id() == last_idx.var_index_) {
+              OZ (resolve_local_cursor(cursor_ident.access_name_, ns, index, func, false, true));
+            } else {
+              OZ (resolve_package_cursor(last_idx.var_index_, cursor_ident.access_name_, index, func));
+            }
+          }
+        } else {
+          ret = OB_ERR_SP_CURSOR_MISMATCH;
+          LOG_WARN("can not found cursor",
+                  K(resolve_ctx_.session_info_.get_database_name()), K(obj_access_idents), K(obj_access_idxs));
+          LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_ident.access_name_.length(), cursor_ident.access_name_.ptr());
+        }
       }
     }
   } else if (T_IDENT == parse_tree->type_) {
-    OZ (resolve_cursor(ObString(parse_tree->str_len_, parse_tree->str_value_), ns, index, func));
+    OZ (resolve_local_cursor(
+      ObString(parse_tree->str_len_, parse_tree->str_value_), ns, index, func, false, false));
   } else if (T_QUESTIONMARK == parse_tree->type_) {
     OZ (resolve_questionmark_cursor(parse_tree->value_, current_block_->get_namespace(), index));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected cursor node type", K(ret), K(parse_tree->type_));
   }
+  return ret;
+}
+
+int ObPLResolver::resolve_package_cursor(
+  uint64_t package_id, const ObString &cursor_name, int64_t &index, ObPLCompileUnitAST &func)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = OB_INVALID_INDEX;
+  const ObPLCursor *cursor = NULL;
+  const ObPackageInfo *package_info = NULL;
+  ObPLPackageManager &package_manager = resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
+  OZ (package_manager.get_package_cursor(resolve_ctx_, package_id, cursor_name, cursor, idx));
+  if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
+    ret = OB_ERR_SP_CURSOR_MISMATCH;
+    LOG_WARN("can not found cursor", K(resolve_ctx_.session_info_.get_database_name()), K(cursor_name), K(package_id));
+    LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
+  }
+
+  OZ (resolve_ctx_.schema_guard_.get_package_info(
+    get_tenant_id_by_object_id(package_id), package_id, package_info));
+  CK (OB_NOT_NULL(package_info));
+  OZ (ObPLDependencyUtil::add_dependency_object_impl(func.get_dependency_table(),
+                                                     ObSchemaObjVersion(package_info->get_package_id(),
+                                                                        package_info->get_schema_version(),
+                                                                        DEPENDENCY_PACKAGE)));
+  OZ (ObPLDependencyUtil::add_dependency_objects(&func.get_dependency_table(), cursor->get_value().get_ref_objects()));
+  OX (func.set_rps());
+  CK (OB_NOT_NULL(cursor));
+  CK (OB_NOT_NULL(current_block_));
+  OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
   return ret;
 }
 
@@ -16591,7 +16592,7 @@ int ObPLResolver::resolve_questionmark_cursor(
   return ret;
 }
 
-int ObPLResolver::resolve_cursor(
+int ObPLResolver::resolve_local_cursor(
   const ObString &name, const ObPLBlockNS &ns,
   int64_t &cursor, ObPLCompileUnitAST &func, bool check_mode, bool for_external_cursor)
 {
@@ -16641,20 +16642,20 @@ int ObPLResolver::resolve_cursor(
       && OB_INVALID_INDEX == cursor
       && (!check_mode || ns.get_block_type() != ObPLBlockNS::BLOCK_ROUTINE)) {
     if (OB_NOT_NULL(ns.get_pre_ns())) {
-      OZ (SMART_CALL(resolve_cursor(name,
-                                    *ns.get_pre_ns(),
-                                    cursor,
-                                    func,
-                                    check_mode,
-                                    for_external_cursor)), K(name));
+      OZ (SMART_CALL(resolve_local_cursor(name,
+                                          *ns.get_pre_ns(),
+                                          cursor,
+                                          func,
+                                          check_mode,
+                                          for_external_cursor)), K(name));
     } else if (OB_NOT_NULL(ns.get_external_ns())
                && OB_NOT_NULL(ns.get_external_ns()->get_parent_ns())) {
-      OZ (SMART_CALL(resolve_cursor(name,
-                                    *(ns.get_external_ns()->get_parent_ns()),
-                                    cursor,
-                                    func,
-                                    check_mode,
-                                    for_external_cursor)), K(name));
+      OZ (SMART_CALL(resolve_local_cursor(name,
+                                          *(ns.get_external_ns()->get_parent_ns()),
+                                          cursor,
+                                          func,
+                                          check_mode,
+                                          for_external_cursor)), K(name));
     } else if (check_mode) {
       LOG_DEBUG("can not found cursor", K(name));
     } else {
