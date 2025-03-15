@@ -144,6 +144,20 @@ private:
                                      SystemTriggerEvent trigger_event,
                                      bool &do_trigger);
   static int is_enabled_system_trigger(bool &is_enable);
+  static int convert_sql_type_to_pl_type(ObSQLSessionInfo *session,
+                                         ObExecContext &exec_ctx,
+                                         ObSchemaGetterGuard *schema_guard,
+                                         ObIAllocator &alloc,
+                                         ObObj &src,
+                                         ObObj &dst,
+                                         ObObjType obj_type);
+  static int convert_pl_type_to_sql_type(ObSQLSessionInfo *session,
+                                         ObExecContext &exec_ctx,
+                                         ObIAllocator &alloc,
+                                         ObObj &src,
+                                         ObObj &dst,
+                                         ObObjType obj_type);
+
 private:
   static const uint64_t ROUTINE_IDX_CALC_WHEN = 1;
   static const uint64_t ROUTINE_IDX_BEFORE_STMT = 2;

@@ -16,6 +16,8 @@
 #include "sql/engine/dml/ob_table_update_op.h"
 #include "sql/ob_spi.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_stmt.h"
 
 namespace oceanbase
 {
@@ -202,6 +204,8 @@ int TriggerHandle::init_param_old_row(
     for (int64_t i = 0; i < trig_ctdef.old_row_exprs_.count() && OB_SUCC(ret); ++i) {
       ObDatum *datum;
       ObObj result;
+      ObObj dst;
+      bool is_udt = false;
       if (OB_FAIL(trig_ctdef.old_row_exprs_.at(i)->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval rowid expr", K(ret));
       } else if (OB_ISNULL(datum))  {
@@ -210,13 +214,39 @@ int TriggerHandle::init_param_old_row(
       } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.old_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
-      } else if (OB_FAIL(deep_copy_obj(*trig_rtdef.old_record_->get_allocator(), result, cells[i]))) {
-        LOG_WARN("fail to deep copy obj", K(ret));
+      } else if ((is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
+        if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sql ctx is null", K(ret));
+        } else if (OB_FAIL(convert_sql_type_to_pl_type(eval_ctx.exec_ctx_.get_my_session(),
+                                                eval_ctx.exec_ctx_,
+                                                eval_ctx.exec_ctx_.get_sql_ctx()->schema_guard_,
+                                                eval_ctx.exec_ctx_.get_allocator(),
+                                                result,
+                                                dst,
+                                                trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
+          LOG_WARN("failed to convert sql type to pl type", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_udt) {
+        if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*trig_rtdef.old_record_->get_allocator(), dst, cells[i]))) {
+          LOG_WARN("fail to deep copy obj", K(ret));
+        }
+        int tmp_ret = pl::ObUserDefinedType::destruct_obj(dst);
+        if (tmp_ret != OB_SUCCESS) {
+          LOG_WARN("destruct obj failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(deep_copy_obj(*trig_rtdef.old_record_->get_allocator(), result, cells[i]))) {
+          LOG_WARN("fail to deep copy obj", K(ret));
+        }
       }
       LOG_DEBUG("debug init param old expr", K(ret), K(i),
         K(ObToStringExpr(eval_ctx, *trig_ctdef.old_row_exprs_.at(i))));
     }
-    if (OB_NOT_NULL(trig_ctdef.rowid_old_expr_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(trig_ctdef.rowid_old_expr_)) {
       ObDatum *datum;
       if (OB_FAIL(trig_ctdef.rowid_old_expr_->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval rowid expr", K(ret));
@@ -252,6 +282,8 @@ int TriggerHandle::init_param_new_row(
     for (int64_t i = 0; i < trig_ctdef.new_row_exprs_.count() && OB_SUCC(ret); ++i) {
       ObDatum *datum;
       ObObj result;
+      ObObj dst;
+      bool is_udt =false;
       if (OB_FAIL(trig_ctdef.new_row_exprs_.at(i)->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval rowid expr", K(ret));
       } else if (OB_ISNULL(datum))  {
@@ -260,7 +292,21 @@ int TriggerHandle::init_param_new_row(
       } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
+      } else if ((is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+        if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sql ctx is null", K(ret));
+        } else if (OB_FAIL(convert_sql_type_to_pl_type(eval_ctx.exec_ctx_.get_my_session(),
+                                                eval_ctx.exec_ctx_,
+                                                eval_ctx.exec_ctx_.get_sql_ctx()->schema_guard_,
+                                                eval_ctx.exec_ctx_.get_allocator(),
+                                                result,
+                                                dst,
+                                                trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+          LOG_WARN("failed to convert sql type to pl type", K(ret));
+        }
       }
+
       if (OB_SUCC(ret) && !trig_ctdef.trig_col_info_.get_flags()[i].is_rowid_
           && (ObCharType == result.get_type() || ObNCharType == result.get_type())) {
         // pad space for char type
@@ -276,11 +322,20 @@ int TriggerHandle::init_param_new_row(
           LOG_WARN("failed to pad space", K(col_type), K(accuracy), K(ret));
         }
       }
-      OZ (deep_copy_obj(*trig_rtdef.new_record_->get_allocator(), result, cells[i]));
+      if (is_udt) {
+        OZ (pl::ObUserDefinedType::deep_copy_obj(*trig_rtdef.new_record_->get_allocator(), dst, cells[i]));
+        int tmp_ret = pl::ObUserDefinedType::destruct_obj(dst);
+        if (tmp_ret != OB_SUCCESS) {
+          LOG_WARN("destruct obj failed", K(ret));
+        }
+      } else {
+        OZ (deep_copy_obj(*trig_rtdef.new_record_->get_allocator(), result, cells[i]));
+      }
       LOG_DEBUG("debug init param new expr", K(ret), K(i),
         K(ObToStringExpr(eval_ctx, *trig_ctdef.new_row_exprs_.at(i))));
     }
-    if (OB_NOT_NULL(trig_ctdef.rowid_new_expr_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(trig_ctdef.rowid_new_expr_)) {
       ObDatum *datum;
       if (OB_FAIL(trig_ctdef.rowid_new_expr_->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval rowid expr", K(ret));
@@ -551,8 +606,19 @@ int TriggerHandle::check_and_update_new_row(
         } else {
           ObObj tmp_obj = new_cells[i];
           ObDatum &write_datum = expr->locate_datum_for_write(eval_ctx);
-          if (OB_FAIL(deep_copy_obj(eval_ctx.exec_ctx_.get_allocator(), new_cells[i], tmp_obj))) {
+          if (ob_is_geometry(expr->obj_meta_.get_type())) {
+            if (OB_FAIL(convert_pl_type_to_sql_type(eval_ctx.exec_ctx_.get_my_session(),
+                                                    eval_ctx.exec_ctx_,
+                                                    eval_ctx.exec_ctx_.get_allocator(),
+                                                    new_cells[i],
+                                                    tmp_obj,
+                                                    expr->obj_meta_.get_type()))) {
+              LOG_WARN("failed to convert pl type to sql type", K(ret));
+            }
+          } else if (OB_FAIL(deep_copy_obj(eval_ctx.exec_ctx_.get_allocator(), new_cells[i], tmp_obj))) {
             LOG_WARN("failed to deep copy obj", K(ret));
+          }
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(write_datum.from_obj(tmp_obj))) {
             LOG_WARN("failed to from obj", K(ret));
           } else if (is_lob_storage(tmp_obj.get_type()) &&
@@ -865,6 +931,83 @@ int TriggerHandle::calc_when_condition(ObExecContext &exec_ctx,
     LOG_WARN("calc trigger routine failed", K(ret), K(trigger_id));
   } else {
     need_fire = result.is_true();
+  }
+  return ret;
+}
+
+int TriggerHandle::convert_sql_type_to_pl_type(ObSQLSessionInfo *session,
+                                               ObExecContext &exec_ctx,
+                                               ObSchemaGetterGuard *schema_guard,
+                                               ObIAllocator &alloc,
+                                               ObObj &src,
+                                               ObObj &dst,
+                                               ObObjType obj_type)
+{
+  int ret = OB_SUCCESS;
+  if (src.is_null()) {
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else {
+      uint64_t udt_id = OB_INVALID_ID;
+      const ObUDTTypeInfo *udt_info = NULL;
+      const pl::ObUserDefinedType *user_type = NULL;
+      int64_t ptr = 0;
+      int64_t init_size = OB_INVALID_SIZE;
+      pl::ObPLUDTNS udt_ns(*schema_guard);
+      if (ob_is_geometry(obj_type)) {
+        udt_id = 300028;
+      }
+      uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+      if (OB_INVALID_ID == udt_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid udt id", K(ret), K(obj_type));
+      } else if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
+        LOG_WARN("failed to get udt info", K(ret), K(obj_type));
+      } else if (OB_ISNULL(udt_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt_info is null", K(ret));
+      } else if (OB_FAIL(udt_info->transform_to_pl_type(alloc, *schema_guard, user_type))) {
+        LOG_WARN("failed to transform to pl type", K(ret));
+      } else if (OB_FAIL(user_type->newx(alloc, &udt_ns, ptr))) {
+        LOG_WARN("failed to new user type", K(ret));
+      } else if (OB_FAIL(user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size))) {
+        LOG_WARN("failed to get size", K(ret));
+      } else {
+        dst.set_extend(ptr, user_type->get_type(), init_size);
+      }
+      if (OB_NOT_NULL(user_type)) {
+        user_type->~ObUserDefinedType();
+      }
+    }
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+    ObCastCtx cast_ctx(&alloc, &dtc_params, CM_NONE, src.get_collation_type());
+    cast_ctx.exec_ctx_ = &exec_ctx;
+    if (OB_FAIL(ObObjCaster::to_type(ObExtendType, cast_ctx, src, dst))) {
+      LOG_WARN("failed to cast to extend type", K(ret), K(src), K(dst), K(obj_type));
+    }
+  }
+  return ret;
+}
+
+int TriggerHandle::convert_pl_type_to_sql_type(ObSQLSessionInfo *session,
+                                               ObExecContext &exec_ctx,
+                                               ObIAllocator &alloc,
+                                               ObObj &src,
+                                               ObObj &dst,
+                                               ObObjType obj_type)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_geometry(obj_type)) {
+    const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+    ObCastCtx cast_ctx(&alloc, &dtc_params, CM_NONE, src.get_collation_type());
+    if (OB_FAIL(ObObjCaster::to_type(obj_type, cast_ctx, src, dst))) {
+      LOG_WARN("failed to cast to extend type", K(ret), K(src), K(dst), K(obj_type));
+    }
   }
   return ret;
 }
