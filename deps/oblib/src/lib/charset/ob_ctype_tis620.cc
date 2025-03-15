@@ -14,6 +14,7 @@
 #include "lib/charset/ob_ctype_tis620_tab.h"
 #include "lib/charset/ob_ctype_tis620.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/charset/ob_tis620ci_sort_scanner.h"
 
 /*
   Convert thai string to "Standard C String Function" sortable string
@@ -84,23 +85,40 @@ static int ob_strnncoll_tis620(const ObCharsetInfo *cs [[maybe_unused]],
                                size_t len2, bool s2_is_prefix) {
   uchar buf[80];
   uchar *tc1, *tc2;
-  int i;
+  int res = 0;
 
   if (s2_is_prefix && len1 > len2) len1 = len2;
 
   tc1 = buf;
-  if ((len1 + len2 + 2) > (int)sizeof(buf))
-    tc1 = static_cast<uchar *>(oceanbase::ob_malloc(len1 + len2 + 2, "CharsetInit"));
-  tc2 = tc1 + len1 + 1;
-  memcpy(tc1, s1, len1);
-  tc1[len1] = 0; /* if length(s1)> len1, need to put 'end of string' */
-  memcpy(tc2, s2, len2);
-  tc2[len2] = 0; /* put end of string */
-  thai2sortable(tc1, len1);
-  thai2sortable(tc2, len2);
-  i = strcmp((char *)tc1, (char *)tc2);
-  if (tc1 != buf) oceanbase::ob_free(tc1);
-  return i;
+  if ((len1 + len2 + 2) > (int)sizeof(buf)) {
+      Tis620CiSortScanner scanner1(s1, len1);
+      Tis620CiSortScanner scanner2(s2, len2);
+      uchar ch1;
+      uchar ch2;
+      while (scanner1.has_next() && scanner2.has_next()) {
+         scanner1.get_next_character(ch1);
+         scanner2.get_next_character(ch2);
+         if (ch1 != ch2) {
+            res = ((int)ch1 - (int)ch2);
+         }
+      }
+      if (scanner1.has_next()) {
+          res = 1;
+      }
+      if (scanner2.has_next()) {
+          res = -1;
+      }
+  } else {
+      tc2 = tc1 + len1 + 1;
+      memcpy(tc1, s1, len1);
+      tc1[len1] = 0; /* if length(s1)> len1, need to put 'end of string' */
+      memcpy(tc2, s2, len2);
+      tc2[len2] = 0; /* put end of string */
+      thai2sortable(tc1, len1);
+      thai2sortable(tc2, len2);
+      res = strcmp((char *)tc1, (char *)tc2);
+  }
+  return res;
 }
 
 static int ob_strnncollsp_tis620(const ObCharsetInfo *cs [[maybe_unused]],
@@ -112,48 +130,73 @@ static int ob_strnncollsp_tis620(const ObCharsetInfo *cs [[maybe_unused]],
   int res = 0;
 
   a = buf;
-  if ((a_length + b_length + 2) > (int)sizeof(buf))
-    alloced = a = (uchar *)oceanbase::ob_malloc(a_length + b_length + 2, "CharsetInit");
-
-  b = a + a_length + 1;
-  memcpy(a, a0, a_length);
-  a[a_length] = 0; /* if length(a0)> len1, need to put 'end of string' */
-  memcpy(b, b0, b_length);
-  b[b_length] = 0; /* put end of string */
-  a_length = thai2sortable(a, a_length);
-  b_length = thai2sortable(b, b_length);
-
-  end = a + (length = std::min(a_length, b_length));
-  while (a < end) {
-    if (*a++ != *b++) {
-      res = ((int)a[-1] - (int)b[-1]);
-      goto ret;
+  if ((a_length + b_length + 2) > (int)sizeof(buf)) {
+    Tis620CiSortScanner scanner1(a0, a_length);
+    Tis620CiSortScanner scanner2(b0, b_length);
+    uchar ch1;
+    uchar ch2;
+    while (scanner1.has_next() && scanner2.has_next()) {
+        scanner1.get_next_character(ch1);
+        scanner2.get_next_character(ch2);
+        if (ch1 != ch2) {
+          res = ((int)ch1 - (int)ch2);
+        }
     }
-  }
-  if (a_length != b_length) {
-    int swap = 1;
     /*
       Check the next not space character of the longer key. If it's < ' ',
       then it's smaller than the other key.
     */
-    if (a_length < b_length) {
-      /* put shorter key in s */
-      a_length = b_length;
-      a = b;
-      swap = -1; /* swap sign of result */
-      res = -res;
+    while (scanner1.has_next()) {
+      scanner1.get_next_character(ch1);
+      if (ch1 != ' ') {
+        res = (ch1 < ' ') ? -1 : 1;
+        break;
+      }
     }
-    for (end = a + a_length - length; a < end; a++) {
-      if (*a != ' ') {
-        res = (*a < ' ') ? -swap : swap;
-        goto ret;
+    while (scanner2.has_next()) {
+      scanner2.get_next_character(ch2);
+      if (ch2 != ' ') {
+        res = (ch2 < ' ') ? 1 : -1;
+        break;
+      }
+    }
+  } else {
+    b = a + a_length + 1;
+    memcpy(a, a0, a_length);
+    a[a_length] = 0; /* if length(a0)> len1, need to put 'end of string' */
+    memcpy(b, b0, b_length);
+    b[b_length] = 0; /* put end of string */
+    a_length = thai2sortable(a, a_length);
+    b_length = thai2sortable(b, b_length);
+
+    end = a + (length = std::min(a_length, b_length));
+    while (a < end) {
+      if (*a++ != *b++) {
+        res = ((int)a[-1] - (int)b[-1]);
+        return res;
+      }
+    }
+    if (a_length != b_length) {
+      int swap = 1;
+      /*
+        Check the next not space character of the longer key. If it's < ' ',
+        then it's smaller than the other key.
+      */
+      if (a_length < b_length) {
+        /* put shorter key in s */
+        a_length = b_length;
+        a = b;
+        swap = -1; /* swap sign of result */
+        res = -res;
+      }
+      for (end = a + a_length - length; a < end; a++) {
+        if (*a != ' ') {
+          res = (*a < ' ') ? -swap : swap;
+          break;
+        }
       }
     }
   }
-
-ret:
-
-  if (alloced) oceanbase::ob_free(alloced);
   return res;
 }
 
@@ -335,3 +378,136 @@ ObCharsetInfo ob_charset_tis620_bin = {
     &ob_charset_tis620_handler,
     &ob_collation_8bit_bin_handler,
     PAD_SPACE};
+
+void Tis620CiSortScanner::adjust_position(int cur, int next)
+{
+  cur_ = cur;
+  next_ = next;
+}
+
+void Tis620CiSortScanner::move_next(uchar& ch, uint64_t& move_count) {
+  uchar *p;
+  size_t tlen;
+  uchar l2bias;
+
+  tlen = capacity_;
+  uchar* tstr = const_cast<uchar*>(str_);
+  l2bias = 256 - 8;
+  uint64_t count = 0;
+  for (p = tstr; tlen > 0; p++, tlen--) {
+    uchar c = *p;
+
+    if (isthai(c)) {
+      const int *t_ctype0 = t_ctype[c];
+
+      if (isconsnt(c)) l2bias -= 8;
+      if (isldvowel(c) && tlen != 1 && isconsnt(p[1])) {
+        tlen--;
+        p++;
+        continue;
+      }
+
+      if (t_ctype0[1] >= L2_GARAN) {
+        ch = l2bias + t_ctype0[1] - L2_GARAN + 1;
+        count++;
+        if (count == move_count) {
+          move_count++;
+          break;
+        }
+      }
+    } else {
+      l2bias -= 8;
+    }
+  }
+}
+bool Tis620CiSortScanner::has_next() {
+  if ((count_ == capacity_) ||
+      ((count_ + move_count_-1)==capacity_)) {
+    state_ = END_STATE;
+  }
+  return !(state_ & END_STATE);
+}
+int Tis620CiSortScanner::get_next_character(uchar& ch) {
+    while (true) {
+        if ((state_ & YEILD_STATE) || (state_ & END_STATE)) {
+            if ((state_ & YEILD_STATE) && !(state_ & MOVE_STATE)) {
+                count_++;
+            }
+            break;
+        }
+        if (INIT_STATE & state_) {
+            if (cur_ + next_ >= capacity_) {
+                if ((count_ == capacity_) ||
+                    ((count_ + move_count_-1)==capacity_)) {
+                  state_ = END_STATE;
+                } else if (move_count_ == 0) {
+                  move_count_ = 1;
+                  state_ = MOVE_STATE;
+                } else {
+                  state_ = MOVE_STATE;
+                }
+            } else {
+                uchar c = *(str_ + cur_ + next_);
+                if (isthai(c)) {
+                    state_ = ISTHAT_STATE;
+                } else {
+                    state_ = NOT_ISTHAT_STATE;
+                }
+            }
+        } else if (ISTHAT_STATE & state_) {
+            const uchar *p = (str_ + cur_ + next_);
+            uchar c = *p;
+            const int *t_ctype0 = t_ctype[c];
+            if (isldvowel(c) && p < (str_+capacity_-1) && isconsnt(p[1])) {
+                ch = p[1];
+                adjust_position(cur_+1, -1);
+                state_ = SWAP_STATE | YEILD_STATE;
+            } else if (t_ctype0[1] >= L2_GARAN) {
+                adjust_position(cur_+1, 0);
+                state_ = INIT_STATE;
+            } else {
+                ch = c;
+                adjust_position(cur_+1, 0);
+                state_ = INIT_STATE | YEILD_STATE;
+            }
+        } else if (NOT_ISTHAT_STATE & state_) {
+            uchar c = *(str_ + cur_ + next_);
+            ch = to_lower_tis620[c];
+            adjust_position(cur_+1, 0);
+            state_ = INIT_STATE | YEILD_STATE;
+        } else if (SWAP_STATE & state_) {
+            ch = *(str_ + cur_ + next_);
+            adjust_position(cur_+1, 0);
+            state_ = INIT_STATE | YEILD_STATE;
+        } else if (MOVE_STATE & state_) {
+          if (version_ == MYSQL4) {
+            state_ = INIT_STATE | MOVE_STATE | YEILD_STATE;
+            move_next(ch, move_count_);
+          } else if (version_ == MYSQL5x) {
+            state_ = INIT_STATE | MOVE_STATE | YEILD_STATE;
+            if ((count_ + move_count_) == capacity_) {
+              move_next(ch, move_count_);
+            } else {
+              ch = str_[capacity_-1];
+              move_count_++;
+            }
+          }
+        }
+    }
+    state_ &= (~(YEILD_STATE | MOVE_STATE));
+    return state_;
+}
+
+void debug_tis620_sortkey(const uchar *str, size_t len, uchar *dst, size_t dst_len, int version)
+{
+  Tis620CiSortScanner scanner(str, len,  version);
+  uchar ch;
+  size_t idx = 0;
+  while (scanner.has_next()) {
+    scanner.get_next_character(ch);
+    if (idx < dst_len) {
+      dst[idx] = ch;
+      idx++;
+    }
+  }
+}
