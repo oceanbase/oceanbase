@@ -74,26 +74,24 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse tree for comment string", K(ret));
     } else {
+      ObString nls_comment_string;
       int64_t comment_length = 0;
       const char *comment_ptr = NULL;
       comment_length = parse_tree.children_[1]->str_len_;
       comment_ptr = parse_tree.children_[1]->str_value_;
-      if (T_SET_TABLE_COMMENT == parse_tree.type_ && comment_length <= MAX_ORACLE_COMMENT_LENGTH) {
-        comment_.assign_ptr((char *)(comment_ptr), static_cast<int32_t>(comment_length));
-      } else if (T_SET_COLUMN_COMMENT == parse_tree.type_ && comment_length <= MAX_ORACLE_COMMENT_LENGTH) {
-        comment_.assign_ptr((char *)(comment_ptr), static_cast<int32_t>(comment_length));
-      } else {
+      comment_.assign_ptr((char *)(comment_ptr), static_cast<int32_t>(comment_length));
+      if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+              *allocator_, session_info_->get_dtc_params(), comment_, 0, NULL, &nls_comment_string))) {
+        LOG_WARN("fail to convert sql text to schema string", K(ret));
+      } else if (T_SET_TABLE_COMMENT == parse_tree.type_ && nls_comment_string.length() > MAX_ORACLE_COMMENT_LENGTH) {
         comment_ = "";
-        if (T_SET_TABLE_COMMENT == parse_tree.type_) {
-          ret = OB_ERR_TOO_LONG_TABLE_COMMENT;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_TABLE_COMMENT, MAX_ORACLE_COMMENT_LENGTH);
-        } else {
-          ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, MAX_ORACLE_COMMENT_LENGTH);
-        }
+        ret = OB_ERR_TOO_LONG_TABLE_COMMENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_TABLE_COMMENT, MAX_ORACLE_COMMENT_LENGTH);
+      } else if (T_SET_COLUMN_COMMENT == parse_tree.type_ && comment_length > MAX_ORACLE_COMMENT_LENGTH) {
+        comment_ = "";
+        ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, MAX_ORACLE_COMMENT_LENGTH);
       }
-      OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
-            *allocator_, session_info_->get_dtc_params(), comment_));
     }
 
     if (OB_SUCC(ret)) {

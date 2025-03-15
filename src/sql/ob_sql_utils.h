@@ -615,11 +615,21 @@ public:
                                                     ObString &sql_text,
                                                     int64_t convert_flag = 0,
                                                     int64_t *action_flag = NULL);
+  /**
+   * @brief convert_sql_text_to_schema_for_storing
+   * @param dtc_params, collation settings from session
+   * @param sql_text, source sql string from client
+   * @param convert_flag, options to control convert behavior
+   * @param action_flag, affected options
+   * @param oracle_nls_string, convert to nls_collation result
+   * @return
+   */
   static int convert_sql_text_to_schema_for_storing(common::ObIAllocator &allocator,
                                                     const common::ObDataTypeCastParams &dtc_params,
-                                                    ObString &sql_text,
+                                                    common::ObString &sql_text,
                                                     int64_t convert_flag = 0,
-                                                    int64_t *action_flag = NULL);
+                                                    int64_t *action_flag = NULL,
+                                                    common::ObString *oracle_nls_string = NULL);
 
   static int print_identifier(char *buf, const int64_t buf_len, int64_t &pos,
                               common::ObCollationType connection_collation,

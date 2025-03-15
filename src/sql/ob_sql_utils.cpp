@@ -4736,9 +4736,11 @@ int ObSQLUtils::convert_sql_text_to_schema_for_storing(ObIAllocator &allocator,
                                                        const ObDataTypeCastParams &dtc_params,
                                                        ObString &sql_text,
                                                        int64_t convert_flag,
-                                                       int64_t *action_flag)
+                                                       int64_t *action_flag,
+                                                       ObString *oracle_nls_string)
 {
   int ret = OB_SUCCESS;
+  ObString oracle_nls_result = sql_text;
   OZ (ObCharset::charset_convert(allocator,
                                  sql_text,
                                  dtc_params.connection_collation_,
@@ -4770,6 +4772,12 @@ int ObSQLUtils::convert_sql_text_to_schema_for_storing(ObIAllocator &allocator,
                                      CS_TYPE_UTF8MB4_BIN,
                                      sql_text));
     }
+    if (OB_SUCC(ret)) {
+      oracle_nls_result = temp_result;
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(oracle_nls_string)) {
+    *oracle_nls_string = oracle_nls_result;
   }
   return ret;
 }
