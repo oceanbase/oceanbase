@@ -290,11 +290,6 @@ private:
       const ObTabletID &dst_tablet_id,
       ObSSTableIndexBuilder *index_builder,
       ObTabletCreateSSTableParam &create_sstable_param);
-  static int check_and_determine_restore_status(
-      const ObLSHandle &ls_handle,
-      const ObTabletID &dst_tablet_id,
-      const ObTablesHandleArray &major_handles_array,
-      ObTabletRestoreStatus::STATUS &restore_status);
 private:
   bool is_inited_;
   ObTabletSplitParam *param_;
@@ -478,7 +473,7 @@ public:
       const obrpc::ObCheckMediumCompactionInfoListArg &arg,
       obrpc::ObCheckMediumCompactionInfoListResult &result);
   static int check_tablet_restore_status(
-      const ObArray<ObTabletID> &dest_tablets_id,
+      const ObIArray<ObTabletID> &dest_tablets_id,
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
       bool &is_tablet_status_need_to_split);
