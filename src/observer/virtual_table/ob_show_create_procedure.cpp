@@ -151,7 +151,13 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
           // create_routine
           bool sql_quote_show_create = true;
           bool ansi_quotes = false;
-          if (OB_FAIL(session_->get_sql_quote_show_create(sql_quote_show_create))) {
+          bool print_column_priv = false;
+          bool is_mysql_mode = lib::is_mysql_mode();
+          if (is_mysql_mode && OB_FAIL(has_show_create_function_priv(proc_info, print_column_priv))) {
+            SERVER_LOG(WARN, "failed to check print column priv", K(ret), K(proc_info));
+          } else if (is_mysql_mode && !print_column_priv) {
+            cur_row_.cells_[cell_idx].set_null();
+          } else if (OB_FAIL(session_->get_sql_quote_show_create(sql_quote_show_create))) {
             SERVER_LOG(WARN, "failed to get sql_quote_show_create", K(ret), K(session_));
           } else if (FALSE_IT(IS_ANSI_QUOTES(session_->get_sql_mode(), ansi_quotes))) {
             // do nothing
@@ -221,6 +227,45 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
       }
       if (OB_SUCC(ret)) {
         cell_idx++;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObShowCreateProcedure::has_show_create_function_priv(const ObRoutineInfo &proc_info,
+                                                         bool &print_create_function_column_priv) const {
+  int ret = OB_SUCCESS;
+  if (sql::ObSchemaChecker::is_ora_priv_check()) {
+  } else {
+    const ObString &db = session_priv_.db_;
+    const ObString &routine = proc_info.get_routine_name();
+
+    ObArenaAllocator alloc;
+    ObStmtNeedPrivs stmt_need_privs(alloc);
+
+    // check routine definer
+    ObString priv_user = proc_info.get_priv_user();
+    ObString user_name = priv_user.split_on('@');
+    if (user_name == session_priv_.user_name_) {
+      print_create_function_column_priv = true;
+    }
+
+    // check global-level select priv
+    if (!print_create_function_column_priv) {
+      stmt_need_privs.reset();
+      ObNeedPriv need_priv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_SELECT, false);
+      if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+        SERVER_LOG(WARN, "fail to init need_privs", K(ret));
+      } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+        SERVER_LOG(WARN, "Add need priv to stmt_need_privs error", K(ret));
+      } else if (OB_FAIL(schema_guard_->check_priv(session_priv_, enable_role_id_array_, stmt_need_privs))) {
+        SERVER_LOG(WARN, "No privilege global-level select", K(ret));
+        if (OB_ERR_NO_PRIVILEGE == ret) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        print_create_function_column_priv = true;
       }
     }
   }
