@@ -2626,6 +2626,7 @@ void ObDDLTaskRecord::reset()
   ret_code_ = OB_SUCCESS;
   execution_id_ = -1;  // -1 is invalid
   consensus_schema_version_ = OB_INVALID_VERSION;
+  ddl_stmt_str_.reset();
 }
 
 
