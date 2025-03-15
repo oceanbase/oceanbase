@@ -842,7 +842,7 @@ int ObTempColumnStore::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEval
                                  const ObBatchRows &brs, int64_t &stored_rows_count)
 {
   int ret = OB_SUCCESS;
-  int16_t size = 0;
+  int64_t size = 0;
   const uint16_t *selector = NULL;
   if (OB_UNLIKELY(exprs.count() != get_col_cnt())) {
     ret = OB_INVALID_ARGUMENT;
@@ -900,7 +900,7 @@ int ObTempColumnStore::add_batch(const IVectorPtrs &vectors,
                                  int64_t &stored_rows_count)
 {
   int ret = OB_SUCCESS;
-  int16_t size = 0;
+  int64_t size = 0;
   const uint16_t *selector = NULL;
   if (OB_UNLIKELY(vectors.count() != get_col_cnt())) {
     ret = OB_INVALID_ARGUMENT;

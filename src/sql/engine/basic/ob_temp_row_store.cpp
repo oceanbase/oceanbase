@@ -844,7 +844,7 @@ int ObTempRowStoreBase<RA>::add_batch(const common::ObIArray<ObExpr *> &exprs, O
                               const int64_t start_pos /* 0 */)
 {
   int ret = OB_SUCCESS;
-  int16_t size = 0;
+  int64_t size = 0;
   if (OB_FAIL(init_batch_ctx())) {
     LOG_WARN("fail to init batch ctx", K(ret));
   } else {
@@ -891,7 +891,7 @@ int ObTempRowStoreBase<RA_ACCESS>::add_batch(const common::ObIArray<ObExpr *> &e
                                              ObCompactRow **stored_rows)
 {
   int ret = OB_SUCCESS;
-  int16_t size = 0;
+  int64_t size = 0;
   if (OB_FAIL(init_batch_ctx())) {
     LOG_WARN("init batch ctx failed", K(ret));
   } else {
