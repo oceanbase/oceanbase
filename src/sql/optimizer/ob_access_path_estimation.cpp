@@ -669,9 +669,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
     RangePartitionHelper calc_range_partition_helper;
     chosen_scan_ranges.reuse();
     chosen_partitions.reuse();
-    SMART_VARS_3((ObTablePartitionInfo, index_part_info),
-                 (ObPhysicalPlanCtx, tmp_plan_ctx, arena),
-                 (ObExecContext, tmp_exec_ctx, arena)) {
+    SMART_VAR(ObTablePartitionInfo, tmp_part_info) {
       const ObTablePartitionInfo *table_part_info = NULL;
       ObTablePartitionInfo* valid_part_info = NULL;
       if (OB_ISNULL(ap = paths.at(i)) || OB_ISNULL(ap->parent_) || OB_ISNULL(ap->parent_->get_plan()) ||
@@ -688,20 +686,8 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         ObPhysicalPlanCtx *plan_ctx = ctx.get_exec_ctx()->get_physical_plan_ctx();
         const int64_t cur_time = plan_ctx->has_cur_time() ?
             plan_ctx->get_cur_time().get_timestamp() : ObTimeUtility::current_time();
-        tmp_exec_ctx.set_my_session(ctx.get_session_info());
-        tmp_exec_ctx.set_physical_plan_ctx(&tmp_plan_ctx);
-        tmp_exec_ctx.set_sql_ctx(ctx.get_exec_ctx()->get_sql_ctx());
-        tmp_plan_ctx.set_timeout_timestamp(plan_ctx->get_timeout_timestamp());
-        tmp_plan_ctx.set_cur_time(cur_time, *ctx.get_session_info());
-        tmp_plan_ctx.set_rich_format(ctx.get_session_info()->use_rich_format());
         OPT_TRACE("Process index", ap->index_id_, "ref table", table_part_info->get_ref_table_id());
-        if (OB_FAIL(tmp_plan_ctx.set_subschema_ctx(plan_ctx->get_subschema_ctx()))) {
-          LOG_WARN("failed to set subschema ctx", K(ret));
-        } else if (OB_FAIL(tmp_plan_ctx.get_param_store_for_update().assign(plan_ctx->get_param_store()))) {
-          LOG_WARN("failed to assign phy plan ctx");
-        } else if (OB_FAIL(tmp_plan_ctx.init_datum_param_store())) {
-          LOG_WARN("failed to init datum store", K(ret));
-        } else if (partition_limit >= result_helper->result_.valid_partition_count_ || partition_limit <= 0) {
+        if (partition_limit >= result_helper->result_.valid_partition_count_ || partition_limit <= 0) {
           // do storage estimation for all partitions
         } else if (OB_FAIL(get_valid_partition_info(ctx, arena, *table_part_info, valid_partition_infos, valid_part_info))) {
           LOG_WARN("failed to assign table part info", K(ret));
@@ -712,10 +698,10 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         OPT_TRACE("There are", result_helper->result_.valid_partition_count_, "valid partitions in index", ap->index_id_);
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(index_part_info.assign(*table_part_info))) {
+      } else if (OB_FAIL(tmp_part_info.assign(*table_part_info))) {
         LOG_WARN("failed to assign table part info", K(ret));
       } else if (!ap->is_global_index_ && ap->ref_table_id_ != ap->index_id_ &&
-                OB_FAIL(index_part_info.replace_final_location_key(tmp_exec_ctx,
+                OB_FAIL(tmp_part_info.replace_final_location_key(*ctx.get_exec_ctx(),
                                                                  ap->index_id_,
                                                                  true))) {
         LOG_WARN("failed to replace final location key", K(ret));
@@ -729,10 +715,10 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
       } else if (!calc_range_partition_helper.get_all_partition_is_valid()) {
         // choose partitions for each range
         const ObCandiTabletLocIArray &ori_partitions = table_part_info->get_phy_tbl_location_info().get_phy_part_loc_info_list();
-        const ObCandiTabletLocIArray &index_partitions = index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
+        const ObCandiTabletLocIArray &index_partitions = tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
         if (OB_FAIL(add_storage_estimation_task_by_ranges(ctx,
                                                           arena,
-                                                          tmp_exec_ctx,
+                                                          *ctx.get_exec_ctx(),
                                                           calc_range_partition_helper,
                                                           prefer_addrs,
                                                           *ap,
@@ -745,7 +731,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
           LOG_WARN("failed to add task by ranges", K(ret));
         }
       } else {
-        const ObCandiTabletLocIArray &index_partitions = index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
+        const ObCandiTabletLocIArray &index_partitions = tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
         if (OB_FAIL(add_storage_estimation_task(ctx,
                                                 arena,
                                                 prefer_addrs,
