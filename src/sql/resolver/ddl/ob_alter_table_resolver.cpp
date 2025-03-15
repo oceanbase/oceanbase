@@ -1338,7 +1338,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("*it_begin is NULL", K(ret));
               } else {
-                if (alter_column_schema->alter_type_ != OB_DDL_ADD_COLUMN) {
+                if (alter_column_schema->alter_type_ != OB_DDL_ADD_COLUMN &&
+                    alter_column_schema->alter_type_ != OB_DDL_MODIFY_COLUMN) {
                   continue;
                 } else if (alter_column_schema->is_invisible_column()) {
                   has_add_invisible_col = true;
@@ -6766,7 +6767,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               "column_name", alter_column_schema.get_column_name(), K(ret));
         }
       }
-      if (OB_SUCC(ret) && lib::is_oracle_mode() && alter_column_schema.is_invisible_column()) {
+      if (OB_SUCC(ret) && alter_column_schema.is_invisible_column()) {
         ObString name(node.children_[i]->children_[0]->children_[2]->str_len_, node.children_[i]->children_[0]->children_[2]->str_value_);
         ObColumnSchemaHashWrapper col_key(name);
         if (OB_FAIL(reduced_visible_col_set.set_refactored(col_key))) {
