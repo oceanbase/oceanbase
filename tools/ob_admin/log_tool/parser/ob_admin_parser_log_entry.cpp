@@ -195,6 +195,20 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, 
               } else {/*do nothing*/}
               break;
             }
+            case transaction::ObTxLogType::TX_DIRECT_LOAD_INC_LOG: {
+              ObTxDirectLoadIncLog::TempRef temp_ref;
+              ObTxDirectLoadIncLog::ConstructArg arg(temp_ref);
+              ObTxDirectLoadIncLog dli_log(arg);
+
+              if (OB_FAIL(dump_tx_id_ts_(str_arg_.writer_ptr_, tx_id, has_dumped_tx_id))) {
+                LOG_WARN("failed to dump_tx_id_ts_", K(ret));
+              } else if (OB_FAIL(tx_log_block.deserialize_log_body(dli_log))) {
+                LOG_WARN("tx_log_block.deserialize_log_body failed", K(ret), K(dli_log));
+              } else if (OB_FAIL(dli_log.ob_admin_dump(str_arg_))) {
+                LOG_WARN("failed to dump ObTxMultiDataSourceLog", K(ret), K(dli_log), K(str_arg_));
+              } else { /*do nothing*/}
+              break;
+            }
             case transaction::ObTxLogType::TX_ACTIVE_INFO_LOG: {
               ObTxActiveInfoLogTempRef temp_ref;
               ObTxActiveInfoLog infolog(temp_ref);

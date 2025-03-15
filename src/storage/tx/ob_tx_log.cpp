@@ -352,7 +352,7 @@ OB_TX_SERIALIZE_MEMBER(ObTxRollbackToLog, compat_bytes_, /* 1 */ from_, /* 2 */ 
 
 OB_TX_SERIALIZE_MEMBER(ObTxMultiDataSourceLog, compat_bytes_, /* 1 */ data_);
 
-OB_TX_SERIALIZE_MEMBER(ObTxDirectLoadIncLog, compat_bytes_, /* 1 */ ddl_log_type_, /* 2 */ log_buf_);
+OB_TX_SERIALIZE_MEMBER(ObTxDirectLoadIncLog, compat_bytes_, /* 1 */ ddl_log_type_, /* 2 */ log_buf_, /* 3 */ batch_key_);
 
 int ObTxActiveInfoLog::before_serialize()
 {
@@ -617,7 +617,7 @@ int ObTxDirectLoadIncLog::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(2))) {
+    if (OB_FAIL(compat_bytes_.init(3))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }
@@ -625,6 +625,7 @@ int ObTxDirectLoadIncLog::before_serialize()
   if (OB_SUCC(ret)) {
     TX_NO_NEED_SER(false, 1, compat_bytes_);
     TX_NO_NEED_SER(false, 2, compat_bytes_);
+    TX_NO_NEED_SER(false, 3, compat_bytes_);
   }
 
   return ret;
@@ -1182,8 +1183,15 @@ int  ObTxDirectLoadIncLog::ob_admin_dump(share::ObAdminMutatorStringArg &arg)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arg writer is NULL", K(arg), K(ret));
   } else {
+    ObCStringHelper helper;
     arg.writer_ptr_->dump_key("<TxDirectLoadIncLog>");
     arg.writer_ptr_->start_object();
+    arg.writer_ptr_->dump_key("dli_log_type");
+    arg.writer_ptr_->dump_int64(static_cast<int64_t>(ddl_log_type_));
+    arg.writer_ptr_->dump_key("dli_buf_size");
+    arg.writer_ptr_->dump_int64(log_buf_.get_buf_size());
+    arg.writer_ptr_->dump_key("dli_batch_key");
+    arg.writer_ptr_->dump_string(helper.convert(batch_key_));
     //TODO direct_load_inc
     //dump direct_load_inc log_buf as a string in ob_admin log_tool
     arg.writer_ptr_->end_object();

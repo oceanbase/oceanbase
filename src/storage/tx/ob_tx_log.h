@@ -643,6 +643,7 @@ private:
 
   ObTxDLIncLogBuf &log_buf_;
   // ObDDLRedoLog &ddl_redo_log_;
+  ObDDLIncLogBasic batch_key_;
 };
 
 class ObTxActiveInfoLogTempRef {
