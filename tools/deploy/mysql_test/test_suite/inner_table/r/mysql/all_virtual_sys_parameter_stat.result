@@ -380,6 +380,7 @@ _enable_newsort
 _enable_new_query_range_extraction
 _enable_new_sql_nio
 _enable_nlj_spf_use_rich_format
+_enable_obdal
 _enable_optimizer_qualify_filter
 _enable_oracle_priv_check
 _enable_parallel_das_dml
