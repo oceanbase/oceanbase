@@ -182,8 +182,8 @@ TEST_F(TestSSTmpFileFlushTask, basic_flush)
   ASSERT_EQ(0, flush_task.async_write_list_.get_curr_total());
 
   // all sealed segments are flushed to object storage, and there is no unsealed segment.
-  // thus, seg_meta_map should be empty
-  ASSERT_TRUE(file_manager->get_segment_file_mgr().seg_meta_map_.empty());
+  // but seg meta will be reserved until segs are evicted by preread_cache_mgr.
+  ASSERT_EQ(tmp_file_cnt, file_manager->get_segment_file_mgr().seg_meta_map_.size());
 }
 
 } // namespace storage

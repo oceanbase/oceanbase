@@ -336,16 +336,18 @@ TEST_F(TestFlushUnsealedFile, flush_seal_and_unseal_file_concurrently)
       break;
     }
   }
-  // 3. when sealed macro id first flush, sealed file will flush to remote object storage, and seg meta will be deleted.
+  // 3. when sealed macro id first flush, sealed file will flush to remote object storage.
+  //    seg meta will be reserved until this seg is evicted by preread_cache_mgr.
   bool is_meta_exist = true;
   TmpFileSegId seg_id(tmp_file_id_, 0);
   TmpFileMetaHandle meta_handle;
   ASSERT_EQ(OB_SUCCESS, file_manager->get_segment_file_mgr().try_get_seg_meta(seg_id, meta_handle, is_meta_exist));
-  ASSERT_FALSE(is_meta_exist);
+  ASSERT_TRUE(is_meta_exist);
   bool is_file_exist = false;
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_remote_file(macro_id, 0/*ls_epoch_id*/, is_file_exist));
   ASSERT_TRUE(is_file_exist);
-  ASSERT_EQ(OB_SUCCESS, file_manager->delete_tmp_file(macro_id));
+  // Note: must delete_tmp_file with file_size, which would delete tmp file meta.
+  ASSERT_EQ(OB_SUCCESS, file_manager->delete_tmp_file(macro_id, file_size_));
 
   append_write_tmp_file(0, file_size_);
   // 4. first push unsealed macro id to flush queue, then push sealed macro id to flush queue
