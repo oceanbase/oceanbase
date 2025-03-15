@@ -126,6 +126,8 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
   } else if (0 == value) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("value is 0", K(ret), K(value), K(sessid));
+  } else if (OB_FAIL(dblink_conn_map_.erase_refactored(sessid))) {
+    LOG_ERROR("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));
   } else {
     common::sqlclient::ObISQLConnection *connection = reinterpret_cast<common::sqlclient::ObISQLConnection *>(value);
     while (OB_NOT_NULL(connection) && OB_SUCC(ret)) {
@@ -144,9 +146,6 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
       }
       connection->dblink_unwlock();
       connection = next;
-    }
-    if (OB_SUCC(ret) && OB_FAIL(dblink_conn_map_.erase_refactored(sessid))) {
-      LOG_WARN("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));
     }
   }
   return ret;
