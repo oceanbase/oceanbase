@@ -7258,9 +7258,9 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
 
       if (OB_FAIL(ret)) {
       } else if (node.num_child_ > 1) {
-        if (compat_version < DATA_VERSION_4_3_5_0) {
+        if (compat_version < DATA_VERSION_4_3_5_0 && OB_NOT_NULL(node.children_[1])) {
           ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "alter column group delayed gets unsupported data_version", K(ret), K(compat_version));
+          SQL_RESV_LOG(WARN, "alter column group delayed gets unsupported data_version", K(ret), K(compat_version), K(node.num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
         } else if (GCTX.is_shared_storage_mode()) {
           ret = OB_NOT_SUPPORTED;

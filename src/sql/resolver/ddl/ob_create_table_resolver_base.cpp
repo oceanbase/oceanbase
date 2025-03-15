@@ -336,7 +336,6 @@ uint64_t ObCreateTableResolverBase::gen_column_group_id()
 int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_node,
                                                             ObTableSchema &table_schema)
 {
-  int tmp_ret = OB_SUCCESS;
   int ret = OB_SUCCESS;
   ObArray<uint64_t> column_ids; // not include virtual column
   uint64_t compat_version = 0;
@@ -364,6 +363,11 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
       }
     }
 
+    bool build_old_version_cg = false;
+    if (FAILEDx(ObSchemaUtils::check_build_old_version_column_group(table_schema, build_old_version_cg))) {
+      LOG_WARN("fail to check build old version column group", K(ret), K(table_schema));
+    }
+
     /* build column group when cg node is null && tenant cg valid*/
     ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
     if (OB_FAIL(ret)) {
@@ -383,18 +387,11 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
 
       /* force to build all cg*/
       ObColumnGroupSchema all_cg;
-      uint64_t all_cg_id = ALL_COLUMN_GROUP_ID;
-#ifdef ERRSIM
-      tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
-      if (OB_TMP_FAIL(tmp_ret)) {
-        all_cg_id = table_schema.get_max_used_column_group_id() + 1;
-      }
-#endif
       if (OB_FAIL(ret)) {
       } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
       } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
         if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
-                                                                  all_cg_id, all_cg))) {
+                                                          build_old_version_cg ? table_schema.get_max_used_column_group_id() + 1 : ALL_COLUMN_GROUP_ID, all_cg))) {
           LOG_WARN("fail to add all column group", K(ret));
         } else if (OB_FAIL(table_schema.add_column_group(all_cg))) {
           LOG_WARN("fail to build all column group", K(ret));
@@ -419,10 +416,8 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
       }
     }
 
-    if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
-      if (OB_FAIL(table_schema.adjust_column_group_array())) {
-        LOG_WARN("fail to adjust column group array", K(ret), K(table_schema));
-      }
+    if (!build_old_version_cg && FAILEDx(table_schema.adjust_column_group_array())) {
+      LOG_WARN("fail to adjust column group array", K(ret), K(table_schema));
     }
   }
   return ret;

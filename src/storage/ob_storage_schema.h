@@ -350,7 +350,7 @@ public:
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
-      K_(row_store_type), K_(schema_version), K_(is_cs_replica_compat), K_(enable_macro_block_bloom_filter),
+      K_(row_store_type), K_(schema_version), K_(is_cs_replica_compat), K_(is_column_table_schema), K_(enable_macro_block_bloom_filter),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),

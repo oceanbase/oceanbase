@@ -860,18 +860,13 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
             }
           }
         }
-        int tmp_ret = OB_SUCCESS;
-        uint64_t rowkey_cg_id = ROWKEY_COLUMN_GROUP_ID;
-#ifdef ERRSIM
-        tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
-        if (OB_TMP_FAIL(tmp_ret)) {
-          rowkey_cg_id = table_schema.get_max_used_column_group_id() + 1;
-        }
-#endif
+        bool build_old_version_cg = false;
         if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObSchemaUtils::check_build_old_version_column_group(table_schema, build_old_version_cg))) {
+          LOG_WARN("fail to check build old version column group", K(ret), K(table_schema));
         } else if (OB_FAIL(ObSchemaUtils::build_column_group(
                                table_schema, table_schema.get_tenant_id(),ObColumnGroupType::ROWKEY_COLUMN_GROUP,
-                               OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids, rowkey_cg_id, new_rowkey_cg))) {
+                               OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids, build_old_version_cg ? table_schema.get_max_used_column_group_id() + 1 : ROWKEY_COLUMN_GROUP_ID, new_rowkey_cg))) {
           LOG_WARN("fail to build rowkey column group", K(ret));
         } else if (OB_FAIL(table_schema.add_column_group(new_rowkey_cg))) {
           LOG_WARN("fail to add rowkey column group to table_schema", K(ret));
@@ -1039,22 +1034,17 @@ int ObSchemaUtils::build_add_each_column_group(const share::schema::ObTableSchem
       for (;OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
         column_group_schema.reset();
         ObColumnSchemaV2 *column = (*iter_begin);
-        int tmp_ret = OB_SUCCESS;
-        uint64_t cg_id = dst_table_schema.get_next_single_column_group_id();
-#ifdef ERRSIM
-        tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
-        if (OB_TMP_FAIL(tmp_ret)) {
-          cg_id = dst_table_schema.get_max_used_column_group_id() + 1;
-        }
-#endif
+        bool build_old_version_cg = false;
         if (OB_ISNULL(column)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column schema should not be null", K(ret));
         } else if (column->is_virtual_generated_column()) {
             /* skip virtual column*/
+        } else if (OB_FAIL(ObSchemaUtils::check_build_old_version_column_group(dst_table_schema, build_old_version_cg))) {
+          LOG_WARN("fail to check build old version column group", K(ret), K(dst_table_schema));
         } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(
                                       table_schema, column, dst_table_schema.get_tenant_id(),
-                                      cg_id, column_group_schema))) {
+                                      build_old_version_cg ? dst_table_schema.get_max_used_column_group_id() + 1 : dst_table_schema.get_next_single_column_group_id(), column_group_schema))) {
             LOG_WARN("fail to build single column group", K(ret));
         } else if (column_group_schema.is_valid()) {
           if (OB_FAIL(dst_table_schema.add_column_group(column_group_schema))) {
@@ -1377,6 +1367,26 @@ int ObSchemaUtils::is_drop_column_only(const AlterTableSchema &alter_table_schem
     } else if (OB_DDL_DROP_COLUMN != alter_col->alter_type_) {
       is_drop_col_only = false;
     }
+  }
+  return ret;
+}
+
+int ObSchemaUtils::check_build_old_version_column_group(const share::schema::ObTableSchema &table_schema, bool &build_old_version_cg)
+{
+  int ret = OB_SUCCESS;
+  build_old_version_cg = false;
+#ifdef ERRSIM
+  int tmp_ret = OB_SUCCESS;
+  tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+  if (OB_TMP_FAIL(tmp_ret)) {
+    build_old_version_cg = true;
+  }
+#endif
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(table_schema.get_tenant_id()), K(data_version));
+  } else if (data_version < DATA_VERSION_4_3_5_0) {
+    build_old_version_cg = true;
   }
   return ret;
 }
