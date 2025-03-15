@@ -1380,6 +1380,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
   NULL, // ObExprMap::eval_map,                                        /* 843 */
   NULL, // ObExprSparseVectorIPDistance::calc_inner_product,           /* 844 */
+  NULL, // ObExprMapKeys::eval_map_keys,                               /* 845 */
+  NULL, // ObExprMapValues::eval_map_values,                           /* 846 */
+
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1781,6 +1784,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprFindInSet::calc_find_in_set_vector,                     /* 214 */
   NULL, // ObExprSubstringIndex::eval_substring_index_vector,            /* 215 */
   NULL, // ObExprConcatWs::calc_concat_ws_expr_vector,                   /* 216 */
+  NULL, // ObExprMapKeys::eval_map_keys_vector,                          /* 217 */
+  NULL, // ObExprMapValues::eval_map_values_vector,                      /* 218 */
+  NULL, // ObExprRbToArray::eval_rb_to_array_vector,                     /* 219 */
+  NULL, // ObExprRbContains::eval_rb_contains_vector,                    /* 220 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

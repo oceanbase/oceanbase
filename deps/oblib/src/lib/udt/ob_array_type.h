@@ -76,6 +76,7 @@ enum ArrayFormat {
   Vector = 1,
   Binary_Varlen = 2,
   Nested_Array = 3,
+  MAP = 4,
   Array_MAX_FORMAT
 };
 

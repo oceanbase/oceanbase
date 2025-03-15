@@ -908,6 +908,10 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_UNION = 1780,
   T_FUNC_SYS_ARRAY_REPLACE = 1781,
   T_FUNC_SYS_ARRAY_POPFRONT = 1782,
+  T_FUN_SYS_MAP = 1783,
+  T_FUN_SYS_MAP_KEYS = 1784,
+  T_FUN_SYS_MAP_VALUES = 1785,
+  ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
   T_FUN_SYS_GENERATOR = 1802,
