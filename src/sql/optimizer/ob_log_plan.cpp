@@ -7988,6 +7988,11 @@ int ObLogPlan::is_plan_reliable(const ObLogicalOperator *root,
     } else {
       is_reliable = cost_info->table_filters_.empty() && cost_info->postfix_filters_.empty();
     }
+  } else if (log_op_def::LOG_GROUP_BY == root->get_type() ||
+             log_op_def::LOG_SORT == root->get_type() ||
+             log_op_def::LOG_WINDOW_FUNCTION == root->get_type() ||
+             log_op_def::LOG_DISTINCT == root->get_type()) {
+    is_reliable = false;
   } else if (root->get_filter_exprs().count() == 0 && !root->is_block_op()) {
     is_reliable = true;
   } else {

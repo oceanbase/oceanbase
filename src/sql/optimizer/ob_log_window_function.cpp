@@ -372,24 +372,57 @@ int ObLogWindowFunction::do_re_est_cost(EstimateCostInfo &param, double &card, d
   ObLogicalOperator *child = NULL;
   double child_card = 0.0;
   double child_width = 0.0;
-  double sel = 0.0;
+  double sel = 1.0;
+  card = get_card();
+  if (param.need_row_count_ >= 0 && param.need_row_count_ < card) {
+    card = param.need_row_count_;
+  }
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
   } else if (OB_FAIL(get_child_est_info(child_card, child_width, sel))) {
     LOG_WARN("get child est info failed", K(ret));
+  } else if (sel < OB_DOUBLE_EPSINON || is_block_op() ||
+             param.need_row_count_ < 0 ||
+             param.need_row_count_ >= sel * child_card) {
+    param.need_row_count_ = -1.0;
   } else {
+    int64_t prefix_part_expr_idx = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < win_exprs_.count(); i ++) {
+      if (OB_ISNULL(win_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (prefix_part_expr_idx < 0) {
+        prefix_part_expr_idx = i;
+      } else if (win_exprs_.at(i)->get_partition_exprs().count() <
+                 win_exprs_.at(prefix_part_expr_idx)->get_partition_exprs().count()) {
+        prefix_part_expr_idx = i;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      param.need_row_count_ /= sel;
+      const common::ObIArray<ObRawExpr *> &part_exprs = win_exprs_.at(prefix_part_expr_idx)->get_partition_exprs();
+      double part_exprs_ndv = 0.0;
+      get_plan()->get_selectivity_ctx().init_op_ctx(child);
+      if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
+                                                       get_plan()->get_selectivity_ctx(),
+                                                       part_exprs,
+                                                       child_card,
+                                                       part_exprs_ndv))) {
+        LOG_WARN("failed to calculate distinct", K(ret));
+      } else if (OB_UNLIKELY(std::fabs(part_exprs_ndv) < 1.0)) {
+        param.need_row_count_ = -1.0;
+      } else {
+        double num_rows_per_group = child_card / part_exprs_ndv;
+        double num_groups = std::ceil(param.need_row_count_ / num_rows_per_group);
+        param.need_row_count_ = num_groups * num_rows_per_group;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     double child_cost = child->get_cost();
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    if (is_block_op()) {
-      param.need_row_count_ = -1; //reset need row count
-    }
-     else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= sel * child_card) {
-      param.need_row_count_ = -1;
-    } else if (param.need_row_count_ > 0) {
-      param.need_row_count_ /= sel;
-    }
     if (OB_FAIL(ret)) {
       //do nothing
     } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
@@ -398,7 +431,7 @@ int ObLogWindowFunction::do_re_est_cost(EstimateCostInfo &param, double &card, d
       LOG_WARN("calculate cost of window function failed", K(ret));
     } else {
       cost = child_cost + op_cost;
-      card = sel * child_card;
+      card = child_card * sel < card ? child_card * sel : card;
     }
   }
   return ret;
@@ -420,13 +453,16 @@ int ObLogWindowFunction::get_child_est_info(double &child_card, double &child_wi
   } else if (0 == child_card) {
     selectivity = 1.0;
   } else if (!filter_exprs_.empty()) {
-    if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(&get_output_equal_sets(),
-                                                                  use_topn_sort_ ? origin_sort_card_ : get_card()))) {
-    } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
-                                                              get_plan()->get_selectivity_ctx(),
-                                                              filter_exprs_,
-                                                              selectivity,
-                                                              get_plan()->get_predicate_selectivities()))) {
+    get_plan()->get_selectivity_ctx().init_op_ctx(child);
+    if (use_topn_sort_){
+      get_plan()->get_selectivity_ctx().set_current_rows(origin_sort_card_);
+      get_plan()->get_selectivity_ctx().set_ambient_card(nullptr);
+    }
+    if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
+                                                        get_plan()->get_selectivity_ctx(),
+                                                        filter_exprs_,
+                                                        selectivity,
+                                                        get_plan()->get_predicate_selectivities()))) {
       LOG_WARN("failed to calc selectivity", K(ret));
     } else if (use_topn_sort_) {
       //calc the card of window func operator without pushing down the topn filter first.
@@ -515,7 +551,7 @@ int ObLogWindowFunction::compute_sharding_info()
 
 bool ObLogWindowFunction::is_block_op() const
 {
-  bool is_block_op = true;
+  bool is_block_op = false;
   // 对于window function算子, 在没有partition by以及完整窗口情况下,
   // 所有数据作为一个窗口, 认为是block算子
   // 在其他情况下, 认为是非block算子
@@ -523,10 +559,8 @@ bool ObLogWindowFunction::is_block_op() const
   for (int64_t i = 0; i < win_exprs_.count(); ++i) {
     if (OB_ISNULL(win_expr = win_exprs_.at(i))) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "win expr is null");
-    } else if (win_expr->get_partition_exprs().count() > 0 ||
-        win_expr->get_upper().type_ != BoundType::BOUND_UNBOUNDED ||
-        win_expr->get_lower().type_ != BoundType::BOUND_UNBOUNDED ) {
-      is_block_op = false;
+    } else if (win_expr->get_partition_exprs().count() == 0) {
+      is_block_op = true;
       break;
     }
   }

@@ -2682,24 +2682,24 @@ ROLLBACK;
 START TRANSACTION;
 EXPLAIN BASIC UPDATE t2 SET c = 10 ORDER BY a, b DESC LIMIT 5;
 Query Plan
-=================================
-|ID|OPERATOR           |NAME    |
----------------------------------
-|0 |UPDATE             |        |
-|1 |└─TOP-N SORT       |        |
-|2 |  └─TABLE FULL SCAN|t2(idx2)|
-=================================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |UPDATE             |    |
+|1 |└─TOP-N SORT       |    |
+|2 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.a, t2.b, t2.c, t2.d)})}]),
       update([t2.c=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      sort_keys([t2.a, ASC], [t2.b, DESC]), topn(5), prefix_pos(1)
+      sort_keys([t2.a, ASC], [t2.b, DESC]), topn(5)
   2 - output([t2.__pk_increment], [t2.c], [t2.a], [t2.b], [t2.d]), filter(nil), rowset=16
       access([t2.__pk_increment], [t2.c], [t2.a], [t2.b], [t2.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 UPDATE t2 SET c = 10 ORDER BY a, b DESC LIMIT 5;
 ROLLBACK;
 DROP TABLE t1, t2;

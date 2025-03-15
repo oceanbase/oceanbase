@@ -1338,6 +1338,12 @@ int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
   GET_VARCHAR_VALUE(QBLOCK_NAME, qblock_name_);
   GET_VARCHAR_VALUE(REMARKS, remarks_);
   GET_VARCHAR_VALUE(OTHER_XML, other_xml_);
+  if (OB_SUCC(ret) &&
+      OB_SUCCESS != (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS)) {
+    plan_info.real_cost_ = 0.0;
+    plan_info.cpu_cost_ = 0.0;
+    plan_info.io_cost_ = 0.0;
+  }
   return ret;
 }
 
