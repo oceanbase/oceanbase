@@ -36,7 +36,7 @@ public:
   ObFTSingleWord(const ObFTSingleWord &other) = default;
   ObFTSingleWord &operator=(const ObFTSingleWord &other) = default;
 
-  int64_t hash(uint64_t &hash_value) const;
+  int hash(uint64_t &hash_value) const;
   int32_t set_word(const char *word, int32_t word_len);
   ObString get_word() const;
   bool operator==(const ObFTSingleWord &other) const;

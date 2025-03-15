@@ -16,7 +16,7 @@ namespace oceanbase
 {
 namespace storage
 {
-int64_t ObFTSingleWord::hash(uint64_t &hash_value) const
+int ObFTSingleWord::hash(uint64_t &hash_value) const
 {
   hash_value = get_word().hash();
   return OB_SUCCESS;

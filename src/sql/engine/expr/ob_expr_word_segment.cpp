@@ -148,7 +148,7 @@ int ObExprWordSegment::cg_expr(
       }
     }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 }  // namespace sql
