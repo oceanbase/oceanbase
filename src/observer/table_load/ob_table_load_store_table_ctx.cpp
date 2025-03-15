@@ -303,9 +303,24 @@ int ObTableLoadStoreDataTableCtx::init_ls_partition_ids(
   const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids)
 {
   int ret = OB_SUCCESS;
+  int64_t schema_version = OB_INVALID_VERSION;
+  const bool is_incremental = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+  if (!is_incremental) {
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema_version(MTL_ID(),
+                                                                 store_ctx_->ctx_->ddl_param_.schema_version_,
+                                                                 table_id_,
+                                                                 schema_version))) {
+    LOG_WARN("fail to get schema version", KR(ret), K(MTL_ID()), K(table_id_));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
     const ObTableLoadLSIdAndPartitionId &ls_partition_id = ls_partition_ids[i];
-    if (OB_FAIL(ls_partition_ids_.push_back(ls_partition_id))) {
+    if (is_incremental && OB_FAIL(check_tablet(ls_partition_id.ls_id_,
+                                               ls_partition_id.part_tablet_id_.tablet_id_,
+                                               schema_version))) {
+      LOG_WARN("fail to check tablet", KR(ret),
+                                       K(ls_partition_id.ls_id_),
+                                       K(ls_partition_id.part_tablet_id_.tablet_id_));
+    } else if (OB_FAIL(ls_partition_ids_.push_back(ls_partition_id))) {
       LOG_WARN("fail to push back ", KR(ret));
     }
   }
@@ -314,6 +329,31 @@ int ObTableLoadStoreDataTableCtx::init_ls_partition_ids(
     if (OB_FAIL(target_ls_partition_ids_.push_back(ls_partition_id))) {
       LOG_WARN("fail to push back", KR(ret));
     }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreDataTableCtx::check_tablet(const ObLSID &ls_id,
+                                               const ObTabletID &tablet_id,
+                                               const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service is nullptr", KR(ret));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("fail to get ls", KR(ret), K(ls_id));
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id,
+                                               tablet_handle,
+                                               ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+    LOG_WARN("fail to ddl get tablet", KR(ret), K(tablet_id));
+  } else if (OB_FAIL(
+             tablet_handle.get_obj()->check_schema_version_with_cache(schema_version))) {
+    LOG_WARN("fail to check schema version with cache", KR(ret), K(schema_version));
   }
   return ret;
 }

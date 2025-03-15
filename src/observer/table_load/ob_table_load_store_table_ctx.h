@@ -114,7 +114,9 @@ private:
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
   int acquire_table_builder(ObTableLoadDataTableBuilder *&table_builder, ObIAllocator &allocator,
                             ObDirectLoadTableDataDesc table_data_desc);
-
+  int check_tablet(const share::ObLSID &ls_id,
+                   const ObTabletID &tablet_id,
+                   const int64_t schema_version);
   //////////////////////// insert_table_ctx ////////////////////////
 public:
   int init_insert_table_ctx(const storage::ObDirectLoadTransParam &trans_param,

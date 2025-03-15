@@ -449,7 +449,7 @@ int ObTableLoadInstance::try_lock_in_tx(const ObLockRequest &lock_arg)
 int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
+  ObSchemaGetterGuard *schema_guard = nullptr;
   ObCommonID raw_id;
   share::SCN current_scn;
   int64_t schema_version = 0;
@@ -457,10 +457,10 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
   const uint64_t tenant_id = stmt_ctx_.tenant_id_;
   const uint64_t table_id = stmt_ctx_.table_id_;
   ObTableLoadDDLParam &ddl_param = stmt_ctx_.ddl_param_;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
-                                                                                  schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, schema_version))) {
+  if (OB_ISNULL(schema_guard = execute_ctx_->exec_ctx_->get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard in exe ctx is nullptr", KR(ret));
+  } else if (OB_FAIL(schema_guard->get_schema_version(tenant_id, schema_version))) {
     LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, raw_id))) {
     LOG_WARN("failed to gen unique id by rpc", KR(ret), K(tenant_id));
