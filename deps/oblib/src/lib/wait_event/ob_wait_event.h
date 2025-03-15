@@ -129,6 +129,9 @@ WAIT_EVENT_DEF(DEADLOCK_MGR_BUCKET_LOCK, 18103, "latch: deadlock manager bucket 
 WAIT_EVENT_DEF(MEMTABLE_CTX_ACCESS_LOCK, 18104, "latch: memtable context access wait", "spin count", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(LS_REPLAY_CTRL_LOCK, 18105, "latch: logstream replay control wait", "spin count", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(INDEPENDENT_DAG_COND_WAIT, 18106, "independent dag condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(TMP_FILE_FLUSH_COND_WAIT, 18107, "tmp file flush condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(MACRO_BLOOM_FILTER_COND_WAIT, 18108, "macro block bloom filter condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(LS_BACKUP_COND_WAIT, 18109, "logstream backup condition wait", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)

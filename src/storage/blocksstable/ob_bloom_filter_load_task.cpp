@@ -322,7 +322,7 @@ int ObMacroBlockBloomFilterLoadTG::init()
     LOG_WARN("fail to set bloom filter load tg tg runnable", K(ret));
   } else if (OB_FAIL(load_task_queue_.init())) {
     LOG_WARN("failed to init bloom filter load task queue", K(ret));
-  } else if (OB_FAIL(idle_cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
+  } else if (OB_FAIL(idle_cond_.init(ObWaitEventIds::MACRO_BLOOM_FILTER_COND_WAIT))) {
     LOG_WARN("fail to init bloom filter load tg idle cond", K(ret));
   } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
                                      OB_MALLOC_MIDDLE_BLOCK_SIZE,
