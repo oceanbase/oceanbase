@@ -68,60 +68,23 @@ public:
     return ash_buffer_->get(pos);
   }
 public:
-  class Iterator
+  class ObAshBaseIterator
   {
   public:
-    Iterator() : ash_buffer_(), curr_(0), end_(0) {}
-    explicit Iterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
-             int64_t start,
-             int64_t end)
-        : ash_buffer_(),
-          curr_(start),
-          end_(end)
+    ObAshBaseIterator(int64_t curr, int64_t end) : ash_buffer_(), curr_(curr), end_(end){};
+    DECLARE_PURE_VIRTUAL_TO_STRING;
+    virtual bool has_next() const = 0;
+    virtual const ObActiveSessionStatItem &next() = 0;
+    virtual void init_with_sample_time_index(const int64_t &start, const int64_t &end) = 0;
+
+  protected:
+    std::pair<int64_t, int64_t> binary_search_sample_time_range(
+        const int64_t &start, const int64_t &end)
     {
-      ash_buffer_ = ash_buffer;
+      int64_t right = sample_time_search_right_most(end);
+      int64_t left = sample_time_search_left_most(start);
+      return std::pair<int64_t, int64_t>{left, right};
     }
-    Iterator(const Iterator &other)
-       : curr_(other.curr_),
-         end_(other.end_)
-    {
-      ash_buffer_ = other.ash_buffer_;
-    }
-    TO_STRING_KV(K_(ash_buffer), K_(curr), K_(end));
-    bool has_next() const
-    {
-      bool bret = true;
-      if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
-        bret = false;
-      } else if (ash_buffer_->write_pos() - curr_ > ash_buffer_->size()) {  // write_pos is the next valid write position which is not written
-        bret = false;
-      } else if (curr_ < end_) {
-        bret = false;
-      }
-      return bret;
-    }
-    const ObActiveSessionStatItem &next()
-    {
-      int64_t pos = curr_ % ash_buffer_->size();
-      curr_--;
-      return ash_buffer_->get(pos);
-    }
-    void init_with_sample_time_index(const int64_t &start, const int64_t &end)
-    {
-      if (OB_LIKELY(curr_ >= 0)) {
-        std::pair<int64_t, int64_t> range = binary_search_sample_time_range(start, end);
-        curr_ = range.second;
-        end_ = range.first;
-      }
-      LOG_DEBUG("ash range for index", K(start), K(end), KPC(this));
-    }
-    private:
-     std::pair<int64_t, int64_t> binary_search_sample_time_range(
-         const int64_t &start, const int64_t &end) {
-       int64_t right = sample_time_search_right_most(end);
-       int64_t left = sample_time_search_left_most(start);
-       return std::pair<int64_t, int64_t>{left, right};
-     }
     int64_t sample_time_search_left_most(const int64_t left)
     {
       /**
@@ -149,8 +112,8 @@ public:
            * seconds(ash's default sample interval), this corner case could be
            * ended in constant time.
            */
-          LOG_DEBUG("ash overwrite happened during binary search", K(begin),
-                    K(middle), K(end), K(val), K(ash_buffer_->size()));
+          LOG_DEBUG("ash overwrite happened during binary search", K(begin), K(middle), K(end),
+              K(val), K(ash_buffer_->size()));
           // TODO(roland.qk): Adding sysstat counter to track this corner case.
           end = curr_ + 1;
           begin = ash_buffer_->write_pos() - ash_buffer_->size();
@@ -175,8 +138,8 @@ public:
           }
         } else {
           // ash ring buffer overwrite happened.
-          LOG_DEBUG("ash overwrite happened during binary search", K(begin),
-                    K(middle), K(end), K(val), K(ash_buffer_->size()));
+          LOG_DEBUG("ash overwrite happened during binary search", K(begin), K(middle), K(end),
+              K(val), K(ash_buffer_->size()));
           // TODO(roland.qk): Adding sysstat counter to track this corner case.
           end = curr_ + 1;
           begin = sample_time_search_left_most(right);
@@ -188,7 +151,8 @@ public:
     bool is_valid(int64_t pos)
     {
       bool bret = true;
-      if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
+      if (OB_UNLIKELY(
+              nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
         bret = false;
       } else if (ash_buffer_->write_pos() - pos > ash_buffer_->size()) {
         bret = false;
@@ -197,32 +161,81 @@ public:
       }
       return bret;
     }
-  private:
+
+  protected:
     common::ObSharedGuard<ObAshBuffer> ash_buffer_;
     int64_t curr_;
     int64_t end_;
   };
 
-  class ReverseIterator
+  class Iterator : public ObAshBaseIterator
   {
   public:
-    ReverseIterator() : ash_buffer_(), curr_(0), end_(0) {}
+    Iterator() : ObAshBaseIterator(0, 0) {}
+    explicit Iterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
+             int64_t start,
+             int64_t end)
+        : ObAshBaseIterator(start, end)
+    {
+      ash_buffer_ = ash_buffer;
+    }
+    Iterator(const Iterator &other)
+       : ObAshBaseIterator(other.curr_, other.end_)
+    {
+      curr_ = other.curr_;
+      end_ = other.end_;
+      ash_buffer_ = other.ash_buffer_;
+    }
+    TO_STRING_KV(K_(ash_buffer), K(ash_buffer_->write_pos()), K_(curr), K_(end));
+    // void set_scan_order(common::ObQueryFlag::ScanOrder order) { ash_scan_order_ = order; };
+    bool has_next() const override
+    {
+      bool bret = true;
+      if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
+        bret = false;
+      } else if (ash_buffer_->write_pos() - curr_ > ash_buffer_->size()) {  // write_pos is the next valid write position which is not written
+        bret = false;
+      } else if (curr_ < end_) {
+        bret = false;
+      }
+      return bret;
+    }
+    const ObActiveSessionStatItem &next() override
+    {
+      int64_t pos = curr_ % ash_buffer_->size();
+      curr_--;
+      return ash_buffer_->get(pos);
+    }
+    void init_with_sample_time_index(const int64_t &start, const int64_t &end) override
+    {
+      if (OB_LIKELY(curr_ >= 0)) {
+        std::pair<int64_t, int64_t> range = binary_search_sample_time_range(start, end);
+        curr_ = range.second;
+        end_ = range.first;
+      }
+      LOG_DEBUG("ash range for forward index scan", K(start), K(end), KPC(this));
+    }
+  };
+
+  class ReverseIterator : public ObAshBaseIterator
+  {
+  public:
+    ReverseIterator() : ObAshBaseIterator(0, 0) {}
     explicit ReverseIterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
               int64_t start,
               int64_t end)
-        : ash_buffer_(),
-          curr_(start),
-          end_(end)
+        : ObAshBaseIterator(start, end)
     {
       ash_buffer_ = ash_buffer;
     }
     ReverseIterator(const ReverseIterator &other)
-       : curr_(other.curr_),
-         end_(other.end_)
+       : ObAshBaseIterator(other.curr_, other.end_)
     {
+      curr_ = other.curr_;
+      end_ = other.end_;
       ash_buffer_ = other.ash_buffer_;
     }
-    bool has_next() const
+    bool has_next() const override
     {
       bool bret = true;
       if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
@@ -234,7 +247,7 @@ public:
       }
       return bret;
     }
-    const ObActiveSessionStatItem &next()
+    const ObActiveSessionStatItem &next() override
     {
       int64_t pos = curr_ % ash_buffer_->size();
       curr_++;
@@ -244,11 +257,21 @@ public:
     {
       return end_ - curr_ + 1;
     }
+    void init_with_sample_time_index(const int64_t &start, const int64_t &end) override
+    {
+      if (OB_LIKELY(curr_ >= 0)) {
+        // swap curr and end because binary search algo is designed for forward scan.
+        int64_t tmp = 0;
+        tmp = curr_;
+        curr_ = end_;
+        end_ = tmp;
+        std::pair<int64_t, int64_t> range = binary_search_sample_time_range(start, end);
+        curr_ = range.first;
+        end_ = range.second;
+      }
+      LOG_DEBUG("ash range for reverse index scan", K(start), K(end), KPC(this));
+    }
     TO_STRING_KV(K_(ash_buffer), K(ash_buffer_->write_pos()), K_(curr), K_(end));
-  private:
-    common::ObSharedGuard<ObAshBuffer> ash_buffer_;
-    int64_t curr_;
-    int64_t end_;
   };
 
   Iterator create_iterator()
@@ -269,6 +292,7 @@ public:
     return Iterator(ash_buffer, read_start, read_end);
   }
 
+  // Only used for ash buffer resize.
   ReverseIterator create_reverse_iterator_no_lock()
   {
     // get hold of ash buffer.
@@ -284,6 +308,12 @@ public:
       read_end = ash_buffer->write_pos() - 1;
     }
     return ReverseIterator(ash_buffer, read_start, read_end);
+  }
+  ReverseIterator create_reverse_iterator()
+  {
+    // get hold of ash buffer.
+    LockGuard lock(mutex_);
+    return create_reverse_iterator_no_lock();
   }
   void lock() { mutex_.lock(); };
   void unlock() { mutex_.unlock(); };

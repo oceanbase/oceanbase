@@ -105,7 +105,9 @@ protected:
     DELTA_WRITE_IO_BYTES,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
-  share::ObActiveSessHistList::Iterator iterator_;
+  share::ObActiveSessHistList::Iterator forward_iterator_;
+  share::ObActiveSessHistList::ReverseIterator reverse_iterator_;
+  share::ObActiveSessHistList::ObAshBaseIterator *iterator_;
   common::ObAddr addr_;
   common::ObString ipstr_;
   int32_t port_;

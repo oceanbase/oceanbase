@@ -22,7 +22,9 @@ using namespace oceanbase::share;
 
 ObVirtualASH::ObVirtualASH() :
     ObVirtualTableScannerIterator(),
-    iterator_(),
+    forward_iterator_(),
+    reverse_iterator_(),
+    iterator_(&forward_iterator_),
     addr_(),
     ipstr_(),
     port_(0),
@@ -73,15 +75,15 @@ int ObVirtualASH::set_ip(const common::ObAddr &addr)
 int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
   if (is_first_get_) {
     is_first_get_ = false;
-    iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+    forward_iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+    iterator_ = &forward_iterator_;
   }
 
   do {
-    if (iterator_.has_next()) {
-      const ObActiveSessionStatItem &node = iterator_.next();
+    if (iterator_->has_next()) {
+      const ObActiveSessionStatItem &node = iterator_->next();
       if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
@@ -480,8 +482,8 @@ int ObVirtualASHI1::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   do {
-    if (iterator_.has_next()) {
-      const ObActiveSessionStatItem &node = iterator_.next();
+    if (iterator_->has_next()) {
+      const ObActiveSessionStatItem &node = iterator_->next();
       if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
@@ -530,8 +532,15 @@ int ObVirtualASHI1::init_next_query_range()
         right = 0;
       }
       ++current_key_range_index_;
-      iterator_ = ObActiveSessHistList::get_instance().create_iterator();
-      iterator_.init_with_sample_time_index(left, right);
+      if (common::ObQueryFlag::ScanOrder::Reverse == scan_flag_.scan_order_) {
+        reverse_iterator_ = ObActiveSessHistList::get_instance().create_reverse_iterator();
+        iterator_ = &reverse_iterator_;
+      } else {
+        // we treat every thing else as forward order.
+        forward_iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+        iterator_ = &forward_iterator_;
+      }
+      iterator_->init_with_sample_time_index(left, right);
       LOG_DEBUG("current ash query range", K(key_ranges_), K(left), K(right), K_(iterator));
     }
   }
