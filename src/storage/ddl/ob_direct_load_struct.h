@@ -571,7 +571,8 @@ public:
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
                    const ObString vec_idx_param,
                    const int64_t vec_dim,
-                   const ObIArray<ObColumnSchemaItem> &col_array)
+                   const ObIArray<ObColumnSchemaItem> &col_array,
+                   const int64_t context_id)
   {
     return OB_NOT_IMPLEMENT;
   }
@@ -609,7 +610,8 @@ public:
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const ObString vec_idx_param,
       const int64_t vec_dim,
-      const ObIArray<ObColumnSchemaItem> &col_array) override;
+      const ObIArray<ObColumnSchemaItem> &col_array,
+      const int64_t context_id) override;
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   void reset();
   // vector index functions
@@ -652,6 +654,7 @@ public:
   virtual void reset();
   virtual int build_clusters() = 0;
   virtual int is_empty(bool &empty) = 0;
+  inline int64_t get_context_id() { return context_id_; }
 
 protected:
   template<typename HelperType>
@@ -660,6 +663,7 @@ protected:
   ObArenaAllocator vec_allocator_;
   ObArenaAllocator tmp_allocator_;
   ObIvfBuildHelperGuard helper_guard_;
+  int64_t context_id_;
 };
 
 template<typename HelperType>
@@ -692,7 +696,8 @@ public:
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const ObString vec_idx_param,
       const int64_t vec_dim,
-      const ObIArray<ObColumnSchemaItem> &col_array) override;
+      const ObIArray<ObColumnSchemaItem> &col_array,
+      const int64_t context_id) override;
   virtual void reset() override;
   virtual int build_clusters() override;
   // for write: ObDirectLoadSliceWriter::fill_sstable_slice -> get_next_vector_data_row
@@ -724,7 +729,8 @@ public:
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const ObString vec_idx_param,
       const int64_t vec_dim,
-      const ObIArray<ObColumnSchemaItem> &col_array) override;
+      const ObIArray<ObColumnSchemaItem> &col_array,
+      const int64_t context_id) override;
   virtual void reset() override;
   virtual int build_clusters() override;
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
@@ -755,7 +761,8 @@ public:
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const ObString vec_idx_param,
       const int64_t vec_dim,
-      const ObIArray<ObColumnSchemaItem> &col_array) override;
+      const ObIArray<ObColumnSchemaItem> &col_array,
+      const int64_t context_id) override;
   virtual void reset() override;
   virtual int build_clusters() override;
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
@@ -1201,6 +1208,7 @@ public:
       const ObArray<ObColumnSchemaItem> &column_items,
       const int64_t dir_id,
       const int64_t parallelism,
+      const int64_t context_id,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = NULL);
   int fill_sstable_slice(
@@ -1214,6 +1222,7 @@ public:
       const ObArray<ObColumnSchemaItem> &column_items,
       const int64_t dir_id,
       const int64_t parallelism,
+      const int64_t context_id,
       ObInsertMonitor *insert_monitor = NULL);
   int fill_lob_sstable_slice(
       const uint64_t table_id,
@@ -1257,7 +1266,8 @@ public:
     const ObStorageSchema *storage_schema,
     const SCN &start_scn,
     const ObTableSchemaItem &schema_item,
-    ObInsertMonitor* insert_monitor);
+    ObInsertMonitor* insert_monitor,
+    const int64_t context_id);
   void set_row_offset(const int64_t row_offset) { row_offset_ = row_offset; }
   int64_t get_row_count() const { return nullptr == slice_store_ ? 0 : slice_store_->get_row_count(); }
   int64_t get_row_offset() const { return row_offset_; }
@@ -1307,12 +1317,14 @@ private:
       const share::SCN &start_scn,
       const ObString vec_idx_param,
       const int64_t vec_dim,
+      const int64_t context_id,
       const bool use_vector_store = false,
       const int64_t max_batch_size = 0);
   int prepare_vector_slice_store(
       const ObStorageSchema *storage_schema,
       const ObString vec_idx_param,
-      const int64_t vec_dim);
+      const int64_t vec_dim,
+      const int64_t context_id);
   int report_unique_key_dumplicated(
       const int ret_code,
       const uint64_t table_id,

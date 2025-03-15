@@ -1610,7 +1610,7 @@ int ObTabletDirectLoadMgr::fill_sstable_slice(
       LOG_WARN("unexpected err", K(ret), K(slice_info), K(is_schema_item_ready_));
     } else if (OB_FAIL(slice_writer->fill_sstable_slice(start_scn, sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, tablet_id_,
         sqc_build_ctx_.storage_schema_, iter, schema_item_, direct_load_type_, column_items_, dir_id_,
-        sqc_build_ctx_.build_param_.runtime_only_param_.parallel_, affected_rows, insert_monitor))) {
+        sqc_build_ctx_.build_param_.runtime_only_param_.parallel_, slice_info.context_id_, affected_rows, insert_monitor))) {
       LOG_WARN("fill sstable slice failed", K(ret), KPC(this));
     }
   }
@@ -1675,6 +1675,7 @@ int ObTabletDirectLoadMgr::fill_sstable_slice(
                                                         column_items_,
                                                         dir_id_,
                                                         sqc_build_ctx_.build_param_.runtime_only_param_.parallel_,
+                                                        slice_info.context_id_,
                                                         insert_monitor))) {
       LOG_WARN("fill sstable slice failed", K(ret), KPC(this));
     }
@@ -2203,7 +2204,8 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
                                                              sqc_build_ctx_.storage_schema_,
                                                              start_scn,
                                                              schema_item_,
-                                                             insert_monitor))) {
+                                                             insert_monitor,
+                                                             slice_info.context_id_))) {
               LOG_WARN("fail to fill vector index data", K(ret));
             }
           }
