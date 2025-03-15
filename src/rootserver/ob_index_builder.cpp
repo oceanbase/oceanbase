@@ -1329,12 +1329,17 @@ int ObIndexBuilder::do_create_local_index(
       }
 
       if (OB_SUCC(ret) && is_generate_rowkey_doc) {
-        if (OB_FAIL(ObDDLUtil::obtain_snapshot(trans, new_table_schema, index_schema, new_fetched_snapshot))) {
-          LOG_WARN("fail to obtain snapshot",
-              K(ret), K(new_table_schema), K(index_schema), K(new_fetched_snapshot));
+        if (OB_FAIL(ObDDLUtil::write_defensive_and_obtain_snapshot(trans,
+                                                                   tenant_id,
+                                                                   new_table_schema,
+                                                                   index_schema,
+                                                                   ddl_service_.get_schema_service().get_schema_service(),
+                                                                   new_fetched_snapshot))) {
+          LOG_WARN("fail to write defensive and obtain snapshot",
+              K(ret), K(tenant_id), K(new_table_schema));
         }
       }
-      LOG_INFO("create_index_arg.index_type_", K(create_index_arg.index_type_), K(create_index_arg.index_key_));
+
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  create_index_arg,

@@ -7469,7 +7469,7 @@ int ObDDLService::create_aux_index(
                                            tenant_data_version,
                                            trans,
                                            task_record,
-                                           arg.snapshot_version_))) {
+                                           idx_schema->is_rowkey_doc_id() ? arg.snapshot_version_ : 0))) {
           LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
         } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
         }
@@ -7933,13 +7933,19 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                     && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version))) {
                   LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
                 }
+
                 if (OB_SUCC(ret) && is_generate_rowkey_doc) {
-                  if (new_fetched_snapshot <= 0 &&
-                      OB_FAIL(ObDDLUtil::obtain_snapshot(trans, new_table_schema, index_schema, new_fetched_snapshot))) {
-                    LOG_WARN("fail to obtain snapshot",
-                        K(ret), K(new_table_schema), K(index_schema), K(new_fetched_snapshot));
+                  if (OB_FAIL(ObDDLUtil::write_defensive_and_obtain_snapshot(trans,
+                                                                             new_table_schema.get_tenant_id(),
+                                                                             new_table_schema,
+                                                                             index_schema,
+                                                                             get_schema_service().get_schema_service(),
+                                                                             new_fetched_snapshot))) {
+                    LOG_WARN("fail to write defensive and obtain snapshot",
+                        K(ret), K(new_table_schema.get_tenant_id()), K(new_table_schema));
                   }
                 }
+
                 if (OB_SUCC(ret)) {
                   ObIndexNameHashWrapper index_key(create_index_arg->index_name_);
                   if (OB_FAIL(create_index_arg->index_schema_.assign(index_schema))) {
@@ -15257,7 +15263,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                   tenant_data_version,
                                                                   alter_table_arg.allocator_,
                                                                   task_record,
-                                                                  new_fetched_snapshot))) {
+                                                                  index_schema.is_rowkey_doc_id() ? new_fetched_snapshot : 0))) {
                 LOG_WARN("fail to submit build index task", KR(ret), "type", create_index_arg->index_type_);
               } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
                 LOG_WARN("fail to push ddl task", KR(ret), K(task_record));

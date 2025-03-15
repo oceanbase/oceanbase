@@ -498,6 +498,14 @@ int ObSetRwDefensiveOp::operator()(ObTabletBindingMdsUserData &data)
   return ret;
 };
 
+int ObSetWriteDefensiveOp::operator()(ObTabletBindingMdsUserData &data)
+{
+  int ret = OB_SUCCESS;
+  data.redefined_ = false;
+  data.schema_version_ = schema_version_;
+  return ret;
+};
+
 int ObTabletUnbindMdsHelper::set_redefined_versions_for_hidden_tablets(
     ObLS &ls,
     const ObBatchUnbindTabletArg &arg,
@@ -831,6 +839,24 @@ int ObTabletBindingMdsHelper::modify_tablet_binding_for_rw_defensive(
 {
   int ret = OB_SUCCESS;
   ObSetRwDefensiveOp op(schema_version);
+  if (OB_UNLIKELY(OB_INVALID_VERSION == schema_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(schema_version), K(tablet_ids));
+  } else if (OB_FAIL(modify_tablet_binding_(tenant_id, tablet_ids, abs_timeout_us, op, trans))) {
+    LOG_WARN("failed to modify tablet binding", K(ret));
+  }
+  return ret;
+}
+
+int ObTabletBindingMdsHelper::modify_tablet_binding_for_write_defensive(
+    const uint64_t tenant_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const int64_t schema_version,
+    const int64_t abs_timeout_us,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSetWriteDefensiveOp op(schema_version);
   if (OB_UNLIKELY(OB_INVALID_VERSION == schema_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(schema_version), K(tablet_ids));

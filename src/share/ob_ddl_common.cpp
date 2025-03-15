@@ -1867,6 +1867,48 @@ int ObDDLUtil::calc_snapshot_with_gts(
   return ret;
 }
 
+int ObDDLUtil::write_defensive_and_obtain_snapshot(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_table_schema,
+    ObSchemaService *schema_service,
+    int64_t &new_fetched_snapshot)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(schema_service)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("there are invalid arg", K(tenant_id), KP(schema_service));
+  } else {
+    HEAP_VAR(ObTableSchema, tmp_table_schema) {
+      common::ObArray<ObTabletID> tablet_ids;
+      const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_ts()
+                                                                  : ObTimeUtility::current_time() + GCONF.rpc_timeout;
+      ObRefreshSchemaStatus schema_status;
+      schema_status.tenant_id_ = tenant_id;
+      if (OB_FAIL(schema_service->get_table_schema_from_inner_table(schema_status,
+                                                                    data_table_schema.get_table_id(),
+                                                                    trans,
+                                                                    tmp_table_schema))) {
+        LOG_WARN("fail to get table schema from inner table",
+            K(ret), K(tenant_id), K(data_table_schema.get_table_id()));
+      } else if (OB_FAIL(data_table_schema.get_tablet_ids(tablet_ids))) {
+        LOG_WARN("fail to get tablet ids", K(ret), K(data_table_schema));
+      } else if (OB_FAIL(ObTabletBindingMdsHelper::modify_tablet_binding_for_write_defensive(tenant_id,
+                                                                                             tablet_ids,
+                                                                                             tmp_table_schema.get_schema_version(),
+                                                                                             abs_timeout_us,
+                                                                                             trans))) {
+        LOG_WARN("fail to modify tablet binding for write defensive", K(ret));
+      } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(trans, data_table_schema, index_table_schema, new_fetched_snapshot))) {
+        LOG_WARN("fail to obtain snapshot",
+            K(ret), K(data_table_schema), K(index_table_schema), K(new_fetched_snapshot));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::check_and_cancel_single_replica_dag(
     rootserver::ObDDLTask* task,
     const uint64_t table_id,
