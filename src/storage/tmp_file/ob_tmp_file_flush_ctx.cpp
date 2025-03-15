@@ -67,6 +67,25 @@ void ObTmpFileFlushInfo::reset()
   flush_meta_page_array_.reset();
 }
 
+int ObTmpFileFlushInfo::assign(const ObTmpFileFlushInfo &other)
+{
+  int ret = OB_SUCCESS;
+  fd_ = other.fd_;
+  batch_flush_idx_ = other.batch_flush_idx_;
+  has_last_page_lock_ = other.has_last_page_lock_;
+  insert_meta_tree_done_ = other.insert_meta_tree_done_;
+  update_meta_data_done_ = other.update_meta_data_done_;
+  file_handle_ = other.file_handle_;
+  flush_data_page_disk_begin_id_ = other.flush_data_page_disk_begin_id_;
+  flush_data_page_num_ = other.flush_data_page_num_;
+  flush_virtual_page_id_ = other.flush_virtual_page_id_;
+  file_size_ = other.file_size_;
+  if (OB_FAIL(flush_meta_page_array_.assign(other.flush_meta_page_array_))) {
+    LOG_WARN("failed to assign flush meta page array", KR(ret), KPC(this));
+  }
+  return ret;
+}
+
 // -------------- ObTmpFileBatchFlushContext --------------- //
 
 int ObTmpFileBatchFlushContext::init()

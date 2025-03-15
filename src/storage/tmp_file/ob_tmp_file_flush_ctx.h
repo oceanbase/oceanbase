@@ -211,6 +211,7 @@ public:
   void reset();
   bool has_data() const { return flush_data_page_num_ > 0; }
   bool has_meta() const { return !flush_meta_page_array_.empty(); }
+  int assign(const ObTmpFileFlushInfo &other);
   TO_STRING_KV(K(fd_), K(batch_flush_idx_), K(has_last_page_lock_), K(insert_meta_tree_done_), K(update_meta_data_done_),
                K(flush_data_page_disk_begin_id_), K(flush_data_page_num_), K(flush_virtual_page_id_), K(file_size_),
                K(flush_meta_page_array_), KP(file_handle_.get()));
