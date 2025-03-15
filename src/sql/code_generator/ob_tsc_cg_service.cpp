@@ -1006,7 +1006,8 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
       if (expr->is_column_ref_expr() &&
           static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
           !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()
-          && !static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column()
+          && (!static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column() ||
+              (static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column() && !op.is_tsc_with_doc_id()))
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column()) {

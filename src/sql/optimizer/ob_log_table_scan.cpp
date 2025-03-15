@@ -2907,6 +2907,20 @@ int ObLogTableScan::create_exec_param_for_auto_split(const ObExprResType &type, 
   return ret;
 }
 
+bool ObLogTableScan::is_tsc_with_doc_id() const
+{
+  bool re = false;
+  if (with_domain_types_.size() > 0) {
+    for (int64_t i = 0; i < with_domain_types_.count(); ++i) {
+      if (ObDomainIdUtils::DOC_ID == with_domain_types_.at(i)) {
+        re = true;
+        break;
+      }
+    }
+  }
+  return re;
+}
+
 int ObLogTableScan::construct_table_split_range_filter(ObSQLSessionInfo *session, const int64_t filter_type)
 {
   int ret = OB_SUCCESS;

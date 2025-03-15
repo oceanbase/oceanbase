@@ -149,7 +149,7 @@ int ObDomainIdUtils::check_column_need_domain_id_merge(
           } else {
             for (int64_t i = 0; OB_SUCC(ret) && !res && i < simple_index_infos.count(); ++i) {
               const ObIndexType index_type = simple_index_infos.at(i).index_type_;
-              if (schema::is_fts_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
+              if (schema::is_fts_or_multivalue_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
                 res = true;
               }
             }
@@ -425,7 +425,7 @@ int ObDomainIdUtils::check_has_domain_index(const void *table_schema, ObIArray<i
       if (is_rowkey_doc_aux(simple_index_infos.at(i).index_type_)) {
         for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count(); ++j) {
           const ObIndexType index_type = simple_index_infos.at(j).index_type_;
-          if (schema::is_fts_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
+          if (schema::is_fts_or_multivalue_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
             domain_type = ObDomainIDType::DOC_ID; // only one
           }
         }

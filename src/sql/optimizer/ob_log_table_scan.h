@@ -790,6 +790,7 @@ public:
   uint64_t get_auto_split_filter_type() const { return auto_split_filter_type_; };
   const ObRawExpr *get_auto_split_filter() const { return auto_split_filter_; };
   const ObIArray<ObRawExpr *> &get_auto_split_params() const { return auto_split_params_; };
+  bool is_tsc_with_doc_id() const;
   inline bool is_tsc_with_domain_id() const { return with_domain_types_.size() > 0; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }

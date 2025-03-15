@@ -20854,15 +20854,9 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, bool &n
       }
       for (int64_t i = 0; OB_SUCC(ret) && !need_column_ref_expr && i < simple_index_infos.count(); ++i) {
         ObAuxTableMetaInfo &index_info = simple_index_infos.at(i);
-        if (is_doc_rowkey_aux(index_info.index_type_)) {
+        if (is_doc_rowkey_aux(index_info.index_type_) || is_fts_index_aux(index_info.index_type_) ||
+            is_fts_doc_word_aux(index_info.index_type_) || is_multivalue_index_aux(index_info.index_type_)) {
           need_column_ref_expr = true;
-        }
-      }
-      if (OB_SUCC(ret) && !need_column_ref_expr) {
-        // TODO: @zyx439997 fix the bug. id = 2025022600107346118
-        ret = OB_EAGAIN;
-        if (REACH_TIME_INTERVAL(1000 * 1000)) {
-          LOG_WARN("funlltext is being built, so need wait.");
         }
       }
     } else {
