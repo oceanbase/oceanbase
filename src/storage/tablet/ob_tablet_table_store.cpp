@@ -1921,6 +1921,7 @@ int ObTabletTableStore::build_ddl_sstables(
 
   bool is_new_table_valid_ddl_sstable = false;
   bool is_slice_sstables_valid_ddl_sstable = false;
+  bool need_keep_old_ddl_sstable = true;
   if (slice_sstables.count() > 0) {
     if (nullptr != new_table) {
       ret = OB_ERR_UNEXPECTED;
@@ -1948,9 +1949,18 @@ int ObTabletTableStore::build_ddl_sstables(
     is_new_table_valid_ddl_sstable = new_table->is_ddl_dump_sstable()
         && table_meta_handle.get_sstable_meta().get_basic_meta().ddl_scn_ >= tablet.get_tablet_meta().ddl_start_scn_;
   }
-
+  if (OB_SUCC(ret)) {
+    // cleanup ddl sstables only happen in two cases:
+    // 1. put major sstable into  table store
+    // 2. ddl start log replace with a valid ddl sstable
+    if (nullptr != new_sstable && new_sstable->is_major_sstable()) {
+      need_keep_old_ddl_sstable = false;
+    } else if (is_new_table_valid_ddl_sstable) {
+      need_keep_old_ddl_sstable = keep_old_ddl_sstable;
+    }
+  }
   if (OB_FAIL(ret)) {
-  } else if (keep_old_ddl_sstable) {
+  } else if (need_keep_old_ddl_sstable) {
     if (!is_new_table_valid_ddl_sstable && !is_slice_sstables_valid_ddl_sstable) { // not valid ddl sstable, simple keep old ddl sstable
       if (OB_FAIL(old_store.ddl_sstables_.get_all_tables(ddl_dump_sstables))) {
         LOG_WARN("get ddl dump sstables failed", K(ret));
