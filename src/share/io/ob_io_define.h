@@ -25,6 +25,7 @@
 #include "lib/tc/ob_tc.h"
 #include "lib/worker.h"
 #include "share/resource_manager/ob_resource_plan_info.h"
+#include "storage/ob_storage_checked_object_base.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
 #include "storage/shared_storage/ob_ss_fd_cache_struct.h"
@@ -709,7 +710,7 @@ public:
   IOReqList req_list_;
 };
 
-class ObIOHandle final
+class ObIOHandle final : public storage::ObStorageCheckedObjectBase
 {
 public:
   ObIOHandle();

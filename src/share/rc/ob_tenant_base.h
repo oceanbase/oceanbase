@@ -978,18 +978,29 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
 #define mtl_sop_borrow(type)                                                                                    \
   ({                                                                                                            \
     type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
+    (iter);                                                                                                     \
+  })
+
+#define mtl_sop_return(type, ptr)                                                                               \
+  do {                                                                                                          \
+    MTL(common::ObServerObjectPool<type>*)->return_object(ptr);                                                 \
+  } while (false)
+
+#define mtl_sop_borrow_checked(type)                                                                                    \
+  ({                                                                                                            \
+    type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
     if (OB_NOT_NULL(iter)) {                                                                                    \
       storage::ObStorageLeakChecker::get_instance().handle_hold(iter, storage::ObStorageCheckID::STORAGE_ITER); \
     }                                                                                                           \
     (iter);                                                                                                     \
   })
 
-#define mtl_sop_return(type, ptr)                                                                               \
+#define mtl_sop_return_checked(type, iter)                                                                               \
   do {                                                                                                          \
-    if (OB_NOT_NULL(ptr)) {                                                                                     \
-      storage::ObStorageLeakChecker::get_instance().handle_reset(ptr, storage::ObStorageCheckID::STORAGE_ITER); \
+    if (OB_NOT_NULL(iter)) {                                                                                    \
+      storage::ObStorageLeakChecker::get_instance().handle_reset(iter, storage::ObStorageCheckID::STORAGE_ITER); \
     }                                                                                                           \
-    MTL(common::ObServerObjectPool<type>*)->return_object(ptr);                                                 \
+    MTL(common::ObServerObjectPool<type>*)->return_object(iter);                                                 \
   } while (false)
 
 } // end of namespace share

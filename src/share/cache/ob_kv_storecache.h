@@ -317,7 +317,7 @@ private:
 };
 
 
-class ObKVCacheHandle
+class ObKVCacheHandle : storage::ObStorageCheckedObjectBase
 {
 public:
   ObKVCacheHandle();
@@ -338,7 +338,6 @@ private:
   friend class ObKVCacheIterator;
   friend class storage::ObStorageLeakChecker;
   ObKVMemBlockHandle *mb_handle_;
-  bool is_traced_;
 };
 
 class ObKVCacheIterator
@@ -388,6 +387,8 @@ int ObIKVCache<Key, Value>::put_kvpair(ObKVCacheInstHandle &inst_handle, ObKVCac
       if (OB_ENTRY_EXIST != ret) {
         COMMON_LOG(WARN, "Fail to put kvpair to map, ", K(ret));
       }
+    } else {
+      storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
     }
   }
   return ret;

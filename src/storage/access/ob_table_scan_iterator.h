@@ -46,7 +46,7 @@ class ObMemtableRowSampleIterator;
 class ObRowSampleIterator;
 class ObBlockSampleIterator;
 
-class ObTableScanIterator : public common::ObNewRowIterator
+class ObTableScanIterator : public common::ObNewRowIterator, public ObStorageCheckedObjectBase
 {
 public:
   ObTableScanIterator();

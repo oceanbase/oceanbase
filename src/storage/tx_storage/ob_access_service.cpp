@@ -339,7 +339,7 @@ int ObAccessService::table_scan(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("The result_ is already pointed to an valid object",
         K(ret), K(vparam), KPC(result), K(lbt()));
-  } else if (OB_ISNULL(iter = mtl_sop_borrow(ObTableScanIterator))) {
+  } else if (OB_ISNULL(iter = mtl_sop_borrow_checked(ObTableScanIterator))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alloc table scan iterator fail", K(ret));
   } else if (FALSE_IT(result = iter)) {
@@ -1358,7 +1358,7 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
     if (OB_FAIL(table_scan_iter->check_ls_offline_after_read())) {
       LOG_WARN("discover ls offline after table scan", K(ret), KPC(table_scan_iter));
     }
-    mtl_sop_return(ObTableScanIterator, table_scan_iter);
+    mtl_sop_return_checked(ObTableScanIterator, table_scan_iter);
   } else {
     iter->~ObNewRowIterator();
   }

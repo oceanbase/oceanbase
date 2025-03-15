@@ -14,6 +14,7 @@
 
 #include "share/cache/ob_kvcache_struct.h"
 #include "share/io/ob_io_define.h"
+#include "storage/ob_storage_checked_object_base.h"
 
 
 namespace oceanbase
@@ -75,7 +76,6 @@ public:
   char bt_[512];
 };
 
-
 class ObStorageLeakChecker final
 {
 public:
@@ -88,8 +88,8 @@ public:
   static ObStorageLeakChecker &get_instance();
   void reset();
   // return if is recorded
-  bool handle_hold(const void *handle, const ObStorageCheckID type_id);
-  void handle_reset(const void *handle, const ObStorageCheckID type_id);
+  bool handle_hold(ObStorageCheckedObjectBase* handle, const ObStorageCheckID type_id);
+  void handle_reset(ObStorageCheckedObjectBase* handle, const ObStorageCheckID type_id);
   int get_aggregate_bt_info(hash::ObHashMap<ObStorageCheckerValue, int64_t> &bt_info);
 private:
   static const int64_t HANDLE_BT_MAP_BUCKET_NUM = 10000;

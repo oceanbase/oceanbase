@@ -25,7 +25,7 @@ using namespace lib;
 namespace common
 {
 ObKVCacheHandle::ObKVCacheHandle()
-  : mb_handle_(NULL), is_traced_(false)
+  : mb_handle_(NULL)
 {
 }
 
@@ -44,20 +44,14 @@ ObKVCacheHandle &ObKVCacheHandle::operator =(const ObKVCacheHandle &other)
 {
   if (&other != this) {
     int ret = OB_SUCCESS;
-    if (NULL != mb_handle_) {
-      if (is_traced_) {
-        storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
-        is_traced_ = false;
-      }
-      ObKVGlobalCache::get_instance().revert(mb_handle_);
-    }
+    reset();
     mb_handle_ = other.mb_handle_;
     if (NULL != mb_handle_) {
       if (OB_FAIL(mb_handle_->handle_ref_.check_and_inc_ref_cnt())) {
         //should not happen
         COMMON_LOG(ERROR, "Fail to add handle ref, ", K(ret));
       }
-      is_traced_ = storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
+      storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
     }
   }
   return *this;
@@ -68,10 +62,7 @@ void ObKVCacheHandle::move_from(ObKVCacheHandle &other)
   reset();
   mb_handle_ = other.mb_handle_;
   if (mb_handle_ != nullptr) {
-    is_traced_ = storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
-    if (other.is_traced_) {
-      storage::ObStorageLeakChecker::get_instance().handle_reset(&other, storage::ObStorageCheckID::ALL_CACHE);
-    }
+    storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
   }
   other.mb_handle_ = nullptr;
   other.reset();
@@ -80,10 +71,7 @@ void ObKVCacheHandle::move_from(ObKVCacheHandle &other)
 void ObKVCacheHandle::reset()
 {
   if (NULL != mb_handle_) {
-    if (is_traced_) {
-      storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
-      is_traced_ = false;
-    }
+    storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
     ObKVGlobalCache::get_instance().revert(mb_handle_);
     mb_handle_ = NULL;
   }
