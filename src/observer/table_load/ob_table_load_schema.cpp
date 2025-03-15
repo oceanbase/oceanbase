@@ -139,7 +139,8 @@ int ObTableLoadSchema::get_table_schema(ObSchemaGetterGuard &schema_guard,
 }
 
 int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema,
-                                               ObIArray<const ObColumnSchemaV2 *> &column_schemas)
+                                               ObIArray<const ObColumnSchemaV2 *> &column_schemas,
+                                               bool contain_invisible_column)
 {
   int ret = OB_SUCCESS;
   column_schemas.reset();
@@ -164,7 +165,7 @@ int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema
         // 不显示隐藏列(堆表隐藏主键列,快速删除列,?)
       } else if (column_schema->is_unused()) {
         // 不显示快速删除列
-      } else if (column_schema->is_invisible_column()) {
+      } else if (column_schema->is_invisible_column() && !contain_invisible_column) {
         // 不显示invisible列
       } else if (column_schema->is_shadow_column()) {
         // 不显示shadow列
@@ -172,21 +173,6 @@ int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema
         LOG_WARN("fail to push back column schema", KR(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::get_user_column_schemas(ObSchemaGetterGuard &schema_guard,
-                                               uint64_t tenant_id,
-                                               uint64_t table_id,
-                                               ObIArray<const ObColumnSchemaV2 *> &column_schemas)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(get_table_schema(schema_guard, tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret));
-  } else {
-    ret = get_user_column_schemas(table_schema, column_schemas);
   }
   return ret;
 }
@@ -209,39 +195,6 @@ int ObTableLoadSchema::get_user_column_ids(const ObTableSchema *table_schema,
   return ret;
 }
 
-int ObTableLoadSchema::get_user_column_ids(ObSchemaGetterGuard &schema_guard,
-                                           uint64_t tenant_id,
-                                           uint64_t table_id,
-                                           ObIArray<uint64_t> &column_ids)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(get_table_schema(schema_guard, tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret));
-  } else {
-    ret = get_user_column_ids(table_schema, column_ids);
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::get_user_column_names(const ObTableSchema *table_schema,
-                                             ObIArray<ObString> &column_names)
-{
-  int ret = OB_SUCCESS;
-  column_names.reset();
-  ObArray<const ObColumnSchemaV2 *> column_schemas;
-  if (OB_FAIL(get_user_column_schemas(table_schema, column_schemas))) {
-    LOG_WARN("fail to get user column schemas", KR(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_schemas.count(); ++i) {
-    const ObColumnSchemaV2 *column_schema = column_schemas.at(i);
-    if (OB_FAIL(column_names.push_back(column_schema->get_column_name_str()))) {
-      LOG_WARN("fail to push back column name", KR(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::get_user_column_id_and_names(const ObTableSchema *table_schema,
                                                     ObIArray<uint64_t> &column_ids,
                                                     ObIArray<ObString> &column_names)
@@ -250,7 +203,7 @@ int ObTableLoadSchema::get_user_column_id_and_names(const ObTableSchema *table_s
   column_ids.reset();
   column_names.reset();
   ObArray<const ObColumnSchemaV2 *> column_schemas;
-  if (OB_FAIL(get_user_column_schemas(table_schema, column_schemas))) {
+  if (OB_FAIL(get_user_column_schemas(table_schema, column_schemas, true/*contain_invisible_column*/))) {
     LOG_WARN("fail to get user column schemas", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < column_schemas.count(); ++i) {
@@ -284,31 +237,6 @@ int ObTableLoadSchema::get_column_ids(const ObTableSchema *table_schema,
       } else if (OB_FAIL(column_ids.push_back(col_desc.col_id_))) {
         LOG_WARN("failed to push back column id", KR(ret), K(i));
       }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::get_column_ids(ObSchemaGetterGuard &schema_guard,
-                                      uint64_t tenant_id,
-                                      uint64_t table_id,
-                                      ObIArray<uint64_t> &column_ids,
-                                      bool contain_hidden_pk_column)
-{
-  int ret = OB_SUCCESS;
-  column_ids.reset();
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    const ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
-    } else {
-      ret = get_column_ids(table_schema, column_ids, contain_hidden_pk_column);
     }
   }
   return ret;
