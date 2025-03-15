@@ -4060,7 +4060,10 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
   submit_arg.suggested_buf_size_ = dli_log.get_serialize_size() + 200;
 
   ObTxCtxLogOperator<ObTxDirectLoadIncLog> dli_log_op(this, &log_block, &construct_arg, submit_arg);
-  if (OB_FAIL(dli_buf.serialize_log_object(&dli_log))) {
+  if (OB_FAIL(check_status_())) {
+    TRANS_LOG(WARN, "check tx status before submitting dli log", K(ret), K(dli_log_type),
+              K(batch_key), K(replay_barrier), K(replay_hint), KPC(this));
+  } else if (OB_FAIL(dli_buf.serialize_log_object(&dli_log))) {
     TRANS_LOG(WARN, "serialize direct load log failed", K(ret), K(dli_log), K(replay_hint),
               KPC(this));
   } else if (OB_FAIL(dli_log_op(ObTxLogOpType::SUBMIT))) {
