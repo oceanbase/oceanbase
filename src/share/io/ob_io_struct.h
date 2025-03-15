@@ -494,7 +494,7 @@ private:
   static const int64_t MAX_SYNC_IO_QUEUE_COUNT = 512;
   ObFixedQueue<ObIORequest> req_queue_;
   ObThreadCond cond_;
-  int64_t submit_count_;
+  int64_t used_io_depth_;
   bool is_wait_;
 };
 

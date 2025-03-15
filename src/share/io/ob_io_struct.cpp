@@ -2440,7 +2440,7 @@ int ObAsyncIOChannel::on_failed(ObIORequest &req, const ObIORetCode &ret_code)
 
 /******************             SyncIOChannel              **********************/
 ObSyncIOChannel::ObSyncIOChannel()
-  : is_inited_(false)
+  : is_inited_(false), used_io_depth_(0)
 {
 }
 
@@ -2496,6 +2496,7 @@ void ObSyncIOChannel::handle(void *task)
     if (OB_FAIL(do_sync_io(*req))) {
       LOG_WARN("do sync io failed", K(ret), KPC(req));
     }
+    ATOMIC_FAA(&used_io_depth_, -get_io_depth(req->get_align_size()));
     req->dec_ref("sync_dec"); // ref for file system
   }
   UNUSED(ret);
@@ -2505,11 +2506,18 @@ int ObSyncIOChannel::submit(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   const int64_t current_ts = ObTimeUtility::current_time();
+  const int64_t io_depth = get_io_depth(min(max(GMEMCONF.get_server_memory_limit() / 10, 500 * 1024L * 1024L), 4 * 1024L * 1024L * 1024L));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(used_io_depth_ >= io_depth)) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
+      LOG_WARN("reach io depth", K(ret), K(io_depth), K(used_io_depth_));
+    }
   } else {
     req.inc_ref("sync_inc"); // ref for file system
+    ATOMIC_FAA(&used_io_depth_, get_io_depth(req.get_align_size()));
     if (OB_FAIL(ObSimpleThreadPool::push(&req))) {
       req.dec_ref("sync_dec"); // ref for file system
       if (OB_EAGAIN != ret) {
