@@ -3042,9 +3042,10 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                       && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
                     ret = OB_ERR_TOO_LONG_KEY_LENGTH;
                     LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
-                  } else if (index_data_length <= 0) {
+                  } else if (length <= 0) {
                     ret = OB_ERR_WRONG_KEY_COLUMN;
                     LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+                    LOG_WARN("byte_length of string type column should bigger than zero", K(length), K(ret));
                   } else {
                     // do nothing
                   }

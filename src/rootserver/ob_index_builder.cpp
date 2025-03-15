@@ -1673,10 +1673,10 @@ int ObIndexBuilder::generate_schema(
             }
           } else if (OB_FAIL(data_column->get_byte_length(length, is_oracle_mode, false))) {
             LOG_WARN("fail to get byte length of column", K(ret));
-          } else if (length < 0) {
+          } else if (length < 0 || (0 == length && !data_column->is_vec_index_column())) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
-            LOG_WARN("byte_length of string type column is less than zero", K(length), K(ret));
+            LOG_WARN("byte_length of string type column should bigger than zero", K(length), K(ret), K(data_column->get_column_name_str()));
           } else { /*do nothing*/ }
 
           if (OB_SUCC(ret)) {
