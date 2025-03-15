@@ -907,8 +907,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
         if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
           DISABLE_SQL_MEMLEAK_GUARD;
-          const ObString expr_savepoint_name("PL expr savepoint");
-          OZ (ObSqlTransControl::create_savepoint(*ctx->exec_ctx_, expr_savepoint_name));
+          OZ (ObSqlTransControl::create_savepoint(*ctx->exec_ctx_, PL_INNER_EXPR_SAVEPOINT));
           OX (has_implicit_savepoint = true);
         }
       }
@@ -932,9 +931,8 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
             int tmp_ret = OB_SUCCESS;
             if (has_implicit_savepoint) {
               DISABLE_SQL_MEMLEAK_GUARD;
-              const ObString expr_savepoint_name("PL expr savepoint");
               if (OB_SUCCESS !=
-                  (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, expr_savepoint_name))) {
+                  (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, PL_INNER_EXPR_SAVEPOINT))) {
                 LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
               }
   #ifdef OB_BUILD_ORACLE_PL
