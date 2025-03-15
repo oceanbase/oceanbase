@@ -793,7 +793,7 @@ void ObIOAllocator::free(T *instance)
 
 inline bool is_io_aligned(const int64_t value, const int64_t align)
 {
-  return 0 == (value % align);
+  return (align > 0) && (0 == (value % align));
 }
 
 inline void align_offset_size(
