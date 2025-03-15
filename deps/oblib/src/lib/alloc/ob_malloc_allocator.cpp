@@ -487,17 +487,17 @@ void ObMallocAllocator::get_tenant_label_usage(
   }
 }
 
-void ObMallocAllocator::print_tenant_ctx_memory_usage(uint64_t tenant_id) const
+void ObMallocAllocator::print_tenant_ctx_memory_usage(uint64_t tenant_id, uint64_t min_print_size) const
 {
   ObTenantCtxAllocatorGuard allocator = NULL;
   for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
     allocator = get_tenant_ctx_allocator(tenant_id, ctx_id);
     if (OB_LIKELY(NULL != allocator)) {
-      allocator->print_memory_usage();
+      allocator->print_memory_usage(min_print_size);
     } else {
       allocator = get_tenant_ctx_allocator_unrecycled(tenant_id, ctx_id);
       if (OB_LIKELY(NULL != allocator)) {
-        allocator->print_memory_usage();
+        allocator->print_memory_usage(min_print_size);
       }
     }
   }

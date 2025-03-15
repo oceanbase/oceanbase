@@ -316,7 +316,7 @@ public:
 
   common::ObLabelItem get_label_usage(ObLabel &label) const;
 
-  void print_memory_usage() const { print_usage(); }
+  void print_memory_usage(uint64_t min_print_size = 0) const { print_usage(min_print_size); }
 
   AChunk *alloc_chunk(const int64_t size, const ObMemAttr &attr);
   void free_chunk(AChunk *chunk, const ObMemAttr &attr);
@@ -348,7 +348,7 @@ public:
 private:
   int64_t inc_ref_cnt(int64_t cnt) { return ATOMIC_FAA(&ref_cnt_, cnt); }
   int64_t get_ref_cnt() const { return ATOMIC_LOAD(&ref_cnt_); }
-  void print_usage() const;
+  void print_usage(uint64_t min_print_size = 0) const;
   AChunk *pop_chunk();
   void push_chunk(AChunk *chunk);
   int with_resource_handle_invoke(InvokeFunc func) const
