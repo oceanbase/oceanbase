@@ -110,13 +110,38 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 
 int ObParquetTableRowIterator::next_file()
 {
+#define BEGIN_CATCH_EXCEPTIONS try {
+#define END_CATCH_EXCEPTIONS                                                                       \
+  } catch (const ::parquet::ParquetStatusException &e) {                                           \
+    if (OB_SUCC(ret)) {                                                                            \
+      status = e.status();                                                                         \
+      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
+    }                                                                                              \
+  } catch (const ::parquet::ParquetException &e) {                                                 \
+    if (OB_SUCC(ret)) {                                                                            \
+      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
+      LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());                                          \
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
+    }                                                                                              \
+  } catch (...) {                                                                                  \
+    if (OB_SUCC(ret)) {                                                                            \
+      ret = OB_ERR_UNEXPECTED;                                                                     \
+      LOG_WARN("unexpected error", K(ret));                                                        \
+    }                                                                                              \
+  }                                                                                                \
+
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   ObString location = scan_param_->external_file_location_;
   int64_t task_idx = 0;
-  int64_t file_size = 0;
+  arrow::Status status = arrow::Status::OK();
 
   do {
+    ret = OB_SUCCESS;
+    file_meta_.reset();
+    file_reader_.reset();
+    status = arrow::Status::OK();
     if ((task_idx = state_.file_idx_++) >= scan_param_->key_ranges_.count()) {
       ret = OB_ITER_END;
     } else {
@@ -126,33 +151,40 @@ int ObParquetTableRowIterator::next_file()
       OZ (url_.append_fmt("%.*s%s%.*s", location.length(), location.ptr(),
                                         (location.empty() || location[location.length() - 1] == '/') ? "" : split_char,
                                         state_.cur_file_url_.length(), state_.cur_file_url_.ptr()));
-      OZ (data_access_driver_.get_file_size(url_.string(), file_size));
 
       if (OB_SUCC(ret)) {
-        ObString expr_file_url;
-        if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
-          ObSqlString full_name;
-          if (ip_port_.empty()) {
-            OZ(gen_ip_port(allocator_));
+        BEGIN_CATCH_EXCEPTIONS
+          ObString expr_file_url;
+          if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+            ObSqlString full_name;
+            if (ip_port_.empty()) {
+              OZ(gen_ip_port(allocator_));
+            }
+            OZ (full_name.append_fmt("%.*s%%%.*s", ip_port_.length(), ip_port_.ptr(),
+                                    state_.cur_file_url_.length(), state_.cur_file_url_.ptr()));
+            OZ (ob_write_string(allocator_, full_name.string(), expr_file_url));
+          } else {
+            expr_file_url = state_.cur_file_url_;
           }
-          OZ (full_name.append_fmt("%.*s%%%.*s", ip_port_.length(), ip_port_.ptr(),
-                                   state_.cur_file_url_.length(), state_.cur_file_url_.ptr()));
-          OZ (ob_write_string(allocator_, full_name.string(), expr_file_url));
-        } else {
-          expr_file_url = state_.cur_file_url_;
-        }
-        for (int i = 0; OB_SUCC(ret) && i < eval_ctx.max_batch_size_; i++) {
-          file_url_ptrs_.at(i) = expr_file_url.ptr();
-          file_url_lens_.at(i) = expr_file_url.length();
-        }
+          for (int i = 0; OB_SUCC(ret) && i < eval_ctx.max_batch_size_; i++) {
+            file_url_ptrs_.at(i) = expr_file_url.ptr();
+            file_url_lens_.at(i) = expr_file_url.length();
+          }
+          if (OB_SUCC(ret)) {
+            std::shared_ptr<ObArrowFile> cur_file = std::make_shared<ObArrowFile>(
+              data_access_driver_, url_.ptr(), &arrow_alloc_, file_prefetch_buffer_);
+            OZ(cur_file.get()->open());
+            OX(file_reader_ = parquet::ParquetFileReader::Open(cur_file, read_props_));
+            OX(file_meta_ = file_reader_->metadata());
+          }
+        END_CATCH_EXCEPTIONS
       }
 
-      LOG_DEBUG("current external file", K(url_), K(file_size));
+      LOG_DEBUG("current external file", K(url_), K(ret));
     }
-  } while (OB_SUCC(ret) && OB_UNLIKELY(0 >= file_size)); //skip not exist or empty file
+  } while (OB_INVALID_EXTERNAL_FILE == ret && status.IsInvalid()); //skip not exist or empty file
 
   if (OB_SUCC(ret)) {
-
     int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
     if (part_id != 0 && state_.part_id_ != part_id) {
       state_.part_id_ = part_id;
@@ -164,18 +196,9 @@ int ObParquetTableRowIterator::next_file()
                                                         ObExternalTableUtils::ROW_GROUP_NUMBER,
                                                         state_.cur_row_group_idx_,
                                                         state_.end_row_group_idx_));
+    OX (state_.end_row_group_idx_ = std::min((int64_t)(file_meta_->num_row_groups()), state_.end_row_group_idx_));
 
-    try {
-      file_meta_.reset();
-      file_reader_.reset();
-      std::shared_ptr<ObArrowFile> cur_file = std::make_shared<ObArrowFile>(
-        data_access_driver_, url_.ptr(), &arrow_alloc_, file_prefetch_buffer_);
-      OZ (cur_file.get()->open());
-      if (OB_SUCC(ret)) {
-        file_reader_ = parquet::ParquetFileReader::Open(cur_file, read_props_);
-        file_meta_ = file_reader_->metadata();
-        state_.end_row_group_idx_ = std::min((int64_t)(file_meta_->num_row_groups()), state_.end_row_group_idx_);
-      }
+    BEGIN_CATCH_EXCEPTIONS
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
         ObDataAccessPathExtraInfo *data_access_info =
             static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
@@ -233,20 +256,10 @@ int ObParquetTableRowIterator::next_file()
           }
         }
       }
-    } catch(const std::exception& e) {
-      if (OB_SUCC(ret)) {
-        //invalid file
-        ret = OB_INVALID_EXTERNAL_FILE;
-        LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());
-        LOG_WARN("unexpected error", K(ret), "Info", e.what());
-      }
-    } catch(...) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error", K(ret));
-      }
-    }
+    END_CATCH_EXCEPTIONS
   }
+#undef BEGIN_CATCH_EXCEPTIONS
+#undef END_CATCH_EXCEPTIONS
 
   return ret;
 }
