@@ -63,6 +63,7 @@ WAIT_EVENT_DEF(MT_WRITE_LOCK_WAIT,14002,"memstore write lock wait","lock","waite
 WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock holder tx id","data seq number","holder lock time",APPLICATION,false, true)
 WAIT_EVENT_DEF(ROW_LOCK_RETRY, 14004, "retry wait because of row lock wait", "lock holder tx id","data seq number","holder lock time", APPLICATION, false , false)
 WAIT_EVENT_DEF(EXPR_FUNC_SLEEP, 14005, "sleep: wait for user calls", "sleep_interval", "", "", APPLICATION, true, true)
+WAIT_EVENT_DEF(TRANS_SET_VIOLATION_RETRY, 14006, "retry: transaction set violation", "max trans id", "data seq number", "holder lock time", APPLICATION, false, true)
 // CONCURRENCY
 // condition wait has one parameter e.g. address of the condition variable
 WAIT_EVENT_DEF(IO_QUEUE_COND_WAIT, 15066, "io queue condition wait", "address", "", "", CONCURRENCY, true, true)
