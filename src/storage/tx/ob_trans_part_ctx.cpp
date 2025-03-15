@@ -10634,7 +10634,7 @@ int ObPartTransCtx::collect_tx_ctx(const ObLSID dest_ls_id,
     arg.tx_id_ = trans_id_;
     arg.tx_state_ = exec_info_.state_;
     // must differ with src epoch bacause of may transfer back
-    arg.epoch_ = epoch_ | (ObTimeUtility::current_time_ns() & ~(0xFFFFUL << 48));
+    arg.epoch_ = ~(1UL << 63) & ((epoch_ << 48) | (ObTimeUtility::current_time_ns() & ~(0xFFFFUL << 48)));
     arg.session_id_ = session_id_;
     arg.associated_session_id_ = associated_session_id_;
     arg.trans_version_ = mt_ctx_.get_trans_version();
