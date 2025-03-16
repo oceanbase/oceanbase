@@ -16,6 +16,8 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/schema/ob_schema_utils.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -24,6 +26,7 @@ namespace share
 namespace schema
 {
 using namespace common;
+using namespace sql;
 
 ObMViewInfo::ObMViewInfo() { reset(); }
 
@@ -54,6 +57,7 @@ ObMViewInfo &ObMViewInfo::operator=(const ObMViewInfo &src_schema)
     last_refresh_time_ = src_schema.last_refresh_time_;
     schema_version_ = src_schema.schema_version_;
     refresh_dop_ = src_schema.refresh_dop_;
+    data_sync_scn_ = src_schema.data_sync_scn_;
     if (OB_FAIL(deep_copy_str(src_schema.refresh_next_, refresh_next_))) {
       LOG_WARN("deep copy refresh next failed", KR(ret), K(src_schema.refresh_next_));
     } else if (OB_FAIL(deep_copy_str(src_schema.refresh_job_, refresh_job_))) {
@@ -103,6 +107,7 @@ void ObMViewInfo::reset()
   reset_string(last_refresh_trace_id_);
   schema_version_ = OB_INVALID_VERSION;
   refresh_dop_ = 0;
+  data_sync_scn_ = 0;
   ObSchema::reset();
 }
 
@@ -131,7 +136,8 @@ OB_SERIALIZE_MEMBER(ObMViewInfo,
                     last_refresh_time_,
                     last_refresh_trace_id_,
                     schema_version_,
-                    refresh_dop_);
+                    refresh_dop_,
+                    data_sync_scn_);
 
 int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const
 {

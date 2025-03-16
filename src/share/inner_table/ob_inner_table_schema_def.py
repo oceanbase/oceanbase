@@ -6298,7 +6298,8 @@ def_table_schema(
     ('last_refresh_time', 'int', 'true'),
     ('last_refresh_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
     ('schema_version', 'int'),
-    ('refresh_dop', 'int', 'false', '0')
+    ('refresh_dop', 'int', 'false', '0'),
+    ('data_sync_scn', 'uint', 'false', '0')
   ]
 )
 
@@ -15892,6 +15893,8 @@ def_table_schema(
 # 12533: __all_virtual_ccl_rule
 # 12534: __all_virtual_ccl_status
 
+# 12535: __all_virtual_mview_running_job
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16436,6 +16439,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status
+
+# 15507: __all_virtual_mview_running_job
+# 15508: __all_mview_dep
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -40940,6 +40946,10 @@ def_table_schema(
 # 21649: CDB_OB_CCL_RULE
 # 21650: GV$OB_SQL_CCL_STATUS
 # 21651: V$OB_SQL_CCL_STATUS
+
+# 21652: DBA_MVIEW_RUNNING_JOBS
+# 21653: CDB_MVIEW_RUNNING_JOBS
+# 21654: DBA_MVIEW_DEPS
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -62532,6 +62542,9 @@ def_table_schema(
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 
 # 25307: DBA_OB_CCL_RULE
+
+# 25308: DBA_MVIEW_RUNNING_JOBS
+# 25309: DBA_MVIEW_DEPS
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

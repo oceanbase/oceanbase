@@ -4281,6 +4281,7 @@ last_refresh_time	bigint(20)	YES		NULL
 last_refresh_trace_id	varchar(64)	YES		NULL	
 schema_version	bigint(20)	NO		NULL	
 refresh_dop	bigint(20)	NO		0	
+data_sync_scn	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview;
 IF(count(*) >= 0, 1, 0)
 1

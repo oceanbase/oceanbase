@@ -37,18 +37,22 @@ public:
     mview_op_type_ = MVIEW_OP_TYPE::UNDEFINE_OP;
     read_snapshot_ = 0;
     parallel_ = 0;
+    session_id_ = 0;
+    start_ts_ = 0;
   }
   ~ObMViewOpArg() { reset(); }
   bool is_valid() const { return table_id_ > 0 &&
                            mview_op_type_ > UNDEFINE_OP; }
   int assign(const ObMViewOpArg& other);
 
-  TO_STRING_KV(K_(table_id), K_(mview_op_type), K_(read_snapshot),
-      K_(parallel));
+  TO_STRING_KV(K_(table_id), K_(mview_op_type), K_(read_snapshot), K_(parallel), K_(session_id),
+               K_(start_ts));
   int64_t table_id_;
   MVIEW_OP_TYPE mview_op_type_;
   int64_t read_snapshot_;
   int64_t parallel_;
+  uint64_t session_id_;
+  int64_t start_ts_;
 };
 
 class ObMViewMdsOpCtx : public mds::BufferCtx

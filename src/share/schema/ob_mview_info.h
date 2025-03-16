@@ -62,6 +62,7 @@ public:
   DEFINE_STRING_GETTER_AND_SETTER(last_refresh_trace_id);
   DEFINE_GETTER_AND_SETTER(int64_t, schema_version);
   DEFINE_GETTER_AND_SETTER(int64_t, refresh_dop);
+  DEFINE_GETTER_AND_SETTER(uint64_t, data_sync_scn);
 
 #undef DEFINE_GETTER_AND_SETTER
 #undef DEFINE_STRING_GETTER_AND_SETTER
@@ -112,7 +113,8 @@ public:
                K_(last_refresh_time),
                K_(last_refresh_trace_id),
                K_(schema_version),
-               K_(refresh_dop));
+               K_(refresh_dop),
+               K_(data_sync_scn));
 
 public:
   static constexpr char *MVIEW_REFRESH_JOB_PREFIX = const_cast<char *>("MVIEW_REFRESH$J_");
@@ -133,6 +135,7 @@ private:
   ObString last_refresh_trace_id_;
   int64_t schema_version_;
   int64_t refresh_dop_;
+  uint64_t data_sync_scn_;
 };
 
 } // namespace schema

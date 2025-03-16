@@ -28,7 +28,9 @@ OB_SERIALIZE_MEMBER(ObMViewOpArg,
                     table_id_,
                     mview_op_type_,
                     read_snapshot_,
-                    parallel_);
+                    parallel_,
+                    session_id_,
+                    start_ts_);
 
 int ObMViewMdsOpHelper::on_register(
       const char* buf,
@@ -91,6 +93,8 @@ int ObMViewOpArg::assign(const ObMViewOpArg& other)
   mview_op_type_ = other.mview_op_type_;
   read_snapshot_ = other.read_snapshot_;
   parallel_ = other.parallel_;
+  session_id_ = other.session_id_;
+  start_ts_ = other.start_ts_;
   return ret;
 }
 
