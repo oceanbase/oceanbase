@@ -765,7 +765,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             break;
           }
         case COLUMN_KEY: {
-            if(column_schema->is_original_rowkey_column()) {
+            if (column_schema->is_original_rowkey_column() || column_schema->is_heap_table_primary_key_column()) {
               cells[cell_idx].set_varchar("PRI");
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                     ObCharset::get_default_charset()));

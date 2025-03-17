@@ -197,6 +197,8 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version_) && col->is_hidden()) {
               // version lower than 4.3.1 does not support SHOW EXTENDED,
               // should not output hidden columns.
+            } else if (table_schema->is_heap_organized_table() && col->is_hidden_pk_column_id(col->get_column_id())) {
+              // heap organized table should not output hidden pk columns
             } else if (col->is_invisible_column() && lib::is_oracle_mode()) { // 忽略 invisible 列
               // mysql 8.0.23 has supported invisivle column, we should not ignore them
               // for mysql
@@ -1344,7 +1346,9 @@ int ObTableColumns::is_primary_key(const ObTableSchema &table_schema,
       && OB_FAIL(rowkey_info.is_rowkey_column(column_schema.get_column_id(), is_pri))) {
     LOG_WARN("check if rowkey column failed.", K(ret), "column_id",
              column_schema.get_column_id(), K(rowkey_info));
-  } else { /*do nothing*/ }
+  } else {
+    is_pri |= column_schema.is_heap_table_primary_key_column();
+  }
   return ret;
 }
 
