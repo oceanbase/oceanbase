@@ -851,7 +851,10 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
           case OB_APP_MIN_COLUMN_ID + 1: {
             index_name.reset();
             //  get the original short index name
-            if (OB_FAIL(ObTableSchema::get_index_name(*allocator_,
+            if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_schema->get_index_type()) {
+              cells[cell_idx].set_varchar(ObString("PRIMARY"));
+              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            } else if (OB_FAIL(ObTableSchema::get_index_name(*allocator_,
                 table_schema.get_table_id(), index_schema->get_table_name_str(),
                 index_name))) {
               SERVER_LOG(WARN, "error get index table name failed", K(ret));

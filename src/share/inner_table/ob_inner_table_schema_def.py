@@ -16596,7 +16596,8 @@ def_table_schema(
                  t.table_name                                                  AS TABLE_NAME,
                  CASE WHEN i.index_type IN (2,4,8,41) THEN 0 ELSE 1 END        AS NON_UNIQUE,
                  db.database_name                                              AS INDEX_SCHEMA,
-                 substr(i.table_name, 7 + instr(substr(i.table_name, 7), '_')) AS INDEX_NAME,
+                 CASE WHEN i.index_type = 41 THEN 'PRIMARY' ELSE
+                 substr(i.table_name, 7 + instr(substr(i.table_name, 7), '_')) END AS INDEX_NAME,
                  c.index_position                                              AS SEQ_IN_INDEX,
                  CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
                  CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
