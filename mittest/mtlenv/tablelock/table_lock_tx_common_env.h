@@ -158,6 +158,8 @@ void MockTxEnv::get_store_ctx(MyTxCtx &my_ctx,
   int64_t tx_lock_timeout = 0;
   concurrent_control::ObWriteFlag write_flag;
   store_ctx.ls_id_ = my_ctx.tx_ctx_.ls_id_;
+  static ObLS fake_ls;
+  store_ctx.ls_ = &fake_ls;
   store_ctx.mvcc_acc_ctx_.init_write(my_ctx.tx_ctx_,
                                      my_ctx.tx_ctx_.mt_ctx_,
                                      my_ctx.tx_ctx_.trans_id_,

@@ -329,7 +329,7 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
                         const common::ObAddr &caller);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
-                                int &state,
+                                int64_t &state,
                                 share::SCN &commit_version)
 {
   share::SCN recycle_scn;
@@ -337,7 +337,7 @@ int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
 }
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
-                                int &state,
+                                int64_t &state,
                                 share::SCN &commit_version,
                                 share::SCN &recycle_scn);
 OB_NOINLINE int gen_trans_id_(ObTransID &trans_id);
@@ -416,12 +416,6 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
 int tx_sanity_check_(ObTxDesc &tx);
-int get_tx_table_(ObLS *ls,
-                  const share::ObLSID &ls_id,
-                  ObTxTable* &tx_table);
-int get_tx_table_guard_(ObLS *ls,
-                        const share::ObLSID &ls_id,
-                        ObTxTableGuard &guard);
 void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,

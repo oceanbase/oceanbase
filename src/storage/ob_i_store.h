@@ -458,7 +458,7 @@ struct ObStoreCtx
   void reset();
   bool is_valid() const
   {
-    return ls_id_.is_valid() && mvcc_acc_ctx_.is_valid();
+    return ls_id_.is_valid() && OB_NOT_NULL(ls_) && mvcc_acc_ctx_.is_valid();
   }
   bool is_read() const { return mvcc_acc_ctx_.is_read(); }
   bool is_write() const { return mvcc_acc_ctx_.is_write(); }
@@ -488,7 +488,7 @@ struct ObStoreCtx
                K_(is_read_store_ctx),
                K_(update_full_column));
   share::ObLSID ls_id_;
-  storage::ObLS *ls_;                              // for performance opt
+  storage::ObLS *ls_;
   int16_t branch_;                                 // parallel write id
   common::ObTabletID tablet_id_;
   mutable ObTableStoreIterator *table_iter_;

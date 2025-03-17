@@ -156,6 +156,9 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.set(&fake_opt_stat_mgr_);
   OZ(fake_lock_wait_mgr_.init());
   tenant_.set(&fake_lock_wait_mgr_);
+  ls_service_.is_inited_ = true;
+  OZ(ls_service_.ls_map_.init(tenant_id_, lib::ObMallocAllocator::get_instance()));
+  tenant_.set(&ls_service_);
   OZ (create_memtable_(100000, memtable_));
   {
     ObColDesc col_desc;
@@ -202,11 +205,11 @@ int ObTxNode::start() {
     fake_tx_table_.ls_ = &fake_ls_;
     fake_tx_table_.online();
     int tx_data_table_offset = offsetof(storage::ObTxTable, tx_data_table_);
-    void* ls_tx_data_table_ptr = (void*)((int64_t)&(mock_ls_.tx_table_) + tx_data_table_offset);
+    void* ls_tx_data_table_ptr = (void*)((int64_t)&(fake_ls_.tx_table_) + tx_data_table_offset);
     ls_tx_data_table_ptr = &fake_tx_table_.tx_data_table_;
-    mock_ls_.tx_table_.is_inited_ = true;
-    mock_ls_.tx_table_.online();
-    mock_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
+    fake_ls_.tx_table_.is_inited_ = true;
+    fake_ls_.tx_table_.online();
+    fake_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
   } else {
     abort();
   }
@@ -305,8 +308,8 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   } while(!is_tx_clean && ++retry_cnt < 1000);
   OX(txs_.stop());
   OZ(txs_.wait_());
+  OZ(drop_ls_(ls_id_));
   if (role_ == Leader && fake_tx_log_adapter_) {
-    OZ(drop_ls_(ls_id_));
     fake_tx_log_adapter_->stop();
     fake_tx_log_adapter_->wait();
     fake_tx_log_adapter_->destroy();
@@ -321,6 +324,7 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   if (role_ == Leader && fake_tx_log_adapter_) {
     delete fake_tx_log_adapter_;
   }
+  fake_ls_.ls_meta_.ls_id_ = ObLSID(1001);
   FAST_FAIL();
   ObTenantEnv::set_tenant(NULL);
 }
@@ -334,7 +338,7 @@ int ObTxNode::create_memtable_(const int64_t tablet_id, memtable::ObMemtable *&m
   table_key.scn_range_.start_scn_.convert_for_gts(100);
   table_key.scn_range_.end_scn_.set_max();
   ObLSHandle ls_handle;
-  ls_handle.set_ls(fake_ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
+  ls_handle.set_ls(ls_service_.ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
   OZ (t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0));
   if (OB_SUCC(ret)) {
     mt = t;
@@ -348,20 +352,24 @@ int ObTxNode::create_ls_(const ObLSID ls_id) {
                                 ls_id,
                                 &fake_tx_table_,
                                 &fake_lock_table_,
-                                *mock_ls_.get_tx_svr(),
+                                *fake_ls_.get_tx_svr(),
                                 (ObITxLogParam*)0x01,
                                 fake_tx_log_adapter_));
   if (Leader == role_) {
     OZ(get_location_adapter_().fill(ls_id, addr_));
   }
-  mock_ls_.get_tx_svr()->online();
+  fake_ls_.ls_meta_.ls_id_ = ls_id;
+  fake_ls_.get_tx_svr()->online();
+  fake_ls_.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD);
+  MTL(ObLSService*)->ls_map_.add_ls(fake_ls_);
   return ret;
 }
 
 int ObTxNode::drop_ls_(const ObLSID ls_id) {
   int ret = OB_SUCCESS;
   OZ(txs_.tx_ctx_mgr_.remove_ls(ls_id, true));
-  OZ(get_location_adapter_().remove(ls_id));
+  get_location_adapter_().remove(ls_id);
+  OZ(MTL(ObLSService*)->ls_map_.del_ls(ls_id));
   return ret;
 }
 
@@ -547,7 +555,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(&tenant_);
   ObStoreCtx read_store_ctx;
-  read_store_ctx.ls_ = &mock_ls_;
+  read_store_ctx.ls_ = &fake_ls_;
   read_store_ctx.ls_id_ = ls_id_;
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
@@ -647,7 +655,7 @@ int ObTxNode::write(ObTxDesc &tx,
   iter->reset();
   ObITable *mtb = memtable_;
   iter->add_table(mtb);
-  write_store_ctx.ls_ = &mock_ls_;
+  write_store_ctx.ls_ = &fake_ls_;
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
   write_store_ctx.branch_ = branch;
@@ -705,6 +713,7 @@ int ObTxNode::write_begin(ObTxDesc &tx,
   ObITable *mtb = memtable_;
   iter->add_table(mtb);
   write_store_ctx.ls_id_ = ls_id_;
+  write_store_ctx.ls_ = &fake_ls_;
   write_store_ctx.table_iter_ = iter;
   concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
@@ -783,10 +792,10 @@ int ObTxNode::replay(const void *buffer,
   } else {
     share::SCN log_scn;
     log_scn.convert_for_tx(ts_ns);
-    ObFakeTxReplayExecutor executor(&mock_ls_,
+    ObFakeTxReplayExecutor executor(&fake_ls_,
                                     ls_id_,
                                     tenant_id_,
-                                    mock_ls_.get_tx_svr(),
+                                    fake_ls_.get_tx_svr(),
                                     lsn,
                                     log_scn,
                                     base_header);
