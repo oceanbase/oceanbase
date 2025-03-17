@@ -46,7 +46,7 @@ private:
   static int get_job_id(const uint64_t tenant_id,
                         ObMySQLTransaction &trans,
                         int64_t &job_id);
-  static int get_job_action(ObSqlString &job_action);
+  static int get_job_action(const schema::ObSysVariableSchema &sys_variable, ObSqlString &job_action);
   static int create_flush_ncomp_dll_job_common(const schema::ObSysVariableSchema &sys_variable,
                                                 const uint64_t tenant_id,
                                                 const bool is_enabled,

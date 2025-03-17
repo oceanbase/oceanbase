@@ -30,6 +30,9 @@ public:
     sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int upgrade_all(
     sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int get_job_action(ObSqlString &job_action);
+  static int flush_dll_ncomp(
+    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
 };
 
 } // end of pl

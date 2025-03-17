@@ -109,36 +109,16 @@ int ObFlushNcompDll::get_job_id(const uint64_t tenant_id,
   return ret;
 }
 
-int ObFlushNcompDll::get_job_action(ObSqlString &job_action)
+int ObFlushNcompDll::get_job_action(const ObSysVariableSchema &sys_variable, ObSqlString &job_action)
 {
   int ret = OB_SUCCESS;
-
-  common::ObZone zone;
-  ObArray<ObServerInfoInTable> servers_info;
-  common::hash::ObHashSet<ObServerInfoInTable::ObBuildVersion> observer_version_set;
-  bool need_comma = false;
-
+  bool is_oracle_mode = false;
   job_action.reset();
-
-  OZ (observer_version_set.create((4)));
-  OZ (share::ObAllServerTracer::get_instance().get_servers_info(zone, servers_info));
-  for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); ++i) {
-    OZ (observer_version_set.set_refactored(servers_info.at(i).get_build_version()));
-  }
-
-  //OZ (get_package_and_svn(build_version, sizeof(build_version)));
-  //OZ (job_action.assign_fmt("delete FROM %s where build_version != '%s'", OB_ALL_NCOMP_DLL_V2_TNAME, build_version));
-  OZ (job_action.append_fmt("delete FROM %s where build_version not in (", OB_ALL_NCOMP_DLL_V2_TNAME));
-  for (common::hash::ObHashSet<ObServerInfoInTable::ObBuildVersion>::const_iterator iter = observer_version_set.begin();
-      OB_SUCC(ret) && iter != observer_version_set.end();
-      iter++) {
-    OZ(job_action.append_fmt("%s'%s'", need_comma ? ", " : "", iter->first.ptr()));
-    OX (need_comma = true);
-  }
-  OZ(job_action.append(")"));
-
-  if (observer_version_set.created()) {
-    observer_version_set.destroy();
+  OZ (sys_variable.get_oracle_mode(is_oracle_mode));
+  if (!is_oracle_mode) {
+    OZ (job_action.assign_fmt("__DBMS_UPGRADE.FLUSH_DLL_NCOMP()"));
+  } else {
+    OZ (job_action.assign_fmt("\"__DBMS_UPGRADE\".FLUSH_DLL_NCOMP()"));
   }
 
   return ret;
@@ -189,7 +169,7 @@ int ObFlushNcompDll::create_flush_ncomp_dll_job(const ObSysVariableSchema &sys_v
     LOG_WARN("fail to check ncomp dll job", K(ret));
   } else if (is_job_exists) {
     // do nothing
-  } else if (OB_FAIL(get_job_action(job_action))) {
+  } else if (OB_FAIL(get_job_action(sys_variable, job_action))) {
     LOG_WARN("fail to get job action", K(ret));
   } else if (OB_FAIL(create_flush_ncomp_dll_job_common(sys_variable,
                                                tenant_id,
