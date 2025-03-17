@@ -15,6 +15,7 @@
 #include "pl/ob_pl_router.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "pl/ob_pl_dependency_util.h"
 
 namespace oceanbase {
 using namespace common;
@@ -175,6 +176,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info_.get_routine_params().count(); ++i) {
     ObRoutineParam *param = routine_info_.get_routine_params().at(i);
     ObPLDataType param_type;
+    ObSEArray<ObSchemaObjVersion, 4> deps;
     CK (OB_NOT_NULL(param));
     OX (param_type.set_enum_set_ctx(&func_ast.get_enum_set_ctx()));
     OZ (pl::ObPLDataType::transform_from_iparam(param,
@@ -182,7 +184,8 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
                                                 session_info_,
                                                 inner_allocator_,
                                                 sql_proxy_,
-                                                param_type));
+                                                param_type,
+                                                &deps));
     if (OB_SUCC(ret)) {
       if (param->is_ret_param()) {
         func_ast.set_ret_type(param_type);
@@ -198,6 +201,11 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
         LOG_WARN("failed to add argument", K(param->get_param_name()), K(param->get_param_type()), K(ret));
       } else {
         // do nothing
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObPLDependencyUtil::add_dependency_objects(&func_ast.get_dependency_table(), deps))) {
+          LOG_WARN("fail to add dependency objects", K(ret));
+        }
       }
     }
   }

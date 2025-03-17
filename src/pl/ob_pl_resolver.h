@@ -306,7 +306,8 @@ public:
                               sql::ObResolverParams &params,
                               ObRawExpr *&expr,
                               bool for_write = false,
-                              const ObPLDataType *expected_type = NULL);
+                              const ObPLDataType *expected_type = NULL,
+                              ObPLDependencyTable *deps = NULL);
   static int resolve_local_var(const ParseNode &node,
                                ObPLBlockNS &ns,
                                ObRawExprFactory &expr_factory,

@@ -47,7 +47,8 @@ int ObCallProcedureResolver::check_param_expr_legal(ObRawExpr *param)
 int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
                                              const ObRoutineInfo *routine_info,
                                              ObCallProcedureInfo *call_proc_info,
-                                             ObIArray<ObRawExpr*> &params)
+                                             ObIArray<ObRawExpr*> &params,
+                                             pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   bool has_assign_param = false;
@@ -71,13 +72,13 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
         LOG_WARN("param node is NULL", K(i), K(ret));
       } else if (T_SP_CPARAM == params_node->children_[i]->type_) {
         has_assign_param = true;
-        if (OB_FAIL(resolve_cparam_with_assign(params_node->children_[i], routine_info, params))) {
+        if (OB_FAIL(resolve_cparam_with_assign(params_node->children_[i], routine_info, params, deps))) {
           LOG_WARN("failed to resolve cparam with assign", K(ret));
         }
       } else if (has_assign_param) {
         ret = OB_ERR_SP_WRONG_ARG_NUM;
         LOG_WARN("can not set param without assign after param with assign", K(ret));
-      } else if (OB_FAIL(resolve_cparam_without_assign(params_node->children_[i], i, params))) {
+      } else if (OB_FAIL(resolve_cparam_without_assign(params_node->children_[i], i, params, deps))) {
         LOG_WARN("failed to resolve cparam without assign", K(ret), K(i));
       }
     }
@@ -124,7 +125,8 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
 
 int ObCallProcedureResolver::resolve_cparam_without_assign(const ParseNode *param_node,
                                                            const int64_t position,
-                                                           ObIArray<ObRawExpr*> &params)
+                                                           ObIArray<ObRawExpr*> &params,
+                                                           pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(param_node));
@@ -136,7 +138,7 @@ int ObCallProcedureResolver::resolve_cparam_without_assign(const ParseNode *para
   } else if (OB_NOT_NULL(params.at(position))) {
     ret = OB_ERR_SP_DUP_PARAM;
     LOG_WARN("dup params", K(ret), K(position));
-  } else if (OB_FAIL(pl::ObPLResolver::resolve_raw_expr(*param_node, params_, param))) {
+  } else if (OB_FAIL(pl::ObPLResolver::resolve_raw_expr(*param_node, params_, param, false, nullptr, &deps))) {
     LOG_WARN("failed to resolve const expr", K(ret));
   } else if (OB_ISNULL(param)) {
     ret = OB_ERR_UNEXPECTED;
@@ -150,12 +152,14 @@ int ObCallProcedureResolver::resolve_cparam_without_assign(const ParseNode *para
   } else {
     params.at(position) = param;
   }
+
   return ret;
 }
 
 int ObCallProcedureResolver::resolve_cparam_with_assign(const ParseNode *param_node,
                                                         const ObRoutineInfo* routine_info,
-                                                        ObIArray<ObRawExpr*> &params)
+                                                        ObIArray<ObRawExpr*> &params,
+                                                        pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(param_node));
@@ -192,7 +196,7 @@ int ObCallProcedureResolver::resolve_cparam_with_assign(const ParseNode *param_n
       } else if (OB_UNLIKELY(-1 == position)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid postition value", K(ret), K(position));
-      } else if (OB_FAIL(resolve_cparam_without_assign(param_node->children_[1], position, params))) {
+      } else if (OB_FAIL(resolve_cparam_without_assign(param_node->children_[1], position, params, deps))) {
         LOG_WARN("failed to resolve cparam without assign", K(ret));
       }
     }
@@ -385,6 +389,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
     }
     ObSEArray<ObRawExpr*, 16> expr_params;
+    pl::ObPLDependencyTable deps;
     // 获取routine schem info
     if (OB_SUCC(ret)) {
       ObSynonymChecker synonym_checker;
@@ -434,14 +439,15 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OZ (schema_checker_->get_schema_mgr()->get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
         OX (call_proc_info->set_tenant_schema_version(tenant_schema_version));
         OX (call_proc_info->set_sys_schema_version(sys_schema_version));
-        OZ (call_proc_info->init_dependency_table_store(1 + (synonym_checker.has_synonym() ? synonym_checker.get_synonym_ids().count() : 0)));
-        OZ (call_proc_info->get_dependency_table().push_back(obj_version));
+        OZ (deps.push_back(obj_version));
         OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker,
-                                                         *schema_checker_->get_schema_mgr(), &call_proc_info->get_dependency_table()));
+                                                         *schema_checker_->get_schema_mgr(), &deps));
       }
     }
     ObSEArray<ObRawExpr*, 16> params;
-    OZ (resolve_cparams(params_node, proc_info, call_proc_info, params));
+    OZ (resolve_cparams(params_node, proc_info, call_proc_info, params, deps));
+    OZ (call_proc_info->init_dependency_table_store(deps.count()));
+    OZ (call_proc_info->get_dependency_table().assign(deps));
 
     if (OB_SUCC(ret)) {
       if (OB_INVALID_ID == proc_info->get_package_id()) {
