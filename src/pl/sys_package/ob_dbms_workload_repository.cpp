@@ -6610,8 +6610,8 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
     "IO Size: The total read or write size(MB) of background task or SQL",
     "IO Bandwidth: Average IO size(MB) consumed per second",
     "Type: read or write",
-    "Object ID: The tablet_id with the highest read or write samples",
-    "% Object ID: The ratio of the tablet_id with the highest read or write samples to the total samples of tablet_ids in entire background task or SQL",
+    "Object ID: The tablet_id with the highest read or write bytes",
+    "% Object ID: The ratio of the tablet_id with the highest read or write bytes to the total bytes of tablet_ids in entire background task or SQL",
   };
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
@@ -6654,11 +6654,9 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
       } else if (OB_FAIL(sql_string.append_fmt(
         "sql_data AS ("
             "SELECT svr_ip, svr_port, NULL AS program, NULL AS module, NULL AS action, "
-                    "sql_id, plan_hash, io_count, io_bytes, type, tablet_id, tablet_samples, "
+                    "sql_id, plan_hash, io_count, io_bytes, type, tablet_id, "
                     "ROW_NUMBER() OVER(PARTITION BY svr_ip, svr_port, sql_id, plan_hash, "
-                                      "type ORDER BY tablet_samples DESC) AS rank,"
-                    "SUM(tablet_samples) OVER(PARTITION BY svr_ip, svr_port, sql_id, "
-                                            "plan_hash, type) AS total_tablet_samples, "
+                                      "type ORDER BY io_bytes DESC) AS rank,"
                     "SUM(io_count) OVER(PARTITION BY svr_ip, svr_port, sql_id, "
                                         "plan_hash, type) AS total_io_counts, "
                     "SUM(io_bytes) OVER(PARTITION BY svr_ip, svr_port, "
@@ -6672,7 +6670,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
                         "CASE rn_ WHEN 1 THEN read_count WHEN 2 THEN write_count END AS io_count, "
                         "CASE rn_ WHEN 1 THEN read_bytes WHEN 2 THEN write_bytes END AS io_bytes, "
                         "CASE rn_ WHEN 1 THEN 'disk_read' WHEN 2 THEN 'disk_write' END AS type, "
-                        "tablet_id, tablet_samples, tablet_tm_delta_time "
+                        "tablet_id, tablet_tm_delta_time "
                 "FROM  ")) {
         LOG_WARN("Failed to append top io sql");
       } else if (sql_string.append_fmt(
@@ -6682,24 +6680,20 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
                               "SUM(delta_read_io_bytes * count_weight) AS read_bytes, "
                               "SUM(delta_write_io_requests * count_weight) AS write_count, "
                               "SUM(delta_write_io_bytes * count_weight) AS write_bytes, tablet_id, "
-                              "%s, SUM(tm_delta_time * count_weight) AS tablet_tm_delta_time "
+                              "SUM(tm_delta_time * count_weight) AS tablet_tm_delta_time "
                       "FROM session_data sd "
                       "WHERE sql_id IS NOT NULL AND plan_hash IS NOT NULL "
                       "GROUP BY svr_ip, svr_port, sql_id, plan_hash, tablet_id) ,"
                       "(SELECT ROW_NUMBER() OVER(ORDER BY NULL) AS rn_ FROM table(generator(2)))"
-                  ") WHERE io_count > 0),",
-                  lib::is_oracle_mode() ? "SUM(DECODE(tablet_id, NULL, 0, count_weight)) AS tablet_samples "
-                                        : "SUM(IF(tablet_id IS NOT NULL, count_weight, 0)) AS tablet_samples "
+                  ") WHERE io_count > 0),"
       )) {
         LOG_WARN("Failed to append top io sql");
       } else if (sql_string.append_fmt(
         "module_data AS ( "
            "SELECT svr_ip, svr_port, program, module, action, sql_id, plan_hash, io_count, "
-                  "io_bytes, type, tablet_id, tablet_samples, "
+                  "io_bytes, type, tablet_id, "
                   "ROW_NUMBER() OVER(PARTITION BY svr_ip, svr_port, program, module, action, "
-                                    "type ORDER BY tablet_samples DESC) AS rank, "
-                  "SUM(tablet_samples) OVER(PARTITION BY svr_ip, svr_port, program, module, "
-                                            "action, type) AS total_tablet_samples, "
+                                    "type ORDER BY io_bytes DESC) AS rank, "
                   "SUM(io_count) OVER(PARTITION BY svr_ip, svr_port, program, module, "
                                       "action, type) AS total_io_counts, "
                   "SUM(io_bytes) OVER(PARTITION BY svr_ip, svr_port, program, "
@@ -6714,7 +6708,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
                         "CASE rn_ WHEN 1 THEN read_count WHEN 2 THEN write_count END AS io_count, "
                         "CASE rn_ WHEN 1 THEN read_bytes WHEN 2 THEN write_bytes END AS io_bytes, "
                         "CASE rn_ WHEN 1 THEN 'disk_read' WHEN 2 THEN 'disk_write' END AS type, "
-                        "tablet_id, tablet_samples, tablet_tm_delta_time "
+                        "tablet_id, tablet_tm_delta_time "
                 "FROM "
       )) {
         LOG_WARN("Failed to append top io sql");
@@ -6724,24 +6718,22 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
                               "SUM(delta_read_io_bytes * count_weight) AS read_bytes, "
                               "SUM(delta_write_io_requests * count_weight) AS write_count, "
                               "SUM(delta_write_io_bytes * count_weight) AS write_bytes, tablet_id, "
-                              "%s, SUM(tm_delta_time * count_weight) AS tablet_tm_delta_time "
+                              "SUM(tm_delta_time * count_weight) AS tablet_tm_delta_time "
                       "FROM session_data sd "
                       "WHERE sql_id IS NULL AND plan_hash IS NULL "
                       "GROUP BY svr_ip, svr_port, program, module, action, tablet_id), "
                       "(SELECT ROW_NUMBER() OVER(ORDER BY NULL) AS rn_ FROM table(generator(2))) "
-                  ") WHERE io_count > 0)",
-                  lib::is_oracle_mode() ? "SUM(DECODE(tablet_id, NULL, 0, count_weight)) AS tablet_samples "
-                                        : "SUM(IF(tablet_id IS NOT NULL, count_weight, 0)) AS tablet_samples "
+                  ") WHERE io_count > 0)"
       )) {
         LOG_WARN("Failed to append top io sql");
       } else if (sql_string.append_fmt(
         "SELECT * FROM ("
                 "SELECT %s AS NODE, PROGRAM, MODULE, ACTION, SQL_ID, PLAN_HASH, IO_COUNT, IO_BYTES, TOTAL_DELTA_TIME, "
-                        "TYPE, TABLET_ID, TABLET_SAMPLES, TOTAL_TABLET_SAMPLES, TOTAL_IO_COUNTS, TOTAL_IO_BYTES "
+                        "TYPE, TABLET_ID, TOTAL_IO_COUNTS, TOTAL_IO_BYTES "
                 "FROM sql_data WHERE RANK=1 "
                 "UNION ALL "
                 "SELECT %s AS NODE, PROGRAM, MODULE, ACTION, SQL_ID, PLAN_HASH, IO_COUNT, IO_BYTES, TOTAL_DELTA_TIME, "
-                        "TYPE, TABLET_ID, TABLET_SAMPLES, TOTAL_TABLET_SAMPLES, TOTAL_IO_COUNTS, TOTAL_IO_BYTES "
+                        "TYPE, TABLET_ID, TOTAL_IO_COUNTS, TOTAL_IO_BYTES "
                 "FROM module_data WHERE RANK=1 "
         ") ORDER BY TOTAL_IO_BYTES / TOTAL_DELTA_TIME DESC %s",
         lib::is_oracle_mode() ? "svr_ip || ':' || svr_port" : "CONCAT(svr_ip, ':', svr_port)",
@@ -6778,9 +6770,8 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(*result, "SQL_ID", sql_id_char, 64, tmp_real_str_len);
             EXTRACT_UINT_FIELD_FOR_ASH_STR(*result, "PLAN_HASH", plan_hash, uint64_t);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "TABLET_ID", tablet_id, int64_t);
-            EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "TABLET_SAMPLES", tablet_samples, int64_t);
-            EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "TOTAL_TABLET_SAMPLES", total_tablet_samples, int64_t);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "TOTAL_IO_COUNTS", total_io_counts, int64_t);
+            EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "IO_BYTES", io_bytes, int64_t);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "TOTAL_IO_BYTES", total_io_bytes, int64_t);
             char type_char[32] = "";
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(*result, "TYPE", type_char, 32, tmp_real_str_len);
@@ -6789,11 +6780,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_bandwidth(const AshReportParams &
             char total_io_mega_byte[64] = "0";
             calc_avg_active_sessions(total_io_bytes, 1024.0 * 1024.0, total_io_mega_byte);
             char tablet_ratio_char[64] = "-";
-            if (tablet_samples > 0) {
-              calc_ratio(tablet_samples, total_tablet_samples, tablet_ratio_char);
-            } else {
-              snprintf(tablet_id_char, 64, "-");
-            }
+            calc_ratio(io_bytes, total_io_bytes, tablet_ratio_char);
             char io_ps_char[64] = "0";
             char io_bandwidth_char[64] = "0";
             if (total_delta_time > 0) {
