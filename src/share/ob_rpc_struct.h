@@ -2325,7 +2325,8 @@ public:
       alter_mview_arg_(),
       is_alter_mlog_attributes_(false),
       alter_mlog_arg_(),
-      part_storage_cache_policy_()
+      part_storage_cache_policy_(),
+      data_version_(0)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2433,7 +2434,8 @@ public:
                K_(alter_mview_arg),
                K_(is_alter_mlog_attributes),
                K_(alter_mlog_arg),
-               K_(part_storage_cache_policy));
+               K_(part_storage_cache_policy),
+               K_(data_version));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2480,6 +2482,7 @@ public:
   bool is_alter_mlog_attributes_;
   ObAlterMLogArg alter_mlog_arg_;
   common::ObString part_storage_cache_policy_;
+  uint64_t data_version_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -2794,7 +2797,8 @@ public:
         is_rebuild_index_(false),
         is_index_scope_specified_(false),
         is_offline_rebuild_(false),
-        index_key_(-1)
+        index_key_(-1),
+        data_version_(0)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2831,6 +2835,7 @@ public:
     is_index_scope_specified_ = false;
     is_offline_rebuild_ = false;
     index_key_ = -1;
+    data_version_ = 0;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2873,6 +2878,7 @@ public:
       is_index_scope_specified_ = other.is_index_scope_specified_;
       is_offline_rebuild_ = other.is_offline_rebuild_;
       index_key_ = other.index_key_;
+      data_version_ = other.data_version_;
     }
     return ret;
   }
@@ -2946,6 +2952,7 @@ public:
   bool is_index_scope_specified_;
   bool is_offline_rebuild_;
   int64_t index_key_;
+  uint64_t data_version_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg

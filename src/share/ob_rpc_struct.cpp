@@ -2673,7 +2673,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
               alter_mview_arg_,
               is_alter_mlog_attributes_,
               alter_mlog_arg_,
-              part_storage_cache_policy_);
+              part_storage_cache_policy_,
+              data_version_);
 
   return ret;
 }
@@ -2784,7 +2785,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               alter_mview_arg_,
               is_alter_mlog_attributes_,
               alter_mlog_arg_,
-              part_storage_cache_policy_);
+              part_storage_cache_policy_,
+              data_version_);
   return ret;
 }
 
@@ -2842,7 +2844,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 alter_mview_arg_,
                 is_alter_mlog_attributes_,
                 alter_mlog_arg_,
-                part_storage_cache_policy_);
+                part_storage_cache_policy_,
+                data_version_);
   }
 
   if (OB_FAIL(ret)) {
@@ -3394,7 +3397,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     is_rebuild_index_,
                     is_index_scope_specified_,
                     is_offline_rebuild_,
-                    index_key_);
+                    index_key_,
+                    data_version_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,
