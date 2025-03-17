@@ -35,6 +35,7 @@ static const int64_t OB_MAX_PL_IDENT_LENGTH = 128; // latest oracle ident max le
 static const int64_t OB_MAX_MYSQL_PL_IDENT_LENGTH = 64;
 
 static const ObString PL_IMPLICIT_SAVEPOINT = "PL/SQL@IMPLICIT_SAVEPOINT";
+static const ObString PL_INNER_EXPR_SAVEPOINT = "PL/SQL@EXPR_SAVEPOINT";
 
 OB_INLINE uint64_t get_tenant_id_by_object_id(uint64_t object_id)
 {

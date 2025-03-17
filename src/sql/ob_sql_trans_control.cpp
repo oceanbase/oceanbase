@@ -1142,7 +1142,9 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
 
 #define CHECK_EXPLICIT_SAVEPOINT_TXN_FREE_ROUTE_ALLOWED(savepoint)      \
   if (OB_SUCC(ret) && !session->is_inner() && session->is_txn_free_route_temp()) { \
-    if (pl::PL_IMPLICIT_SAVEPOINT != savepoint) {                       \
+    if (pl::PL_INNER_EXPR_SAVEPOINT == savepoint) {                       \
+    } else if (pl::PL_IMPLICIT_SAVEPOINT == savepoint) {                \
+    } else {                                                            \
       ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                          \
       LOG_WARN("create savepoint is not allowed executed on txn tmp node", K(ret), \
                K(savepoint), K(session->get_txn_free_route_ctx()), KPC(session)); \
@@ -1150,7 +1152,7 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
   }
 
 
-#define CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name)                            \
+#define CHECK_DBLINK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name)                            \
   if (OB_SUCC(ret) && (sp_name == DBLINK_DEFAULT_SAVEPOINT || sp_name == PL_DBLINK_DEFAULT_SAVEPOINT)) { \
     ret = OB_ERR_INVALID_CHARACTER_STRING;                              \
     LOG_WARN("this savepoint name is not allowed", K(ret), K(sp_name));             \
@@ -1181,7 +1183,7 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
       const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
       if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
         // only check savepoint name in dblink trans
-        CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name);
+        CHECK_DBLINK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name);
         OZ (ObTMService::tm_create_savepoint(exec_ctx, sp_name));
       }
     }
