@@ -966,6 +966,9 @@ int ObODPSJNITableRowIterator::next_task(const int64_t capacity)
         } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_row_count(
                 task_alloc_, part_spec, real_time_partition_row_count))) {
           LOG_WARN("failed to get partition row count", K(ret));
+        } else if (OB_UNLIKELY(-1 == real_time_partition_row_count)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("get an invalid partition", K(ret), K(part_spec));
         } else if (start >= real_time_partition_row_count) {
           start = real_time_partition_row_count;
           step = 0;
@@ -2102,7 +2105,7 @@ int ObOdpsPartitionJNIScannerMgr::fetch_row_count(uint64_t tenant_id,
         }
 
         if (!is_found) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ODPS_ERROR;
           LOG_WARN("failed to find any parition spec on remote", K(ret),
                   K(odps_partition.file_url_));
         }

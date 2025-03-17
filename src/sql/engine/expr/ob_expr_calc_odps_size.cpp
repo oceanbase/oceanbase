@@ -106,6 +106,11 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                   row_count))) {
             LOG_WARN("failed to fetch row count", K(ret), K(file_url),
                      K(table_schema->get_external_properties()));
+          } else {
+            // -1 means the partition spec not exists
+            LOG_TRACE("fetch row count with partition spec",
+                     K(ret), K(row_count), K(file_url),
+                     K(table_schema->get_external_properties()));
           }
 #else
           ret = OB_NOT_SUPPORTED;
