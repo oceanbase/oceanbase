@@ -123,6 +123,24 @@ static constexpr char check_table_view_invalid2[] =
     "'Corrupt' As Msg_text "
     "FROM dual)";
 
+int ObShowResolver::check_db_access_for_show_sql(const ObShowResolverContext &show_resv_ctx,
+                                                 ObSessionPrivInfo &session_priv,
+                                                 const common::ObIArray<uint64_t> &enable_role_id_array)
+{
+  int ret = OB_SUCCESS;
+  ObString show_db_name = show_resv_ctx.show_database_name_;
+  if (OB_FAIL(schema_checker_->check_db_access(session_priv, enable_role_id_array, show_db_name))) {
+    if (OB_ERR_NO_DB_PRIVILEGE == ret) {
+      LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                      session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                      show_db_name.length(), show_db_name.ptr());
+    } else {
+      LOG_WARN("fail to check priv", K(ret));
+    }
+  } else { /* do nothing */ }
+  return ret;
+}
+
 int ObShowResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -217,91 +235,82 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("database id is invalid", K(ret), K(show_db_id));
+          } else if (OB_FAIL(check_db_access_for_show_sql(show_resv_ctx, session_priv, enable_role_id_array))) {
+            LOG_WARN("check db access for show sql failed", K(ret));
           } else {
-            show_db_name = show_resv_ctx.show_database_name_;
-            if (OB_FAIL(schema_checker_->check_db_access(session_priv, enable_role_id_array, show_db_name))) {
-              if (OB_ERR_NO_DB_PRIVILEGE == ret) {
-                LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                               session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                               show_db_name.length(), show_db_name.ptr());
+            /* (parse_tree.children_[2]->value_)&1        ->  FULL
+             * ((parse_tree.children_[2]->value_)>>1)&1   ->  EXTENDED
+             * ObServer does not have hidden tables created by failed ALTER TABLE
+             * statements, hence we do nothing for "EXTENDED"
+             */
+            bool is_full = (1 == ((parse_tree.children_[2]->value_)&1));
+            bool is_extended = (1 == (((parse_tree.children_[2]->value_)>>1)&1));
+            bool is_compat; // compatible mode for version lower than 4.2.2 which does not support SHOW EXTENDED
+            uint64_t min_data_version;
+            if (OB_UNLIKELY(((parse_tree.children_[2]->value_)>>2) != 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node value unexpected", K(ret), K(parse_tree.children_[2]->value_));
+              break;
+            } else if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_data_version))) {
+              LOG_WARN("get min data version failed", K(ret), K(real_tenant_id));
+            } else if (OB_FALSE_IT(is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version))) {
+            } else if (OB_UNLIKELY(is_compat && is_extended)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("version lower than 4.2.2 or 4.3.1 does not support show extended", K(ret));
+            } else if (!is_full) {
+              if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
+                if (OB_UNLIKELY(condition_node->num_child_ != 2
+                                || NULL == condition_node->children_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid like parse node",
+                      K(ret),
+                      K(condition_node->num_child_),
+                      K(condition_node->children_));
+                } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
+                                        || NULL == condition_node->children_[1])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid like parse node",
+                      K(ret),
+                      K(condition_node->num_child_),
+                      K(condition_node->children_[0]),
+                      K(condition_node->children_[1]));
+
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES_LIKE,
+                                  show_resv_ctx.show_database_name_.length(),
+                                  show_resv_ctx.show_database_name_.ptr(),
+                                  static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
+                                  condition_node->children_[0]->str_value_);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                }
               } else {
-                LOG_WARN("fail to check priv", K(ret));
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES, show_resv_ctx.show_database_name_.length(),
+                                show_resv_ctx.show_database_name_.ptr());
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
               }
             } else {
-              /* (parse_tree.children_[2]->value_)&1        ->  FULL
-               * ((parse_tree.children_[2]->value_)>>1)&1   ->  EXTENDED
-               * ObServer does not have hidden tables created by failed ALTER TABLE
-               * statements, hence we do nothing for "EXTENDED"
-               */
-              bool is_full = (1 == ((parse_tree.children_[2]->value_)&1));
-              bool is_extended = (1 == (((parse_tree.children_[2]->value_)>>1)&1));
-              bool is_compat; // compatible mode for version lower than 4.2.2 which does not support SHOW EXTENDED
-              uint64_t min_data_version;
-              if (OB_UNLIKELY(((parse_tree.children_[2]->value_)>>2) != 0)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("node value unexpected", K(ret), K(parse_tree.children_[2]->value_));
-                break;
-              } else if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_data_version))) {
-                LOG_WARN("get min data version failed", K(ret), K(real_tenant_id));
-              } else if (OB_FALSE_IT(is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version))) {
-              } else if (OB_UNLIKELY(is_compat && is_extended)) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("version lower than 4.2.2 or 4.3.1 does not support show extended", K(ret));
-              } else if (!is_full) {
-                if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
-                  if (OB_UNLIKELY(condition_node->num_child_ != 2
-                                  || NULL == condition_node->children_)) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid like parse node",
-                        K(ret),
-                        K(condition_node->num_child_),
-                        K(condition_node->children_));
-                  } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
-                                         || NULL == condition_node->children_[1])) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid like parse node",
-                        K(ret),
-                        K(condition_node->num_child_),
-                        K(condition_node->children_[0]),
-                        K(condition_node->children_[1]));
-
-                  } else {
-                    GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES_LIKE,
-                                   show_resv_ctx.show_database_name_.length(),
-                                   show_resv_ctx.show_database_name_.ptr(),
-                                   static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
-                                   condition_node->children_[0]->str_value_);
-                    GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
-                  }
+              if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
+                if (OB_UNLIKELY(condition_node->num_child_ != 2
+                                || NULL == condition_node->children_[0]
+                                || NULL == condition_node->children_[1])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid like parse node",
+                      K(ret),
+                      K(condition_node->num_child_),
+                      K(condition_node->children_[0]),
+                      K(condition_node->children_[1]));
                 } else {
-                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES, show_resv_ctx.show_database_name_.length(),
-                                 show_resv_ctx.show_database_name_.ptr());
-                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES_LIKE,
+                                  show_resv_ctx.show_database_name_.length(),
+                                  show_resv_ctx.show_database_name_.ptr(),
+                                  static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
+                                  condition_node->children_[0]->str_value_);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
                 }
               } else {
-                if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
-                  if (OB_UNLIKELY(condition_node->num_child_ != 2
-                                  || NULL == condition_node->children_[0]
-                                  || NULL == condition_node->children_[1])) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid like parse node",
-                        K(ret),
-                        K(condition_node->num_child_),
-                        K(condition_node->children_[0]),
-                        K(condition_node->children_[1]));
-                  } else {
-                    GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES_LIKE,
-                                   show_resv_ctx.show_database_name_.length(),
-                                   show_resv_ctx.show_database_name_.ptr(),
-                                   static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
-                                   condition_node->children_[0]->str_value_);
-                    GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
-                  }
-                } else {
-                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES, show_resv_ctx.show_database_name_.length(),
-                                 show_resv_ctx.show_database_name_.ptr());
-                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
-                }
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES, show_resv_ctx.show_database_name_.length(),
+                                show_resv_ctx.show_database_name_.ptr());
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
               }
             }
 
@@ -1059,6 +1068,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("database id is invalid", K(ret), K(show_db_id));
+            } else if (OB_FAIL(check_db_access_for_show_sql(show_resv_ctx, session_priv, enable_role_id_array))) {
+              LOG_WARN("check db access for show sql failed", K(ret));
             } else {
               show_resv_ctx.stmt_type_ = stmt::T_SHOW_TABLE_STATUS;
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLE_STATUS);
@@ -1111,6 +1122,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("database id is invalid", K(ret), K(show_db_id));
+            } else if (OB_FAIL(check_db_access_for_show_sql(show_resv_ctx, session_priv, enable_role_id_array))) {
+              LOG_WARN("check db access for show sql failed", K(ret));
             } else {
               int64_t proc_type = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
               show_resv_ctx.stmt_type_ = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? stmt::T_SHOW_PROCEDURE_STATUS : stmt::T_SHOW_FUNCTION_STATUS;
@@ -3656,7 +3669,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLE_STATUS,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PROCEDURE_STATUS,
                        NULL,
-                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and d.database_id = %ld and p.routine_type = %ld ORDER BY name COLLATE utf8mb4_bin ASC",
+                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and d.database_id = %ld and p.routine_type = %ld and (0 = sys_privilege_check('routine_acc', effective_tenant_id()) or 0 = sys_privilege_check('routine_acc', effective_tenant_id(), d.database_name, p.routine_name, p.routine_type)) ORDER BY name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRIGGERS,
@@ -3751,12 +3764,12 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_DATABASES_LIKE,
                        "Database");
 DEFINE_SHOW_CLAUSE_SET(SHOW_DATABASES_STATUS,
                        NULL,
-                       "select db as `Database`, case when sum(read_only) = 0 then \'read write\' when sum(read_only) < count(read_only) then \'partially read only\' else \'read only\' end as `Status` from %s.%s  group by db",
+                       "select db as `Database`, case when sum(read_only) = 0 then \'read write\' when sum(read_only) < count(read_only) then \'partially read only\' else \'read only\' end as `Status` from %s.%s where (0 = sys_privilege_check('db_acc', effective_tenant_id()) or 0 = sys_privilege_check('db_acc', effective_tenant_id(), `db`, '')) group by db",
                        NULL,
                        "Database");
 DEFINE_SHOW_CLAUSE_SET(SHOW_DATABASES_STATUS_LIKE,
                        "SELECT `Database` AS `Database (%.*s)`, `Status` ",
-                       "select db as `Database`, case when sum(read_only) = 0 then \'read write\' when sum(read_only) < count(read_only) then \'partially read only\' else \'read only\' end as `Status` from %s.%s  group by db",
+                       "select db as `Database`, case when sum(read_only) = 0 then \'read write\' when sum(read_only) < count(read_only) then \'partially read only\' else \'read only\' end as `Status` from %s.%s where (0 = sys_privilege_check('db_acc', effective_tenant_id()) or 0 = sys_privilege_check('db_acc', effective_tenant_id(), `db`, '')) group by db",
                        NULL,
                        "Database");
 DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_TABLE,

@@ -122,6 +122,9 @@ private:
                                        const common::ObIArray<uint64_t> &enable_role_id_array,
                                        int &ret_code,
                                        bool &has_select_privilege);
+  int check_db_access_for_show_sql(const ObShowResolverContext &show_resv_ctx,
+                                   ObSessionPrivInfo &session_priv,
+                                   const common::ObIArray<uint64_t> &enable_role_id_array);
 private:
   int recursive_resolve_table_info(const ParseNode *table_list_node,
                                    ObIAllocator &alloc,
