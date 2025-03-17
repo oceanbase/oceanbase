@@ -46,7 +46,7 @@ public:
   //This interface is only allowed to be used in a single-table DML operator,
   //it is invalid when multiple tables are modified in one DML operator
   virtual int get_single_dml_ctdef(const ObDMLBaseCtDef *&dml_ctdef) const override;
-
+  int get_global_index_ctdefs(ObIArray<const ObDMLBaseCtDef *> &dml_ctdefs) const;
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
                        K_(has_insert_clause),
                        K_(has_update_clause),
