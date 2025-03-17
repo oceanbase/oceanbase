@@ -290,6 +290,10 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   storage_schema2.column_cnt_ += 1;
   storage_schema2.column_info_simplified_ = true;
   storage_schema2.schema_version_ += 100;
+  storage_schema1.progressive_merge_round_ = 3;
+  storage_schema2.progressive_merge_round_ = 2;
+  storage_schema1.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  storage_schema2.compressor_type_ = ObCompressorType::LZ4_COMPRESSOR;
 
   // schema 2 have large store column cnt
   ObStorageSchema *result_storage_schema = NULL;
@@ -298,6 +302,8 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
   ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
   ASSERT_EQ(result_storage_schema->is_column_info_simplified(), true);
+  ASSERT_EQ(result_storage_schema->progressive_merge_round_, storage_schema1.progressive_merge_round_);
+  ASSERT_EQ(result_storage_schema->compressor_type_, ObCompressorType::NONE_COMPRESSOR);
   ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
 
   // mock schema with virtual column, same column_cnt & store_column_cnt, simplified = false
