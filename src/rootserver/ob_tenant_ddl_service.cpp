@@ -2029,6 +2029,7 @@ int ObTenantDDLService::init_tenant_schema(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   const int64_t start_time = ObTimeUtility::fast_current_time();
   FLOG_INFO("[CREATE_TENANT] STEP 2.5. start init tenant schemas", K(tenant_id));
+  DEBUG_SYNC(BEFORE_CREATE_TENANT_TABLE_SCHEMA);
   ObDDLSQLTransaction trans(schema_service_, true, true, false, false);
   const int64_t init_schema_version = tenant_schema.get_schema_version();
   const int64_t refreshed_schema_version = 0;
