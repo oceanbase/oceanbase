@@ -2821,6 +2821,15 @@ int ObServerAcceptPlanBaselineP::process()
   return ret;
 }
 
+int ObServerSyncBaselineP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql::ObSpmController::sync_baseline())) {
+    LOG_WARN("failed to sync plan baseline", K(ret));
+  }
+  return ret;
+}
+
 int ObServerCancelEvolveTaskP::process()
 {
   int ret = OB_SUCCESS;
