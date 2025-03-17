@@ -782,6 +782,7 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
   } else if (ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
     skip_calc = true;
+    STORAGE_LOG(TRACE, "calculate upper_trans_version is disabled", K(get_ls_id()), K(skip_calc), K(sstable_end_scn));
   } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn))) {
     // there is a start_scn of running transactions is smaller than the sstable_end_scn
   } else {
@@ -972,16 +973,22 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
                         || (TC_REACH_TIME_INTERVAL(5LL * 1000LL * 1000LL/* 5 seconds */)
                            && (ObClockGenerator::getClock() - sstable_end_scn.convert_to_ts()) > CALC_FAIL_WARN_THREASHOLD);
 
+#define CALC_UPPER_DEBUG_LOG(LOG_LEVEL)            \
+  STORAGE_LOG(LOG_LEVEL,                           \
+              "do calculate upper trans version.", \
+              K(get_ls_id()),                      \
+              K(need_skip),                        \
+              K(sstable_end_scn),                  \
+              K(max_decided_scn),                  \
+              K(min_start_scn_in_ctx),             \
+              K(effective_scn),                    \
+              K(min_start_scn_in_tx_data_memtable));
   if (need_print_log) {
-    STORAGE_LOG(INFO,
-                "do calculate upper trans version.",
-                K(need_skip),
-                K(sstable_end_scn),
-                K(max_decided_scn),
-                K(min_start_scn_in_ctx),
-                K(effective_scn),
-                K(min_start_scn_in_tx_data_memtable));
+    CALC_UPPER_DEBUG_LOG(INFO);
+  } else {
+    CALC_UPPER_DEBUG_LOG(TRACE);
   }
+#undef CALC_UPPER_DEBUG_LOG
 
   return need_skip;
 }

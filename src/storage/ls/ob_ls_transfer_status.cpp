@@ -247,7 +247,7 @@ int ObLSTransferStatus::enable_upper_trans_calculation_(const share::SCN op_scn)
     TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
   } else {
     tx_data_table->enable_upper_trans_calculation(op_scn);
-    TRANS_LOG(INFO, "enable upper trans calculation", KPC(ls_), K(guard), KPC(this));
+    FLOG_INFO("enable upper trans calculation", KPC(ls_), K(guard), KPC(this));
   }
 
   return ret;
@@ -270,7 +270,7 @@ int ObLSTransferStatus::disable_upper_trans_calculation_()
     TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
   } else {
     tx_data_table->disable_upper_trans_calculation();
-    TRANS_LOG(INFO, "disable upper trans calculation", KPC(ls_), K(guard), KPC(this));
+    FLOG_INFO("disable upper trans calculation", KPC(ls_), K(guard), KPC(this));
   }
 
   return ret;
