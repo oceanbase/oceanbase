@@ -363,7 +363,7 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
     if (OB_FAIL(io_usage.get_io_usage(avg_iops, avg_size, avg_rt))) {
       LOG_ERROR("fail to get io usage", K(ret));
     } else {
-      for (int64_t i = 0; i < io_config.group_num_ && i < avg_size.count() && i < avg_iops.count() && i < avg_rt.count(); ++i) {
+      for (int64_t i = 0; i < io_config.group_num_ && (i + 1) < avg_size.count() && (i + 1) < avg_iops.count() && (i + 1) < avg_rt.count(); ++i) {
         if (io_config.group_configs_.at(i).deleted_) {
           continue;
         }
