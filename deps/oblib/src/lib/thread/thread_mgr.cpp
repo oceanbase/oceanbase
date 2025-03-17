@@ -55,7 +55,7 @@ void lib_init_create_func()
 }
 
 TGMgr::TGMgr()
-  : bs_(MAX_ID, bs_buf_)
+  : bs_(MAX_ID, bs_buf_), tg_seq_(0)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; i < MAX_ID; i++) {
@@ -92,6 +92,10 @@ void TGMgr::destroy_tg(int tg_id, bool is_exist)
       OB_DELETE(ITG, "", tg);
       tg = nullptr;
       free_tg_id(tg_id);
+    } else {
+      if (tg_id >= TGDefIDs::END && !is_exist) {
+        OB_LOG_RET(ERROR, OB_ENTRY_NOT_EXIST, "cannot destroy an empty tg", K(tg_id));
+      }
     }
   }
 }
@@ -99,8 +103,14 @@ void TGMgr::destroy_tg(int tg_id, bool is_exist)
 int TGMgr::alloc_tg_id(int start)
 {
   common::ObLatchMutexGuard guard(lock_, common::ObLatchIds::DEFAULT_MUTEX);
-  int tg_id = bs_.find_first_significant(start);
-  bs_.unset(tg_id);
+  int tg_id = bs_.find_first_significant(MAX(start, tg_seq_ % MAX_ID));
+  if (-1 == tg_id && start < tg_seq_ % MAX_ID) {
+    tg_id = bs_.find_first_significant(start);
+  }
+  if (tg_id >= 0) {
+    bs_.unset(tg_id);
+    tg_seq_++;
+  }
   return tg_id;
 }
 
