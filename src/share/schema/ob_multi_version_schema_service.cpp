@@ -3947,10 +3947,13 @@ bool ObMultiVersionSchemaService::is_tenant_not_refreshed(const uint64_t tenant_
     // 2. when schema_not_refreshed = true, it means tenant schema should be refreshed or tenant has been dropped.
     if (schema_not_refreshed) {
       ObSchemaGetterGuard guard;
-      ObSimpleTenantSchema *tenant_schema = NULL;
+      const ObSimpleTenantSchema *tenant_schema = NULL;
       if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
         schema_not_refreshed = false;
         LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+        schema_not_refreshed = true;
+        LOG_WARN("failed to get tenant info", KR(ret), K(tenant_id));
       } else if (OB_ISNULL(tenant_schema)) {
         schema_not_refreshed = true;
         LOG_TRACE("tenant should be refreshed or has been dropped", KR(ret), K(tenant_id));
@@ -3959,6 +3962,7 @@ bool ObMultiVersionSchemaService::is_tenant_not_refreshed(const uint64_t tenant_
       } else {
         // To make ls leader stable when tenant is in abnormal status.
         schema_not_refreshed = false;
+        LOG_TRACE("tenant is abnormal, treat schema as refreshed", KR(ret), K(tenant_id));
       }
     }
   }
