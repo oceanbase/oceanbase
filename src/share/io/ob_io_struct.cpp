@@ -1837,12 +1837,15 @@ int ObIOScheduler::schedule_request(ObIORequest &req)
       idx = ObRandom::rand(0, senders_.count() - 1);
     }
     ObIOSender *sender = senders_.at(idx);
-    if (req.io_info_.fd_.device_handle_->media_id_ != schedule_media_id_) {
+    if ((req.io_info_.fd_.device_handle_->media_id_ != schedule_media_id_) ||
+        (OB_SERVER_TENANT_ID == req.io_info_.tenant_id_ && req.io_info_.flag_.is_unlimited())) {
       // direct submit
       if (OB_FAIL(sender->submit(req))) {
         LOG_WARN("direct submit request failed", K(ret));
       } else {
-        LOG_INFO("direct submit request success", K(req));
+        if (REACH_TIME_INTERVAL(1000000)) {
+          LOG_INFO("direct submit request success", K(req));
+        }
       }
     } else {
       if (OB_FAIL(sender->enqueue_request(req))) {
