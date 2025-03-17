@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_WRITE_BUFFER_POOL_ENTRY_ARRAY_H_
 
 #include "lib/container/ob_array.h"
+#include "lib/allocator/ob_fifo_allocator.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
 
 namespace oceanbase
@@ -157,7 +158,7 @@ public:
   {
     const int64_t bucket_idx = idx / MAX_BUCKET_CAPACITY;
     const int64_t bucket_offset = idx % MAX_BUCKET_CAPACITY;
-    return buckets_[bucket_idx].at(bucket_offset);
+    return buckets_[bucket_idx]->at(bucket_offset);
   }
 private:
   // by reserving 10000 entries(48 bytes), the array buffer will be upper aligned to accommodate 10085 entries
@@ -167,8 +168,9 @@ private:
 private:
   bool is_inited_;
   int64_t size_;
-  ObArray<ObArray<ObPageEntry>> buckets_;
-  ModulePageAllocator allocator_;
+  ObArray<ObArray<ObPageEntry> *> buckets_;
+  ModulePageAllocator extend_allocator_;
+  ObFIFOAllocator allocator_;
 };
 
 }  // end namespace tmp_file

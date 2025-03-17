@@ -66,7 +66,12 @@ int ObTmpWriteBufferPoolEntryArray::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tmp file entry array init twice", KR(ret));
+  } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
+                                     OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                     ObMemAttr(MTL_ID(), "TmpFileEntArPt")))) {
+    LOG_WARN("fail to init allocator", KR(ret), K(OB_MALLOC_NORMAL_BLOCK_SIZE));
   } else {
+    extend_allocator_.set_attr(ObMemAttr(MTL_ID(), "TmpFileEntBkt"));
     buckets_.set_attr(ObMemAttr(MTL_ID(), "TmpFileEntBktAr"));
     size_ = 0;
     is_inited_ = true;
@@ -77,6 +82,13 @@ int ObTmpWriteBufferPoolEntryArray::init()
 void ObTmpWriteBufferPoolEntryArray::destroy()
 {
   if (IS_INIT) {
+    for (int64_t i = 0; i < buckets_.size(); ++i) {
+      if (buckets_[i] != nullptr) {
+        buckets_[i]->reset();
+        allocator_.free(buckets_[i]);
+        buckets_[i] = nullptr;
+      }
+    }
     buckets_.reset();
     size_ = 0;
     is_inited_ = false;
@@ -86,14 +98,19 @@ void ObTmpWriteBufferPoolEntryArray::destroy()
 int ObTmpWriteBufferPoolEntryArray::add_new_bucket_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(buckets_.push_back(ObArray<ObPageEntry>()))) {
+  void *buf = nullptr;
+  ObArray<ObPageEntry> *bucket = nullptr;
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObArray<ObPageEntry>)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory for new bucket", KR(ret), K(buckets_.size()), K(size_));
+  } else if (FALSE_IT(bucket = new (buf) ObArray<ObPageEntry>())) {
+  } else if (OB_FAIL(buckets_.push_back(bucket))) {
     LOG_WARN("fail to push back new bucket", KR(ret), K(buckets_.size()), K(size_));
   } else {
     int64_t bucket_idx = buckets_.size() - 1;
-    buckets_[bucket_idx].set_attr(ObMemAttr(MTL_ID(), "TmpFileEntBkt"));
-    buckets_[bucket_idx].set_block_allocator(allocator_);
+    buckets_[bucket_idx]->set_block_allocator(extend_allocator_);
 
-    if (OB_FAIL(buckets_[bucket_idx].reserve(MAX_BUCKET_CAPACITY))) {
+    if (OB_FAIL(buckets_[bucket_idx]->reserve(MAX_BUCKET_CAPACITY))) {
       LOG_WARN("fail to do reserve for new bucket", KR(ret), K(buckets_.size()), K(size_));
     }
   }
@@ -119,7 +136,7 @@ int ObTmpWriteBufferPoolEntryArray::push_back(const ObPageEntry &entry)
     } else if (OB_UNLIKELY(bucket_idx >= buckets_.size() || bucket_idx < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid bucket index", KR(ret), K(bucket_idx), K(buckets_.size()), K(size_));
-    } else if (OB_FAIL(buckets_[bucket_idx].push_back(entry))) {
+    } else if (OB_FAIL(buckets_[bucket_idx]->push_back(entry))) {
       LOG_WARN("fail to push back entry", KR(ret), K(bucket_idx), K(entry), K(size_));
     }
   }
@@ -134,11 +151,13 @@ void ObTmpWriteBufferPoolEntryArray::pop_back()
 {
   if (size_ > 0) {
     const int64_t bucket_idx = buckets_.size() - 1;
-    buckets_[bucket_idx].pop_back();
+    buckets_[bucket_idx]->pop_back();
     size_ -= 1;
 
-    if (buckets_[bucket_idx].size() == 0) {
-      buckets_[bucket_idx].reset();
+    if (buckets_[bucket_idx]->size() == 0) {
+      buckets_[bucket_idx]->reset();
+      allocator_.free(buckets_[bucket_idx]);
+      buckets_[bucket_idx] = nullptr;
       buckets_.pop_back();
       LOG_DEBUG("pop back a bucket", K(buckets_.size()), K(size_));
     }
