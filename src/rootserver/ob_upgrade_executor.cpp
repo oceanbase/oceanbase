@@ -1155,6 +1155,7 @@ int ObUpgradeExecutor::upgrade_mysql_system_package_job_()
            PROCEDURE UPGRADE(package_name VARCHAR(1024), \
                              load_from_file BOOLEAN DEFAULT TRUE); \
            PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN DEFAULT TRUE); \
+           PROCEDURE FLUSH_DLL_NCOMP();  \
          END;";
   const char *create_package_body_sql =
         "CREATE OR REPLACE PACKAGE BODY __DBMS_UPGRADE \
@@ -1162,6 +1163,8 @@ int ObUpgradeExecutor::upgrade_mysql_system_package_job_()
              PRAGMA INTERFACE(c, UPGRADE_SINGLE); \
            PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN); \
              PRAGMA INTERFACE(c, UPGRADE_ALL); \
+           PROCEDURE FLUSH_DLL_NCOMP();  \
+             PRAGMA INTERFACE(c, FLUSH_DLL_NCOMP);  \
          END;";
   const char *upgrade_sql = "CALL __DBMS_UPGRADE.UPGRADE_ALL(FALSE);";
   ObTimeoutCtx ctx;
@@ -1215,6 +1218,7 @@ int ObUpgradeExecutor::upgrade_oracle_system_package_job_()
            PROCEDURE UPGRADE(package_name VARCHAR2, \
                              load_from_file BOOLEAN DEFAULT TRUE); \
            PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN DEFAULT TRUE); \
+           PROCEDURE FLUSH_DLL_NCOMP;  \
          END;";
   const char *create_package_body_sql =
         "CREATE OR REPLACE PACKAGE BODY \"__DBMS_UPGRADE\" IS \
@@ -1222,6 +1226,8 @@ int ObUpgradeExecutor::upgrade_oracle_system_package_job_()
              PRAGMA INTERFACE(c, UPGRADE_SINGLE); \
            PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN); \
              PRAGMA INTERFACE(c, UPGRADE_ALL); \
+           PROCEDURE FLUSH_DLL_NCOMP;  \
+             PRAGMA INTERFACE(c, FLUSH_DLL_NCOMP);  \
          END;";
   const char *upgrade_sql = "BEGIN \"__DBMS_UPGRADE\".UPGRADE_ALL(FALSE); END;";
   ObTimeoutCtx ctx;

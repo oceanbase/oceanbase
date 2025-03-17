@@ -940,7 +940,7 @@ int ObUpgradeForAllVersionProcessor::flush_ncomp_dll_job()
     if (FAILEDx(ObFlushNcompDll::create_flush_ncomp_dll_job(
         *sys_variable_schema,
         tenant_id_,
-        false/*is_enabled*/,
+        true/*is_enabled*/,
         trans))) { // insert ignore
       LOG_WARN("create flush ncomp dll job failed", KR(ret), K(tenant_id_));
     }

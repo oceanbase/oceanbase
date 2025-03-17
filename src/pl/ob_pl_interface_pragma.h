@@ -88,6 +88,7 @@
   // start of __dbms_upgrade
   INTERFACE_DEF(INTERFACE_DBMS_UPGRADE_SINGLE, "UPGRADE_SINGLE", (ObDBMSUpgrade::upgrade_single))
   INTERFACE_DEF(INTERFACE_DBMS_UPGRADE_ALL, "UPGRADE_ALL", (ObDBMSUpgrade::upgrade_all))
+  INTERFACE_DEF(INTERFACE_DBMS_FLUSH_DLL_NCOMP, "FLUSH_DLL_NCOMP", (ObDBMSUpgrade::flush_dll_ncomp))
   // end of __dbms_upgrade
 
 #ifdef OB_BUILD_ORACLE_PL

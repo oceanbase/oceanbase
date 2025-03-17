@@ -78,5 +78,58 @@ int ObDBMSUpgrade::upgrade_all(
   return ret;
 }
 
+int ObDBMSUpgrade::get_job_action(ObSqlString &job_action)
+{
+  int ret = OB_SUCCESS;
+
+  common::ObZone zone;
+  ObArray<ObServerInfoInTable> servers_info;
+  common::hash::ObHashSet<ObServerInfoInTable::ObBuildVersion> observer_version_set;
+  bool need_comma = false;
+
+  job_action.reset();
+
+  OZ (observer_version_set.create((4)));
+  OZ (share::ObAllServerTracer::get_instance().get_servers_info(zone, servers_info));
+  for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); ++i) {
+    OZ (observer_version_set.set_refactored(servers_info.at(i).get_build_version()));
+  }
+
+  //OZ (get_package_and_svn(build_version, sizeof(build_version)));
+  //OZ (job_action.assign_fmt("delete FROM %s where build_version != '%s'", OB_ALL_NCOMP_DLL_V2_TNAME, build_version));
+  OZ (job_action.append_fmt("delete FROM %s where build_version not in (", OB_ALL_NCOMP_DLL_V2_TNAME));
+  for (common::hash::ObHashSet<ObServerInfoInTable::ObBuildVersion>::const_iterator iter = observer_version_set.begin();
+      OB_SUCC(ret) && iter != observer_version_set.end();
+      iter++) {
+    OZ(job_action.append_fmt("%s'%s'", need_comma ? ", " : "", iter->first.ptr()));
+    OX (need_comma = true);
+  }
+  OZ(job_action.append(")"));
+
+  if (observer_version_set.created()) {
+    observer_version_set.destroy();
+  }
+
+  return ret;
+}
+
+int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(params);
+  UNUSED(result);
+  ObSqlString job_action;
+  int64_t affected_rows = 0;
+  sql::ObSQLSessionInfo *session = NULL;
+
+  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
+  CK (OB_NOT_NULL(session = ctx.get_my_session()));
+  OZ (get_job_action(job_action));
+  OZ (ctx.get_sql_proxy()->write(session->get_effective_tenant_id(), job_action.ptr(), affected_rows));
+  LOG_INFO("flush dll ncomp", K(ret), K(job_action), K(affected_rows));
+
+  return ret;
+}
+
 } // end of pl
 } // end oceanbase
