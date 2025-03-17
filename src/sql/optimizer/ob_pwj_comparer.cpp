@@ -331,10 +331,8 @@ int ObPwjComparer::is_obj_equal(const common::ObObj &first_value,
     is_equal = (first_value.is_min_value() && second_value.is_min_value());
   } else if (first_value.is_max_value() || second_value.is_max_value()) {
     is_equal = (first_value.is_max_value() && second_value.is_max_value());
-  } else if (OB_UNLIKELY(first_value.get_meta() != second_value.get_meta())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("first value and second value meta not same", K(ret),
-        K(first_value.get_meta()), K(second_value.get_meta()));
+  } else if (first_value.get_meta() != second_value.get_meta()) {
+    is_equal = false;
   } else {
     is_equal = (first_value == second_value);
   }
