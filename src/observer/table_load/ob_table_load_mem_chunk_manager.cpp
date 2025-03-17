@@ -182,6 +182,43 @@ int ObTableLoadMemChunkManager::close_chunk(int64_t chunk_node_id)
   return ret;
 }
 
+int ObTableLoadMemChunkManager::close_and_acquire_chunk(int64_t chunk_node_id, ChunkType *&chunk)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadMemChunkManager is not init", KR(ret));
+  } else if (OB_UNLIKELY(chunk_node_id < 0 || chunk_node_id >= chunk_nodes_.count() || nullptr == chunk)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(chunk_node_id), K(chunk_nodes_.count()), KP(chunk));
+  } else {
+    ObTableLoadChunkNode &chunk_node = chunk_nodes_.at(chunk_node_id);
+    CompareType compare;
+    if (OB_UNLIKELY(!chunk_node.is_used())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("chunk node should be used and chunk not null", KR(ret), K(chunk_node_id), K(chunk_node));
+    } else if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
+      LOG_WARN("fail to init compare", KR(ret));
+    } else if (OB_FAIL(chunk->sort(compare))) {
+      LOG_WARN("fail to sort chunk", KR(ret));
+    } else if (OB_FAIL(mem_ctx_->mem_chunk_queue_.push(chunk))) {
+      LOG_WARN("fail to push", KR(ret));
+    } else {
+      while (mem_ctx_->fly_mem_chunk_count_ >= mem_ctx_->max_mem_chunk_count_ && OB_LIKELY(!mem_ctx_->has_error_)) {
+        usleep(50000);
+      }
+      if (OB_UNLIKELY(mem_ctx_->has_error_)) {
+        ret = store_ctx_->get_error_code();
+      } else if (OB_FAIL(acquire_chunk(chunk_node.chunk_))) {
+        LOG_WARN("fail to acquire chunk", KR(ret));
+      } else {
+        chunk = chunk_node.chunk_;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadMemChunkManager::acquire_chunk(ChunkType *&chunk)
 {
   int ret = OB_SUCCESS;

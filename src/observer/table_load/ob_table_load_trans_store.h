@@ -109,6 +109,8 @@ private:
                              const common::ObObj &obj,
                              common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
+  int check_rowkey_length(const ObDirectLoadDatumRow &datum_row,
+                          const int64_t rowkey_column_count);
 
 private:
   class IWriter

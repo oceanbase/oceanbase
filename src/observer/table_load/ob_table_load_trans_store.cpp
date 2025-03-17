@@ -925,6 +925,13 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
       LOG_WARN("fail to cast column", KR(ret), K(i), K(obj), KPC(column_schema));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (store_ctx_->ctx_->schema_.has_lob_rowkey_) {
+      if (OB_FAIL(check_rowkey_length(datum_row, store_ctx_->ctx_->schema_.rowkey_column_count_))) {
+        LOG_WARN("fail to check rowkey length", KR(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -1057,6 +1064,27 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
       }
     } else {
       out_obj = obj;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::check_rowkey_length(const ObDirectLoadDatumRow &datum_row,
+                                                     const int64_t rowkey_column_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!datum_row.is_valid() || rowkey_column_count > datum_row.count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", KR(ret), K(datum_row), K(rowkey_column_count));
+  } else {
+    int64_t rowkey_len = 0;
+    for (int64_t i = 0; i < rowkey_column_count; i++) {
+      rowkey_len += datum_row.storage_datums_[i].len_;
+    }
+    if (rowkey_len > OB_MAX_VARCHAR_LENGTH_KEY) {
+      ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+      OB_LOG(WARN, "rowkey is too long", KR(ret), K(rowkey_len));
     }
   }
   return ret;

@@ -987,6 +987,123 @@ bool ObDirectLoadVectorUtils::check_all_tablet_id_is_same(ObIVector *vec, const 
   return is_same;
 }
 
+int ObDirectLoadVectorUtils::check_rowkey_length(
+    const ObIArray<ObIVector *> &vectors,
+    const ObBatchRows &batch_rows,
+    const int64_t rowkey_column_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(rowkey_column_count < 0 || vectors.count() < rowkey_column_count || batch_rows.size_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(vectors), K(rowkey_column_count), K(batch_rows.size_));
+  } else {
+    int64_t *rowkey_len = nullptr;
+    int64_t row_count = batch_rows.size_;
+    if (OB_ISNULL(rowkey_len = static_cast<int64_t *>(ob_malloc(sizeof(int64_t) * batch_rows.size_, "TLD_CheckRK")))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(rowkey_len));
+    } else {
+      memset(rowkey_len, 0, sizeof(int64_t) * row_count);
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < rowkey_column_count; col_idx++) {
+        const ObIVector *vector = vectors.at(col_idx);
+        const VectorFormat format = vector->get_format();
+        switch (format) {
+          case VEC_FIXED: {
+            const ObFixedLengthBase *vec = static_cast<const ObFixedLengthBase *>(vector);
+            if (batch_rows.all_rows_active_) {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                rowkey_len[row_idx] += vec->get_length();
+              }
+            } else {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                if (!batch_rows.skip_->at(row_idx)) {
+                  rowkey_len[row_idx] += vec->get_length();
+                }
+              }
+            }
+            break;
+          }
+          case VEC_CONTINUOUS: {
+            const ObContinuousBase *vec = static_cast<const ObContinuousBase *>(vector);
+            if (batch_rows.all_rows_active_) {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                rowkey_len[row_idx] += vec->get_offsets()[row_idx + 1] - vec->get_offsets()[row_idx];
+              }
+            } else {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                if (!batch_rows.skip_->at(row_idx)) {
+                  rowkey_len[row_idx] += vec->get_offsets()[row_idx + 1] - vec->get_offsets()[row_idx];
+                }
+              }
+            }
+            break;
+          }
+          case VEC_DISCRETE: {
+            const ObDiscreteBase *vec = static_cast<const ObDiscreteBase *>(vector);
+            if (batch_rows.all_rows_active_) {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                rowkey_len[row_idx] += vec->get_lens()[row_idx];
+              }
+            } else {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                if (!batch_rows.skip_->at(row_idx)) {
+                  rowkey_len[row_idx] += vec->get_lens()[row_idx];
+                }
+              }
+            }
+            break;
+          }
+          case VEC_UNIFORM: {
+            const ObUniformBase *vec = static_cast<const ObUniformBase *>(vector);
+            if (batch_rows.all_rows_active_) {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                rowkey_len[row_idx] += vec->get_datums()[row_idx].len_;
+              }
+            } else {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                if (!batch_rows.skip_->at(row_idx)) {
+                  rowkey_len[row_idx] += vec->get_datums()[row_idx].len_;
+                }
+              }
+            }
+            break;
+          }
+          case VEC_UNIFORM_CONST: {
+            const ObUniformBase *vec = static_cast<const ObUniformBase *>(vector);
+            if (batch_rows.all_rows_active_) {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                rowkey_len[row_idx] += vec->get_datums()[0].len_;
+              }
+            } else {
+              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
+                if (!batch_rows.skip_->at(row_idx)) {
+                  rowkey_len[row_idx] += vec->get_datums()[0].len_;
+                }
+              }
+            }
+            break;
+          }
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected vector format", KR(ret), K(format));
+            break;
+        }
+      }
+      for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; row_idx++) {
+        if (rowkey_len[row_idx] > OB_MAX_VARCHAR_LENGTH_KEY) {
+          ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+          LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+          LOG_WARN("rowkey is too long", K(ret), K(row_idx), K(rowkey_len[row_idx]));
+        }
+      }
+    }
+    if (OB_NOT_NULL(rowkey_len)) {
+      ob_free(rowkey_len);
+    }
+  }
+  return ret;
+}
+
 /**
  * hidden pk vector
  */

@@ -679,7 +679,10 @@ int ObTableLoadStoreTransPXWriter::flush_batch(ObIVector *tablet_id_vector,
     } else {
       append_vectors = &vectors;
     }
-    if (nullptr != pre_sort_writer_) {
+    if (store_ctx_->ctx_->schema_.has_lob_rowkey_ &&
+        OB_FAIL(ObDirectLoadVectorUtils::check_rowkey_length(*append_vectors, batch_rows, store_ctx_->ctx_->schema_.rowkey_column_count_))) {
+      LOG_WARN("fail to check rowkey length", KR(ret));
+    } else if (nullptr != pre_sort_writer_) {
       if (OB_FAIL(pre_sort_writer_->px_write(tablet_id_vector, *append_vectors, batch_rows, affected_rows))) {
         LOG_WARN("fail to px write", KR(ret));
       }

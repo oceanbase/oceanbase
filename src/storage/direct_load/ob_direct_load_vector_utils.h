@@ -14,6 +14,7 @@
 
 #include "common/object/ob_obj_type.h"
 #include "share/vector/ob_i_vector.h"
+#include "sql/engine/ob_batch_rows.h"
 
 namespace oceanbase
 {
@@ -83,6 +84,9 @@ public:
   static ObTabletID get_tablet_id(common::ObUniformBase *vector, const int64_t batch_idx);
   static ObTabletID get_tablet_id(common::ObIVector *vector, const int64_t batch_idx);
   static bool check_all_tablet_id_is_same(common::ObIVector *vector, const int64_t size);
+  static int check_rowkey_length(const ObIArray<ObIVector *> &vectors,
+                                 const sql::ObBatchRows &batch_rows,
+                                 const int64_t rowkey_column_count);
 
   // hidden pk vector
   static int batch_fill_hidden_pk(common::ObIVector *vector, const int64_t start,

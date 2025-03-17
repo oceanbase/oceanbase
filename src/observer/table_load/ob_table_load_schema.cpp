@@ -421,6 +421,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     is_column_store_(false),
     has_autoinc_column_(false),
     has_identity_column_(false),
+    has_lob_rowkey_(false),
     rowkey_column_count_(0),
     store_column_count_(0),
     collation_type_(CS_TYPE_INVALID),
@@ -457,6 +458,7 @@ void ObTableLoadSchema::reset()
   is_column_store_ = false;
   has_autoinc_column_ = false;
   has_identity_column_ = false;
+  has_lob_rowkey_ = false;
   rowkey_column_count_ = 0;
   store_column_count_ = 0;
   collation_type_ = CS_TYPE_INVALID;
@@ -589,6 +591,9 @@ int ObTableLoadSchema::init_lob_storage(common::ObIArray<share::schema::ObColDes
     const ObColDesc &col_desc = column_descs.at(i);
     if (col_desc.col_type_.is_lob_storage()) {
       column_descs.at(i).col_type_.set_has_lob_header();
+      if (i < rowkey_column_count_) {
+        has_lob_rowkey_ = true;
+      }
       if (OB_FAIL(lob_column_idxs_.push_back(i))) {
         LOG_WARN("fail to push back", KR(ret));
       }

@@ -153,12 +153,8 @@ int ObDirectLoadMemChunk<T, Compare>::add_item(const T &item)
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDirectLoadMemChunk not init", KR(ret), KP(this));
   } else {
-    const int64_t item_size = sizeof(T) + item.get_deep_copy_size();
-    if (item_size > buf_mem_limit_) {
-      ret = common::OB_SIZE_OVERFLOW;
-      STORAGE_LOG(WARN, "invalid item size, must not larger than buf memory limit", KR(ret),
-                  K(item_size), K(buf_mem_limit_));
-    } else if (allocator_.used() + item_size > buf_mem_limit_) {
+    int64_t item_size = sizeof(T) + item.get_deep_copy_size();
+    if (!item_list_.empty() && allocator_.used() + item_size > buf_mem_limit_) {
       return OB_BUF_NOT_ENOUGH;
     } else {
       OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, memory_add_item_time_us);

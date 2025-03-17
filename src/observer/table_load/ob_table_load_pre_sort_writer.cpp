@@ -166,32 +166,23 @@ int ObTableLoadPreSortWriter::append_row(const ObTabletID &tablet_id,
                                          const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
-  bool success_write = false;
   RowType const_row;
   external_row_.tablet_id_ = tablet_id;
   if (OB_FAIL(external_row_.external_row_.from_datum_row(datum_row,
                                                          mem_ctx_->table_data_desc_.rowkey_column_num_))) {
     LOG_WARN("fail to cast row from datum row", KR(ret));
-  }
-  while (OB_SUCC(ret) && !success_write) {
-    if (nullptr == chunk_ && OB_FAIL(chunks_manager_->get_chunk(chunk_node_id_, chunk_))) {
-      LOG_WARN("fail to get chunk", KR(ret));
+  } else if (chunk_ == nullptr && OB_FAIL(chunks_manager_->get_chunk(chunk_node_id_, chunk_))) {
+    LOG_WARN("fail to get chunk", KR(ret));
+  } else if (FALSE_IT(const_row = external_row_)) {
+  } else if (OB_FAIL(chunk_->add_item(const_row))) {
+    if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+      LOG_WARN("fail to add item", KR(ret));
     } else {
-      const_row = external_row_;
-      if (OB_FAIL(chunk_->add_item(const_row))) {
-        if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
-          LOG_WARN("fail to add item", KR(ret));
-        } else {
-          ret = OB_SUCCESS;
-          if (OB_FAIL(pre_sorter_->close_chunk(chunk_node_id_))) {
-            LOG_WARN("fail to init sort chunk task", KR(ret));
-          } else {
-            chunk_node_id_ = -1;
-            chunk_ = nullptr;
-          }
-        }
-      } else {
-        success_write = true;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(chunks_manager_->close_and_acquire_chunk(chunk_node_id_, chunk_))) {
+        LOG_WARN("fail to close chunk", KR(ret));
+      } else if (OB_FAIL(chunk_->add_item(const_row))) {
+        LOG_WARN("fail to add item", KR(ret));
       }
     }
   }
