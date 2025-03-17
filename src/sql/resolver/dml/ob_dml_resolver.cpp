@@ -4981,31 +4981,27 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
     }
     case ObExternalFileFormat::FormatType::ODPS_FORMAT:
     {
-      if (!GCONF._use_odps_jni_connector) {
+      // TODO: implement getting table schema by using odps jni
 #ifdef OB_BUILD_CPP_ODPS
-        ObODPSTableRowIterator odps_driver;
-        if (OB_FAIL(odps_driver.init_tunnel(format.odps_format_))) {
-          LOG_WARN("failed to init tunnel", K(ret));
-        }
-        else if (OB_FAIL(odps_driver.pull_all_columns())) {
-          LOG_WARN("failed to pull column", K(ret));
-        } else if (OB_FAIL(build_column_schemas_for_odps(odps_driver.get_column_list(),
-                                                        odps_driver.get_part_col_names(),
-                                                        table_schema))) {
-          LOG_WARN("failed to build column schemas for odps", K(ret));
-        } else if (OB_FAIL(set_partition_info_for_odps(table_schema,
-                                                      odps_driver.get_part_col_names()))) {
-          LOG_WARN("failed to set partition info for odps", K(ret));
-        }
-#else
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
-        LOG_WARN("not support to read odps in opensource", K(ret));
-#endif
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("odps jni connector is not supported in url external table", K(ret));
+      ObODPSTableRowIterator odps_driver;
+      if (OB_FAIL(odps_driver.init_tunnel(format.odps_format_))) {
+        LOG_WARN("failed to init tunnel", K(ret));
       }
+      else if (OB_FAIL(odps_driver.pull_all_columns())) {
+        LOG_WARN("failed to pull column", K(ret));
+      } else if (OB_FAIL(build_column_schemas_for_odps(odps_driver.get_column_list(),
+                                                      odps_driver.get_part_col_names(),
+                                                      table_schema))) {
+        LOG_WARN("failed to build column schemas for odps", K(ret));
+      } else if (OB_FAIL(set_partition_info_for_odps(table_schema,
+                                                    odps_driver.get_part_col_names()))) {
+        LOG_WARN("failed to set partition info for odps", K(ret));
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+      LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
       break;
     }
     case ObExternalFileFormat::FormatType::PARQUET_FORMAT:

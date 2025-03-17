@@ -934,10 +934,31 @@ int ObODPSJNITableRowIterator::next_task(const int64_t capacity)
       } else if (OB_ISNULL(state_.odps_jni_scanner_.get())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexcepted null ptr", K(ret), K(state_.is_from_gi_pump_));
-      } else if (OB_FAIL(calc_file_partition_list_value(
-                     part_id, task_alloc_, state_.part_list_val_))) {
-        LOG_WARN("failed to calc parttion list value", K(part_id), K(ret));
-      } else {
+      }
+
+      bool is_part_table = scan_param_->table_param_->is_partition_table();
+      bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
+      if (OB_SUCC(ret)) {
+        if (is_external_object) {
+          // for partitioned external url table,
+          // calculate partition values by calc_file_part_list_value_by_array
+          if (is_part_table) {
+            if (OB_FAIL(calc_file_part_list_value_by_array(part_id,
+                                                  task_alloc_,
+                                                  scan_param_->partition_infos_,
+                                                  state_.part_list_val_))) {
+              LOG_WARN("failed to calc parttion list value for mocked table", K(part_id), K(ret));
+            }
+          }
+        } else {
+          // for regular external table, calculate partition values by calc_file_partition_list_value
+          if (OB_FAIL(calc_file_partition_list_value(part_id, task_alloc_, state_.part_list_val_))) {
+            LOG_WARN("failed to calc parttion list value", K(part_id), K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
         int64_t real_time_partition_row_count = 0;
         if (OB_ISNULL(odps_jni_schema_scanner_)) {
           ret = OB_INVALID_ARGUMENT;
