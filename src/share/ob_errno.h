@@ -3969,6 +3969,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DUPLICATE_INDEX__USER_ERROR_MSG "Duplicate index \'%s\' defined on the table \'%s.%s\'"
 #define OB_NO_LS_REPLICA_CAN_DO_BACKUP__USER_ERROR_MSG "No suitable replica found to perform backup"
 #define OB_INVALID_KMS_DEST__USER_ERROR_MSG "%s is not a valid uri"
+#define OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM__USER_ERROR_MSG "the object is locked by worm"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8370,6 +8371,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NO_LS_REPLICA_CAN_DO_BACKUP__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9138, No suitable replica found to perform backup"
 #define OB_INVALID_KMS_DEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9139, %s is not a valid uri"
 #define OB_INVALID_KMS_DEST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9139, %s is not a valid uri"
+#define OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9140, the object is locked by worm"
+#define OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9140, the object is locked by worm"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9225,7 +9228,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2411];
+extern int g_all_ob_errnos[2412];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
