@@ -1591,6 +1591,8 @@ int ObTransformSubqueryCoalesce::check_subquery_validity(ObQueryRefRawExpr *quer
   } else if (contain_subquery) {
     //do nothing
     LOG_WARN("select item contain subquery, can not be coalesced");
+  } else if (!query_ref->has_exec_param()) {
+    valid = true;
   } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(query_ref->get_exec_params(),
                                                                          *subquery,
                                                                          valid))) {
