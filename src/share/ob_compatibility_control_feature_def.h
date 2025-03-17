@@ -43,4 +43,8 @@ DEF_COMPAT_CONTROL_FEATURE(FUNC_LOCATE_NULL,
     "The result of REPLACE('x', 'abc', null) is different in MySQL 5.7 and 8.0",
     MOCK_CLUSTER_VERSION_4_2_5_0, CLUSTER_VERSION_4_3_0_0,
     CLUSTER_VERSION_4_3_3_0)
+
+DEF_COMPAT_CONTROL_FEATURE(RECV_PLAIN_PASSWORD,
+    "The set password command is different in different OceanBase versions",
+    MOCK_CLUSTER_VERSION_4_3_5_2)
 #endif

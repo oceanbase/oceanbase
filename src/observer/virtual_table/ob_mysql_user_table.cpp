@@ -11,10 +11,11 @@
  */
 
 #include "observer/virtual_table/ob_mysql_user_table.h"
-
+#include "lib/file/ob_string_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
+using namespace ::obsys;
 namespace oceanbase
 {
 namespace observer
@@ -82,7 +83,13 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                     break;
                   }
                   case (PASSWD): {
-                    cells[col_idx].set_varchar(user_info->get_passwd_str());
+                    ObString upper_passwd_str = user_info->get_passwd_str();
+                    if (nullptr == ObStringUtil::str_to_upper(upper_passwd_str.ptr())) {
+                      SERVER_LOG(INFO, "failed to upper password");
+                      cells[col_idx].set_varchar(user_info->get_passwd_str());
+                    } else {
+                      cells[col_idx].set_varchar(upper_passwd_str);
+                    }
                     cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
