@@ -687,6 +687,8 @@ int ObSysTableChecker::ob_write_string(const ObString &src, ObString &dst)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObDDLSequenceID, seq_id_, sys_leader_epoch_, enable_new_seq_id_);
+
 ObRefreshSchemaInfo::ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other)
 {
   (void) assign(other);
@@ -717,7 +719,7 @@ bool ObRefreshSchemaInfo::is_valid() const
   return true;
 }
 
-OB_SERIALIZE_MEMBER(ObRefreshSchemaInfo, tenant_id_, schema_version_, sequence_id_);
+OB_SERIALIZE_MEMBER(ObRefreshSchemaInfo, tenant_id_, schema_version_, sequence_id_, new_sequence_id_);
 
 OB_SERIALIZE_MEMBER(ObSchemaObjVersion, object_id_, version_, object_type_);
 

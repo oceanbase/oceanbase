@@ -599,6 +599,25 @@ public:
 };
 typedef ObSchemaVersionGenerator TSISchemaVersionGenerator;
 
+class ObDDLSequenceID
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLSequenceID()
+    : seq_id_(common::OB_INVALID_ID),
+      sys_leader_epoch_(common::OB_INVALID_ID),
+      enable_new_seq_id_(false)
+  {}
+  virtual ~ObDDLSequenceID() {}
+  // TODO@jingyu.cr: add functions here and remove sequence_id in ObRefreshSchemaInfo
+
+  TO_STRING_KV(K_(seq_id), K_(sys_leader_epoch), K_(enable_new_seq_id));
+private:
+  uint64_t seq_id_;
+  int64_t sys_leader_epoch_;
+  bool enable_new_seq_id_;
+};
+
 struct ObRefreshSchemaInfo
 {
   OB_UNIS_VERSION(1);
@@ -606,7 +625,8 @@ public:
   ObRefreshSchemaInfo()
     : schema_version_(common::OB_INVALID_VERSION),
       tenant_id_(common::OB_INVALID_TENANT_ID),
-      sequence_id_(common::OB_INVALID_ID)
+      sequence_id_(common::OB_INVALID_ID),
+      new_sequence_id_()
   {}
   ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other);
   virtual ~ObRefreshSchemaInfo() {}
@@ -619,11 +639,12 @@ public:
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_schema_version() const { return schema_version_; }
   uint64_t get_sequence_id() const { return sequence_id_; }
-  TO_STRING_KV(K_(schema_version), K_(tenant_id), K_(sequence_id));
+  TO_STRING_KV(K_(schema_version), K_(tenant_id), K_(sequence_id), K_(new_sequence_id));
 private:
   int64_t schema_version_;
   uint64_t tenant_id_;
   uint64_t sequence_id_;
+  ObDDLSequenceID new_sequence_id_;
 };
 
 class ObDropTenantInfo
