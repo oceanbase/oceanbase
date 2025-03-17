@@ -604,14 +604,6 @@ int ObLogSet::allocate_granule_pre(AllocGIContext &ctx)
      */
     ctx.set_in_partition_wise_state(this);
     LOG_TRACE("in find partition wise state", K(ctx));
-  } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
-    if (!ctx.is_in_partition_wise_state() &&
-        !ctx.is_in_pw_affinity_state()) {
-      ctx.set_in_partition_wise_state(this);
-      if (OB_FAIL(ctx.set_pw_affinity_state())) {
-        LOG_WARN("set affinity state failed", K(ret), K(ctx));
-      }
-    }
   } else if (ctx.is_in_partition_wise_state()) {
     /**
      *       (partition wise join below)
@@ -930,24 +922,6 @@ int ObLogSet::compute_op_parallel_and_server_info()
     } else if (child->get_part_cnt() > 0 &&
                get_parallel() > child->get_part_cnt()) {
       int64_t reduce_parallel = child->get_part_cnt();
-      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
-      set_parallel(reduce_parallel);
-      need_re_est_child_cost_ = true;
-    }
-  } else if (DistAlgo::DIST_SET_PARTITION_WISE == get_distributed_algo()) {
-    int64_t max_child_part_cnt = -1;
-    const ObLogicalOperator *child = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      if (OB_ISNULL(child = get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("set operator i-th child is null", K(ret), K(i));
-      } else {
-        max_child_part_cnt = child->get_part_cnt() > max_child_part_cnt ? child->get_part_cnt()
-                                                                        : max_child_part_cnt;
-      }
-    }
-    if (OB_SUCC(ret) && max_child_part_cnt > 0 && get_parallel() > max_child_part_cnt) {
-      int64_t reduce_parallel = max_child_part_cnt;
       reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
       set_parallel(reduce_parallel);
       need_re_est_child_cost_ = true;

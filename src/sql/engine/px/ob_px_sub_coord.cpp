@@ -225,7 +225,8 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
           if (OB_FAIL(sqc_ctx.gi_pump_.init_pump_args(&ctx, scan_ops, tablets_array,
               sqc_ctx.partitions_info_, sqc.get_access_external_table_files(),
               dml_op, sqc.get_task_count(),
-              gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order()))) {
+              gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order(),
+              gi_op->id_))) {
             LOG_WARN("fail to init pump args", K(ret));
           } else {
             gi_input->set_granule_pump(&sqc_ctx.gi_pump_);

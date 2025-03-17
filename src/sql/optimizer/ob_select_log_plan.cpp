@@ -2716,7 +2716,6 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
   }
   int64_t max_child_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   int64_t first_child_part_cnt = 0;
-  int64_t max_child_part_cnt = 0;
   const ObLogicalOperator *child = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); ++i) {
     if (OB_ISNULL(child = child_ops.at(i))) {
@@ -2725,12 +2724,9 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
     } else if (0 == i) {
       max_child_parallel = child->get_parallel();
       first_child_part_cnt = child->get_part_cnt();
-      max_child_part_cnt = child->get_part_cnt();
     } else {
       max_child_parallel = child->get_parallel() > max_child_parallel ? child->get_parallel()
                                                                       : max_child_parallel;
-      max_child_part_cnt = child->get_part_cnt() > max_child_part_cnt ? child->get_part_cnt()
-                                                                      : max_child_part_cnt;
     }
   }
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_BASIC_METHOD)) {
@@ -2785,9 +2781,6 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
     } else if (!is_set_partition_wise) {
       set_dist_methods &= ~DIST_SET_PARTITION_WISE;
       OPT_TRACE("will not use set partition wise");
-    } else if (max_child_part_cnt <= max_child_parallel &&
-               get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
-      OPT_TRACE("will use set partition wise");
     } else {
       set_dist_methods = DistAlgo::DIST_SET_PARTITION_WISE;
       OPT_TRACE("will use set partition wise, ignore other method");
