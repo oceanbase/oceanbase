@@ -478,6 +478,7 @@ ObStorageSchema::ObStorageSchema()
     store_column_cnt_(0),
     has_all_column_group_(false),
     mv_mode_(),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE),
     is_inited_(false)
 {
 }
@@ -498,6 +499,8 @@ int ObStorageSchema::set_storage_schema_version(const uint64_t tenant_data_versi
     storage_schema_version_ = STORAGE_SCHEMA_VERSION_V2;
   } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
     storage_schema_version_ = STORAGE_SCHEMA_VERSION_V3;
+  } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+    storage_schema_version_ = STORAGE_SCHEMA_VERSION_V4;
   } else {
     storage_schema_version_ = STORAGE_SCHEMA_VERSION_LATEST;
   }
@@ -844,6 +847,7 @@ void ObStorageSchema::reset()
   progressive_merge_num_ = 0;
   master_key_id_ = INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   if (nullptr != allocator_) {
     reset_string(encryption_);
     reset_string(encrypt_key_);
@@ -960,6 +964,9 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V4) {
       OB_UNIS_ENCODE(mv_mode_);
     }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
+      OB_UNIS_ENCODE(merge_engine_type_);
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid storage schema version", K(ret), K_(storage_schema_version));
@@ -1073,6 +1080,9 @@ int ObStorageSchema::deserialize(
     } // TODO(@lixia.yq) need to add compat log for column_group after transfer refresh
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V4) {
       OB_UNIS_DECODE(mv_mode_);
+    }
+    if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
+      OB_UNIS_DECODE(merge_engine_type_);
     }
 
     if (OB_SUCC(ret)) {
@@ -1627,7 +1637,9 @@ int64_t ObStorageSchema::get_serialize_size() const
   if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V4) {
     OB_UNIS_ADD_LEN(mv_mode_);
   }
-
+  if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
+    OB_UNIS_ADD_LEN(merge_engine_type_);
+  }
   return len;
 }
 
@@ -2127,6 +2139,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     progressive_merge_num_ = input_schema.get_progressive_merge_num();
     master_key_id_ = input_schema.get_master_key_id();
     compressor_type_ = input_schema.get_compressor_type();
+    merge_engine_type_ = input_schema.get_merge_engine_type();
   }
 
   return ret;

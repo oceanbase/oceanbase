@@ -324,6 +324,7 @@ all_table_def = dict(
       ('parser_properties', 'longtext', 'false', ''),
       ('enable_macro_block_bloom_filter', 'bool', 'false', 'false'),
       ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', r'{\"GLOBAL\":\"AUTO\"}'),
+      ('merge_engine_type', 'int', 'false', '0'),
     ],
 )
 

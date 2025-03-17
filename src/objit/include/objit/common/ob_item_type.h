@@ -2799,6 +2799,8 @@ typedef enum ObItemType
   T_FILTER_QUERY = 4828,
   T_CCL_WITH_OPTION = 4829,
   T_DROP_CCL_RULE = 4830,
+  // merge_engine
+  T_MERGE_ENGINE = 4831,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

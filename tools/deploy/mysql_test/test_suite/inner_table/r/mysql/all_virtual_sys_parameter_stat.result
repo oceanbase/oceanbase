@@ -86,6 +86,7 @@ default_enable_extended_rowid
 default_load_mode
 default_progressive_merge_num
 default_row_format
+default_table_merge_engine
 default_table_organization
 default_table_store_format
 devname
@@ -356,6 +357,7 @@ _enable_dbms_job_package
 _enable_dbms_lob_partial_update
 _enable_decimal_int_type
 _enable_defensive_check
+_enable_delete_insert_scan
 _enable_distributed_das_scan
 _enable_drop_and_add_index
 _enable_easy_keepalive

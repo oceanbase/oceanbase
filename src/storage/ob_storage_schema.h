@@ -315,6 +315,8 @@ public:
   virtual inline common::ObRowStoreType get_row_store_type() const override { return row_store_type_; }
   virtual inline const char *get_compress_func_name() const override {  return all_compressor_name[compressor_type_]; }
   virtual inline common::ObCompressorType get_compressor_type() const override { return compressor_type_; }
+  virtual inline ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
+  virtual inline bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
   virtual inline bool is_column_info_simplified() const override { return column_info_simplified_; }
 
   virtual int init_column_meta_array(
@@ -355,7 +357,7 @@ public:
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
-      "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group));
+      "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group), K_(merge_engine_type));
 public:
   static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
@@ -411,7 +413,8 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION_V2 = 2; // add for store_column_cnt_
   static const int64_t STORAGE_SCHEMA_VERSION_V3 = 3; // add for cg_group
   static const int64_t STORAGE_SCHEMA_VERSION_V4 = 4;
-  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V4;
+  static const int64_t STORAGE_SCHEMA_VERSION_V5 = 5; // add for merge_engine_type_
+  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V5;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 
@@ -451,6 +454,7 @@ public:
   int64_t store_column_cnt_; // NOT include virtual generated column
   bool has_all_column_group_; // for column store, no need to serialize
   share::schema::ObMvMode mv_mode_;
+  ObMergeEngineType merge_engine_type_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

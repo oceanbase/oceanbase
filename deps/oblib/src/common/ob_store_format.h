@@ -61,6 +61,13 @@ enum ObTableStoreType : uint8_t
   OB_TABLE_STORE_MAX
 };
 
+enum class ObMergeEngineType : uint8_t
+{
+  OB_MERGE_ENGINE_PARTIAL_UPDATE = 0,
+  OB_MERGE_ENGINE_DELETE_INSERT = 1,
+  OB_MERGE_ENGINE_MAX
+};
+
 struct ObStoreFormatItem
 {
   const char* format_name_;

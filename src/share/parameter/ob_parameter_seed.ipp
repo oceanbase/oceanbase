@@ -2548,3 +2548,12 @@ DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h
 DEF_BOOL(_enable_obdal, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable use obdal to access object storage.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(default_table_merge_engine, OB_TENANT_PARAMETER, "PARTIAL_UPDATE",
+         "Specify the default merge_engine when creating table: partial_update, delete_insert.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_delete_insert_scan, OB_TENANT_PARAMETER, "True",
+         "Only avaliable for table with delete_insert merge_engine type."
+         "When it is false, use merge sort when scaning sstables."
+         "When it is true, use delete_insert processor when scanning sstables.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

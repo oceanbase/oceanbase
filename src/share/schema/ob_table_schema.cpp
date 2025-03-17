@@ -1727,6 +1727,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       micro_index_clustered_ = src_schema.micro_index_clustered_;
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
       mlog_tid_ = src_schema.mlog_tid_;
+      merge_engine_type_ = src_schema.merge_engine_type_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3781,6 +3782,7 @@ void ObTableSchema::reset()
   aux_lob_meta_tid_ = OB_INVALID_ID;
   aux_lob_piece_tid_ = OB_INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   reset_string(tablegroup_name_);
   reset_string(comment_);
   reset_string(pk_comment_);
@@ -7095,7 +7097,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(local_session_vars),
     K_(index_params),
     K_(exec_env),
-    K_(storage_cache_policy));
+    K_(storage_cache_policy),
+    K_(merge_engine_type));
   J_OBJ_END();
 
   return pos;
@@ -7293,6 +7296,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(parser_properties_);
   OB_UNIS_ENCODE(storage_cache_policy_type_);
   OB_UNIS_ENCODE(storage_cache_policy_);
+  OB_UNIS_ENCODE(merge_engine_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7536,6 +7540,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE_AND_FUNC(parser_properties_, deep_copy_str);
   OB_UNIS_DECODE(storage_cache_policy_type_);
   OB_UNIS_DECODE_AND_FUNC(storage_cache_policy_, deep_copy_str);
+  OB_UNIS_DECODE(merge_engine_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7679,6 +7684,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(parser_properties_);
   OB_UNIS_ADD_LEN(storage_cache_policy_type_);
   OB_UNIS_ADD_LEN(storage_cache_policy_);
+  OB_UNIS_ADD_LEN(merge_engine_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
