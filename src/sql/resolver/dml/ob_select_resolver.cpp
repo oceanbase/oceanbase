@@ -5111,7 +5111,10 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
       new(into_item) ObSelectIntoItem();
       into_item->into_type_ = node->type_;
       if (T_INTO_OUTFILE == node->type_) { // into outfile
-        if (OB_FAIL(resolve_into_const_node(node->children_[0], into_item->outfile_name_))) { //name
+        if (is_in_set_query()) {
+          ret = OB_INAPPROPRIATE_INTO;
+          LOG_WARN("select into outfile can not in set query", K(ret));
+        } else if (OB_FAIL(resolve_into_const_node(node->children_[0], into_item->outfile_name_))) { //name
           LOG_WARN("resolve into outfile name failed", K(ret));
         } else if (NULL != node->children_[1]) { // charset
           ObCharsetType charset_type = CHARSET_INVALID;
@@ -5134,7 +5137,10 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
           }
         }
       } else if (T_INTO_DUMPFILE  == node->type_) { // into dumpfile
-        if (OB_FAIL(resolve_into_const_node(node->children_[0], into_item->outfile_name_))) {
+        if (is_in_set_query()) {
+          ret = OB_INAPPROPRIATE_INTO;
+          LOG_WARN("select into dumpfile can not in set query", K(ret));
+        } else if (OB_FAIL(resolve_into_const_node(node->children_[0], into_item->outfile_name_))) {
           LOG_WARN("resolve into outfile name failed", K(ret));
         }
       } else if (T_INTO_VARIABLES == node->type_) { // into @x,@y....
