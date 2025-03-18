@@ -125,6 +125,9 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
     do {
       if (OB_FAIL(lib_cache->add_cache_obj(ctx, &pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
         PL_CACHE_LOG(INFO, "schema in pl cache value is old, start to remove pl object", K(ret), K(pc_ctx.key_));
+      }
+      if (ctx.need_destroy_node_) {
+        PL_CACHE_LOG(WARN, "fail to add cache obj, need destroy node", K(ret), K(pc_ctx.key_));
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = lib_cache->remove_cache_node(&pc_ctx.key_))) {
           ret = tmp_ret;
