@@ -1032,7 +1032,7 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
       break;
     }
     case ObMySQLDateTC: {
-      ret = ObTimeConverter::mdate_to_ob_time(input.get_mysql_date(), ob_time);
+      ret = ObTimeConverter::mdate_to_ob_time<true>(input.get_mysql_date(), ob_time);
       break;
     }
     case ObOTimestampTC: {
@@ -1050,7 +1050,7 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
       break;
     }
     case ObMySQLDateTimeTC: {
-      ret = ObTimeConverter::mdatetime_to_ob_time(input.get_mysql_datetime(), ob_time);
+      ret = ObTimeConverter::mdatetime_to_ob_time<true>(input.get_mysql_datetime(), ob_time);
       break;
     }
     default: {
