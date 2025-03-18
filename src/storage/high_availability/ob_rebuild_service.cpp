@@ -386,6 +386,7 @@ void ObRebuildService::fast_sleep()
 {
   ObThreadCondGuard guard(thread_cond_);
   fast_sleep_cnt_++;
+  thread_cond_.signal();
 }
 
 void ObRebuildService::destroy()
@@ -469,10 +470,10 @@ void ObRebuildService::run1()
 #endif
       if (OB_SERVER_IS_INIT == ret || fast_sleep_cnt_ > 0) {
         wait_time_ms = WAIT_SERVER_IN_SERVICE_TIME_MS;
+        fast_sleep_cnt_ = 0;
       }
       ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
-      fast_sleep_cnt_ = 0;
     }
   }
 }
