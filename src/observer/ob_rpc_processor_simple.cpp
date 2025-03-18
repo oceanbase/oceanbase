@@ -80,6 +80,8 @@
 #include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
 #include "rootserver/ob_alter_ls_command.h"
+#include "share/backup/ob_backup_connectivity.h"
+
 
 namespace oceanbase
 {
@@ -2884,6 +2886,15 @@ int ObTabletLocationReceiveP::process()
   }
   result_.set_ret(ret);
   return OB_SUCCESS;
+}
+
+int ObRpcChangeExternalStorageDestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(share::ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(arg_))) {
+    COMMON_LOG(WARN, "failed to change external storage dest", KR(ret), K(arg_));
+  }
+  return ret;
 }
 
 int ObForceSetTenantLogDiskP::process()

@@ -313,4 +313,5 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // ddl
   RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
+  RPC_PROCESSOR(ObRpcChangeExternalStorageDestP, gctx_);
 }

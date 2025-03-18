@@ -195,6 +195,7 @@ class ObGlobalAutoIncService;
 class ObDagWarningHistoryManager;
 class ObTenantErrsimModuleMgr;
 class ObTenantErrsimEventMgr;
+class ObBackupDestIOPermissionMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -321,7 +322,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
       observer::ObTenantQueryRespTimeCollector*,    \
-      observer::ObTableQueryASyncMgr*              \
+      observer::ObTableQueryASyncMgr*,              \
+      share::ObBackupDestIOPermissionMgr*          \
   )
 
 

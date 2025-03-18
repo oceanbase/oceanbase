@@ -268,6 +268,7 @@ OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_DUMP_SERVER_USAGE, ObForceDumpServerUs
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_AND_CANCEL_DDL_COMPLEMENT_DAG, ObRpcCheckandCancelDDLComplementDagP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_SERVICE_NAME, ObRefreshServiceNameP);
 
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHANGE_EXTERNAL_STORAGE_DEST, ObRpcChangeExternalStorageDestP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

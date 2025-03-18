@@ -82,11 +82,11 @@ public:
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
-  int get_storage_info_str(char *storage_info, const int64_t info_len) const;
+  virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
   int get_delete_mode() const { return delete_mode_; }
 
   bool is_valid() const;
-  void reset();
+  virtual void reset();
   int64_t hash() const;
   bool operator ==(const ObObjectStorageInfo &storage_info) const;
   bool operator !=(const ObObjectStorageInfo &storage_info) const;

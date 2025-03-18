@@ -92,7 +92,7 @@ private:
       const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
       char *buf, const int64_t buf_size, const int64_t offset,
       int64_t &read_size);
-  
+  int is_io_prohibited(const share::ObBackupStorageInfo *storage_info) const;
   
   DISALLOW_COPY_AND_ASSIGN(ObBackupIoAdapter);
 };

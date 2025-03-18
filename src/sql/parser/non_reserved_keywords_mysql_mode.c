@@ -55,6 +55,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"asensitive", ASENSITIVE},
   {"ascii", ASCII},
   {"at", AT},
+  {"attribute", ATTRIBUTE},
   {"authors", AUTHORS},
   {"auto", AUTO},
   {"auto_increment", AUTO_INCREMENT},
@@ -1005,6 +1006,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"statement_id", STATEMENT_ID},
   {"TTL", TTL},
   {"kv_attributes", KV_ATTRIBUTES},
+  {"external_storage_dest", EXTERNAL_STORAGE_DEST}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

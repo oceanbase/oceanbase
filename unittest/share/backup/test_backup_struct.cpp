@@ -52,18 +52,22 @@ TEST(ObBackupDest, nfs)
   const char *backup_test = "file:///backup_dir/?&delete_mode=tagging";
   ObBackupDest dest;
   ObBackupDest dest1;
+  ObBackupDest dest2;
+  ObBackupDest dest3;
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest.set(backup_test));
+  ASSERT_EQ(OB_SUCCESS, dest.set_storage_path(ObString(backup_test)));
   backup_test = "file:///backup_dir/";
 
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
+  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test)));
   LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), K(*(dest.get_storage_info())));
   ASSERT_EQ(0, strcmp(dest.root_path_, "file:///backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 1);
   ObString backup_str("file:///backup_dir/");
-  ObBackupDest dest2;
   ASSERT_EQ(OB_SUCCESS, dest2.set(backup_str));
   ASSERT_EQ(0, strcmp(dest.root_path_, "file:///backup_dir"));
 
@@ -75,6 +79,9 @@ TEST(ObBackupDest, nfs)
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
   ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
+  ASSERT_TRUE(is_equal);
   ASSERT_TRUE(dest == dest1);
   ASSERT_EQ(OB_SUCCESS, dest2.deep_copy(dest));
   ASSERT_EQ(0, strcmp(dest.root_path_, "file:///backup_dir"));
@@ -84,13 +91,20 @@ TEST(ObBackupDest, nfs)
 TEST(ObBackupDest, oss)
 {
   const char *backup_test = "oss://backup_dir/?host=xxx.com&access_id=111&access_key=222&delete_mode=tagging";
+  const char *backup_test1 = "oss://backup_dir/?host=xxx.com";
   ObBackupDest dest;
   ObBackupDest dest1;
+  ObBackupDest dest2;
+  ObBackupDest dest3;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
+  ASSERT_EQ(OB_SUCCESS, dest2.set_storage_path(ObString(backup_test)));
+  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test1)));
   LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest2), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), K(*(dest.get_storage_info())));
   ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
 
@@ -104,6 +118,12 @@ TEST(ObBackupDest, oss)
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest2, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
   ASSERT_TRUE(is_equal);
   ASSERT_TRUE(dest == dest1);
   dest1.reset();
@@ -129,8 +149,9 @@ TEST(ObBackupDest, oss_encrypt)
   const char *endpoint = "host=xxx.com";
   const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   const char *extension = "";
+  const int64_t dest_id = 1001;
   ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObString backup_test_str(backup_test);
   ObBackupDest dest2;
@@ -144,7 +165,7 @@ TEST(ObBackupDest, oss_encrypt)
   ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
 
   dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObMasterKeyGetter::instance().stop();
   ObMasterKeyGetter::instance().wait();
@@ -154,13 +175,20 @@ TEST(ObBackupDest, oss_encrypt)
 TEST(ObBackupDest, cos)
 {
   const char *backup_test = "cos://backup_dir/?host=xxx.com&access_id=111&access_key=222&delete_mode=tagging&appid=333";
+  const char *backup_test1 = "cos://backup_dir/?host=xxx.com";
   ObBackupDest dest;
   ObBackupDest dest1;
+  ObBackupDest dest2;
+  ObBackupDest dest3;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
+  ASSERT_EQ(OB_SUCCESS, dest2.set_storage_path(ObString(backup_test)));
+  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test1)));
   LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest2), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), K(*(dest.get_storage_info())));
   ASSERT_EQ(0, strcmp(dest.root_path_, "cos://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 2);
 
@@ -174,6 +202,12 @@ TEST(ObBackupDest, cos)
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest2, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
   ASSERT_TRUE(is_equal);
   ASSERT_TRUE(dest == dest1);
   dest1.reset();
@@ -199,8 +233,9 @@ TEST(ObBackupDest, cos_encrypt)
   const char *endpoint = "host=xxx.com";
   const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   const char *extension = "appid=333";
+  const int64_t dest_id = 1001;
   ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObString backup_test_str(backup_test);
   ObBackupDest dest2;
@@ -214,7 +249,7 @@ TEST(ObBackupDest, cos_encrypt)
   ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com"));
 
   dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObMasterKeyGetter::instance().stop();
   ObMasterKeyGetter::instance().wait();

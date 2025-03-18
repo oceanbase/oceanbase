@@ -22,12 +22,14 @@
 #include "common/ob_role.h"
 #include "common/ob_timeout_ctx.h"
 #include "common/ob_region.h"
+#include "common/ob_idc.h"
 #include "share/ob_define.h"
 #include "share/ob_force_print_log.h"
 #include "share/ob_encryption_util.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/scn.h"
+#include "share/ob_kv_parser.h"
 
 namespace oceanbase
 {
@@ -68,6 +70,7 @@ const int64_t OB_GROUP_VALIDATE_CONCURRENCY = 1;
 const int64_t OB_MAX_INCREMENTAL_BACKUP_NUM = 64;
 const int64_t OB_MAX_LOG_ARCHIVE_CONCURRENCY = 128;
 const int64_t OB_BACKUP_PIECE_DIR_NAME_LENGTH = 128;
+const int64_t OB_MAX_BACKUP_SRC_INFO_LENGTH = 128;
 const int64_t OB_BACKUP_NO_SWITCH_PIECE_ID = 0;
 const int64_t OB_BACKUP_INVALID_PIECE_ID = -1;
 const int64_t OB_BACKUP_SWITCH_BASE_PIECE_ID = 1;
@@ -98,7 +101,7 @@ const int64_t OB_MAX_COMPAT_MODE_STR_LEN = 6; //ORACLE/MYSQL
 const int64_t OB_MAX_RESTORE_USER_AND_TENANT_LEN = OB_MAX_ORIGINAL_NANE_LENGTH + OB_MAX_USER_NAME_LENGTH + 1;
 const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 const int64_t OB_MAX_BACKUP_SET_NUM = 1000000;
-
+const int64_t OB_MAX_BACKUP_DEST_COUNT = 256;
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
 const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
 
@@ -153,8 +156,9 @@ const char *const OB_STR_CLUSTER_BACKUP_BACKUP_SET_FILE_INFO = "cluster_backup_b
 const char *const OB_STR_TENANT_BACKUP_BACKUP_SET_FILE_INFO = "tenant_backup_backup_set_file_info";
 const char *const OB_STR_LS_FILE_INFO = "ls_file_info";
 const char *const OB_STR_TMP_FILE_MARK = ".tmp.";
-const char *const Ob_STR_BACKUP_REGION = "backup_region";
-const char *const OB_STR_BACKUP_ZONE = "backup_zone";
+const char *const Ob_STR_BACKUP_REGION = "region";
+const char *const OB_STR_BACKUP_ZONE = "zone";
+const char *const OB_STR_BACKUP_IDC = "idc";
 const char *const OB_STR_JOB_ID = "job_id";
 const char *const OB_STR_BACKUP_SET_ID = "backup_set_id";
 const char *const OB_STR_BACKUP_COMPRESSOR_TYPE = "compressor_type";
@@ -206,6 +210,7 @@ const char *const OB_STR_BACKUP_BACKUP_DEST_OPT = "backup_backup_dest_option";
 const char *const OB_STR_BACKUP_CHECK_FILE = "check_file";
 const char *const OB_STR_BACKUP_DEST_ENDPOINT = "endpoint";
 const char *const OB_STR_BACKUP_DEST_AUTHORIZATION = "authorization";
+const char *const OB_STR_BACKUP_DEST_ID = "dest_id";
 const char *const OB_STR_BACKUP_DEST_EXTENSION = "extension";
 const char *const OB_STR_BACKUP_CHECK_FILE_NAME = "check_file_name";
 const char *const OB_STR_BACKUP_LAST_CHECK_TIME = "last_check_time";
@@ -356,7 +361,10 @@ const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_NAME_SESSION_STR = "__ob_res
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_ID_SESSION_STR = "__ob_restore_preview_backup_cluster_id__";
 const char *const MULTI_BACKUP_SET_PATH_PREFIX = "BACKUPSET";
 const char *const MULTI_BACKUP_PIECE_PATH_PREFIX = "BACKUPPIECE";
-
+const char *const BACKUP_REGION = "region=";
+const char *const BACKUP_ZONE = "zone=";
+const char *const BACKUP_IDC = "idc=";
+const char *const DEST_ID = "dest_id=";
 const char *const ENCRYPT_KEY = "encrypt_key=";
 const char *const OB_STR_INITIATOR_JOB_ID = "initiator_job_id";
 const char *const OB_STR_EXECUTOR_TENANT_ID = "executor_tenant_id";
@@ -575,6 +583,25 @@ struct ObBackupSetDesc {
   ObBackupType backup_type_;  // FULL OR INC
   share::SCN min_restore_scn_;
   int64_t total_bytes_;
+};
+
+enum class ObBackupSrcType: int64_t
+{
+  EMPTY = 0,
+  ZONE = 1,
+  IDC = 2,
+  REGION = 3,
+  MAX
+};
+
+struct ObDestIOProhibitedInfo final
+{
+public:
+  ObDestIOProhibitedInfo(): io_prohibited_(false), last_access_time_(0) {}
+  ~ObDestIOProhibitedInfo() {}
+  TO_STRING_KV(K_(io_prohibited), K_(last_access_time));
+  bool io_prohibited_;
+  int64_t last_access_time_;
 };
 
 struct ObRestoreBackupSetBriefInfo final
@@ -887,20 +914,28 @@ public:
   using common::ObObjectStorageInfo::set;
 
 public:
-  ObBackupStorageInfo() {}
+  ObBackupStorageInfo(): dest_id_(OB_INVALID_DEST_ID) {};
   virtual ~ObBackupStorageInfo();
-
+  virtual void reset() override;
   int set(
       const common::ObStorageType device_type,
       const char *endpoint,
       const char *authorization,
-      const char *extension);
+      const char *extension,
+      const int64_t dest_id);
+  int set_endpoint(const common::ObStorageType device_type, const char *storage_info);
+  virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const override;
   int get_authorization_info(char *authorization, const int64_t length) const;
-
+  int get_src_type(ObBackupSrcType &src_type) const;
+  int get_src_info(char *src_info, const int64_t info_length) const;
+  int64_t get_dest_id() const { return dest_id_; }
+  const char *get_extension() const { return extension_; }
+  INHERIT_TO_STRING_KV("ObObjectStorageInfo", ObObjectStorageInfo, K_(dest_id));
 private:
+  int64_t dest_id_;
+  virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
 #ifdef OB_BUILD_TDE_SECURITY
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
-  virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
   int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
@@ -918,11 +953,14 @@ public:
       const char *path,
       const char *endpoint,
       const char *authorization,
-      const char *extension);
+      const char *extension,
+      const int64_t dest_id);
   int set(const char *root_path, const char *storage_info);
   int set(const char *root_path, const ObBackupStorageInfo *storage_info);
   int set_without_decryption(const common::ObString &backup_dest);
+  int set_storage_path(const common::ObString &storage_path_str);
   void reset();
+  ObStorageType get_device_type() const;
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
@@ -940,7 +978,7 @@ public:
 
 private:
   int alloc_and_init();
-  int parse_backup_dest_str_(const char *backup_dest);
+  int parse_backup_dest_str_(const char *backup_dest, const bool only_parse_for_unique_path);
   void root_path_trim_();
 
   char *root_path_;
@@ -1031,7 +1069,6 @@ public:
   template<class T>
   static int parse_backup_format_input(
       const ObString &format_input,
-      const int64_t max_length,
       common::ObIArray<T> &array);
   static int convert_timestamp_to_date(
       const int64_t snapshot_version,
@@ -1121,10 +1158,10 @@ public:
   BackupDataType type_;
 };
 
-struct ObBackupRegion
+struct ObBackupRegion final
 {
   ObBackupRegion();
-  virtual ~ObBackupRegion();
+  ~ObBackupRegion();
   void reset();
   int set(const ObString &region, const int64_t priority);
 
@@ -1134,10 +1171,23 @@ struct ObBackupRegion
   int64_t priority_;
 };
 
-struct ObBackupZone
+struct ObBackupIdc final
+{
+  ObBackupIdc();
+  ~ObBackupIdc();
+  void reset();
+  int set(const ObString &idc, const int64_t priority);
+
+  bool is_valid() const { return !idc_.is_empty() && priority_ >= 0; }
+  TO_STRING_KV(K_(idc), K_(priority));
+  ObIDC idc_;
+  int64_t priority_;
+};
+
+struct ObBackupZone final
 {
   ObBackupZone();
-  virtual ~ObBackupZone();
+  ~ObBackupZone();
   void reset();
   int set(const ObString &zone, const int64_t priority);
 
@@ -1151,7 +1201,6 @@ struct ObBackupZone
 template<class T>
 int ObBackupUtils::parse_backup_format_input(
     const ObString &format_input,
-    const int64_t max_length,
     ObIArray<T> &array)
 {
   int ret = OB_SUCCESS;
@@ -1163,19 +1212,16 @@ int ObBackupUtils::parse_backup_format_input(
   T object;
   int64_t priority = 0;
 
-  if (max_length <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "parse backup format input get invalid argument", K(ret), K(max_length));
-  } else if (0 == format_input.length()) {
+  if (0 == format_input.length()) {
     //do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < format_input.length(); ++i) {
 
       if (format_input.ptr()[i] == split_commma || format_input.ptr()[i] == split_semicolon) {
         length = i - pos;
-        if (length <= 0 || length > max_length || length > INT32_MAX) {
+        if (length <= 0 || length > INT32_MAX) {
           ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length), K(max_length));
+          OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length));
         } else {
           ObString tmp_string;
           object.reset();
@@ -1777,6 +1823,53 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupPartialTableListMeta);
 };
+
+struct ObBackupDestAttribute
+{
+  ObBackupDestAttribute() { reset(); }
+  void reset()
+  {
+    MEMSET(src_info_, 0, sizeof(src_info_));
+  }
+
+  char src_info_[OB_MAX_BACKUP_SRC_INFO_LENGTH];
+};
+
+class ObBackupDestAttributeParser
+{
+public:
+  static int parse(const common::ObString &str, ObBackupDestAttribute &option);
+private:
+  static int parse_(const char *str, ObBackupDestAttribute &option);
+public:
+  class ExtraArgsCb : public share::ObKVMatchCb
+  {
+  public:
+    ExtraArgsCb(ObBackupDestAttribute &option);
+    int match(const char *key, const char *value);
+    bool check() const;
+  private:
+    typedef int (*Setter)(const char *val, ObBackupDestAttribute &option);
+    static int set_zone_(const char *val, ObBackupDestAttribute &option);
+    static int set_idc_(const char *val, ObBackupDestAttribute &option);
+    static int set_region_(const char *val, ObBackupDestAttribute &option);
+    static int set_src_info_(const char *val, const ObBackupSrcType src_type, ObBackupDestAttribute &option);
+  private:
+    ObBackupDestAttribute &option_;
+    struct Action {
+      const char *key_;
+      Setter setter_;
+      bool required_;
+    };
+    const static int ACTION_CNT = 3;
+    static Action actions_[ACTION_CNT];
+    bool is_set_[ACTION_CNT];
+  };
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDestAttributeParser);
+};
+
 }//share
 }//oceanbase
 

@@ -255,7 +255,7 @@ END_P SET_VAR DELIMITER
 %token <non_reserved_keyword>
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
-        ARBITRATION ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
+        ARBITRATION ASCII AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
         ACTIVATE AVAILABILITY ARCHIVELOG AUDIT
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
@@ -277,7 +277,7 @@ END_P SET_VAR DELIMITER
 
         EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
-        EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL
+        EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL EXTERNAL_STORAGE_DEST
 
         FAILOVER FAST FAULTS FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
@@ -518,6 +518,7 @@ END_P SET_VAR DELIMITER
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_table_partition_option
 %type <node> dynamic_sampling_hint
+%type <node> path_info opt_attribute
 %type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
@@ -15655,6 +15656,13 @@ ALTER SYSTEM zone_action ZONE relation_name_or_string
   malloc_non_terminal_node($$, result->malloc_pool_, T_ADMIN_ZONE, 3, $3, $5, NULL);
 }
 |
+ALTER SYSTEM alter_or_change_or_modify EXTERNAL_STORAGE_DEST path_info opt_set opt_attribute
+{
+  (void)($3);
+  (void)($6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHANGE_EXTERNAL_STORAGE_DEST, 2, $5, $7);
+}
+|
 ALTER SYSTEM alter_or_change_or_modify ZONE relation_name_or_string opt_set add_or_alter_zone_options
 {
   (void)($3);
@@ -17237,6 +17245,22 @@ ALTER
 | MODIFY
 {
   $$ = NULL;
+}
+;
+
+path_info:
+PATH opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
+}
+;
+
+opt_attribute:
+ATTRIBUTE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
 }
 ;
 
@@ -18966,6 +18990,7 @@ ACCOUNT
 |       ARBITRATION
 |       ASCII
 |       AT
+|       ATTRIBUTE
 |       AUDIT
 |       AUTHORS
 |       AUTO
@@ -19141,6 +19166,7 @@ ACCOUNT
 |       EXTENDED_NOADDR
 |       EXTENT_SIZE
 |       EXTERNAL
+|       EXTERNAL_STORAGE_DEST
 |       FAILOVER
 |       EXTRACT
 |       FAST

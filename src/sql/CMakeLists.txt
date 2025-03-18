@@ -940,6 +940,7 @@ ob_set_subtarget(ob_sql resolver
   resolver/xa/ob_xa_prepare_resolver.cpp
   resolver/xa/ob_xa_rollback_resolver.cpp
   resolver/xa/ob_xa_start_resolver.cpp
+  resolver/backup/ob_backup_change_external_storage_dest_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_cmd

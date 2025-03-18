@@ -72,6 +72,8 @@ DEF_SIMPLE_EXECUTOR(ObRefreshIOCalibraiton);
 
 DEF_SIMPLE_EXECUTOR(ObSetConfig);
 
+DEF_SIMPLE_EXECUTOR(ObChangeExternalStorageDest);
+
 DEF_SIMPLE_EXECUTOR(ObClearLocationCache);
 
 DEF_SIMPLE_EXECUTOR(ObReloadUnit);
