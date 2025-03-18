@@ -152,7 +152,7 @@ int ObDiagnosticInfos::get_session_diag_info(int64_t session_id, ObDISessionColl
   int ret = OB_SUCCESS;
   ObDiagnosticInfo *tmp_di = nullptr;
   if (OB_FAIL(di_infos_.get(SessionID(session_id), tmp_di))) {
-    LOG_WARN("failed to get session diag info", K(ret), KPC(this));
+    LOG_WARN("failed to get session diag info", K(ret), KPC(this), K(session_id));
   } else {
     tmp_di->get_event_stats().accumulate_to(diag_info.base_value_.get_event_stats());
     diag_info.base_value_.get_add_stat_stats().add(tmp_di->get_add_stat_stats());

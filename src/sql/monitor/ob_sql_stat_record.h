@@ -118,7 +118,9 @@ public:
   void reset();
   int assign(const ObExecutingSqlStatRecord& other);
   int record_sqlstat_start_value();
-  int record_sqlstat_end_value();
+  /// WARN: current sression's di address can be changed by time. So please always using
+  /// get_local_diagnose_info() to get latest di paramter.
+  int record_sqlstat_end_value(ObDiagnoseSessionInfo* di = nullptr);
   // WARNNIGN!!!
   // It is forbidden to use the cur_plan_ pointer on sql_ctx_,
   // which can be modified and risks CORE. It is only safe to use the result_set pointer.
