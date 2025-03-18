@@ -1612,8 +1612,8 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
   ObPxSqcHandler *handler = ctx_.get_sqc_handler();
   if (OB_ISNULL(handler)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dynimic sample only supported in parallel execution mode", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynimic sample in non-px mode");
+    LOG_WARN("dynamic sample only supported in parallel execution mode", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic sample in non-px mode");
   } else if (OB_SUCCESS != ERRSIM_DYNAMIC_SAMPLE_FAIL &&
              ctx_.get_px_task_id() == 0) {
     ret = ERRSIM_DYNAMIC_SAMPLE_FAIL;
@@ -1651,7 +1651,7 @@ int ObPxTransmitOp::build_ds_piece_msg(int64_t expected_range_count,
   UNUSED(expected_range_count);
   UNUSED(piece_msg);
   int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "build ds picec msg");
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "build ds piece msg");
   return ret;
 }
 

@@ -1275,7 +1275,7 @@ int ObTenantStorageMetaPersister::ss_batch_remove_ls_tablets(
         }
         /*
           3. persist new pending_free_tablet_arr, and update array_info.
-            Avoiding seperated IO, do not delete current_version for each tablet in there, which will be deleted later.
+            Avoiding separated IO, do not delete current_version for each tablet in there, which will be deleted later.
         */
         if (OB_FAIL(ret)) {
           // error occurred

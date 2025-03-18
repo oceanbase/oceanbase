@@ -228,7 +228,7 @@ int ObStorageFileUtil::batch_del_files(
   UNUSED(files_to_delete);
   UNUSED(failed_files_idx);
   int ret = OB_NOT_SUPPORTED;
-  OB_LOG(WARN, "NFS does not support batch del fiels", K(ret));
+  OB_LOG(WARN, "NFS does not support batch del files", K(ret));
   return ret;
 }
 
@@ -948,7 +948,7 @@ ObStorageFileSingleWriter::~ObStorageFileSingleWriter()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "wrtier is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "writer is not closed", KCSTRING(path_), K(fd_));
     has_error_ = true;
     if (OB_SUCCESS != (tmp_ret = close_and_rename())) {
       STORAGE_LOG_RET(WARN, tmp_ret, "failed to close and rename", K(tmp_ret), KCSTRING(path_), K(fd_));
@@ -1454,7 +1454,7 @@ int ObStorageParallelFileMultiPartWriter::complete()
         cur_part_file_size = reader.get_length();
         read_size = -1;
         if (FAILEDx(reader.pread(read_buf, cur_part_file_size, 0, read_size))) {
-          OB_LOG(WARN, "fail to read part file coentent",
+          OB_LOG(WARN, "fail to read part file content",
               K(ret), K(cur_part_file_size), K(part_file_path));
         } else if (OB_UNLIKELY(cur_part_file_size != read_size)) {
           ret = OB_ERR_UNEXPECTED;

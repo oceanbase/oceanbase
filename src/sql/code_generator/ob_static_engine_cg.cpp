@@ -4447,7 +4447,7 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
     } else if (OB_FAIL(spec.child_exprs_.assign(spec.get_child()->output_))) {
       LOG_WARN("failed to append child exprs", K(ret));
     } else if (OB_FAIL(init_recieve_dynamic_exprs(spec.get_child()->output_, spec))) {
-      LOG_WARN("fail to init recieve dynamic expr", K(ret));
+      LOG_WARN("fail to init receive dynamic expr", K(ret));
     } else if (IS_PX_COORD(spec.get_type())) {
       ObPxCoordSpec *coord = static_cast<ObPxCoordSpec*>(&spec);
       coord->set_expected_worker_count(op.get_expected_worker_count());
