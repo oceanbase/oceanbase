@@ -10,7 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX LIB
+#ifndef OCEANBASE_OB_ARRAY_FIXED_SIZE_IPP_
+#define OCEANBASE_OB_ARRAY_FIXED_SIZE_IPP_
+
 #include "ob_array_type.h"
 #include "lib/ob_errno.h"
 #include "ob_array_fixed_size.h"
@@ -657,3 +659,5 @@ int ObArrayFixedSize<T>::distinct(ObIAllocator &alloc, ObIArrayType *&output) co
 
 } // namespace common
 } // namespace oceanbase
+
+#endif //OCEANBASE_OB_ARRAY_FIXED_SIZE_IPP_

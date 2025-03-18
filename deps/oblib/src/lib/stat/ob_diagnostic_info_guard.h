@@ -169,16 +169,6 @@ private:
   bool prev_value_;
 };
 
-class ObRetryWaitEventInfoGuard {
-public:
-  ObRetryWaitEventInfoGuard(sql::ObSQLSessionInfo &session);
-  ~ObRetryWaitEventInfoGuard();
-
-private:
-  bool is_switch_;
-  sql::ObQueryRetryASHDiagInfo *parent_ptr_;
-};
-
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                \
   class ObActiveSession_##ash_flag_type##_FlagSetterGuard                        \
   {                                                                              \

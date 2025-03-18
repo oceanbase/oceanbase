@@ -15,9 +15,6 @@
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnostic_info_util.h"
 #include "lib/container/ob_vector.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "common/ob_smart_var.h"
 
 namespace oceanbase
 {

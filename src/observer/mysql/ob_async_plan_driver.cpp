@@ -41,7 +41,7 @@ ObAsyncPlanDriver::~ObAsyncPlanDriver()
 int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
-  ObRetryWaitEventInfoGuard retry_info_guard(session_);
+  ObRetryWaitEventInfoGuard retry_info_guard(session_.get_retry_info_for_update().get_query_retry_ash_diag_info_ptr());
   int ret = OB_SUCCESS;
   // result.open 后 pkt_param 所需的 last insert id 等各项参数都已经计算完毕
   // 对于异步增删改的情况，需要提前update last insert id，以确保回调pkt_param参数正确

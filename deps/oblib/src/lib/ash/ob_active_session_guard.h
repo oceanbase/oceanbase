@@ -28,11 +28,6 @@
 
 namespace oceanbase
 {
-namespace sql
-{
-class ObQueryRetryASHDiagInfo;
-}
-
 namespace observer
 {
 class ObVirtualASH;
@@ -43,9 +38,9 @@ namespace common
 class ObDiagnoseSessionInfo;
 class ObDiagnoseTenantInfo;
 class ObAshBuffer;
-struct ObActiveSessionStat;
 class ObDiagnosticInfo;
 class ObRetryWaitEventInfoGuard;
+struct ObQueryRetryAshInfo;
 
 // historical ob active session stat for ash.
 struct ObActiveSessionStatItem
@@ -263,7 +258,7 @@ public:
                        const int64_t p2 = 0,
                        const int64_t p3 = 0);
   void finish_ash_waiting();
-  inline sql::ObQueryRetryASHDiagInfo* get_retry_ash_diag_info_ptr() { return query_retry_ash_diag_info_ptr_; }
+  inline ObQueryRetryAshInfo* get_retry_ash_diag_info_ptr() { return query_retry_ash_diag_info_ptr_; }
   void begin_retry_wait_event(const int64_t retry_wait_event_no,
                               const int64_t retry_wait_event_p1,
                               const int64_t retry_wait_event_p2,
@@ -299,7 +294,7 @@ public:
   }
 
 private:
-  inline void set_retry_ash_diag_info_ptr(sql::ObQueryRetryASHDiagInfo* query_retry_ash_diag_info_ptr) {
+  inline void set_retry_ash_diag_info_ptr(ObQueryRetryAshInfo* query_retry_ash_diag_info_ptr) {
     query_retry_ash_diag_info_ptr_ = query_retry_ash_diag_info_ptr;
   }
 public:
@@ -339,7 +334,7 @@ private:
   // So we collect the wait time after the event finish
   int64_t fixup_index_;
   common::ObSharedGuard<ObAshBuffer> fixup_ash_buffer_;
-  sql::ObQueryRetryASHDiagInfo* query_retry_ash_diag_info_ptr_;
+  ObQueryRetryAshInfo* query_retry_ash_diag_info_ptr_;
 };
 
 class ObAshBuffer
@@ -348,7 +343,7 @@ public:
   ObAshBuffer() : write_pos_(0), read_pos_(0), buffer_() {}
   ~ObAshBuffer()
   {
-    OB_LOG(INFO, "successfully released one ash buffer", K(buffer_.count()), "size", buffer_.count() * sizeof(sizeof(ObActiveSessionStatItem)), K(this));
+    // OB_LOG(INFO, "successfully released one ash buffer", K(buffer_.count()), "size", buffer_.count() * sizeof(sizeof(ObActiveSessionStatItem)), K(this));
   }
   const ObActiveSessionStatItem &get(int64_t pos) const;
   int64_t copy_from_ash_buffer(const ObActiveSessionStatItem &stat);
@@ -404,7 +399,64 @@ private:
       di->get_ash_stat().get_retry_ash_diag_info_ptr()->filed = value;                      \
     }                                                                                       \
   } while (0)
-}
-}
+
+struct ObQueryRetryAshInfo {
+public:
+  ObQueryRetryAshInfo()
+    :ls_id_(OB_INVALID_ID),
+    holder_tx_id_(OB_INVALID_ID),
+    holder_data_seq_num_(OB_INVALID_ID),
+    holder_lock_timestamp_(OB_INVALID_ID),
+    table_id_(OB_INVALID_ID),
+    table_schema_version_(OB_INVALID_ID),
+    sys_ls_leader_addr_(OB_INVALID_ID),
+    dop_(OB_INVALID_ID),
+    required_px_workers_number_(OB_INVALID_ID),
+    admitted_px_workers_number_(OB_INVALID_ID),
+    tablet_id_(OB_INVALID_ID)
+  {}
+
+  ~ObQueryRetryAshInfo() = default;
+  void reset() {
+    ls_id_                         = OB_INVALID_ID;
+    holder_tx_id_                  = OB_INVALID_ID;
+    holder_data_seq_num_           = OB_INVALID_ID;
+    holder_lock_timestamp_         = OB_INVALID_ID;
+    table_id_                      = OB_INVALID_ID;
+    table_schema_version_          = OB_INVALID_ID;
+    sys_ls_leader_addr_            = OB_INVALID_ID;
+    dop_                           = OB_INVALID_ID;
+    required_px_workers_number_    = OB_INVALID_ID;
+    admitted_px_workers_number_    = OB_INVALID_ID;
+    tablet_id_                     = OB_INVALID_ID;
+  }
+
+public:
+  int64_t ls_id_;
+  int64_t holder_tx_id_;
+  int64_t holder_data_seq_num_;
+  int64_t holder_lock_timestamp_;
+  int64_t table_id_;
+  int64_t table_schema_version_;
+  int64_t sys_ls_leader_addr_;
+  int64_t dop_;
+  int64_t required_px_workers_number_;
+  int64_t admitted_px_workers_number_;
+  int64_t tablet_id_;
+};
+
+class ObRetryWaitEventInfoGuard {
+public:
+  ObRetryWaitEventInfoGuard(oceanbase::common::ObQueryRetryAshInfo *info);
+  ~ObRetryWaitEventInfoGuard();
+
+private:
+  bool is_switch_;
+  oceanbase::common::ObQueryRetryAshInfo *parent_ptr_;
+};
+
+} // end of common
+} // end of oceanbase
+
 #endif /* _OB_SHARE_ASH_ACTIVE_SESSION_GUARD_H_ */
 //// end of header file

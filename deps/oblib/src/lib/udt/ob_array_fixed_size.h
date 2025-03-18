@@ -144,4 +144,7 @@ private :
 
 } // namespace common
 } // namespace oceanbase
+
+#include "ob_array_fixed_size.ipp"
+
 #endif // OCEANBASE_OB_ARRAY_FIXED_SIZE_

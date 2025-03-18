@@ -15,7 +15,6 @@
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/ob_lib_config.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "lib/stat/ob_diagnostic_info_util.h"
 
 namespace oceanbase
@@ -346,34 +345,6 @@ ObDiagnosticInfoSwitchGuard::~ObDiagnosticInfoSwitchGuard()
     common::ObLocalDiagnosticInfo::dec_ref(cur_di_);
   } else {
     lib::ObPerfModeGuard::get_tl_instance() = prev_value_;
-  }
-}
-
-ObRetryWaitEventInfoGuard::ObRetryWaitEventInfoGuard(sql::ObSQLSessionInfo &session)
-  : is_switch_(false),
-    parent_ptr_(nullptr)
-{
-  if (oceanbase::lib::is_diagnose_info_enabled()) {
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      sql::ObQueryRetryASHDiagInfo * cur_ptr = session.get_retry_info_for_update().get_query_retry_ash_diag_info_ptr();
-      if (di->get_ash_stat().get_retry_ash_diag_info_ptr() != cur_ptr) {
-        sql::ObQueryRetryASHDiagInfo *parent_ptr_ = di->get_ash_stat().get_retry_ash_diag_info_ptr();
-        di->get_ash_stat().set_retry_ash_diag_info_ptr(cur_ptr);
-        is_switch_ = true;
-      }
-    }
-  }
-}
-ObRetryWaitEventInfoGuard::~ObRetryWaitEventInfoGuard()
-{
-  if (is_switch_) {
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      di->get_ash_stat().set_retry_ash_diag_info_ptr(parent_ptr_);
-    } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "(SHOULD NEVER HAPPEN) di point to nullptr", K(di));
-    }
   }
 }
 

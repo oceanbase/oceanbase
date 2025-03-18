@@ -18,6 +18,12 @@
 
 namespace oceanbase
 {
+namespace common
+{
+  struct ObActiveSessionStatItem;
+  struct ObActiveSessionStat;
+  class ObAshBuffer;
+}
 namespace share
 {
 typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
@@ -163,7 +169,7 @@ public:
     }
 
   protected:
-    common::ObSharedGuard<ObAshBuffer> ash_buffer_;
+    common::ObSharedGuard<common::ObAshBuffer> ash_buffer_;
     int64_t curr_;
     int64_t end_;
   };
@@ -172,7 +178,7 @@ public:
   {
   public:
     Iterator() : ObAshBaseIterator(0, 0) {}
-    explicit Iterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
+    explicit Iterator(const common::ObSharedGuard<common::ObAshBuffer> &ash_buffer,
              int64_t start,
              int64_t end)
         : ObAshBaseIterator(start, end)
@@ -221,7 +227,7 @@ public:
   {
   public:
     ReverseIterator() : ObAshBaseIterator(0, 0) {}
-    explicit ReverseIterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
+    explicit ReverseIterator(const common::ObSharedGuard<common::ObAshBuffer> &ash_buffer,
               int64_t start,
               int64_t end)
         : ObAshBaseIterator(start, end)
@@ -318,10 +324,10 @@ public:
   void lock() { mutex_.lock(); };
   void unlock() { mutex_.unlock(); };
 private:
-  int allocate_ash_buffer(int64_t ash_size, common::ObSharedGuard<ObAshBuffer> &ash_buffer);
+  int allocate_ash_buffer(int64_t ash_size, common::ObSharedGuard<common::ObAshBuffer> &ash_buffer);
   int64_t ash_size_;
   lib::ObMutex mutex_;
-  common::ObSharedGuard<ObAshBuffer> ash_buffer_;
+  common::ObSharedGuard<common::ObAshBuffer> ash_buffer_;
 };
 
 }
