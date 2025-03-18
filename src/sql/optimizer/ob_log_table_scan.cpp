@@ -496,7 +496,8 @@ int ObLogTableScan::copy_filter_before_index_back()
                   LOG_WARN("failed to add replaced expr", K(ret));
                 } else if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
                   LOG_WARN("failed to copy exprs", K(ret));
-                } else if (filters.at(i)->get_expr_type() == T_OP_RUNTIME_FILTER) {
+                } else if (filters.at(i)->get_expr_type() == T_OP_RUNTIME_FILTER
+                           || filters.at(i)->get_expr_type() == T_OP_PUSHDOWN_TOPN_FILTER) {
                   // record runtime filter, also replace it in join filter use operator
                   get_plan()->gen_col_replacer().add_replace_expr(old_expr, filters.at(i));
                 }

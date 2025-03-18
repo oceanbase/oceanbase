@@ -238,6 +238,11 @@ int ObLogSort::inner_replace_op_exprs(ObRawExprReplacer &replacer)
       LOG_WARN("failed to resolve ref params of hash sortkey", K(hash_sortkey_), K(ret));
     } else { /* Do nothing */ }
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(topn_filter_info_.pushdown_topn_filter_expr_)) {
+    if (OB_FAIL(replace_expr_action(replacer, topn_filter_info_.pushdown_topn_filter_expr_))) {
+      LOG_WARN("failed to replace pushdown topn filter expr");
+    }
+  }
   return ret;
 }
 
