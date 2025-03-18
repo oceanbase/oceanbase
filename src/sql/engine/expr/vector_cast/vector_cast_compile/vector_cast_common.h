@@ -30,9 +30,9 @@ static const int COMPILATION_UNIT = 7;
 #define DEF_COMPILE_FUNC_INIT(unit_idx)                                                                 \
   void __init_vec_cast_func##unit_idx()                                                                 \
   {                                                                                                     \
-    DEF_COMPILATION_VARS(tc, ObMaxTC, unit_idx);                                                        \
-    Ob2DArrayConstIniter<tc_end, ObMaxTC, VectorCastIniter, tc_start, VEC_TC_INTEGER>::init();          \
-    Ob2DArrayConstIniter<tc_end, ObMaxTC, EvalArgVecCasterIniter, tc_start, VEC_TC_INTEGER>::init();    \
+    DEF_COMPILATION_VARS(tc, MAX_VEC_TC, unit_idx);                                                        \
+    Ob2DArrayConstIniter<tc_end, MAX_VEC_TC, VectorCastIniter, tc_start, VEC_TC_INTEGER>::init();          \
+    Ob2DArrayConstIniter<tc_end, MAX_VEC_TC, EvalArgVecCasterIniter, tc_start, VEC_TC_INTEGER>::init();    \
   }
 
 } // end sql
