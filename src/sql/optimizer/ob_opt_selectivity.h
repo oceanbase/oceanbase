@@ -58,6 +58,8 @@ public:
 
   virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const = 0;
 
+  virtual double combine_ndvs(double rows, ObIArray<double> &ndvs) const = 0;
+
   virtual bool is_independent() const = 0;
 
 protected:
@@ -74,6 +76,8 @@ public:
   static ObEstCorrelationModel& get_model();
 
   virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const override;
+
+  virtual double combine_ndvs(double rows, ObIArray<double> &ndvs) const override;
 
   virtual bool is_independent() const override { return true; };
 
@@ -92,6 +96,8 @@ public:
 
   virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const override;
 
+  virtual double combine_ndvs(double rows, ObIArray<double> &ndvs) const override;
+
   virtual bool is_independent() const { return false; }
 
 protected:
@@ -108,6 +114,8 @@ public:
   static ObEstCorrelationModel& get_model();
 
   virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const override;
+
+  virtual double combine_ndvs(double rows, ObIArray<double> &ndvs) const override;
 
   virtual bool is_independent() const { return false; }
 
@@ -1211,7 +1219,8 @@ public:
     hist_scale_(-1),
     density_(0.0),
     column_expr_(NULL),
-    is_valid_(false) {}
+    is_valid_(false),
+    table_meta_(NULL) {}
 
   virtual ~ObHistSelHelper() = default;
 
@@ -1243,11 +1252,16 @@ protected:
   double density_;
   const ObColumnRefRawExpr *column_expr_;
   bool is_valid_;
+  const OptTableMeta *table_meta_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObHistSelHelper);
 };
 
 class ObHistEqualSelHelper: public ObHistSelHelper
 {
 public:
+  ObHistEqualSelHelper() = default;
   virtual ~ObHistEqualSelHelper() = default;
 
   int set_compare_value(const OptSelectivityCtx &ctx,
@@ -1264,13 +1278,20 @@ protected:
                             const ObHistogram &histogram,
                             double &sel,
                             bool &is_rare_value) override;
+  int refine_out_of_bounds_sel(const OptSelectivityCtx &ctx,
+                               const ObObj &value,
+                               double &sel,
+                               bool &is_rare_value);
 private:
   ObObj compare_value_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObHistEqualSelHelper);
 };
 
 class ObHistRangeSelHelper: public ObHistSelHelper
 {
 public:
+  ObHistRangeSelHelper() = default;
   virtual ~ObHistRangeSelHelper() = default;
 
   int init(const OptTableMetas &table_metas,
@@ -1292,6 +1313,8 @@ private:
   ObQueryRangeArray ranges_;
   ObObj hist_min_value_;
   ObObj hist_max_value_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObHistRangeSelHelper);
 };
 
 }

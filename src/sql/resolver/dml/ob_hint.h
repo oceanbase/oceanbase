@@ -329,6 +329,7 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
 #define COMPAT_VERSION_4_2_4      (oceanbase::common::cal_version(4, 2, 4, 0))
 #define COMPAT_VERSION_4_2_5      (oceanbase::common::cal_version(4, 2, 5, 0))
+#define COMPAT_VERSION_4_2_5_BP3  (oceanbase::common::cal_version(4, 2, 5, 3))
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
@@ -336,7 +337,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_4      (oceanbase::common::cal_version(4, 3, 4, 0))
 #define COMPAT_VERSION_4_3_5      (oceanbase::common::cal_version(4, 3, 5, 0))
 #define COMPAT_VERSION_4_3_5_BP1  (oceanbase::common::cal_version(4, 3, 5, 1))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5_BP1
+#define COMPAT_VERSION_4_3_5_BP2  (oceanbase::common::cal_version(4, 3, 5, 2))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5_BP2
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 

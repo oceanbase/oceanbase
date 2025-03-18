@@ -252,10 +252,8 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write(file_head_annotation)
   cpp_file.write("#define USING_LOG_PREFIX SHARE\n")
   cpp_file.write("#include \"" + pdir + "/" + cpp_file_name.replace(".cpp", ".h") + "\"\n")
-  cpp_file.write("#include \"share/system_variable/ob_system_variable_factory.h\"\n")
+  cpp_file.write("#include \"ob_system_variable_factory.h\"\n")
   cpp_file.write("#include \"share/object/ob_obj_cast.h\"\n")
-  cpp_file.write("#include \"common/expression/ob_expr_string_buf.h\"\n")
-  cpp_file.write("#include \"common/expression/ob_expr_string_buf.h\"\n")
   cpp_file.write("using namespace oceanbase::common;\n");
   cpp_file.write("\n")
   cpp_file.write("namespace oceanbase\n");
@@ -671,11 +669,8 @@ def make_sys_var_cpp(pdir, filename, list_sorted_by_name, list_sorted_by_id):
   wfile = open(filename, 'w')
   wfile.write(file_head_annotation);
   wfile.write("#define USING_LOG_PREFIX SQL_SESSION\n");
-  wfile.write("#include \"share/ob_define.h\"\n")
   wfile.write("#include \"" + pdir + "/" + filename.replace(".cpp", ".h") + "\"\n")
   # wfile.write("#include \"share/system_variable/ob_system_variable_init.cpp\"\n")
-  wfile.write("#include \"share/ob_errno.h\"\n")
-  wfile.write("#include <algorithm>\n")
   wfile.write("using namespace oceanbase::common;\n");
   wfile.write("""
 namespace oceanbase
