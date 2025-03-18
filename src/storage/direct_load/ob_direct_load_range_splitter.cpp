@@ -444,19 +444,38 @@ int ObDirectLoadSampleInfo::get_origin_info(ObDirectLoadOriginTable *origin_tabl
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(origin_table));
   } else {
-    ObSSTable *major_sstable = origin_table->get_major_sstable();
-    ObSSTableMetaHandle meta_handle;
-    if (OB_ISNULL(major_sstable)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected major sstable is null", KR(ret), KPC(origin_table));
-    } else if (OB_FAIL(major_sstable->get_meta(meta_handle))) {
-      LOG_WARN("fail to get sstable meta", K(ret), KPC(major_sstable));
+    if (nullptr != origin_table->get_major_sstable()) {
+      ObSSTable *major_sstable = origin_table->get_major_sstable();
+      ObSSTableMetaHandle meta_handle;
+      if (OB_FAIL(major_sstable->get_meta(meta_handle))) {
+        LOG_WARN("fail to get sstable meta", K(ret), KPC(major_sstable));
+      } else {
+        const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
+        origin_sample_num_ = basic_meta.data_macro_block_count_;
+        origin_rows_per_sample_ = basic_meta.data_macro_block_count_ > 0
+                                    ? basic_meta.row_count_ / basic_meta.data_macro_block_count_
+                                    : 0;
+      }
     } else {
-      const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
-      origin_sample_num_ = basic_meta.data_macro_block_count_;
-      origin_rows_per_sample_ = basic_meta.data_macro_block_count_ > 0
-                                  ? basic_meta.row_count_ / basic_meta.data_macro_block_count_
-                                  : 0;
+      int64_t data_macro_block_count = 0;
+      int64_t row_count = 0;
+      const ObIArray<ObSSTable *> &ddl_sstables = origin_table->get_ddl_sstables();
+      for (int64_t i = 0; OB_SUCC(ret) && i < ddl_sstables.count(); ++i) {
+        ObSSTable *ddl_sstable = ddl_sstables.at(i);
+        ObSSTableMetaHandle meta_handle;
+        if (OB_FAIL(ddl_sstable->get_meta(meta_handle))) {
+          LOG_WARN("fail to get sstable meta", K(ret), KPC(ddl_sstable));
+        } else {
+          const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
+          data_macro_block_count += basic_meta.data_macro_block_count_;
+          row_count += basic_meta.row_count_;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        origin_sample_num_ = data_macro_block_count;
+        origin_rows_per_sample_ =
+          data_macro_block_count > 0 ? row_count / data_macro_block_count : 0;
+      }
     }
   }
   return ret;
