@@ -432,6 +432,7 @@ private:
   bool is_normal_cgs_at_the_end_;
   // for read time query check of mview
   bool is_mlog_table_;
+  bool is_enable_semistruct_encoding_;
 };
 } //namespace schema
 } //namespace share

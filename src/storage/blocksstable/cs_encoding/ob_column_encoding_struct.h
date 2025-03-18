@@ -38,6 +38,7 @@ struct ObCSColumnHeader
     STRING = 1,
     INT_DICT = 2,
     STR_DICT = 3,
+    SEMISTRUCT = 4,
     MAX_TYPE
   };
 
@@ -48,6 +49,7 @@ struct ObCSColumnHeader
       case STRING :  { return "STRING"; }
       case INT_DICT: { return "INT_DICT"; }
       case STR_DICT: { return "STR_DICT"; }
+      case SEMISTRUCT: { return "SEMISTRUCT"; }
       default:       { return "MAX_TYPE"; }
     }
   }

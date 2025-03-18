@@ -2241,6 +2241,7 @@ public:
        INCREMENT_CACHE_SIZE,
        ENABLE_MACRO_BLOCK_BLOOM_FILTER,
        STORAGE_CACHE_POLICY,
+       SEMISTRUCT_ENCODING_TYPE,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType

@@ -631,7 +631,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_vec_index_(false),
     is_partition_table_(false),
     is_normal_cgs_at_the_end_(false),
-    is_mlog_table_(false)
+    is_mlog_table_(false),
+    is_enable_semistruct_encoding_(false)
 {
   reset();
 }
@@ -666,6 +667,7 @@ void ObTableParam::reset()
   is_partition_table_ = false;
   is_normal_cgs_at_the_end_ = false;
   is_mlog_table_ = false;
+  is_enable_semistruct_encoding_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -722,6 +724,7 @@ OB_DEF_SERIALIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_mlog_table_);
   }
+  OB_UNIS_ENCODE(is_enable_semistruct_encoding_);
   return ret;
 }
 
@@ -833,6 +836,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE, is_mlog_table_);
   }
+  OB_UNIS_DECODE(is_enable_semistruct_encoding_);
   return ret;
 }
 
@@ -897,6 +901,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 is_mlog_table_);
   }
+  OB_UNIS_ADD_LEN(is_enable_semistruct_encoding_);
   return len;
 }
 

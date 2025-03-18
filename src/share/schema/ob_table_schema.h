@@ -514,6 +514,38 @@ public:
                "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_);
 };
 
+struct ObSemiStructEncodingType
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum Mode {
+    NONE = 0,
+    ENCODING = 1
+  };
+
+public:
+  ObSemiStructEncodingType():
+    flags_(0)
+  {}
+
+  ~ObSemiStructEncodingType() { reset(); }
+
+  void reset() { flags_ = 0;}
+  bool is_enable_semistruct_encoding() const { return ENCODING == mode_; }
+  int64_t get_deep_copy_size() const { return sizeof(ObSemiStructEncodingType); }
+
+  union
+  {
+    int64_t flags_;
+    struct
+    {
+      uint64_t mode_ : 8;
+      uint64_t reserved_ : 56;
+    };
+  };
+  TO_STRING_KV(K_(mode), K_(reserved));
+};
+
 struct ObBackUpTableModeOp
 {
   /*
@@ -730,6 +762,11 @@ public:
   virtual int get_mv_mode_struct(ObMvMode &mv_mode) const
   {
     UNUSED(mv_mode);
+    return common::OB_NOT_SUPPORTED;
+  }
+  virtual int get_semistruct_encoding_type(ObSemiStructEncodingType& type) const
+  {
+    UNUSED(type);
     return common::OB_NOT_SUPPORTED;
   }
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -2086,6 +2123,15 @@ public:
   {
     mv_mode_.table_referenced_by_fast_lsm_mv_flag_ = flag;
   }
+  void set_semistruct_encoding_type(const int64_t type) { semistruct_encoding_type_.flags_ = type; }
+  void set_semistruct_encoding_type(const ObSemiStructEncodingType& type) { semistruct_encoding_type_ = type; }
+  const ObSemiStructEncodingType& get_semistruct_encoding_type() const { return semistruct_encoding_type_; }
+  int64_t get_semistruct_encoding_flags() const { return semistruct_encoding_type_.flags_; }
+  virtual int get_semistruct_encoding_type(ObSemiStructEncodingType& type) const
+  {
+    type = semistruct_encoding_type_;
+    return OB_SUCCESS;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -2295,6 +2341,7 @@ protected:
   ObMvMode mv_mode_;
   common::ObString storage_cache_policy_;
   ObMergeEngineType merge_engine_type_;
+  ObSemiStructEncodingType semistruct_encoding_type_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

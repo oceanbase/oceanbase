@@ -54,6 +54,7 @@ void ObDecodeResourcePool::destroy()
     cs_string_pool_.destroy();
     cs_int_dict_pool_.destroy();
     cs_str_dict_pool_.destroy();
+    cs_semistruct_pool_.destroy();
     cs_ctx_block_pool_.destroy();
     is_inited_ = false;
   }
@@ -80,6 +81,7 @@ int ObDecodeResourcePool::init() {
         || OB_FAIL(cs_string_pool_.init(MAX_CS_DECODER_CNT * adaptive_factor, "CsStrPl", tenant_id))
         || OB_FAIL(cs_int_dict_pool_.init(MAX_CS_DECODER_CNT * adaptive_factor, "CsDictPl", tenant_id))
         || OB_FAIL(cs_str_dict_pool_.init(MAX_CS_DECODER_CNT * adaptive_factor, "CsDictPl", tenant_id))
+        || OB_FAIL(cs_semistruct_pool_.init(MAX_CS_DECODER_CNT * adaptive_factor, "CsSemiPl", tenant_id))
         || OB_FAIL(cs_ctx_block_pool_.init(MAX_CS_CTX_BLOCK_CNT * adaptive_factor, "CsCtxBlockPl", tenant_id))
         )) {
       STORAGE_LOG(WARN, "failed to init decode resource pool", K(ret));
@@ -133,6 +135,7 @@ int ObDecodeResourcePool::reload_config()
       cs_string_pool_.set_fixed_count(MAX_CS_DECODER_CNT * adaptive_factor);
       cs_int_dict_pool_.set_fixed_count(MAX_CS_DECODER_CNT * adaptive_factor);
       cs_str_dict_pool_.set_fixed_count(MAX_CS_DECODER_CNT * adaptive_factor);
+      cs_semistruct_pool_.set_fixed_count(MAX_CS_DECODER_CNT * adaptive_factor);
       cs_ctx_block_pool_.set_fixed_count(MAX_CS_CTX_BLOCK_CNT * adaptive_factor);
     }
   }
@@ -231,6 +234,12 @@ ObSmallObjPool<ObStrDictColumnDecoder>& ObDecodeResourcePool::get_pool()
 }
 
 template<>
+ObSmallObjPool<ObSemiStructColumnDecoder>& ObDecodeResourcePool::get_pool()
+{
+  return cs_semistruct_pool_;
+}
+
+template<>
 ObSmallObjPool<ObColumnCSDecoderCtxBlock>& ObDecodeResourcePool::get_pool()
 {
   return cs_ctx_block_pool_;
@@ -282,7 +291,8 @@ ObCSDecoderPool::ObCSDecoderPool()
     cs_string_pool_(),
     cs_int_dict_pool_(),
     cs_str_dict_pool_(),
-    pools_{cs_integer_pool_, cs_string_pool_, cs_int_dict_pool_, cs_str_dict_pool_}
+    cs_semistruct_pool_(),
+    pools_{cs_integer_pool_, cs_string_pool_, cs_int_dict_pool_, cs_str_dict_pool_, cs_semistruct_pool_}
 {
   memset(free_cnts_, 0, sizeof(free_cnts_));
 }
@@ -298,6 +308,7 @@ void ObCSDecoderPool::reset()
     (void)free_decoders<ObStringColumnDecoder>(*decode_res_pool, ObCSColumnHeader::STRING);
     (void)free_decoders<ObIntDictColumnDecoder>(*decode_res_pool, ObCSColumnHeader::INT_DICT);
     (void)free_decoders<ObStrDictColumnDecoder>(*decode_res_pool, ObCSColumnHeader::STR_DICT);
+    (void)free_decoders<ObSemiStructColumnDecoder>(*decode_res_pool, ObCSColumnHeader::SEMISTRUCT);
   }
 }
 

@@ -46,7 +46,7 @@ public:
                    str_diff_pool_(), hex_str_pool_(), str_prefix_pool_(),
                    column_equal_pool_(), column_substr_pool_(), ctx_block_pool_(),
                    cs_integer_pool_(), cs_string_pool_(), cs_int_dict_pool_(),
-                   cs_str_dict_pool_(), cs_ctx_block_pool_(), is_inited_(false) {}
+                   cs_str_dict_pool_(), cs_semistruct_pool_(), cs_ctx_block_pool_(), is_inited_(false) {}
   ~ObDecodeResourcePool();
   static int mtl_init(ObDecodeResourcePool *&ctx_array_pool);
   void destroy();
@@ -87,6 +87,7 @@ private:
   ObSmallObjPool<ObStringColumnDecoder> cs_string_pool_;
   ObSmallObjPool<ObIntDictColumnDecoder> cs_int_dict_pool_;
   ObSmallObjPool<ObStrDictColumnDecoder> cs_str_dict_pool_;
+  ObSmallObjPool<ObSemiStructColumnDecoder> cs_semistruct_pool_;
   ObSmallObjPool<ObColumnCSDecoderCtxBlock> cs_ctx_block_pool_;
   bool is_inited_;
 };
@@ -162,6 +163,7 @@ private:
   ObIColumnCSDecoder* cs_string_pool_[MAX_CS_CNTS[ObCSColumnHeader::STRING]];
   ObIColumnCSDecoder* cs_int_dict_pool_[MAX_CS_CNTS[ObCSColumnHeader::INT_DICT]];
   ObIColumnCSDecoder* cs_str_dict_pool_[MAX_CS_CNTS[ObCSColumnHeader::INT_DICT]];
+  ObIColumnCSDecoder* cs_semistruct_pool_[MAX_CS_CNTS[ObCSColumnHeader::SEMISTRUCT]];
   ObIColumnCSDecoder** pools_[ObCSColumnHeader::MAX_TYPE];
   int16_t free_cnts_[ObCSColumnHeader::MAX_TYPE];
 };

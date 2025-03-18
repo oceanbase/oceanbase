@@ -123,6 +123,9 @@ ObMvMode & ObMvMode::operator=(const ObMvMode &other)
 OB_SERIALIZE_MEMBER_SIMPLE(ObMvMode,
                            mode_);
 
+OB_SERIALIZE_MEMBER_SIMPLE(ObSemiStructEncodingType,
+                           flags_);
+
 common::ObString ObMergeSchema::EMPTY_STRING = common::ObString::make_string("");
 
 int ObMergeSchema::get_mulit_version_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const
@@ -1646,7 +1649,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     local_session_vars_(allocator),
     index_params_(),
     exec_env_(),
-    storage_cache_policy_()
+    storage_cache_policy_(),
+    semistruct_encoding_type_()
 {
   reset();
 }
@@ -1909,6 +1913,9 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.storage_cache_policy_, storage_cache_policy_))) {
     LOG_WARN("deep copy storage cache policy failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    semistruct_encoding_type_ = src_schema.semistruct_encoding_type_;
   }
 
   if (OB_FAIL(ret)) {
@@ -3747,6 +3754,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += local_session_vars_.get_deep_copy_size();
   convert_size += external_properties_.length() + 1;
   convert_size += storage_cache_policy_.length() + 1;
+  convert_size += semistruct_encoding_type_.get_deep_copy_size();
   return convert_size;
 }
 
@@ -3852,6 +3860,7 @@ void ObTableSchema::reset()
   local_session_vars_.reset();
   mv_mode_.reset();
   storage_cache_policy_.reset();
+  semistruct_encoding_type_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -7098,7 +7107,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(index_params),
     K_(exec_env),
     K_(storage_cache_policy),
-    K_(merge_engine_type));
+    K_(merge_engine_type),
+    K_(semistruct_encoding_type));
   J_OBJ_END();
 
   return pos;
@@ -7297,6 +7307,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(storage_cache_policy_type_);
   OB_UNIS_ENCODE(storage_cache_policy_);
   OB_UNIS_ENCODE(merge_engine_type_);
+  OB_UNIS_ENCODE(semistruct_encoding_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7541,6 +7552,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(storage_cache_policy_type_);
   OB_UNIS_DECODE_AND_FUNC(storage_cache_policy_, deep_copy_str);
   OB_UNIS_DECODE(merge_engine_type_);
+  OB_UNIS_DECODE(semistruct_encoding_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7685,6 +7697,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(storage_cache_policy_type_);
   OB_UNIS_ADD_LEN(storage_cache_policy_);
   OB_UNIS_ADD_LEN(merge_engine_type_);
+  OB_UNIS_ADD_LEN(semistruct_encoding_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

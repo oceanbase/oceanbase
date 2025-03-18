@@ -899,6 +899,8 @@ constexpr int OB_NOT_MULTIVALUE_SUPPORT = -5519;
 constexpr int OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX = -5520;
 constexpr int OB_ERR_JSON_CONTAINER_CAST_SCALAR = -5521;
 constexpr int OB_ERR_INVALID_IDENTIFIER_JSON_TABLE = -5522;
+constexpr int OB_SEMISTRUCT_SCHEMA_NOT_MATCH = -5523;
+constexpr int OB_NOT_SUPPORT_SEMISTRUCT_ENCODE = -5524;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -3057,6 +3059,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX__USER_ERROR_MSG "Invalid JSON value for CAST for functional index."
 #define OB_ERR_JSON_CONTAINER_CAST_SCALAR__USER_ERROR_MSG "Cannot store an array or an object in a scalar key part of the index."
 #define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__USER_ERROR_MSG "invalid identifier used for path expression in JSON_TABLE"
+#define OB_SEMISTRUCT_SCHEMA_NOT_MATCH__USER_ERROR_MSG "Cannot match semistruct schema."
+#define OB_NOT_SUPPORT_SEMISTRUCT_ENCODE__USER_ERROR_MSG "not support semistruct encoding."
 #define OB_ERR_SESSION_VAR_CHANGED__USER_ERROR_MSG "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
@@ -6547,6 +6551,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_JSON_CONTAINER_CAST_SCALAR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5521, Cannot store an array or an object in a scalar key part of the index."
 #define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__ORA_USER_ERROR_MSG "ORA-40680: invalid identifier used for path expression in JSON_TABLE"
 #define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__OBE_USER_ERROR_MSG "OBE-40680: invalid identifier used for path expression in JSON_TABLE"
+#define OB_SEMISTRUCT_SCHEMA_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5523, Cannot match semistruct schema."
+#define OB_SEMISTRUCT_SCHEMA_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5523, Cannot match semistruct schema."
+#define OB_NOT_SUPPORT_SEMISTRUCT_ENCODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5524, not support semistruct encoding."
+#define OB_NOT_SUPPORT_SEMISTRUCT_ENCODE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5524, not support semistruct encoding."
 #define OB_ERR_SESSION_VAR_CHANGED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5540, System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SESSION_VAR_CHANGED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5540, System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
@@ -9228,7 +9236,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2412];
+extern int g_all_ob_errnos[2414];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

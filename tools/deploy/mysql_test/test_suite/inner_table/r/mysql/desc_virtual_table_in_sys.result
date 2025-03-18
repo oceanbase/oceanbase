@@ -1006,6 +1006,7 @@ parser_properties	longtext	NO
 enable_macro_block_bloom_filter	tinyint(4)	NO		0	
 storage_cache_policy	varchar(1048576)	NO		{"GLOBAL":"AUTO"}	
 merge_engine_type	bigint(20)	NO		0	
+semistruct_encoding_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2839,6 +2840,7 @@ parser_properties	longtext	NO
 enable_macro_block_bloom_filter	tinyint(4)	NO		0	
 storage_cache_policy	varchar(1048576)	NO		{"GLOBAL":"AUTO"}	
 merge_engine_type	bigint(20)	NO		0	
+semistruct_encoding_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2940,6 +2942,7 @@ parser_properties	longtext	YES
 enable_macro_block_bloom_filter	tinyint(4)	YES		0	
 storage_cache_policy	varchar(1048576)	YES		{"GLOBAL":"AUTO"}	
 merge_engine_type	bigint(20)	YES		0	
+semistruct_encoding_type	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1

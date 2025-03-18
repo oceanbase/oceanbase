@@ -1240,6 +1240,8 @@ DEFINE_ERROR(OB_NOT_MULTIVALUE_SUPPORT, -5519, ER_NOT_SUPPORTED_YET, "42000", "T
 DEFINE_ERROR(OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX, -5520, ER_CAST_INDEX_JSON_VALUE, "42000", "Invalid JSON value for CAST for functional index.");
 DEFINE_ERROR(OB_ERR_JSON_CONTAINER_CAST_SCALAR, -5521, ER_ARRAY_CAST_INDEX_SCALAR, "42000", "Cannot store an array or an object in a scalar key part of the index.");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_IDENTIFIER_JSON_TABLE, -5522, -1, "22000", "invalid identifier used for path expression in JSON_TABLE", 40680, "invalid identifier used for path expression in JSON_TABLE");
+DEFINE_ERROR(OB_SEMISTRUCT_SCHEMA_NOT_MATCH, -5523, -1, "HY000", "Cannot match semistruct schema.");
+DEFINE_ERROR(OB_NOT_SUPPORT_SEMISTRUCT_ENCODE, -5524, -1, "HY000", "not support semistruct encoding.");
 
 //for changed solidify session vars of generated cols
 DEFINE_ERROR_EXT_DEP(OB_ERR_SESSION_VAR_CHANGED, -5540, -1, "HY000", "System variables are different from the old values solidified.", "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s).");

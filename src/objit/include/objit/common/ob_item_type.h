@@ -2801,6 +2801,7 @@ typedef enum ObItemType
   T_DROP_CCL_RULE = 4830,
   // merge_engine
   T_MERGE_ENGINE = 4831,
+  T_SEMISTRUCT_ENCODING_TYPE = 4832,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

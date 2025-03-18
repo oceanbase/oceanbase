@@ -479,6 +479,7 @@ ObStorageSchema::ObStorageSchema()
     has_all_column_group_(false),
     mv_mode_(),
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE),
+    semistruct_encoding_type_(),
     is_inited_(false)
 {
 }
@@ -862,6 +863,7 @@ void ObStorageSchema::reset()
     has_all_column_group_ = false;
     allocator_ = nullptr;
   }
+  semistruct_encoding_type_.reset();
   is_inited_ = false;
 }
 
@@ -966,6 +968,7 @@ int ObStorageSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
     }
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
       OB_UNIS_ENCODE(merge_engine_type_);
+      OB_UNIS_ENCODE(semistruct_encoding_type_);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1083,6 +1086,7 @@ int ObStorageSchema::deserialize(
     }
     if (OB_SUCC(ret) && storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
       OB_UNIS_DECODE(merge_engine_type_);
+      OB_UNIS_DECODE(semistruct_encoding_type_);
     }
 
     if (OB_SUCC(ret)) {
@@ -1639,6 +1643,7 @@ int64_t ObStorageSchema::get_serialize_size() const
   }
   if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V5) {
     OB_UNIS_ADD_LEN(merge_engine_type_);
+    OB_UNIS_ADD_LEN(semistruct_encoding_type_);
   }
   return len;
 }
@@ -2124,6 +2129,8 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
 
   if (OB_FAIL(input_schema.get_mv_mode_struct(mv_mode_))) {
     STORAGE_LOG(WARN, "Fail to get mv mode struct", K(ret));
+  } else if (OB_FAIL(input_schema.get_semistruct_encoding_type(semistruct_encoding_type_))) {
+    STORAGE_LOG(WARN, "Fail to get semistruct encoding options", K(ret));
   } else {
     is_use_bloomfilter_ = input_schema.is_use_bloomfilter();
     table_type_ = input_schema.get_table_type();
