@@ -5661,6 +5661,16 @@ void ObDDLResolver::reset() {
   enable_macro_block_bloom_filter_ = false;
 }
 
+void ObDDLResolver::reset_index()
+{
+  index_scope_ = NOT_SPECIFIED;
+  parser_name_.reset();
+  parser_properties_.reset();
+  comment_.reset();
+  // default
+  index_using_type_ = USING_BTREE;
+}
+
 bool ObDDLResolver::is_valid_prefix_key_type(const ObObjTypeClass column_type_class)
 {
   return column_type_class == ObStringTC || column_type_class == ObTextTC;

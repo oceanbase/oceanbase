@@ -872,7 +872,6 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     int64_t external_table_accept_options[] = {
       T_ALTER_REFRESH_EXTERNAL_TABLE, T_ALTER_EXTERNAL_PARTITION_OPTION, T_TABLE_OPTION_LIST, T_ALTER_TABLE_OPTION};
     for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
-      reset();
       ParseNode *action_node = node.children_[i];
       if (OB_ISNULL(action_node)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1886,6 +1885,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
   } else {
+    // reset the table options before parsing
+    reset_index();
     bool is_unique_key = 1 == node.value_;
     bool is_fulltext_index = 3 == node.value_;
     ParseNode *index_name_node = nullptr;
@@ -2048,9 +2049,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 }
               }
             }
-            if (OB_SUCCESS == ret) {
-              //reset the table options before parsing
-              index_scope_ = NOT_SPECIFIED;
+            if (OB_SUCC(ret)) {
               if (NULL != table_option_node) {
                 has_index_using_type_ = false;
                 if (OB_FAIL(resolve_table_options(table_option_node, true))) {

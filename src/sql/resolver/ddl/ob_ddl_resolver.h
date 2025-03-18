@@ -1055,6 +1055,11 @@ protected:
   int check_index_param(const ParseNode *option_node, ObString &index_params, const int64_t vector_dim);
 
   void reset();
+
+  // for alter table: there may be some index_arg.
+  // while create table can garentee some table info is behind the index arg, which will not be
+  // reset
+  void reset_index();
   int get_mv_container_table(uint64_t tenant_id,
                              const uint64_t mv_container_table_id,
                              const share::schema::ObTableSchema *&mv_container_table_schema,
