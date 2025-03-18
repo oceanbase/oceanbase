@@ -1878,8 +1878,14 @@ int ObBackupDestIOPermissionMgr::check_backup_src_info_valid(
         const ObBackupSrcType &backup_src_type)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(backup_src_info) || ObBackupSrcType::EMPTY > backup_src_type || ObBackupSrcType::MAX <= backup_src_type) {
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((CLUSTER_VERSION_4_2_2_0 < min_cluster_version && min_cluster_version < CLUSTER_VERSION_4_2_5_2)
+          || min_cluster_version < MOCK_CLUSTER_VERSION_4_2_1_11) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup zone is not supported for current cluster version", K(ret), K(min_cluster_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "change external storage dest is");
+  } else if (OB_ISNULL(backup_src_info) || backup_src_info[0] == '\0'
+                || ObBackupSrcType::EMPTY > backup_src_type || ObBackupSrcType::MAX <= backup_src_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(backup_src_info), K(backup_src_type));
   } else if (ObBackupSrcType::ZONE == backup_src_type && OB_FAIL(check_zone_valid(backup_src_info))) {
@@ -2081,10 +2087,12 @@ int ObBackupDestIOPermissionMgr::check_idc_valid(const char *src_info)
 int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const obrpc::ObAdminSetConfigArg &arg)
 {
   int ret = OB_SUCCESS;
-
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_2) {
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((CLUSTER_VERSION_4_2_2_0 < min_cluster_version && min_cluster_version < CLUSTER_VERSION_4_2_5_2)
+          || min_cluster_version < MOCK_CLUSTER_VERSION_4_2_1_11) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("change external storage dest is not supported under cluster version 4_2_5_2 ", K(ret));
+    LOG_WARN("change external storage dest is not supported for current cluster version",
+        K(ret), K(min_cluster_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "change external storage dest is");
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

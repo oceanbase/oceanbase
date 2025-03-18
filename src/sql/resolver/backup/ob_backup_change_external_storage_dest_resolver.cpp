@@ -28,10 +28,12 @@ namespace sql
 int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_2) {
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((CLUSTER_VERSION_4_2_2_0 < min_cluster_version && min_cluster_version < CLUSTER_VERSION_4_2_5_2)
+          || min_cluster_version < MOCK_CLUSTER_VERSION_4_2_1_11) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("change external storage dest is not supported under cluster version 4_2_5_2 ", K(ret));
+    LOG_WARN("change external storage dest is not supported for current cluster version",
+        K(ret), K(min_cluster_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "change external storage dest is");
   } else if (OB_UNLIKELY(T_CHANGE_EXTERNAL_STORAGE_DEST != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
