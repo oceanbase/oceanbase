@@ -22,31 +22,6 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-/**
- * @brief ObTransformGroupByPullup::transform_one_stmt
- *  select sum(r.value) from r, t, p where r.c1 = t.c1 and t.c2 = p.c2 and p.c3 > 0 group by p.c4;
- *  ==>
- *  select sum(r_sum * t_cnt * p_cnt) from
- *      (select r.c1, sum(r.value) as r_sum from r group by r.c1) v1,
- *      (select t.c1, t.c2, count(*) as t_cnt from t group by t.c1, t.c2) v2,
- *      (select p.c2, p.c4, count(*) as p_cnt from p where p.c3 > 0 group by p.c2, p.c4) v3
- *  where v1.c1 = v2.c1 and v2.c2 = v3.c2 group by v3.c4;
- *
- *  select sum(r.value) from r, t where r.ukey = t.c1 group by t.c2;
- *  ==>
- *  select sum(r.value * v2.t_cnt) from
- *       r, (select c1, c2, count(*) as t_cnt from t group by t.c1, t.c2) v2
- *  where r.ukey = v2.c1 group by v2.c2;
- *
- * select sum(r.value) from r left join t on r.c1 = t.c1 where r.c3 > 0 group by r.c2;
- * ==>
- * select sum(r_sum * case when v2.c1 is null then 1 else v2.t_cnt) from
- *     (select r.c1, r.c2, sum(r.value) as r_sum where r.c3 > 0 from r group by r.c1, r.c2) v1,
- *     (select t.c1, count(*) as t_cnt from t group by t.c1) v2
- * where v1.c1 = v2.c1 group by v1.c2;
- *
- */
-
 int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                                            ObDMLStmt *&stmt,
                                                            bool &trans_happened)
@@ -77,7 +52,7 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
     } else if (OB_ISNULL(view = trans_stmt->get_table_item_by_id(view_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("view is null", K(ret));
-    } else if (OB_FALSE_IT(pullup_ctx.view_talbe_id_ = valid_views.at(i).table_id_)) {
+    } else if (OB_FALSE_IT(pullup_ctx.view_table_id_ = valid_views.at(i).table_id_)) {
     } else if (OB_FAIL(get_trans_view(trans_stmt, view_stmt))) {
       LOG_WARN("failed to get transform view", K(ret));
     } else if (OB_FAIL(do_groupby_pull_up(view_stmt, valid_views.at(i)))) {
@@ -157,7 +132,7 @@ int ObTransformGroupByPullup::check_group_by_subset(ObRawExpr *expr,
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && bret && i < expr->get_param_count(); i++) {
           if (OB_FAIL(SMART_CALL(check_group_by_subset(expr->get_param_expr(i), group_exprs, bret)))) {
-            LOG_WARN("check group by subset faield", K(ret));
+            LOG_WARN("check group by subset failed", K(ret));
           }
         }
       }
@@ -252,9 +227,17 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       LOG_WARN("failed to add members", K(ret));
     }
   }
-  //如果generated table输出的聚合函数出现在join on condition，那么它也要被忽略
+  // Ignore any generated table that meets the following conditions:
+  // 1. Output aggregate column that appears in stmt's join on condition.
+  //    Pulling up groupby from such table invalids such join on conditions.
+  // 2. all join conditions (EQ/NSEQ where condition) related to the generated table
+  //    contain aggregate column of the generated table.
+  //    Pulling up groupby from such table will result a non-conditional cartesian product
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_on_conditions(*stmt, ignore_tables))) {
+      LOG_WARN("failed to check ignore views", K(ret));
+    } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_1_BP11) {
+    } else if (OB_FAIL(check_where_conditions(*stmt, ignore_tables))) {
       LOG_WARN("failed to check ignore views", K(ret));
     }
   }
@@ -320,7 +303,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       OPT_TRACE("hint reject transform");
     } else if (OB_FALSE_IT(myhint = static_cast<const ObViewMergeHint*>(sub_stmt->get_stmt_hint().get_normal_hint(T_MERGE_HINT)))) {
     } else if (!enable_group_by_placement_transform && (NULL == myhint || myhint->enable_no_group_by_pull_up())) {
-      OPT_TRACE("system var disable group by placemebt");
+      OPT_TRACE("system var disable group by placement");
     } else if (ignore_tables.has_member(stmt->get_table_bit_index(table->table_id_))) {
       // skip the generated table
       OPT_TRACE("ignore this table");
@@ -439,28 +422,127 @@ int ObTransformGroupByPullup::check_on_conditions(ObDMLStmt &stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     TableItem *table = NULL;
     ObRawExpr *expr = columns.at(i);
-    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(expr);
+    ObRawExpr *select_expr = NULL;
     if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid column expr", K(ret), K(expr));
-    } else if (OB_ISNULL(table = stmt.get_table_item_by_id(column_expr->get_table_id()))) {
+    } else if (OB_FAIL(extract_info_from_column_expr(stmt, *expr, table, select_expr))) {
+      LOG_WARN("failed to extract info from column expr", K(ret));
+    } else if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table item is null", K(ret));
-    } else if (table->is_generated_table()) {
-      int64_t sel_idx = column_expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
-      ObRawExpr *select_expr = NULL;
-      if (OB_UNLIKELY(sel_idx < 0 || sel_idx >= table->ref_query_->get_select_item_size())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("select index is invalid", K(ret), K(sel_idx));
-      } else if (OB_ISNULL(select_expr = table->ref_query_->get_select_item(sel_idx).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid select expr", K(ret), K(select_expr));
-      } else if (!select_expr->has_flag(CNT_AGG)) {
-        // do nothing
-      } else if (OB_FAIL(ignore_tables.add_member(stmt.get_table_bit_index(table->table_id_)))) {
-        LOG_WARN("failed to add ignore table set", K(ret));
+      LOG_WARN("invalid table item", K(ret), K(expr));
+    } else if (!table->is_generated_table()) {
+    } else if (OB_ISNULL(select_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid select item", K(ret), K(expr));
+    } else if (!select_expr->has_flag(CNT_AGG)) {
+      // do nothing
+    } else if (OB_FAIL(ignore_tables.add_member(stmt.get_table_bit_index(table->table_id_)))) {
+      LOG_WARN("failed to add ignore table set", K(ret));
+    }
+  }
+  return ret;
+}
+
+// If all join conditions that related to a generated table have aggregate output column of that table,
+// they will be moved to having after groupby pullup, resulting a cartesian product w/o condition
+// which may have high cost.
+// Do not do groupby pullup for such generated table.
+int ObTransformGroupByPullup::check_where_conditions(ObDMLStmt &stmt,
+                                                     ObSqlBitSet<> &ignore_tables)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObRawExpr *> &stmt_cond_exprs = stmt.get_condition_exprs();
+  ObSqlBitSet<> has_aggr_cond_table_ids;
+  ObSqlBitSet<> has_non_aggr_cond_table_ids;
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt_cond_exprs.count(); ++i) {
+    ObRawExpr *cond_expr = stmt_cond_exprs.at(i);
+    ObSEArray<ObRawExpr *, 4> column_exprs;
+    if (OB_ISNULL(cond_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null cond expr", K(ret));
+    } else if (!cond_expr->has_flag(IS_JOIN_COND)) {
+      // only consider join conditions (which is EQ or NSEQ between different tables)
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(cond_expr, column_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else {
+      ObSqlBitSet<> temp_has_non_aggr_cond_table_ids;
+      if (OB_FAIL(temp_has_non_aggr_cond_table_ids.add_members2(cond_expr->get_relation_ids()))) {
+        LOG_WARN("failed to add members to bit set", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
+        TableItem *table = NULL;
+        ObRawExpr *expr = column_exprs.at(j);
+        ObRawExpr *select_expr = NULL;
+        int32_t table_bit_idx = OB_INVALID_INDEX;
+        if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_column_ref_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column expr", K(ret), K(expr));
+        } else if (OB_FAIL(extract_info_from_column_expr(stmt, *expr, table, select_expr))) {
+          LOG_WARN("failed to extract info from column expr", K(ret));
+        } else if (OB_ISNULL(table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid table item", K(ret), K(expr));
+        } else if (!table->is_generated_table()) {
+        } else if (OB_ISNULL(select_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid select expr", K(ret), K(expr));
+        } else if (!select_expr->has_flag(CNT_AGG)) {
+        } else if (FALSE_IT(table_bit_idx = stmt.get_table_bit_index(table->table_id_))) {
+        } else if (OB_FAIL(has_aggr_cond_table_ids.add_member(table_bit_idx))) {
+          LOG_WARN("failed to add member to bit set", K(ret));
+        } else if (OB_FAIL(temp_has_non_aggr_cond_table_ids.del_member(table_bit_idx))) {
+          LOG_WARN("failed to delete member from bit set", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(has_non_aggr_cond_table_ids.add_members2(temp_has_non_aggr_cond_table_ids))) {
+        LOG_WARN("failed to add members to bit set", K(ret));
       }
     }
+  }
+  // has_aggr_cond_table_ids - has_non_aggr_cond_table_ids = tables that
+  // all conditions related to them includes their aggregate output column
+  // ignore them
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(has_aggr_cond_table_ids.del_members2(has_non_aggr_cond_table_ids))) {
+    LOG_WARN("failed to delete members from bit set", K(ret));
+  } else if (OB_FAIL(ignore_tables.add_members2(has_aggr_cond_table_ids))) {
+    LOG_WARN("failed to add members to bit set", K(ret));
+  }
+  return ret;
+}
+
+// get table_item from outer_expr of stmt
+// if table_item is generated_table, get corresponding select_expr
+int ObTransformGroupByPullup::extract_info_from_column_expr(const ObDMLStmt &stmt,
+                                                            const ObRawExpr &outer_expr,
+                                                            TableItem *&table,
+                                                            ObRawExpr *&select_expr)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnRefRawExpr *column_expr = static_cast<const ObColumnRefRawExpr *>(&outer_expr);
+  int64_t pos = OB_INVALID_ID;
+  table = NULL;
+  select_expr = NULL;
+  if (OB_UNLIKELY(!outer_expr.is_column_ref_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid column expr", K(ret), K(outer_expr));
+  } else if (OB_ISNULL(table = stmt.get_table_item_by_id(column_expr->get_table_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else if (!table->is_generated_table()) {
+  } else if (OB_ISNULL(table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ref_query for generated table", K(ret));
+  } else if (FALSE_IT(pos = column_expr->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+    /*do nothing*/
+  } else if (OB_UNLIKELY(pos < 0 || pos >= table->ref_query_->get_select_item_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid array pos", K(pos), K(table->ref_query_->get_select_item_size()), K(ret));
+  } else if (OB_ISNULL(select_expr = table->ref_query_->get_select_item(pos).expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   }
   return ret;
 }
@@ -947,7 +1029,7 @@ int ObTransformGroupByPullup::is_expected_plan(ObLogPlan *plan, void *check_ctx,
   } else if (is_trans_plan) {
     //do nothing
   } else if (OB_FAIL(check_original_plan_validity(plan->get_plan_root(),
-                                                  ctx->view_talbe_id_,
+                                                  ctx->view_table_id_,
                                                   is_valid))) {
     LOG_WARN("failed to check plan validity", K(ret));
   }
@@ -1322,7 +1404,7 @@ int ObTransformGroupByPullup::get_group_by_subset(ObRawExpr *expr,
     } else if (idx == -1) { //not found
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
         if (OB_FAIL(SMART_CALL(get_group_by_subset(expr->get_param_expr(i), group_exprs, subset_group_exprs)))) {
-          LOG_WARN("check group by subset faield", K(ret));
+          LOG_WARN("check group by subset failed", K(ret));
         }
       }
     } else if (OB_FAIL(add_var_to_array_no_dup(subset_group_exprs, expr))) {

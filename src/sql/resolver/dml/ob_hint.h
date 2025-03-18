@@ -152,7 +152,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_1_BP8  (oceanbase::common::cal_version(4, 2, 1, 8))
 #define COMPAT_VERSION_4_2_1_BP9  (oceanbase::common::cal_version(4, 2, 1, 9))
 #define COMPAT_VERSION_4_2_1_BP10  (oceanbase::common::cal_version(4, 2, 1, 10))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_2_1_BP10
+#define COMPAT_VERSION_4_2_1_BP11  (oceanbase::common::cal_version(4, 2, 1, 11))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_2_1_BP11
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 
