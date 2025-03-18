@@ -152,25 +152,34 @@ int ObMPStmtPrexecute::before_process()
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
       uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
+      bool need_response_error = false;
       session->set_current_trace_id(ObCurTraceId::get_trace_id());
       session->set_proxy_version(get_proxy_version());
-      int64_t packet_len = (reinterpret_cast<const ObMySQLRawPacket &>
-                                (req_->get_packet())).get_clen();
       ObReqTimeGuard req_timeinfo_guard;
-      if (sql_len_ > 0 && 0 == stmt_id_) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(!session->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid session", K_(sql), K(ret));
+      } else if (OB_UNLIKELY(session->is_zombie())) {
+        ret = OB_ERR_SESSION_INTERRUPTED;
+        LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
+                K(session->get_sessid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
+      } else if (pkt.exist_trace_info()
+                 && OB_FAIL(session->update_sys_variable(SYS_VAR_OB_TRACE_INFO,
+                                                         pkt.get_trace_info()))) {
+        LOG_WARN("fail to update trace info", K(ret));
+      } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+      } else if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
+        LOG_WARN("fail get process extra info", K(ret));
+      } else if (FALSE_IT(session->post_sync_session_info())) {
+      } else if (sql_len_ > 0 && 0 == stmt_id_) {
         int64_t query_timeout = 0;
         int64_t tenant_version = 0;
         int64_t sys_version = 0;
         bool force_sync_resp = false;
-        bool need_response_error = false;
-        if (OB_UNLIKELY(!session->is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid session", K_(sql), K(ret));
-        } else if (OB_UNLIKELY(session->is_zombie())) {
-          ret = OB_ERR_SESSION_INTERRUPTED;
-          LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
-                  K(session->get_sessid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
-        } else if (OB_UNLIKELY(packet_len > session->get_max_packet_size())) {
+        int64_t packet_len =
+            (reinterpret_cast<const ObMySQLRawPacket &>(req_->get_packet())).get_clen();
+        if (OB_UNLIKELY(packet_len > session->get_max_packet_size())) {
           ret = OB_ERR_NET_PACKET_TOO_LARGE;
           LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
         } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
