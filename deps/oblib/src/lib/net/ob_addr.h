@@ -88,6 +88,7 @@ public:
   bool using_ipv6() const { return IPV6 == version_; }
   bool using_unix() const { return UNIX == version_; }
   int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int format_ipv6_addr(char *buffer, const int64_t size) const;
 
   template<size_t N>
   int64_t to_string(char (&buffer)[N], const int64_t size) const;
