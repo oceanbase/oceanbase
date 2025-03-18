@@ -699,6 +699,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     OZ (ob_write_string(allocator != NULL ? *allocator
                         : ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
     OZ (session_info.store_top_query_string(cur_query_));
+    OX (session_info.reset_query_string());
     OZ (recursion_ctx_.init(session_info));
     // set top level sql id
     ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
