@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_MACRO_BLOCK_WRITER_H_
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_MACRO_BLOCK_WRITER_H_
 #include "share/io/ob_io_manager.h"
+#include "storage/blocksstable/ob_block_writer_concurrent_guard.h"
 #include "encoding/ob_micro_block_decoder.h"
 #include "encoding/ob_micro_block_encoder.h"
 #include "lib/compress/ob_compressor.h"
@@ -156,30 +157,18 @@ public:
       ObIMacroBlockFlushCallback *callback = nullptr,
       ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr);
-  int init_pre_warmer(const share::ObPreWarmerParam &pre_warm_param);
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc,
                                  const ObMicroBlockData *micro_block_data);
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr);
   int append_micro_block(ObMicroBlockDesc &micro_block_desc, const ObMicroIndexInfo &micro_index_info);
   int append_index_micro_block(ObMicroBlockDesc &micro_block_desc);
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr);
-  int data_aggregator_eval(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   virtual int append_batch(const ObBatchDatumRows &datum_rows,
                            const ObMacroBlockDesc *curr_macro_desc = nullptr);
   // TODO(baichangmin): SSTableRebuilder disabled in SS mode. Finish SN route later.
-  int append_macro_block(const ObDataMacroBlockMeta &macro_meta)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(nullptr == data_store_desc_)) {
-      ret = OB_NOT_INIT;
-      STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened", K(ret));
-    } else if (OB_FAIL(append(macro_meta, nullptr))) {
-      STORAGE_LOG(WARN, "fail to append", K(ret));
-    }
-    return ret;
-  }
+  int append_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size);
-  int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge);
+  int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const;
   int check_meta_macro_block_need_rewrite(bool &need_rewrite) const;
   int close();
   void dump_block_and_writer_buffer();
@@ -202,6 +191,9 @@ protected:
   inline int64_t get_curr_micro_writer_row_count() const { return micro_writer_->get_row_count(); }
 
 private:
+  int init_pre_warmer(const share::ObPreWarmerParam &pre_warm_param);
+  int data_aggregator_eval(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
+  int append_row_inner(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc);
   int append_row(const ObDatumRow &row, const int64_t split_size);
   int append_batch(const ObBatchDatumRows &datum_rows,
                    const int64_t split_size);
@@ -294,6 +286,7 @@ private:
   char *io_buf_;
   ObIMacroBlockValidator *validator_;
   bool is_cs_encoding_writer_;
+  volatile bool concurrent_lock_;
 };
 
 struct ObIMacroBlockValidator

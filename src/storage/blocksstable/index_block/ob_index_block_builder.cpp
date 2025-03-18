@@ -455,7 +455,8 @@ ObSSTableIndexBuilder::ObSSTableIndexBuilder(const bool use_double_write_buffer)
     optimization_mode_(ENABLE),
     enable_dump_disk_(false),
     is_closed_(false),
-    is_inited_(false)
+    is_inited_(false),
+    concurrent_lock_(false)
 {
 }
 
@@ -506,6 +507,7 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
                                 ObSpaceOptimizationMode mode)
 {
   int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObSSTableIndexBuilder has been inited", K(ret));
@@ -1553,14 +1555,25 @@ int ObSSTableIndexBuilder::close(ObSSTableMergeRes &res,
                                  ObIMacroBlockFlushCallback *callback,
                                  ObIODevice *device_handle)
 {
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   ObMacroDataSeq tmp_seq(0);
   tmp_seq.set_index_block();
   share::ObPreWarmerParam pre_warm_param(share::MEM_PRE_WARM);
-  return close_with_macro_seq(res, tmp_seq.macro_data_seq_, nested_size,
+  return close_with_macro_seq_inner(res, tmp_seq.macro_data_seq_, nested_size,
                               nested_offset, pre_warm_param, callback, device_handle);
 }
 
 int ObSSTableIndexBuilder::close_with_macro_seq(
+    ObSSTableMergeRes &res, int64_t &macro_seq, const int64_t nested_size,
+    const int64_t nested_offset, const share::ObPreWarmerParam &pre_warm_param,
+    ObIMacroBlockFlushCallback *callback, ObIODevice *device_handle)
+{
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
+  return close_with_macro_seq_inner(res, macro_seq, nested_size,
+                              nested_offset, pre_warm_param, callback, device_handle);
+}
+
+int ObSSTableIndexBuilder::close_with_macro_seq_inner(
     ObSSTableMergeRes &res, int64_t &macro_seq, const int64_t nested_size,
     const int64_t nested_offset, const share::ObPreWarmerParam &pre_warm_param,
     ObIMacroBlockFlushCallback *callback, ObIODevice *device_handle)

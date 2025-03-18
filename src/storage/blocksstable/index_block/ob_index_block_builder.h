@@ -619,7 +619,6 @@ public:
       ObDataStoreDesc *&leaf_store_desc,
       ObDataStoreDesc *&container_store_desc,
       ObIndexTreeRootCtx *&index_tree_root_ctx);
-  int append_root(ObIndexTreeRootCtx &index_tree_root_ctx);
   int close(
       ObSSTableMergeRes &res,
       const int64_t nested_size = OB_DEFAULT_MACRO_BLOCK_SIZE,
@@ -664,6 +663,15 @@ public:
                                                      ObDataMacroBlockMeta &macro_meta);
 
 private:
+  int close_with_macro_seq_inner(
+      ObSSTableMergeRes &res,
+      int64_t &macro_seq,
+      const int64_t nested_size,
+      const int64_t nested_offset,
+      const share::ObPreWarmerParam &pre_warm_param,
+      ObIMacroBlockFlushCallback *callback = nullptr,
+      ObIODevice *device_handle = nullptr);
+  int append_root(ObIndexTreeRootCtx &index_tree_root_ctx);
   int check_and_rewrite_sstable(ObSSTableMergeRes &res);
   int check_and_rewrite_sstable_without_size(ObSSTableMergeRes &res);
   int do_check_and_rewrite_sstable(ObBlockInfo &block_info);
@@ -722,6 +730,7 @@ private:
   bool enable_dump_disk_;
   bool is_closed_;
   bool is_inited_;
+  volatile bool concurrent_lock_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableIndexBuilder);
 };
 

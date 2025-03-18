@@ -417,7 +417,8 @@ ObMacroBlockWriter::ObMacroBlockWriter(const bool is_need_macro_buffer)
     object_cleaner_(nullptr),
     io_buf_(nullptr),
     validator_(NULL),
-    is_cs_encoding_writer_(false)
+    is_cs_encoding_writer_(false),
+    concurrent_lock_(false)
 {
 }
 
@@ -487,6 +488,7 @@ int ObMacroBlockWriter::open(
     ObIODevice *device_handle)
 {
   int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   reset();
   if (OB_UNLIKELY(!data_store_desc.is_valid() || parallel_idx < 0 ||
                   !macro_seq_param.is_valid() || !pre_warm_param.is_valid() ||
@@ -580,8 +582,13 @@ int ObMacroBlockWriter::open(
 
 int ObMacroBlockWriter::append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
 {
-  int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
+  return append_row_inner(row, curr_macro_desc);
+}
 
+int ObMacroBlockWriter::append_row_inner(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
+{
+  int ret = OB_SUCCESS;
   UNUSED(curr_macro_desc);
   LOG_DEBUG("append row", K(row));
 
@@ -605,13 +612,13 @@ int ObMacroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows,
                                      const ObMacroBlockDesc *curr_macro_desc)
 {
   int ret = OB_SUCCESS;
-
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   if (!is_cs_encoding_writer_) {
     ObDatumRow &row = datum_row_;
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_rows.row_count_; i ++) {
       if (OB_FAIL(datum_rows.to_datum_row(i, row))) {
         LOG_WARN("fail to to datum row", KR(ret), K(i));
-      } else if (OB_FAIL(append_row(row, curr_macro_desc))) {
+      } else if (OB_FAIL(append_row_inner(row, curr_macro_desc))) {
         LOG_WARN("fail to append row", K(row), KR(ret));
       }
     }
@@ -629,6 +636,18 @@ int ObMacroBlockWriter::append_batch(const ObBatchDatumRows &datum_rows,
   return ret;
 }
 
+int ObMacroBlockWriter::append_macro_block(const ObDataMacroBlockMeta &macro_meta)
+{
+  int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
+  if (OB_UNLIKELY(nullptr == data_store_desc_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened", K(ret));
+  } else if (OB_FAIL(append(macro_meta, nullptr))) {
+    STORAGE_LOG(WARN, "fail to append", K(ret));
+  }
+  return ret;
+}
 
 int ObMacroBlockWriter::append(const ObDataMacroBlockMeta &macro_meta,
                                const ObMicroBlockData *micro_block_data)
@@ -828,6 +847,7 @@ int ObMacroBlockWriter::append_macro_block(
     const ObMicroBlockData *micro_block_data)
 {
   int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   bool is_micro_index_clustered = micro_index_clustered();
   const ObDataMacroBlockMeta *data_block_meta = macro_desc.macro_meta_;
 
@@ -862,7 +882,7 @@ int ObMacroBlockWriter::append_macro_block(
 int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc)
 {
   int ret = OB_SUCCESS;
-
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   UNUSED(curr_macro_desc);
   bool need_merge = false;
   STORAGE_LOG(DEBUG, "append micro_block", K(micro_block));
@@ -931,6 +951,7 @@ int ObMacroBlockWriter::append_micro_block(
     ObMicroBlockDesc &micro_block_desc,
     const ObMicroIndexInfo &micro_index_info) {
   int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   if (OB_ISNULL(data_store_desc_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened, ", K(ret), KP(data_store_desc_));
@@ -960,7 +981,7 @@ int ObMacroBlockWriter::append_micro_block(
   return ret;
 }
 
-int ObMacroBlockWriter::check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge)
+int ObMacroBlockWriter::check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge) const
 {
   int ret = OB_SUCCESS;
   need_merge = false;
@@ -992,6 +1013,7 @@ int ObMacroBlockWriter::check_meta_macro_block_need_rewrite(bool &need_rewrite) 
 int ObMacroBlockWriter::close()
 {
   int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   if (OB_UNLIKELY(OB_ISNULL(data_store_desc_) || OB_ISNULL(micro_writer_))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "exceptional situation", K(ret), K_(data_store_desc), K_(micro_writer));
@@ -1311,6 +1333,7 @@ int ObMacroBlockWriter::append_index_micro_block(ObMicroBlockDesc &micro_block_d
   // used to append normal index micro block
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   if (OB_UNLIKELY(micro_block_desc.row_count_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "micro desc is empty", K(ret));
@@ -1345,6 +1368,7 @@ int ObMacroBlockWriter::append_index_micro_block(ObMicroBlockDesc &micro_block_d
 int ObMacroBlockWriter::get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size)
 {
   int ret = OB_SUCCESS;
+  ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   estimate_size = 0;
 
   if (OB_ISNULL(builder_)) {
