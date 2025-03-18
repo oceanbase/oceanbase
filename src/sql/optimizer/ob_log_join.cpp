@@ -491,20 +491,20 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
   int64_t &pos = plan_text.pos_;
   const ObDMLStmt *stmt = NULL;
   ObItemType use_join_type = T_INVALID;
-  ObLogicalOperator *left_child = NULL;
-  ObLogicalOperator *right_child = NULL;
-  const ObRelIds *tables= NULL;
+  const ObLogicalOperator *left_child = NULL;
+  const ObLogicalOperator *right_child = NULL;
+  const JoinPath *join_path = NULL;
   ObString qb_name;
   if (is_late_mat()) {
     // need not print outline for late material join
   } else {
    if (OB_ISNULL(get_plan())
-      || OB_ISNULL(stmt = get_plan()->get_stmt())
-      || OB_ISNULL(left_child = get_child(first_child))
-      || OB_ISNULL(right_child = get_child(second_child))
-      || OB_ISNULL(tables = &right_child->get_table_set())) {
+       || OB_ISNULL(stmt = get_plan()->get_stmt())
+       || OB_ISNULL(left_child = get_child(first_child))
+       || OB_ISNULL(right_child = get_child(second_child))
+       || OB_ISNULL(join_path = get_join_path())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt), K(right_child));
+      LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt), K(left_child), K(right_child), K(join_path));
     } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
       LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
     } else if (NESTED_LOOP_JOIN == get_join_algo()) {
@@ -534,35 +534,35 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
     if (OB_FAIL(ret)) {
     // 2. print join algo
     } else if (OB_FAIL(print_join_hint_outline(*stmt,
-                                              use_join_type,
-                                              qb_name,
-                                              *tables,
-                                              plan_text))) {
+                                               use_join_type,
+                                               qb_name,
+                                               right_child->get_table_set(),
+                                               plan_text))) {
       LOG_WARN("fail to print use join hint", K(ret));
     // 3. print pq distribute hint
     } else if (ObJoinHint::need_print_dist_algo(get_dist_method()) &&
-              OB_FAIL(print_join_hint_outline(*stmt,
-                                              T_PQ_DISTRIBUTE,
-                                              qb_name,
-                                              *tables,
-                                              plan_text))) {
+               OB_FAIL(print_join_hint_outline(*stmt,
+                                               T_PQ_DISTRIBUTE,
+                                               qb_name,
+                                               right_child->get_table_set(),
+                                               plan_text))) {
       LOG_WARN("fail to print pq distribute hint", K(ret));
     // 4. print pq map hint
     } else if (is_using_slave_mapping() &&
-              OB_FAIL(print_join_hint_outline(*stmt,
-                                              T_PQ_MAP,
-                                              qb_name,
-                                              *tables,
-                                              plan_text))) {
+               OB_FAIL(print_join_hint_outline(*stmt,
+                                               T_PQ_MAP,
+                                               qb_name,
+                                               right_child->get_table_set(),
+                                               plan_text))) {
       LOG_WARN("fail to print pq distribute hint", K(ret));
     // 5. print use nl material
     } else if (NESTED_LOOP_JOIN == get_join_algo() &&
-              LOG_MATERIAL == right_child->get_type() &&
-              OB_FAIL(print_join_hint_outline(*stmt,
-                                              T_USE_NL_MATERIALIZATION,
-                                              qb_name,
-                                              *tables,
-                                              plan_text))) {
+               join_path->need_mat_ &&
+               OB_FAIL(print_join_hint_outline(*stmt,
+                                               T_USE_NL_MATERIALIZATION,
+                                               qb_name,
+                                               right_child->get_table_set(),
+                                               plan_text))) {
       LOG_WARN("fail to print pq distribute hint", K(ret));
     } else {
     // 6. print (part) join filter hint
@@ -570,16 +570,16 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
       for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
         if (infos.at(i).can_use_join_filter_ &&
             OB_FAIL(print_join_filter_hint_outline(*stmt,
-                                                  qb_name,
-                                                  left_child->get_table_set(),
-                                                  infos.at(i).filter_table_id_,
-                                                  infos.at(i).pushdown_filter_table_,
-                                                  infos.at(i).table_id_,
-                                                  false,
-                                                  plan_text))) {
+                                                   qb_name,
+                                                   left_child->get_table_set(),
+                                                   infos.at(i).filter_table_id_,
+                                                   infos.at(i).pushdown_filter_table_,
+                                                   infos.at(i).table_id_,
+                                                   false,
+                                                   plan_text))) {
           LOG_WARN("fail to print join filter hint", K(ret));
         } else if (infos.at(i).need_partition_join_filter_ &&
-                  OB_FAIL(print_join_filter_hint_outline(*stmt,
+                   OB_FAIL(print_join_filter_hint_outline(*stmt,
                                                           qb_name,
                                                           left_child->get_table_set(),
                                                           infos.at(i).filter_table_id_,
@@ -720,10 +720,12 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
 {
   int ret = OB_SUCCESS;
   const LogJoinHint *log_join_hint = NULL;
-  ObLogicalOperator *child_op = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(child_op = get_child(second_child))) {
+  const ObLogicalOperator *child_op = NULL;
+  const JoinPath *join_path = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(child_op = get_child(second_child))
+      || OB_ISNULL(join_path = get_join_path())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(child_op));
+    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(child_op), K(join_path));
   } else if (NULL != (log_join_hint = get_plan()->get_log_plan_hint().get_join_hint(child_op->get_table_set()))) {
     bool find = false;
     const ObJoinHint *join_hint = NULL;
@@ -742,7 +744,7 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
     }
     // add used use/no_use nl_material hint
     if (OB_SUCC(ret) && NULL != log_join_hint->nl_material_) {
-      if (NESTED_LOOP_JOIN == get_join_algo() && LOG_MATERIAL == child_op->get_type()) {
+      if (NESTED_LOOP_JOIN == get_join_algo() && join_path->need_mat_) {
         if (log_join_hint->nl_material_->is_enable_hint()
             && OB_FAIL(used_hints.push_back(log_join_hint->nl_material_))) {
           LOG_WARN("failed to append nl material hint", K(ret));
