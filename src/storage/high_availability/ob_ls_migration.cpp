@@ -1060,7 +1060,7 @@ int ObStartMigrationTask::process()
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(ctx_));
     }
   }
-
+  DEBUG_SYNC(AFTER_START_MIGRATION_TASK);
   return ret;
 }
 
