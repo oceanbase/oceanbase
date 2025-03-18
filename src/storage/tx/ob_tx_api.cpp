@@ -2000,8 +2000,11 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
   tx.min_implicit_savepoint_.reset();
   tx.savepoints_.reset();
   // reset snapshot
-  tx.snapshot_version_.reset();
-  tx.snapshot_scn_.reset();
+  if (tx.snapshot_version_.is_valid()) {
+    tx.snapshot_version_.reset();
+    tx.snapshot_scn_.reset();
+    tx.state_change_flags_.EXTRA_CHANGED_ = true;
+  }
 }
 
 int ObTransService::start_epoch_(ObTxDesc &tx)

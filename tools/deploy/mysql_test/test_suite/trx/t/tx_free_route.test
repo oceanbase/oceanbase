@@ -17,6 +17,7 @@ if ($client_session_id_version == '2') {
   alter proxyconfig set proxy_id = 1;
   alter proxyconfig set client_session_id_version = 1;
 }
+alter proxyconfig set enable_session_info_verification = 1;
 --enable_abort_on_error
 --enable_query_log
 --enable_result_log
@@ -879,7 +880,9 @@ drop outline tx_route_test_ot_4;
 --enable_result_log
 disconnect conn100;
 
---echo "---- 11 deadlock ---"
+##########################################################################
+--echo "------------------ 11 deadlock ----------------------------------"
+##########################################################################
 connect (conn11,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 connect (conn12,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 connection conn11;
@@ -890,6 +893,8 @@ commit;
 start transaction;
 update t set v = 100 where id = 1;
 connection conn12;
+--echo "set conn12 session to RR, in order to check EXTRA state sync"
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 start transaction;
 update t set v = 111 where id = 10001;
 send update t set v = 112 where id = 1;
@@ -913,6 +918,47 @@ insert into t(id) values(3);
 commit;
 disconnect conn11;
 disconnect conn12;
+##########################################################################
+--echo "------------ 12 deadlock kill tx on orig, sync extra -------------
+##########################################################################
+connect (conn13,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
+connect (conn14,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
+connection conn13;
+delete from t;
+commit;
+insert into t(id) values(12),(10012);
+commit;
+start transaction;
+update t set v = 100 where id = 12;
+connection conn14;
+--echo "set conn14 session to RR, in order to check EXTRA state sync"
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+start transaction;
+## let trans start on first part
+select * from t where id = 12;
+update t set v = 111 where id = 10012;
+## the query killed will be on trans start node
+send update t set v = 112 where id = 12;
+connection conn13;
+update t set v = 101 where id = 10012;
+select * from t where id = 12;
+insert into t(id) values(212),(10122);
+commit;
+connection conn14;
+--error 1213
+reap;
+--error 1213
+select * from t where id = 10012;
+--error 1213
+insert into t(id) values(10123);
+--error 1213
+select * from t where id = 12;
+--error 1213
+insert into t(id) values(123);
+--error 6002
+commit;
+disconnect conn13;
+disconnect conn14;
 
 --echo "------------- X - special query types ----------------------"
 #--------------------------------------------------------------------------
