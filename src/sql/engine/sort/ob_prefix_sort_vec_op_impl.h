@@ -36,7 +36,7 @@ public:
     selector_(nullptr), selector_size_(0), sort_prefix_rows_(0), prefix_pos_(0),
     im_sk_store_(&allocator_), im_addon_store_(&allocator_),
     im_sk_rows_(nullptr), im_addon_rows_(nullptr), immediate_pos_(0),
-    brs_(nullptr)
+    brs_(nullptr), brs_holder_(&allocator_)
   {}
   virtual ~ObPrefixSortVecImpl()
   {

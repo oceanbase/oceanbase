@@ -21,6 +21,7 @@ void ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::reset()
   full_sk_collations_ = nullptr;
   base_sk_collations_.reset();
   brs_holder_.reset();
+  brs_holder_.destroy();
   next_prefix_row_ = nullptr;
   prev_row_ = nullptr;
   child_ = nullptr;
