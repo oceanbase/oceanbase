@@ -812,10 +812,8 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
       } \
     } \
     ObString data_str; \
-    if (obj2.is_outrow_lob()) { \
-      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
-      ret = CR_OB_ERROR; \
-    } else if (OB_FAIL(obj2.get_string(data_str))) { \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE); \
+    if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str))) { \
       LOG_ERROR("invalid text object", K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else { \
@@ -847,10 +845,8 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
       } \
     } \
     ObString data_str; \
-    if (obj2.is_outrow_lob()) { \
-      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
-      ret = CR_OB_ERROR; \
-    } else if (OB_FAIL(obj2.get_string(data_str))) { \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE); \
+    if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str))) { \
       LOG_ERROR("invalid text object", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else { \
@@ -904,13 +900,11 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     } \
     ObString data_str1; \
     ObString data_str2; \
-    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
-      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
-      ret = CR_OB_ERROR; \
-    } else if (OB_FAIL(obj1.get_string(data_str1))) { \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE); \
+    if (OB_FAIL(obj1.read_lob_data(tmp_allocator, data_str1))) { \
       LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
-    } else if (OB_FAIL(obj2.get_string(data_str2))) { \
+    } else if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str2))) { \
       LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else { \
@@ -943,13 +937,11 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     } \
     ObString data_str1; \
     ObString data_str2; \
-    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
-      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
-      ret = CR_OB_ERROR; \
-    } else if (OB_FAIL(obj1.get_string(data_str1))) { \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE); \
+    if (OB_FAIL(obj1.read_lob_data(tmp_allocator, data_str1))) { \
       LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
-    } else if (OB_FAIL(obj2.get_string(data_str2))) { \
+    } else if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str2))) { \
       LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else { \
@@ -1320,15 +1312,13 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int result = 0;                                                                             \
     ObString data_str1;                                                                         \
     ObString data_str2;                                                                         \
-    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
-      ret = OB_NOT_SUPPORTED;                                                                   \
-      LOG_ERROR("not support outrow json lobs", K(ret), K(obj1), K(obj2));                      \
-    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE);\
+    if (OB_FAIL(obj1.read_lob_data(tmp_allocator, data_str1))) {                                \
       ret = OB_ERR_UNEXPECTED;                                                                  \
       LOG_ERROR("invalid json lob object1", K(ret),                                             \
                 K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
                 K(obj1), K(obj2));                                                              \
-    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+    } else if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str2))) {                         \
       ret = OB_ERR_UNEXPECTED;                                                                  \
       LOG_ERROR("invalid json lob object2", K(ret),                                             \
                 K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
@@ -1366,15 +1356,13 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int result = CR_OB_ERROR;                                                                   \
     ObString data_str1;                                                                         \
     ObString data_str2;                                                                         \
-    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
-      LOG_WARN("not support outrow json lobs", K(obj1), K(obj2));                               \
-      ret = CR_OB_ERROR;                                                                        \
-    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE);\
+    if (OB_FAIL(obj1.read_lob_data(tmp_allocator, data_str1))) {                                \
       LOG_WARN("invalid json lob object1",                                                      \
                 K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
                 K(obj1), K(obj2));                                                              \
       ret = CR_OB_ERROR;                                                                        \
-    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+    } else if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str2))) {                         \
       LOG_WARN("invalid json lob object2",                                                      \
                 K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
                 K(obj1), K(obj2));                                                              \
@@ -2139,12 +2127,16 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
-      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+    ObString data_str1;\
+    ObString data_str2;\
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE); \
+    if (OB_FAIL(obj1.read_lob_data(tmp_allocator, data_str1))) { \
+      LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str2))) { \
+      LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else { \
-      ObString data_str1 = obj1.get_string();\
-      ObString data_str2 = obj2.get_string();\
       ret = CS_TYPE_INVALID != cs_type \
             ? static_cast<int>(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
                                                    data_str2.ptr(), data_str2.length(), \
@@ -2172,12 +2164,15 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
-      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+    ObString data_str1;\
+    ObString data_str2;\
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE); \
+    if (OB_FAIL(obj1.read_lob_data(tmp_allocator, data_str1))) { \
+      LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.read_lob_data(tmp_allocator, data_str2))) { \
+      LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
     } else { \
-      ObString data_str1 = obj1.get_string();\
-      ObString data_str2 = obj2.get_string();\
       ret = CS_TYPE_INVALID != cs_type \
             ? INT_TO_CR(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
                                                    data_str2.ptr(), data_str2.length(), \
