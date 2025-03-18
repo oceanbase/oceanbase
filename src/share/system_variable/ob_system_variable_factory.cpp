@@ -1103,6 +1103,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_truncate_flashback",
   "ob_global_debug_sync",
   "ob_hnsw_ef_search",
+  "ob_hnsw_extra_info_max_size",
   "ob_interm_result_mem_limit",
   "ob_ivf_nprobes",
   "ob_kv_mode",
@@ -1938,6 +1939,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK,
   SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
   SYS_VAR_OB_HNSW_EF_SEARCH,
+  SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE,
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
   SYS_VAR_OB_IVF_NPROBES,
   SYS_VAR_OB_KV_MODE,
@@ -3060,7 +3062,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "socket",
   "mview_refresh_dop",
   "enable_optimizer_rowgoal",
-  "ob_ivf_nprobes"
+  "ob_ivf_nprobes",
+  "ob_hnsw_extra_info_max_size"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4097,6 +4100,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarMviewRefreshDop)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
         + sizeof(ObSysVarObIvfNprobes)
+        + sizeof(ObSysVarObHnswExtraInfoMaxSize)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11591,6 +11595,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObIvfNprobes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswExtraInfoMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswExtraInfoMaxSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObHnswExtraInfoMaxSize));
       }
     }
 
@@ -20752,6 +20765,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObHnswExtraInfoMaxSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObHnswExtraInfoMaxSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswExtraInfoMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswExtraInfoMaxSize", K(ret));
       }
       break;
     }

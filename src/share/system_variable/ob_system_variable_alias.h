@@ -848,6 +848,7 @@ namespace share
   static const char* const OB_SV_MVIEW_REFRESH_DOP = "mview_refresh_dop";
   static const char* const OB_SV_ENABLE_OPTIMIZER_ROWGOAL = "enable_optimizer_rowgoal";
   static const char* const OB_SV_IVF_NPROBES = "ob_ivf_nprobes";
+  static const char* const OB_SV_HNSW_EXTRA_INFO_MAX_SIZE = "ob_hnsw_extra_info_max_size";
 
 }
 }

@@ -11395,13 +11395,28 @@ static struct VarsInit{
     ObSysVars[831].alias_ = "OB_SV_IVF_NPROBES" ;
     }();
 
+    [&] (){
+      ObSysVars[832].default_value_ = "1024" ;
+      ObSysVars[832].info_ = "The extra info size threshold filled into the hnsw index param, when not specified during hnsw index creation." ;
+      ObSysVars[832].name_ = "ob_hnsw_extra_info_max_size" ;
+      ObSysVars[832].data_type_ = ObUInt64Type ;
+      ObSysVars[832].min_val_ = "0" ;
+      ObSysVars[832].max_val_ = "16384" ;
+      ObSysVars[832].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[832].id_ = SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE] = 832 ;
+      ObSysVars[832].base_value_ = "1024" ;
+    ObSysVars[832].alias_ = "OB_SV_HNSW_EXTRA_INFO_MAX_SIZE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 832;
+static int64_t var_amount = 833;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
