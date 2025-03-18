@@ -18,6 +18,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/trace/ob_trace.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "src/share/io/ob_io_define.h"
 
 namespace oceanbase
 {

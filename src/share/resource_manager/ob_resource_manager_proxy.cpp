@@ -20,12 +20,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_utils.h"
-#include "share/resource_manager/ob_resource_plan_manager.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
-#include "share/resource_manager/ob_resource_manager.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
-#include "share/io/ob_io_manager.h"
 #include "common/ob_timeout_ctx.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server_struct.h"
@@ -171,24 +166,6 @@ int ObResourceManagerProxy::delete_plan(
                   affected_rows))) {
         trans.reset_last_error();
         LOG_WARN("fail to execute sql", K(sql), K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObResMgrVarcharValue cur_plan;
-    ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
-    if (OB_FAIL(plan_mgr.get_cur_plan(tenant_id, cur_plan))) {
-      LOG_WARN("get cur plan failed", K(ret), K(tenant_id), K(cur_plan));
-    } else if (cur_plan.get_value() != plan) {
-      //删除非当前使用plan，do nothing
-    } else {
-      //删除当前使用的plan，把当前所有IO资源置空
-      if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
-        LOG_WARN("reset cur plan group directive failed",K(plan), K(ret));
-      } else if (OB_FAIL(reset_all_mapping_rules())) {
-        LOG_WARN("reset hashmap failed when delete using plan");
-      } else {
-        LOG_INFO("reset cur plan group directive success",K(plan), K(ret));
       }
     }
   }
@@ -346,31 +323,6 @@ int ObResourceManagerProxy::delete_consumer_group(
         trans.reset_last_error();
         LOG_WARN("fail to execute sql", K(sql), K(ret));
       }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // 在这里inner sql之后就stop io_control的原因是，无法从内部表读到被删除group的信息
-    uint64_t group_id = 0;
-    share::ObGroupName group_name;
-    group_name.set_value(consumer_group);
-    ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-      ret = OB_INVALID_CONFIG;
-      LOG_WARN("invalid config", K(ret), K(tenant_id));
-    } else if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name, group_id))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        //创建group后立刻删除，可能还没有被刷到存储层或plan未生效，此时不再进行后续操作
-        ret = OB_SUCCESS;
-        LOG_INFO("delete group success with no_releated_io_module", K(consumer_group), K(tenant_id));
-      } else {
-        LOG_WARN("fail get group id", K(ret), K(group_id), K(consumer_group));
-      }
-    } else if (OB_FAIL(GCTX.cgroup_ctrl_->delete_group_iops(tenant_id, consumer_group))) {
-      LOG_WARN("fail to stop cur iops isolation", K(ret), K(tenant_id), K(consumer_group));
-    } else if (OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(
-                   tenant_id, group_id, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-      LOG_WARN("fail to remove group cgroup", K(ret), K(tenant_id), K(consumer_group), K(group_id));
     }
   }
   return ret;
@@ -673,7 +625,11 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("HA_LOW") ||
       0 == function_name.compare("DDL_HIGH") ||
       0 == function_name.compare("DDL") ||
-      0 == function_name.compare("OTHER_BACKGROUND")) {
+      0 == function_name.compare("OPT_STATS") ||
+      0 == function_name.compare("CLOG_LOW")  ||
+      0 == function_name.compare("CLOG_MID")  ||
+      0 == function_name.compare("CLOG_HIGH") ||
+      0 == function_name.compare("GC_MACRO_BLOCK")) {
     exist = true;
   } else {
     exist = false;
@@ -1156,15 +1112,6 @@ int ObResourceManagerProxy::delete_plan_directive(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected row value not expected", K(affected_rows), K(ret));
       }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // 在这里inner sql之后就stop的原因是， 无法从内部表读到被删除group的信息
-    if (OB_FAIL(GCTX.cgroup_ctrl_->reset_group_iops(
-                     tenant_id,
-                     group))) {
-      LOG_WARN("reset deleted group directive failed", K(ret), K(group));
     }
   }
   return ret;
@@ -2167,11 +2114,5 @@ int ObResourceManagerProxy::get_iops_config(
       }
     }
   }
-  return ret;
-}
-
-int ObResourceManagerProxy::reset_all_mapping_rules()
-{
-  int ret = G_RES_MGR.get_mapping_rule_mgr().reset_mapping_rules();
   return ret;
 }

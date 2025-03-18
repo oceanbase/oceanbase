@@ -155,7 +155,8 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       read_info.offset_ = 0;
       read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      read_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
+      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      read_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
       if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else if (OB_FAIL(macro_bare_iter->open(

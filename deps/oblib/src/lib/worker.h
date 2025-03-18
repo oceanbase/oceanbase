@@ -83,7 +83,8 @@ public:
 
   OB_INLINE void set_group_id(int32_t group_id) { group_id_ = group_id; }
   OB_INLINE int32_t get_group_id() const { return group_id_; }
-
+  OB_INLINE void set_func_type_(uint8_t func_type) { func_type_ = func_type; }
+  OB_INLINE uint8_t get_func_type() const { return func_type_; }
   OB_INLINE void set_rpc_stat_srv(void *rpc_stat_srv) { rpc_stat_srv_ = rpc_stat_srv; }
   OB_INLINE void *get_rpc_stat_srv() const { return rpc_stat_srv_; }
 
@@ -140,6 +141,7 @@ private:
   int32_t worker_level_;
   int32_t curr_request_level_;
   int32_t group_id_;
+  uint8_t func_type_;
   void *rpc_stat_srv_;
 
   int64_t timeout_ts_;
@@ -186,6 +188,8 @@ inline Worker &this_worker()
 
 #define THIS_WORKER oceanbase::lib::Worker::self()
 
+#define GET_FUNC_TYPE() (THIS_WORKER.get_func_type())
+#define SET_FUNCTION_TYPE(func_type) (THIS_WORKER.set_func_type_(func_type))
 class DisableSchedInterGuard
 {
 public:

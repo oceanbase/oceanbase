@@ -480,6 +480,10 @@ void ObTenantNodeBalancer::periodically_check_tenant()
     (*it).tenant_->periodically_check();
     IGNORE_RETURN (*it).tenant_->unlock(*(*it).handle_);
   }
+  ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
+  ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+  ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
+  LOG_INFO("refresh resource manager plan", K(plan_mgr), K(rule_mgr), K(col_rule_mgr));
 }
 
 // Although unit has been deleted, the local cached unit cannot be deleted if the tenant still holds resource

@@ -23,6 +23,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/ob_table_range.h"
+#include "share/resource_manager/ob_resource_plan_info.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
 
 namespace oceanbase
@@ -719,7 +720,7 @@ public:
   void run1() override;
   void yield();
   void set_task(ObITask *task) { task_ = task; }
-  void set_function_type(const int64_t function_type) { function_type_ = function_type; }
+  void set_function_type(const ObFunctionType function_type) { function_type_ = function_type; }
   int set_dag_resource(const uint64_t group_id);
   bool need_wake_up() const;
   ObITask *get_task() const { return task_; }
@@ -736,7 +737,7 @@ private:
   DagWorkerStatus status_;
   int64_t check_period_;
   int64_t last_check_time_;
-  int64_t function_type_;
+  ObFunctionType function_type_;
   uint64_t group_id_;
   int tg_id_;
   bool is_inited_;
@@ -883,6 +884,7 @@ private:
   int loop_waiting_dag_list(const int64_t priority);
   int loop_blocking_dag_net_list();
   int loop_running_dag_net_map();
+  ObFunctionType convert_priority_to_function_type(const int64_t priority);
   int finish_task_in_dag(ObITask &task, ObIDag &dag, ObIDagNet *&erase_dag_net);
   int finish_dag_(const ObIDag::ObDagStatus status, ObIDag &dag, ObIDagNet *&erase_dag_net, const bool try_move_child);
   int finish_dag_net(ObIDagNet *dag_net);

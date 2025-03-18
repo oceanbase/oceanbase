@@ -347,7 +347,8 @@ int ObBloomFilterMacroBlockWriter::flush_macro_block()
       macro_write_info.buffer_ = data_buffer_.data();
       macro_write_info.size_ = data_buffer_.upper_align_length();
       macro_write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      macro_write_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
+      macro_write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      macro_write_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
       if (OB_FAIL(ObBlockManager::write_block(macro_write_info, macro_handle))) {
         STORAGE_LOG(WARN, "Failed to write bloomfilter macro block", K(ret));
       } else if (OB_FAIL(block_write_ctx_.add_macro_block_id(macro_handle.get_macro_id()))) {

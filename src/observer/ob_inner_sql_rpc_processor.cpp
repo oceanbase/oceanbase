@@ -105,7 +105,7 @@ int ObInnerSqlRpcP::process_write(
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = -1;
-  ResourceGroupGuard guard(transmit_arg.get_consumer_group_id());
+  ResourceGroupGuard guard(transmit_arg.get_consumer_group_id(), oceanbase::share::ObFunctionType::DEFAULT_FUNCTION);
   if (OB_FAIL(conn->execute_write(transmit_arg.get_tenant_id(), write_sql.ptr(), affected_rows))) {
     LOG_WARN("execute write failed", K(ret), K(transmit_arg), K(write_sql));
   } else {
@@ -126,7 +126,7 @@ int ObInnerSqlRpcP::process_read(
   int ret = OB_SUCCESS;
   common::ObScanner &scanner = transmit_result.get_scanner();
   scanner.set_found_rows(0);
-
+  ResourceGroupGuard guard(transmit_arg.get_consumer_group_id(), share::ObFunctionType::DEFAULT_FUNCTION);
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *sql_result = NULL;
     if (OB_FAIL(conn->execute_read(GCONF.cluster_id, transmit_arg.get_tenant_id(), read_sql.ptr(), res))) {
@@ -482,12 +482,14 @@ int ObInnerSqlRpcP::set_session_param_to_conn(
   return ret;
 }
 
-ResourceGroupGuard::ResourceGroupGuard(const int32_t group_id)
+ResourceGroupGuard::ResourceGroupGuard(const int32_t group_id, const uint8_t func_type)
   : group_change_(false), old_group_id_(0)
 {
   if (is_user_group(group_id)) {
     old_group_id_ = THIS_WORKER.get_group_id();
     THIS_WORKER.set_group_id(group_id);
+    old_func_type_ = GET_FUNC_TYPE();
+    SET_FUNCTION_TYPE(func_type);
     group_change_ = true;
   }
 }
@@ -496,6 +498,7 @@ ResourceGroupGuard::~ResourceGroupGuard()
 {
   if (group_change_) {
     THIS_WORKER.set_group_id(old_group_id_);
+    SET_FUNCTION_TYPE(old_func_type_);
   }
 }
 

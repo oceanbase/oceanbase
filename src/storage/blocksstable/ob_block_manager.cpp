@@ -1429,7 +1429,7 @@ int ObBlockManager::set_group_id(const uint64_t tenant_id)
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
   } else {
     uint64_t consumer_group_id = 0;
-    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id, ObFunctionType::PRIO_OTHER_BACKGROUND, consumer_group_id))) {
+    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id, ObFunctionType::PRIO_GC_MACRO_BLOCK, consumer_group_id))) {
       //function level
       LOG_WARN("fail to get group id by function", K(ret), K(tenant_id), K(consumer_group_id));
     } else if (consumer_group_id != group_id_) {
@@ -1444,6 +1444,7 @@ int ObBlockManager::set_group_id(const uint64_t tenant_id)
     if (OB_SUCC(ret)) {
       ATOMIC_SET(&group_id_, consumer_group_id);
       THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
+      SET_FUNCTION_TYPE(static_cast<uint8_t>(ObFunctionType::PRIO_GC_MACRO_BLOCK));
     }
   }
   return ret;
@@ -1516,7 +1517,8 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
     read_info.offset_ = 0;
     read_info.size_ = blk_mgr_.get_macro_block_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
 
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {
       LOG_WARN("async read block failed", K(ret), K(macro_id), K(read_info));

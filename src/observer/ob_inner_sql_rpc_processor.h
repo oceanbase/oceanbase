@@ -79,12 +79,12 @@ class ResourceGroupGuard
 {
   //todo qilu:revert after ddl_back_threads are split under tenants
 public:
-  ResourceGroupGuard(const int32_t group_id);
+  ResourceGroupGuard(const int32_t group_id, const uint8_t func_type);
   ~ResourceGroupGuard();
 public:
   bool group_change_;
   int32_t old_group_id_;
-
+  uint8_t old_func_type_;
 };
 
 }

@@ -94,6 +94,7 @@ public:
   int init(const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent);
   void reset();
   bool is_valid() const;
+  TO_STRING_KV(K_(min_percent), K_(max_percent), K_(weight_percent));
 public:
   uint64_t min_percent_;
   uint64_t max_percent_;
@@ -143,18 +144,6 @@ public:
   // 获取某个cgroup组的cpuacct.usage, 即cpu time
   int get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   int get_throttled_time(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  // 设定指定租户cgroup组的iops，直接更新到租户io_config
-  int set_group_iops(const uint64_t tenant_id,
-                     const uint64_t group_id,
-                     const OBGroupIOInfo &group_io);
-  // 删除正在使用的plan反应到IO层：重置所有IOPS
-  int reset_all_group_iops(const uint64_t tenant_id);
-  // 删除directive反应到IO层：重置IOPS
-  int reset_group_iops(const uint64_t tenant_id,
-                       const common::ObString &consumer_group);
-  // 删除group反应到IO层：停用对应的group结构
-  int delete_group_iops(const uint64_t tenant_id,
-                        const common::ObString &consumer_group);
   int get_group_info_by_group_id(const uint64_t tenant_id,
                                  uint64_t group_id,
                                  share::ObGroupName &group_name);

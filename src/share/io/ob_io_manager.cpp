@@ -53,7 +53,7 @@ int ObIOManager::init(const int64_t memory_limit,
                       const int64_t schedule_media_id)
 {
   int ret = OB_SUCCESS;
-  int64_t schedule_queue_count = 0 != schedule_thread_count ? schedule_thread_count : (lib::is_mini_mode() ? 2 : 16);
+  int64_t schedule_queue_count = 0 != schedule_thread_count ? schedule_thread_count : (lib::is_mini_mode() ? 2 : 8);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -126,6 +126,7 @@ void ObIOManager::destroy()
   tenant_map_.destroy();
   allocator_.destroy();
   is_inited_ = false;
+  LOG_INFO("io manager is destroyed");
 }
 
 int ObIOManager::start()
@@ -239,7 +240,7 @@ int ObIOManager::pread(ObIOInfo &info, int64_t &read_size)
     if (OB_FAIL(tenant_aio(info, handle))) {
       LOG_WARN("do inner aio failed", K(ret), K(info));
     } else {
-      while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
+      while (OB_SUCC(ret) || OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) { // wait to die
         if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync read failed", K(ret), K(info));
@@ -277,7 +278,7 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
     if (OB_FAIL(tenant_aio(info, handle))) {
       LOG_WARN("do inner aio failed", K(ret), K(info));
     } else {
-      while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
+      while (OB_SUCC(ret) || OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) { // wait to die
         if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync write failed", K(ret), K(info));
@@ -723,10 +724,10 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init io tracer failed", K(ret));
   } else if (OB_FAIL(alloc_io_clock(io_allocator_, io_clock_))) {
     LOG_WARN("alloc io clock failed", K(ret));
-  } else if (OB_FAIL(io_usage_.init(io_config.group_num_))) {
-     LOG_WARN("init io usage failed", K(ret), K(io_usage_), K(io_config.group_num_));
+  } else if (OB_FAIL(io_usage_.init(tenant_id ,io_config.group_num_))) {
+     LOG_WARN("init io usage failed", K(ret), K(io_usage_), K(io_config.group_num_), K(tenant_id));
   } else if (OB_FAIL(io_backup_usage_.init())) {
-     LOG_WARN("init io usage failed", K(ret), K(io_backup_usage_), K(SYS_RESOURCE_GROUP_CNT));
+     LOG_WARN("init io usage failed", K(ret), K(io_backup_usage_), K(SYS_MODULE_CNT));
   } else if (OB_FAIL(io_clock_->init(io_config, &io_usage_))) {
     LOG_WARN("init io clock failed", K(ret), K(io_config));
   } else if (OB_FAIL(io_scheduler->init_group_queues(tenant_id, io_config.group_num_, &io_allocator_))) {
@@ -806,7 +807,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (SLOG_IO != info.flag_.get_group_id() && NULL != detector && detector->is_data_disk_has_fatal_error()) {
+  } else if (SLOG_IO != info.flag_.get_sys_module_id() && NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
     LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk has fatal error");
@@ -992,6 +993,29 @@ int ObTenantIOManager::get_group_index(const int64_t group_id, uint64_t &index)
   } else if (OB_UNLIKELY(index == INT64_MAX)) {
     //index == INT64_MAX means group has been deleted
     ret = OB_STATE_NOT_MATCH;
+  }
+  return ret;
+}
+
+int ObTenantIOManager::get_group_config(const int64_t group_id, ObTenantIOConfig::GroupConfig &group_config) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t index = INT64_MAX;
+  if (OB_UNLIKELY(!is_user_group(group_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid group id", K(ret), K(group_id));
+  } else if (OB_FAIL(group_id_index_map_.get_refactored(group_id, index))) {
+    if(OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("get index from map failed", K(ret), K(group_id), K(index));
+    }
+  } else if (OB_UNLIKELY(index == INT64_MAX)) {
+    // other groups
+    group_config = io_config_.other_group_config_;
+  } else if (OB_UNLIKELY(index < 0 || index >= io_config_.group_configs_.count())) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid group config", K(index));
+  } else {
+    group_config = io_config_.group_configs_.at(index);
   }
   return ret;
 }
@@ -1346,21 +1370,21 @@ void ObTenantIOManager::print_io_status()
               databuff_printf(buf,
                   len,
                   pos,
-                  "group_id: %ld, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f; ",
+                  "group_id: %ld, mode: read, size:%ld, iops:%ld, rt:%ld ",
                   io_manager_->io_config_.group_ids_.at(i - 1),
-                  avg_size_->at(i).at(static_cast<int>(ObIOMode::READ)),
-                  avg_iops_->at(i).at(static_cast<int>(ObIOMode::READ)),
-                  avg_rt_->at(i).at(static_cast<int>(ObIOMode::READ)));
+                  static_cast<int64_t>(avg_size_->at(i).at(static_cast<int>(ObIOMode::READ))),
+                  static_cast<int64_t>(avg_iops_->at(i).at(static_cast<int>(ObIOMode::READ))),
+                  static_cast<int64_t>(avg_rt_->at(i).at(static_cast<int>(ObIOMode::READ))));
             }
             if (avg_size_->at(i).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
               databuff_printf(buf,
                   len,
                   pos,
-                  "group_id: %ld, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f; ",
+                  "group_id: %ld, mode: write, size: %ld, iops: %ld, rt: %ld; ",
                   io_manager_->io_config_.group_ids_.at(i - 1),
-                  avg_size_->at(i).at(static_cast<int>(ObIOMode::WRITE)),
-                  avg_iops_->at(i).at(static_cast<int>(ObIOMode::WRITE)),
-                  avg_rt_->at(i).at(static_cast<int>(ObIOMode::WRITE)));
+                  static_cast<int64_t>(avg_size_->at(i).at(static_cast<int>(ObIOMode::WRITE))),
+                  static_cast<int64_t>(avg_iops_->at(i).at(static_cast<int>(ObIOMode::WRITE))),
+                  static_cast<int64_t>(avg_rt_->at(i).at(static_cast<int>(ObIOMode::WRITE))));
             }
           }
         }
@@ -1369,23 +1393,23 @@ void ObTenantIOManager::print_io_status()
           databuff_printf(buf,
               len,
               pos,
-              "group_id: %ld, group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f; ",
+              "group_id: %ld, group_name: %s, mode: read, size: %ld, iops: %ld, rt: %ld; ",
               0L,
               "OTHER_GROUPS",
-              avg_size_->at(0).at(static_cast<int>(ObIOMode::READ)),
-              avg_iops_->at(0).at(static_cast<int>(ObIOMode::READ)),
-              avg_rt_->at(0).at(static_cast<int>(ObIOMode::READ)));
+              static_cast<int64_t>(avg_size_->at(0).at(static_cast<int>(ObIOMode::READ))),
+              static_cast<int64_t>(avg_iops_->at(0).at(static_cast<int>(ObIOMode::READ))),
+              static_cast<int64_t>(avg_rt_->at(0).at(static_cast<int>(ObIOMode::READ))));
         }
         if (avg_size_->at(0).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
           databuff_printf(buf,
               len,
               pos,
-              "group_id: %ld, group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f; ",
+              "group_id: %ld, group_name: %s, mode: write, size: %ld, iops: %ld, rt: %ld; ",
               0L,
               "OTHER_GROUPS",
-              avg_size_->at(0).at(static_cast<int>(ObIOMode::WRITE)),
-              avg_iops_->at(0).at(static_cast<int>(ObIOMode::WRITE)),
-              avg_rt_->at(0).at(static_cast<int>(ObIOMode::WRITE)));
+              static_cast<int64_t>(avg_size_->at(0).at(static_cast<int>(ObIOMode::WRITE))),
+              static_cast<int64_t>(avg_iops_->at(0).at(static_cast<int>(ObIOMode::WRITE))),
+              static_cast<int64_t>(avg_rt_->at(0).at(static_cast<int>(ObIOMode::WRITE))));
         }
         return pos;
       }
@@ -1402,7 +1426,7 @@ void ObTenantIOManager::print_io_status()
     if (OB_FAIL(io_usage_.get_io_usage(avg_iops, avg_size, avg_rt))) {
       LOG_ERROR("fail to get io usage", K(ret));
     } else {
-      IOStatusLog io_status_log(this, &avg_iops, &avg_size, &avg_rt);
+      IOStatusLog io_status_log(this, &avg_size, &avg_iops, &avg_rt);
       for (int64_t i = 0; !need_print_io_status && i < io_usage_.get_io_usage_num() && i < avg_size.count(); ++i) {
         if (i == 0 || (i > 0 && !io_config_.group_configs_.at(i - 1).deleted_)) {
           if (avg_size.at(i).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon() ||
@@ -1412,7 +1436,7 @@ void ObTenantIOManager::print_io_status()
         }
       }
       if (need_print_io_status) {
-        LOG_INFO("[IO STATUS]", K_(tenant_id), K(io_status_log));
+        LOG_INFO("[IO STATUS GROUP]", K_(tenant_id), K(io_status_log));
       }
     }
 
@@ -1434,26 +1458,26 @@ void ObTenantIOManager::print_io_status()
           if (j >= sys_avg_size_->count() || j >= sys_avg_iops_->count() || j >= sys_avg_rt_->count()) {
             // ignore
           } else {
-            ObIOModule module = static_cast<ObIOModule>(SYS_RESOURCE_GROUP_START_ID + j);
+            ObIOModule module = static_cast<ObIOModule>(SYS_MODULE_START_ID + j);
             if (sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
               databuff_printf(buf,
                   len,
                   pos,
-                  "sys_group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f; ",
+                  "sys_group_name: %s, mode: read, size: %ld, iops: %ld, rt: %ld; ",
                   get_io_sys_group_name(module),
-                  sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::READ)),
-                  sys_avg_iops_->at(j).at(static_cast<int>(ObIOMode::READ)),
-                  sys_avg_rt_->at(j).at(static_cast<int>(ObIOMode::READ)));
+                  static_cast<int64_t>(sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::READ))),
+                  static_cast<int64_t>(sys_avg_iops_->at(j).at(static_cast<int>(ObIOMode::READ))),
+                  static_cast<int64_t>(sys_avg_rt_->at(j).at(static_cast<int>(ObIOMode::READ))));
             }
             if (sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
               databuff_printf(buf,
                   len,
                   pos,
-                  "sys_group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f; ",
+                  "sys_group_name: %s, mode: write, size: %ld, iops: %ld, rt: %ld; ",
                   get_io_sys_group_name(module),
-                  sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::WRITE)),
-                  sys_avg_iops_->at(j).at(static_cast<int>(ObIOMode::WRITE)),
-                  sys_avg_rt_->at(j).at(static_cast<int>(ObIOMode::WRITE)));
+                  static_cast<int64_t>(sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::WRITE))),
+                  static_cast<int64_t>(sys_avg_iops_->at(j).at(static_cast<int>(ObIOMode::WRITE))),
+                  static_cast<int64_t>(sys_avg_rt_->at(j).at(static_cast<int>(ObIOMode::WRITE))));
             }
           }
         }
@@ -1480,7 +1504,7 @@ void ObTenantIOManager::print_io_status()
         }
       }
       if (need_print_sys_io_status) {
-        LOG_INFO("[IO STATUS SYS]", K_(tenant_id), K(io_status_sys_log));
+        LOG_INFO("[IO STATUS GROUP SYS]", K_(tenant_id), K(io_status_sys_log));
       }
 
       if (need_print_io_status || need_print_sys_io_status) {
@@ -1506,6 +1530,67 @@ void ObTenantIOManager::print_io_status()
       }
     }
   }
+  // print io function status
+  print_io_function_status();
+}
+
+int ObTenantIOManager::print_io_function_status()
+{
+  int ret = OB_SUCCESS;
+  if (!is_working() || !is_inited_) {
+    LOG_WARN("is not working or not inited", K(is_working()), K(is_inited_));
+  } else {
+    char io_status[1024] = { 0 };
+    int FUNC_NUM = static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM);
+    int GROUP_MODE_NUM = static_cast<uint8_t>(ObIOGroupMode::MODECNT);
+    ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> &func_usages = io_func_infos_.func_usages_;
+    double avg_size = 0;
+    double avg_iops = 0;
+    int64_t avg_bw = 0;
+    int64_t avg_prepare_delay = 0;
+    int64_t avg_schedule_delay = 0;
+    int64_t avg_submit_delay = 0;
+    int64_t avg_device_delay = 0;
+    int64_t avg_total_delay = 0;
+    for (int i = 0; i < FUNC_NUM; ++i) {
+      for (int j = 0; j < GROUP_MODE_NUM; ++j) {
+        avg_size = 0;
+        const char *mode_str = get_io_mode_string(static_cast<ObIOGroupMode>(j));
+        if (i >= func_usages.count()) {
+          LOG_ERROR("func usages out of range", K(i), K(func_usages.count()));
+        } else if (j >= func_usages.at(i).count()) {
+          LOG_ERROR("func usages by mode out of range", K(i), K(j), K(func_usages.at(i).count()));
+        } else if (OB_FAIL(func_usages.at(i).at(j).calc(
+                       avg_size,
+                       avg_iops,
+                       avg_bw,
+                       avg_prepare_delay,
+                       avg_schedule_delay,
+                       avg_submit_delay,
+                       avg_device_delay,
+                       avg_total_delay))) {
+          LOG_WARN("fail to calc func usage", K(ret), K(i), K(j));
+        } else if (avg_size < std::numeric_limits<double>::epsilon()) {
+        } else {
+          const char *func_name = get_io_function_name(static_cast<share::ObFunctionType>(i)).ptr();
+          snprintf(io_status, sizeof(io_status),
+                    "function_name:%s, mode:%s, avg_size:%ld, avg_iops:%ld, avg_bw:%ld, [delay/us]: prepare:%ld, schedule:%ld, submit:%ld, device:%ld, total:%ld",
+                    func_name,
+                    mode_str,
+                    static_cast<int64_t>(avg_size + 0.5),
+                    static_cast<int64_t>(avg_iops + 0.99),
+                    avg_bw,
+                    avg_prepare_delay,
+                    avg_schedule_delay,
+                    avg_submit_delay,
+                    avg_device_delay,
+                    avg_total_delay);
+          LOG_INFO("[IO STATUS FUNCTION]", K_(tenant_id), KCSTRING(io_status));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 void ObTenantIOManager::inc_ref()
@@ -1544,5 +1629,13 @@ int ObTenantIOManager::get_throttled_time(uint64_t group_id, int64_t &throttled_
       io_usage_.group_throttled_time_us_.at(idx) = current_throttled_time_us;
     }
   }
+  return ret;
+}
+
+
+int ObTenantIOManager::get_io_func_infos(ObIOFuncUsages &io_func_infos) const
+{
+  int ret = OB_SUCCESS;
+  io_func_infos = io_func_infos_;
   return ret;
 }

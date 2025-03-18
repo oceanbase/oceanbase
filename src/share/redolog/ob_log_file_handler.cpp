@@ -253,7 +253,8 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       io_info.offset_ = offset + read_sz;
       io_info.size_ = size - read_sz;
       io_info.flag_.set_mode(ObIOMode::READ);
-      io_info.flag_.set_group_id(ObIOModule::SLOG_IO);
+      io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+      io_info.flag_.set_sys_module_id(ObIOModule::SLOG_IO);
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       io_info.buf_ = nullptr;
       io_info.callback_ = nullptr;
@@ -341,7 +342,8 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
       io_info.fd_ = io_fd_;
       io_info.offset_ = offset;
       io_info.size_ = size;
-      io_info.flag_.set_group_id(ObIOModule::SLOG_IO);
+      io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+      io_info.flag_.set_sys_module_id(ObIOModule::SLOG_IO);
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       io_info.buf_ = reinterpret_cast<const char *>(buf);
       io_info.callback_ = nullptr;

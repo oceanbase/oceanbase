@@ -1326,7 +1326,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     status_(DWS_FREE),
     check_period_(0),
     last_check_time_(0),
-    function_type_(0),
+    function_type_(ObFunctionType::DEFAULT_FUNCTION),
     group_id_(OB_INVALID_GROUP_ID),
     tg_id_(-1),
     is_inited_(false)
@@ -1395,7 +1395,7 @@ void ObTenantDagWorker::reset()
   status_ = DWS_FREE;
   check_period_ = 0;
   last_check_time_ = 0;
-  function_type_ = 0;
+  function_type_ = ObFunctionType::DEFAULT_FUNCTION;
   group_id_ = OB_INVALID_GROUP_ID;
   self_ = NULL;
   is_inited_ = false;
@@ -1421,9 +1421,14 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
   if (is_user_group(group_id)) {
     //user level
     consumer_group_id = group_id;
-  } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {
+  } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), static_cast<share::ObFunctionType>(function_type_), consumer_group_id))) {
     //function level
     LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
+  } else if (OB_UNLIKELY(function_type_ < 0 || function_type_ >= static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM))){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("function type is out of range", K(ret), K(function_type_));
+  } else {
+    SET_FUNCTION_TYPE(function_type_);
   }
 
   if (OB_SUCC(ret) && consumer_group_id != group_id_) {
@@ -3137,6 +3142,41 @@ int ObTenantDagScheduler::loop_ready_dag_lists()
   return ret;
 }
 
+ObFunctionType ObTenantDagScheduler::convert_priority_to_function_type(const int64_t priority)
+{
+  ObFunctionType function_type = ObFunctionType::DEFAULT_FUNCTION;
+  switch (priority) {
+    case ObDagPrio::DAG_PRIO_COMPACTION_HIGH:
+      function_type = ObFunctionType::PRIO_COMPACTION_HIGH;
+      break;
+    case ObDagPrio::DAG_PRIO_HA_HIGH:
+      function_type = ObFunctionType::PRIO_HA_HIGH;
+      break;
+    case ObDagPrio::DAG_PRIO_COMPACTION_MID:
+      function_type = ObFunctionType::PRIO_COMPACTION_MID;
+      break;
+    case ObDagPrio::DAG_PRIO_HA_MID:
+      function_type = ObFunctionType::PRIO_HA_MID;
+      break;
+    case ObDagPrio::DAG_PRIO_COMPACTION_LOW:
+      function_type = ObFunctionType::PRIO_COMPACTION_LOW;
+      break;
+    case ObDagPrio::DAG_PRIO_HA_LOW:
+      function_type = ObFunctionType::PRIO_HA_LOW;
+      break;
+    case ObDagPrio::DAG_PRIO_DDL:
+      function_type = ObFunctionType::PRIO_DDL;
+      break;
+    case ObDagPrio::DAG_PRIO_DDL_HIGH:
+      function_type = ObFunctionType::PRIO_DDL_HIGH;
+      break;
+    default:
+      // keep the default value
+      break;
+  }
+  return function_type;
+}
+
 int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority)
 {
   int ret = OB_SUCCESS;
@@ -3149,7 +3189,7 @@ int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_w
   if (OB_SUCC(ret)) {
     ret_worker = free_workers_.remove_first();
     ret_worker->set_task(&task);
-    ret_worker->set_function_type(priority);
+    ret_worker->set_function_type(convert_priority_to_function_type(priority));
   }
   return ret;
 }

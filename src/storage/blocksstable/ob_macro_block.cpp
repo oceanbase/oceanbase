@@ -841,7 +841,8 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
     write_info.buffer_ = data_.data();
     write_info.size_ = data_.upper_align_length();
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    write_info.io_desc_.set_group_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
+    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    write_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
     if (OB_FAIL(macro_handle.async_write(write_info))) {
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(macro_handle));
     } else if (OB_FAIL(block_write_ctx.add_macro_block_id(macro_handle.get_macro_id()))) {

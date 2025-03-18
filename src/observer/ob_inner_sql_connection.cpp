@@ -684,6 +684,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
     } else {
       ObSQLSessionInfo &session = res.result_set().get_session();
       session.set_expect_group_id(group_id_);
+      ResourceGroupGuard guard(consumer_group_id_, share::ObFunctionType::DEFAULT_FUNCTION);
       if (OB_ISNULL(res.sql_ctx().schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null");
@@ -1698,7 +1699,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
           sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_READ,
           lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
           THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-          ddl_info, is_load_data_exec, use_external_session_);
+          ddl_info, is_load_data_exec, use_external_session_, consumer_group_id_);
       arg.set_nls_formats(get_session().get_local_nls_date_format(),
                           get_session().get_local_nls_timestamp_format(),
                           get_session().get_local_nls_timestamp_tz_format());

@@ -1089,11 +1089,6 @@ void ObTenant::destroy()
     DESTROY_ENTITY(ctx_);
     ctx_ = nullptr;
   }
-  if (cgroup_ctrl_.is_valid() &&
-      OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
-          id_, OB_INVALID_GROUP_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-    LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
-  }
   group_map_.destroy_group();
   ObTenantSwitchGuard guard(this);
   destroy_mtl_module();
@@ -1121,6 +1116,11 @@ void ObTenant::destroy()
   if (nullptr != mtl_init_ctx_) {
     common::ob_delete(mtl_init_ctx_);
     mtl_init_ctx_ = nullptr;
+  }
+  if (cgroup_ctrl_.is_valid() &&
+      OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
+          id_, OB_INVALID_GROUP_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
 }
 
@@ -1563,8 +1563,7 @@ void ObTenant::print_throttled_time()
         LOG_WARN_RET(tmp_ret, "get tenant io manager failed", K(tmp_ret), K(tenant_->id_));
       } else {
         for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
-          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_ &&
-              !tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).cleared_) {
+          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_) {
             uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
             if (OB_TMP_FAIL(tenant_holder.get_ptr()->get_throttled_time(group_id, group_throttled_time))) {
               LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group_id));

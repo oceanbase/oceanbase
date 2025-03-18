@@ -359,7 +359,7 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
       LOG_ERROR("fail to get io usage", K(ret));
     } else {
       for (int64_t i = 0; i < io_config.group_num_ && i < avg_size.count() && i < avg_iops.count() && i < avg_rt.count(); ++i) {
-        if (io_config.group_configs_.at(i).deleted_ || io_config.group_configs_.at(i).cleared_) {
+        if (io_config.group_configs_.at(i).deleted_) {
           continue;
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
@@ -447,6 +447,7 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
     if (OB_FAIL(sys_io_usage.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt))) {
       LOG_ERROR("fail to get sys io usage", K(ret));
     } else {
+      sys_io_usage.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt);
       for (int64_t i = 0; i < sys_avg_size.count(); ++i) {
         if (i >= sys_avg_size.count() || i >= sys_avg_iops.count() || i >= sys_avg_rt.count()) {
           //ignore
@@ -456,7 +457,7 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
               QuotaInfo item;
               item.tenant_id_ = tenant_id;
               item.mode_ = static_cast<ObIOMode>(j);
-              item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
+              item.group_id_ = SYS_MODULE_START_ID + i;
               item.size_ = sys_avg_size.at(i).at(j);
               item.real_iops_ = sys_avg_iops.at(i).at(j);
               item.min_iops_ = INT64_MAX;
@@ -618,7 +619,7 @@ int ObAllVirtualIOScheduler::init(const common::ObAddr &addr)
           const ObTenantIOConfig &io_config = tenant_holder.get_ptr()->get_io_config();
           int64_t group_num = tenant_holder.get_ptr()->get_group_num();
           for (int64_t index = 0; OB_SUCC(ret) && index < group_num; ++index) {
-            if (io_config.group_configs_.at(index).deleted_ || io_config.group_configs_.at(i).cleared_) {
+            if (io_config.group_configs_.at(index).deleted_) {
               continue;
             }
             ScheduleInfo item;

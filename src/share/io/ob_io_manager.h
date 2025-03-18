@@ -129,6 +129,7 @@ public:
   int alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *&io_clock);
   int init_group_index_map(const int64_t tenant_id, const ObTenantIOConfig &io_config);
   int get_group_index(const int64_t group_id, uint64_t &index);
+  int get_group_config(const int64_t group_id, ObTenantIOConfig::GroupConfig &index) const;
   int modify_group_io_config(const uint64_t index,
                              const int64_t min_percent,
                              const int64_t max_percent,
@@ -161,9 +162,11 @@ public:
   uint64_t get_usage_index(const int64_t group_id);
   ObIOAllocator *get_tenant_io_allocator() { return &io_allocator_; }
   void print_io_status();
+  int print_io_function_status();
   void inc_ref();
   void dec_ref();
   int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
+  int get_io_func_infos(ObIOFuncUsages &io_func_infos) const;
   TO_STRING_KV(K(is_inited_), K(ref_cnt_), K(tenant_id_), K(io_config_), K(io_clock_),
        K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_));
 private:
@@ -180,6 +183,7 @@ private:
   ObIOUsage io_usage_;
   ObSysIOUsage io_backup_usage_; //for backup mock group
   ObIOTracer io_tracer_;
+  ObIOFuncUsages io_func_infos_; // Tenant Level: IO function group usage monitor
   DRWLock io_config_lock_; //for map and config
   hash::ObHashMap<uint64_t, uint64_t> group_id_index_map_; //key:group_id, value:index
 };

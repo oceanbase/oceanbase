@@ -107,7 +107,7 @@ static ObIOInfo get_random_io_info()
   io_info.fd_.first_id_ = ObRandom::rand(0, 10000);
   io_info.fd_.second_id_ = ObRandom::rand(0, 10000);
   io_info.flag_.set_mode(static_cast<ObIOMode>(ObRandom::rand(0, (int)ObIOMode::MAX_MODE - 1)));
-  io_info.flag_.set_group_id(0); // 0 means default
+  io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   io_info.flag_.set_wait_event(ObRandom::rand(1, 9999));
   io_info.offset_ = ObRandom::rand(1, 1000L * 1000L * 1000L);
   io_info.size_ = ObRandom::rand(1, 1000L * 10L);
@@ -160,7 +160,7 @@ TEST_F(TestIOStruct, IOFlag)
 
   // normal usage
   flag.set_mode(ObIOMode::READ);
-  flag.set_group_id(0);
+  flag.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   flag.set_wait_event(99);
   ASSERT_TRUE(flag.is_valid());
 
@@ -170,12 +170,6 @@ TEST_F(TestIOStruct, IOFlag)
   flag2.set_mode(ObIOMode::MAX_MODE);
   ASSERT_FALSE(flag2.is_valid());
   flag2.set_mode((ObIOMode)88);
-  ASSERT_FALSE(flag2.is_valid());
-
-  // test io group
-  flag2 = flag;
-  ASSERT_TRUE(flag2.is_valid());
-  flag2.set_group_id(-1);
   ASSERT_FALSE(flag2.is_valid());
 
   // test wait event number
@@ -206,7 +200,7 @@ TEST_F(TestIOStruct, IOInfo)
   info.tenant_id_ = OB_SERVER_TENANT_ID;
   info.fd_ = fd;
   info.flag_.set_mode(ObIOMode::READ);
-  info.flag_.set_group_id(0);
+  info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   info.flag_.set_wait_event(1);
   info.offset_ = 80;
   info.size_ = 1;
@@ -304,13 +298,13 @@ TEST_F(TestIOStruct, IORequest)
   read_info.tenant_id_ = OB_SERVER_TENANT_ID;
   read_info.fd_ = fd;
   read_info.flag_.set_mode(ObIOMode::READ);
-  read_info.flag_.set_group_id(0);
+  read_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   read_info.flag_.set_wait_event(1);
   read_info.offset_ = 89;
   read_info.size_ = 1;
-  ASSERT_EQ(req.get_group_id(), 0);
+  ASSERT_EQ(req.get_resource_group_id(), USER_RESOURCE_OTHER_GROUP_ID);
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req.tenant_io_mgr_.get_ptr()->io_usage_.init(0));
+  ASSERT_EQ(OB_SUCCESS, req.tenant_io_mgr_.get_ptr()->io_usage_.init(500, 0));
   ASSERT_SUCC(req.init(read_info));
   ASSERT_TRUE(req.is_inited_);
   ASSERT_EQ(req.io_buf_, nullptr); // read buf allocation is delayed
@@ -476,6 +470,38 @@ TEST_F(TestIOStruct, IOStat)
   ASSERT_GE(avg_cpu, 0);
 }
 
+TEST_F(TestIOStruct, IOGroupUsage)
+{
+  ObIOGroupUsage usage;
+  usage.inc(123456, 100, 200, 300, 400, 1000);
+  double avg_size = 0;
+  double avg_iops = 0;
+  int64_t avg_bw = 0;
+  int64_t avg_prepare_delay = 0;
+  int64_t avg_schedule_delay = 0;
+  int64_t avg_submit_delay = 0;
+  int64_t avg_device_delay = 0;
+  int64_t avg_total_delay = 0;
+  usleep(1000 * 1000);
+  usage.calc(avg_size,
+      avg_iops,
+      avg_bw,
+      avg_prepare_delay,
+      avg_schedule_delay,
+      avg_submit_delay,
+      avg_device_delay,
+      avg_total_delay);
+  ASSERT_NEAR(avg_size, 123456, 12345);
+  ASSERT_NEAR(avg_iops, 1, 0.1);
+  ASSERT_NEAR(avg_bw, 123456, 12345);
+  ASSERT_NEAR(avg_prepare_delay, 100, 10);
+  ASSERT_NEAR(avg_schedule_delay, 200, 20);
+  ASSERT_NEAR(avg_submit_delay, 300, 30);
+  ASSERT_NEAR(avg_device_delay, 400, 40);
+  ASSERT_NEAR(avg_total_delay, 1000, 100);
+}
+
+
 TEST_F(TestIOStruct, IOScheduler)
 {
   ObIOCalibration::get_instance().init();
@@ -499,7 +525,7 @@ TEST_F(TestIOStruct, IOScheduler)
   ObIOUsage io_usage;
   ASSERT_SUCC(io_clock.init(tenant_config, &io_usage));
   io_clock.destroy();
-  ASSERT_SUCC(io_usage.init(0));
+  ASSERT_SUCC(io_usage.init(500, 0));
   ASSERT_SUCC(io_clock.init(tenant_config, &io_usage));
   //ASSERT_SUCC(scheduler.schedule_request(io_clock, req));
 
@@ -540,7 +566,7 @@ TEST_F(TestIOStruct, MClockQueue)
   ASSERT_TRUE(io_config.is_valid());
   ObTenantIOClock tenant_clock;
   ObIOUsage io_usage;
-  ASSERT_SUCC(io_usage.init(2));
+  ASSERT_SUCC(io_usage.init(500, 2));
   ASSERT_SUCC(io_usage.refresh_group_num(2));
   ASSERT_SUCC(tenant_clock.init(io_config, &io_usage));
   ObMClockQueue mqueue1;
@@ -728,7 +754,7 @@ TEST_F(TestIOManager, simple)
   io_info.tenant_id_ = 500;
   io_info.fd_ = fd;
   io_info.flag_.set_write();
-  io_info.flag_.set_group_id(0);
+  io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   io_info.flag_.set_wait_event(100);
   io_info.offset_ = 0;
   io_info.size_ = write_io_size;
@@ -1791,7 +1817,7 @@ int IOPerfRunner::do_perf_rolling()
   int ret = OB_SUCCESS;
   ObIOInfo info;
   info.tenant_id_ = load_.tenant_id_;
-  info.flag_.set_group_id(load_.group_id_);
+  info.flag_.set_resource_group_id(load_.group_id_);
   info.flag_.set_mode(load_.mode_);
   info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   info.fd_ = fd_;
@@ -1884,7 +1910,7 @@ int IOPerfRunner::do_batch_io()
   int ret = OB_SUCCESS;
   ObIOInfo info;
   info.tenant_id_ = load_.tenant_id_;
-  info.flag_.set_group_id(load_.group_id_);
+  info.flag_.set_resource_group_id(load_.group_id_);
   info.flag_.set_mode(load_.mode_);
   info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   info.fd_ = fd_;

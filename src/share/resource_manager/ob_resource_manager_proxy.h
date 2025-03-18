@@ -16,7 +16,6 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
@@ -181,7 +180,6 @@ public:
       const common::ObString &plan,
       const common::ObString &group,
       ObPlanDirective &directive);
-  int reset_all_mapping_rules();
 
 private:
   int allocate_consumer_group_id(

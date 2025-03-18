@@ -22,6 +22,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "share/io/ob_io_define.h"
 #include "share/io/io_schedule/ob_io_mclock.h"
 
@@ -142,7 +143,7 @@ class ObIOUsage final
 public:
   ObIOUsage();
   ~ObIOUsage();
-  int init(const int64_t group_num);
+  int init(const uint64_t tenant_id, const int64_t group_num);
   int refresh_group_num (const int64_t group_num);
   void accumulate(ObIORequest &req);
   void calculate_io_usage();
@@ -155,6 +156,7 @@ public:
   ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
+  mutable common::ObQSyncLock lock_;
   ObSEArray<ObSEArray<ObIOStat, GROUP_START_NUM>, 2> io_stats_;
   ObSEArray<ObSEArray<ObIOStatDiff, GROUP_START_NUM>, 2> io_estimators_;
   AvgItems group_avg_iops_;
@@ -172,14 +174,14 @@ public:
   int init();
   void accumulate(ObIORequest &req);
   void calculate_io_usage();
-  typedef ObSEArray<ObSEArray<double, SYS_RESOURCE_GROUP_CNT>, 2> SysAvgItems;
+  typedef ObSEArray<ObSEArray<double, SYS_MODULE_CNT>, 2> SysAvgItems;
   int get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us);
   void record_request_start(ObIORequest &req);
   void record_request_finish(ObIORequest &req);
   TO_STRING_KV(K(io_stats_), K(io_estimators_), K(group_avg_iops_), K(group_avg_byte_), K(group_avg_rt_us_));
 private:
-  ObSEArray<ObSEArray<ObIOStat, SYS_RESOURCE_GROUP_CNT>, 2> io_stats_;
-  ObSEArray<ObSEArray<ObIOStatDiff, SYS_RESOURCE_GROUP_CNT>, 2> io_estimators_;
+  ObSEArray<ObSEArray<ObIOStat, SYS_MODULE_CNT>, 2> io_stats_;
+  ObSEArray<ObSEArray<ObIOStatDiff, SYS_MODULE_CNT>, 2> io_estimators_;
   SysAvgItems group_avg_iops_;
   SysAvgItems group_avg_byte_;
   SysAvgItems group_avg_rt_us_;
@@ -313,6 +315,8 @@ public:
   int64_t get_senders_count() { return senders_.count(); }
   TO_STRING_KV(K(is_inited_), K(io_config_), K(senders_));
 private:
+  static const int64_t SENDER_QUEUE_WATERLEVEL = 64;
+private:
   friend class ObIOTuner;
   bool is_inited_;
   const ObIOConfig &io_config_;
@@ -402,6 +406,7 @@ private:
   static const int64_t MAX_SYNC_IO_QUEUE_COUNT = 512;
   ObFixedQueue<ObIORequest> req_queue_;
   ObThreadCond cond_;
+  int64_t submit_count_;
   bool is_wait_;
 };
 
@@ -434,6 +439,7 @@ private:
   ObIODevice *device_handle_;
   int64_t used_io_depth_;
   int64_t max_io_depth_;
+  ObSpinLock lock_for_sync_io_;
 };
 
 class ObIORunner : public lib::TGRunnable
@@ -572,9 +578,73 @@ private:
   hash::ObHashMap<int64_t /*request_ptr*/, TraceInfo> trace_map_;
 };
 
+struct ObIOGroupUsage
+{
+  ObIOGroupUsage()
+      : last_ts_(ObTimeUtility::fast_current_time()),
+        io_count_(0),
+        size_(0),
+        last_io_ps_record_(0),
+        last_io_bw_record_(0),
+        total_prepare_delay_(0),
+        total_schedule_delay_(0),
+        total_submit_delay_(0),
+        total_device_delay_(0),
+        total_total_delay_(0)
+  {}
+  int calc(double &avg_size, double &avg_iops, int64_t &avg_bw, int64_t &avg_prepare_delay,
+      int64_t &avg_schedule_delay, int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
+  void inc(const int64_t size, const int64_t prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
+      const int64_t device_delay, const int64_t total_delay)
+  {
+    ATOMIC_FAA(&size_, size);
+    ATOMIC_FAA(&io_count_, 1);
+    ATOMIC_FAA(&total_prepare_delay_, prepare_delay);
+    ATOMIC_FAA(&total_schedule_delay_, schedule_delay);
+    ATOMIC_FAA(&total_submit_delay_, submit_delay);
+    ATOMIC_FAA(&total_device_delay_, device_delay);
+    ATOMIC_FAA(&total_total_delay_, total_delay);
+  }
+  int clear()
+  {
+    ATOMIC_SET(&total_prepare_delay_, 0);
+    ATOMIC_SET(&total_schedule_delay_, 0);
+    ATOMIC_SET(&total_submit_delay_, 0);
+    ATOMIC_SET(&total_device_delay_, 0);
+    ATOMIC_SET(&total_total_delay_, 0);
+    return OB_SUCCESS;
+  }
+  int64_t last_ts_;
+  int64_t io_count_;
+  int64_t size_;
+  int64_t last_io_ps_record_;    // iops
+  int64_t last_io_bw_record_;    // iobw
+  int64_t total_prepare_delay_;  // us
+  int64_t total_schedule_delay_;
+  int64_t total_submit_delay_;
+  int64_t total_device_delay_;
+  int64_t total_total_delay_;
+  TO_STRING_KV(K(last_ts_), K(io_count_), K(size_), K(last_io_ps_record_), K(last_io_bw_record_),
+      K(total_prepare_delay_), K(total_schedule_delay_), K(total_submit_delay_), K(total_device_delay_),
+      K(total_total_delay_));
+};
+
+struct ObIOFuncUsageByMode : ObIOGroupUsage
+{
+};
+typedef ObSEArray<ObIOFuncUsageByMode, static_cast<uint8_t>(ObIOGroupMode::MODECNT)> ObIOFuncUsage;
+typedef ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> ObIOFuncUsageArr;
+struct ObIOFuncUsages
+{
+public:
+  ObIOFuncUsages();
+  ~ObIOFuncUsages() = default;
+  int accumulate(ObIORequest &req);
+  TO_STRING_KV(K(func_usages_));
+  ObIOFuncUsageArr func_usages_;
+};
 
 // template function implementation
-
 template<typename T, typename... Args>
 int ObIOAllocator::alloc(T *&instance, Args &...args)
 {
