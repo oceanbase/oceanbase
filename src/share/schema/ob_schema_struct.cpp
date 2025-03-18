@@ -719,7 +719,8 @@ bool ObRefreshSchemaInfo::is_valid() const
   return true;
 }
 
-OB_SERIALIZE_MEMBER(ObRefreshSchemaInfo, tenant_id_, schema_version_, sequence_id_, new_sequence_id_);
+OB_SERIALIZE_MEMBER(ObRefreshSchemaInfo, // FARM COMPAT WHITELIST
+                    tenant_id_, schema_version_, sequence_id_, new_sequence_id_);
 
 OB_SERIALIZE_MEMBER(ObSchemaObjVersion, object_id_, version_, object_type_);
 
