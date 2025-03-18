@@ -291,7 +291,7 @@ enum DomainIndexType
   VEC_INDEX = 2
 };
 
-enum ObVecIndexType : uint8_t
+enum ObVecIndexType : uint8_t //FARM COMPAT WHITELIST
 {
   VEC_INDEX_INVALID = 0,
   VEC_INDEX_POST_WITHOUT_FILTER = 1,
