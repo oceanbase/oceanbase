@@ -10,7 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_kvcache_struct.h"
+#include "lib/allocator/ob_retire_station.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
+#include "share/cache/ob_kvcache_inst_map.h"
+#include "share/cache/ob_kvcache_struct.h"
 
 namespace oceanbase
 {
@@ -58,6 +61,7 @@ void ObKVCacheStatus::reset()
   config_ = NULL;
   kv_cnt_ = 0;
   store_size_ = 0;
+  retired_size_ = 0;
   map_size_ = 0;
   lru_mb_cnt_ = 0;
   lfu_mb_cnt_ = 0;
@@ -266,14 +270,15 @@ int ObKVStoreMemBlock::alloc(
  */
 ObKVMemBlockHandle::ObKVMemBlockHandle()
     : mem_block_(NULL),
-      status_(FREE),
       inst_(NULL),
       policy_(LRU),
       get_cnt_(0),
       recent_get_cnt_(0),
       score_(0),
       kv_cnt_(0),
-      working_set_(NULL)
+      ref_cnt_(0),
+      seq_num_(0),
+      status_(FREE)
 {
 }
 
@@ -283,18 +288,27 @@ ObKVMemBlockHandle::~ObKVMemBlockHandle()
 
 void ObKVMemBlockHandle::reset()
 {
-  status_ = FREE;
   inst_ = NULL;
   policy_ = LRU;
   get_cnt_ = 0;
   recent_get_cnt_ = 0;
   score_ = 0;
   kv_cnt_ = 0;
-  handle_ref_.reset();
+  //The seq must NOT be reset
   prev_ = NULL;
   next_ = NULL;
   retire_link_.reset();
-  working_set_ = NULL;
+  status_ = FREE;
+}
+
+
+int64_t ObKVMemBlockHandle::get_seq_num_for_node() const
+{
+  int64_t seq_num = ATOMIC_LOAD(&seq_num_);
+  if (FREE == ATOMIC_LOAD(&status_)) {
+    seq_num = -1;
+  }
+  return seq_num;
 }
 
 int ObKVMemBlockHandle::store(const ObIKVCacheKey &key, const ObIKVCacheValue &value,
@@ -323,10 +337,21 @@ int ObKVMemBlockHandle::alloc(const int64_t key_size, const int64_t value_size,
 
 void ObKVMemBlockHandle::set_full(const double base_mb_score)
 {
+  ATOMIC_STORE_RLX(&status_, FULL);
   score_ += base_mb_score;
-  ATOMIC_STORE((uint32_t*)(&status_), FULL);
 }
 
+bool ObKVMemBlockHandle::retire()
+{
+  bool b_ret = false;
+  if (ObKVMBHandleStatus::FULL == get_status() && ATOMIC_BCAS(&status_, FULL, FREE)) {
+    b_ret = true;
+    ATOMIC_INC(&seq_num_); // MEM_BARRIER();
+    HazardDomain::get_instance().retire(this);
+  }
+
+  return b_ret;
+}
 
 /*
  * -------------------------------------------------ObKVCacheStoreMemblockInfo------------------------------------------------

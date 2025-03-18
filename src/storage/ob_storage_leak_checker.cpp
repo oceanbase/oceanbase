@@ -21,10 +21,6 @@ namespace oceanbase
 namespace storage
 {
 
-ERRSIM_POINT_DEF(ERRSIM_CACHE_HANDLE_TRACE);
-ERRSIM_POINT_DEF(ERRSIM_IO_HANDLE_TRACE);
-ERRSIM_POINT_DEF(ERRSIM_STORAGE_ITER_TRACE);
-
 /*
  * ---------------------------------------------- ObStorageCheckerKey ----------------------------------------------
  */
@@ -106,8 +102,7 @@ const char ObStorageLeakChecker::ITER_CHECKER_NAME[MAX_CACHE_NAME_LENGTH] = "sto
 ObStorageLeakChecker ObStorageLeakChecker::instance_;
 
 ObStorageLeakChecker::ObStorageLeakChecker()
-  : check_id_(ObStorageCheckID::INVALID_ID),
-    checker_info_()
+    : checker_info_()
 {
   INIT_SUCC(ret);
   if (OB_FAIL(checker_info_.create(HANDLE_BT_MAP_BUCKET_NUM, "STRG_CHECKER_M", "STRG_CHECKER_M"))) {
@@ -120,20 +115,14 @@ ObStorageLeakChecker::~ObStorageLeakChecker()
   reset();
 }
 
-ObStorageLeakChecker &ObStorageLeakChecker::get_instance()
-{
-  return instance_;
-}
-
 void ObStorageLeakChecker::reset()
 {
-  check_id_ = ObStorageCheckID::INVALID_ID;
   checker_info_.reuse();
 }
 
-bool ObStorageLeakChecker::handle_hold(ObStorageCheckedObjectBase* handle, const ObStorageCheckID check_id)
+OB_NOINLINE void ObStorageLeakChecker::inner_handle_hold(
+    ObStorageCheckedObjectBase* handle, const ObStorageCheckID check_id)
 {
-  bool need_record = false;
   INIT_SUCC(ret);
   ObStorageCheckerKey key(handle);
   ObStorageCheckerValue value;
@@ -142,43 +131,21 @@ bool ObStorageLeakChecker::handle_hold(ObStorageCheckedObjectBase* handle, const
     COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), K(handle), K(check_id));
   } else if (checker_info_.size() > MAP_SIZE_LIMIT) {
   } else {
-    value.check_id_ = check_id_;
+    value.check_id_ = check_id;
     value.tenant_id_ = MTL_ID();
-    if (ObStorageCheckID::ALL_CACHE == check_id) {
-      need_record = OB_SUCCESS != ERRSIM_CACHE_HANDLE_TRACE;
-      const ObKVCacheHandle *cache_handle = static_cast<const ObKVCacheHandle *>(handle);
-      if (OB_UNLIKELY(need_record) && !cache_handle->is_valid() ) {
-        need_record = false;
-      }
-      if (OB_UNLIKELY(need_record)) {
-        value.tenant_id_ = cache_handle->mb_handle_->inst_->tenant_id_;
-        value.check_id_ = (ObStorageCheckID)cache_handle->mb_handle_->inst_->cache_id_;
-      }
-    } else if (ObStorageCheckID::IO_HANDLE == check_id) {
-      need_record = OB_SUCCESS != ERRSIM_IO_HANDLE_TRACE;
-      const ObIOHandle *io_handle = static_cast<const ObIOHandle *>(handle);
-      if (OB_UNLIKELY(need_record) && io_handle->is_empty()) {
-        need_record = false;
-      }
-    } else if (ObStorageCheckID::STORAGE_ITER == check_id) {
-      need_record = OB_SUCCESS != ERRSIM_STORAGE_ITER_TRACE;
+    lbt(value.bt_, sizeof(value.bt_));
+    if (OB_FAIL(checker_info_.set_refactored(key, value))) {
+      COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to record backtrace", K(ret), K(key), K(value));
     } else {
-      COMMON_LOG(WARN, "invalid check id!", K(check_id));
-    }
-    if (OB_UNLIKELY(need_record)) {
       handle->is_traced_ = true;
-      lbt(value.bt_, sizeof(value.bt_));
-      if (OB_FAIL(checker_info_.set_refactored(key, value))) {
-        COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to record backtrace", K(ret), K(key), K(value));
-      }
     }
   }
-  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle hold details", K(ret), K(check_id_),
+  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle hold details", K(ret), K(check_id),
              KP(handle), K(check_id), K(key), K(value));
-  return OB_SUCC(ret) && need_record;
 }
 
-void ObStorageLeakChecker::handle_reset(ObStorageCheckedObjectBase* handle, const ObStorageCheckID check_id)
+OB_NOINLINE void ObStorageLeakChecker::inner_handle_reset(
+    ObStorageCheckedObjectBase* handle, const ObStorageCheckID check_id)
 {
   INIT_SUCC(ret);
   ObStorageCheckerKey key(handle);
@@ -186,17 +153,14 @@ void ObStorageLeakChecker::handle_reset(ObStorageCheckedObjectBase* handle, cons
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), KP(handle), K(check_id));
   } else {
-    if (handle->is_traced_) {
-      if (OB_FAIL(checker_info_.erase_refactored(key))) {
-        if (OB_HASH_NOT_EXIST != ret) {
-          COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to erase cache handle backtrace", K(ret), K(key));
-        }
+    if (OB_FAIL(checker_info_.erase_refactored(key))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to erase cache handle backtrace", K(ret), K(key));
       }
     }
     handle->is_traced_ = false;
   }
-  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle reset details", K(ret), K(check_id_),
-             KP(handle), K(check_id), K(key));
+  COMMON_LOG(DEBUG, "[STORAGE-CHECKER] handle reset details", K(ret), K(check_id), KP(handle), K(check_id), K(key));
 }
 
 int ObStorageLeakChecker::get_aggregate_bt_info(hash::ObHashMap<ObStorageCheckerValue, int64_t> &bt_info)

@@ -10,14 +10,18 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/alloc/alloc_struct.h"
 #include <gtest/gtest.h>
 #define private public
 #define protected public
 #include "share/ob_thread_mgr.h"
+#include "share/cache/ob_kv_storecache.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "observer/ob_signal_handle.h"
 #include "ob_cache_test_utils.h"
 #include "share/ob_tenant_mgr.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -62,7 +66,10 @@ TestKVCache::TestKVCache()
     upper_mem_limit_(16 * 1024 * 1024)
 {
   for (int64_t t = tenant_id_; t < tenant_id_ + 30; ++t) {
-    ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(t);
+    auto guard = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(t, ObCtxIds::KVSTORE_CACHE_ID);
+    if (nullptr == guard.allocator_) {
+      ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(t);
+    }
   }
 }
 
@@ -83,7 +90,9 @@ void TestKVCache::SetUp()
   if (OB_INIT_TWICE == ret) {
     ret = OB_SUCCESS;
   }
-  ASSERT_EQ(OB_SUCCESS, ret);
+  if (OB_FAIL(ObClockGenerator::init())) {
+    COMMON_LOG(WARN, "init clock generator failed", K(ret));
+  }
 
   // set observer memory limit
   CHUNK_MGR.set_limit(5L * 1024L * 1024L * 1024L);
@@ -203,7 +212,7 @@ TEST(TestKVCacheValue, wash_stress)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObKVGlobalCache::get_instance().wash_timer_.cancel_all();
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 16 * 1024;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -240,7 +249,7 @@ TEST_F(TestKVCache, test_hazard_version)
   TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
   TG_WAIT(lib::TGDefIDs::KVCacheWash);
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 64;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -284,7 +293,7 @@ TEST_F(TestKVCache, test_hazard_version)
 
 TEST_F(TestKVCache, test_func)
 {
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 64;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -345,7 +354,7 @@ TEST_F(TestKVCache, test_func)
   ret = cache.put(key, value);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = cache.get(key, pvalue, handle);
-  COMMON_LOG(INFO, "handle ref count", K(handle.mb_handle_->get_ref_cnt()), K(store.get_handle_ref_cnt(handle.mb_handle_)));
+  // COMMON_LOG(INFO, "handle ref count", K(handle.mb_handle_->get_ref_cnt()), K(store.get_handle_ref_cnt(handle.mb_handle_)));
   ASSERT_EQ(OB_SUCCESS, ret);
   if (OB_SUCC(ret)) {
     ASSERT_TRUE(value.v_ == pvalue->v_);
@@ -359,9 +368,9 @@ TEST_F(TestKVCache, test_func)
     ret = cache.put(key, value);
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = cache.get(key, pvalue, kvcache_handles[i]);
-    COMMON_LOG(INFO, "handle ref count", K(kvcache_handles[i].mb_handle_->get_ref_cnt()), K(store.get_handle_ref_cnt(kvcache_handles[i].mb_handle_)));
+    // COMMON_LOG(INFO, "handle ref count", K(kvcache_handles[i].mb_handle_->get_ref_cnt()), K(store.get_handle_ref_cnt(kvcache_handles[i].mb_handle_)));
   }
-  COMMON_LOG(INFO, "handle ref count", K(handle.mb_handle_->get_ref_cnt()), K(store.get_handle_ref_cnt(handle.mb_handle_)));
+  // COMMON_LOG(INFO, "handle ref count", K(handle.mb_handle_->get_ref_cnt()), K(store.get_handle_ref_cnt(handle.mb_handle_)));
 
   //test erase
   ret = cache.erase(key);
@@ -370,6 +379,7 @@ TEST_F(TestKVCache, test_func)
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 
   //test alloc and put
+  handle.reset();
   ret = cache.alloc(tenant_id_, K_SIZE, V_SIZE, kvpair, handle, inst_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   kvpair->key_ = new (kvpair->key_) TestKey;
@@ -408,7 +418,7 @@ TEST_F(TestKVCache, test_func)
 
 TEST_F(TestKVCache, test_large_kv)
 {
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 2 * 1024 * 1024;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -444,7 +454,7 @@ TEST_F(TestKVCache, test_large_kv)
 //   TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
 //   TG_WAIT(lib::TGDefIDs::KVCacheWash);
 //   TG_WAIT(lib::TGDefIDs::KVCacheRep);
-//   static const int64_t K_SIZE = 16;
+//   static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
 //   static const int64_t V_SIZE = 512 * 1024;
 //   typedef TestKVCacheKey<K_SIZE> TestKey;
 //   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -525,7 +535,7 @@ TEST_F(TestKVCache, test_wash)
   TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
   TG_WAIT(lib::TGDefIDs::KVCacheWash);
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 512 * 1024;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -592,7 +602,7 @@ TEST_F(TestKVCache, test_washable_size)
   TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
   TG_WAIT(lib::TGDefIDs::KVCacheWash);
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 2 * 1024 * 1024;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -649,7 +659,7 @@ TEST_F(TestKVCache, test_hold_size)
   TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
   TG_WAIT(lib::TGDefIDs::KVCacheWash);
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 2 * 1024 * 1024;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -708,7 +718,7 @@ TEST_F(TestKVCache, test_hold_size)
 //   TG_WAIT(lib::TGDefIDs::KVCacheRep);
 
 //   // put to cache make cache use all memory
-//   static const int64_t K_SIZE = 16;
+//   static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
 //   static const int64_t V_SIZE = 2 * 1024;
 //   typedef TestKVCacheKey<K_SIZE> TestKey;
 //   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -783,7 +793,7 @@ TEST_F(TestKVCache, cache_wash_self)
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
 
   // put to cache make cache use all memory
-  static const int64_t K_SIZE = 16;
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
   static const int64_t V_SIZE = 2 * 1024;
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -845,7 +855,7 @@ TEST_F(TestKVCache, mix_mode_without_backgroup)
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
 
   ObAllocatorStress alloc_stress;
-  ObCacheStress<16, 2*1024> cache_stress;
+  ObCacheStress<TEST_KVCACHE_KEY_MIN_SIZE, 2*1024> cache_stress;
 
   ASSERT_EQ(OB_SUCCESS, alloc_stress.init());
   ASSERT_EQ(OB_SUCCESS, cache_stress.init(tenant_id_, 0));
@@ -860,12 +870,14 @@ TEST_F(TestKVCache, mix_mode_without_backgroup)
   const int64_t alloc_size = 1024;
   const int64_t alloc_count = 50 * 1024;
   const int64_t task_count = 4;
+  COMMON_LOG(INFO, "********** Start alloc task **********");
   for (int64_t i = 0; i < task_count; ++i) {
     ObCacheTestTask task(tenant_id_, true, alloc_size, alloc_count, alloc_stress.get_stat());
     ASSERT_EQ(OB_SUCCESS, alloc_stress.add_task(task));
     sleep(1);
   }
 
+  COMMON_LOG(INFO, "********** Start free task **********");
   for (int64_t i = 0; i < task_count; ++i) {
     ObCacheTestTask task(tenant_id_, false, alloc_size, alloc_count, alloc_stress.get_stat());
     ASSERT_EQ(OB_SUCCESS, alloc_stress.add_task(task));
@@ -890,7 +902,7 @@ TEST_F(TestKVCache, mix_mode_with_backgroup)
   ObResourceMgr::get_instance().set_cache_washer(ObKVGlobalCache::get_instance());
 
   ObAllocatorStress alloc_stress_array[3];
-  ObCacheStress<16, 2*1024> cache_stress_array[3];
+  ObCacheStress<TEST_KVCACHE_KEY_MIN_SIZE, 2*1024> cache_stress_array[3];
 
   for (int i = 0; i < 3; ++i) {
     ASSERT_EQ(OB_SUCCESS, alloc_stress_array[i].init());
@@ -958,7 +970,7 @@ TEST_F(TestKVCache, large_chunk_wash_mb)
   TG_WAIT(lib::TGDefIDs::KVCacheRep);
 
   ObAllocatorStress alloc_stress;
-  ObCacheStress<16, 2*1024> cache_stress;
+  ObCacheStress<TEST_KVCACHE_KEY_MIN_SIZE, 2*1024> cache_stress;
 
   ASSERT_EQ(OB_SUCCESS, alloc_stress.init());
   ASSERT_EQ(OB_SUCCESS, cache_stress.init(tenant_id_, 0));
@@ -1017,7 +1029,7 @@ TEST_F(TestKVCache, large_chunk_wash_mb)
 //   TG_WAIT(lib::TGDefIDs::KVCacheWash);
 //   TG_WAIT(lib::TGDefIDs::KVCacheRep);
 
-//   ObCacheStress<16, 2*1024> cache_stress;
+//   ObCacheStress<TEST_KVCACHE_KEY_MIN_SIZE, 2*1024> cache_stress;
 //   ASSERT_EQ(OB_SUCCESS, cache_stress.init(tenant_id_, 0));
 //   cache_stress.start();
 //   // wait cache use all memory
@@ -1026,7 +1038,7 @@ TEST_F(TestKVCache, large_chunk_wash_mb)
 //   cache_stress.stop();
 //   cache_stress.wait();
 
-//   static const int64_t K_SIZE = 16;
+//   static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
 //   static const int64_t V_SIZE = 10 * 1024 * 1024;
 //   typedef TestKVCacheKey<K_SIZE> TestKey;
 //   typedef TestKVCacheValue<V_SIZE> TestValue;
@@ -1161,6 +1173,484 @@ TEST(ObSyncWashRt, sync_wash_mb_rt)
 }
 */
 
+TEST_F(TestKVCache, hazard_pointer) {
+  if (!GCONF._enable_kvcache_hazard_pointer) {
+	return;
+  }
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
+  static const int64_t V_SIZE = 64;
+  typedef TestKVCacheKey<K_SIZE> TestKey;
+  typedef TestKVCacheValue<V_SIZE> TestValue;
+
+  int ret = OB_SUCCESS;
+  ObKVCache<TestKey, TestValue> cache;
+  TestKey key;
+  TestValue value;
+  const TestValue *pvalue = NULL;
+  ObKVCachePair *kvpair = NULL;
+  ObKVCacheHandle handle;
+  ObKVCacheIterator iter;
+
+  ObKVCacheInstKey inst_key(0, tenant_id_);
+  ObKVCacheInstHandle inst_handle;
+  ObKVGlobalCache::get_instance().insts_.get_cache_inst(inst_key, inst_handle);
+  ObKVCacheStore &store = ObKVGlobalCache::get_instance().store_;
+
+
+  key.v_ = 900;
+  key.tenant_id_ = tenant_id_;
+  value.v_ = 4321;
+
+  ret = cache.init("test");
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // test protect
+  ret = cache.put_and_fetch(key, value, pvalue, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(handle.is_valid());
+  ObKVMemBlockHandle* mb_handle = handle.get_mb_handle();
+  while (ObKVMBHandleStatus::USING == mb_handle->get_status()) {
+    key.v_++;
+    ASSERT_EQ(OB_SUCCESS, cache.put(key, value));
+  }
+  ASSERT_TRUE(mb_handle->retire());
+  HazardDomain::get_instance().reclaim([&](ObKVMemBlockHandle* reclaimed) {
+    ASSERT_TRUE(false);
+  });
+  handle.reset();
+
+  // test reclaim
+  bool something_reclaimed = false;
+  HazardDomain::get_instance().reclaim([&](ObKVMemBlockHandle* reclaimed) {
+    something_reclaimed = true;
+    ASSERT_EQ(reclaimed, mb_handle);
+    store.free_mbhandle(reclaimed, true);
+  });
+  ASSERT_TRUE(something_reclaimed);
+
+  // test release and reuse hazard pointer
+  key.v_ += 1;
+  ret = cache.put_and_fetch(key, value, pvalue, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  HazardPointer* hazptr = handle.hazptr_holder_.hazptr_;
+  HazptrTLCache::get_instance().flush();
+  handle.~ObKVCacheHandle();
+  new (&handle) ObKVCacheHandle();
+  key.v_ += 1;
+  ret = cache.put_and_fetch(key, value, pvalue, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(handle.hazptr_holder_.hazptr_, hazptr);
+}
+
+TEST_F(TestKVCache, cache_handle_pin) {
+  TG_CANCEL(lib::TGDefIDs::KVCacheWash, ObKVGlobalCache::get_instance().wash_task_);
+  TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
+  TG_WAIT(lib::TGDefIDs::KVCacheWash);
+  TG_WAIT(lib::TGDefIDs::KVCacheRep);
+  static const int64_t K_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
+  static const int64_t V_SIZE = 8 << 10; // 8K
+  typedef TestKVCacheKey<K_SIZE> TestKey;
+  typedef TestKVCacheValue<V_SIZE> TestValue;
+
+  int ret = OB_SUCCESS;
+  ObKVCache<TestKey, TestValue> cache;
+  const TestValue *pvalue = NULL;
+  ObKVCachePair *kvpair = NULL;
+  ObKVCacheHandle handle;
+  ObKVCacheIterator iter;
+
+  ObKVCacheInstKey inst_key(0, tenant_id_);
+  ObKVCacheInstHandle inst_handle;
+  ObKVGlobalCache::get_instance().insts_.get_cache_inst(inst_key, inst_handle);
+  ObKVCacheStore &store = ObKVGlobalCache::get_instance().store_;
+
+  ret = cache.init("test");
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  std::vector<std::thread> threads;
+  constexpr static int64_t THREAD_NUM = 8;
+  for (int64_t thread_idx = 0; thread_idx < THREAD_NUM; ++thread_idx) {
+    threads.emplace_back([&cache, thread_idx](){
+      int64_t handle_size = (thread_idx + 1) * 128;
+      std::vector<ObKVCacheHandle> handles(handle_size);
+      std::vector<typeof(pvalue)> values(handle_size);
+	  TestKey key;
+	  TestValue value;
+      for (uint16_t repeat = 0; repeat < 1; ++repeat) {
+        for (uint16_t j = 0; j < handle_size; ++j) {
+          auto val = (thread_idx << 32) + (repeat << 16) + j;
+          key.v_ = val;
+          value.v_ = val;
+          int ret = cache.put_and_fetch(key, value, values[j], handles[j]);
+          ASSERT_EQ(OB_SUCCESS, ret);
+          ASSERT_EQ(val, values[j]->v_);
+          ASSERT_TRUE(handles[j].is_valid());
+        }
+        for (uint16_t j = 0; j < handle_size; ++j) {
+          auto val = (thread_idx << 32) + (repeat << 16) + j;
+          ASSERT_EQ(val, values[j]->v_);
+          handles[j].reset();
+        }
+      }
+    });
+  }
+
+  bool finished = false;
+
+  threads.emplace_back([&]() {
+    for (; ATOMIC_LOAD(&finished) == false;) {
+      ObKVGlobalCache::get_instance().wash();
+    }
+  });
+
+  for (auto i = 0; i < THREAD_NUM; ++i) {
+    threads[i].join();
+  }
+
+  ATOMIC_STORE(&finished, true);
+  threads.back().join();
+}
+
+// TEST(HazardPointer, produce_consume) {
+//   bool stopped = false;
+//   auto queue = HazptrList();
+//   auto producer = [&]() {
+//     while (!ATOMIC_LOAD_RLX(&stopped)) {
+//       HazardPointer* hazptr;
+//       HazptrTLCache::get_instance().acquire_hazptr(hazptr);
+//       queue.push_ts(hazptr);
+//     }
+//   };
+//   auto consumer = [&]() {
+//     while (!ATOMIC_LOAD_RLX(&stopped)) {
+//       auto hazptr = queue.pop_ts();
+//       if (OB_NOT_NULL(hazptr)) {
+//         HazptrTLCache::get_instance().release_hazptr(hazptr);
+//       }
+//     }
+//   };
+
+//   std::vector<std::thread> threads;
+//   for (int i = 0; i < 5; ++i) {
+//     threads.emplace_back(producer);
+//   }
+//   for (int i = 0; i < 5; ++i) {
+//     threads.emplace_back(consumer);
+//   }
+
+//   sleep(10);
+
+//   ATOMIC_STORE_RLX(&stopped, true);
+//   for (auto& t : threads) {
+//     t.join();
+//   }
+// }
+
+
+
+struct TestSListNode {
+  TestSListNode* get_next() const
+  {
+    return next_;
+  }
+  TestSListNode* get_next_atomic() const
+  {
+    return ATOMIC_LOAD_RLX(&next_);
+  }
+  void set_next(TestSListNode* next)
+  {
+    next_ = next;
+  }
+  void set_next_atomic(TestSListNode* next)
+  {
+    ATOMIC_STORE_RLX(&next_, next);
+  }
+  TestSListNode* next_{nullptr};
+  pthread_t thread_id_{0};
+};
+
+
+using TestList = SList<TestSListNode>;
+
+void mark(TestSListNode* node)
+{
+  ASSERT_TRUE(ATOMIC_BCAS(&node->thread_id_, 0, pthread_self()));
+}
+
+void mark(TestList& list)
+{
+  FOREACH(it, list)
+  {
+    mark(&*it);
+  }
+}
+
+void unmark(TestSListNode* node)
+{
+  ASSERT_TRUE(ATOMIC_BCAS(&node->thread_id_, pthread_self(), 0));
+}
+
+void unmark(TestList& list)
+{
+  FOREACH(it, list)
+  {
+    unmark(&*it);
+  }
+}
+
+void check(const TestList& list)
+{
+  ASSERT_TRUE (list.get_size() >= 0);
+  if (OB_ISNULL(list.get_head()) || OB_ISNULL(list.get_tail()) || list.get_size() == 0) {
+    ASSERT_TRUE(list.get_head() == nullptr);
+    ASSERT_TRUE(list.get_tail() == nullptr);
+    ASSERT_TRUE(list.get_size() == 0);
+  } else {
+    ASSERT_TRUE(list.get_tail()->get_next() == nullptr);
+    TestSListNode *slow = list.get_head(), *fast = list.get_head()->get_next();
+    int size = 1;
+    if (list.get_size() == 2) {
+      ASSERT_TRUE(fast == list.get_tail());
+    } else if (fast == nullptr) {
+      ASSERT_TRUE(1 == list.get_size());
+    } else {
+      for (;;) {
+        slow = slow->get_next();
+        {
+          fast = fast->get_next();
+          ++size;
+          if (size == list.get_size() - 1) {
+            ASSERT_TRUE(fast == list.get_tail());
+            break;
+          }
+          ASSERT_TRUE(fast->get_next() != nullptr);
+        }
+        {
+          fast = fast->get_next();
+          ++size;
+          if (size == list.get_size() - 1) {
+            ASSERT_TRUE(fast == list.get_tail());
+            break;
+          }
+          ASSERT_TRUE(fast->get_next() != nullptr);
+        }
+        ASSERT_TRUE(slow != fast);
+      }
+    }
+  }
+}
+
+TEST(SList, simple)
+{
+  TestList list;
+  check(list);
+  ASSERT_TRUE(list.is_empty());
+
+  list.push(new TestSListNode());
+  check(list);
+
+  delete list.pop();
+  check(list);
+
+  auto node = new TestSListNode();
+  node->set_next(new TestSListNode());
+  list = TestList(node);
+  check(list);
+
+  delete list.pop();
+  check(list);
+
+  delete list.pop();
+  check(list);
+
+  list.push(new TestSListNode());
+  check(list);
+
+  list.push_front(new TestSListNode());
+  check(list);
+
+  auto tmp = list.pop(2);
+  ASSERT_EQ(tmp.get_size(), 2);
+  check(list);
+  check(tmp);
+  while (!tmp.is_empty()) {
+    delete tmp.pop();
+  }
+
+  list.push_front(new TestSListNode());
+  check(list);
+
+  list.push(new TestSListNode());
+  check(list);
+
+  ASSERT_EQ(list.get_size(), 2);
+  tmp = list.pop_all_ts();
+  ASSERT_EQ(tmp.get_size(), 2);
+  check(list);
+  check(tmp);
+  while (!tmp.is_empty()) {
+    delete tmp.pop();
+  }
+}
+
+TEST(SList, thread_safe)
+{
+  TestList list;
+
+  std::function<void()> ops[] = {
+      [&]() {
+        auto hazptr = new TestSListNode();
+        list.push_ts(hazptr);
+      },
+      [&]() {
+        auto hazptr = new TestSListNode();
+        list.push_front_ts(hazptr);
+      },
+      [&]() {
+        TestList tmp;
+        for (int i = 0; i < 10; ++i) {
+          auto hazptr = new TestSListNode();
+          tmp.push(hazptr);
+        }
+        list.push_ts(tmp);
+      },
+      // [&]() {
+      //   TestList tmp;
+      //   for (int i = 0; i < 10; ++i) {
+      //     auto hazptr = new TestSListNode();
+      //     tmp.push(hazptr);
+      //   }
+      //   list.push_front_ts(tmp);
+      // },
+      [&]() {
+        auto hazptr = list.pop_ts();
+        if (OB_NOT_NULL(hazptr)) {
+          mark(hazptr);
+          delete hazptr;
+        }
+      },
+      [&]() {
+        auto tmp = list.pop_ts(10);
+        check(tmp);
+        mark(tmp);
+        while (!tmp.is_empty()) {
+          delete tmp.pop();
+        }
+      },
+      [&]() {
+        auto tmp = list.pop_ts(10);
+        check(tmp);
+        mark(tmp);
+        unmark(tmp);
+        list.push_ts(tmp);
+      },
+      // [&]() {
+      //   auto tmp = list.pop_ts(10);
+      //   check(tmp);
+      //   mark(tmp);
+      //   unmark(tmp);
+      //   list.push_front_ts(tmp);
+      // },
+      [&]() {
+        auto hazptr = list.pop_ts();
+        if (OB_NOT_NULL(hazptr)) {
+          mark(hazptr);
+          unmark(hazptr);
+          list.push_ts(hazptr);
+        }
+      },
+      [&]() {
+        auto hazptr = list.pop_ts();
+        if (OB_NOT_NULL(hazptr)) {
+          mark(hazptr);
+          unmark(hazptr);
+          list.push_front_ts(hazptr);
+        }
+      }
+  };
+
+  std::thread gc_thread;
+  bool gc_stopped;
+  auto start_gc = [&]() {
+    gc_stopped = false;
+    gc_thread = std::thread([&]() {
+      while (!ATOMIC_LOAD_RLX(&gc_stopped)) {
+        if (list.get_size_ts() > 1000000) {
+          TestList tmp = list.pop_all_ts();
+          check(tmp);
+          mark(tmp);
+          while (!tmp.is_empty()) {
+            delete tmp.pop();
+          }
+        }
+        usleep(100);
+      }
+    });
+  };
+
+  auto finish_gc = [&]() {
+    ATOMIC_STORE_RLX(&gc_stopped, true);
+    gc_thread.join();
+  };
+
+  // for (int i = 0; i < sizeof(ops) / sizeof(ops[0]); ++i) {
+  //   for (int j = i; j < sizeof(ops) / sizeof(ops[0]); ++j) {
+  //     start_gc();
+  //     bool stopped = false;
+  //     std::thread a([&]() {
+  //       while (!ATOMIC_LOAD_RLX(&stopped)) {
+  //         ops[i]();
+  //       }
+  //     });
+  //     std::thread b([&]() {
+  //       while (!ATOMIC_LOAD_RLX(&stopped)) {
+  //         ops[j]();
+  //       }
+  //     });
+  //     sleep(1);
+  //     ATOMIC_STORE_RLX(&stopped, true);
+  //     a.join();
+  //     b.join();
+  //     finish_gc();
+  //     check(list);
+  //   }
+  // }
+
+  start_gc();
+  std::vector<std::thread> threads;
+  bool stopped = false;
+  for (int i = 0; i < 10; ++i) {
+    threads.emplace_back([&]() {
+      while (!ATOMIC_LOAD_RLX(&stopped)) {
+        ops[rand() % (sizeof(ops) / sizeof(ops[0]))]();
+      }
+    });
+  }
+  sleep(5);
+  ATOMIC_STORE_RLX(&stopped, true);
+  for (auto& t : threads) {
+    t.join();
+  }
+  finish_gc();
+  check(list);
+}
+
+TEST(HazardPointer, wash)
+{
+  TG_CANCEL(lib::TGDefIDs::KVCacheWash, ObKVGlobalCache::get_instance().wash_task_);
+  TG_CANCEL(lib::TGDefIDs::KVCacheRep, ObKVGlobalCache::get_instance().replace_task_);
+  TG_WAIT(lib::TGDefIDs::KVCacheWash);
+  TG_WAIT(lib::TGDefIDs::KVCacheRep);
+
+  HazptrList list[100];
+  for (int i = 0; i < 100; ++i) {
+    HazardDomain::get_instance().acquire_hazptrs(list[i], 100);
+  }
+  for (int i = 0; i < 100; ++i) {
+    HazardDomain::get_instance().release_hazptrs(list[i]);
+  }
+  HazardDomain::get_instance().wash();
+}
 }
 }
 

@@ -2557,3 +2557,7 @@ DEF_BOOL(_enable_delete_insert_scan, OB_TENANT_PARAMETER, "True",
          "When it is false, use merge sort when scaning sstables."
          "When it is true, use delete_insert processor when scanning sstables.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_kvcache_hazard_pointer, OB_CLUSTER_PARAMETER, "True",
+         "use hazard pointer(default) or reference counting to manage memory in kvcache",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY))

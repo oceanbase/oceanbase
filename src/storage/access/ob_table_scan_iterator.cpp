@@ -25,6 +25,8 @@ using namespace oceanbase::blocksstable;
 
 constexpr const char ObTableScanIterator::LABEL[];
 
+ERRSIM_POINT_DEF(ERRSIM_STORAGE_ITER_TRACE);
+
 ObTableScanIterator::ObTableScanIterator()
     : ObNewRowIterator(ObNewRowIterator::ObTableScanIterator),
       is_inited_(false),
@@ -756,6 +758,11 @@ int ObTableScanIterator::check_txn_status_if_read_uncommitted_()
     }
   }
   return ret;
+}
+
+bool ObTableScanIterator::need_trace() const
+{
+  return OB_SUCCESS != ERRSIM_STORAGE_ITER_TRACE;
 }
 
 } // namespace storage

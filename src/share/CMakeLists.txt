@@ -132,10 +132,11 @@ ob_set_subtarget(ob_share cache
   cache/ob_kvcache_map.cpp
   cache/ob_kvcache_store.cpp
   cache/ob_kvcache_struct.cpp
-  cache/ob_working_set_mgr.cpp
   cache/ob_kvcache_hazard_version.cpp
   cache/ob_kvcache_pre_warmer.cpp
   cache/ob_kvcache_pointer_swizzle.cpp
+  cache/ob_kvcache_hazard_pointer.cpp
+  cache/ob_kvcache_hazard_domain.cpp
 )
 
 ob_set_subtarget(ob_share common

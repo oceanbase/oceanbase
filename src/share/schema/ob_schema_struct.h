@@ -1810,6 +1810,23 @@ struct SchemaObj
     schema_(NULL),
     handle_()
   {}
+  int assign(const SchemaObj& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "fail to assign handle");
+      this->schema_type_ = OB_MAX_SCHEMA;
+      this->tenant_id_ = common::OB_INVALID_ID;
+      this->schema_id_ = common::OB_INVALID_ID;
+      this->schema_ = NULL;
+    } else {
+      this->schema_type_ = other.schema_type_;
+      this->tenant_id_ = other.tenant_id_;
+      this->schema_id_ = other.schema_id_;
+      this->schema_ = other.schema_;
+    }
+    return ret;
+  }
   ObSchemaType schema_type_;
   uint64_t tenant_id_;
   uint64_t schema_id_;

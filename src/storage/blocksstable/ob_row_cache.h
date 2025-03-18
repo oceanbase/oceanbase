@@ -91,6 +91,23 @@ struct ObRowValueHandle
   ObRowCacheValue *row_value_;
   common::ObKVCacheHandle handle_;
   ObRowValueHandle() : row_value_(NULL), handle_() {}
+  void move_from(ObRowValueHandle& other)
+  {
+    this->row_value_ = other.row_value_;
+    this->handle_.move_from(other.handle_);
+    other.reset();
+  }
+  int assign(const ObRowValueHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "failed to assign handle", K(ret));
+      this->row_value_ = nullptr;
+    } else {
+      this->row_value_ = other.row_value_;
+    }
+    return ret;
+  }
   virtual ~ObRowValueHandle() {}
   inline bool is_valid() const { return NULL != row_value_ && row_value_->is_valid() && handle_.is_valid(); }
   inline void reset() { row_value_ = NULL; handle_.reset(); }

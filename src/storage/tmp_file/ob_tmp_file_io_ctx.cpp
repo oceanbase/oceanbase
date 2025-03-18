@@ -473,30 +473,13 @@ ObTmpFileIOCtx::ObBlockCacheHandle::ObBlockCacheHandle()
 {
 }
 
-ObTmpFileIOCtx::ObBlockCacheHandle::ObBlockCacheHandle(const ObTmpBlockValueHandle &block_handle,
-    char *dest_user_read_buf, const int64_t offset_in_src_data_buf, const int64_t read_size)
-  : ObIReadHandle(dest_user_read_buf, offset_in_src_data_buf, read_size), block_handle_(block_handle)
-{
-}
+ObTmpFileIOCtx::ObBlockCacheHandle::ObBlockCacheHandle(
+    char* dest_user_read_buf, const int64_t offset_in_src_data_buf, const int64_t read_size)
+    : ObIReadHandle(dest_user_read_buf, offset_in_src_data_buf, read_size)
+{}
 
 ObTmpFileIOCtx::ObBlockCacheHandle::~ObBlockCacheHandle()
 {
-}
-
-ObTmpFileIOCtx::ObBlockCacheHandle::ObBlockCacheHandle(
-    const ObTmpFileIOCtx::ObBlockCacheHandle &other)
-{
-  *this = other;
-}
-
-ObTmpFileIOCtx::ObBlockCacheHandle &ObTmpFileIOCtx::ObBlockCacheHandle::operator=(
-    const ObTmpFileIOCtx::ObBlockCacheHandle &other)
-{
-  if (&other != this) {
-    block_handle_ = other.block_handle_;
-    ObIReadHandle::operator=(other);
-  }
-  return *this;
 }
 
 bool ObTmpFileIOCtx::ObBlockCacheHandle::is_valid()
@@ -518,30 +501,14 @@ ObTmpFileIOCtx::ObPageCacheHandle::ObPageCacheHandle()
 {
 }
 
-ObTmpFileIOCtx::ObPageCacheHandle::ObPageCacheHandle(const ObTmpPageValueHandle &page_handle,
-    char *dest_user_read_buf, const int64_t offset_in_src_data_buf, const int64_t read_size)
-  : ObIReadHandle(dest_user_read_buf, offset_in_src_data_buf, read_size), page_handle_(page_handle)
+ObTmpFileIOCtx::ObPageCacheHandle::ObPageCacheHandle(
+    char* dest_user_read_buf, const int64_t offset_in_src_data_buf, const int64_t read_size)
+    : ObIReadHandle(dest_user_read_buf, offset_in_src_data_buf, read_size)
 {
 }
 
 ObTmpFileIOCtx::ObPageCacheHandle::~ObPageCacheHandle()
 {
-}
-
-ObTmpFileIOCtx::ObPageCacheHandle::ObPageCacheHandle(
-    const ObTmpFileIOCtx::ObPageCacheHandle &other)
-{
-  *this = other;
-}
-
-ObTmpFileIOCtx::ObPageCacheHandle &ObTmpFileIOCtx::ObPageCacheHandle::operator=(
-    const ObTmpFileIOCtx::ObPageCacheHandle &other)
-{
-  if (&other != this) {
-    page_handle_ = other.page_handle_;
-    ObIReadHandle::operator=(other);
-  }
-  return *this;
 }
 
 bool ObTmpFileIOCtx::ObPageCacheHandle::is_valid()

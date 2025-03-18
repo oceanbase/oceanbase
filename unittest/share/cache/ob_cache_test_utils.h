@@ -26,13 +26,15 @@ using namespace lib;
 namespace common
 {
 
+static constexpr int64_t TEST_KVCACHE_KEY_MIN_SIZE = 24;
 template<int64_t SIZE>
 struct TestKVCacheKey: public ObIKVCacheKey
 {
+  static constexpr int64_t MIN_SIZE = TEST_KVCACHE_KEY_MIN_SIZE;
+  static_assert(SIZE >= MIN_SIZE, "SIZE is too small");
   TestKVCacheKey(void)
       : v_(0), tenant_id_(0)
   {
-    memset(buf_, 0, sizeof(buf_));
   }
   virtual bool operator ==(const ObIKVCacheKey &other) const;
   virtual uint64_t get_tenant_id() const
@@ -45,30 +47,33 @@ struct TestKVCacheKey: public ObIKVCacheKey
   }
   virtual int64_t size() const
   {
-    return sizeof(*this);
+    return SIZE;
   }
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const;
   uint64_t v_;
   uint64_t tenant_id_;
-  char buf_[SIZE > sizeof(v_) ? SIZE - sizeof(v_) : 0];
+  char buf_[0];
 };
+static_assert(sizeof(TestKVCacheKey<TEST_KVCACHE_KEY_MIN_SIZE>) == TestKVCacheKey<TEST_KVCACHE_KEY_MIN_SIZE>::MIN_SIZE, "");
 
+static constexpr int64_t TEST_KVCACHE_VALUE_MIN_SIZE = 16;
 template<int64_t SIZE>
 struct TestKVCacheValue: public ObIKVCacheValue
 {
+  static constexpr int64_t MIN_SIZE = TEST_KVCACHE_VALUE_MIN_SIZE;
+  static_assert(SIZE >= MIN_SIZE, "SIZE is too small");
   TestKVCacheValue(void)
       : v_(0)
-  {
-    memset(buf_, 0, sizeof(buf_));
-  }
+  {}
   virtual int64_t size() const
   {
-    return sizeof(*this);
+    return SIZE;
   }
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const;
   uint64_t v_;
-  char buf_[SIZE > sizeof(v_) ? SIZE - sizeof(v_) : 0];
+  char buf_[0];
 };
+static_assert(sizeof(TestKVCacheValue<TEST_KVCACHE_VALUE_MIN_SIZE>) == TestKVCacheValue<TEST_KVCACHE_VALUE_MIN_SIZE>::MIN_SIZE, "");
 
 
 template<int64_t SIZE>
@@ -577,128 +582,6 @@ private:
   int64_t total_cnt_;
   int64_t fail_cnt_;
   ObKVCache<TestKey, TestValue> cache_;
-};
-
-template<int64_t K_SIZE, int64_t V_SIZE>
-class ObWorkingSetStress : public share::ObThreadPool
-{
-public:
-  typedef TestKVCacheKey<K_SIZE> TestKey;
-  typedef TestKVCacheValue<V_SIZE> TestValue;
-
-  ObWorkingSetStress() : inited_(false), tenant_id_(OB_INVALID_ID),
-      put_count_(0), fail_count_(0)  {}
-  virtual ~ObWorkingSetStress() {}
-
-  int init(const uint64_t tenant_id, const bool only_put)
-  {
-    int ret = OB_SUCCESS;
-    if (inited_) {
-      ret = OB_INIT_TWICE;
-      COMMON_LOG(WARN, "init twice", K(ret));
-    } else if (OB_FAIL(cache_.init("test_cache"))) {
-      COMMON_LOG(WARN, "cache init failed", K(ret));
-    } else if (OB_FAIL(ws_.init(tenant_id, cache_))) {
-      COMMON_LOG(WARN, "init ws failed", K(ret), K(tenant_id));
-    } else {
-      tenant_id_ = tenant_id;
-      put_count_ = 0;
-      fail_count_ = 0;
-      only_put_ = only_put;
-      pcache_ = &ws_;
-      inited_ = true;
-    }
-    return ret;
-  }
-
-  int init(const uint64_t tenant_id, ObKVCache<TestKey, TestValue> &cache, const bool use_ws, const int64_t start_key = 0)
-  {
-    int ret = OB_SUCCESS;
-    if (inited_) {
-      ret = OB_INIT_TWICE;
-      COMMON_LOG(WARN, "init twice", K(ret));
-    } else {
-      tenant_id_ = tenant_id;
-      put_count_ = 0;
-      fail_count_ = 0;
-      only_put_ = false;
-      pcache_ = &cache;
-      start_key_ = start_key;
-      if (use_ws) {
-        if (OB_FAIL(ws_.init(tenant_id, cache))) {
-          COMMON_LOG(WARN, "init ws failed", K(ret), K(tenant_id));
-        } else {
-          pcache_ = &ws_;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        inited_ = true;
-      }
-    }
-    return ret;
-  }
-
-  virtual void run1()
-  {
-
-    // const int64_t thread_id = (int64_t)(arg);
-    const int64_t thread_id = this->get_thread_idx();
-    const int64_t count = this->get_thread_count();
-    int64_t put_count = 0;
-    int64_t fail_count = 0;
-    int ret = OB_SUCCESS;
-    COMMON_LOG(INFO, "working set stress thread start");
-    TestKey key;
-    TestValue value;
-    if (!inited_) {
-      ret = OB_NOT_INIT;
-      COMMON_LOG(WARN, "not init", K(ret));
-    } else {
-      while (!has_set_stop()) {
-        key.tenant_id_ = tenant_id_;
-        key.v_ = start_key_ + thread_id + put_count * count;
-        if (OB_FAIL(pcache_->put(key, value))) {
-          COMMON_LOG(WARN, "cache put failed", K(ret));
-        } else if (!only_put_) {
-          const TestValue *get_value = NULL;
-          ObKVCacheHandle handle;
-          if (OB_FAIL(pcache_->get(key, get_value, handle))) {
-            if (OB_ENTRY_NOT_EXIST == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              COMMON_LOG(WARN, "cache get failed", K(ret));
-            }
-          }
-        }
-        ++put_count;
-        if (OB_FAIL(ret)) {
-          ++fail_count;
-          ObMallocAllocator::get_instance()->print_tenant_memory_usage(tenant_id_);
-          ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(tenant_id_);
-
-        }
-      }
-    }
-    ATOMIC_AAF(&put_count_, put_count);
-    ATOMIC_AAF(&fail_count_, fail_count);
-    COMMON_LOG(INFO, "working set stress thread exit");
-  }
-
-  uint64_t get_tenant_id() const { return tenant_id_; }
-  int64_t get_put_count() const { return put_count_; }
-  int64_t get_fail_count() const { return fail_count_; }
-  int64_t get_used() const { return ws_.working_set_->get_used(); }
-  int64_t get_limit() const { return ws_.working_set_->get_limit(); }
-private:
-  bool inited_;
-  uint64_t tenant_id_;
-  int64_t put_count_;
-  int64_t fail_count_;
-  bool only_put_;
-  ObIKVCache<TestKey, TestValue> *pcache_;
-  ObKVCache<TestKey, TestValue> cache_;
-  ObCacheWorkingSet<TestKey, TestValue> ws_;
-  int64_t start_key_;
 };
 
 class TestNode : public ObKVCacheHazardNode{

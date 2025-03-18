@@ -57,6 +57,8 @@ struct ObIndexBlockTreePathItem
   ~ObIndexBlockTreePathItem() { reset(); }
 
   void reset();
+  void move_from(ObIndexBlockTreePathItem& item_ptr);
+  int assign(const ObIndexBlockTreePathItem& other);
 
   MacroBlockId macro_block_id_;
   int64_t curr_row_idx_;

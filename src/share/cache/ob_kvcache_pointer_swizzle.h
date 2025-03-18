@@ -38,7 +38,6 @@ private:
   bool load_node(ObPointerSwizzleNode &tmp_ps_node);
   void reset();
   void set(ObKVMemBlockHandle *mb_handle, const ObIKVCacheValue *value);
-  bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num);
 private:
   union ObNodeVersion
   {

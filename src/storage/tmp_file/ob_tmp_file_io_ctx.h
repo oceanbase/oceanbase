@@ -172,12 +172,18 @@ public:
   struct ObBlockCacheHandle final : public ObIReadHandle
   {
     ObBlockCacheHandle();
-    ObBlockCacheHandle(const ObTmpBlockValueHandle &block_handle_, char *dest_user_read_buf,
-                       const int64_t offset_in_src_data_buf,
-                       const int64_t read_size);
+    ObBlockCacheHandle(char* dest_user_read_buf, const int64_t offset_in_src_data_buf, const int64_t read_size);
     ~ObBlockCacheHandle();
-    ObBlockCacheHandle(const ObBlockCacheHandle &other);
-    ObBlockCacheHandle &operator=(const ObBlockCacheHandle &other);
+    int assign(const ObBlockCacheHandle &other)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(this->block_handle_.assign(other.block_handle_))) {
+        COMMON_LOG(WARN, "fail to assign page_handle", K(ret));
+      } else {
+        ObIReadHandle::operator=(other);
+      }
+      return ret;
+    }
     virtual bool is_valid() override;
     INHERIT_TO_STRING_KV("ObIReadHandle", ObIReadHandle, K(block_handle_));
     ObTmpBlockValueHandle block_handle_;
@@ -186,12 +192,21 @@ public:
   struct ObPageCacheHandle final : public ObIReadHandle
   {
     ObPageCacheHandle();
-    ObPageCacheHandle(const ObTmpPageValueHandle &page_handle, char *dest_user_read_buf,
-                      const int64_t offset_in_src_data_buf,
-                      const int64_t read_size);
+    ObPageCacheHandle(char* dest_user_read_buf, const int64_t offset_in_src_data_buf, const int64_t read_size);
     ~ObPageCacheHandle();
-    ObPageCacheHandle(const ObPageCacheHandle &other);
-    ObPageCacheHandle &operator=(const ObPageCacheHandle &other);
+    int init(const ObTmpPageValueHandle &page_handle) {
+      return page_handle_.assign(page_handle);
+    }
+    int assign(const ObPageCacheHandle &other)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(this->page_handle_.assign(other.page_handle_))) {
+        COMMON_LOG(WARN, "fail to assign page_handle", K(ret));
+      } else {
+        ObIReadHandle::operator=(other);
+      }
+      return ret;
+    }
     virtual bool is_valid() override;
     INHERIT_TO_STRING_KV("ObIReadHandle", ObIReadHandle, K(page_handle_));
     ObTmpPageValueHandle page_handle_;

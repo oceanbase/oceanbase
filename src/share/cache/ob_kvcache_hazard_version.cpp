@@ -324,7 +324,7 @@ int ObKVCacheHazardStation::print_current_status() const
           }
         }
         if (OB_SUCC(ret)) {
-          _OB_LOG(INFO, "[KVCACHE-HAZARD] hazard version status info: current_version: %8ld | min_version=%8ld | total_nodes_count: %8ld |\n%s",
+          _OB_LOG(INFO, "[KVCACHE-HAZARD-VERSION] hazard version status info: current_version: %8ld | min_version=%8ld | total_nodes_count: %8ld |\n%s",
               version_, get_min_version(), total_nodes_num, buf);
         }
       }

@@ -66,6 +66,8 @@ public:
   // A offline ls will disable replay status and kill all part_ctx on the follower.
   // We can not read the uncommitted data which has not replay commit log yet.
   int check_ls_offline_after_read();
+  bool need_trace() const;
+  ObStorageCheckID get_check_id() const { return ObStorageCheckID::STORAGE_ITER; }
 public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
   static constexpr const char LABEL[] = "RPTableScanIter";

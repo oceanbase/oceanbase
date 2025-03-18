@@ -80,6 +80,59 @@ void ObMicroBlockDataHandle::reset()
   allocator_ = nullptr;
 }
 
+void ObMicroBlockDataHandle::move_from(ObMicroBlockDataHandle& other)
+{
+  this->reset();
+
+  this->tenant_id_ = other.tenant_id_;
+  this->macro_block_id_ = other.macro_block_id_;
+  this->block_state_ = other.block_state_;
+  this->block_index_ = other.block_index_;
+  this->micro_info_ = other.micro_info_;
+  this->des_meta_ = other.des_meta_;
+  this->des_meta_.encrypt_key_ = encrypt_key_;
+  MEMCPY(encrypt_key_, other.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+  this->cache_handle_.move_from(other.cache_handle_);
+  this->io_handle_ = other.io_handle_;
+  this->handle_mgr_ = other.handle_mgr_;
+  this->allocator_ = other.allocator_;
+  this->loaded_block_data_ = other.loaded_block_data_;
+  this->is_loaded_block_ = other.is_loaded_block_;
+
+  other.handle_mgr_ = nullptr; // avoid double call of dec_hold_size
+  other.allocator_ = nullptr; // avoid double free
+  other.reset();
+}
+
+int ObMicroBlockDataHandle::assign(const ObMicroBlockDataHandle& other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (other.is_loaded_block_ && nullptr != other.allocator_ && other.loaded_block_data_.is_valid()) {
+      // current upper logic doesn't need to copy sync-loaded micro block data
+      ret = OB_NOT_SUPPORTED;
+    } else if (FALSE_IT(this->reset())) {
+    } else if (OB_FAIL(this->cache_handle_.assign(other.cache_handle_))) {
+      LOG_WARN("Fail to assign", K(ret));
+    } else {
+      this->tenant_id_ = other.tenant_id_;
+      this->macro_block_id_ = other.macro_block_id_;
+      this->block_state_ = other.block_state_;
+      this->block_index_ = other.block_index_;
+      this->micro_info_ = other.micro_info_;
+      this->des_meta_ = other.des_meta_;
+      this->des_meta_.encrypt_key_ = encrypt_key_;
+      MEMCPY(encrypt_key_, other.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+      this->io_handle_ = other.io_handle_;
+      // this->handle_mgr_ = other.handle_mgr_;
+      this->allocator_ = other.allocator_;
+      this->loaded_block_data_ = other.loaded_block_data_;
+      this->is_loaded_block_ = other.is_loaded_block_;
+    }
+  }
+  return ret;
+}
+
 bool ObMicroBlockDataHandle::match(const blocksstable::MacroBlockId &macro_id,
                                    const int32_t offset,
                                    const int32_t size) const
@@ -163,28 +216,6 @@ int64_t ObMicroBlockDataHandle::get_handle_size() const
   }
 
   return size;
-}
-
-ObMicroBlockDataHandle & ObMicroBlockDataHandle::operator=(const ObMicroBlockDataHandle &other)
-{
-  if (this != &other) {
-    reset();
-    tenant_id_ = other.tenant_id_;
-    macro_block_id_ = other.macro_block_id_;
-    block_state_ = other.block_state_;
-    block_index_ = other.block_index_;
-    micro_info_ = other.micro_info_;
-    des_meta_ = other.des_meta_;
-    des_meta_.encrypt_key_ = encrypt_key_;
-    MEMCPY(encrypt_key_, other.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    cache_handle_ = other.cache_handle_;
-    io_handle_ = other.io_handle_;
-    // TODO @lvling : do not copy handle_mgr_
-    allocator_ = other.allocator_;
-    loaded_block_data_ = other.loaded_block_data_;
-    is_loaded_block_ = other.is_loaded_block_;
-  }
-  return *this;
 }
 
 int ObMicroBlockDataHandle::get_loaded_block_data(ObMicroBlockData &block_data)

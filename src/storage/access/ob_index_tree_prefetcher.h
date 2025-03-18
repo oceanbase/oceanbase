@@ -84,6 +84,41 @@ public:
     index_block_info_.reset();
     row_handle_.reset();
   }
+  void move_from(ObSSTableReadHandle& other)
+  {
+    this->is_get_ = other.is_get_;
+    this->is_bf_contain_ = other.is_bf_contain_;
+    this->is_sorted_multi_get_ = other.is_sorted_multi_get_;
+    this->row_state_ = other.row_state_;
+    this->range_idx_ = other.range_idx_;
+    this->micro_begin_idx_ = other.micro_begin_idx_;
+    this->micro_end_idx_ = other.micro_end_idx_;
+    this->query_range_ = other.query_range_;
+    this->micro_handle_ = other.micro_handle_;
+    this->index_block_info_ = other.index_block_info_;
+    this->row_handle_.move_from(other.row_handle_);
+    other.reset();
+  }
+  int assign(const ObSSTableReadHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->row_handle_.assign(other.row_handle_))) {
+      COMMON_LOG(WARN, "Fail to assign row_handle_");
+      this->reset();
+    } else {
+      this->is_get_ = other.is_get_;
+      this->is_bf_contain_ = other.is_bf_contain_;
+      this->is_sorted_multi_get_ = other.is_sorted_multi_get_;
+      this->row_state_ = other.row_state_;
+      this->range_idx_ = other.range_idx_;
+      this->micro_begin_idx_ = other.micro_begin_idx_;
+      this->micro_end_idx_ = other.micro_end_idx_;
+      this->query_range_ = other.query_range_;
+      this->micro_handle_ = other.micro_handle_;
+      this->index_block_info_ = other.index_block_info_;
+    }
+    return ret;
+  }
   OB_INLINE bool is_valid() const { return nullptr != query_range_; }
   OB_INLINE bool need_read_block() const { return ObSSTableRowState::IN_BLOCK == row_state_; }
   OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey()
@@ -219,7 +254,7 @@ private:
   {
     return micro_handles_[level % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
   }
-  bool last_handle_hit(const ObMicroIndexInfo &block_info, const bool is_data, ObMicroBlockDataHandle &micro_handle);
+  int last_handle_hit(const ObMicroIndexInfo &block_info, const bool is_data, ObMicroBlockDataHandle &micro_handle, bool &hit);
 protected:
   static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
@@ -269,19 +304,48 @@ struct ObCachedLevelMicroDataHandle
     macro_id_.reset();
     handle_.reset();
   }
+  void move_from(ObCachedLevelMicroDataHandle& other)
+  {
+    this->is_valid_ = other.is_valid_;
+    this->is_leaf_block_ = other.is_leaf_block_;
+    this->rowkey_begin_idx_ = other.rowkey_begin_idx_;
+    this->rowkey_end_idx_ = other.rowkey_end_idx_;
+    this->macro_id_ = other.macro_id_;
+    this->handle_.move_from(other.handle_);
+    other.reset();
+  }
+  int assign(const ObCachedLevelMicroDataHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "Fail to assign handle_");
+      this->reset();
+    } else {
+      this->is_valid_ = other.is_valid_;
+      this->is_leaf_block_ = other.is_leaf_block_;
+      this->rowkey_begin_idx_ = other.rowkey_begin_idx_;
+      this->rowkey_end_idx_ = other.rowkey_end_idx_;
+      this->macro_id_ = other.macro_id_;
+    }
+    return ret;
+  }
   OB_INLINE bool is_covered(const int64_t rowkey_idx) const
   {
     return is_valid_ && rowkey_begin_idx_ <= rowkey_idx && rowkey_idx < rowkey_end_idx_;
   }
-  OB_INLINE void set_handle(const bool leaf, const int64_t begin_idx, const int64_t end_idx, const MacroBlockId &macro_id, const ObMicroBlockDataHandle &handle)
+  OB_INLINE int set_handle(const bool leaf, const int64_t begin_idx, const int64_t end_idx, const MacroBlockId &macro_id, const ObMicroBlockDataHandle &handle)
   {
-    is_valid_ = true;
-    is_leaf_block_ = leaf;
-    rowkey_begin_idx_ = begin_idx;
-    rowkey_end_idx_ = end_idx;
-    macro_id_ = macro_id;
-    handle_.reset();
-    handle_ = handle;
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(handle))) {
+      COMMON_LOG(WARN, "failed to set handle_");
+    } else {
+      is_valid_ = true;
+      is_leaf_block_ = leaf;
+      rowkey_begin_idx_ = begin_idx;
+      rowkey_end_idx_ = end_idx;
+      macro_id_ = macro_id;
+    }
+    return ret;
   }
   TO_STRING_KV(K_(is_valid), K_(is_leaf_block), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(macro_id));
   bool is_valid_;
@@ -321,6 +385,36 @@ public:
       for (int64_t i = 0; i < DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT; ++i) {
         micro_handles_[i].reset();
       }
+    }
+    void move_from(ObSSTableReadHandleExt &other)
+    {
+      ObSSTableReadHandle::move_from(other);
+      this->cur_level_ = other.cur_level_;
+      this->cur_prefetch_end_ = other.cur_prefetch_end_;
+      this->micro_handle_idx_ = other.micro_handle_idx_;
+      for (int64_t i = 0; i < DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT; ++i) {
+        this->micro_handles_[i].move_from(other.micro_handles_[i]);
+      }
+      other.reset();
+    }
+    int assign(const ObSSTableReadHandleExt &other)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(ObSSTableReadHandle::assign(other))) {
+        STORAGE_LOG(WARN, "Fail to assign ObSSTableReadHandle", K(ret));
+        this->reset();
+      } else {
+        this->cur_level_ = other.cur_level_;
+        this->cur_prefetch_end_ = other.cur_prefetch_end_;
+        this->micro_handle_idx_ = other.micro_handle_idx_;
+        for (int64_t i = 0; OB_SUCC(ret) && i < DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT; ++i) {
+          if (OB_FAIL(this->micro_handles_[i].assign(other.micro_handles_[i]))) {
+            STORAGE_LOG(WARN, "Fail to assign micro_handles_", K(ret));
+            reset();
+          }
+        }
+      }
+      return ret;
     }
     OB_INLINE ObMicroBlockDataHandle& get_read_handle()
     {

@@ -70,6 +70,23 @@ struct ObTmpBlockValueHandle final
 public:
   ObTmpBlockValueHandle() : value_(NULL), handle_() {}
   ~ObTmpBlockValueHandle() = default;
+  void move_from(ObTmpBlockValueHandle& other)
+  {
+    this->value_ = other.value_;
+    this->handle_.move_from(other.handle_);
+    other.reset();
+  }
+  int assign(const ObTmpBlockValueHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "failed to assign handle", K(ret));
+      this->value_ = nullptr;
+    } else {
+      this->value_ = other.value_;
+    }
+    return ret;
+  }
   bool is_valid() const { return NULL != value_ && handle_.is_valid(); }
   void reset()
   {
@@ -172,6 +189,23 @@ public:
   {
     handle_.reset();
     value_ = NULL;
+  }
+  void move_from(ObTmpPageValueHandle& other)
+  {
+    this->handle_.move_from(other.handle_);
+    this->value_ = other.value_;
+    other.reset();
+  }
+  int assign(const ObTmpPageValueHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "failed to assign handle", K(ret));
+      this->value_ = nullptr;
+    } else {
+      this->value_ = other.value_;
+    }
+    return ret;
   }
   TO_STRING_KV(KP(value_), K(handle_));
   ObTmpPageCacheValue *value_;

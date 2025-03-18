@@ -37,7 +37,8 @@ struct ObMicroBlockDataHandle {
   ObMicroBlockDataHandle();
   virtual ~ObMicroBlockDataHandle();
   void reset();
-
+  int assign(const ObMicroBlockDataHandle &other);
+  void move_from(ObMicroBlockDataHandle &other);
   int get_data_block_data(
       blocksstable::ObMacroBlockReader &block_reader,
       blocksstable::ObMicroBlockData &block_data);

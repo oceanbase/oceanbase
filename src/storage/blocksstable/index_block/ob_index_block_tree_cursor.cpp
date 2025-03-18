@@ -81,6 +81,44 @@ void ObIndexBlockTreePathItem::reset()
   block_from_cache_ = false;
 }
 
+void ObIndexBlockTreePathItem::move_from(ObIndexBlockTreePathItem& other)
+{
+  macro_block_id_ = other.macro_block_id_;
+  curr_row_idx_ = other.curr_row_idx_;
+  row_count_ = other.row_count_;
+  start_row_offset_ = other.start_row_offset_;
+  block_data_= other.block_data_;
+  cache_handle_.move_from(other.cache_handle_);
+  row_store_type_ = other.row_store_type_;
+  is_root_micro_block_ = other.is_root_micro_block_;
+  is_block_data_held_ = other.is_block_data_held_;
+  is_block_allocated_ = other.is_block_allocated_;
+  is_block_transformed_ = other.is_block_transformed_;
+  block_from_cache_ = other.block_from_cache_;
+}
+
+int ObIndexBlockTreePathItem::assign(const ObIndexBlockTreePathItem& other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cache_handle_.assign(other.cache_handle_))) {
+    LOG_WARN("fail to assign handle", K(ret));
+    reset();
+  } else {
+    macro_block_id_ = other.macro_block_id_;
+    curr_row_idx_ = other.curr_row_idx_;
+    row_count_ = other.row_count_;
+    start_row_offset_ = other.start_row_offset_;
+    block_data_ = other.block_data_;
+    row_store_type_ = other.row_store_type_;
+    is_root_micro_block_ = other.is_root_micro_block_;
+    is_block_data_held_ = other.is_block_data_held_;
+    is_block_allocated_ = other.is_block_allocated_;
+    is_block_transformed_ = other.is_block_transformed_;
+    block_from_cache_ = other.block_from_cache_;
+  }
+  return ret;
+}
+
 ObIndexBlockTreePath::ObIndexBlockTreePath()
   : allocator_(), item_stack_(allocator_), next_item_(nullptr), path_() {}
 
@@ -285,7 +323,7 @@ int ObIndexBlockTreePath::PathItemStack::expand()
   } else {
     MEMSET(new_var_buf, 0, new_alloc_size);
     for (int64_t i = 0; i < buf_capacity_ - MAX_TREE_FIX_BUF_LENGTH; ++i) {
-      reinterpret_cast<ObIndexBlockTreePathItem *>(new_var_buf)[i] = var_buf_[i];
+      reinterpret_cast<ObIndexBlockTreePathItem *>(new_var_buf)[i].move_from(var_buf_[i]);
     }
     if (nullptr != var_buf_) {
       allocator_->free(var_buf_);
@@ -956,7 +994,8 @@ int ObIndexBlockTreeCursor::get_child_micro_infos(
     LOG_WARN("Failed to get micro block infos", K(ret));
   } else if (OB_FAIL(get_micro_block_endkeys(range, endkey_allocator, micro_index_infos, endkeys))) {
     LOG_WARN("Failed to get micro block endkeys", K(ret));
-  } else if (FALSE_IT(hold_item = *curr_path_item_)) {
+  } else if (OB_FAIL(hold_item.assign(*curr_path_item_))) {
+    LOG_WARN("Failed to assign path item", K(ret));
   } else if (FALSE_IT(curr_path_item_->is_block_data_held_ = true)) {
   } else if (OB_FAIL(pull_up(false /* cascade */, false /* is_reverse_scan */))) {
     LOG_WARN("Failed to pull up to previous micro block", K(ret));

@@ -738,6 +738,8 @@ public:
   int check_is_finished(bool &is_finished);
   void clear_io_callback();
   ObIOCallback *get_io_callback();
+  bool need_trace() const;
+  storage::ObStorageCheckID get_check_id() const { return storage::ObStorageCheckID::IO_HANDLE; }
   TO_STRING_KV("io_result", to_cstring(result_));
 
 private:
@@ -745,7 +747,6 @@ private:
 
 private:
   ObIOResult *result_;
-  bool is_traced_;
 };
 
 struct ObTenantIOConfig final

@@ -990,7 +990,7 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
   ({                                                                                                            \
     type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
     if (OB_NOT_NULL(iter)) {                                                                                    \
-      storage::ObStorageLeakChecker::get_instance().handle_hold(iter, storage::ObStorageCheckID::STORAGE_ITER); \
+      storage::ObStorageLeakChecker::get_instance().handle_hold(iter); \
     }                                                                                                           \
     (iter);                                                                                                     \
   })
@@ -998,7 +998,7 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
 #define mtl_sop_return_checked(type, iter)                                                                               \
   do {                                                                                                          \
     if (OB_NOT_NULL(iter)) {                                                                                    \
-      storage::ObStorageLeakChecker::get_instance().handle_reset(iter, storage::ObStorageCheckID::STORAGE_ITER); \
+      storage::ObStorageLeakChecker::get_instance().handle_reset(iter); \
     }                                                                                                           \
     MTL(common::ObServerObjectPool<type>*)->return_object(iter);                                                 \
   } while (false)

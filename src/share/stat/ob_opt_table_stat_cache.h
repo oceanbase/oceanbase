@@ -39,16 +39,29 @@ struct ObOptTableStatHandle
 
   ObOptTableStatHandle()
     : stat_(nullptr), cache_(nullptr), handle_() {}
-  ObOptTableStatHandle(const ObOptTableStatHandle &other)
-  {
-    if (this != &other) {
-      *this = other;
-    }
-  }
   ~ObOptTableStatHandle()
   {
     stat_ = nullptr;
     cache_ = nullptr;
+  }
+  void move_from(ObOptTableStatHandle &other)
+  {
+    stat_ = other.stat_;
+    cache_ = other.cache_;
+    handle_.move_from(other.handle_);
+    other.reset();
+  }
+  int assign(const ObOptTableStatHandle &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "fail to assign kv cache handle", K(ret));
+      reset();
+    } else {
+      this->stat_ = other.stat_;
+      this->cache_ = other.cache_;
+    }
+    return ret;
   }
   void reset()
   {

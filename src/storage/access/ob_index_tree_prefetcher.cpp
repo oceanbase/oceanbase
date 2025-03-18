@@ -297,25 +297,27 @@ int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scan
   return ret;
 }
 
-bool ObIndexTreePrefetcher::last_handle_hit(const ObMicroIndexInfo &block_info,
+int ObIndexTreePrefetcher::last_handle_hit(const ObMicroIndexInfo &block_info,
                                             const bool is_data,
-                                            ObMicroBlockDataHandle &micro_handle)
+                                            ObMicroBlockDataHandle &micro_handle,
+                                            bool &hit)
 {
-  bool bret = false;
+  int ret = OB_SUCCESS;
+  hit = false;
   const MacroBlockId macro_id = block_info.get_macro_id();
   const int32_t offset = block_info.get_block_offset();
   const int32_t size = block_info.get_block_size();
   if (is_data) {
-    if (last_micro_block_handle_.in_block_state() && last_micro_block_handle_.match(macro_id, offset, size)) {
-      micro_handle = last_micro_block_handle_;
+    if (last_micro_block_handle_.in_block_state() && last_micro_block_handle_.match(macro_id, offset, size) &&
+        OB_SUCC(micro_handle.assign(last_micro_block_handle_))) {
       EVENT_INC(ObStatEventIds::DATA_BLOCK_CACHE_HIT);
-      bret = true;
+      hit = true;
     }
   } else if (micro_handle.match(macro_id, offset, size)) {
     EVENT_INC(ObStatEventIds::INDEX_BLOCK_CACHE_HIT);
-    bret = true;
+    hit = true;
   }
-  return bret;
+  return ret;
 }
 
 int ObIndexTreePrefetcher::check_bloom_filter(
@@ -397,10 +399,13 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     const bool need_submit_io)
 {
   int ret = OB_SUCCESS;
-  if (need_cache_last_block() && last_handle_hit(index_block_info, is_data, micro_handle)) {
+  bool hit;
+  if (need_cache_last_block() && OB_SUCC(last_handle_hit(index_block_info, is_data, micro_handle, hit)) && hit) {
     ++access_ctx_->table_store_stat_.block_cache_hit_cnt_;
-    LOG_DEBUG("last micro block handle hits", K(is_data), K(index_block_info),
-                                              K(last_micro_block_handle_), K(micro_handle));
+    LOG_DEBUG(
+        "last micro block handle hits", K(is_data), K(index_block_info), K(last_micro_block_handle_), K(micro_handle));
+  } else if (OB_FAIL(ret)) {
+    LOG_WARN("Fail to check last micro block handle hit", K(ret));
   } else if (OB_FAIL(access_ctx_->micro_block_handle_mgr_.get_micro_block_handle(
                          access_ctx_,
                          index_block_info,
@@ -415,7 +420,9 @@ int ObIndexTreePrefetcher::prefetch_block_data(
       LOG_WARN("Fail to get micro block handle from handle mgr", K(ret));
     }
   } else if (need_cache_last_block() && is_data && micro_handle.in_block_state()) {
-    last_micro_block_handle_ = micro_handle;
+    if (OB_FAIL(last_micro_block_handle_.assign(micro_handle))) {
+      LOG_WARN("Fail to assign last micro block handle", K(ret));
+    }
   }
   return ret;
 }
@@ -748,12 +755,13 @@ int ObIndexTreeMultiPrefetcher::drill_down(
     } else if (FALSE_IT(read_handle.set_cur_micro_handle(next_handle))) {
     } else if (pre_locate &&
                ObSSTableMicroBlockState::IN_BLOCK_CACHE == next_handle.block_state_ &&
-               index_block_info.rowkey_end_idx_ - index_block_info.rowkey_begin_idx_ > 1) {
+               index_block_info.rowkey_end_idx_ - index_block_info.rowkey_begin_idx_ > 1 && OB_FAIL(
       level_handles_.at(read_handle.cur_level_).set_handle(index_block_info.is_leaf_block(),
                                                            index_block_info.rowkey_begin_idx_,
                                                            index_block_info.rowkey_end_idx_,
                                                            index_block_info.get_macro_id(),
-                                                           next_handle);
+                                                           next_handle))) {
+                                                            LOG_WARN("failed to set handle", K(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (cur_level_is_leaf) {

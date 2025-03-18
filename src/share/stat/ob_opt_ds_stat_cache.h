@@ -39,16 +39,29 @@ struct ObOptDSStatHandle
 
   ObOptDSStatHandle()
     : stat_(nullptr), cache_(nullptr), handle_() {}
-  ObOptDSStatHandle(const ObOptDSStatHandle &other)
-  {
-    if (this != &other) {
-      *this = other;
-    }
-  }
   ~ObOptDSStatHandle()
   {
     stat_ = nullptr;
     cache_ = nullptr;
+  }
+  void move_from(ObOptDSStatHandle &other)
+  {
+    stat_ = other.stat_;
+    cache_ = other.cache_;
+    handle_.move_from(other.handle_);
+    other.reset();
+  }
+  int assign(const ObOptDSStatHandle& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "Fail to assign", K(ret));
+      this->reset();
+    } else {
+      stat_ = other.stat_;
+      cache_ = other.cache_;
+    }
+    return ret;
   }
   void reset()
   {

@@ -11,6 +11,8 @@
 
 #include "ob_kvcache_pointer_swizzle.h"
 #include "storage/blocksstable/ob_micro_block_cache.h"
+#include "storage/ob_storage_checked_object_base.h"
+#include "storage/ob_storage_leak_checker.h"
 
 namespace oceanbase
 {
@@ -60,6 +62,7 @@ int ObPointerSwizzleNode::access_mem_ptr(blocksstable::ObMicroBlockBufferHandle 
 {
   int ret = OB_SUCCESS;
   ObPointerSwizzleNode tmp_ps_node;
+  bool protect_success;
   if (nullptr == value_) {
     // The attempt to check if value_ is nullptr (a dirty read) might indicate that
     // swizzling has never occurred or that it has already been unswizzled.
@@ -67,17 +70,19 @@ int ObPointerSwizzleNode::access_mem_ptr(blocksstable::ObMicroBlockBufferHandle 
   } else if (!load_node(tmp_ps_node)) {
     // The multithreaded safe loading of the node failed
     ret = OB_READ_NOTHING;
-  } else if (!add_handle_ref(tmp_ps_node.mb_handle_, tmp_ps_node.seq_num_)) {
+  } else if (OB_FAIL(handle.handle_.hazptr_holder_.protect(protect_success, tmp_ps_node.mb_handle_, tmp_ps_node.seq_num_))) {
+    COMMON_LOG(WARN, "protect failed", KP(tmp_ps_node.mb_handle_));
+  } else if (!protect_success) {
     // The memory for value_ corresponding to the node has been released;
     // the node is reset to improve efficiency, whether the node is reset or not is
     // independent of the release of memory for value_.
     unswizzle();
     ret = OB_READ_NOTHING;
   } else {
+    ObStorageLeakChecker::get_instance().handle_hold(&handle.handle_);
     ++tmp_ps_node.mb_handle_->recent_get_cnt_;
     ATOMIC_AAF(&tmp_ps_node.mb_handle_->get_cnt_, 1);
     tmp_ps_node.mb_handle_->inst_->status_.total_hit_cnt_.inc();
-    handle.set_mb_handle(tmp_ps_node.mb_handle_);
     handle.set_micro_block(reinterpret_cast<const blocksstable::ObMicroBlockCacheValue*>(tmp_ps_node.value_));
     COMMON_LOG(DEBUG, "access the memory successfully which the swizzling pointer points to", KPC(this));
   }
@@ -122,16 +127,7 @@ void ObPointerSwizzleNode::set(ObKVMemBlockHandle *mb_handle, const ObIKVCacheVa
 {
   mb_handle_ = mb_handle;
   value_ = value;
-  seq_num_ = mb_handle->get_seq_num();
-}
-
-bool ObPointerSwizzleNode::add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num)
-{
-  bool bret = false;
-  if (NULL != mb_handle) {
-    bret = (OB_SUCCESS == mb_handle->handle_ref_.check_seq_num_and_inc_ref_cnt(seq_num));
-  }
-  return bret;
+  seq_num_ = mb_handle->get_seq_num_for_node();
 }
 
 ObPointerSwizzleNode::ObPointerSwizzleGuard::ObPointerSwizzleGuard(ObNodeVersion &cur_version)

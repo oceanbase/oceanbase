@@ -32,6 +32,7 @@ namespace oceanbase
 namespace common
 {
 class ObKVCacheInstMap;
+class HazardDomain;
 struct ObTenantMBList
 {
   ObTenantMBList() { reset(); }
@@ -39,11 +40,11 @@ struct ObTenantMBList
 
   int init(const uint64_t tenant_id);
   void reset() {
-    tenant_id_ = common::OB_INVALID_ID;
     head_.reset();
     head_.prev_ = &head_;
     head_.next_ = &head_;
     resource_mgr_.reset();
+    tenant_id_ = common::OB_INVALID_ID;
     ref_cnt_ = 0;
     inited_ = false;
   }
@@ -52,9 +53,9 @@ struct ObTenantMBList
   int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
 
-  uint64_t tenant_id_;
   ObKVMemBlockHandle head_;
   lib::ObTenantResourceMgrHandle resource_mgr_;
+  uint64_t tenant_id_;
   int64_t ref_cnt_;
   bool inited_;
 };

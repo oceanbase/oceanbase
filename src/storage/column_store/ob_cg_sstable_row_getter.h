@@ -45,6 +45,23 @@ public:
       ObSSTableWrapper &wrapper,
       const blocksstable::ObDatumRowkey &idx_key);
   int get_next_row(ObMacroBlockReader &block_reader, const blocksstable::ObDatumRow *&store_row);
+  int assign(const ObCGGetter &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->read_handle_.assign(other.read_handle_))) {
+      COMMON_LOG(WARN, "failed to assign read handle", K(ret));
+      this->reset();
+    } else {
+      this->is_inited_ = other.is_inited_;
+      this->is_same_data_block_ = other.is_same_data_block_;
+      this->sstable_ = other.sstable_;
+      this->table_wrapper_ = other.table_wrapper_;
+      this->iter_param_ = other.iter_param_;
+      this->access_ctx_ = other.access_ctx_;
+      this->micro_getter_ = other.micro_getter_;
+    }
+    return ret;
+  }
   TO_STRING_KV(K_(is_inited), K_(is_same_data_block), K_(prefetcher), KPC_(sstable));
 
 protected:

@@ -51,6 +51,8 @@ struct ObMicroBlockDataHandle
       const int64_t data_checksum,
       ObMicroBlockHandleMgr *handle_mgr);
   void reset();
+  void move_from(ObMicroBlockDataHandle& other);
+  int assign(const ObMicroBlockDataHandle& other);
   bool match(const blocksstable::MacroBlockId &macro_id,
              const int32_t offset,
              const int32_t size) const;
@@ -60,7 +62,6 @@ struct ObMicroBlockDataHandle
       const bool is_data_block = true);
   int get_cached_index_block_data(blocksstable::ObMicroBlockData &index_block);
   int64_t get_handle_size() const;
-  ObMicroBlockDataHandle & operator=(const ObMicroBlockDataHandle &other);
   OB_INLINE bool in_block_state() const
   { return ObSSTableMicroBlockState::IN_BLOCK_CACHE == block_state_ || ObSSTableMicroBlockState::IN_BLOCK_IO == block_state_; }
   OB_INLINE bool need_multi_io() const

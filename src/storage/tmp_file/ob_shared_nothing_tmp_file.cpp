@@ -297,9 +297,8 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
       LOG_DEBUG("hit block cache", K(block_index), K(fd_), K(io_ctx));
       char *read_buf = io_ctx.get_todo_buffer();
       const int64_t read_size = end_read_offset_in_block - begin_read_offset_in_block;
-      ObTmpFileIOCtx::ObBlockCacheHandle block_cache_handle(block_value_handle, read_buf,
-                                                            begin_read_offset_in_block,
-                                                            read_size);
+      ObTmpFileIOCtx::ObBlockCacheHandle block_cache_handle(read_buf, begin_read_offset_in_block, read_size);
+      block_cache_handle.block_handle_.move_from(block_value_handle);
       if (OB_FAIL(io_ctx.get_block_cache_handles().push_back(block_cache_handle))) {
         LOG_WARN("Fail to push back into block_handles", KR(ret), K(fd_));
       } else if (OB_FAIL(io_ctx.update_data_size(read_size))) {
@@ -685,15 +684,14 @@ int ObSharedNothingTmpFile::inner_read_continuous_cached_pages_(const int64_t be
   int64_t read_offset = begin_read_offset_in_block;
   int64_t cur_array_idx = start_array_idx;
   for (int64_t cached_page_idx = begin_page_idx; OB_SUCC(ret) && cached_page_idx <= end_page_idx; cached_page_idx++) {
-    ObTmpPageValueHandle p_handle = page_value_handles.at(cur_array_idx++);
     char *read_buf = io_ctx.get_todo_buffer();
     const int64_t cur_page_end_offset = get_page_end_offset_by_virtual_id_(cached_page_idx);
     const int64_t read_size = MIN(cur_page_end_offset, end_read_offset_in_block) - read_offset;
     const int64_t read_offset_in_page = get_offset_in_page_(read_offset);
-    ObTmpFileIOCtx::ObPageCacheHandle page_handle(p_handle, read_buf,
-                                                  read_offset_in_page,
-                                                  read_size);
-    if (OB_FAIL(io_ctx.get_page_cache_handles().push_back(page_handle))) {
+    ObTmpFileIOCtx::ObPageCacheHandle page_handle(read_buf, read_offset_in_page, read_size);
+    if (OB_FAIL(page_handle.page_handle_.assign(page_value_handles.at(cur_array_idx++)))) {
+      LOG_WARN("Failed to assign page_handle_", KR(ret));
+    } else if (OB_FAIL(io_ctx.get_page_cache_handles().push_back(page_handle))) {
       LOG_WARN("Fail to push back into page_handles", KR(ret), K(fd_));
     } else if (OB_FAIL(io_ctx.update_data_size(read_size))) {
       LOG_WARN("fail to update data size", KR(ret), K(fd_), K(read_size));

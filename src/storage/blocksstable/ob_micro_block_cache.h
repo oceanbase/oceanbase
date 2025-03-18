@@ -124,6 +124,21 @@ class ObMicroBlockBufferHandle
 public:
   ObMicroBlockBufferHandle() : micro_block_(NULL) {}
   ~ObMicroBlockBufferHandle() {}
+  void move_from(ObMicroBlockBufferHandle& other) {
+    this->handle_.move_from(other.handle_);
+    this->micro_block_ = other.micro_block_;
+    other.reset();
+  }
+  int assign(const ObMicroBlockBufferHandle& other) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->handle_.assign(other.handle_))) {
+      COMMON_LOG(WARN, "failed to assign micro block buffer handle", K(ret));
+      this->reset();
+    } else {
+      this->micro_block_ = other.micro_block_;
+    }
+    return ret;
+  }
   void reset() { micro_block_ = NULL; handle_.reset(); }
   inline const ObMicroBlockData* get_block_data() const
   { return is_valid() ? &(micro_block_->get_block_data()) : NULL; }
@@ -131,11 +146,11 @@ public:
   inline bool is_valid() const { return NULL != micro_block_ && handle_.is_valid(); }
   inline ObKVMemBlockHandle* get_mb_handle() const { return handle_.get_mb_handle(); }
   inline const ObMicroBlockCacheValue* get_micro_block() const { return micro_block_; }
-  inline void set_mb_handle(ObKVMemBlockHandle *mb_handle) { handle_.set_mb_handle(mb_handle); }
   inline void set_micro_block(const ObMicroBlockCacheValue *micro_block) { micro_block_ = micro_block; }
   TO_STRING_KV(K_(handle), KP_(micro_block));
 private:
   friend class ObIMicroBlockCache;
+  friend class common::ObPointerSwizzleNode;
   common::ObKVCacheHandle handle_;
   const ObMicroBlockCacheValue *micro_block_;
 };

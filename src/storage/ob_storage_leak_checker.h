@@ -22,15 +22,6 @@ namespace oceanbase
 namespace storage
 {
 
-enum class ObStorageCheckID
-{
-  INVALID_ID,
-  ALL_CACHE = MAX_CACHE_NUM,
-  IO_HANDLE,
-  STORAGE_ITER
-};
-
-
 inline bool is_cache(ObStorageCheckID id) {
   return (int)id > OB_CACHE_INVALID && (int)id <= (int)ObStorageCheckID::ALL_CACHE;
 }
@@ -85,13 +76,17 @@ public:
   static constexpr int MEMORY_LIMIT = 128L << 20;
   static constexpr int MAP_SIZE_LIMIT = MEMORY_LIMIT / sizeof(ObStorageCheckerValue);
 
-  static ObStorageLeakChecker &get_instance();
+  static ObStorageLeakChecker &get_instance() { return instance_; }
   void reset();
   // return if is recorded
-  bool handle_hold(ObStorageCheckedObjectBase* handle, const ObStorageCheckID type_id);
-  void handle_reset(ObStorageCheckedObjectBase* handle, const ObStorageCheckID type_id);
+  template<typename T>
+  bool handle_hold(T* handle, bool errsim_bypass = false);
+  template<typename T>
+  void handle_reset(T* handle);
   int get_aggregate_bt_info(hash::ObHashMap<ObStorageCheckerValue, int64_t> &bt_info);
 private:
+  void inner_handle_hold(ObStorageCheckedObjectBase* handle, const ObStorageCheckID type_id);
+  void inner_handle_reset(ObStorageCheckedObjectBase* handle, const ObStorageCheckID type_id);
   static const int64_t HANDLE_BT_MAP_BUCKET_NUM = 10000;
 
   ObStorageLeakChecker();
@@ -99,9 +94,27 @@ private:
 
   static ObStorageLeakChecker instance_;
 
-  ObStorageCheckID check_id_;
   hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue> checker_info_;
 };
+
+template<typename T>
+OB_INLINE bool ObStorageLeakChecker::handle_hold(T* handle, bool errsim_bypass)
+{
+  bool b_ret = false;
+  if (OB_UNLIKELY(handle->need_trace() || errsim_bypass)) {
+    inner_handle_hold(static_cast<ObStorageCheckedObjectBase*>(handle), handle->get_check_id());
+    b_ret = true;
+  }
+  return b_ret;
+}
+
+template<typename T>
+OB_INLINE void ObStorageLeakChecker::handle_reset(T* handle)
+{
+  if (OB_UNLIKELY(handle->is_traced())) {
+    inner_handle_reset(static_cast<ObStorageCheckedObjectBase*>(handle), handle->get_check_id());
+  }
+}
 
 
 }  // storage

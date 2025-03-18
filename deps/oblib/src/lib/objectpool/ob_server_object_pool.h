@@ -399,31 +399,22 @@ inline ObServerObjectPool<T>& get_server_object_pool() {
   return w.instance_;
 }
 
-#ifdef ENABLE_DEBUG_LOG
 #define sop_borrow(type)                                                                                        \
   ({                                                                                                            \
     type *iter = common::get_server_object_pool<type>().borrow_object();                                        \
     if (OB_NOT_NULL(iter)) {                                                                                    \
-      storage::ObStorageLeakChecker::get_instance().handle_hold(iter, storage::ObStorageCheckID::STORAGE_ITER); \
+      storage::ObStorageLeakChecker::get_instance().handle_hold(iter); \
     }                                                                                                           \
     (iter);                                                                                                     \
   })
-#else
-#define sop_borrow(type) common::get_server_object_pool<type>().borrow_object()
-#endif
 
-#ifdef ENABLE_DEBUG_LOG
 #define sop_return(type, ptr)                                                                                   \
   do {                                                                                                          \
     if (OB_NOT_NULL(ptr)) {                                                                                     \
-      storage::ObStorageLeakChecker::get_instance().handle_reset(ptr, storage::ObStorageCheckID::STORAGE_ITER); \
+      storage::ObStorageLeakChecker::get_instance().handle_reset(ptr); \
     }                                                                                                           \
     common::get_server_object_pool<type>().return_object(ptr);                                                  \
   } while (false)
-#else
-#define sop_return(type, ptr) common::get_server_object_pool<type>().return_object(ptr)
-#endif
-
 
 }
 }

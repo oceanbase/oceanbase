@@ -80,8 +80,9 @@ int ObDynamicSampling::add_ds_result_cache(ObIArray<ObDSResultItem> &ds_result_i
         if (OB_UNLIKELY(logical_idx < 0 || logical_idx >= ds_result_items.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(ret), K(logical_idx), K(ds_result_items));
+        } else if (OB_FAIL(ds_result_items.at(i).stat_handle_.assign(ds_result_items.at(logical_idx).stat_handle_))) {
+          LOG_WARN("failed to assign stat handle", K(ret));
         } else {
-          ds_result_items.at(i).stat_handle_ =  ds_result_items.at(logical_idx).stat_handle_;
           ds_result_items.at(i).stat_ = NULL;
         }
       } else if (OB_FAIL(ctx_->get_opt_stat_manager()->add_ds_stat_cache(ds_result_items.at(i).stat_key_,

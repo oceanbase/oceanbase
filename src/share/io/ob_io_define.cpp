@@ -1733,8 +1733,11 @@ bool ObPhyQueue::reach_adjust_interval()
 }
 
 /******************             IOHandle              **********************/
+
+ERRSIM_POINT_DEF(ERRSIM_IO_HANDLE_TRACE);
+
 ObIOHandle::ObIOHandle()
-  : result_(nullptr), is_traced_(false)
+  : result_(nullptr)
 {
 }
 
@@ -1769,7 +1772,7 @@ int ObIOHandle::set_result(ObIOResult &result)
   result.inc_ref("handle_inc"); // ref for handle
   result.inc_out_ref();
   result_ = &result;
-  is_traced_ = storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::IO_HANDLE);
+  storage::ObStorageLeakChecker::get_instance().handle_hold(this);
   return ret;
 }
 
@@ -1957,9 +1960,7 @@ int64_t ObIOHandle::get_rt() const
 void ObIOHandle::reset()
 {
   if (OB_NOT_NULL(result_)) {
-    if (is_traced_) {
-      storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::IO_HANDLE);
-    }
+    storage::ObStorageLeakChecker::get_instance().handle_reset(this);
     result_->dec_out_ref();
     result_->dec_ref("handle_dec"); // ref for handle
     result_ = nullptr;
@@ -1987,6 +1988,11 @@ ObIOCallback *ObIOHandle::get_io_callback()
     callback = result_->io_callback_;
   }
   return callback;
+}
+
+bool ObIOHandle::need_trace() const
+{
+  return is_valid() && OB_SUCCESS != ERRSIM_IO_HANDLE_TRACE;
 }
 
 /******************             TenantIOConfig              **********************/

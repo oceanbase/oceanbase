@@ -16,16 +16,19 @@
 
 #include "lib/allocator/ob_retire_station.h"
 #include "lib/resource/ob_cache_washer.h"
-#include "ob_kvcache_struct.h"
-#include "ob_kvcache_inst_map.h"
-#include "ob_cache_utils.h"
+#include "lib/resource/ob_resource_mgr.h"
+#include "share/cache/ob_cache_utils.h"
+#include "share/cache/ob_kvcache_hazard_pointer.h"
+#include "share/cache/ob_kvcache_inst_map.h"
+#include "share/cache/ob_kvcache_struct.h"
 #include "share/ob_i_tenant_mem_limit_getter.h"
 
 namespace oceanbase
 {
 namespace common
 {
-template <typename MBWrapper>
+class HazptrHolder;
+class ObKVGlobalCache;
 class ObIKVCacheStore
 {
 public:
@@ -34,24 +37,22 @@ public:
     const ObIKVCacheKey &key,
     const ObIKVCacheValue &value,
     ObKVCachePair *&kvpair,
-    MBWrapper *&mb_wrapper,
+    HazptrHolder& hazptr_holder,
     const enum ObKVCachePolicy policy = LRU);
   int alloc_kvpair(
       ObKVCacheInst &inst,
       const int64_t key_size,
       const int64_t value_size,
       ObKVCachePair *&kvpair,
-      MBWrapper *&mb_wrapper,
+      HazptrHolder& hazptr_holder,
       const enum ObKVCachePolicy policy = LRU);
 protected:
-  virtual bool add_handle_ref(MBWrapper *mb_wrapper) = 0;
-  virtual uint32_t de_handle_ref(MBWrapper *mb_wrapper, const bool do_retire = true) = 0;
   virtual int alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
-      const int64_t block_size, MBWrapper *&mb_wrapper) = 0;
-  virtual int free(MBWrapper *mb_wrapper) = 0;
-  virtual MBWrapper *&get_curr_mb(ObKVCacheInst &inst, const enum ObKVCachePolicy policy) = 0;
+      const int64_t block_size, ObKVMemBlockHandle *&mb_handle) = 0;
+  virtual int free(ObKVMemBlockHandle *mb_handle) = 0;
+  virtual ObKVMemBlockHandle *&get_curr_mb(ObKVCacheInst &inst, const enum ObKVCachePolicy policy) = 0;
   virtual bool mb_status_match(ObKVCacheInst &inst,
-      const enum ObKVCachePolicy policy, MBWrapper *mb_wrapper) = 0;
+      const enum ObKVCachePolicy policy, ObKVMemBlockHandle *mb_handle) = 0;
   virtual int64_t get_block_size() const = 0;
 private:
   int alloc_kvpair_without_retry(
@@ -59,11 +60,11 @@ private:
       const int64_t key_size,
       const int64_t value_size,
       ObKVCachePair *&kvpair,
-      MBWrapper *&mb_wrapper,
+      HazptrHolder &hazptr_holder,
       const enum ObKVCachePolicy policy);
 };
 
-class ObKVCacheStore final : public ObIKVCacheStore<ObKVMemBlockHandle>,
+class ObKVCacheStore final : public ObIKVCacheStore,
     public ObIMBHandleAllocator
 {
 public:
@@ -73,8 +74,11 @@ public:
            const int64_t block_size, const ObITenantMemLimitGetter &mem_limit_getter);
   void destroy();
   int set_priority(const int64_t cache_id, const int64_t old_priority, const int64_t new_priority);
-  void refresh_score();
+  int refresh_score();
   bool wash();
+  bool add_handle_ref(ObKVMemBlockHandle *mb_handle) const;
+  bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const int64_t seq_num) const;
+  int64_t de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true);
   int get_avg_cache_item_size(const uint64_t tenant_id, const int64_t cache_id,
                               int64_t &avg_cache_item_size);
 
@@ -94,14 +98,9 @@ public:
   virtual int alloc_mbhandle(ObKVCacheInst &inst, ObKVMemBlockHandle *&mb_handle);
   virtual int alloc_mbhandle(const ObKVCacheInstKey &inst_key, ObKVMemBlockHandle *&mb_handle);
   virtual int free_mbhandle(ObKVMemBlockHandle *mb_handle, const bool do_retire);
-  virtual int mark_washable(ObKVMemBlockHandle *mb_handle);
 
-  virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num);
-  virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle);
-  virtual uint32_t de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true) override;
-  int64_t get_handle_ref_cnt(const ObKVMemBlockHandle *mb_handle);
   virtual int64_t get_block_size() const { return block_size_; }
-  // implement functions of ObIMBWrapperMgr
+  // implement functions of ObIObKVMemBlockHandleMgr
   virtual int alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
       const int64_t block_size, ObKVMemBlockHandle *&mb_handle);
   virtual int free(ObKVMemBlockHandle *mb_handle);
@@ -110,18 +109,20 @@ public:
       const enum ObKVCachePolicy policy, ObKVMemBlockHandle *mb_handle);
   int get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
   int print_tenant_memblock_info(ObDLink *link);
+  static int64_t compute_mb_handle_num(const int64_t max_cache_size, const int64_t block_size)
+  {
+    return max_cache_size / block_size + 2 * (WASH_THREAD_RETIRE_LIMIT + RETIRE_LIMIT * OB_MAX_THREAD_NUM);
+  }
 
 private:
-  int try_flush_washable_mb(
-    const uint64_t tenant_id, 
-    lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks, 
-    const int64_t cache_id = -1, 
-    const int64_t size_need_washed = INT64_MAX,
-    const bool force_flush = false);
-  int inner_push_memblock_info(const ObKVMemBlockHandle &handle, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
+  int try_flush_washable_mb(const uint64_t tenant_id, lib::ObICacheWasher::ObCacheMemBlock*& wash_blocks,
+            const int64_t cache_id = -1, const int64_t size_need_washed = INT64_MAX, const bool force_flush = false);
+  int inner_flush_washable_mb(const int64_t cache_id, const int64_t size_to_wash, int64_t& size_washed,
+    lib::ObICacheWasher::ObCacheMemBlock*& wash_blocks, ObTenantMBListHandle& list_handle, bool force_flush);
+  void free_mbs(lib::ObTenantResourceMgrHandle& resource_handle, int64_t tenant_id, lib::ObICacheWasher::ObCacheMemBlock* wash_blocks);
+  int inner_push_memblock_info(const ObKVMemBlockHandle &handle, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos, int64_t tenant_id);
   void purge_mb_handle_retire_station();
 
-private:
   static const int64_t SYNC_WASH_MB_TIMEOUT_US = 100 * 1000; // 100ms
   static const int64_t RETIRE_LIMIT = 16;
   static const int64_t WASH_THREAD_RETIRE_LIMIT = 2048;
@@ -136,10 +137,42 @@ private:
   static const int64_t MIN_GLOBAL_WASH_THRESHOLD = 8L;  // 8 * 2M = 16M
   static const int64_t FLUSH_PRESERVE_TENANT_NUM = 10; // number preversed for flush
   static const int64_t DEFAULT_TENANT_BUCKET_NUM = 64;
-  struct StoreMBHandleCmp
-  {
-    bool operator()(const ObKVMemBlockHandle *a, const ObKVMemBlockHandle *b) const;
-  };
+  static const int64_t DEFAULT_MAX_CACHE_SIZE = 1024L * 1024L * 1024L * 1024L;  //1T
+  static const int64_t MAX_MB_NUM = DEFAULT_MAX_CACHE_SIZE / lib::ACHUNK_SIZE;
+
+public:
+  static const int64_t MAX_MB_HANDLE_NUM =
+        MAX_MB_NUM + 2 * (ObKVCacheStore::WASH_THREAD_RETIRE_LIMIT + ObKVCacheStore::RETIRE_LIMIT * OB_MAX_THREAD_NUM);
+
+private:
+struct WashCallBack {
+  WashCallBack(ObKVCacheStore& store, uint64_t& freed_mem_size) : store_(store), freed_mem_size_(freed_mem_size) {}
+  void operator()(ObKVMemBlockHandle *mb_handle);
+  ObKVCacheStore& store_;
+  uint64_t& freed_mem_size_;
+};
+struct SyncWashCallBack {
+  SyncWashCallBack(ObKVCacheStore& store, HazardList& retire_list, lib::ObICacheWasher::ObCacheMemBlock*& wash_blocks,
+      int64_t& size_washed, const int64_t size_to_wash, const int64_t tenant_id)
+      : store_(store),
+        retire_list_(retire_list),
+        wash_blocks_(wash_blocks),
+        size_washed_(size_washed),
+        size_to_wash_(size_to_wash),
+        tenant_id_(tenant_id)
+  {}
+  void operator()(ObKVMemBlockHandle *mb_handle);
+  ObKVCacheStore& store_;
+  HazardList& retire_list_;
+  lib::ObICacheWasher::ObCacheMemBlock*& wash_blocks_;
+  int64_t& size_washed_;
+  const int64_t size_to_wash_;
+  const int64_t tenant_id_;
+};
+
+struct StoreMBHandleCmp {
+  bool operator()(const ObKVMemBlockHandle* a, const ObKVMemBlockHandle* b) const;
+};
   struct WashHeap
   {
   public:
@@ -210,8 +243,7 @@ private:
 
   void *alloc_mb(lib::ObTenantResourceMgrHandle &resource_handle,
         const uint64_t tenant_id,
-        const int64_t block_size,
-        const int64_t wash_cache_id = -1);
+        const int64_t block_size);
   void free_mb(lib::ObTenantResourceMgrHandle &resource_handle,
         const uint64_t tenant_id, void *ptr);
 
@@ -239,7 +271,6 @@ private:
   int64_t cur_mb_num_;
   int64_t max_mb_num_;
   int64_t block_size_;
-  int64_t aligned_block_size_;
   int64_t block_payload_size_;
   ObKVMemBlockHandle *mb_handles_;
   ObFixedQueue<ObKVMemBlockHandle> mb_handles_pool_;
@@ -259,137 +290,8 @@ private:
   const ObITenantMemLimitGetter *mem_limit_getter_;
 };
 
-template <typename MBWrapper>
-int ObIKVCacheStore<MBWrapper>::store(
-    ObKVCacheInst &inst,
-    const ObIKVCacheKey &key,
-    const ObIKVCacheValue &value,
-    ObKVCachePair *&kvpair,
-    MBWrapper *&mb_wrapper,
-    const enum ObKVCachePolicy policy)
-{
-  int ret = common::OB_SUCCESS;
-  const int64_t key_size = key.size();
-  const int64_t value_size = value.size();
-  if (OB_FAIL(alloc_kvpair(inst, key_size, value_size, kvpair, mb_wrapper, policy))) {
-    COMMON_LOG(WARN, "failed to alloc", K(ret), K(key_size), K(value_size));
-  } else {
-    if (OB_FAIL(key.deep_copy(reinterpret_cast<char *>(kvpair->key_), key_size, kvpair->key_))) {
-      COMMON_LOG(WARN, "failed to deep copy key", K(ret));
-    } else if (OB_FAIL(value.deep_copy(reinterpret_cast<char *>(kvpair->value_), value_size, kvpair->value_))) {
-      COMMON_LOG(WARN, "failed to deep copy value", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != mb_wrapper) {
-        de_handle_ref(mb_wrapper);
-        mb_wrapper = nullptr;
-      }
-      kvpair = nullptr;
-    }
-  }
-  return ret;
-}
-
-template <typename MBWrapper>
-int ObIKVCacheStore<MBWrapper>::alloc_kvpair(
-    ObKVCacheInst &inst,
-    const int64_t key_size,
-    const int64_t value_size,
-    ObKVCachePair *&kvpair,
-    MBWrapper *&mb_wrapper,
-    const enum ObKVCachePolicy policy)
-{
-  int ret = OB_SUCCESS;
-  int64_t tenant_id = inst.tenant_id_;
-  ret = alloc_kvpair_without_retry(inst, key_size, value_size, kvpair, mb_wrapper, policy);
-  if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-    int64_t washed_size = ObMallocAllocator::get_instance()->sync_wash(tenant_id, 0, INT64_MAX);
-    if (washed_size > 0) {
-      ret = alloc_kvpair_without_retry(inst, key_size, value_size, kvpair, mb_wrapper, policy);
-      COMMON_LOG(INFO, "[MEM][WASH] sync wash succeed", K(ret), K(tenant_id), K(washed_size));
-    }
-  }
-  return ret;
-}
-
-template <typename MBWrapper>
-int ObIKVCacheStore<MBWrapper>::alloc_kvpair_without_retry(
-    ObKVCacheInst &inst,
-    const int64_t key_size,
-    const int64_t value_size,
-    ObKVCachePair *&kvpair,
-    MBWrapper *&mb_wrapper,
-    const enum ObKVCachePolicy policy)
-{
-  int ret = common::OB_SUCCESS;
-  const int64_t block_size = get_block_size();
-  const int64_t block_payload_size = block_size - sizeof(ObKVStoreMemBlock);
-  int64_t align_kv_size = ObKVStoreMemBlock::get_align_size(key_size, value_size);
-  kvpair = NULL;
-  mb_wrapper = NULL;
-
-  if (align_kv_size > block_payload_size) {
-    //large kv
-    const int64_t big_block_size = align_kv_size + sizeof(ObKVStoreMemBlock);
-    if (OB_FAIL(alloc(inst, policy, big_block_size, mb_wrapper))) {
-      COMMON_LOG(ERROR, "alloc failed", K(ret), K(big_block_size));
-    } else {
-      if (add_handle_ref(mb_wrapper)) {
-        if (OB_FAIL(mb_wrapper->alloc(key_size, value_size, align_kv_size, kvpair))) {
-          //Fail to alloc kvpair, deref the reference
-          de_handle_ref(mb_wrapper);
-          COMMON_LOG(WARN, "alloc failed", K(ret));
-        } else {
-          //success to alloc kv
-          mb_wrapper->set_full(inst.status_.base_mb_score_);
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "add_handle_ref failed", K(ret));
-      }
-    }
-  } else {
-    //small kv
-    do {
-      mb_wrapper = get_curr_mb(inst, policy);
-      if (NULL != mb_wrapper) {
-        if (add_handle_ref(mb_wrapper)) {
-          if (mb_status_match(inst, policy, mb_wrapper)) {
-            if (OB_FAIL(mb_wrapper->alloc(key_size, value_size, align_kv_size, kvpair))) {
-              if (OB_BUF_NOT_ENOUGH != ret) {
-                COMMON_LOG(WARN, "alloc failed", K(ret));
-              } else {
-                ret = OB_SUCCESS;
-              }
-            } else {
-              break;
-            }
-          }
-          de_handle_ref(mb_wrapper);
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        MBWrapper *new_mb_wrapper = NULL;
-        if (OB_FAIL(alloc(inst, policy, block_size, new_mb_wrapper))) {
-          COMMON_LOG(WARN, "alloc failed", K(ret), K(block_size));
-        } else if (ATOMIC_BCAS((uint64_t*)(&get_curr_mb(inst, policy)), (uint64_t)mb_wrapper, (uint64_t)new_mb_wrapper)) {
-          if (NULL != mb_wrapper) {
-            mb_wrapper->set_full(inst.status_.base_mb_score_);
-          }
-        } else if (OB_FAIL(free(new_mb_wrapper))) {
-          COMMON_LOG(ERROR, "free failed", K(ret));
-        }
-      }
-    } while (OB_SUCC(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    kvpair = NULL;
-    mb_wrapper = NULL;
-  }
-  return ret;
-}
+ObKVMemBlockHandle* mb_handle_at(uint32_t handle_index);
+uint32_t handle_index_of(ObKVMemBlockHandle* mb_handle);
 
 }//end namespace common
 }//end namespace oceanbase

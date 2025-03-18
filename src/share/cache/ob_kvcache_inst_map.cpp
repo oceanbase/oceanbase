@@ -10,7 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_kvcache_inst_map.h"
+#include "share/cache/ob_kvcache_inst_map.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
 
 
 namespace oceanbase
@@ -28,10 +29,10 @@ int ObTenantMBList::init(const uint64_t tenant_id)
       tenant_id, resource_mgr_))) {
     COMMON_LOG(WARN, "get_tenant_resource_mgr failed", K(ret), K(tenant_id));
   } else {
-    tenant_id_ = tenant_id;
     head_.reset();
     head_.prev_ = &head_;
     head_.next_ = &head_;
+    tenant_id_ = tenant_id;
     ref_cnt_ = 0;
     inited_ = true;
   }
@@ -111,11 +112,12 @@ bool ObKVCacheInst::can_destroy() const
 
 void ObKVCacheInst::try_mark_delete()
 {
+  ObKVMemBlockHandle* handle;
   if (!is_delete_) {
     is_delete_ = true;
     ATOMIC_DEC(&ref_cnt_);
-    for (int i = 0 ; i < MAX_POLICY ; ++i) {
-      if (nullptr != handles_[i]) {
+    for (int i = 0; i < MAX_POLICY; ++i) {
+      if (OB_NOT_NULL(handles_[i])) {
         handles_[i]->status_ = FULL;
         handles_[i] = nullptr;
       }
@@ -511,11 +513,12 @@ void ObKVCacheInstMap::print_tenant_cache_info(const uint64_t tenant_id)
           for (KVCacheInstMap::iterator iter = inst_map_.begin(); iter != inst_map_.end(); ++iter) {
             if (iter->second->tenant_id_ == tenant_id) {
               ret = databuff_printf(buf, BUFLEN, ctx_pos,
-              "[CACHE] tenant_id=%8ld | cache_name=%30s | cache_size=%12ld | cache_store_size=%12ld | cache_map_size=%12ld | kv_cnt=%8ld | hold_size=%12ld\n",
+              "[CACHE] tenant_id=%8ld | cache_name=%30s | cache_size=%12ld | cache_store_size=%12ld | cache_retired_size=%12ld | cache_map_size=%12ld | kv_cnt=%8ld | hold_size=%12ld\n",
               iter->second->tenant_id_,
               iter->second->status_.config_->cache_name_,
               iter->second->status_.store_size_ + iter->second->node_allocator_.allocated(),
               iter->second->status_.store_size_,
+              iter->second->status_.retired_size_,
               iter->second->node_allocator_.allocated(),
               iter->second->status_.kv_cnt_,
               iter->second->status_.hold_size_);

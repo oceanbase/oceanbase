@@ -36,8 +36,10 @@ namespace common
 
 #define ATOMIC_LOAD(x) __atomic_load_n((x), __ATOMIC_SEQ_CST)
 #define ATOMIC_LOAD_ACQ(x) __atomic_load_n((x), __ATOMIC_ACQUIRE)
+#define ATOMIC_LOAD_RLX(x) __atomic_load_n((x), __ATOMIC_RELAXED)
 #define ATOMIC_STORE(x, v) ({ __atomic_store_n((x), (v), __ATOMIC_SEQ_CST);})
 #define ATOMIC_STORE_REL(x, v) ({ __atomic_store_n((x), (v), __ATOMIC_RELEASE);})
+#define ATOMIC_STORE_RLX(x, v) ({ __atomic_store_n((x), (v), __ATOMIC_RELAXED);})
 #define ATOMIC_LOAD64(addr) ({int64_t x = __atomic_load_n((int64_t*)addr, __ATOMIC_SEQ_CST); *(typeof(addr))&x; })
 #define ATOMIC_STORE64(addr, v) ({ typeof(v) v1 = v; __atomic_store_n((int64_t*)addr, *(int64_t*)&v1, __ATOMIC_SEQ_CST); })
 

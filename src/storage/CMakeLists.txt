@@ -1,5 +1,4 @@
 ob_set_subtarget(ob_storage blocksstable
-  blocksstable/ob_block_cache_working_set.cpp
   blocksstable/ob_block_manager.cpp
   blocksstable/ob_macro_seq_generator.cpp
   blocksstable/ob_object_manager.cpp

@@ -124,6 +124,30 @@ struct ObDSResultItem
     stat_handle_(),
     stat_(NULL)
   {}
+  void reset()
+  {
+    type_ = OB_DS_INVALID_STAT;
+    index_id_ = OB_INVALID_ID;
+    exprs_.reset();
+    stat_key_.reset();
+    stat_handle_.reset();
+    stat_ = nullptr;
+  }
+  int assign(const ObDSResultItem& other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->stat_handle_.assign(other.stat_handle_))) {
+      COMMON_LOG(WARN, "failed to assign stat_handle");
+      this->reset();
+    } else {
+      this->type_ = other.type_;
+      this->index_id_ = other.index_id_;
+      this->exprs_ = other.exprs_;
+      this->stat_key_ = other.stat_key_;
+      this->stat_ = other.stat_;
+    }
+    return ret;
+  }
   TO_STRING_KV(K(type_),
                K(index_id_),
                K(exprs_),
