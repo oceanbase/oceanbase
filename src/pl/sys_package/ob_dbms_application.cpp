@@ -29,7 +29,11 @@ int ObDBMSAppInfo::read_client_info(sql::ObExecContext &ctx, sql::ParamStore &pa
   CK (OB_LIKELY(1 == params.count()));
   OV (params.at(0).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
   client_info = ctx.get_my_session()->get_client_info();
-  params.at(0).set_varchar(client_info);
+  if (lib::is_oracle_mode() && client_info.empty()) {
+    params.at(0).set_null();
+  } else {
+    params.at(0).set_varchar(client_info);
+  }
   return ret;
 }
 // this is a procedure, and not need to return result
@@ -45,8 +49,16 @@ int ObDBMSAppInfo::read_module(sql::ObExecContext &ctx, sql::ParamStore &params,
   OV (params.at(1).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
   module_name = ctx.get_my_session()->get_module_name();
   action_name = ctx.get_my_session()->get_action_name();
-  params.at(0).set_varchar(module_name);
-  params.at(1).set_varchar(action_name);
+  if (lib::is_oracle_mode() && module_name.empty()) {
+    params.at(0).set_null();
+  } else {
+    params.at(0).set_varchar(module_name);
+  }
+  if (lib::is_oracle_mode() && action_name.empty()) {
+    params.at(1).set_null();
+  } else {
+    params.at(1).set_varchar(action_name);
+  }
   return ret;
 }
 // this is a procedure, and not need to return result
