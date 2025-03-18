@@ -201,6 +201,8 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_encode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_decode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_connection_mgr)
 DEF_ASH_FLAGS_SETTER_GUARD(in_check_row_confliction)
+DEF_ASH_FLAGS_SETTER_GUARD(in_resolve)
+DEF_ASH_FLAGS_SETTER_GUARD(in_rewrite)
 
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD
