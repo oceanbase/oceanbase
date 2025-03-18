@@ -5333,6 +5333,8 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
   } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_view_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
+  } else if ((src_column->is_string_lob() && !dst_column->is_string_lob()) || (!src_column->is_string_lob() && dst_column->is_string_lob())) {
+    is_offline = true;
   } else if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check if oracle compat mode failed", K(ret));
   } else if (OB_FAIL(check_is_exactly_same_type(*src_column, *dst_column, is_same))) {
