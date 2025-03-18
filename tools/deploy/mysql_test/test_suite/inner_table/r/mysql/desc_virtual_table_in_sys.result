@@ -6541,8 +6541,8 @@ ssl_cert_expired_time	bigint(20)	NO		NULL
 memory_limit	bigint(20)	NO		NULL	
 data_disk_allocated	bigint(20)	NO		NULL	
 data_disk_assigned	bigint(20)	YES		NULL	
-data_disk_suggested_operation	varchar(32)	YES		NULL	
-data_disk_suggested_size	bigint(20)	YES		NULL	
+ss_data_disk_operation_suggested	varchar(32)	YES		NULL	
+ss_data_disk_size_suggested	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_server;
 IF(count(*) >= 0, 1, 0)
 1

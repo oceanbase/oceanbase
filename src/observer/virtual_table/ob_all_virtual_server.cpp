@@ -155,14 +155,14 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
         case MEMORY_LIMIT:
           cur_row_.cells_[i].set_int(GMEMCONF.get_server_memory_limit());
           break;
-        case DATA_DISK_SUGGESTED_OPERATION:
+        case SS_DATA_DISK_OPERATION_SUGGESTED:
           if (GCTX.is_shared_storage_mode()) {
             cur_row_.cells_[i].set_varchar(share::DataDiskSuggestedOperationType::get_str(resource_info.report_data_disk_suggested_operation_));
           } else {
             cur_row_.cells_[i].set_null();
           }
           break;
-        case DATA_DISK_SUGGESTED_SIZE:
+        case SS_DATA_DISK_SIZE_SUGGESTED:
           if (GCTX.is_shared_storage_mode()) {
             cur_row_.cells_[i].set_int(resource_info.report_data_disk_suggested_size_);
           } else {

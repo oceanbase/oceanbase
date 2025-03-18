@@ -6456,7 +6456,7 @@ int ObInnerTableSchema::all_virtual_server_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("data_disk_suggested_operation", //column_name
+    ADD_COLUMN_SCHEMA("ss_data_disk_operation_suggested", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -6471,7 +6471,7 @@ int ObInnerTableSchema::all_virtual_server_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("data_disk_suggested_size", //column_name
+    ADD_COLUMN_SCHEMA("ss_data_disk_size_suggested", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
