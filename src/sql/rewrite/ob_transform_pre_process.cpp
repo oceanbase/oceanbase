@@ -9319,6 +9319,8 @@ int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
       replacer.set_skip_bool_param_mysql(false);
       if (OB_FAIL(replacer.add_replace_exprs(exec_params, exec_params_remove_const_exprs))) {
         LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(replacer.add_replace_exprs(query_ref_exprs, query_ref_remove_const_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
       } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
         LOG_WARN("failed to iterate stmt expr", K(ret));
       }
