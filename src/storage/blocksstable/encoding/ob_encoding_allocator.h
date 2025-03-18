@@ -61,6 +61,7 @@ struct ObEncodingPool
 
 extern int64_t encoder_sizes[];
 extern int64_t decoder_sizes[];
+extern int64_t MAX_DECODER_SIZE;
 
 template <typename EncodingItem>
 class ObEncodingAllocator

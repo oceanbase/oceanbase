@@ -215,57 +215,25 @@ int ObColumnCSDecoder::quick_compare(const ObStorageDatum &left,
   return ret;
 }
 
-/////////////////////// acquire decoder from local ///////////////////////
-typedef int (*local_decode_acquire_func)(ObCSDecoderPool &local_decoder_pool,
-                                   const ObIColumnCSDecoder *&decoder);
-typedef int(*local_decode_release_func)(ObCSDecoderPool &local_decoder_pool,
-                                   ObIColumnCSDecoder *decoder);
+typedef int (*new_decoder_func)(char *buf, const ObIColumnCSDecoder *&decoder);
 
-static local_decode_acquire_func acquire_local_funcs_[ObCSColumnHeader::MAX_TYPE] = {
-    acquire_local_decoder<ObIntegerColumnDecoder>,
-    acquire_local_decoder<ObStringColumnDecoder>,
-    acquire_local_decoder<ObIntDictColumnDecoder>,
-    acquire_local_decoder<ObStrDictColumnDecoder>,
+static new_decoder_func new_decoder_funcs_[ObCSColumnHeader::MAX_TYPE] =
+{
+    new_decoder_with_allocated_buf<ObIntegerColumnDecoder>,
+    new_decoder_with_allocated_buf<ObStringColumnDecoder>,
+    new_decoder_with_allocated_buf<ObIntDictColumnDecoder>,
+    new_decoder_with_allocated_buf<ObStrDictColumnDecoder>,
 };
-
-static local_decode_release_func release_local_funcs_[ObCSColumnHeader::MAX_TYPE] = {
-    release_local_decoder<ObIntegerColumnDecoder>,
-    release_local_decoder<ObStringColumnDecoder>,
-    release_local_decoder<ObIntDictColumnDecoder>,
-    release_local_decoder<ObStrDictColumnDecoder>,
-};
-
 template <class Decoder>
-int acquire_local_decoder(ObCSDecoderPool &local_decoder_pool, const ObIColumnCSDecoder *&decoder)
+int new_decoder_with_allocated_buf(char *buf, const ObIColumnCSDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
   Decoder *d = nullptr;
-  if (OB_FAIL(local_decoder_pool.alloc<Decoder>(d))) {
-    LOG_WARN("alloc cs decoder from local decoder pool failed", K(ret));
+  if (OB_ISNULL(d = new(buf) Decoder())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), KP(buf));
   } else {
     decoder = d;
-  }
-
-  if (OB_FAIL(ret) && nullptr != d) {
-    local_decoder_pool.free<Decoder>(d);
-    decoder = nullptr;
-  }
-  return ret;
-}
-
-template <class Decoder>
-int release_local_decoder(ObCSDecoderPool &local_decoder_pool, ObIColumnCSDecoder *decoder)
-{
-  int ret = OB_SUCCESS;
-  Decoder *d = nullptr;
-  if (nullptr == decoder) {
-    //do nothing
-  } else if (FALSE_IT(d = static_cast<Decoder *>(decoder))) {
-  } else if (OB_FAIL(local_decoder_pool.free<Decoder>(d))) {
-    LOG_ERROR("failed to free cs decoder", K(ret), "type", decoder->get_type(), KP(d));
-  } else {
-    d = nullptr;
-    decoder = nullptr;
   }
   return ret;
 }
@@ -275,11 +243,13 @@ ObNoneExistColumnCSDecoder ObICSEncodeBlockReader::none_exist_column_decoder_;
 ObColumnCSDecoderCtx ObICSEncodeBlockReader::none_exist_column_decoder_ctx_;
 
 ObICSEncodeBlockReader::ObICSEncodeBlockReader()
-  : request_cnt_(0), cached_decocer_(NULL), decoders_(nullptr), need_release_decoders_(nullptr),
-    need_release_decoder_cnt_(0), transform_helper_(), column_count_(0), default_decoders_(),
-    default_release_decoders_(), local_decoder_pool_(nullptr), ctx_array_(), ctxs_(NULL),
+  : request_cnt_(0), cached_decoder_(NULL), decoders_(nullptr),
+    transform_helper_(), column_count_(0), default_decoders_(),
+    ctx_array_(), ctxs_(NULL),
     decoder_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), common::ObModIds::OB_DECODER_CTX)), OB_MALLOC_NORMAL_BLOCK_SIZE),
     buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "IENB_CSREADER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
+    allocated_decoders_buf_(nullptr),
+    allocated_decoders_buf_size_(0),
     store_id_array_(NULL), default_store_ids_(),
     default_column_types_(), need_cast_(false)
 {
@@ -287,18 +257,12 @@ ObICSEncodeBlockReader::ObICSEncodeBlockReader()
 
 ObICSEncodeBlockReader::~ObICSEncodeBlockReader()
 {
-  (void)free_decoders();
   ctx_array_.reset();
-  if (NULL != local_decoder_pool_) {
-    local_decoder_pool_->reset();
-    local_decoder_pool_ = NULL;
-  }
 }
 
 void ObICSEncodeBlockReader::reuse()
 {
-  (void)free_decoders();
-  cached_decocer_ = nullptr;
+  cached_decoder_ = nullptr;
   request_cnt_ = 0;
   decoders_ = nullptr;
   need_cast_ = false;
@@ -312,16 +276,11 @@ void ObICSEncodeBlockReader::reuse()
 
 void ObICSEncodeBlockReader::reset()
 {
-  (void)free_decoders();
-  cached_decocer_ = NULL;
+  cached_decoder_ = NULL;
   request_cnt_ = 0;
   decoders_ = nullptr;
   need_cast_ = false;
   ctx_array_.reset();
-  if (NULL != local_decoder_pool_) {
-    local_decoder_pool_->reset();
-    local_decoder_pool_ = NULL;
-  }
   ctxs_ = NULL;
   store_id_array_ = NULL;
   column_type_array_ = nullptr;
@@ -329,57 +288,32 @@ void ObICSEncodeBlockReader::reset()
   column_count_ = 0;
   decoder_allocator_.reset();
   buf_allocator_.reset();
+  allocated_decoders_buf_ = nullptr;
+  allocated_decoders_buf_size_ = 0;
 }
 
-int ObICSEncodeBlockReader::free_decoders()
+int ObICSEncodeBlockReader::prepare(const int64_t column_cnt)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  if (nullptr != need_release_decoders_) {
-    for (int64_t i = 0; i < need_release_decoder_cnt_; ++i) {
-      if (OB_TMP_FAIL(release_local_funcs_[need_release_decoders_[i]->get_type()]
-          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(need_release_decoders_[i])))) {
-        ret = tmp_ret;
-        LOG_ERROR("failed to free cs decoder", K(tmp_ret), K(i), K(need_release_decoder_cnt_),
-            "type", need_release_decoders_[i]->get_type(), KP(need_release_decoders_[i]));
-      }
-    }
-    need_release_decoders_ = nullptr;
-  }
-  need_release_decoder_cnt_ = 0;
-  return ret;
-}
-
-int ObICSEncodeBlockReader::prepare(const uint64_t tenant_id, const int64_t column_cnt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ret)) {
-  } else if (column_cnt > DEFAULT_DECODER_CNT) {
-    const int64_t release_count = column_cnt + 1;
-    if (OB_ISNULL(store_id_array_ = reinterpret_cast<int32_t *>(
-                    decoder_allocator_.alloc(sizeof(int32_t) * column_cnt)))) {
+  if (column_cnt > DEFAULT_DECODER_CNT) {
+    const int64_t store_ids_size = ALIGN_UP(sizeof(store_id_array_[0]) * column_cnt, 8);
+    const int64_t column_types_size = ALIGN_UP(sizeof(ObObjMeta) * column_cnt, 8);
+    const int64_t col_decoder_size = sizeof(ObColumnCSDecoder) * column_cnt;
+    char *buf = nullptr;
+    if (nullptr
+        == (buf = reinterpret_cast<char*>(decoder_allocator_.alloc(
+          store_ids_size + column_types_size + col_decoder_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory for store ids fail", K(ret), K(column_cnt));
-    } else if (nullptr == (column_type_array_ = reinterpret_cast<ObObjMeta*>(decoder_allocator_.alloc(
-            sizeof(ObObjMeta) * column_cnt)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc memory for column types fail", K(ret), K(column_cnt));
-    } else if (OB_ISNULL(decoders_ = reinterpret_cast<ObColumnCSDecoder *>(
-                           decoder_allocator_.alloc(sizeof(ObColumnCSDecoder) * column_cnt)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc memory for decoders fail", K(ret), K(column_cnt));
-    } else if (OB_ISNULL(
-                 need_release_decoders_ = reinterpret_cast<const ObIColumnCSDecoder **>(
-                   decoder_allocator_.alloc(sizeof(ObIColumnCSDecoder *) * release_count)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN(
-        "alloc memory for need release decoders fail", K(ret), K(column_cnt), K(release_count));
+    } else {
+      store_id_array_ = reinterpret_cast<int32_t *>(buf);
+      column_type_array_ = reinterpret_cast<ObObjMeta *>(buf + store_ids_size);
+      decoders_ = reinterpret_cast<ObColumnCSDecoder *>(buf + store_ids_size + column_types_size);
     }
   } else {
     store_id_array_ = &default_store_ids_[0];
     column_type_array_ = &default_column_types_[0];
     decoders_ = &default_decoders_[0];
-    need_release_decoders_ = &default_release_decoders_[0];
   }
   return ret;
 }
@@ -389,14 +323,10 @@ int ObICSEncodeBlockReader::do_init(const ObMicroBlockData &block_data, const in
   int ret = OB_SUCCESS;
   column_count_ = transform_helper_.get_micro_block_header()->column_count_;
   request_cnt_ = request_cnt;
-  if (OB_ISNULL((local_decoder_pool_))
-      && OB_ISNULL(local_decoder_pool_ = OB_NEWx(ObCSDecoderPool, &buf_allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc local decoder pool memory", K(ret));
-  } else if (OB_FAIL(ctx_array_.get_ctx_array(ctxs_, MAX(request_cnt_, column_count_)))) {
+  if (OB_FAIL(ctx_array_.get_ctx_array(ctxs_, MAX(request_cnt_, column_count_)))) {
     LOG_WARN("get decoder context array failed", K(ret));
   } else if (NULL != block_data.get_extra_buf() && block_data.get_extra_size() > 0) {
-    cached_decocer_ =
+    cached_decoder_ =
       reinterpret_cast<const ObBlockCachedCSDecoderHeader *>(block_data.get_extra_buf());
   }
 
@@ -415,22 +345,28 @@ int ObICSEncodeBlockReader::do_init(const ObMicroBlockData &block_data, const in
 int ObICSEncodeBlockReader::init_decoders()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == store_id_array_ || NULL == column_type_array_ || nullptr == decoders_ ||
-        nullptr == need_release_decoders_ || !transform_helper_.is_inited())) {
+  if (OB_UNLIKELY(NULL == store_id_array_ || NULL == column_type_array_ ||
+      nullptr == decoders_ || !transform_helper_.is_inited())) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("invalid inner stat", K(ret), KP_(store_id_array), KP(decoders_),
-      KP(need_release_decoders_), K(transform_helper_.is_inited()));
+    LOG_WARN("invalid inner stat", K(ret), KP_(store_id_array),
+        KP(decoders_), K(transform_helper_.is_inited()));
+  } else if (OB_FAIL(alloc_decoders_buf())) {
+    LOG_WARN("fail to alloc decoders buf", K(ret));
   } else {
+    int64_t decoders_buf_pos = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < request_cnt_; ++i) {
-      if (OB_FAIL(add_decoder(store_id_array_[i], column_type_array_[i], decoders_[i]))) {
-        LOG_WARN("add_decoder failed", K(ret), "request_idx", i);
+      if (OB_FAIL(add_decoder(store_id_array_[i], column_type_array_[i], decoders_buf_pos, decoders_[i]))) {
+        LOG_WARN("add_decoder failed", K(ret), "request_idx", i, K(decoders_buf_pos));
       }
     }
   }
   return ret;
 }
 
-int ObICSEncodeBlockReader::add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, ObColumnCSDecoder &dest)
+int ObICSEncodeBlockReader::add_decoder(const int64_t store_idx,
+                                        const ObObjMeta &obj_meta,
+                                        int64_t &decoders_buf_pos,
+                                        ObColumnCSDecoder &dest)
 {
   int ret = OB_SUCCESS;
   if (store_idx < 0 || store_idx >= column_count_) {  // non exist column
@@ -438,7 +374,7 @@ int ObICSEncodeBlockReader::add_decoder(const int64_t store_idx, const ObObjMeta
     dest.ctx_ = &none_exist_column_decoder_ctx_;
   } else {
     const ObIColumnCSDecoder *decoder = nullptr;
-    if (OB_FAIL(acquire(store_idx, decoder))) {
+    if (OB_FAIL(acquire(store_idx, decoders_buf_pos, decoder))) {
       LOG_WARN("acquire decoder failed", K(ret), K(store_idx));
     } else if (OB_FAIL(transform_helper_.build_column_decoder_ctx(obj_meta, store_idx, *ctxs_[store_idx]))) {
       LOG_WARN("fail to build column decoder ctx", K(ret), K(store_idx));
@@ -453,18 +389,58 @@ int ObICSEncodeBlockReader::add_decoder(const int64_t store_idx, const ObObjMeta
 
 // called before inited
 // performance critical, do not check parameters
-int ObICSEncodeBlockReader::acquire(const int64_t store_idx, const ObIColumnCSDecoder *&decoder)
+int ObICSEncodeBlockReader::acquire(const int64_t store_idx,
+                                    int64_t &decoders_buf_pos,
+                                    const ObIColumnCSDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
   const ObCSColumnHeader &col_header = transform_helper_.get_column_header(store_idx);
-  if (NULL != cached_decocer_ && store_idx < cached_decocer_->count_) {
-    decoder = &cached_decocer_->at(store_idx);
-  } else if (OB_FAIL(acquire_local_funcs_[col_header.type_](*local_decoder_pool_, decoder))) {
-    LOG_WARN("acquire decoder failed", K(ret), K(store_idx), K(col_header));
+  if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
+    decoder = &cached_decoder_->at(store_idx);
   } else {
-    need_release_decoders_[need_release_decoder_cnt_++] = decoder;
+    const int64_t decoder_size = cs_decoder_sizes[col_header.type_];
+    if (OB_UNLIKELY(decoders_buf_pos + decoder_size > allocated_decoders_buf_size_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("decoders buf not enough", K(ret), K(decoders_buf_pos),
+          K(decoder_size), K(allocated_decoders_buf_size_), K(store_idx));
+    } else if (OB_FAIL(new_decoder_funcs_[col_header.type_](
+        allocated_decoders_buf_ + decoders_buf_pos, decoder))) {
+      LOG_WARN("fail to new decoder", K(ret), K(store_idx), K(col_header.type_));
+    } else {
+      decoders_buf_pos += decoder_size;
+    }
   }
+  return ret;
+}
 
+int ObICSEncodeBlockReader::alloc_decoders_buf()
+{
+  int ret = OB_SUCCESS;
+  int64_t size = 0;
+  for (int64_t i = 0; i < request_cnt_; ++i) {
+    const int64_t store_idx = store_id_array_[i];
+    const ObCSColumnHeader &col_header = transform_helper_.get_column_header(store_idx);
+    if (store_idx < 0 || store_idx >= column_count_) {
+      // non exist column
+    } else if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
+     // cached decoder
+    } else {
+      size += cs_decoder_sizes[col_header.type_];
+    }
+  }
+  if (size > allocated_decoders_buf_size_) {
+    if (allocated_decoders_buf_size_ > 0) {
+      allocated_decoders_buf_ = nullptr;
+      allocated_decoders_buf_size_ = 0;
+      buf_allocator_.reuse();
+    }
+    if (OB_ISNULL(allocated_decoders_buf_ = (char*)buf_allocator_.alloc(size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc", K(ret), K(size));
+    } else {
+      allocated_decoders_buf_size_ = size;
+    }
+  }
   return ret;
 }
 
@@ -483,7 +459,7 @@ int ObCSEncodeBlockGetReader::init(
   if (OB_UNLIKELY(!block_data.is_valid()) || request_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument is invalid", K(ret), K(block_data), K(request_cnt));
-  } else if (OB_FAIL(prepare(MTL_ID(), request_cnt))) {
+  } else if (OB_FAIL(prepare(request_cnt))) {
     LOG_WARN("prepare fail", K(ret), K(request_cnt));
   } else if (typeid(ObRowkeyReadInfo) == typeid(read_info)) {
     for (int64_t i  = 0; OB_SUCC(ret) && i < request_cnt; ++i) {
@@ -619,7 +595,7 @@ int ObCSEncodeBlockGetReader::init(const ObMicroBlockData &block_data,
   if (OB_UNLIKELY(!block_data.is_valid()) || request_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument is invalid", K(ret), K(block_data), K(request_cnt));
-  } else if (OB_FAIL(prepare(MTL_ID(), MAX(schema_rowkey_cnt, request_cnt)))) {
+  } else if (OB_FAIL(prepare(MAX(schema_rowkey_cnt, request_cnt)))) {
     LOG_WARN("prepare fail", K(ret), K(request_cnt), K(schema_rowkey_cnt));
   } else {
     int64_t idx = 0;
@@ -725,15 +701,15 @@ int ObCSEncodeBlockGetReader::get_row_id(
 
 //=============================ObMicroBlockCSDecoder===================================//
 ObMicroBlockCSDecoder::ObMicroBlockCSDecoder()
-  : request_cnt_(0), cached_decoder_(nullptr), decoder_buf_(nullptr), decoders_(nullptr),
-    need_release_decoders_(), need_release_decoder_cnt_(0), transform_helper_(),
-    column_count_(0), local_decoder_pool_(nullptr), ctx_array_(), ctxs_(nullptr),
+  : request_cnt_(0), cached_decoder_(nullptr), decoders_(nullptr),
+    transform_helper_(), column_count_(0), ctx_array_(), ctxs_(nullptr),
     decoder_allocator_(ObModIds::OB_DECODER_CTX),
+    transform_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_TRANSFORM")), OB_MALLOC_NORMAL_BLOCK_SIZE),
     buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_CSDECODER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
-    transform_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_TRANSFORM")), OB_MALLOC_NORMAL_BLOCK_SIZE)
+    allocated_decoders_buf_(nullptr),
+    allocated_decoders_buf_size_(0)
 {
   reader_type_ = CSDecoder;
-  need_release_decoders_.set_allocator(&buf_allocator_);
 }
 
 ObMicroBlockCSDecoder::~ObMicroBlockCSDecoder()
@@ -794,53 +770,73 @@ int ObMicroBlockCSDecoder::acquire(
 
 // called before inited
 // performance critical, do not check parameters
-int ObMicroBlockCSDecoder::acquire(const int64_t store_idx, const ObIColumnCSDecoder *&decoder)
+int ObMicroBlockCSDecoder::acquire(
+    const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
   decoder = nullptr;
-  const ObCSColumnHeader &col_header = transform_helper_.get_column_header(store_idx);
   if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
     decoder = &cached_decoder_->at(store_idx);
   } else {
-    if (OB_FAIL(acquire_local_funcs_[(ObCSColumnHeader::Type)col_header.type_](
-                      *local_decoder_pool_, decoder))) {
-      LOG_WARN("acquire decoder failed", K(ret), K(store_idx), K(col_header));
-    } else if (OB_FAIL(need_release_decoders_.push_back(decoder))) {
-      LOG_WARN("add decoder failed", K(ret), K(store_idx), K(col_header));
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(release_local_funcs_[decoder->get_type()]
-          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(decoder)))) {
-        LOG_ERROR("failed to free decoder", K(tmp_ret), "type", decoder->get_type(), KP(decoder));
-      } else {
-        decoder = nullptr;
-      }
+    const ObCSColumnHeader &col_header = transform_helper_.get_column_header(store_idx);
+    const int64_t decoder_size = cs_decoder_sizes[col_header.type_];
+    if (OB_UNLIKELY(decoders_buf_pos + decoder_size > allocated_decoders_buf_size_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("decoders buf not enough", K(ret), K(decoders_buf_pos),
+          K(decoder_size), K(allocated_decoders_buf_size_));
+    } else if (OB_FAIL(new_decoder_funcs_[col_header.type_](
+        allocated_decoders_buf_ + decoders_buf_pos, decoder))) {
+      LOG_WARN("fail to new decoder", K(ret), K(store_idx), K(col_header));
     } else {
-      ++need_release_decoder_cnt_;
+      decoders_buf_pos += decoder_size;
     }
   }
   return ret;
 }
 
-int ObMicroBlockCSDecoder::free_decoders()
+int ObMicroBlockCSDecoder::alloc_decoders_buf(const bool by_read_info)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  for (int64_t i = 0; i < need_release_decoder_cnt_; ++i) {
-    if (OB_TMP_FAIL(release_local_funcs_[need_release_decoders_[i]->get_type()]
-        (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(need_release_decoders_[i])))) {
-      ret = tmp_ret;
-      LOG_ERROR("failed to free cs decoder", K(tmp_ret), K(i), K(need_release_decoder_cnt_),
-          "type", need_release_decoders_[i]->get_type(), KP(need_release_decoders_[i]));
+  int64_t size = 0;
+  size += request_cnt_ * sizeof(ObColumnCSDecoder); // for decoders_
+
+  if (OB_UNLIKELY(by_read_info && read_info_ == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null read_info", K(ret));
+  } else {
+    const ObColumnIndexArray *cols_index = by_read_info ? &(read_info_->get_columns_index()) : nullptr;
+    int64_t decoders_cnt = by_read_info ? request_cnt_ : column_count_;
+    for (int64_t i = 0; i < decoders_cnt; ++i) {
+      const int64_t store_idx = by_read_info ? cols_index->at(i) : i;
+      const ObCSColumnHeader &col_header = transform_helper_.get_column_header(store_idx);
+
+      if (store_idx < 0 || store_idx >= column_count_) {
+        // non exist column
+      } else if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
+        // in cached_decoder_
+      } else {
+        size += cs_decoder_sizes[col_header.type_];
+      }
     }
   }
-  need_release_decoders_.clear();
-  need_release_decoder_cnt_ = 0;
+  if (size > allocated_decoders_buf_size_) {
+    if (allocated_decoders_buf_size_ > 0) {
+      allocated_decoders_buf_ = nullptr;
+      allocated_decoders_buf_size_ = 0;
+      buf_allocator_.reuse();
+    }
+    if (OB_ISNULL(allocated_decoders_buf_ = (char*)buf_allocator_.alloc(size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc", K(ret), K(size));
+    } else {
+      allocated_decoders_buf_size_ = size;
+    }
+  }
   return ret;
 }
 
 void ObMicroBlockCSDecoder::inner_reset()
 {
-  (void)free_decoders();
   cached_decoder_ = nullptr;
   ctxs_ = NULL;
   column_count_ = 0;
@@ -854,40 +850,31 @@ void ObMicroBlockCSDecoder::reset()
 {
   inner_reset();
   ctx_array_.reset();
-  if (NULL != local_decoder_pool_) {
-    local_decoder_pool_->reset();
-    local_decoder_pool_ = NULL;
-  }
-  decoder_buf_ = NULL;
   request_cnt_ = 0;
-  need_release_decoders_.destroy();
   buf_allocator_.reset();
   decoder_allocator_.reset();
   transform_allocator_.reset();
+  allocated_decoders_buf_ = nullptr;
+  allocated_decoders_buf_size_ = 0;
 }
 
 int ObMicroBlockCSDecoder::init_decoders()
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(need_release_decoders_.reserve(request_cnt_))) {
-    LOG_WARN("fail to init release decoders", K(ret), K(request_cnt_));
-  } else if (OB_ISNULL(decoder_buf_) &&
-      OB_ISNULL(decoder_buf_ = buf_allocator_.alloc((request_cnt_) * sizeof(ObColumnCSDecoder)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc decoder_buf_ memory", K(ret));
-  } else {
-    decoders_ = reinterpret_cast<ObColumnCSDecoder *>(decoder_buf_);
-    if (OB_ISNULL(read_info_) || typeid(ObRowkeyReadInfo) == typeid(*read_info_)) {
-      ObObjMeta col_type;
-      if (OB_UNLIKELY(column_count_ < request_cnt_ && nullptr == read_info_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("for empty read info, request cnt is invalid", KR(ret), KP(read_info_), K(request_cnt_));
-      }
+  if (OB_ISNULL(read_info_) || typeid(ObRowkeyReadInfo) == typeid(*read_info_)) {
+    ObObjMeta col_type;
+    if (OB_UNLIKELY(column_count_ < request_cnt_ && nullptr == read_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("for empty read info, request cnt is invalid", KR(ret), KP(read_info_), K(request_cnt_));
+    } else if (OB_FAIL(alloc_decoders_buf(false/*by_read_info*/))) {
+      LOG_WARN("fail to alloc decoders buf", K(ret));
+    } else {
+      decoders_ = reinterpret_cast<ObColumnCSDecoder *>(allocated_decoders_buf_);
+      int64_t decoders_buf_pos = request_cnt_ * sizeof(ObColumnCSDecoder);
       int i = 0;
       for ( ; OB_SUCC(ret) && i < column_count_; ++i) {
         col_type.set_type(static_cast<ObObjType>(transform_helper_.get_column_header(i).obj_type_));
-        if (OB_FAIL(add_decoder(i, col_type, nullptr, decoders_[i]))) {
+        if (OB_FAIL(add_decoder(i, col_type, nullptr, decoders_buf_pos, decoders_[i]))) {
           LOG_WARN("add_decoder failed", K(ret), K(i), K(col_type));
         }
       }
@@ -895,22 +882,20 @@ int ObMicroBlockCSDecoder::init_decoders()
         decoders_[i].decoder_ = &none_exist_column_decoder_;
         decoders_[i].ctx_ = &none_exist_column_decoder_ctx_;
       }
-    } else {
-      const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
-      const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
-      if (typeid(ObCGRowkeyReadInfo) == typeid(*read_info_) || typeid(ObCGReadInfo) == typeid(*read_info_) || read_info_->get_columns()->count() < 1) {
-        FOREACH_ADD_DECODER(nullptr)
-      } else {
-        const ObColumnParamIArray *cols_param = read_info_->get_columns();
-        FOREACH_ADD_DECODER(cols_param->at(i))
-      }
     }
+  } else if (OB_FAIL(alloc_decoders_buf(true/*by_read_info*/))) {
+    LOG_WARN("fail to alloc decoders buf", K(ret));
+  } else {
+    decoders_ = reinterpret_cast<ObColumnCSDecoder *>(allocated_decoders_buf_);
+    int64_t decoders_buf_pos = request_cnt_ * sizeof(ObColumnDecoder);
 
-    if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(free_decoders())) {
-        LOG_ERROR("fail to free cs decoders", K(tmp_ret));
-      }
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
+    const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
+    if (typeid(ObCGRowkeyReadInfo) == typeid(*read_info_) || typeid(ObCGReadInfo) == typeid(*read_info_) || read_info_->get_columns()->count() < 1) {
+      FOREACH_ADD_DECODER(nullptr)
+    } else {
+      const ObColumnParamIArray *cols_param = read_info_->get_columns();
+      FOREACH_ADD_DECODER(cols_param->at(i))
     }
   }
 
@@ -921,6 +906,7 @@ int ObMicroBlockCSDecoder::add_decoder(
     const int64_t store_idx,
     const ObObjMeta &obj_meta,
     const ObColumnParam *col_param,
+    int64_t &decoders_buf_pos,
     ObColumnCSDecoder &dest)
 {
   int ret = OB_SUCCESS;
@@ -933,7 +919,7 @@ int ObMicroBlockCSDecoder::add_decoder(
     dest.ctx_->fill_for_new_column(col_param, &decoder_allocator_.get_inner_allocator());
   } else {
     const ObIColumnCSDecoder *decoder = NULL;
-    if (OB_FAIL(acquire(store_idx, decoder))) {
+    if (OB_FAIL(acquire(store_idx, decoders_buf_pos, decoder))) {
       LOG_WARN("acquire decoder failed", K(ret), K(store_idx));
     } else if (OB_FAIL(transform_helper_.build_column_decoder_ctx(obj_meta, store_idx, *ctxs_[store_idx]))) {
       LOG_WARN("fail to build column decoder ctx", K(ret), K(store_idx));
@@ -957,11 +943,7 @@ int ObMicroBlockCSDecoder::init(
   } else {
     if (OB_SUCC(ret)) {
       if (is_inited_) {
-        if (OB_LIKELY(request_cnt_ >= read_info.get_request_count() && nullptr != decoder_buf_)) {
-          inner_reset();
-        } else {
-          reset();
-        }
+        inner_reset();
       }
     }
     read_info_ = &read_info;
@@ -989,7 +971,7 @@ int ObMicroBlockCSDecoder::init(
     LOG_WARN("invalid argument", K(ret), K(block_data));
   } else {
     if (is_inited_) {
-      reset();
+      inner_reset();
     }
     read_info_ = nullptr;
     datum_utils_ = datum_utils;
@@ -1033,11 +1015,7 @@ int ObMicroBlockCSDecoder::do_init(const ObMicroBlockData &block_data)
         reinterpret_cast<const ObBlockCachedCSDecoderHeader *>(block_data.get_extra_buf());
     }
 
-    if (OB_ISNULL((local_decoder_pool_))
-        && OB_ISNULL(local_decoder_pool_ = OB_NEWx(ObCSDecoderPool, &buf_allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc local decoder pool memory", K(ret));
-    } else if (OB_FAIL(ctx_array_.get_ctx_array(ctxs_, MAX(request_cnt_, col_cnt)))) {
+    if (OB_FAIL(ctx_array_.get_ctx_array(ctxs_, MAX(request_cnt_, col_cnt)))) {
       LOG_WARN("get decoder context array failed", K(ret));
     } else if (OB_FAIL(init_decoders())) {
       LOG_WARN("init decoders failed", K(ret));

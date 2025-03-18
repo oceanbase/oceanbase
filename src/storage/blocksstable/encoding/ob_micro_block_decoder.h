@@ -112,13 +112,11 @@ private:
 };
 
 template <class Decoder>
-static int acquire_local_decoder(ObDecoderPool &local_decoder_pool,
-                           const ObMicroBlockHeader &header,
-                           const ObColumnHeader &col_header,
-                           const char *meta_data,
-                           const ObIColumnDecoder *&decoder);
-template <class Decoder>
-static int release_local_decoder(ObDecoderPool &local_decoder_pool, ObIColumnDecoder *decoder);
+int new_decoder_with_allocated_buf(char *buf,
+                                   const ObMicroBlockHeader &header,
+                                   const ObColumnHeader &col_header,
+                                   const char *meta_data,
+                                   const ObIColumnDecoder *&decoder);
 class ObIEncodeBlockReader
 {
 public:
@@ -133,36 +131,37 @@ public:
       const char *block,
       const int64_t block_size);
 protected:
-  int prepare(const uint64_t tenant_id, const int64_t column_cnt);
+  int prepare(const int64_t column_cnt);
   int do_init(const ObMicroBlockData &block_data, const int64_t request_cnt);
   int init_decoders();
-  int add_decoder(const int64_t store_idx, const common::ObObjMeta &obj_meta, ObColumnDecoder &dest);
-  int free_decoders();
-  int acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder);
+  int add_decoder(const int64_t store_idx, const common::ObObjMeta &obj_meta,
+                  int64_t &decoders_buf_pos, ObColumnDecoder &dest);
+  int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnDecoder *&decoder);
   int setup_row(const uint64_t row_id, int64_t &row_len, const char *&row_data);
+  int alloc_decoders_buf();
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
-  static const int64_t DEFAULT_RELEASE_CNT = (DEFAULT_DECODER_CNT + 1) * 2;
 
   int64_t request_cnt_; // request column count
   const ObMicroBlockHeader *header_;
   const ObColumnHeader *col_header_;
-  const ObBlockCachedDecoderHeader *cached_decocer_;
+  const ObBlockCachedDecoderHeader *cached_decoder_;
   const char *meta_data_;
   const char *row_data_;
   ObVarRowIndex var_row_index_;
   ObFixRowIndex fix_row_index_;
   ObIRowIndex *row_index_;
   ObColumnDecoder *decoders_;
-  const ObIColumnDecoder **need_release_decoders_;
-  int64_t need_release_decoder_cnt_;
   ObColumnDecoder default_decoders_[DEFAULT_DECODER_CNT];
-  const ObIColumnDecoder * default_release_decoders_[DEFAULT_RELEASE_CNT];
-  ObDecoderPool *local_decoder_pool_;
   ObDecoderCtxArray ctx_array_;
   ObColumnDecoderCtx **ctxs_;
   common::ObArenaAllocator decoder_allocator_;
+  // For highly concurrently get row on wide tables(eg: more then 100 columns),
+  // frequently allocate from MTL(ObDecodeResourcePool*), resulting in a bottleneck
+  // for atomic operations under ARM, so we allocate mem for decoders in ObEncodeBlockGetReader
   common::ObArenaAllocator buf_allocator_;
+  char *allocated_decoders_buf_;
+  int64_t allocated_decoders_buf_size_;
   int64_t *store_id_array_;
   common::ObObjMeta *column_type_array_;
   int64_t default_store_ids_[DEFAULT_DECODER_CNT];
@@ -394,8 +393,8 @@ private:
   int add_decoder(const int64_t store_idx,
                   const common::ObObjMeta &obj_meta,
                   const ObColumnParam *col_param,
+                  int64_t &decoders_buf_pos,
                   ObColumnDecoder &dest);
-  int free_decoders();
   int decode_cells(const uint64_t row_id,
                    const int64_t row_len,
                    const char *row_data,
@@ -426,8 +425,8 @@ private:
       const ObColumnHeader &col_header,
       const char *meta_data,
       const ObIColumnDecoder *&decoder);
-  int acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder);
-  void release(const ObIColumnDecoder *decoder);
+  int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnDecoder *&decoder);
+  int alloc_decoders_buf(const bool by_read_info);
   int filter_pushdown_retro(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObWhiteFilterExecutor &filter,
@@ -448,14 +447,8 @@ private:
   ObFixRowIndex fix_row_index_;
   const ObBlockCachedDecoderHeader *cached_decoder_;
   ObIRowIndex *row_index_;
-  void *decoder_buf_;
   ObColumnDecoder *decoders_;
-  // array size is double of max_column_count, because we may need two decoders for one column,
-  // e.g.: column equal encoding, one for column equal decoder and one for referenced column decoder.
-  ObFixedArray<const ObIColumnDecoder *, ObIAllocator> need_release_decoders_;
-  int64_t need_release_decoder_cnt_;
   ObRowReader flat_row_reader_;
-  ObDecoderPool *local_decoder_pool_;
   ObDecoderCtxArray ctx_array_;
   ObColumnDecoderCtx **ctxs_;
   static ObNoneExistColumnDecoder none_exist_column_decoder_;
@@ -463,6 +456,8 @@ private:
   static ObNewColumnDecoder new_column_decoder_;
   ObBlockReaderAllocator decoder_allocator_;
   common::ObArenaAllocator buf_allocator_;
+  char *allocated_decoders_buf_;
+  int64_t allocated_decoders_buf_size_;
 };
 
 }

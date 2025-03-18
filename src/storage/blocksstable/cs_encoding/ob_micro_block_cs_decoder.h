@@ -88,9 +88,7 @@ private:
 };
 
 template <class Decoder>
-static int acquire_local_decoder(ObCSDecoderPool &local_decoder_pool, const ObIColumnCSDecoder *&decoder);
-template <class Decoder>
-static int release_local_decoder(ObCSDecoderPool &local_decoder_pool, ObIColumnCSDecoder *decoder);
+int new_decoder_with_allocated_buf(char *buf, const ObIColumnCSDecoder *&decoder);
 
 class ObICSEncodeBlockReader
 {
@@ -101,32 +99,33 @@ public:
   void reuse();
 
 protected:
-  int prepare(const uint64_t tenant_id, const int64_t column_cnt);
+  int prepare(const int64_t column_cnt);
   int do_init(const ObMicroBlockData &block_data, const int64_t request_cnt);
   int init_decoders();
-  int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, ObColumnCSDecoder &dest);
-  int free_decoders();
-  int acquire(int64_t store_idx, const ObIColumnCSDecoder *&decoder);
+  int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, int64_t &decoders_buf_pos, ObColumnCSDecoder &dest);
+  int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder);
+  int alloc_decoders_buf();
 
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
-  static const int64_t DEFAULT_RELEASE_CNT = DEFAULT_DECODER_CNT;
 
   int64_t request_cnt_;  // request column count
-  const ObBlockCachedCSDecoderHeader *cached_decocer_;
+  const ObBlockCachedCSDecoderHeader *cached_decoder_;
   ObColumnCSDecoder *decoders_;
-  const ObIColumnCSDecoder **need_release_decoders_;
-  int64_t need_release_decoder_cnt_;
   ObCSMicroBlockTransformHelper transform_helper_;
   int32_t column_count_;
   ObColumnCSDecoder default_decoders_[DEFAULT_DECODER_CNT];
-  const ObIColumnCSDecoder *default_release_decoders_[DEFAULT_RELEASE_CNT];
-
-  ObCSDecoderPool *local_decoder_pool_;
   ObCSDecoderCtxArray ctx_array_;
   ObColumnCSDecoderCtx **ctxs_;
   common::ObArenaAllocator decoder_allocator_;
+
+  // For highly concurrently get row on wide tables(eg: more then 100 columns),
+  // frequently allocate from MTL(ObDecodeResourcePool*), resulting in a bottleneck
+  // for atomic operations under ARM, so we allocate mem for decoders in ObEncodeBlockGetReader
   common::ObArenaAllocator buf_allocator_;
+  char *allocated_decoders_buf_;
+  int64_t allocated_decoders_buf_size_;
+
   int32_t *store_id_array_;
   common::ObObjMeta *column_type_array_;
   int32_t default_store_ids_[DEFAULT_DECODER_CNT];
@@ -300,6 +299,7 @@ private:
       const int64_t store_idx,
       const ObObjMeta &obj_meta,
       const ObColumnParam *col_param,
+      int64_t &decoders_buf_pos,
       ObColumnCSDecoder &dest);
   int free_decoders();
   int get_stream_data_buf(const int64_t stream_idx, const char *&buf);
@@ -322,8 +322,8 @@ private:
   static int acquire(
     Allocator &allocatois_row_store_type_with_cs_encodingr, const ObCSColumnHeader::Type type, const ObIColumnCSDecoder *&decoder);
 
-  int acquire(int64_t store_idx, const ObIColumnCSDecoder *&decoder);
-  void release(const ObIColumnCSDecoder *decoder);
+  int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder);
+  int alloc_decoders_buf(const bool by_read_info);
   int filter_pushdown_retro(const sql::ObPushdownFilterExecutor *parent,
     sql::ObWhiteFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     const int32_t col_offset, const share::schema::ObColumnParam *col_param,
@@ -334,21 +334,19 @@ private:
 private:
   int32_t request_cnt_;  // request column count
   const ObBlockCachedCSDecoderHeader *cached_decoder_;
-  void *decoder_buf_;
   ObColumnCSDecoder *decoders_;
-  ObFixedArray<const ObIColumnCSDecoder *, ObIAllocator> need_release_decoders_;
-  int32_t need_release_decoder_cnt_;
   ObCSMicroBlockTransformHelper transform_helper_;
   int32_t column_count_;
-  ObCSDecoderPool *local_decoder_pool_;
   ObCSDecoderCtxArray ctx_array_;
   ObColumnCSDecoderCtx **ctxs_;
   static ObNoneExistColumnCSDecoder none_exist_column_decoder_;
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
   static ObNewColumnCSDecoder new_column_decoder_;
   ObBlockReaderAllocator decoder_allocator_;
-  common::ObArenaAllocator buf_allocator_;
   common::ObArenaAllocator transform_allocator_;
+  common::ObArenaAllocator buf_allocator_;
+  char *allocated_decoders_buf_;
+  int64_t allocated_decoders_buf_size_;
 };
 
 }  // namespace blocksstable
