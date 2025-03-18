@@ -6101,8 +6101,10 @@ int ObBasicSessionInfo::get_opt_dynamic_sampling(uint64_t &v) const
 
 void ObBasicSessionInfo::reset_query_string()
 {
-  thread_data_.cur_query_[0] = '\0';
-  thread_data_.cur_query_len_ = 0;
+  if (thread_data_.cur_query_ != nullptr) {
+    thread_data_.cur_query_[0] = '\0';
+    thread_data_.cur_query_len_ = 0;
+  }
 }
 
 void ObBasicSessionInfo::reset_top_query_string()
