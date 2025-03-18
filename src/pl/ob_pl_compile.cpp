@@ -834,7 +834,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
       ObRoutinePersistentInfo routine_storage(MTL_ID(),
-                                        session_info_.get_database_id(),
+                                        package.get_database_id(),
                                         session_info_.get_database_id(),
                                         package.get_id(),
                                         get_tenant_id_by_object_id(package.get_id()));
