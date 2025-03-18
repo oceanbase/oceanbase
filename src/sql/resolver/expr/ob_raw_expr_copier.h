@@ -161,6 +161,8 @@ public:
 
   int find_in_copy_context(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
 
+  void reuse();
+
 private:
 
   int add_expr(const ObRawExpr *from, const ObRawExpr *to);

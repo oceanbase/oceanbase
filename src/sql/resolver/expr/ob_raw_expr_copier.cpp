@@ -133,6 +133,13 @@ int ObRawExprCopier::find_in_copy_context(const ObRawExpr *old_expr, ObRawExpr *
   return ret;
 }
 
+void ObRawExprCopier::reuse()
+{
+  new_exprs_.reuse();
+  copied_exprs_.reuse();
+  uncopy_expr_nodes_.reuse();
+}
+
 int ObRawExprCopier::copy_expr_node(const ObRawExpr *expr,
                                     ObRawExpr *&new_expr)
 {

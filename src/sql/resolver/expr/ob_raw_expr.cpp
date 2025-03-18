@@ -214,7 +214,7 @@ bool ObRawExpr::has_generalized_column(bool ignore_column/* = false */) const
   return (!ignore_column && has_flag(CNT_COLUMN)) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
          || has_flag(CNT_WINDOW_FUNC) || has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN)
          || has_flag(CNT_SEQ_EXPR) || has_flag(CNT_SYS_CONNECT_BY_PATH) || has_flag(CNT_CONNECT_BY_ROOT)
-         || has_flag(CNT_OP_PSEUDO_COLUMN);
+         || has_flag(CNT_OP_PSEUDO_COLUMN) || has_flag(CNT_MATCH_EXPR);
 
 }
 

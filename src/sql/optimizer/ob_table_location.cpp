@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::sql;
@@ -6185,47 +6186,61 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
     ObRawExprFactory expr_factory(allocator_);
     ObRawExprCopier expr_copier(expr_factory);
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_columns.count(); ++i) {
-      ObColumnRefRawExpr * cur_expr = partition_columns.at(i).expr_;
-      if (OB_ISNULL(cur_expr)) {
+      ObColumnRefRawExpr * cur_col_expr = partition_columns.at(i).expr_;
+      if (OB_ISNULL(cur_col_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Column item's expr is NULL", K(ret));
-      } else if (OB_FAIL(part_column_exprs.push_back(cur_expr))) {
+      } else if (OB_FAIL(part_column_exprs.push_back(cur_col_expr))) {
         LOG_WARN("failed to push back part column expr");
-      } else if ((ObIntTC == cur_expr->get_type_class() && ObIntType != cur_expr->get_data_type()) ||
-                 (ObUIntTC == cur_expr->get_type_class() && ObUInt64Type != cur_expr->get_data_type())) {
+      } else if ((ObIntTC == cur_col_expr->get_type_class() && ObIntType != cur_col_expr->get_data_type()) ||
+                 (ObUIntTC == cur_col_expr->get_type_class() && ObUInt64Type != cur_col_expr->get_data_type())) {
         /*对于int类型分区键，OB内部存储的分区定义值是用INT64保存的，因此这里需要把column expr也mock成int64的，
           否则表达式计算时会出现column的预期类型与实际类型不符的问题*/
         need_replace_column = true;
         ObRawExpr *new_expr = nullptr;
-        if (OB_FAIL(expr_copier.copy(cur_expr, new_expr))) {
+        if (OB_FAIL(expr_copier.copy(cur_col_expr, new_expr))) {
           LOG_WARN("failed to copy column expr", K(ret));
         } else if (OB_ISNULL(new_expr) || OB_UNLIKELY(ObRawExpr::EXPR_COLUMN_REF != new_expr->get_expr_class())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected expr", KPC(new_expr));
-        } else if (ObIntTC == cur_expr->get_type_class()) {
+        } else if (ObIntTC == cur_col_expr->get_type_class()) {
+          ObExprResType res_type;
+          res_type.set_int();
+          res_type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
+          res_type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
           new_expr->set_data_type(ObIntType);
+          new_expr->set_result_type(res_type);
         } else {
+          ObExprResType res_type;
+          res_type.set_uint64();
+          res_type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].scale_);
+          res_type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].precision_);
           new_expr->set_data_type(ObUInt64Type);
+          new_expr->set_result_type(res_type);
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ori_exprs.push_back(cur_expr))) {
+        } else if (OB_FAIL(ori_exprs.push_back(cur_col_expr))) {
           LOG_WARN("failed to push back origen column expr");
+        } else if (OB_FALSE_IT(cur_col_expr = static_cast<ObColumnRefRawExpr*>(new_expr))) {
+        } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(expr_factory,
+                                                                          partition_columns.at(i).expr_,
+                                                                          new_expr, session_info))) {
+          LOG_WARN("failed to add cast for replace", K(ret));
         } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
           LOG_WARN("failed to push back cast expr");
-        } else {
-          cur_expr = static_cast<ObColumnRefRawExpr*>(new_expr);
         }
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(row_desc.add_column(cur_expr))) {
+      } else if (OB_FAIL(row_desc.add_column(cur_col_expr))) {
         LOG_WARN("Failed to add column item to temporary row desc", K(ret));
-      } else if (OB_FAIL(cur_expr->add_flag(IS_COLUMNLIZED))) {
+      } else if (OB_FAIL(cur_col_expr->add_flag(IS_COLUMNLIZED))) {
         LOG_WARN("failed to add flag IS_COLUMNLIZED", K(ret));
       }
     }
     /* int类型的列做分区键时，内部保存的分区定义中的值都会转换成INT64存储，因此*/
     if (OB_SUCC(ret) && need_replace_column) {
+      expr_copier.reuse();
       if (OB_FAIL(expr_copier.add_replaced_expr(ori_exprs, new_exprs))) {
         LOG_WARN("failed to add replace pair", K(ret));
       }
