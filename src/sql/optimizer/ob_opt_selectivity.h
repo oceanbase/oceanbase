@@ -443,12 +443,7 @@ public:
            const ObTableMetaInfo *base_meta_info);
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
-
-  int init_column_meta(const OptSelectivityCtx &ctx,
-                       const uint64_t column_id,
-                       OptColumnMeta &col_meta);
-
-  int add_column_meta_no_dup(const uint64_t column_id, const OptSelectivityCtx &ctx);
+  int add_column_meta_no_dup(const ObIArray<uint64_t> &column_id, const OptSelectivityCtx &ctx);
 
   const OptColumnMeta* get_column_meta(const uint64_t column_id) const;
   OptColumnMeta* get_column_meta(const uint64_t column_id);
@@ -505,7 +500,19 @@ public:
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),
                K_(scale_ratio), K_(stat_locked), K_(distinct_rows), K_(real_rows));
+
 private:
+  // TODO: make the column_metas to Array<OptColumnMeta*>
+  int init_column_meta(const OptSelectivityCtx &ctx,
+                       const ObIArray<uint64_t> &column_ids,
+                       ObIArray<OptColumnMeta> &column_metas);
+
+  int refine_column_meta(const OptSelectivityCtx &ctx,
+                         const uint64_t column_id,
+                         const ObGlobalColumnStat &stat,
+                         OptColumnMeta &col_meta);
+
+private :
   uint64_t table_id_;
   uint64_t ref_table_id_;
   double rows_;

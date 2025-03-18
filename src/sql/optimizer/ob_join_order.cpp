@@ -4398,11 +4398,16 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected params", K(ret), K(column_items.count()), K(ss_offset), K(table_meta));
     }
+
+    ObSEArray<uint64_t, 4> col_ids;
     for (int64_t i = 0; OB_SUCC(ret) && i < ss_offset; ++i) {
-      if (OB_FAIL(table_meta->add_column_meta_no_dup(column_items.at(i).column_id_ , ctx))) {
-        LOG_WARN("failed to add column meta no duplicate", K(ret));
-	  }
-	}
+      if (OB_FAIL(col_ids.push_back(column_items.at(i).column_id_))) {
+        LOG_WARN("fail to push_back column_ids", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(table_meta->add_column_meta_no_dup(col_ids, ctx))) {
+      LOG_WARN("failed to add column meta no duplicate", K(ret));
+    }
   }
   LOG_TRACE("check use skip scan", K(helper.is_inner_path_),
                           K(hint_force_skip_scan), K(hint_force_no_skip_scan), K(use_skip_scan));
@@ -15943,33 +15948,62 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
           if (rows < index_rows) {
             function_index_scale_ratio = rows / index_rows;
           }
+          ObSEArray<uint64_t, 16> refetch_col_ids;
+          ObSEArray<ObGlobalColumnStat, 16> col_stats;
+          ObSEArray<OptColumnMeta *, 16> col_meta_ptrs;
           for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
-            int64_t global_ndv = 0;
-            int64_t num_null = 0;
             ObGlobalColumnStat stat;
             OptColumnMeta *col_meta = table_meta->get_column_meta(column_ids.at(i));
             if (col_meta != NULL) {
-              if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_column_stat(OPT_CTX.get_session_info()->get_effective_tenant_id(),
-                                                                          index_id,
-                                                                          table_stat_part_ids,
-                                                                          column_ids.at(i),
-                                                                          index_rows,
-                                                                          function_index_scale_ratio,
-                                                                          stat,
-                                                                          &OPT_CTX.get_allocator()))) {
-                LOG_WARN("failed to get column stats", K(ret));
-              } else if (OB_FAIL(OptTableMeta::refine_column_stat(stat, rows, *col_meta))) {
-                LOG_WARN("failed to refine column stat", K(ret));
-              } else {
-                global_ndv = col_meta->get_ndv();
-                num_null = col_meta->get_num_null();
-                col_meta->set_ndv(rows < global_ndv ? rows : global_ndv);
-                col_meta->set_num_null(rows < num_null ? rows : num_null);
-                col_meta->set_avg_len(stat.avglen_val_);
-                col_meta->set_min_value(stat.min_val_);
-                col_meta->set_max_value(stat.max_val_);
-                col_meta->set_min_max_inited(true);
+              if (OB_FAIL(refetch_col_ids.push_back(column_ids.at(i)))) {
+                LOG_WARN("failed to push back column stat", K(ret));
+              } else if (OB_FAIL(col_meta_ptrs.push_back(col_meta))) {
+                LOG_WARN("failed to push back column meta", K(ret));
               }
+            }
+          }
+
+          if (OB_SUCC(ret) && !refetch_col_ids.empty()) {
+            if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->batch_get_column_stats(
+                                    OPT_CTX.get_session_info()->get_effective_tenant_id(),
+                                    index_id,
+                                    table_stat_part_ids,
+                                    refetch_col_ids,
+                                    index_rows,
+                                    function_index_scale_ratio,
+                                    col_stats,
+                                    &OPT_CTX.get_allocator()))) {
+              LOG_WARN("failed to get column stats", K(ret));
+            } else if (refetch_col_ids.count() != col_stats.count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected error column size not equal with column_stats",
+                       K(ret),
+                       K(refetch_col_ids.count()),
+                       K(col_stats.count()));
+            }
+          }
+
+          for (int64_t i = 0; OB_SUCC(ret) && i < refetch_col_ids.count(); ++i) {
+            int64_t global_ndv = 0;
+            int64_t num_null = 0;
+            OptColumnMeta *col_meta = col_meta_ptrs.at(i);
+            if (OB_ISNULL(col_meta)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret));
+            } else if (OB_UNLIKELY(col_meta->get_column_id() != col_meta->get_column_id())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected column id not matched when get column stats", K(ret));
+            } else if (OB_FAIL(OptTableMeta::refine_column_stat(col_stats.at(i), rows, *col_meta))) {
+              LOG_WARN("failed to refine column stat", K(ret));
+            } else {
+              global_ndv = col_meta->get_ndv();
+              num_null = col_meta->get_num_null();
+              col_meta->set_ndv(rows < global_ndv ? rows : global_ndv);
+              col_meta->set_num_null(rows < num_null ? rows : num_null);
+              col_meta->set_avg_len(col_stats.at(i).avglen_val_);
+              col_meta->set_min_value(col_stats.at(i).min_val_);
+              col_meta->set_max_value(col_stats.at(i).max_val_);
+              col_meta->set_min_max_inited(true);
             }
           }
         }

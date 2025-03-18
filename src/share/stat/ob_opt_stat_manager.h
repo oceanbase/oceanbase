@@ -70,15 +70,23 @@ public:
                         sqlclient::ObISQLConnection *conn,
                         const ObIArray<ObOptTableStat*> &table_stats,
                         const bool is_index_stat);
+  int batch_get_column_stats(const uint64_t tenant_id,
+                             const uint64_t table_id,
+                             const ObIArray<int64_t> &part_ids,
+                             const ObIArray<uint64_t> &column_ids,
+                             const int64_t row_cnt,
+                             const double scale_ratio,
+                             ObIArray<ObGlobalColumnStat> &stat,
+                             ObIAllocator *alloc);
 
   int get_column_stat(const uint64_t tenant_id,
-                      const uint64_t tab_ref_id,
+                      const uint64_t table_id,
                       const ObIArray<int64_t> &part_ids,
                       const uint64_t column_id,
                       const int64_t row_cnt,
                       const double scale_ratio,
                       ObGlobalColumnStat &stat,
-                      ObIAllocator *alloc = NULL);
+                      ObIAllocator *alloc);
 
   int get_column_stat(const uint64_t tenant_id,
                       const uint64_t table_id,
@@ -218,6 +226,24 @@ public:
   int update_system_stats(const uint64_t tenant_id,
                         const ObOptSystemStat *system_stats);
   int delete_system_stats(const uint64_t tenant_id);
+
+private:
+  int trans_col_handle_to_evals(const ObArray<ObOptColumnStatHandle> &new_handles,
+                                hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals);
+
+  int update_all_eval_to_stats(const int64_t row_cnt,
+                               const double scale_ratio,
+                               ObIAllocator *alloc,
+                               const ObIArray<uint64_t> &column_ids,
+                               const hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals,
+                               ObIArray<ObGlobalColumnStat> &column_stats);
+
+  int flush_evals(ObIAllocator *alloc,
+                  const int64_t start_pos,
+                  const int64_t end_pos,
+                  const ObIArray<uint64_t> &column_ids,
+                  const hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals);
+
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

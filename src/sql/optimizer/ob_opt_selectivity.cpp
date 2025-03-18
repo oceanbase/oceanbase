@@ -285,42 +285,78 @@ int OptTableMeta::init(const uint64_t table_id,
   }
 
   //init column ndv
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
-    if (OB_FAIL(init_column_meta(ctx, column_ids.at(i), column_metas_.at(i)))) {
-      LOG_WARN("failed to init column ", K(ret));
+  if (OB_SUCC(ret) && init_column_meta(ctx, column_ids, column_metas_)) {
+    LOG_WARN("init column meta failed", K(ret));
     }
-  }
+
   return ret;
 }
 
 int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
+                                   const ObIArray<uint64_t> &column_ids,
+                                   ObIArray<OptColumnMeta> &column_metas)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObGlobalColumnStat, 4> col_stats;
+
+  if (use_default_stat() || stat_parts_.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+      ObGlobalColumnStat s;
+      column_metas.at(i).set_default_meta(rows_);
+      if (OB_FAIL(col_stats.push_back(s))) {
+        LOG_WARN("failed to push back column id", K(ret));
+      }
+    }
+  } else if (!column_ids.empty()) {
+    // batch get column stats
+    if ((OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(ctx.get_opt_stat_manager()), K(ctx.get_session_info()));
+    } else if (OB_FAIL(ctx.get_opt_stat_manager()->batch_get_column_stats(
+                   ctx.get_session_info()->get_effective_tenant_id(),
+                   ref_table_id_,
+                   stat_parts_,
+                   column_ids,
+                   rows_,
+                   scale_ratio_,
+                   col_stats,
+                   &ctx.get_allocator()))) {
+      LOG_WARN("failed to get column stats", K(ret), KPC(this));
+    } else if (column_ids.count() != col_stats.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error column size not equal with column_stats",
+               K(ret),
+               K(column_ids.count()),
+               K(col_stats.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+        if (OB_FAIL(refine_column_stat(col_stats.at(i), rows_, column_metas.at(i)))) {
+          LOG_WARN("failed to init column ", K(ret));
+        }
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+    if (OB_FAIL(refine_column_meta(ctx, column_ids.at(i), col_stats.at(i), column_metas.at(i)))) {
+      LOG_WARN("failed to init column ", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int OptTableMeta::refine_column_meta(const OptSelectivityCtx &ctx,
                                    const uint64_t column_id,
+                                   const ObGlobalColumnStat &stat,
                                    OptColumnMeta &col_meta)
 {
   int ret = OB_SUCCESS;
-  ObGlobalColumnStat stat;
   bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id) ||
                          column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
   int64_t global_ndv = 0;
   int64_t num_null = 0;
-  if (use_default_stat() || stat_parts_.empty()) {
-    col_meta.set_default_meta(rows_);
-  } else if (OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx.get_opt_stat_manager()),
-                                    K(ctx.get_session_info()));
-  } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                                 ref_table_id_,
-                                                                 stat_parts_,
-                                                                 column_id,
-                                                                 rows_,
-                                                                 scale_ratio_,
-                                                                 stat))) {
-    LOG_WARN("failed to get column stats", K(ret), KPC(this));
-  } else if (OB_FAIL(refine_column_stat(stat, rows_, col_meta))) {
-    LOG_WARN("failed to refine column stat", K(ret));
-  }
-  if (OB_SUCC(ret) && is_single_pkey) {
+  if (is_single_pkey) {
     col_meta.set_ndv(rows_);
     col_meta.set_num_null(0);
   }
@@ -352,18 +388,30 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
   return ret;
 }
 
-int OptTableMeta::add_column_meta_no_dup(const uint64_t column_id,
-                                         const OptSelectivityCtx &ctx)
+int OptTableMeta::add_column_meta_no_dup(const ObIArray<uint64_t> &column_ids, const OptSelectivityCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  OptColumnMeta *col_meta = NULL;
-  if (NULL != OptTableMeta::get_column_meta(column_id)) {
-    /* do nothing */
-  } else if (OB_ISNULL(col_meta = column_metas_.alloc_place_holder())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate place holder for column meta", K(ret));
-  } else if (OB_FAIL(init_column_meta(ctx, column_id, *col_meta))) {
+  ObSEArray<uint64_t, 4> col_ids;
+  ObSEArray<OptColumnMeta, 4> col_stats;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+    OptColumnMeta col_meta;
+    if (NULL != OptTableMeta::get_column_meta(column_ids.at(i))) {
+      /* do nothing */
+    } else if (OB_FAIL(col_ids.push_back(column_ids.at(i)))) {
+      LOG_WARN("failed to push-back col_ids", K(ret));
+    } else if (OB_FAIL(col_stats.push_back(col_meta))) {
+      LOG_WARN("failed to push-back col_stats", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(init_column_meta(ctx, col_ids, col_stats))) {
     LOG_WARN("failed to init column meta", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); i++) {
+    if (OB_FAIL(column_metas_.push_back(col_stats.at(i)))) {
+      LOG_WARN("failed to push_back column meta", K(ret));
+    }
   }
   return ret;
 }

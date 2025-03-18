@@ -708,6 +708,18 @@ void ObGlobalMaxEval::add(const ObObj &obj)
   }
 }
 
+int ObGlobalMaxEval::flush(common::ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  ObObj temp_value_;
+  if (is_valid() && OB_FAIL(ob_write_obj(*alloc, global_max_, temp_value_))) {
+    LOG_WARN("failed to deep copy min obj", K(ret));
+  } else if (is_valid()) {
+    global_max_ = temp_value_;
+  }
+  return ret;
+}
+
 void ObGlobalMinEval::add(const ObObj &obj)
 {
   if (global_min_.is_null()) {
@@ -715,6 +727,18 @@ void ObGlobalMinEval::add(const ObObj &obj)
   } else if (global_min_ > obj) {
     global_min_ = obj;
   }
+}
+
+int ObGlobalMinEval::flush(common::ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  ObObj temp_value_;
+  if (is_valid() && OB_FAIL(ob_write_obj(*alloc, global_min_, temp_value_))) {
+    LOG_WARN("failed to deep copy min obj", K(ret));
+  } else if (is_valid()) {
+    global_min_ = temp_value_;
+  }
+  return ret;
 }
 
 int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
@@ -773,6 +797,33 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
   return ret;
 }
 
+int ObGlobalAllColEvals::flush(common::ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  if(OB_FAIL(max_eval_.flush(alloc))) {
+    LOG_WARN("failed to flush min", K(ret));
+  } else if (OB_FAIL((min_eval_.flush(alloc)))) {
+    LOG_WARN("failed to flush max", K(ret));
+  }
+  return ret;
+}
+
+void ObGlobalAllColEvals::merge(const ObOptColumnStat &col_stats)
+{
+  if (col_stats.get_last_analyzed() > 0) {
+    ndv_eval_.add(col_stats.get_num_distinct(), col_stats.get_llc_bitmap());
+    null_eval_.add(col_stats.get_num_null());
+    avglen_eval_.add(col_stats.get_avg_len());
+    cg_blk_eval_.add_cg_blk_cnt(col_stats.get_cg_macro_blk_cnt(), col_stats.get_cg_micro_blk_cnt());
+    // a partition has min/max values only when it contains a valid value in the other word, ndv is not zero
+    if (col_stats.get_num_distinct() != 0) {
+      min_eval_.add(col_stats.get_min_value());
+      max_eval_.add(col_stats.get_max_value());
+    }
+  } else {
+    column_stat_valid_ = false;
+  }
+}
 static const int32_t DEFAULT_DATA_TYPE_LEGNTH[] =
 {
   /*ObNullType        = 0*/  12,
