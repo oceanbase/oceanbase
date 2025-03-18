@@ -2522,6 +2522,34 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
                                                               is_remote_write,
                                                               lock_tid))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
+      } else if (!data_tablet_mgr->get_lob_mgr_handle().is_valid()) {
+        // when ddl start log is replayed, the ddl commit log is remote write
+        // the lob mgr handle is not bind to data mgr handle, need commit manually
+        ObTabletBindingMdsUserData ddl_data;
+        ObTabletDirectLoadMgrHandle lob_direct_load_mgr_handle;
+        if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+          LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
+        } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+          bool is_lob_major_sstable_exist = false;
+          if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->get_tablet_mgr_and_check_major(arg_.ls_id_, ddl_data.lob_meta_tablet_id_,
+                  true/* is_full_direct_load */, lob_direct_load_mgr_handle, is_lob_major_sstable_exist))) {
+            if (OB_ENTRY_NOT_EXIST == ret && is_lob_major_sstable_exist) {
+              ret = OB_SUCCESS;
+              LOG_INFO("lob meta tablet exist major sstable, skip", K(ret), K(ddl_data.lob_meta_tablet_id_));
+            } else {
+              LOG_WARN("get tablet mgr failed", K(ret), K(ddl_data.lob_meta_tablet_id_));
+            }
+          }
+        } else if (OB_FAIL(lob_direct_load_mgr_handle.get_full_obj()->commit(*tablet_handle.get_obj(),
+                                                                             arg_.start_scn_,
+                                                                             commit_scn,
+                                                                             arg_.table_id_,
+                                                                             arg_.ddl_task_id_,
+                                                                             false/*is replay*/))) {
+          LOG_WARN("lob direct load mgr commit failed", K(ret), K(lob_direct_load_mgr_handle));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(data_tablet_mgr->commit(*tablet_handle.get_obj(),
                                                  arg_.start_scn_,
                                                  commit_scn,
