@@ -2977,6 +2977,7 @@ int ObLobQueryP::process_read()
     ObLobAccessParam param;
     param.scan_backward_ = arg_.scan_backward_;
     param.from_rpc_ = true;
+    param.enable_remote_retry_ = arg_.enable_remote_retry_;
     ObLobQueryIter *iter = nullptr;
     int64_t timeout = get_timeout();
     if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
@@ -3023,6 +3024,7 @@ int ObLobQueryP::process_getlength()
   ObLobAccessParam param;
   param.scan_backward_ = arg_.scan_backward_;
   param.from_rpc_ = true;
+  param.enable_remote_retry_ = arg_.enable_remote_retry_;
   header.reset();
   uint64_t len = 0;
   int64_t timeout = get_timeout();

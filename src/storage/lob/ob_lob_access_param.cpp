@@ -225,7 +225,8 @@ bool ObLobAccessParam::enable_block_cache() const
 
 // 1. from rpc can not remote again
 // 2. lob from other tenant also should read by rpc
-bool ObLobAccessParam::is_remote() const  { return ! from_rpc_ && addr_.is_valid() && (MYADDR != addr_ || MTL_ID() != tenant_id_); }
+bool ObLobAccessParam::is_remote() const  { return (! from_rpc_ || enable_remote_retry_) && addr_.is_valid() && (MYADDR != addr_ || is_across_tenant()); }
+bool ObLobAccessParam::is_across_tenant() const { return MTL_ID() != tenant_id_; }
 
 int ObLobAccessParam::check_handle_size() const
 {

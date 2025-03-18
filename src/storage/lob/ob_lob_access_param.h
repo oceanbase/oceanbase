@@ -52,7 +52,7 @@ public:
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_total_quantity_log_(true),
       read_latest_(false), scan_backward_(false), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false), is_store_char_len_(true), need_read_latest_(false), no_need_retry_(false), is_mlog_(false), try_flush_redo_(false),
-      main_table_rowkey_col_(false), is_index_table_(false),
+      main_table_rowkey_col_(false), is_index_table_(false), enable_remote_retry_(false),
       inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),
       access_ctx_(nullptr), addr_(), lob_id_geneator_(nullptr), data_row_(nullptr)
   {}
@@ -79,6 +79,7 @@ public:
   bool is_blob() { return coll_type_ == common::ObCollationType::CS_TYPE_BINARY; }
 
   bool is_remote() const;
+  bool is_across_tenant() const;
 
   // chunk size can be changed online.
   // that means lob data that has been writed may have different chunk size with schema
@@ -123,7 +124,7 @@ public:
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest), K_(is_total_quantity_log),
     K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), K_(need_read_latest), K(no_need_retry_), K_(is_mlog), K_(try_flush_redo),
-    K_(main_table_rowkey_col), K_(is_index_table), KP_(access_ctx), K_(addr), KPC_(lob_id_geneator), KPC_(data_row));
+    K_(main_table_rowkey_col), K_(is_index_table), K_(enable_remote_retry), KP_(access_ctx), K_(addr), KPC_(lob_id_geneator), KPC_(data_row));
 
 private:
   ObIAllocator *tmp_allocator_;
@@ -206,7 +207,7 @@ public:
   bool try_flush_redo_;
   bool main_table_rowkey_col_; // true: main table rowkey column
   bool is_index_table_;
-
+  bool enable_remote_retry_;
   int64_t inrow_threshold_;
   int64_t schema_chunk_size_;
   ObObj ext_info_log_;

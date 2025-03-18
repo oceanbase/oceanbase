@@ -140,7 +140,7 @@ int ObLobQueryRemoteReader::do_fetch_rpc_buffer(
 int ObLobRemoteUtil::query(ObLobAccessParam& param, const ObLobQueryArg::QueryType qtype, const ObAddr &dst_addr, ObLobRemoteQueryCtx *&remote_ctx)
 {
   int ret = OB_SUCCESS;
-  if (param.from_rpc_) {
+  if (param.from_rpc_ && ! param.enable_remote_retry_) {
     ret = OB_NOT_MASTER;
     LOG_WARN("call from rpc, but remote again", K(ret), K(dst_addr), K(MTL_ID()), K(param));
   } else if (OB_FAIL(remote_query_init_ctx(param, qtype, remote_ctx))) {
@@ -195,6 +195,7 @@ int ObLobRemoteUtil::remote_query_init_ctx(ObLobAccessParam &param, const ObLobQ
     remote_ctx->query_arg_.lob_locator_.ptr_ = param.lob_locator_->ptr_;
     remote_ctx->query_arg_.lob_locator_.size_ = param.lob_locator_->size_;
     remote_ctx->query_arg_.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
+    remote_ctx->query_arg_.enable_remote_retry_ = param.is_across_tenant();
     //set ctx ptr
     ctx = remote_ctx;
   }
