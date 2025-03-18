@@ -6116,7 +6116,6 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
               }
             }
           }
-          OZ (ObPLDependencyUtil::add_dependency_objects(&func.get_dependency_table(), prepare_result.ref_objects_));
           OX (static_sql.set_row_desc(record_type));
         }
         // used for generate route sql
