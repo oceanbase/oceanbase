@@ -2605,6 +2605,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
     // no get_index_number interface currently
     int64_t current_incr_count = 0;
     if (OB_NOT_NULL(get_incr_index())) {
+      TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::get_index_number(get_incr_index(), current_incr_count))) {
         ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to get incr index number", K(ret));
@@ -2625,6 +2626,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
 
     int64_t current_snapshot_count = 0;
     if (OB_NOT_NULL(get_snap_index())) {
+      TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::get_index_number(get_snap_index(), current_snapshot_count))) {
         ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to get snap index number", K(ret));
