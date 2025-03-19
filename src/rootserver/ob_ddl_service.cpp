@@ -17971,7 +17971,8 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
         LOG_WARN("failed to fetch new foreign key id", K(ret), K(tenant_id));
       } else if (original_fk_info.parent_table_id_ == orig_table_schema.get_table_id()) {
         // update referenced constraint id
-        if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_) {
+        if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_ ||
+            (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_ && !orig_table_schema.is_index_table())) {
           if (is_oracle_mode) {
             const ObConstraint *pk_cst = hidden_table_schema.get_pk_constraint();
             if (OB_ISNULL(pk_cst)) {
@@ -17981,7 +17982,11 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
               foreign_key_info.ref_cst_id_ = pk_cst->get_constraint_id();
             }
           } else {
-            foreign_key_info.ref_cst_id_ = common::OB_INVALID_ID;
+            if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_) {
+              foreign_key_info.ref_cst_id_ = common::OB_INVALID_ID;
+            } else if (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_) {
+              foreign_key_info.ref_cst_id_ = hidden_table_schema.get_table_id();
+            }
           }
         } else {
           const ObSimpleTableSchemaV2 *orig_index_table_schema = NULL;
