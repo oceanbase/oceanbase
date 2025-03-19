@@ -15,6 +15,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "sql/engine/ob_exec_context.h"
 
 #define ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME  "tenant_id, " \
                                               "job_name, " \
@@ -505,7 +506,7 @@ int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time
   return ret;
 }
 
-int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::ObSQLSessionInfo *session,
+int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(ObExecContext &ctx,
                                                                    const ObString &job_name,
                                                                    const ObString &attr_name,
                                                                    const ObString &val_name,
@@ -514,6 +515,7 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
 {
   int ret = OB_SUCCESS;
   is_window_attr = false;
+  ObSQLSessionInfo *session = ctx.get_my_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(session));
@@ -573,8 +575,13 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
       }
     } else if (0 == attr_name.case_compare("duration")) {
       // support set duration column.
-      int64_t specify_time = atol(val_name.ptr());
-      if (specify_time < 0 || specify_time > DEFAULT_DAY_INTERVAL_USEC) {
+      char* cname = NULL;
+      int64_t specify_time = -1;
+      if (OB_FAIL(ob_dup_cstring(ctx.get_allocator(), val_name, cname))) {
+        LOG_WARN("failed to dup cstring", K(ret));
+      } else if (OB_FAIL(common::ob_atoll(cname, specify_time))) {
+        LOG_WARN("fail to parse from string", "string", val_name, K(ret));
+      } else if (specify_time < 0 || specify_time > DEFAULT_DAY_INTERVAL_USEC) {
         ret = OB_ERR_DBMS_STATS_PL;
         LOG_WARN("the hour of interval must be between 0 and 24", K(ret));
         LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "the hour of interval must be between 0 and 24");      

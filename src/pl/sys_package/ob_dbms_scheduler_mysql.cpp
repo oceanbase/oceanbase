@@ -130,7 +130,7 @@ int ObDBMSSchedulerMysql::set_attribute(
   OZ (dml.add_pk_column("job_name", ObHexEscapeSqlStr(params.at(0).get_string())));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(
-                                                                          ctx.get_my_session(),
+                                                                          ctx,
                                                                           params.at(0).get_string(),
                                                                           params.at(1).get_string(),
                                                                           params.at(2).get_string(),
