@@ -4187,6 +4187,9 @@ int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, 
   if (OB_SUCC(ret) && need_set) {
     OX ((const_cast<ObPLVar*>(var))->set_type(*type));
     OX ((const_cast<ObPLVar*>(var))->set_readonly(false));
+    if (var->is_referenced()) {
+      OX ((const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_INOUT_ARG));
+    }
     if (OB_FAIL(ret)) {
     } else if (type->is_obj_type()) {
       CK (OB_NOT_NULL(type->get_data_type()));
