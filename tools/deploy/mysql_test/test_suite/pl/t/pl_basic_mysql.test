@@ -1388,6 +1388,8 @@ drop procedure p;
 
 #case 77
 create table a(a1 int);
+drop procedure if exists p1;
+drop procedure if exists p;
 delimiter //;
 create procedure p1(
 INOUT arg1 int,
