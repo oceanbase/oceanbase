@@ -122,7 +122,7 @@ int ObTenantCtxAllocator::iter_label(VisitFunc func) const
   return ret;
 }
 
-void ObTenantCtxAllocator::print_usage() const
+void ObTenantCtxAllocator::print_usage(uint64_t min_print_size) const
 {
   int ret = OB_SUCCESS;
   static const int64_t BUFLEN = 1 << 16;
@@ -133,7 +133,7 @@ void ObTenantCtxAllocator::print_usage() const
     ret = iter_label([&](ObLabel &label, LabelItem *l_item)
     {
       int ret = OB_SUCCESS;
-      if (l_item->count_ != 0) {
+      if (l_item->count_ != 0 && l_item->hold_ >= min_print_size) {
         ret = databuff_printf(
             buf, BUFLEN, pos,
             "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld block_cnt=% '8d chunk_cnt=% '8d mod=%s\n",
