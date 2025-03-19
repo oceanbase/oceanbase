@@ -34,7 +34,8 @@ OB_SERIALIZE_MEMBER(ObUnitInfoGetter::ObTenantConfig,
                     create_timestamp_,
                     has_memstore_,
                     is_removed_,
-                    hidden_sys_data_disk_config_size_);
+                    hidden_sys_data_disk_config_size_,
+                    actual_data_disk_size_);
 
 const char* ObUnitInfoGetter::unit_status_strs_[] = {
     "NORMAL",
@@ -55,7 +56,8 @@ ObUnitInfoGetter::ObTenantConfig::ObTenantConfig()
     create_timestamp_(0),
     has_memstore_(true),
     is_removed_(false),
-    hidden_sys_data_disk_config_size_(0)
+    hidden_sys_data_disk_config_size_(0),
+    actual_data_disk_size_(0)
 {}
 
 int ObUnitInfoGetter::ObTenantConfig::init(

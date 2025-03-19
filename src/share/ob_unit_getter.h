@@ -105,6 +105,7 @@ public:
     bool is_removed_;
     int64_t hidden_sys_data_disk_config_size_;  // In shared storage mode, the value set hidden_sys_memory in sys tenant config.
                                                 // Shared nothing ignore this value and Other tenant ignore this value.
+    int64_t actual_data_disk_size_;  // only as placeholder, always 0
   };
 
   struct ObServerConfig
