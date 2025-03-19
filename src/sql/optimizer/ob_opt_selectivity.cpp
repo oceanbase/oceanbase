@@ -285,7 +285,7 @@ int OptTableMeta::init(const uint64_t table_id,
   }
 
   //init column ndv
-  if (OB_SUCC(ret) && init_column_meta(ctx, column_ids, column_metas_)) {
+  if (OB_SUCC(ret) && OB_FAIL(init_column_meta(ctx, column_ids, column_metas_))) {
     LOG_WARN("init column meta failed", K(ret));
     }
 
