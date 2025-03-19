@@ -4000,6 +4000,11 @@ int ObBasicSessionInfo::get_optimizer_cost_based_transformation(int64_t &cbqt_po
   int ret = get_int64_sys_var(SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION, cbqt_policy);
   return ret;
 }
+
+int ObBasicSessionInfo::is_push_join_predicate_enabled(bool &push_join_predicate_enabled) const
+{
+  return get_bool_sys_var(SYS_VAR__PUSH_JOIN_PREDICATE, push_join_predicate_enabled);
+}
 ////////////////////////////////////////////////////////////////
 int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_map)
 {

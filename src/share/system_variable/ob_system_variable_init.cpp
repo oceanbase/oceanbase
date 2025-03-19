@@ -11410,13 +11410,26 @@ static struct VarsInit{
     ObSysVars[832].alias_ = "OB_SV_HNSW_EXTRA_INFO_MAX_SIZE" ;
     }();
 
+    [&] (){
+      ObSysVars[833].default_value_ = "1" ;
+      ObSysVars[833].info_ = "control whether the optimizer pushes down join predicates to view" ;
+      ObSysVars[833].name_ = "_push_join_predicate" ;
+      ObSysVars[833].data_type_ = ObIntType ;
+      ObSysVars[833].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[833].id_ = SYS_VAR__PUSH_JOIN_PREDICATE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PUSH_JOIN_PREDICATE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PUSH_JOIN_PREDICATE] = 833 ;
+      ObSysVars[833].base_value_ = "1" ;
+    ObSysVars[833].alias_ = "OB_SV__PUSH_JOIN_PREDICATE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 833;
+static int64_t var_amount = 834;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

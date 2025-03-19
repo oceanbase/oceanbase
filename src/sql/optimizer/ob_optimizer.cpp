@@ -761,8 +761,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get opt param nlj batching enable", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_SPF_BATCH_RESCAN, enable_spf_batch_rescan))) {
     LOG_WARN("failed to get opt param enable spf batch rescan", K(ret));
-  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
-    LOG_WARN("fail to check rowsets enabled", K(ret));
+  } else if (OB_FAIL(session.is_push_join_predicate_enabled(push_join_pred_into_view_enabled))) {
+    LOG_WARN("failed to get push join predicate variable", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
+    LOG_WARN("failed to get push join predicate opt param value", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::PARTITION_WISE_PLAN_ENABLED,
                                                    partition_wise_plan_enabled,
                                                    exists_partition_wise_plan_enabled_hint))) {
