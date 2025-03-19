@@ -138,7 +138,17 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
           }
           if (OB_FAIL(ret)) {
           } else if (false == node.is_system_variable_) {
-            if (OB_FAIL(set_user_variable(value_obj, node.variable_name_, expr_ctx))) {
+            if (ob_is_enum_or_set_type(value_obj.get_type())) {
+              ObObjParam obj_param = value_obj;
+              if (OB_FAIL(ObSPIService::cast_enum_set_to_string(ctx,
+                                                                node.value_expr_->get_enum_set_values(),
+                                                                obj_param,
+                                                                value_obj))) {
+                LOG_WARN("cast enum set to string failed", K(ret));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(set_user_variable(value_obj, node.variable_name_, expr_ctx))) {
               LOG_WARN("set user variable failed", K(ret));
             }
           } else {
