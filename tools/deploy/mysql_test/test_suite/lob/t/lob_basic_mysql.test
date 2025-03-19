@@ -282,3 +282,7 @@ select column_name, column_default from information_schema.columns where table_n
 
 drop view t1v1;
 drop table t1;
+
+create table t1(c1 int default 10 comment 'ttttttttttttttttttttttt', c2 int generated always as (c1 + 2) virtual comment 'gen');
+SELECT * from information_schema.COLUMNS  WHERE upper(table_schema)  = 'TEST' and upper(table_name)  = 'T1'  ORDER BY  ordinal_position asc;
+drop table t1;

@@ -618,6 +618,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case DATA_TYPE: {
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
+            cells[cell_idx].reset();
             if (OB_ISNULL(table_schema_) ||
                 OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
               ret = OB_ERR_UNEXPECTED;
@@ -636,6 +637,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                                 static_cast<int32_t>(strlen(data_type_str_)),data_type_str_);
               cells[cell_idx].set_string(column_type, type_val);
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+                SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+              }
             }
             break;
           }
@@ -739,6 +743,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                                       column_schema->get_sub_data_type() : static_cast<uint64_t>(column_schema->get_geo_type());
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
+            cells[cell_idx].reset();
             if (OB_ISNULL(table_schema_) ||
                 OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
               ret = OB_ERR_UNEXPECTED;
@@ -761,6 +766,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
               ObString type_val(column_type_str_len_, static_cast<int32_t>(strlen(column_type_str_)),column_type_str_);
               cells[cell_idx].set_string(column_type, type_val);
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+                SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+              }
             }
             break;
           }
@@ -877,6 +885,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             break;
           }
         case COLUMN_COMMENT: {
+            cells[cell_idx].reset();
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
             if (OB_ISNULL(table_schema_) ||
@@ -888,12 +897,16 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
               cells[cell_idx].set_string(column_type, column_schema->get_comment_str());
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                     ObCharset::get_default_charset()));
+              if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+                SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+              }
             }
             break;
           }
         case GENERATION_EXPRESSION: {
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
+            cells[cell_idx].reset();
             if (OB_ISNULL(table_schema_) ||
                 OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
               ret = OB_ERR_UNEXPECTED;
@@ -906,6 +919,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             }
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                ObCharset::get_default_charset()));
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+              SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+            }
             break;
           }
         case SRS_ID: {
@@ -1123,6 +1140,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             }
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
+            cells[cell_idx].reset();
             if (OB_FAIL(ret)) {
             } else if (OB_ISNULL(table_schema_) ||
                        OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
@@ -1142,6 +1160,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                                 static_cast<int32_t>(strlen(data_type_str_)),data_type_str_);
               cells[cell_idx].set_string(column_type, type_val);
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+                SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+              }
             }
             break;
           }
@@ -1227,6 +1248,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
         case COLUMN_TYPE: {
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
+            cells[cell_idx].reset();
             if (OB_ISNULL(table_schema_) ||
                 OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
               ret = OB_ERR_UNEXPECTED;
@@ -1236,6 +1258,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
               ObString type_val(column_type_str_len_, static_cast<int32_t>(strlen(column_type_str_)),column_type_str_);
               cells[cell_idx].set_string(column_type, type_val);
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+                SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+              }
             }
             break;
           }
