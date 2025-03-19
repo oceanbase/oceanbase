@@ -99,6 +99,7 @@ static int ob_strnncoll_tis620(const ObCharsetInfo *cs [[maybe_unused]],
          scanner2.get_next_character(ch2);
          if (ch1 != ch2) {
             res = ((int)ch1 - (int)ch2);
+            return res;
          }
       }
       if (scanner1.has_next()) {
@@ -139,6 +140,7 @@ static int ob_strnncollsp_tis620(const ObCharsetInfo *cs [[maybe_unused]],
         scanner2.get_next_character(ch2);
         if (ch1 != ch2) {
           res = ((int)ch1 - (int)ch2);
+          return res;
         }
     }
     /*
@@ -149,14 +151,14 @@ static int ob_strnncollsp_tis620(const ObCharsetInfo *cs [[maybe_unused]],
       scanner1.get_next_character(ch1);
       if (ch1 != ' ') {
         res = (ch1 < ' ') ? -1 : 1;
-        break;
+        return res;
       }
     }
     while (scanner2.has_next()) {
       scanner2.get_next_character(ch2);
       if (ch2 != ' ') {
         res = (ch2 < ' ') ? 1 : -1;
-        break;
+        return res;
       }
     }
   } else {
@@ -191,7 +193,7 @@ static int ob_strnncollsp_tis620(const ObCharsetInfo *cs [[maybe_unused]],
       for (end = a + a_length - length; a < end; a++) {
         if (*a != ' ') {
           res = (*a < ' ') ? -swap : swap;
-          break;
+          return res;
         }
       }
     }
