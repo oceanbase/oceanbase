@@ -16338,7 +16338,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc record type for package cursor", K(ret));
       }
-      row_desc = new(row_desc)ObRecordType();
+      OX (row_desc = new(row_desc)ObRecordType());
       OZ (row_desc->deep_copy(allocator, *(cursor.get_row_desc())));
     }
     OX (index = OB_INVALID_INDEX);
