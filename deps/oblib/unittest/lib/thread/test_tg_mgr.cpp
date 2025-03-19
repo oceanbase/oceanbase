@@ -315,7 +315,7 @@ TEST_F(TestTG, map_queue_thread)
   ASSERT_EQ(OB_SUCCESS, TG_SET_HANDLER(tg_id, handler));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_PUSH_TASK(tg_id, &tg_id, 0));
-  ::usleep(50000);
+  ::usleep(500000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
   ASSERT_EQ(1, handler.handle_count_);
@@ -324,7 +324,7 @@ TEST_F(TestTG, map_queue_thread)
   ASSERT_EQ(OB_SUCCESS, TG_SET_HANDLER(tg_id, handler));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_PUSH_TASK(tg_id, &tg_id, 1));
-  ::usleep(50000);
+  ::usleep(500000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
   ASSERT_EQ(2, handler.handle_count_);
