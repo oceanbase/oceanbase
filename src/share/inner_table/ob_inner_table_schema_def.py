@@ -326,6 +326,7 @@ all_table_def = dict(
       ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', r'{\"GLOBAL\":\"AUTO\"}'),
       ('merge_engine_type', 'int', 'false', '0'),
       ('semistruct_encoding_type', 'int', 'false', '0'),
+      ('dynamic_partition_policy', 'varchar:OB_MAX_DYNAMIC_PARTITION_POLICY_LENGTH', 'false', ''),
     ],
 )
 
@@ -15874,7 +15875,6 @@ def_table_schema(
 # 12517: __all_virtual_catalog_history
 # 12518: __all_virtual_catalog_privilege
 # 12519: __all_virtual_catalog_privilege_history
-
 # 12520: __all_virtual_sswriter_group_stat
 # 12521: __all_virtual_sswriter_lease_mgr
 
@@ -15896,6 +15896,8 @@ def_table_schema(
 # 12534: __all_virtual_ccl_status
 
 # 12535: __all_virtual_mview_running_job
+
+# 12536: __all_virtual_dynamic_partition_table
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16438,12 +16440,12 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15502: __all_virtual_tenant_flashback_log_scn
 # 15503: __all_virtual_pl_recompile_objinfo
 # 15504: __tenant_virtual_show_create_catalog
-
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status
 
 # 15507: __all_virtual_mview_running_job
 # 15508: __all_mview_dep
+# 15509: __all_virtual_dynamic_partition_table
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -40953,6 +40955,11 @@ def_table_schema(
 # 21652: DBA_MVIEW_RUNNING_JOBS
 # 21653: CDB_MVIEW_RUNNING_JOBS
 # 21654: DBA_MVIEW_DEPS
+
+# 21655: DBA_OB_DYNAMIC_PARTITION_TABLES
+# 21656: CDB_OB_DYNAMIC_PARTITION_TABLES
+# 21657: V$OB_DYNAMIC_PARTITION_TABLES
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -62561,11 +62568,12 @@ def_table_schema(
 )
 
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
-
 # 25307: DBA_OB_CCL_RULE
 
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
+# 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
+
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -73853,6 +73861,7 @@ def_table_schema(
 
 # 28272: GV$OB_SQL_CCL_STATUS
 # 28273: V$OB_SQL_CCL_STATUS
+# 28274: V$OB_DYNAMIC_PARTITION_TABLES
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
