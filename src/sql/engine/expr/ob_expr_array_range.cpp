@@ -89,7 +89,7 @@ int ObExprArrayRange::eval_array_range(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   int64_t param_start = 0;
   int64_t param_end = 0;
   int64_t param_step = 1;
-  int32_t arr_size = 0;
+  uint64_t arr_size = 0;
   char *arr_buf = NULL;
   uint32_t arr_buf_len = 0;
   int64_t *arr_data = NULL;
@@ -126,7 +126,6 @@ int ObExprArrayRange::eval_array_range(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     // empty array
     arr_buf_len = sizeof(uint32_t);
   } else {
-    /* int64 array binary: | length(uint32_t) | null_bitmaps(size * uint8_t) | arr_data( size * int64_t ) | */
     uint64_t interval = 0;
     if (param_start >= 0 && param_end < 0) {
       if (param_end == INT64_MIN) {
@@ -144,13 +143,15 @@ int ObExprArrayRange::eval_array_range(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       interval = abs(param_end - param_start);
     }
     arr_size = (interval - 1) / abs(param_step) + 1;
-    arr_buf_len = sizeof(uint32_t) + arr_size * (sizeof(uint8_t) + sizeof(int64_t));
     if (arr_size > MAX_ARRAY_ELEMENT_SIZE) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("array element size exceed max", K(ret), K(arr_size), K(MAX_ARRAY_ELEMENT_SIZE));
+    } else {
+      arr_buf_len = sizeof(uint32_t) + arr_size * (sizeof(uint8_t) + sizeof(int64_t));
     }
   }
 
+  /* int64 array binary: | length(uint32_t) | null_bitmaps(size * uint8_t) | arr_data( size * int64_t ) | */
   if (OB_FAIL(ret) || is_null_res) {
   } else if (OB_ISNULL(arr_buf = static_cast<char *>(tmp_allocator.alloc(arr_buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
