@@ -10857,7 +10857,8 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                                    sql::ObResolverParams &params,
                                    ObRawExpr *&expr,
                                    bool for_write,
-                                   const ObPLDataType *expected_type)
+                                   const ObPLDataType *expected_type,
+                                   ObPLDependencyTable *deps)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(params.allocator_));
@@ -10901,6 +10902,12 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                                 resolver.combine_line_and_col(node.stmt_loc_),
                                 false, expected_type));
       OZ (resolver.check_variable_accessible(expr, for_write));
+      if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {
+          ObSchemaObjVersion &ver = func_ast.get_dependency_table().at(i);
+          OZ (deps->push_back(ver));
+        }
+      }
     }
   } else {
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, *(params.allocator_)) {
@@ -10922,6 +10929,12 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                                 resolver.combine_line_and_col(node.stmt_loc_),
                                 false, expected_type));
       OZ (resolver.check_variable_accessible(expr, for_write));
+      if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {
+          ObSchemaObjVersion &ver = func_ast.get_dependency_table().at(i);
+          OZ (deps->push_back(ver));
+        }
+      }
     }
   }
   return ret;

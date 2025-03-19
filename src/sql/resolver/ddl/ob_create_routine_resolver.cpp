@@ -658,12 +658,14 @@ int ObCreateRoutineResolver::analyze_expr_type(ObRawExpr *&expr,
   return ret;
 }
 
-int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObRoutineInfo &routine_info)
+int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, obrpc::ObCreateRoutineArg &crt_routine_arg)
 {
   int ret = OB_SUCCESS;
   ObString param_name;
   ObRoutineParam routine_param;
   ObPLDataType data_type;
+  ObRoutineInfo &routine_info = crt_routine_arg.routine_info_;
+  ObPLDependencyTable deps;
   CK(OB_NOT_NULL(session_info_));
   if (OB_SUCC(ret) && param_list != NULL) {
     CK(OB_LIKELY(T_SP_PARAM_LIST == param_list->type_));
@@ -769,7 +771,9 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
             OZ (pl::ObPLResolver::resolve_raw_expr(*(default_node->children_[0]),
                                                   params_,
                                                   default_expr,
-                                                  false /*for_writer*/));
+                                                  false /*for_writer*/,
+                                                  nullptr,
+                                                  &deps));
             CK (OB_NOT_NULL(default_expr));
             OZ (ObResolverUtils::get_type_and_type_id(default_expr, src_type, src_type_id));
             OZ (ObResolverUtils::check_type_match(
@@ -789,6 +793,12 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
       }
     }
   }
+  ObString dep_attr;
+  OZ (ObDependencyInfo::collect_dep_infos(deps,
+                                          crt_routine_arg.dependency_infos_,
+                                          routine_info.get_object_type(),
+                                          0, dep_attr, dep_attr));
+  OZ (ObDDLResolver::ob_add_ddl_dependency(deps, crt_routine_arg));
   return ret;
 }
 
@@ -1020,7 +1030,7 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
   if (OB_SUCC(ret) && ROUTINE_FUNCTION_TYPE == routine_type) {
     OZ (resolve_ret_type(ret_node, crt_routine_arg->routine_info_));
   }
-  OZ (resolve_param_list(param_node, crt_routine_arg->routine_info_));
+  OZ (resolve_param_list(param_node, *crt_routine_arg));
   OZ (resolve_clause_list(clause_list, crt_routine_arg->routine_info_));
   CK (OB_NOT_NULL(body_node));
   if (OB_FAIL(ret)) {

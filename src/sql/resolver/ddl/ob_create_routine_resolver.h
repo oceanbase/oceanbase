@@ -73,7 +73,7 @@ private:
   int resolve_sp_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
   int resolve_ret_type(const ParseNode *ret_type_node, share::schema::ObRoutineInfo &func_info);
   int analyze_expr_type(ObRawExpr *&expr, share::schema::ObRoutineInfo &routine_info);
-  int resolve_param_list(const ParseNode *param_list, share::schema::ObRoutineInfo &routine_info);
+  int resolve_param_list(const ParseNode *param_list, obrpc::ObCreateRoutineArg &crt_routine_arg);
   int resolve_replace(const ParseNode *parse_node, obrpc::ObCreateRoutineArg *crt_routine_arg);
   int resolve_editionable(const ParseNode *parse_node, obrpc::ObCreateRoutineArg *crt_routine_arg);
   int resolve_param_type(const ParseNode *type_node, const common::ObString &param_name,

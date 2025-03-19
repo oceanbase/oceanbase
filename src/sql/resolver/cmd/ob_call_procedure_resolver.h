@@ -18,7 +18,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "pl/pl_cache/ob_pl_cache.h"
-
+#include "pl/ob_pl_stmt.h"
 namespace oceanbase
 {
 namespace share
@@ -43,13 +43,16 @@ private:
   int resolve_cparams(const ParseNode* params_node,
                       const share::schema::ObRoutineInfo *routien_info,
                       ObCallProcedureInfo *call_proc_info,
-                      ObIArray<ObRawExpr*> &params);
+                      ObIArray<ObRawExpr*> &params,
+                      pl::ObPLDependencyTable &deps);
   int resolve_cparam_without_assign(const ParseNode *param_node,
                       const int64_t position,
-                      common::ObIArray<ObRawExpr*> &params);
+                      common::ObIArray<ObRawExpr*> &params,
+                      pl::ObPLDependencyTable &deps);
   int resolve_cparam_with_assign(const ParseNode *param_node,
                       const share::schema::ObRoutineInfo *routine_info,
-                      common::ObIArray<ObRawExpr*> &params);
+                      common::ObIArray<ObRawExpr*> &params,
+                      pl::ObPLDependencyTable &deps);
   int resolve_param_exprs(const ParseNode *params_node,
                       ObIArray<ObRawExpr*> &expr_params);
   int check_param_expr_legal(ObRawExpr *param);

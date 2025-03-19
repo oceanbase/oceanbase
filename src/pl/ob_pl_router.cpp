@@ -175,6 +175,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info_.get_routine_params().count(); ++i) {
     ObRoutineParam *param = routine_info_.get_routine_params().at(i);
     ObPLDataType param_type;
+    ObSEArray<ObSchemaObjVersion, 4> deps;
     CK (OB_NOT_NULL(param));
     OX (param_type.set_enum_set_ctx(&func_ast.get_enum_set_ctx()));
     OZ (pl::ObPLDataType::transform_from_iparam(param,
@@ -182,7 +183,8 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
                                                 session_info_,
                                                 inner_allocator_,
                                                 sql_proxy_,
-                                                param_type));
+                                                param_type,
+                                                &deps));
     if (OB_SUCC(ret)) {
       if (param->is_ret_param()) {
         func_ast.set_ret_type(param_type);
@@ -198,6 +200,12 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
         LOG_WARN("failed to add argument", K(param->get_param_name()), K(param->get_param_type()), K(ret));
       } else {
         // do nothing
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
+        ObSchemaObjVersion &ver = deps.at(i);
+        if (OB_FAIL(func_ast.add_dependency_object(ver))) {
+          LOG_WARN("fail to add dependency objects", K(ret));
+        }
       }
     }
   }
