@@ -96,6 +96,7 @@ public:
     db_version_(),
     last_executed_(OB_INVALID_ID),
     last_verified_(OB_INVALID_ID),
+    gmt_modified_(OB_INVALID_ID),
     plan_hash_value_(OB_INVALID_ID),
     plan_type_(OB_PHY_PLAN_UNINITIALIZED),
     // constraint
@@ -137,6 +138,8 @@ public:
   inline void set_last_executed(const uint64_t v) { last_executed_ = v; }
   inline uint64_t get_last_verified() const { return last_verified_; }
   inline void set_last_verified(const uint64_t v) { last_verified_ = v; }
+  inline uint64_t get_gmt_modified() const { return gmt_modified_; }
+  inline void set_gmt_modified(const uint64_t v) { gmt_modified_ = v; }
   inline uint64_t get_plan_hash_value() const { return plan_hash_value_; }
   inline void set_plan_hash_value(uint64_t v) { plan_hash_value_ = v;}
   inline ObPhyPlanType get_plan_type() const { return plan_type_; }
@@ -195,6 +198,7 @@ public:
   common::ObString db_version_;  // database version when generate baseline
   uint64_t last_executed_;  // last time when baseline executed
   uint64_t last_verified_;  // last time when baseline verified
+  uint64_t gmt_modified_;  // last time when baseline modified
   uint64_t plan_hash_value_;
   ObPhyPlanType plan_type_;
   //constraint
@@ -378,10 +382,12 @@ public:
     start_time_(0),
     end_time_(0),
     spm_mode_(SPM_MODE_DISABLE),
-    new_plan_is_baseline_(false)
+    new_plan_is_baseline_(false),
+    update_baseline_outline_(false)
   {}
   ~EvolutionTaskResult() {}
   int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
+  bool need_record_evolution_result() const { return !update_baseline_outline_; }
   TO_STRING_KV(K_(key), K_(old_plan_hash_array), K_(old_stat_array), K_(new_plan_hash),
                K_(new_stat), K_(from_mock_task), K_(start_time), K_(end_time),
                K_(status), K_(spm_mode));
@@ -400,6 +406,7 @@ public:
   int64_t end_time_;
   int64_t spm_mode_;
   bool new_plan_is_baseline_;
+  bool update_baseline_outline_;
 };
 
 } // namespace sql end

@@ -118,6 +118,7 @@ public:
   int update_plan_baseline_statistic(EvolutionTaskResult& result);
   int update_statistic_for_evolve(EvolutionTaskResult& result);
   int update_statistic_for_confirm(EvolutionTaskResult& result);
+  int check_and_update_plan_baseline(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);
   int accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, const ObAuditRecordData &audit_record);
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
   int sync_baseline_from_inner_table();

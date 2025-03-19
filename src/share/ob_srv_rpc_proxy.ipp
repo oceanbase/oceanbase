@@ -185,6 +185,7 @@
   RPC_S(PR5 svr_cancel_evolve_task, obrpc::OB_SERVER_CANCEL_EVOLVE_TASK, (obrpc::ObModifyPlanBaselineArg));
   RPC_S(PR5 load_baseline, OB_LOAD_BASELINE, (ObLoadPlanBaselineArg));
   RPC_S(PR5 load_baseline_v2, OB_LOAD_BASELINE_V2, (ObLoadPlanBaselineArg), obrpc::ObLoadBaselineRes);
+  RPC_S(PR5 svr_sync_baseline, obrpc::OB_SERVER_SYNC_BASELINE, (obrpc::ObModifyPlanBaselineArg));
 #endif
   RPC_S(PR5 estimate_tablet_block_count, OB_ESTIMATE_TABLET_BLOCK_COUNT, (ObEstBlockArg), ObEstBlockRes);
   RPC_S(PR5 gen_unique_id, OB_GEN_UNIQUE_ID, (obrpc::UInt64), share::ObCommonID);

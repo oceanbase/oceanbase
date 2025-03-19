@@ -121,6 +121,7 @@ public:
                                 ObString &output_str);
 
   int update_plan_baselines_result(const uint64_t tenant_id,
+                                   ObPlanCache *lib_cache,
                                    EvolutionTaskResult& evo_res);
 
   int update_baseline_item_evolving_result(ObMySQLTransaction& trans,
@@ -170,6 +171,12 @@ public:
                                          const uint64_t& plan_hash,
                                          const ObEvolutionStat &evo_stat,
                                          int64_t& affected_rows);
+  int update_baseline_item_outline_info(ObMySQLTransaction &trans,
+                                        const uint64_t tenant_id,
+                                        ObPlanCache *lib_cache,
+                                        ObBaselineKey &key,
+                                        const uint64_t plan_hash,
+                                        int64_t& affected_rows);
 private:
   static const int64_t max_sql_text_size = 10 * 1024 * 1024; // 10M
   const static char *EMPTY_STR;
