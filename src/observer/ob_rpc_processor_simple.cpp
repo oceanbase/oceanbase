@@ -2539,14 +2539,17 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
             } else {
               LOG_WARN("get tablet mgr failed", K(ret), K(ddl_data.lob_meta_tablet_id_));
             }
+          } else if (OB_ISNULL(lob_direct_load_mgr_handle.get_full_obj())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("lob direct load mgr should not be null", K(ret), K(lob_direct_load_mgr_handle));
+          } else if (OB_FAIL(lob_direct_load_mgr_handle.get_full_obj()->commit(*tablet_handle.get_obj(),
+                                                                               arg_.start_scn_,
+                                                                               commit_scn,
+                                                                               arg_.table_id_,
+                                                                               arg_.ddl_task_id_,
+                                                                               false/*is replay*/))) {
+            LOG_WARN("lob direct load mgr commit failed", K(ret), K(lob_direct_load_mgr_handle));
           }
-        } else if (OB_FAIL(lob_direct_load_mgr_handle.get_full_obj()->commit(*tablet_handle.get_obj(),
-                                                                             arg_.start_scn_,
-                                                                             commit_scn,
-                                                                             arg_.table_id_,
-                                                                             arg_.ddl_task_id_,
-                                                                             false/*is replay*/))) {
-          LOG_WARN("lob direct load mgr commit failed", K(ret), K(lob_direct_load_mgr_handle));
         }
       }
       if (OB_FAIL(ret)) {
