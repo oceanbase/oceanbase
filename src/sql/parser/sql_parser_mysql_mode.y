@@ -7305,6 +7305,7 @@ not NULLX
 | ORIG_DEFAULT now_or_signed_literal
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_ORIG_DEFAULT, 1, $2);
+  $$->is_default_literal_expression_ = 1;
 }
 | AUTO_INCREMENT
 {
@@ -7410,6 +7411,7 @@ opt_column_default_value:
 DEFAULT now_or_signed_literal
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_DEFAULT, 1, $2);
+  $$->is_default_literal_expression_ = 1;
 }
 | DEFAULT '(' expr ')'
 {
@@ -19403,6 +19405,7 @@ alter_column_behavior:
 SET DEFAULT signed_literal
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_DEFAULT, 1, $3);
+  $$->is_default_literal_expression_ = 1;
 }
 | SET DEFAULT '(' expr ')'
 {

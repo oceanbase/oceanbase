@@ -724,6 +724,7 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         default_value.set_param_meta();
         break;
       case T_FUN_SYS_CUR_TIMESTAMP: {
+        resolve_res.is_literal_ = def_node->is_default_literal_expression_;
         ret = update_datetime_default_value(default_value, *def_val, ObTimestampType, ObActionFlag::OP_DEFAULT_NOW_FLAG);
         break;
       }
