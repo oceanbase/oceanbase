@@ -126,7 +126,7 @@ public:
   static const int64_t SKEW_TEST_STEP_SIZE = 5;
   static const uint64_t MIN_CHECK_POPULAR_VALID_ROWS = 10000;
   constexpr static const float SKEW_POPULAR_MAX_RATIO = 0.5;
-  const static int64_t SKEW_HEAP_SIZE = 15;
+  const static int64_t SKEW_HEAP_SIZE = 36;
 
 public:
   ObHashGroupByVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)

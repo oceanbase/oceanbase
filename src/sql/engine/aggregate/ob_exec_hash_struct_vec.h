@@ -551,7 +551,7 @@ public:
 
   const static int64_t SKEW_HEAP_SIZE = 15;
   const static int64_t SKEW_ITEM_CNT_TOLERANCE = 64;
-  constexpr static const float SKEW_POPULAR_MIN_RATIO = 0.3;
+  constexpr static const float SKEW_POPULAR_MIN_RATIO = 0.01;
 
   using BucketArray = common::ObSegmentArray<GroupRowBucket,
                                              OB_MALLOC_MIDDLE_BLOCK_SIZE,
@@ -1864,6 +1864,7 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
               const int64_t idx = old_row_selector_.at(i);
               batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
               old_row_pos[old_row_cnt++] = idx;
+              (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
               int64_t ser_num = locate_buckets_[idx]->get_bkt_seq();
               batch_aggr_rows->aggr_rows_[ser_num] = batch_old_rows[idx];
               batch_aggr_rows->selectors_[ser_num][batch_aggr_rows->selectors_item_cnt_[ser_num]++] = idx;
@@ -1871,6 +1872,7 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
           } else {
             for (int64_t i = 0; i < old_row_selector_cnt_; ++i) {
               const int64_t idx = old_row_selector_.at(i);
+              (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
               batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
               old_row_pos[old_row_cnt++] = idx;
             }
