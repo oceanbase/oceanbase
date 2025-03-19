@@ -1148,12 +1148,15 @@ int ObPLDataType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
   CK (OB_NOT_NULL(src));
   CK (OB_NOT_NULL(dst));
   if (is_obj_type()) {
+    ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObExprResType result_type;
+    ObObj tmp;
     result_type.reset();
     CK (OB_NOT_NULL(get_data_type()));
     OX (result_type.set_meta(get_data_type()->get_meta_type()));
     OX (result_type.set_accuracy(get_data_type()->get_accuracy()));
-    OZ (ObSPIService::spi_convert(ctx.session_info_, ctx.allocator_, *src, result_type, *dst));
+    OZ (ObSPIService::spi_convert(ctx.session_info_, tmp_alloc, *src, result_type, tmp));
+    OZ (deep_copy_obj(ctx.allocator_, tmp, *dst));
     OX (src ++);
     OX (dst ++);
   } else {
