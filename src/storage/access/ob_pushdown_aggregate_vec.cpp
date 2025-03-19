@@ -434,15 +434,17 @@ int ObAggCellVec::read_agg_datum(
   return ret;
 }
 
-int ObAggCellVec::pad_column_if_need(blocksstable::ObStorageDatum &datum)
+OB_INLINE int ObAggCellVec::pad_column_if_need(blocksstable::ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
-  padding_allocator_.reuse();
   if (!basic_info_.need_padding()) {
-  } else if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(),
-                                basic_info_.col_param_->get_accuracy(),
-                                padding_allocator_, datum))) {
-    LOG_WARN("Fail to pad column", K(ret), K_(basic_info), KPC(this));
+  } else {
+    padding_allocator_.reuse();
+    if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(),
+                                  basic_info_.col_param_->get_accuracy(),
+                                  padding_allocator_, datum))) {
+      LOG_WARN("Fail to pad column", K(ret), K_(basic_info), KPC(this));
+    }
   }
   return ret;
 }
