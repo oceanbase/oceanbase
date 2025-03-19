@@ -625,6 +625,7 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
             ",left need sort:", join_path->left_need_sort_, ",left prefix pos:", join_path->left_prefix_pos_,
             ",right need sort:", join_path->right_need_sort_, ",right prefix pos:", join_path->right_prefix_pos_);
     }
+    append("use hybrid hash:", join_path->use_hybrid_hash_dm_);
     new_line();
     append(join_path->get_sharding());
     new_line();

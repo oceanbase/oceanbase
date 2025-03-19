@@ -8424,7 +8424,6 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   right_path_ = other.right_path_;
   join_algo_ = other.join_algo_;
   join_dist_algo_ = other.join_dist_algo_;
-  is_slave_mapping_ = other.is_slave_mapping_;
   join_type_ = other.join_type_;
   need_mat_ = other.need_mat_;
   left_need_sort_ = other.left_need_sort_;
@@ -8469,15 +8468,7 @@ int JoinPath::compute_join_path_sharding()
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(parent_), K(ret));
   } else {
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
-    if (is_slave_mapping_) {
-      if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {
-        if (OB_FAIL(compute_hash_hash_sharding_info())) {
-          LOG_WARN("failed to generate hash-hash sharding info", K(ret));
-        } else { /*do nothing*/ }
-      } else {
-        strong_sharding_ = opt_ctx.get_distributed_sharding();
-      }
-    } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
+    if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
       ObSEArray<ObShardingInfo*, 2> input_shardings;
       if (OB_ISNULL(left_path_->strong_sharding_) || OB_ISNULL(right_path_->strong_sharding_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -8616,7 +8607,8 @@ int JoinPath::compute_join_path_sharding()
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       }
-    } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_) {
+    } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_ ||
+               DistAlgo::DIST_HASH_HASH_LOCAL == join_dist_algo_) {
       if (OB_FAIL(compute_hash_hash_sharding_info())) {
         LOG_WARN("failed to generate hash-hash sharding info", K(ret));
       } else { /*do nothing*/ }
@@ -8627,6 +8619,11 @@ int JoinPath::compute_join_path_sharding()
       } else {
         strong_sharding_ = opt_ctx.get_distributed_sharding();
       }
+    } else if (DistAlgo::DIST_PARTITION_HASH_LOCAL == join_dist_algo_ ||
+               DistAlgo::DIST_HASH_LOCAL_PARTITION == join_dist_algo_ ||
+               DistAlgo::DIST_BROADCAST_HASH_LOCAL == join_dist_algo_ ||
+               DistAlgo::DIST_HASH_LOCAL_BROADCAST == join_dist_algo_) {
+      strong_sharding_ = opt_ctx.get_distributed_sharding();
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(join_dist_algo_), K(ret));
@@ -8757,7 +8754,8 @@ int JoinPath::compute_hash_hash_sharding_info()
   ObIAllocator *allocator = NULL;
   if (OB_ISNULL(left_path_) || OB_ISNULL(left_path_->parent_) || OB_ISNULL(parent_) ||
       OB_ISNULL(allocator = left_path_->parent_->get_allocator()) ||
-      OB_ISNULL(log_plan = left_path_->parent_->get_plan())) {
+      OB_ISNULL(log_plan = left_path_->parent_->get_plan()) ||
+      OB_ISNULL(log_plan->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_path_), K(allocator), K(log_plan), K(ret));
   } else if (OB_UNLIKELY(JoinAlgo::NESTED_LOOP_JOIN == join_algo_)) {
@@ -8766,6 +8764,10 @@ int JoinPath::compute_hash_hash_sharding_info()
   } else {
     bool use_left = false;
     bool use_right = false;
+    //if left outer join use hash hash distribute method
+    //exchange operator will distribute left`s null by random
+    bool is_weak_sharding = false;
+    ObOptimizerContext &opt_ctx = log_plan->get_optimizer_context();
     ObSEArray<ObRawExpr*, 8> left_join_exprs;
     ObSEArray<ObRawExpr*, 8> right_join_exprs;
     switch (join_type_) {
@@ -8774,11 +8776,17 @@ int JoinPath::compute_hash_hash_sharding_info()
         use_right = true;
         break;
       case LEFT_OUTER_JOIN:
+        if (opt_ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
+          is_weak_sharding = true;
+        }
       case LEFT_SEMI_JOIN:
       case LEFT_ANTI_JOIN:
         use_left = true;
         break;
       case RIGHT_OUTER_JOIN:
+        if (opt_ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
+          is_weak_sharding = true;
+        }
       case RIGHT_SEMI_JOIN:
       case RIGHT_ANTI_JOIN:
         use_right = true;
@@ -8846,7 +8854,13 @@ int JoinPath::compute_hash_hash_sharding_info()
                                                                    target_sharding))) {
           LOG_WARN("failed to get cached sharding info", K(ret));
         } else if (NULL != target_sharding) {
-          strong_sharding_ = target_sharding;
+          if (is_weak_sharding) {
+            if (OB_FAIL(weak_sharding_.push_back(target_sharding))) {
+              LOG_WARN("failed to push back sharding", K(ret));
+            }
+          } else {
+            strong_sharding_ = target_sharding;
+          }
         } else if (OB_ISNULL(target_sharding = reinterpret_cast<ObShardingInfo*>(
                                         allocator->alloc(sizeof(ObShardingInfo))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -8864,7 +8878,13 @@ int JoinPath::compute_hash_hash_sharding_info()
           } else if (OB_FAIL(log_plan->get_hash_dist_info().push_back(target_sharding))) {
             LOG_WARN("failed to push back sharding info", K(ret));
           } else {
-            strong_sharding_ = target_sharding;
+            if (is_weak_sharding) {
+              if (OB_FAIL(weak_sharding_.push_back(target_sharding))) {
+                LOG_WARN("failed to push back sharding", K(ret));
+              }
+            } else {
+              strong_sharding_ = target_sharding;
+            }
           }
         }
       } else {
@@ -8888,7 +8908,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
                                                                 right_path_,
                                                                 join_dist_algo_,
                                                                 join_algo_,
-                                                                is_slave_mapping_,
                                                                 parallel_,
                                                                 available_parallel_,
                                                                 server_cnt_,
@@ -8904,7 +8923,6 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
                                                          const Path *right_path,
                                                          const DistAlgo join_dist_algo,
                                                          const JoinAlgo join_algo,
-                                                         bool const is_slave_mapping,
                                                          int64_t &parallel,
                                                          int64_t &available_parallel,
                                                          int64_t &server_cnt,
@@ -8926,15 +8944,7 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
                               K(left_path->parallel_), K(right_path->parallel_),
                               K(left_path->is_single()), K(right_path->is_single()));
     const bool has_nl_param = right_path->is_inner_path() && !right_path->nl_params_.empty();
-    if (is_slave_mapping) {
-      const Path *inherit_child = (has_nl_param || left_path->parallel_ > right_path->parallel_)
-                                  ? left_path : right_path;
-      parallel = inherit_child->parallel_;
-      server_cnt = inherit_child->server_cnt_;
-      if (OB_FAIL(server_list.assign(inherit_child->server_list_))) {
-        LOG_WARN("failed to assign server list", K(ret));
-      }
-    } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo) {
+    if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo) {
       parallel = 1;
       server_cnt = 1;
       available_parallel = std::max(left_path->available_parallel_, right_path->available_parallel_);
@@ -9060,6 +9070,26 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
       if (OB_FAIL(server_list.assign(left_path->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
+    } else if (DistAlgo::DIST_HASH_HASH_LOCAL == join_dist_algo) {
+      const Path *inherit_child = (has_nl_param || left_path->parallel_ > right_path->parallel_)
+                                  ? left_path : right_path;
+      parallel = inherit_child->parallel_;
+      server_cnt = inherit_child->server_cnt_;
+      if (OB_FAIL(server_list.assign(inherit_child->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_PARTITION_HASH_LOCAL == join_dist_algo ||
+               DistAlgo::DIST_BROADCAST_HASH_LOCAL == join_dist_algo) {
+      const Path *inherit_child = (has_nl_param || left_path->parallel_ > right_path->parallel_)
+                                  ? left_path : right_path;
+      parallel = inherit_child->parallel_;
+      server_cnt = right_path->server_cnt_;
+    } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == join_dist_algo ||
+               DistAlgo::DIST_HASH_LOCAL_BROADCAST == join_dist_algo) {
+      const Path *inherit_child = (has_nl_param || left_path->parallel_ > right_path->parallel_)
+                                  ? left_path : right_path;
+      parallel = inherit_child->parallel_;
+      server_cnt = left_path->server_cnt_;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(join_dist_algo), K(ret));
@@ -9132,7 +9162,7 @@ int JoinPath::check_right_has_gi_or_exchange(bool &right_has_gi_or_exchange)
              || DistAlgo::DIST_NONE_ALL == join_dist_algo_
 	     || DistAlgo::DIST_RANDOM_ALL == join_dist_algo_) {
     right_has_gi_or_exchange = false;
-  } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_ && !is_slave_mapping_
+  } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_
              && !left_path_->exchange_allocated_
              && !right_path_->exchange_allocated_) {
     right_has_gi_or_exchange = false;
@@ -9954,7 +9984,6 @@ void JoinPath::reuse()
   right_path_ = NULL;
   join_algo_ = INVALID_JOIN_ALGO;
   join_dist_algo_ = DistAlgo::DIST_INVALID_METHOD;
-  is_slave_mapping_ = false;
   join_type_ = UNKNOWN_JOIN;
   need_mat_ = false;
   left_need_sort_ = false;
@@ -11731,7 +11760,6 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
   int ret = OB_SUCCESS;
   ObSEArray<Path*, 8> left_best_paths;
   ObSEArray<Path*, 8> right_best_paths;
-  bool can_slave_mapping = false;
   if (OB_FAIL(find_minimal_cost_path(left_paths, left_best_paths))) {
     LOG_WARN("failed to find minimal cost path", K(ret));
   } else if (OB_FAIL(find_minimal_cost_path(right_paths, right_best_paths))) {
@@ -11764,8 +11792,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                          HASH_JOIN,
                                                          false,
                                                          naaj_info.is_naaj_,
-                                                         dist_method,
-                                                         can_slave_mapping))) {
+                                                         dist_method))) {
             LOG_WARN("failed to get distributed join method", K(ret));
           } else {
             LOG_TRACE("succeed to get distributed hash join method", K(dist_method));
@@ -11777,7 +11804,6 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                      right_path,
                                                      path_info.join_type_,
                                                      dist_algo,
-                                                     can_slave_mapping,
                                                      join_conditions,
                                                      join_filters,
                                                      join_quals,
@@ -11968,7 +11994,6 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   int64_t dist_method = 0;
-  bool can_slave_mapping = false;
   if (OB_UNLIKELY(left_paths.empty()) || OB_ISNULL(left_paths.at(0)) || OB_ISNULL(right_path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(left_paths.count()), K(right_path), K(ret));
@@ -11982,8 +12007,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
                                                  NESTED_LOOP_JOIN,
                                                  true,
                                                  false,
-                                                 dist_method,
-                                                 can_slave_mapping))) {
+                                                 dist_method))) {
     LOG_WARN("failed to get distributed join method", K(ret));
   } else if (right_path->is_access_path() &&
              OB_FAIL(static_cast<AccessPath*>(right_path)->compute_is_das_dynamic_part_pruning(
@@ -12005,7 +12029,6 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
                                               right_path,
                                               path_info.join_type_,
                                               dist_algo,
-                                              can_slave_mapping,
                                               on_conditions,
                                               where_conditions,
                                               has_equal_cond,
@@ -12036,7 +12059,6 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
   Path *left_path = NULL;
   ObJoinOrder *left_tree = NULL;
   int64_t dist_method = 0;
-  bool can_slave_mapping = false;
   if (OB_UNLIKELY(left_paths.empty()) || OB_ISNULL(left_paths.at(0)) ||
       OB_ISNULL(left_tree = left_paths.at(0)->parent_) ||
       OB_ISNULL(right_path) || OB_ISNULL(right_path->get_sharding())) {
@@ -12052,8 +12074,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                                  NESTED_LOOP_JOIN,
                                                  false,
                                                  false,
-                                                 dist_method,
-                                                 can_slave_mapping))) {
+                                                 dist_method))) {
     LOG_WARN("failed to get distributed join method", K(ret));
   } else if (dist_method == 0) {
     /*do nothing*/
@@ -12077,8 +12098,12 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
         DistAlgo dist_algo = get_dist_algo(j);
         if (dist_method & j) {
           bool right_need_exchange = (dist_algo == DIST_HASH_HASH ||
+                                      dist_algo == DIST_HASH_HASH_LOCAL ||
                                       dist_algo == DIST_NONE_BROADCAST ||
+                                      dist_algo == DIST_HASH_LOCAL_BROADCAST ||
                                       dist_algo == DIST_NONE_PARTITION ||
+                                      dist_algo == DIST_HASH_LOCAL_PARTITION ||
+                                      dist_algo == DIST_PARTITION_HASH_LOCAL ||
                                       dist_algo == DIST_NONE_HASH);
           if (!ObOptimizerUtil::is_right_need_exchange(*right_path->get_sharding(), dist_algo) &&
               right_path->exchange_allocated_ &&
@@ -12090,7 +12115,6 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                               right_path,
                                               path_info.join_type_,
                                               dist_algo,
-                                              can_slave_mapping,
                                               on_conditions,
                                               where_conditions,
                                               has_equal_cond,
@@ -12102,7 +12126,6 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                                     right_path,
                                                     path_info.join_type_,
                                                     dist_algo,
-                                                    can_slave_mapping,
                                                     on_conditions,
                                                     where_conditions,
                                                     has_equal_cond,
@@ -12127,8 +12150,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                                              const JoinAlgo join_algo,
                                              const bool is_push_down,
                                              const bool is_naaj,
-                                             int64_t &distributed_methods,
-                                             bool &can_slave_mapping)
+                                             int64_t &distributed_methods)
 {
   int ret = OB_SUCCESS;
   bool is_basic = false;
@@ -12146,17 +12168,24 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                                     && (distributed_methods == get_dist_algo(distributed_methods));
   bool use_shared_hash_join = false;
   ObSQLSessionInfo *session = NULL;
-  int64_t max_path_parallel = max(left_path.parallel_, right_path.parallel_);
-  can_slave_mapping = path_info.force_slave_mapping_
-                      && max_path_parallel > ObGlobalHint::DEFAULT_PARALLEL
-                      && NESTED_LOOP_JOIN != join_algo;
-  if (path_info.force_slave_mapping_ && !can_slave_mapping) {
-    OPT_TRACE("Disable slave mapping because parallel is 1 or join algorithm is NLJ");
+  if (NESTED_LOOP_JOIN == join_algo || is_naaj) {
+    distributed_methods &= ~DIST_HASH_HASH_LOCAL;
+    distributed_methods &= ~DIST_PARTITION_HASH_LOCAL;
+    distributed_methods &= ~DIST_HASH_LOCAL_PARTITION;
+    distributed_methods &= ~DIST_BROADCAST_HASH_LOCAL;
+    distributed_methods &= ~DIST_HASH_LOCAL_BROADCAST;
+    OPT_TRACE("nlj or naaj can not use slave mapping");
   }
+  bool force_slave_mapping = is_force_dist_method;
+  if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)) {
+    force_slave_mapping = true;
+  }
+
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
       OB_ISNULL(right_sharding = right_path.get_sharding()) ||
-      OB_ISNULL(left_path.parent_) || OB_ISNULL(right_path.parent_)) {
+      OB_ISNULL(left_path.parent_) || OB_ISNULL(right_path.parent_) ||
+      OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(left_sharding),
                 K(right_sharding), K(left_path.parent_), K(ret));
@@ -12348,7 +12377,27 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       OPT_TRACE("plan will not use basic method");
     }
   }
-
+  if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_HASH_LOCAL)) {
+    OPT_TRACE("check hash hash local method");
+    if (OB_FAIL(check_if_match_partition_wise(equal_sets,
+                                              left_path,
+                                              right_path,
+                                              left_join_keys,
+                                              right_join_keys,
+                                              null_safe_info,
+                                              is_partition_wise))) {
+      LOG_WARN("failed to check if match partition wise join", K(ret));
+    } else if (is_partition_wise &&
+               (left_path.parallel_more_than_part_cnt(2) ||
+                right_path.parallel_more_than_part_cnt(2) ||
+                force_slave_mapping)) {
+      distributed_methods = DIST_HASH_HASH_LOCAL;
+      OPT_TRACE("plan will use hash hash local method");
+    } else {
+      distributed_methods &= ~DIST_HASH_HASH_LOCAL;
+      OPT_TRACE("plan will not use hash hash local method");
+    }
+  }
   // check if match partition wise join
   if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_WISE)) {
     OPT_TRACE("check partition wise method");
@@ -12367,9 +12416,10 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       bool need_reduce_dop = left_path.parallel_more_than_part_cnt()
                              || right_path.parallel_more_than_part_cnt();
       if (!need_reduce_dop) {
+        //prune other distribute method
         distributed_methods = DIST_PARTITION_WISE;
-        OPT_TRACE("plan will use partition wise method");
       }
+      OPT_TRACE("plan will use partition wise method");
     } else {
       distributed_methods &= ~DIST_PARTITION_WISE;
       OPT_TRACE("plan will not use partition wise method");
@@ -12408,8 +12458,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
 
   if (OB_SUCC(ret) &&
       ((distributed_methods & DIST_PARTITION_NONE)
+       || (distributed_methods & DIST_PARTITION_HASH_LOCAL)
        || (distributed_methods & DIST_HASH_NONE)
-       || ((distributed_methods & DIST_BROADCAST_NONE) && can_slave_mapping))) {
+       || (distributed_methods & DIST_BROADCAST_HASH_LOCAL))) {
     target_part_keys.reuse();
     if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
@@ -12424,8 +12475,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
 
   if (OB_SUCC(ret) &&
       ((distributed_methods & DIST_NONE_PARTITION)
+       || (distributed_methods & DIST_HASH_LOCAL_PARTITION)
        || (distributed_methods & DIST_NONE_HASH)
-       || ((distributed_methods & DIST_NONE_BROADCAST) && can_slave_mapping))) {
+       || (distributed_methods & DIST_HASH_LOCAL_BROADCAST))) {
     target_part_keys.reuse();
     if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
@@ -12438,6 +12490,26 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     }
   }
 
+  if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_HASH_LOCAL)) {
+    OPT_TRACE("check partition hash local method");
+    if (NULL == right_path.get_strong_sharding()) {
+      OPT_TRACE("strong sharding of right path is null, not use partition hash local");
+      distributed_methods &= ~DIST_PARTITION_HASH_LOCAL;
+    } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()
+               || !is_right_match_repart) {
+      OPT_TRACE("right path not meet repart, not use partition hash local");
+      distributed_methods &= ~DIST_PARTITION_HASH_LOCAL;
+    } else if (right_path.parallel_more_than_part_cnt(2) || force_slave_mapping) {
+      OPT_TRACE("plan will use partition hash local method and prune broadcast/bc2host/hash none method");
+      distributed_methods &= ~DIST_BROADCAST_NONE;
+      distributed_methods &= ~DIST_HASH_NONE;
+      distributed_methods &= ~DIST_BC2HOST_NONE;
+      distributed_methods &= ~DIST_PARTITION_NONE;
+    } else {
+      distributed_methods &= ~DIST_PARTITION_HASH_LOCAL;
+      OPT_TRACE("plan will not use partition hash local method");
+    }
+  }
   // check if match left re-partition
   if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_NONE)) {
     OPT_TRACE("check partition none method");
@@ -12477,6 +12549,25 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else {
       OPT_TRACE("plan will use hash none method and prune broadcast none method");
       distributed_methods &= ~DIST_BROADCAST_NONE;
+    }
+  }
+  if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_LOCAL_PARTITION)) {
+    OPT_TRACE("check hash local partition method");
+    if (NULL == left_path.get_strong_sharding()) {
+      OPT_TRACE("strong sharding of left path is null, not use hash local partition");
+      distributed_methods &= ~DIST_HASH_LOCAL_PARTITION;
+    } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()
+               || !is_left_match_repart) {
+      OPT_TRACE("left path not meet repart, not use hash local partition");
+      distributed_methods &= ~DIST_HASH_LOCAL_PARTITION;
+    } else if (left_path.parallel_more_than_part_cnt(2) || force_slave_mapping) {
+      OPT_TRACE("plan will use hash local partition method and prune none broadcast/hash method");
+      distributed_methods &= ~DIST_NONE_BROADCAST;
+      distributed_methods &= ~DIST_NONE_HASH;
+      distributed_methods &= ~DIST_NONE_PARTITION;
+    } else {
+      distributed_methods &= ~DIST_HASH_LOCAL_PARTITION;
+      OPT_TRACE("plan will not use hash local partition method");
     }
   }
   // check if match right re-partition
@@ -12520,16 +12611,33 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     }
   }
 
-  if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_NONE)
-      && can_slave_mapping && !is_right_match_repart) {
-    OPT_TRACE("force slave mapping and right path not meet repart, prune broadcast none method");
-    distributed_methods &= ~DIST_BROADCAST_NONE;
+  if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_HASH_LOCAL)) {
+    if (!force_slave_mapping || !is_right_match_repart ||
+        !right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
+      OPT_TRACE("right path not meet repart, prune broadcast hash local method");
+      distributed_methods &= ~DIST_BROADCAST_HASH_LOCAL;
+    } else {
+      distributed_methods &= ~DIST_BROADCAST_NONE;
+      OPT_TRACE("plan will use broadcast hash local");
+    }
   }
 
-  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_BROADCAST)
-      && can_slave_mapping && !is_left_match_repart) {
-    OPT_TRACE("force slave mapping and left path not meet repart, prune none broadcast method");
-    distributed_methods &= ~DIST_NONE_BROADCAST;
+  if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_NONE)) {
+    OPT_TRACE("plan will use broadcast none");
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_LOCAL_BROADCAST)) {
+    if (!force_slave_mapping || !is_left_match_repart ||
+        !left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
+      OPT_TRACE("left path not meet repart, prune none broadcast method");
+      distributed_methods &= ~DIST_HASH_LOCAL_BROADCAST;
+    } else {
+      distributed_methods &= ~DIST_NONE_BROADCAST;
+      OPT_TRACE("plan will use hash local broadcast");
+    }
+  }
+  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_BROADCAST)) {
+    OPT_TRACE("plan will use none broadcast");
   }
 
   /*
@@ -12690,7 +12798,6 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
   bool best_need_sort = false;
   ObSEArray<OrderItem, 4> best_order_items;
   ObSEArray<ObRawExpr*, 4> adjusted_join_conditions;
-  bool can_slave_mapping = false;
   if (OB_UNLIKELY(left_paths.empty() || OB_ISNULL(left_paths.at(0))) ||
       OB_UNLIKELY(right_paths.empty()) || OB_ISNULL(right_paths.at(0)) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -12705,8 +12812,7 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                                  MERGE_JOIN,
                                                  false,
                                                  false,
-                                                 dist_method,
-                                                 can_slave_mapping))) {
+                                                 dist_method))) {
     LOG_WARN("failed to get distributed join method", K(ret));
   } else if (0 == dist_method) {
     /*do nothing*/
@@ -12732,7 +12838,6 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                                      right_join_keys,
                                                      right_paths,
                                                      dist_algo,
-                                                     can_slave_mapping,
                                                      best_order_items,
                                                      right_path,
                                                      best_need_sort,
@@ -12744,7 +12849,6 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                                       right_path,
                                                       path_info.join_type_,
                                                       dist_algo,
-                                                      can_slave_mapping,
                                                       merge_key->order_directions_,
                                                       adjusted_join_conditions,
                                                       other_join_conditions,
@@ -12772,7 +12876,6 @@ int ObJoinOrder::find_minimal_cost_merge_path(const Path &left_path,
                                               const ObIArray<ObRawExpr*> &right_join_exprs,
                                               const ObIArray<Path*> &right_path_list,
                                               const DistAlgo join_dist_algo,
-                                              const bool is_slave_mapping,
                                               ObIArray<OrderItem> &best_order_items,
                                               Path *&best_path,
                                               bool &best_need_sort,
@@ -12850,7 +12953,6 @@ int ObJoinOrder::find_minimal_cost_merge_path(const Path &left_path,
                                                                             right_path,
                                                                             join_dist_algo,
                                                                             MERGE_JOIN,
-                                                                            is_slave_mapping,
                                                                             in_parallel,
                                                                             available_parallel,
                                                                             server_cnt,
@@ -13050,7 +13152,6 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                           const Path *right_path,
                                           const ObJoinType join_type,
                                           const DistAlgo join_dist_algo,
-                                          const bool is_slave_mapping,
                                           const ObIArray<ObRawExpr*> &equal_join_conditions,
                                           const ObIArray<ObRawExpr*> &other_join_conditions,
                                           const ObIArray<ObRawExpr*> &filters,
@@ -13078,13 +13179,11 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                        right_path,
                                        HASH_JOIN,
                                        join_dist_algo,
-                                       is_slave_mapping,
                                        join_type);
     join_path->equal_cond_sel_ = equal_cond_sel;
     join_path->other_cond_sel_ = other_cond_sel;
     join_path->is_naaj_ = naaj_info.is_naaj_;
     join_path->is_sna_ = naaj_info.is_sna_;
-    join_path->is_slave_mapping_ &= (!naaj_info.is_naaj_);
     join_path->join_output_rows_ = current_join_output_rows_;
     OPT_TRACE("create new Hash Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
@@ -13780,7 +13879,8 @@ int ObJoinOrder::check_partition_join_filter_valid(const DistAlgo join_dist_algo
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null sharding", K(ret));
     } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5) &&
-               (DIST_PARTITION_NONE != join_dist_algo || right_path.get_strong_sharding() != info.sharding_ ) &&
+               ((DIST_PARTITION_NONE != join_dist_algo && DIST_PARTITION_HASH_LOCAL != join_dist_algo) ||
+                right_path.get_strong_sharding() != info.sharding_ ) &&
                NULL == info.force_part_filter_ &&
                info.sharding_->get_part_cnt() < 1000) {
       info.need_partition_join_filter_ = false;
@@ -13970,7 +14070,6 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
                                         const Path *right_path,
                                         const ObJoinType join_type,
                                         const DistAlgo join_dist_algo,
-                                        const bool is_slave_mapping,
                                         const ObIArray<ObOrderDirection> &merge_directions,
                                         const common::ObIArray<ObRawExpr*> &equal_join_conditions,
                                         const common::ObIArray<ObRawExpr*> &other_join_conditions,
@@ -14010,7 +14109,6 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
                                        right_path,
                                        MERGE_JOIN,
                                        join_dist_algo,
-                                       is_slave_mapping,
                                        join_type);
     join_path->left_need_sort_ = left_need_sort;
     join_path->right_need_sort_ = right_need_sort;
@@ -14444,7 +14542,6 @@ int ObJoinOrder::create_onetime_expr(const ObRelIds &ignore_relids, ObRawExpr* &
 }
 
 int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
-                                               bool both_access,
                                                bool contain_fake_cte,
                                                ValidPathInfo &path_info)
 {
@@ -14464,25 +14561,12 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
       // we can directly ignore the distributed method hint to avoid the inability to generate a valid plan.
       // For SPM evolution, we will throw an error when a valid plan cannot be generated using the hint.
     } else if (NULL != log_join_hint && !log_join_hint->dist_method_hints_.empty()) {
-      path_info.distributed_methods_ &= log_join_hint->dist_methods_;
+      path_info.distributed_methods_ = log_join_hint->dist_methods_;
     } else if (log_hint.is_outline_data_) {
       // outline data has no pq distributed hint
-      path_info.distributed_methods_ &= DIST_BASIC_METHOD;
-    } else if (!get_plan()->get_optimizer_context().is_partition_wise_plan_enabled()) {
-      path_info.distributed_methods_ &= ~DIST_PARTITION_NONE;
-      path_info.distributed_methods_ &= ~DIST_NONE_PARTITION;
-      path_info.distributed_methods_ &= ~DIST_PARTITION_WISE;
-      path_info.distributed_methods_ &= ~DIST_EXT_PARTITION_WISE;
+      path_info.distributed_methods_ = DIST_BASIC_METHOD;
     }
 
-    if (NULL != log_join_hint && both_access && !ignore_dist_hint
-        && NULL != log_join_hint->slave_mapping_) {
-      path_info.force_slave_mapping_ = true;
-      path_info.distributed_methods_ &= ~DIST_PULL_TO_LOCAL;
-      path_info.distributed_methods_ &= ~DIST_HASH_HASH;
-      path_info.distributed_methods_ &= ~DIST_BC2HOST_NONE;
-      path_info.distributed_methods_ &= ~DIST_BASIC_METHOD;
-    }
     if (NULL != log_join_hint && NULL != log_join_hint->nl_material_) {
       path_info.force_mat_ = log_join_hint->nl_material_->is_enable_hint();
       path_info.force_no_mat_ = log_join_hint->nl_material_->is_disable_hint();
@@ -14541,7 +14625,6 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
       OPT_TRACE("start generate reverse join method");
     }
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    const bool both_access = ACCESS == left_tree.get_type() && ACCESS == right_tree.get_type();
     const bool contain_fake_cte = left_paths.at(0)->contain_fake_cte() || right_paths.at(0)->contain_fake_cte();
     if (CONNECT_BY_JOIN == path_info.join_type_) {
       path_info.local_methods_ = NESTED_LOOP_JOIN | HASH_JOIN;
@@ -14562,6 +14645,11 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
                                        DIST_EXT_PARTITION_WISE | DIST_BASIC_METHOD |
                                        DIST_NONE_ALL | DIST_ALL_NONE |
                                        DIST_RANDOM_ALL;
+      if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
+        path_info.distributed_methods_ |= DIST_HASH_HASH_LOCAL | DIST_PARTITION_HASH_LOCAL |
+                                          DIST_HASH_LOCAL_PARTITION | DIST_BROADCAST_HASH_LOCAL |
+                                          DIST_HASH_LOCAL_BROADCAST;
+      }
       if (!get_plan()->get_optimizer_context().is_partition_wise_plan_enabled()) {
         path_info.distributed_methods_ &= ~DIST_PARTITION_NONE;
         path_info.distributed_methods_ &= ~DIST_NONE_PARTITION;
@@ -14570,7 +14658,7 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
       }
     }
     if (!ignore_hint
-        && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(), both_access,
+        && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(),
                                                  contain_fake_cte, path_info))) {
       LOG_WARN("failed to get valid path info from hint", K(ret));
     } else if (RIGHT_OUTER_JOIN == path_info.join_type_
@@ -14654,12 +14742,14 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
       if (IS_LEFT_STYLE_JOIN(path_info.join_type_)) {
         // without BC2HOST DIST_BROADCAST_NONE
         path_info.distributed_methods_ &= ~DIST_BROADCAST_NONE;
+        path_info.distributed_methods_ &= ~DIST_BROADCAST_HASH_LOCAL;
         path_info.distributed_methods_ &= ~DIST_ALL_NONE;
         OPT_TRACE("left anti/semi/outer join can not use broadcast none method");
       }
       if (IS_RIGHT_STYLE_JOIN(path_info.join_type_)) {
         // without BC2HOST DIST_NONE_BROADCAST
         path_info.distributed_methods_ &= ~DIST_NONE_BROADCAST;
+        path_info.distributed_methods_ &= ~DIST_HASH_LOCAL_BROADCAST;
         path_info.distributed_methods_ &= ~DIST_NONE_ALL;
         path_info.distributed_methods_ &= ~DIST_RANDOM_ALL;
         OPT_TRACE("right anti/semi/outer join can not use none broadcast method");
@@ -15398,7 +15488,6 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                         const Path *right_path,
                                         const ObJoinType join_type,
                                         const DistAlgo join_dist_algo,
-                                        const bool is_slave_mapping,
                                         const common::ObIArray<ObRawExpr*> &on_conditions,
                                         const common::ObIArray<ObRawExpr*> &where_conditions,
                                         const bool has_equal_cond,
@@ -15431,7 +15520,6 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                          right_path,
                                          NESTED_LOOP_JOIN,
                                          join_dist_algo,
-                                         is_slave_mapping,
                                          join_type,
                                          need_mat);
     join_path->contain_normal_nl_ = is_normal_nl;

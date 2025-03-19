@@ -79,13 +79,16 @@ struct ObRollupAdaptiveInfo
 
 struct ObHashRollupInfo
 {
-  ObIArray<ObRawExpr *> *expand_exprs_;
-  ObIArray<ObRawExpr *> *gby_exprs_;
-  ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> *dup_expr_pairs_;
-  ObRawExpr *rollup_grouping_id_;
+  ObHashRollupInfo()
+  :rollup_grouping_id_(nullptr)
+  {
 
-  int assign(const ObHashRollupInfo &info);
-  bool valid() const { return rollup_grouping_id_ != nullptr; }
+  }
+
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> expand_exprs_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> gby_exprs_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
+  ObOpPseudoColumnRawExpr *rollup_grouping_id_;
 };
 
 class ObLogGroupBy : public ObLogicalOperator
@@ -108,7 +111,6 @@ public:
         use_hash_aggr_(false),
         has_push_down_(false),
         use_part_sort_(false),
-        dist_method_(T_INVALID),
         gby_dop_(ObGlobalHint::UNSET_PARALLEL),
         is_pushdown_scalar_aggr_(false),
         hash_rollup_info_()
@@ -233,10 +235,7 @@ public:
                                  bool use_part_sort = false,
                                  int64_t dop = ObGlobalHint::UNSET_PARALLEL)
   {
-    dist_method_ = DistAlgo::DIST_BASIC_METHOD == algo ? T_DISTRIBUTE_BASIC :
-                  (DistAlgo::DIST_PARTITION_WISE == algo ? T_DISTRIBUTE_NONE :
-                  (DistAlgo::DIST_HASH_HASH == algo ? T_DISTRIBUTE_HASH : T_DISTRIBUTE_LOCAL));
-
+    set_dist_method(algo);
     use_hash_aggr_ = use_hash_aggr;
     has_push_down_ = has_push_down;
     use_part_sort_ = use_part_sort;
@@ -257,14 +256,14 @@ public:
       K_(is_push_down));
   virtual int get_card_without_filter(double &card) override;
 
-  int set_hash_rollup_info(const ObHashRollupInfo &info) { return hash_rollup_info_.assign(info); }
+  void set_hash_rollup_info(ObHashRollupInfo *info) { hash_rollup_info_ = info; }
   const ObHashRollupInfo *get_hash_rollup_info() const
   {
-    return hash_rollup_info_.valid() ? &hash_rollup_info_ : nullptr;
+    return hash_rollup_info_;
   }
   bool is_hash_rollup_groupby() const
   {
-    return hash_rollup_info_.valid();
+    return NULL != hash_rollup_info_;
   }
 
 private:
@@ -296,11 +295,10 @@ private:
   bool use_hash_aggr_;
   bool has_push_down_;
   bool use_part_sort_;
-  ObItemType dist_method_;
   int64_t gby_dop_;
   // end use print outline
   bool is_pushdown_scalar_aggr_;
-  ObHashRollupInfo hash_rollup_info_;
+  ObHashRollupInfo *hash_rollup_info_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

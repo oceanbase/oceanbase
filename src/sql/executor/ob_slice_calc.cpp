@@ -1726,12 +1726,31 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
     LOG_WARN("failed to get partition id", K(ret));
   } else if (OB_FAIL(get_task_idx_by_tablet_id(eval_ctx, tablet_id, slice_idx_array.at(0)))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      if (tablet_id <= 0) {
-        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      if (unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
+        slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
+        ret = OB_SUCCESS;
+      } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
+        const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
+        slice_idx_array.at(0) = part_ch_array.at(round_robin_idx_).second_;
+        round_robin_idx_++;
+        round_robin_idx_ = round_robin_idx_ % part_ch_array.count();
+        ret = OB_SUCCESS;
+      } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
+        const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
+        int64_t hash_idx = 0;
+        if (OB_FAIL(hash_calc_.calc_slice_idx<false>(eval_ctx, part_ch_array.count(), hash_idx))) {
+          LOG_WARN("fail calc hash value", K(ret));
+        } else if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == hash_idx) {
+          slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
+        } else {
+          slice_idx_array.at(0) = part_ch_array.at(hash_idx).second_;
+        }
       } else {
-        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
+        // 没有找到对应的分区，返回OB_NO_PARTITION_FOR_GIVEN_VALUE
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+        LOG_WARN("can't get the right partition", K(ret), K(tablet_id),
+                 K(unmatch_row_dist_method_));
       }
-      LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(repart_type_));
     }
   }
   return ret;

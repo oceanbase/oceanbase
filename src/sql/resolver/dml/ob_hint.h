@@ -1252,8 +1252,11 @@ class ObPQSetHint : public ObOptHint
 
   const ObIArray<ObItemType> &get_dist_methods() const { return dist_methods_; }
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
-  int set_pq_set_hint(const DistAlgo dist_algo, const int64_t child_num, const int64_t random_none_idx);
-  uint64_t get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
+  int set_pq_set_hint(const DistAlgo dist_algo,
+                      const int64_t child_num,
+                      const int64_t random_none_idx);
+  uint64_t get_dist_algo(int64_t &random_none_idx) const
+  { return get_dist_algo(dist_methods_, random_none_idx); }
   const ObString &get_left_branch() const { return left_branch_; }
   void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));
@@ -1307,6 +1310,7 @@ class ObPQHint : public ObOptHint
   inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
   inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
   inline bool is_force_pull_to_local() const { return T_DISTRIBUTE_LOCAL == dist_method_; }
+  inline bool is_force_hash_local() const { return T_DISTRIBUTE_HASH_LOCAL == dist_method_; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
   int64_t get_parallel() const { return parallel_; }
 

@@ -325,7 +325,6 @@ public:
 		multi_child_op_above_count_in_dfo_(0),
 		partition_count_(0),
     hash_part_(false),
-    slave_mapping_type_(SM_NONE),
     is_valid_for_gi_(false)
   {
   }
@@ -357,7 +356,6 @@ public:
   int push_current_dfo_dop(int64_t dop);
   // MANUAL_TABLE_DOP情况下，exchange operator在 alloc_gi_post才能够被调用
   int pop_current_dfo_dop();
-  inline bool is_in_slave_mapping() { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
   TO_STRING_KV(K(alloc_gi_),
 							 K(tablet_size_),
 							 K(state_),
@@ -373,7 +371,6 @@ public:
   int64_t partition_count_;
   // 记录了当前GI直系TSC的是否是hash/key分区表
   bool hash_part_;
-  SlaveMappingType slave_mapping_type_;
   bool is_valid_for_gi_;
 };
 
@@ -1545,6 +1542,9 @@ public:
     inherit_sharding_index_ = inherit_sharding_index;
   }
   inline bool need_re_est_child_cost() const { return need_re_est_child_cost_; }
+
+  inline DistAlgo get_dist_method()const { return dist_method_; }
+  inline void set_dist_method(const DistAlgo &algo) { dist_method_ = algo; }
   inline bool need_osg_merge() const { return need_osg_merge_; }
   inline void set_need_osg_merge(bool v)
   {
@@ -1634,7 +1634,7 @@ public:
   int get_part_column_exprs(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             ObIArray<ObRawExpr *> &part_cols) const;
-  bool is_parallel_more_than_part_cnt() const;
+  bool is_parallel_more_than_part_cnt(const int64_t ratio = 1) const;
   int64_t get_part_cnt() const;
   inline void set_parallel(int64_t parallel) { parallel_ = parallel; }
   inline int64_t get_parallel() const { return parallel_; }
@@ -1981,6 +1981,7 @@ protected:
   int64_t max_px_thread_branch_;
   int64_t max_px_group_branch_;
   bool need_re_est_child_cost_;
+  DistAlgo dist_method_;
 };
 
 template <typename Allocator>

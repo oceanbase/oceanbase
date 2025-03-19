@@ -27,41 +27,44 @@ namespace sql
 int ObLogExpand::get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+  if (OB_ISNULL(hash_rollup_info_)) {
+    ret  = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null rollup info", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("get plan item info failed", K(ret));
-  } else if (OB_UNLIKELY(expand_exprs_.count() <= 0)) {
+  } else if (OB_UNLIKELY(hash_rollup_info_->expand_exprs_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expand exprs", K(ret));
   } else {
     ObSEArray<ObRawExpr *, 8> uniq_rollup_exprs;
-    if (OB_FAIL(append_array_no_dup(uniq_rollup_exprs, expand_exprs_))) {
+    if (OB_FAIL(append_array_no_dup(uniq_rollup_exprs, hash_rollup_info_->expand_exprs_))) {
       LOG_WARN("append array failed", K(ret));
     }
     BEGIN_BUF_PRINT;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(BUF_PRINTF("repeat(%ld)[", expand_exprs_.count() + 1))) {
+    } else if (OB_FAIL(BUF_PRINTF("repeat(%ld)[", hash_rollup_info_->expand_exprs_.count() + 1))) {
       LOG_WARN("printf failed", K(ret));
     } else {
       // output origin exprs
       OX(gen_duplicate_expr_text(plan_text, uniq_rollup_exprs));
       OX(BUF_PRINTF(", "))
       int nil_idx = uniq_rollup_exprs.count();
-      for (int i = expand_exprs_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      for (int i = hash_rollup_info_->expand_exprs_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
         bool exists_dup = false;
         for (int j = i - 1; OB_SUCC(ret) && !exists_dup && j >= 0; j--) {
-          if (expand_exprs_.at(i) == expand_exprs_.at(j)) {
+          if (hash_rollup_info_->expand_exprs_.at(i) == hash_rollup_info_->expand_exprs_.at(j)) {
             // duplicate expr exists, output current duplicate exprs
             exists_dup = true;
           }
         }
-        bool is_const_expr = expand_exprs_.at(i)->is_const_expr();
+        bool is_const_expr = hash_rollup_info_->expand_exprs_.at(i)->is_const_expr();
         bool is_real_static_const =
-          (expand_exprs_.at(i)->get_expr_type() == T_FUN_SYS_REMOVE_CONST
-          && expand_exprs_.at(i)->get_param_expr(0)->is_static_const_expr());
+          (hash_rollup_info_->expand_exprs_.at(i)->get_expr_type() == T_FUN_SYS_REMOVE_CONST
+          && hash_rollup_info_->expand_exprs_.at(i)->get_param_expr(0)->is_static_const_expr());
         if (exists_dup
             || is_const_expr
             || (lib::is_oracle_mode() && is_real_static_const)
-            || has_exist_in_array(gby_exprs_, expand_exprs_.at(i))) {
+            || has_exist_in_array(hash_rollup_info_->gby_exprs_, hash_rollup_info_->expand_exprs_.at(i))) {
           ret = gen_duplicate_expr_text(plan_text, uniq_rollup_exprs);
           if (!exists_dup) { nil_idx--; }
         } else {
@@ -103,21 +106,21 @@ int ObLogExpand::est_cost()
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   int64_t parallel = 0;
-  if (OB_ISNULL(child) || OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(hash_rollup_info_) || OB_ISNULL(child) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null parameters", K(ret), K(child), K(get_plan()));
   } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parallel degree", K(ret), K(parallel));
-  } else if (OB_UNLIKELY(expand_exprs_.count() <= 0)) {
+  } else if (OB_UNLIKELY(hash_rollup_info_->expand_exprs_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expand exprs", K(ret), K(expand_exprs_));
+    LOG_WARN("unexpected expand exprs", K(ret), K(hash_rollup_info_->expand_exprs_));
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     double op_cost = ObOptEstCost::cost_get_rows(child->get_card() / parallel, opt_ctx);
     set_op_cost(op_cost);
     set_cost(child->get_cost() + op_cost);
-    set_card(child->get_card() * (expand_exprs_.count() + 1));
+    set_card(child->get_card() * (hash_rollup_info_->expand_exprs_.count() + 1));
   }
   return ret;
 }
@@ -129,21 +132,21 @@ int ObLogExpand::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
   double child_card = 0.0;
   double child_cost = 0.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child) || OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(child) || OB_ISNULL(get_plan()) || OB_ISNULL(hash_rollup_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null parameters", K(ret), K(child), K(get_plan()));
   } else if (OB_UNLIKELY(parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expected parallel degree", K(ret), K(parallel));
-  } else if (OB_UNLIKELY(expand_exprs_.count() <= 0)) {
+  } else if (OB_UNLIKELY(hash_rollup_info_->expand_exprs_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expand exprs", K(ret), K(expand_exprs_));
+    LOG_WARN("unexpected expand exprs", K(ret), K(hash_rollup_info_->expand_exprs_));
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("re-estimate cost failed", K(ret));
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     op_cost = ObOptEstCost::cost_get_rows(child_card / parallel, opt_ctx);
-    card = child_card * (expand_exprs_.count() + 1);
+    card = child_card * (hash_rollup_info_->expand_exprs_.count() + 1);
     cost = op_cost + child_cost;
   }
   return ret;
@@ -152,25 +155,43 @@ int ObLogExpand::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
 int ObLogExpand::get_op_exprs(ObIArray<ObRawExpr *> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(grouping_id_expr_)) {
+  if (OB_ISNULL(hash_rollup_info_) || OB_ISNULL(hash_rollup_info_->rollup_grouping_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null grouping id expr", K(ret));
-  } else if (OB_FAIL(all_exprs.push_back(grouping_id_expr_))) {
+  } else if (OB_FAIL(all_exprs.push_back(hash_rollup_info_->rollup_grouping_id_))) {
     LOG_WARN("append element failed", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_exprs, expand_exprs_))) {
+  } else if (OB_FAIL(append_array_no_dup(all_exprs, hash_rollup_info_->expand_exprs_))) {
     LOG_WARN("append elements failed", K(ret));
   }
-  for (int i = 0; OB_SUCC(ret) && i < dup_expr_pairs_.count(); i++) {
-    if (OB_FAIL(all_exprs.push_back(dup_expr_pairs_.at(i).element<1>()))) {
+  for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info_->dup_expr_pairs_.count(); i++) {
+    if (OB_FAIL(all_exprs.push_back(hash_rollup_info_->dup_expr_pairs_.at(i).element<1>()))) {
       LOG_WARN("push back element failed", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(append(all_exprs, gby_exprs_))) {
+  if (OB_SUCC(ret) && OB_FAIL(append(all_exprs, hash_rollup_info_->gby_exprs_))) {
     LOG_WARN("append array failed", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("get op exprs failed", K(ret));
+  }
+  return ret;
+}
+
+int ObLogExpand::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(hash_rollup_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null rollup info", K(ret));
+  } else {
+    is_fixed = (expr == hash_rollup_info_->rollup_grouping_id_);
+    for (int i = 0; !is_fixed && i < hash_rollup_info_->expand_exprs_.count(); i++) {
+      is_fixed = (expr == hash_rollup_info_->expand_exprs_.at(i));
+    }
+    for (int i = 0; !is_fixed && i < hash_rollup_info_->dup_expr_pairs_.count(); i++) {
+      is_fixed = (expr == hash_rollup_info_->dup_expr_pairs_.at(i).element<1>());
+    }
   }
   return ret;
 }
@@ -307,16 +328,6 @@ int ObLogExpand::replace_expr_with_aggr_item(ObAggFunRawExpr *aggr_item, const O
   return ret;
 }
 
-int ObLogExpand::gen_hash_rollup_info(ObHashRollupInfo &info)
-{
-  int ret = OB_SUCCESS;
-  info.expand_exprs_ = &expand_exprs_;
-  info.gby_exprs_ = &gby_exprs_;
-  info.rollup_grouping_id_ = grouping_id_expr_;
-  info.dup_expr_pairs_ = &dup_expr_pairs_;
-  return ret;
-}
-
 int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
                                   ObIArray<ObExprConstraint> &constraints,
                                   ObIArray<ObRawExpr *> &rollup_exprs,
@@ -386,21 +397,21 @@ int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *s
 int ObLogExpand::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(hash_rollup_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null plan", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(replacer, gby_exprs_))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, hash_rollup_info_->gby_exprs_))) {
     LOG_WARN("replace exprs failed", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(replacer, expand_exprs_))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, hash_rollup_info_->expand_exprs_))) {
     LOG_WARN("replace exprs failed", K(ret));
   }
   constexpr int name_buf_len = 128;
   char name_buf[name_buf_len] = {0};
   char * replaced_name = nullptr;
   int64_t pos = 0;
-  for (int i = 0; OB_SUCC(ret) && i < dup_expr_pairs_.count(); i++) {
-    ObRawExpr *&expr = dup_expr_pairs_.at(i).element<0>();
-    ObRawExpr *dup_expr = dup_expr_pairs_.at(i).element<1>();
+  for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info_->dup_expr_pairs_.count(); i++) {
+    ObRawExpr *&expr = hash_rollup_info_->dup_expr_pairs_.at(i).element<0>();
+    ObRawExpr *dup_expr = hash_rollup_info_->dup_expr_pairs_.at(i).element<1>();
     pos = 0;
     if (OB_FAIL(replace_expr_action(replacer, expr))) {
       LOG_WARN("replace expr failed", K(ret));
@@ -428,14 +439,14 @@ int ObLogExpand::compute_const_exprs()
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = NULL;
-  if (OB_ISNULL(child = get_child(0))) {
+  if (OB_ISNULL(child = get_child(0)) || OB_ISNULL(hash_rollup_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null child", K(ret));
   } else {
     ObIArray<ObRawExpr *> &child_const_exprs = child->get_output_const_exprs();
     ObIArray<ObRawExpr *> &output_const_exprs = get_output_const_exprs();
     for (int i = 0; OB_SUCC(ret) && i < child_const_exprs.count(); i++) {
-      if (has_exist_in_array(expand_exprs_, child_const_exprs.at(i))) {
+      if (has_exist_in_array(hash_rollup_info_->expand_exprs_, child_const_exprs.at(i))) {
       } else if (OB_FAIL(output_const_exprs.push_back(child_const_exprs.at(i)))) {
         LOG_WARN("push back element failed", K(ret));
       }

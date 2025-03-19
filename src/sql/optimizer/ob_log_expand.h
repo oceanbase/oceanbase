@@ -26,7 +26,7 @@ using DupRawExprPair = ObTuple<ObRawExpr *, ObRawExpr *>;
 class ObLogExpand : public ObLogicalOperator
 {
 public:
-  ObLogExpand(ObLogPlan &plan) : ObLogicalOperator(plan), grouping_id_expr_(nullptr)
+  ObLogExpand(ObLogPlan &plan) : ObLogicalOperator(plan),hash_rollup_info_(nullptr)
   {}
   virtual ~ObLogExpand()
   {}
@@ -36,53 +36,11 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item) override;
   virtual int get_op_exprs(ObIArray<ObRawExpr *> &all_exprs) override;
 
-  int set_expand_exprs(const ObIArray<ObRawExpr *> &rollup_exprs)
-  {
-    return expand_exprs_.assign(rollup_exprs);
-  }
+  inline void set_hash_rollup_info(ObHashRollupInfo *hash_rollup_info) { hash_rollup_info_ = hash_rollup_info; }
 
-  int set_groupby_exprs(const ObIArray<ObRawExpr *> &gby_exprs)
-  {
-    return gby_exprs_.assign(gby_exprs);
-  }
+  ObHashRollupInfo *get_hash_rollup_info() { return hash_rollup_info_; }
 
-  int set_dup_expr_pairs(const ObIArray<DupRawExprPair> &dup_pairs)
-  {
-    return dup_expr_pairs_.assign(dup_pairs);
-  }
-  void set_grouping_id(ObOpPseudoColumnRawExpr *grouping_id_expr)
-  {
-    grouping_id_expr_ = grouping_id_expr;
-  }
-
-  const ObOpPseudoColumnRawExpr *get_grouping_id() const
-  {
-    return grouping_id_expr_;
-  }
-  ObOpPseudoColumnRawExpr *&get_grouping_id()
-  {
-    return grouping_id_expr_;
-  }
-  const ObIArray<ObRawExpr *> &get_expand_exprs() const
-  {
-    return expand_exprs_;
-  }
-  const ObIArray<ObRawExpr *> &get_gby_exprs() const
-  {
-    return gby_exprs_;
-  }
-  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override
-  {
-    int ret = OB_SUCCESS;
-    is_fixed = (expr == grouping_id_expr_);
-    for (int i = 0; !is_fixed && i < expand_exprs_.count(); i++) {
-      is_fixed = (expr == expand_exprs_.at(i));
-    }
-    for (int i = 0; !is_fixed && i < dup_expr_pairs_.count(); i++) {
-      is_fixed = (expr == dup_expr_pairs_.at(i).element<1>());
-    }
-    return ret;
-  }
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
 
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 
@@ -95,12 +53,6 @@ public:
   virtual int compute_one_row_info() override;
 
   virtual int compute_op_ordering() override;
-
-  int gen_hash_rollup_info(ObHashRollupInfo &info);
-  const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &get_dup_expr_pairs() const
-  {
-    return dup_expr_pairs_;
-  }
 
   static int gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
                               ObIArray<ObExprConstraint> &constraints,
@@ -115,7 +67,7 @@ public:
                                                 ObIArray<DupRawExprPair> &dup_expr_pairs);
 
   static int unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprConstraint> &constraints);
-  TO_STRING_KV(K_(expand_exprs));
+  TO_STRING_KV(K(""));
 
 private:
   static int find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found);
@@ -127,11 +79,7 @@ private:
   int gen_duplicate_expr_text(PlanText &plan_text, ObIArray<ObRawExpr *> &exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogExpand);
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> expand_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> gby_exprs_;
-  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true>
-    dup_expr_pairs_;
-  ObOpPseudoColumnRawExpr *grouping_id_expr_;
+  ObHashRollupInfo *hash_rollup_info_;
 };
 } // namespace sql
 } // end oceanbase

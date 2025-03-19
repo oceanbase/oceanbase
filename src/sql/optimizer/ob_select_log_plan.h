@@ -72,25 +72,73 @@ private:
                                common::ObIArray<ObOrderDirection> &group_directions,
                                common::ObIArray<ObOrderDirection> &rollup_directions);
 
-  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+  int candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
                                      const ObIArray<ObRawExpr*> &rollup_exprs,
                                      const ObIArray<ObOrderDirection> &rollup_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
                                      const ObIArray<ObAggFunRawExpr*> &agg_items,
-                                     const bool is_from_povit);
+                                     const bool is_from_povit,
+                                     ObIArray<CandidatePlan> &groupby_plans);
 
+  int candi_allocate_merge_rollup(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                  const ObIArray<ObRawExpr*> &group_by_exprs,
+                                  const ObIArray<ObOrderDirection> &group_directions,
+                                  const ObIArray<ObRawExpr*> &rollup_exprs,
+                                  const ObIArray<ObOrderDirection> &rollup_directions,
+                                  const ObIArray<ObRawExpr*> &having_exprs,
+                                  const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                  const bool is_from_povit,
+                                  GroupingOpHelper &groupby_helper,
+                                  ObIArray<CandidatePlan> &groupby_plans);
+
+  int create_merge_rollup_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                              const ObIArray<ObRawExpr*> &group_by_exprs,
+                              const ObIArray<ObOrderDirection> &group_directions,
+                              const ObIArray<ObRawExpr*> &rollup_exprs,
+                              const ObIArray<ObOrderDirection> &rollup_directions,
+                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                              const ObIArray<ObRawExpr*> &having_exprs,
+                              GroupingOpHelper &groupby_helper,
+                              CandidatePlan &candidate_plan,
+                              ObIArray<CandidatePlan> &candidate_plans,
+                              bool part_sort_valid,
+                              bool normal_sort_valid,
+                              const DistAlgo algo,
+                              bool can_ignore_merge_plan);
+
+  int inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                    const ObIArray<ObRawExpr*> &group_by_exprs,
+                                    const ObIArray<ObOrderDirection> &group_directions,
+                                    const ObIArray<ObRawExpr*> &rollup_exprs,
+                                    const ObIArray<ObOrderDirection> &rollup_directions,
+                                    const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                    const ObIArray<ObRawExpr*> &having_exprs,
+                                    GroupingOpHelper &groupby_helper,
+                                    ObLogicalOperator *&top,
+                                    bool use_part_sort,
+                                    const DistAlgo algo,
+                                    bool &ignore_plan,
+                                    bool can_ignore_merge);
+  int candi_allocate_hash_rollup(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                  const ObIArray<ObRawExpr*> &group_by_exprs,
+                                  const ObIArray<ObOrderDirection> &group_directions,
+                                  const ObIArray<ObRawExpr*> &rollup_exprs,
+                                  const ObIArray<ObOrderDirection> &rollup_directions,
+                                  const ObIArray<ObRawExpr*> &having_exprs,
+                                  const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                  const bool is_from_povit,
+                                  GroupingOpHelper &groupby_helper,
+                                  ObIArray<CandidatePlan> &groupby_plans);
   int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
-                                     const ObIArray<ObRawExpr*> &rollup_exprs,
-                                     const ObIArray<ObOrderDirection> &rollup_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
                                      const ObIArray<ObAggFunRawExpr*> &agg_items,
-                                     const bool enable_hash_rollup,
-                                     GroupingOpHelper &groupby_helper,
-                                     ObIArray<CandidatePlan> &group_plans);
+                                     const bool is_from_povit,
+                                     ObIArray<CandidatePlan> &candi_plans,
+                                     ObIArray<CandidatePlan> &groupby_plans);
 
   int get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_exprs,
                           const ObIArray<ObRawExpr *> &rollup_exprs,
@@ -103,38 +151,14 @@ private:
   int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
-                                     const ObIArray<ObRawExpr*> &rollup_exprs,
-                                     const ObIArray<ObOrderDirection> &rollup_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
                                      const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                      GroupingOpHelper &groupby_helper,
+                                     ObIArray<CandidatePlan> &candi_plans,
                                      ObIArray<CandidatePlan> &groupby_plans);
-
-  int candi_allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
-                                          const ObIArray<ObRawExpr*> &group_by_exprs,
-                                          const ObIArray<ObOrderDirection> &group_directions,
-                                          const ObIArray<ObRawExpr*> &rollup_exprs,
-                                          const ObIArray<ObOrderDirection> &rollup_directions,
-                                          const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                          const ObIArray<ObRawExpr*> &having_exprs,
-                                          GroupingOpHelper &groupby_helper,
-                                          ObIArray<CandidatePlan> &groupby_plans);
-
-  int allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
-                                    const ObIArray<ObRawExpr*> &group_by_exprs,
-                                    const ObIArray<ObOrderDirection> &group_directions,
-                                    const ObIArray<ObRawExpr*> &rollup_exprs,
-                                    const ObIArray<ObOrderDirection> &rollup_directions,
-                                    const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                    const ObIArray<ObRawExpr*> &having_exprs,
-                                    GroupingOpHelper &groupby_helper,
-                                    const DistAlgo algo,
-                                    CandidatePlan &groupby_plan,
-                                    ObIArray<CandidatePlan> &groupby_plans);
 
   int create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                              const ObIArray<ObRawExpr*> &group_by_exprs,
-                             const ObIArray<ObRawExpr*> &rollup_exprs,
                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
                              const ObIArray<ObRawExpr*> &having_exprs,
                              GroupingOpHelper &groupby_helper,
@@ -159,26 +183,9 @@ private:
                            int64_t minimum_row_count,
                            int64_t topk_precision);
 
-  int should_create_rollup_pushdown_plan(ObLogicalOperator *top,
-                                         const ObIArray<ObRawExpr *> &reduce_exprs,
-                                         const ObIArray<ObRawExpr *> &rollup_exprs,
-                                         GroupingOpHelper &groupby_helper,
-                                         const DistAlgo algo,
-                                         bool &is_needed);
-
-  int create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
-                                  const ObIArray<ObRawExpr*> &rollup_exprs,
-                                  const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                  const ObIArray<ObRawExpr*> &having_exprs,
-                                  GroupingOpHelper &groupby_helper,
-                                  const DistAlgo algo,
-                                  ObLogicalOperator *&top);
-
   int create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                               const ObIArray<ObRawExpr*> &group_by_exprs,
                               const ObIArray<ObOrderDirection> &group_directions,
-                              const ObIArray<ObRawExpr*> &rollup_exprs,
-                              const ObIArray<ObOrderDirection> &rollup_directions,
                               const ObIArray<ObAggFunRawExpr*> &aggr_items,
                               const ObIArray<ObRawExpr*> &having_exprs,
                               GroupingOpHelper &groupby_helper,
@@ -234,6 +241,7 @@ private:
 
   int allocate_distinct_as_top(ObLogicalOperator *&top,
                                const AggregateAlgo algo,
+                               const DistAlgo dist_algo,
                                const ObIArray<ObRawExpr*> &distinct_exprs,
                                const double total_ndv,
                                const bool is_partition_wise = false,
@@ -688,6 +696,14 @@ private:
                                 const int64_t prefix_pos,
                                 const int64_t part_cnt,
                                 ObIArray<CandidatePlan> &all_plans);
+
+  int create_hash_local_dist_win_func(ObLogicalOperator *top,
+                                      const WinFuncOpHelper &win_func_helper,
+                                      const bool need_sort,
+                                      const int64_t prefix_pos,
+                                      const int64_t part_cnt,
+                                      ObIArray<CandidatePlan> &all_plans);
+
   int create_normal_hash_dist_win_func(ObLogicalOperator *&top,
                                        const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
                                        const ObIArray<ObRawExpr*> &partition_exprs,
@@ -995,8 +1011,6 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
   int inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
                                     const ObIArray<ObRawExpr*> &group_by_exprs,
                                     const ObIArray<ObOrderDirection> &group_directions,
-                                    const ObIArray<ObRawExpr*> &rollup_exprs,
-                                    const ObIArray<ObOrderDirection> &rollup_directions,
                                     const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                     const ObIArray<ObRawExpr*> &having_exprs,
                                     GroupingOpHelper &groupby_helper,

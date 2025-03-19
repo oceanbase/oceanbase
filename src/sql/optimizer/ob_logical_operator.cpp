@@ -174,7 +174,6 @@ int ObExchangeInfo::assign(ObExchangeInfo &other)
     dist_method_ = other.dist_method_;
     unmatch_row_dist_method_ = other.unmatch_row_dist_method_;
     null_row_dist_method_ = other.null_row_dist_method_;
-    slave_mapping_type_ = other.slave_mapping_type_;
     strong_sharding_ = other.strong_sharding_;
     parallel_ = other.parallel_;
     server_cnt_ = other.server_cnt_;
@@ -413,8 +412,8 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     need_osg_merge_(false),
     max_px_thread_branch_(OB_INVALID_INDEX),
     max_px_group_branch_(OB_INVALID_INDEX),
-    need_re_est_child_cost_(false)
-
+    need_re_est_child_cost_(false),
+    dist_method_(DIST_INVALID_METHOD)
 {
 }
 
@@ -4407,10 +4406,6 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_PARTITION_WISE);
       } else { /*do nothing*/ }
 
-      if (ctx.is_in_slave_mapping()) {
-        gi_op->add_flag(GI_SLAVE_MAPPING);
-      }
-
       if (OB_SUCC(ret) && LOG_TABLE_SCAN == get_type()
           && EXTERNAL_TABLE == static_cast<ObLogTableScan *>(this)->get_table_type()) {
         if (ctx.force_partition()) {
@@ -5596,7 +5591,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
           join_filter_create->set_is_shared_partition_join_filter();
       }
       if (get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5) &&
-         DistAlgo::DIST_PARTITION_NONE == join_dist_algo) {
+          (DistAlgo::DIST_PARTITION_NONE == join_dist_algo || DistAlgo::DIST_PARTITION_HASH_LOCAL == join_dist_algo)) {
         ObLogicalOperator* child = get_child(first_child);
         if (OB_ISNULL(child)) {
           ret = OB_ERR_UNEXPECTED;
@@ -6786,14 +6781,14 @@ int ObLogicalOperator::check_contain_dist_das(const ObIArray<ObAddr> &exec_serve
   return ret;
 }
 
-bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
+bool ObLogicalOperator::is_parallel_more_than_part_cnt(const int64_t ratio) const
 {
   if (NULL == strong_sharding_) {
     return false;
   } else if (strong_sharding_->get_part_cnt() < 1) {
     return false;
   } else {
-    return get_parallel() > strong_sharding_->get_part_cnt();
+    return get_parallel() > strong_sharding_->get_part_cnt() * ratio;
   }
 }
 

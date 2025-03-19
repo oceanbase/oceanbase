@@ -348,10 +348,16 @@ int ObLogDistinct::print_outline_data(PlanText &plan_text)
                                 qb_name.length(),
                                 qb_name.ptr()))) {
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
-  } else if (NULL != op || is_partition_wise()) {
+  } else if (DIST_BASIC_METHOD != get_dist_method()) {
     ObPQHint pq_hint(T_PQ_DISTINCT_HINT);
     pq_hint.set_qb_name(qb_name);
-    pq_hint.set_dist_method(is_partition_wise() ? T_DISTRIBUTE_NONE : T_DISTRIBUTE_HASH);
+    if (DIST_PARTITION_WISE == get_dist_method()) {
+      pq_hint.set_dist_method(T_DISTRIBUTE_NONE);
+    } else if (DIST_HASH_HASH == get_dist_method()) {
+      pq_hint.set_dist_method(T_DISTRIBUTE_HASH);
+    } else if (DIST_HASH_HASH_LOCAL == get_dist_method()) {
+      pq_hint.set_dist_method(T_DISTRIBUTE_HASH_LOCAL);
+    }
     if (OB_FAIL(pq_hint.print_hint(plan_text))) {
       LOG_WARN("failed to print pq hint", K(ret), K(pq_hint));
     }

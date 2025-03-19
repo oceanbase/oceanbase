@@ -8049,11 +8049,9 @@ int ObStaticEngineCG::generate_hash_rollup_info(const ObHashRollupInfo &rollup_i
   } else if (OB_ISNULL(rt_info = OB_NEWx(HashRollupRTInfo, &phy_plan_->get_allocator(), phy_plan_->get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_ISNULL(rollup_info.expand_exprs_) || OB_ISNULL(rollup_info.gby_exprs_)
-             || OB_ISNULL(rollup_info.dup_expr_pairs_)) {
+  } else if (OB_ISNULL(rollup_info.rollup_grouping_id_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid null array", K(ret), KP(rollup_info.expand_exprs_),
-             KP(rollup_info.gby_exprs_), KP(rollup_info.dup_expr_pairs_));
+    LOG_WARN("invalid null array", K(ret), KP(rollup_info.rollup_grouping_id_));
   } else {
     ObSEArray<ObExpr *, 8> expand_exprs;
     ObSEArray<ObExpr *, 8> gby_exprs;
@@ -8062,24 +8060,24 @@ int ObStaticEngineCG::generate_hash_rollup_info(const ObHashRollupInfo &rollup_i
       LOG_WARN("generate rt expr failed", K(ret));
     }
     ObExpr *rt_expr = nullptr;
-    for (int i = 0; OB_SUCC(ret) && i < rollup_info.expand_exprs_->count(); i++) {
-      if (OB_FAIL(generate_rt_expr(*rollup_info.expand_exprs_->at(i), rt_expr))) {
+    for (int i = 0; OB_SUCC(ret) && i < rollup_info.expand_exprs_.count(); i++) {
+      if (OB_FAIL(generate_rt_expr(*rollup_info.expand_exprs_.at(i), rt_expr))) {
         LOG_WARN("generate rt expr failed", K(ret));
       } else if (OB_FAIL(expand_exprs.push_back(rt_expr))) {
         LOG_WARN("push back failed", K(ret));
       }
     }
-    for (int i = 0; OB_SUCC(ret) && i < rollup_info.gby_exprs_->count(); i++) {
-      if (OB_FAIL(generate_rt_expr(*rollup_info.gby_exprs_->at(i), rt_expr))) {
+    for (int i = 0; OB_SUCC(ret) && i < rollup_info.gby_exprs_.count(); i++) {
+      if (OB_FAIL(generate_rt_expr(*rollup_info.gby_exprs_.at(i), rt_expr))) {
         LOG_WARN("generate rt expr failed", K(ret));
       } else if (OB_FAIL(gby_exprs.push_back(rt_expr))) {
         LOG_WARN("push back failed", K(ret));
       }
     }
-    for (int i = 0; OB_SUCC(ret) && i < rollup_info.dup_expr_pairs_->count(); i++) {
+    for (int i = 0; OB_SUCC(ret) && i < rollup_info.dup_expr_pairs_.count(); i++) {
       ObExpandVecSpec::DupExprPair rt_dup_pair;
       ObExpr *org_rt_expr = nullptr, *dup_rt_expr = nullptr;
-      ObTuple<ObRawExpr *, ObRawExpr *> &raw_pair = rollup_info.dup_expr_pairs_->at(i);
+      const ObTuple<ObRawExpr *, ObRawExpr *> &raw_pair = rollup_info.dup_expr_pairs_.at(i);
       if (OB_ISNULL(raw_pair.element<0>()) || OB_ISNULL(raw_pair.element<1>())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid null expr", K(ret));
@@ -10822,20 +10820,22 @@ int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, cons
   ObSEArray<ObExpr *, 16> expand_exprs;
   ObSEArray<ObExpr *, 16> gby_exprs;
   ObSEArray<ObExpandVecSpec::DupExprPair, 8> dup_expr_pairs;
+  ObHashRollupInfo *hash_rollup_info = NULL;
   if (OB_ISNULL(phy_plan_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null physical plan", K(ret));
-  } else if (OB_ISNULL(op.get_grouping_id())) {
+  } else if (OB_ISNULL(hash_rollup_info=op.get_hash_rollup_info()) ||
+             OB_ISNULL(hash_rollup_info->rollup_grouping_id_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid null grouping id expr", K(ret));
-  } else if (OB_FAIL(generate_rt_expr(*op.get_grouping_id(), spec.grouping_id_expr_))) {
+    LOG_WARN("invalid null hash rollup info", K(ret));
+  } else if (OB_FAIL(generate_rt_expr(*hash_rollup_info->rollup_grouping_id_, spec.grouping_id_expr_))) {
     LOG_WARN("generate rt expr failed", K(ret));
-  } else if (OB_FAIL(mark_expr_self_produced(op.get_grouping_id()))) {
+  } else if (OB_FAIL(mark_expr_self_produced(hash_rollup_info->rollup_grouping_id_))) {
     LOG_WARN("mark expr self produced failed", K(ret));
   } else {
     ObExpr *expand_rt_expr = nullptr;
-    for (int i = 0; OB_SUCC(ret) && i < op.get_expand_exprs().count(); i++) {
-      if (OB_FAIL(generate_rt_expr(*op.get_expand_exprs().at(i), expand_rt_expr))) {
+    for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info->expand_exprs_.count(); i++) {
+      if (OB_FAIL(generate_rt_expr(*hash_rollup_info->expand_exprs_.at(i), expand_rt_expr))) {
         LOG_WARN("generate rt expr failed", K(ret));
       } else if (OB_ISNULL(expand_rt_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -10849,8 +10849,8 @@ int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, cons
       LOG_WARN("assign elements failed", K(ret));
     }
     ObExpr *gby_expr = nullptr;
-    for (int i = 0; OB_SUCC(ret) && i < op.get_gby_exprs().count(); i++) {
-      if (OB_FAIL(generate_rt_expr(*op.get_gby_exprs().at(i), gby_expr))) {
+    for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info->gby_exprs_.count(); i++) {
+      if (OB_FAIL(generate_rt_expr(*hash_rollup_info->gby_exprs_.at(i), gby_expr))) {
         LOG_WARN("generate rt expr failed", K(ret));
       } else if (OB_FAIL(gby_exprs.push_back(gby_expr))) {
         LOG_WARN("push back element failed", K(ret));
@@ -10861,9 +10861,9 @@ int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, cons
       LOG_WARN("assign elements failed", K(ret));
     }
     ObExpr *org_expr = nullptr, *dup_expr = nullptr;
-    for (int i = 0; OB_SUCC(ret) && i < op.get_dup_expr_pairs().count(); i++) {
-      ObRawExpr *org_raw_expr = op.get_dup_expr_pairs().at(i).element<0>();
-      ObRawExpr *dup_raw_expr = op.get_dup_expr_pairs().at(i).element<1>();
+    for (int i = 0; OB_SUCC(ret) && i < hash_rollup_info->dup_expr_pairs_.count(); i++) {
+      ObRawExpr *org_raw_expr = hash_rollup_info->dup_expr_pairs_.at(i).element<0>();
+      ObRawExpr *dup_raw_expr = hash_rollup_info->dup_expr_pairs_.at(i).element<1>();
       if (OB_FAIL(generate_rt_expr(*org_raw_expr, org_expr))) {
         LOG_WARN("generate rt expr failed", K(ret));
       } else if (OB_FAIL(generate_rt_expr(*dup_raw_expr, dup_expr))) {

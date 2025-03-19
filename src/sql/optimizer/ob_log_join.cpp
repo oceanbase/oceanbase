@@ -547,15 +547,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
                                                right_child->get_table_set(),
                                                plan_text))) {
       LOG_WARN("fail to print pq distribute hint", K(ret));
-    // 4. print pq map hint
-    } else if (is_using_slave_mapping() &&
-               OB_FAIL(print_join_hint_outline(*stmt,
-                                               T_PQ_MAP,
-                                               qb_name,
-                                               right_child->get_table_set(),
-                                               plan_text))) {
-      LOG_WARN("fail to print pq distribute hint", K(ret));
-    // 5. print use nl material
+    // 4. print use nl material
     } else if (NESTED_LOOP_JOIN == get_join_algo() &&
                join_path->need_mat_ &&
                OB_FAIL(print_join_hint_outline(*stmt,
@@ -565,7 +557,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
                                                plan_text))) {
       LOG_WARN("fail to print pq distribute hint", K(ret));
     } else {
-    // 6. print (part) join filter hint
+    // 5. print (part) join filter hint
       const ObIArray<JoinFilterInfo> &infos = get_join_filter_infos();
       for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
         if (infos.at(i).can_use_join_filter_ &&
@@ -754,12 +746,6 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
         LOG_WARN("failed to append nl material hint", K(ret));
       }
     }
-    // add used pq_map hint
-    if (OB_SUCC(ret) && is_using_slave_mapping() && NULL != log_join_hint->slave_mapping_) {
-      if (OB_FAIL(used_hints.push_back(log_join_hint->slave_mapping_))) {
-        LOG_WARN("failed to append pq map hint", K(ret));
-      }
-    }
     // add pq dist hint
     for (int64_t i = 0; !find && OB_SUCC(ret) && i < log_join_hint->dist_method_hints_.count(); ++i) {
       if (OB_ISNULL(join_hint = log_join_hint->dist_method_hints_.at(i))) {
@@ -942,8 +928,6 @@ int ObLogJoin::allocate_granule_pre(AllocGIContext &ctx)
   int ret = OB_SUCCESS;
   if (!ctx.exchange_above()) {
     LOG_TRACE("no exchange above, do nothing", K(ctx));
-  } else if (is_using_slave_mapping()) {
-    ctx.slave_mapping_type_ = slave_mapping_type_;
   } else if (!ctx.is_in_partition_wise_state()
              && !ctx.is_in_pw_affinity_state()
              && DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {

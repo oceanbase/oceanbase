@@ -689,8 +689,10 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       }
       if (OB_SUCC(ret)) {
         dfo->set_dist_method(transmit->dist_method_);
-        dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
-        parent_dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
+        if (transmit->is_slave_mapping()) {
+          dfo->set_out_slave_mapping_type(transmit->get_slave_mapping_type());
+          parent_dfo->set_in_slave_mapping_type(transmit->get_slave_mapping_type());
+        }
         dfo->set_pkey_table_loc_id(
           (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);
         if (OB_ISNULL(parent_dfo)) {

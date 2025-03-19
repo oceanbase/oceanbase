@@ -1892,7 +1892,7 @@ DEF_BOOL(enable_dblink, OB_CLUSTER_PARAMETER, "True",
 DEF_STR_WITH_CHECKER(_display_mysql_version, OB_CLUSTER_PARAMETER, "5.7.25", common::ObMySQLVersionLengthChecker,
         "dynamic mysql version of mysql mode observer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_px_join_skew_handling, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_px_join_skew_handling, OB_TENANT_PARAMETER, "True",
         "enables skew handling for parallel joins. The  default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_px_join_skew_minfreq, OB_TENANT_PARAMETER, "30", "[1,100]",

@@ -516,7 +516,8 @@ public:
     parent_dfo_id_(common::OB_INVALID_ID),
     px_sequence_id_(common::OB_INVALID_ID),
     temp_table_id_(0),
-    slave_mapping_type_(SlaveMappingType::SM_NONE),
+    in_slave_mapping_type_(SlaveMappingType::SM_NONE),
+    out_slave_mapping_type_(SlaveMappingType::SM_NONE),
     part_ch_map_(),
     total_task_cnt_(0),
     pkey_table_loc_id_(0),
@@ -581,9 +582,12 @@ public:
   inline void set_into_odps(bool has_into_odps) { has_into_odps_ = has_into_odps; }
   inline bool has_into_odps() const { return has_into_odps_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
-  inline void set_slave_mapping_type(SlaveMappingType v) { slave_mapping_type_ = v; }
-  inline SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
-  inline bool is_slave_mapping() { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
+  inline void set_in_slave_mapping_type(SlaveMappingType v) { in_slave_mapping_type_ = v; }
+  inline void set_out_slave_mapping_type(SlaveMappingType v) { out_slave_mapping_type_ = v; }
+  inline SlaveMappingType get_in_slave_mapping_type() { return in_slave_mapping_type_; }
+  inline SlaveMappingType get_out_slave_mapping_type() { return out_slave_mapping_type_; }
+  inline bool is_in_slave_mapping() { return SlaveMappingType::SM_NONE != in_slave_mapping_type_; }
+  inline bool is_out_slave_mapping() { return SlaveMappingType::SM_NONE != out_slave_mapping_type_; }
 
   ObPxPartChMapArray &get_part_ch_map() { return part_ch_map_; }
 
@@ -742,7 +746,8 @@ public:
                KP_(depend_sibling),
                KP_(parent),
                "child", get_child_count(),
-               K_(slave_mapping_type),
+               K_(in_slave_mapping_type),
+               K_(out_slave_mapping_type),
                K_(dist_method),
                K_(pkey_table_loc_id),
                K_(tsc_op_cnt),
@@ -810,7 +815,8 @@ private:
   int64_t parent_dfo_id_;
   uint64_t px_sequence_id_;
   uint64_t temp_table_id_;
-  SlaveMappingType slave_mapping_type_;
+  SlaveMappingType in_slave_mapping_type_;
+  SlaveMappingType out_slave_mapping_type_;
   ObPxPartChMapArray part_ch_map_;
   ObPQDistributeMethod::Type dist_method_;
   int64_t total_task_cnt_;      // the task total count of dfo start worker

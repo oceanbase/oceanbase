@@ -467,6 +467,7 @@ public:
       force_partition_wise_(false),
       force_dist_hash_(false),
       force_pull_to_local_(false),
+      force_hash_local_(false),
       is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
@@ -476,10 +477,9 @@ public:
       rollup_id_expr_(NULL),
       group_ndv_(-1.0),
       group_distinct_ndv_(-1.0),
-      rollup_grouping_id_expr_(nullptr),
       enable_hash_rollup_(true),
       force_hash_rollup_(false),
-      dup_expr_pairs_(),
+      hash_rollup_info_(NULL),
       grouping_dop_(ObGlobalHint::UNSET_PARALLEL)
     {
     }
@@ -489,19 +489,25 @@ public:
     void clear_ignore_hint()  { ignore_hint_ = false; }
     inline bool allow_basic() const { return ignore_hint_ || (!force_partition_wise_ &&
                                                               !force_dist_hash_ &&
-                                                              !force_pull_to_local_); }
+                                                              !force_pull_to_local_ &&
+                                                              !force_hash_local_); }
     inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ &&
                                                                   !force_partition_wise_ &&
-                                                                  !force_pull_to_local_); }
-    inline bool allow_partition_wise(bool enable_partition_wise_plan) const
-    {
-      bool disable_by_rule = !enable_partition_wise_plan && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
-      return ignore_hint_ ? !disable_by_rule
-                          : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_ && !force_pull_to_local_));
-    }
+                                                                  !force_pull_to_local_ &&
+                                                                  !force_hash_local_); }
+    inline bool allow_partition_wise() const { return ignore_hint_ || (!force_basic_ &&
+                                                                        !force_dist_hash_ &&
+                                                                        !force_pull_to_local_ &&
+                                                                        !force_hash_local_); }
     inline bool allow_pull_to_local() const { return ignore_hint_ || (!force_basic_ &&
                                                                       !force_dist_hash_ &&
-                                                                      !force_partition_wise_); }
+                                                                      !force_partition_wise_ &&
+                                                                      !force_hash_local_); }
+
+    inline bool allow_hash_local() const { return ignore_hint_ || (!force_basic_ &&
+                                                                      !force_dist_hash_ &&
+                                                                      !force_partition_wise_ &&
+                                                                      !force_pull_to_local_); }
 
     inline void reset_three_stage_info()
     {
@@ -522,6 +528,7 @@ public:
     bool force_partition_wise_; // pq hint force use partition wise plan
     bool force_dist_hash_;      // pq hint force use hash distributed method plan
     bool force_pull_to_local_;
+    bool force_hash_local_;
     bool is_scalar_group_by_;
     bool is_from_povit_;
     bool ignore_hint_;
@@ -544,10 +551,9 @@ public:
     // distinct of group expr and distinct expr
     double group_distinct_ndv_;
 
-    ObOpPseudoColumnRawExpr *rollup_grouping_id_expr_;
     bool enable_hash_rollup_;
     bool force_hash_rollup_;
-    ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8> dup_expr_pairs_;
+    ObHashRollupInfo *hash_rollup_info_;
     int64_t grouping_dop_;
 
     TO_STRING_KV(K_(can_storage_pushdown),
@@ -562,6 +568,7 @@ public:
                  K_(force_partition_wise),
                  K_(force_dist_hash),
                  K_(force_pull_to_local),
+                 K_(force_hash_local),
                  K_(is_scalar_group_by),
                  K_(is_from_povit),
                  K_(ignore_hint),
@@ -719,10 +726,8 @@ public:
   int allocate_material_as_top(ObLogicalOperator *&old_top);
 
   /** @brief Allocating a expand operator which is response for duplicate child input as parent of a path */
-  int allocate_expand_as_top(ObLogicalOperator *&old_top, const ObIArray<ObRawExpr *> &expand_exprs,
-                             const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &dup_expr_pairs,
-                             const ObIArray<ObRawExpr *> &gby_exprs,
-                             const ObIArray<ObAggFunRawExpr *> &aggr_items);
+  int allocate_expand_as_top(ObLogicalOperator *&old_top,
+                             ObHashRollupInfo* hash_rollup_info);
 
   /** @brief Create plan tree from an interesting order */
   int create_plan_tree_from_path(Path *path,
@@ -737,11 +742,13 @@ public:
 
   int candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &agg_items,
                                     const ObIArray<ObRawExpr*> &having_exprs,
-                                    const bool is_from_povit);
+                                    const bool is_from_povit,
+                                    ObIArray<CandidatePlan> &groupby_plans);
 
   int inner_candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &agg_items,
                                           const ObIArray<ObRawExpr*> &having_exprs,
                                           GroupingOpHelper &groupby_helper,
+                                          ObIArray<CandidatePlan> &candi_plans,
                                           ObIArray<CandidatePlan> &groupby_plans);
 
   int get_distribute_group_by_method(ObLogicalOperator *top,
@@ -749,7 +756,6 @@ public:
                                     const ObIArray<ObRawExpr*> &reduce_exprs,
                                     uint64_t &group_dist_methods);
   int prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_exprs,
-                               const ObIArray<ObRawExpr *> &rollup_exprs,
                                GroupingOpHelper &helper);
 
   int generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
@@ -761,7 +767,6 @@ public:
 
   bool disable_hash_groupby_in_second_stage();
   int create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
-                                    const ObIArray<ObRawExpr *> &rollup_exprs,
                                     const ObIArray<ObRawExpr*> &having_exprs,
                                     GroupingOpHelper &helper,
                                     ObLogicalOperator *&top);
@@ -811,6 +816,12 @@ public:
                           const ObIArray<ObAggFunRawExpr*> &aggr_items,
                           const bool is_from_povit,
                           GroupingOpHelper &groupby_helper);
+
+  int init_hash_rollup_info(const ObIArray<ObRawExpr*> &groupby_exprs,
+                            const ObIArray<ObRawExpr*> &rollup_exprs,
+                            const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                            ObHashRollupInfo* &hash_rollup_info);
+
 
   int compute_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
                                       const ObIArray<ObRawExpr*> &rollup_exprs,
@@ -1008,7 +1019,7 @@ public:
                                const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP,
                                bool force_use_scalar = false,
                                const ObThreeStageAggrInfo *three_stage_info = NULL,
-                               const ObHashRollupInfo *hash_rollup_info = NULL);
+                               ObHashRollupInfo *hash_rollup_info = NULL);
 
   int candi_allocate_limit(const ObIArray<OrderItem> &order_items);
 

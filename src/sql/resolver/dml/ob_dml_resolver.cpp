@@ -17051,6 +17051,16 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
         dist_algo = DistAlgo::DIST_ALL_NONE;
       } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_ALL == inner) {
         dist_algo = DistAlgo::DIST_RANDOM_ALL;
+      } else if (T_DISTRIBUTE_HASH_LOCAL == outer && T_DISTRIBUTE_HASH_LOCAL == inner) {
+        dist_algo = DistAlgo::DIST_HASH_HASH_LOCAL;
+      } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_HASH_LOCAL == inner) {
+        dist_algo = DistAlgo::DIST_PARTITION_HASH_LOCAL;
+      } else if (T_DISTRIBUTE_HASH_LOCAL == outer && T_DISTRIBUTE_PARTITION == inner) {
+        dist_algo = DistAlgo::DIST_HASH_LOCAL_PARTITION;
+      } else if (T_DISTRIBUTE_BROADCAST == outer && T_DISTRIBUTE_HASH_LOCAL == inner) {
+        dist_algo = DistAlgo::DIST_BROADCAST_HASH_LOCAL;
+      } else if (T_DISTRIBUTE_HASH_LOCAL == outer && T_DISTRIBUTE_BROADCAST == inner) {
+        dist_algo = DistAlgo::DIST_HASH_LOCAL_BROADCAST;
       }
     }
 
@@ -17933,6 +17943,13 @@ int ObDMLResolver::resolve_win_dist_option(const ParseNode *option,
       }
       case T_DISTRIBUTE_HASH: {
         dist_option.algo_ = WinDistAlgo::WIN_DIST_HASH;
+        dist_option.use_hash_sort_ = dist_method->value_ & hash_sort_flag;
+        dist_option.is_push_down_ = dist_method->value_ & push_down_flag;
+        dist_option.use_topn_sort_ = dist_method->value_ & topn_flag;
+        break;
+      }
+      case T_DISTRIBUTE_HASH_LOCAL: {
+        dist_option.algo_ = WinDistAlgo::WIN_DIST_HASH_LOCAL;
         dist_option.use_hash_sort_ = dist_method->value_ & hash_sort_flag;
         dist_option.is_push_down_ = dist_method->value_ & push_down_flag;
         dist_option.use_topn_sort_ = dist_method->value_ & topn_flag;

@@ -1766,7 +1766,8 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
                                         bool &force_basic,
                                         bool &force_partition_wise,
                                         bool &force_dist_hash,
-                                        bool &force_pull_to_local) const
+                                        bool &force_pull_to_local,
+                                        bool &force_hash_local) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
@@ -1776,6 +1777,8 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
   force_basic = false;
   force_partition_wise = false;
   force_dist_hash = false;
+  force_pull_to_local = false;
+  force_hash_local = false;
   const ObAggHint *agg_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_AGGREGATE));
   const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_GBY_HINT));
   const bool enable_pq_hint = COMPAT_VERSION_4_3_3 <= optimizer_features_enable_version_
@@ -1798,11 +1801,13 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
     force_partition_wise = pq_hint->is_force_partition_wise();
     force_dist_hash = pq_hint->is_force_dist_hash();
     force_pull_to_local = pq_hint->is_force_pull_to_local();
+    force_hash_local = pq_hint->is_force_hash_local();
   } else if (is_outline_data_) {
     force_basic = true;
     force_partition_wise = false;
     force_dist_hash = false;
     force_pull_to_local = false;
+    force_hash_local = false;
   }
   return ret;
 }
@@ -1822,7 +1827,8 @@ int ObLogPlanHint::get_distinct_info(bool &force_use_hash,
                                      bool &force_use_merge,
                                      bool &force_basic,
                                      bool &force_partition_wise,
-                                     bool &force_dist_hash) const
+                                     bool &force_dist_hash,
+                                     bool &force_hash_local) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
@@ -1830,6 +1836,7 @@ int ObLogPlanHint::get_distinct_info(bool &force_use_hash,
   force_basic = false;
   force_partition_wise = false;
   force_dist_hash = false;
+  force_hash_local = false;
   const ObHint *method_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_DISTINCT));
   const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_DISTINCT_HINT));
   const bool enable_pq_hint = COMPAT_VERSION_4_3_3 <= optimizer_features_enable_version_
@@ -1845,6 +1852,7 @@ int ObLogPlanHint::get_distinct_info(bool &force_use_hash,
     force_basic = pq_hint->is_force_basic();
     force_partition_wise = pq_hint->is_force_partition_wise();
     force_dist_hash = pq_hint->is_force_dist_hash();
+    force_hash_local = pq_hint->is_force_hash_local();
   } else if (is_outline_data_) {
     force_basic = true;
     force_partition_wise = false;
@@ -2067,7 +2075,7 @@ SetAlgo ObLogPlanHint::get_valid_set_algo() const
   return set_algo;
 }
 
-uint64_t ObLogPlanHint::get_valid_set_dist_algo(int64_t *random_none_idx /* default NULL */ ) const
+uint64_t ObLogPlanHint::get_valid_set_dist_algo(int64_t *random_none_idx /* default NULL */) const
 {
   uint64_t set_dist_algo = DistAlgo::DIST_INVALID_METHOD;
   const ObPQSetHint *pq_set_hint = static_cast<const ObPQSetHint*>(get_normal_hint(T_PQ_SET));

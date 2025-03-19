@@ -2501,6 +2501,11 @@ const char *ObJoinHint::get_dist_algo_str(DistAlgo dist_algo)
     case DistAlgo::DIST_ALL_NONE:           return  "ALL NONE";
     case DistAlgo::DIST_RANDOM_ALL:         return  "RANDOM ALL";
     case DistAlgo::DIST_HASH_ALL:           return  "HASH ALL";
+    case DistAlgo::DIST_HASH_HASH_LOCAL:    return "HASH_LOCAL HASH_LOCAL";
+    case DistAlgo::DIST_PARTITION_HASH_LOCAL:    return "PARTITION HASH_LOCAL";
+    case DistAlgo::DIST_HASH_LOCAL_PARTITION:    return "HASH_LOCAL PARTITION";
+    case DistAlgo::DIST_BROADCAST_HASH_LOCAL:    return "BROADCAST HASH_LOCAL";
+    case DistAlgo::DIST_HASH_LOCAL_BROADCAST:    return "HASH_LOCAL BROADCAST";
     default:  return NULL;
   }
   return  NULL;
@@ -2587,7 +2592,16 @@ int ObPQSetHint::set_pq_set_hint(const DistAlgo dist_algo,
         dist_methods_.at(1) = T_DISTRIBUTE_LOCAL;
         break;
       } 
-      case DistAlgo::DIST_PARTITION_WISE:
+      case DistAlgo::DIST_PARTITION_WISE:  {
+        dist_methods_.at(0) = T_DISTRIBUTE_NONE;
+        dist_methods_.at(1) = T_DISTRIBUTE_NONE;
+        break;
+      }
+      case DistAlgo::DIST_HASH_HASH_LOCAL: {
+        dist_methods_.at(0) = T_DISTRIBUTE_HASH_LOCAL;
+        dist_methods_.at(1) = T_DISTRIBUTE_HASH_LOCAL;
+        break;
+      }
       case DistAlgo::DIST_EXT_PARTITION_WISE:
       case DistAlgo::DIST_SET_PARTITION_WISE:  {
         dist_methods_.at(0) = T_DISTRIBUTE_NONE;
@@ -2614,6 +2628,11 @@ int ObPQSetHint::set_pq_set_hint(const DistAlgo dist_algo,
         dist_methods_.at(1) = T_DISTRIBUTE_NONE;
         break;
       }
+      case DistAlgo::DIST_PARTITION_HASH_LOCAL: {
+        dist_methods_.at(0) = T_DISTRIBUTE_PARTITION;
+        dist_methods_.at(1) = T_DISTRIBUTE_HASH_LOCAL;
+        break;
+      }
       case DistAlgo::DIST_HASH_NONE:  {
         dist_methods_.at(0) = T_DISTRIBUTE_HASH;
         dist_methods_.at(1) = T_DISTRIBUTE_NONE;
@@ -2621,6 +2640,11 @@ int ObPQSetHint::set_pq_set_hint(const DistAlgo dist_algo,
       } 
       case DistAlgo::DIST_NONE_PARTITION:  {
         dist_methods_.at(0) = T_DISTRIBUTE_NONE;
+        dist_methods_.at(1) = T_DISTRIBUTE_PARTITION;
+        break;
+      }
+      case DistAlgo::DIST_HASH_LOCAL_PARTITION: {
+        dist_methods_.at(0) = T_DISTRIBUTE_HASH_LOCAL;
         dist_methods_.at(1) = T_DISTRIBUTE_PARTITION;
         break;
       }
@@ -2692,7 +2716,8 @@ int ObPQSetHint::print_hint_desc(PlanText &plan_text) const
 bool ObPQSetHint::is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods)
 {
   int64_t random_none_idx = OB_INVALID_INDEX;
-  return DistAlgo::DIST_INVALID_METHOD != get_dist_algo(dist_methods, random_none_idx);
+  return DistAlgo::DIST_INVALID_METHOD != get_dist_algo(dist_methods,
+                                                        random_none_idx);
 }
 
 // DistAlgo::DIST_BASIC_METHOD indicate 
@@ -2711,7 +2736,9 @@ uint64_t ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
     if (T_DISTRIBUTE_LOCAL == method1 && T_DISTRIBUTE_LOCAL == method2) {
       dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
     } else if (T_DISTRIBUTE_NONE == method1 && T_DISTRIBUTE_NONE == method2) {
-      dist_algo = DistAlgo::DIST_PARTITION_WISE;
+      dist_algo = DistAlgo::DIST_PARTITION_WISE
+                | DistAlgo::DIST_EXT_PARTITION_WISE
+                | DistAlgo::DIST_SET_PARTITION_WISE;
     } else if (T_DISTRIBUTE_NONE == method1 && T_DISTRIBUTE_ALL == method2) {
       dist_algo = DistAlgo::DIST_NONE_ALL;
     } else if (T_DISTRIBUTE_ALL == method1 && T_DISTRIBUTE_NONE == method2) {
@@ -2732,15 +2759,25 @@ uint64_t ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
     } else if (T_DISTRIBUTE_RANDOM == method1 && T_DISTRIBUTE_NONE == method2) {
       dist_algo = DistAlgo::DIST_SET_RANDOM;
       random_none_idx = 1;
+    } else if (T_DISTRIBUTE_HASH_LOCAL == method1 && T_DISTRIBUTE_HASH_LOCAL == method2) {
+      dist_algo = DistAlgo::DIST_HASH_HASH_LOCAL;
+    } else if (T_DISTRIBUTE_PARTITION == method1 && T_DISTRIBUTE_HASH_LOCAL == method2) {
+      dist_algo = DistAlgo::DIST_PARTITION_HASH_LOCAL;
+    } else if (T_DISTRIBUTE_HASH_LOCAL == method1 && T_DISTRIBUTE_PARTITION == method2) {
+      dist_algo = DistAlgo::DIST_HASH_LOCAL_PARTITION;
     }
   } else { // multi child union all
     int64_t tmp = DistAlgo::DIST_PARTITION_WISE
+                  | DistAlgo::DIST_EXT_PARTITION_WISE
+                  | DistAlgo::DIST_SET_PARTITION_WISE
                   | DistAlgo::DIST_PULL_TO_LOCAL
                   | DistAlgo::DIST_SET_RANDOM;
     for (int i = 0; DistAlgo::DIST_INVALID_METHOD != tmp && i < dist_methods.count(); ++i) {
       const ObItemType method = dist_methods.at(i);
       if (T_DISTRIBUTE_NONE != method) {
         tmp &= ~DistAlgo::DIST_PARTITION_WISE;
+        tmp &= ~DistAlgo::DIST_EXT_PARTITION_WISE;
+        tmp &= ~DistAlgo::DIST_SET_PARTITION_WISE;
       }
       if (T_DISTRIBUTE_LOCAL != method) {
         tmp &= ~DistAlgo::DIST_PULL_TO_LOCAL;
@@ -2755,16 +2792,7 @@ uint64_t ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
         }
       }
     }
-    if (DistAlgo::DIST_PARTITION_WISE == tmp
-        || DistAlgo::DIST_PULL_TO_LOCAL == tmp
-        || DistAlgo::DIST_SET_RANDOM == tmp) {
-      dist_algo = sql::get_dist_algo(tmp);
-    }
-  }
-  if (DistAlgo::DIST_PARTITION_WISE == dist_algo) {
-    dist_algo = DistAlgo::DIST_PARTITION_WISE
-                | DistAlgo::DIST_EXT_PARTITION_WISE
-                | DistAlgo::DIST_SET_PARTITION_WISE;
+    dist_algo = tmp;
   }
   return dist_algo;
 }
@@ -2778,6 +2806,7 @@ const char *ObPQSetHint::get_dist_method_str(const ObItemType dist_method)
     case T_DISTRIBUTE_HASH:       return  "HASH";
     case T_DISTRIBUTE_LOCAL:      return  "LOCAL";
     case T_DISTRIBUTE_RANDOM:     return  "RANDOM";
+    case T_DISTRIBUTE_HASH_LOCAL: return  "HASH_LOCAL";
     default:  return NULL;
   }
   return NULL;
@@ -2846,6 +2875,7 @@ const char *ObPQHint::get_dist_method_str(ObItemType dist_method)
     case T_DISTRIBUTE_NONE:   return  "NONE";
     case T_DISTRIBUTE_HASH:   return  "HASH";
     case T_DISTRIBUTE_LOCAL:  return  "LOCAL";
+    case T_DISTRIBUTE_HASH_LOCAL: return "HASH_LOCAL";
     default:  return NULL;
   }
   return NULL;
@@ -3196,6 +3226,7 @@ const char *ObWindowDistHint::get_dist_algo_str(WinDistAlgo dist_algo)
   switch (dist_algo) {
     case WinDistAlgo::WIN_DIST_NONE:   return  "NONE";
     case WinDistAlgo::WIN_DIST_HASH:   return  "HASH";
+    case WinDistAlgo::WIN_DIST_HASH_LOCAL:   return  "HASH_LOCAL";
     case WinDistAlgo::WIN_DIST_RANGE:  return  "RANGE";
     case WinDistAlgo::WIN_DIST_LIST:   return  "LIST";
     default:  return NULL;
@@ -3305,7 +3336,9 @@ bool ObWindowDistHint::WinDistOption::is_valid() const
     bret = false;
   } else if (WinDistAlgo::WIN_DIST_HASH != algo_ && is_push_down_) {
     bret = false;
-  } else if (WinDistAlgo::WIN_DIST_HASH != algo_ && WinDistAlgo::WIN_DIST_NONE != algo_
+  } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
+             WinDistAlgo::WIN_DIST_NONE != algo_ &&
+             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_
             && (use_hash_sort_ || use_topn_sort_)) {
     bret = false;
   } else {

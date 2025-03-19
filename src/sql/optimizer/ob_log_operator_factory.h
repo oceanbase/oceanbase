@@ -62,6 +62,7 @@ LOG_OP_DEF(LOG_OP_END, "OP_DEF_END")
 #define OCEANBASE_SQL_OB_LOG_OPERATOR_FACTORY_H
 #include "lib/allocator/ob_allocator.h"
 #include "lib/list/ob_obj_store.h"
+#include "sql/ob_sql_define.h"
 namespace oceanbase
 {
 namespace sql
@@ -127,10 +128,15 @@ enum DistAlgo
   DIST_HASH_ALL = (1UL << 13),  //Only used in SPF so far
   DIST_PARTITION_WISE = (1UL << 14), // pure partition wise
   DIST_EXT_PARTITION_WISE = (1UL << 15), // extended partition wise
-  DIST_MAX_JOIN_METHOD = (1UL << 16), // represents max join method
+  DIST_HASH_HASH_LOCAL = (1UL << 16),   //partition wise with slave mapping
+  DIST_PARTITION_HASH_LOCAL = (1UL << 17),
+  DIST_HASH_LOCAL_PARTITION = (1UL << 18),
+  DIST_BROADCAST_HASH_LOCAL = (1UL << 19),
+  DIST_HASH_LOCAL_BROADCAST = (1UL << 20),
+  DIST_MAX_JOIN_METHOD = (1UL << 21), // represents max join method
   // only for set operator
-  DIST_SET_RANDOM = (1UL << 17),
-  DIST_SET_PARTITION_WISE = (1UL << 18) // non-strict set pw with phy_table_location_info_
+  DIST_SET_RANDOM = (1UL << 22),
+  DIST_SET_PARTITION_WISE = (1UL << 23) // non-strict set pw with phy_table_location_info_
 };
 
 inline const ObString &ob_dist_algo_str(DistAlgo algo)
@@ -154,6 +160,11 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     "HASH ALL",
     "PARTITION WISE",
     "EXTEND PARTITION WISE",
+    "HASH HASH LOCAL",
+    "PARTITION HASH LOCAL",
+    "HASH LOCAL PARTITION",
+    "BROADCAST HASH LOCAL",
+    "HASH LOCAL BROADCAST",
     "UNKNOWN ALGO",
     "SET RANDOM",
     "SET PARTITION WISE"
@@ -209,9 +220,37 @@ inline DistAlgo get_dist_algo(int64_t method)
     return DIST_HASH_ALL;
   } else if (method & DIST_SET_RANDOM) {
     return DIST_SET_RANDOM;
+  } else if (method & DIST_HASH_HASH_LOCAL) {
+    return DIST_HASH_HASH_LOCAL;
+  } else if (method & DIST_PARTITION_HASH_LOCAL) {
+    return DIST_PARTITION_HASH_LOCAL;
+  } else if (method & DIST_HASH_LOCAL_PARTITION) {
+    return DIST_HASH_LOCAL_PARTITION;
+  } else if (method & DIST_BROADCAST_HASH_LOCAL) {
+    return DIST_BROADCAST_HASH_LOCAL;
+  } else if (method & DIST_HASH_LOCAL_BROADCAST) {
+    return DIST_HASH_LOCAL_BROADCAST;
   } else {
     return DIST_INVALID_METHOD;
   }
+}
+
+inline SlaveMappingType get_slave_mapping_type(DistAlgo dist_algo)
+{
+  SlaveMappingType sm_type = SlaveMappingType::SM_NONE;
+  if (dist_algo == DIST_HASH_HASH_LOCAL) {
+    sm_type = SlaveMappingType::SM_PWJ_HASH_HASH;
+  } else if (dist_algo == DIST_PARTITION_HASH_LOCAL ||
+              dist_algo == DIST_HASH_LOCAL_PARTITION) {
+    sm_type = SlaveMappingType::SM_PPWJ_HASH_HASH;
+  } else if (dist_algo == DIST_BROADCAST_HASH_LOCAL) {
+    sm_type = SlaveMappingType::SM_PPWJ_BCAST_NONE;
+  } else if (dist_algo == DIST_HASH_LOCAL_BROADCAST) {
+    sm_type = SlaveMappingType::SM_PPWJ_NONE_BCAST;
+  } else {
+    sm_type = SlaveMappingType::SM_NONE;
+  }
+  return sm_type;
 }
 
 inline DistAlgo get_opposite_distributed_type(DistAlgo dist_type)
@@ -273,7 +312,8 @@ enum WinDistAlgo
   WIN_DIST_NONE    = (1UL),
   WIN_DIST_HASH    = (1UL << 1), // hash distribute
   WIN_DIST_RANGE   = (1UL << 2), // range distribute
-  WIN_DIST_LIST    = (1UL << 3)  // range + random distribute
+  WIN_DIST_LIST    = (1UL << 3),  // range + random distribute
+  WIN_DIST_HASH_LOCAL   = (1UL << 4)  // range + random distribute
 };
 
 inline WinDistAlgo get_win_dist_algo(uint64_t method)
@@ -286,6 +326,8 @@ inline WinDistAlgo get_win_dist_algo(uint64_t method)
     return WinDistAlgo::WIN_DIST_HASH;
   } else if (method & WinDistAlgo::WIN_DIST_NONE) {
     return WinDistAlgo::WIN_DIST_NONE;
+  } else if (method & WinDistAlgo::WIN_DIST_HASH_LOCAL) {
+    return WinDistAlgo::WIN_DIST_HASH_LOCAL;
   } else {
     return WinDistAlgo::WIN_DIST_INVALID;
   }

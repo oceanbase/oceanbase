@@ -1101,19 +1101,28 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
 int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
     const ObIArray<ObTableLocation> *table_locations,
     ObExecContext &exec_ctx,
-    ObDfo &child,
     ObDfo &parent)
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
-  if (2 != parent.get_child_count()) {
+  for (int64_t i = 0; OB_SUCC(ret) &&
+                      nullptr == reference_child &&
+                      i < parent.get_child_count(); ++i) {
+    ObDfo *candi_child = nullptr;
+    if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
+      LOG_WARN("failed to get dfo", K(ret));
+    } else if (OB_ISNULL(candi_child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null child", K(ret));
+    } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
+               candi_child->is_out_slave_mapping()) {
+      reference_child = candi_child;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(reference_child)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parent should has two child", K(ret));
-  } else if (OB_FAIL(parent.get_child_dfo(0, reference_child))) {
-    LOG_WARN("failed to get reference_child", K(ret));
-  } else if (reference_child->get_dfo_id() == child.get_dfo_id()
-             && OB_FAIL(parent.get_child_dfo(1, reference_child))) {
-    LOG_WARN("failed to get reference_child", K(ret));
+    LOG_WARN("unexpected null child", K(ret));
   } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
     LOG_WARN("failed to alloc by data", K(ret));
   } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
@@ -3505,20 +3514,30 @@ int ObSlaveMapUtil::build_ppwj_bcast_slave_mn_map(ObDfo &parent, ObDfo &child, u
 int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (2 != parent.get_child_count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected dfo", K(ret), K(parent));
-  } else if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
+  if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
     ObDfo *reference_child = nullptr;
     int64_t child_dfo_idx = -1;
     common::ObSEArray<ObPxSqcMeta *, 8> sqcs;
     ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
     ObPxPartChMapArray &map = child.get_part_ch_map();
-    if (OB_FAIL(parent.get_child_dfo(0, reference_child))) {
-      LOG_WARN("failed to get dfo", K(ret));
-    } else if (reference_child->get_dfo_id() == child.get_dfo_id()
-               && OB_FAIL(parent.get_child_dfo(1, reference_child))) {
-      LOG_WARN("failed to get dfo", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) &&
+                        nullptr == reference_child &&
+                        i < parent.get_child_count(); ++i) {
+      ObDfo *candi_child = nullptr;
+      if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
+        LOG_WARN("failed to get dfo", K(ret));
+      } else if (OB_ISNULL(candi_child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null child", K(ret));
+      } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
+                 candi_child->is_out_slave_mapping()) {
+        reference_child = candi_child;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(reference_child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null child", K(ret));
     } else if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
       LOG_WARN("failed to check dfo pair", K(ret));
     } else if (OB_FAIL(build_mn_channel(dfo_ch_total_infos, child, parent, tenant_id))) {
@@ -3768,7 +3787,7 @@ int ObSlaveMapUtil::build_mn_ch_map(
   uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  SlaveMappingType slave_type = parent.get_slave_mapping_type();
+  SlaveMappingType slave_type = parent.get_in_slave_mapping_type();
   switch(slave_type) {
   case SlaveMappingType::SM_PWJ_HASH_HASH : {
     if (OB_FAIL(build_pwj_slave_map_mn_group(parent, child, tenant_id))) {

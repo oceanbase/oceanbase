@@ -361,6 +361,9 @@ int ObLogSet::compute_sharding_info()
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::first_child;
+  } else if (DistAlgo::DIST_HASH_LOCAL_PARTITION == set_dist_algo_ ||
+             DistAlgo::DIST_PARTITION_HASH_LOCAL == set_dist_algo_) {
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
     LOG_WARN("failed to compute sharding info", K(ret));
   } else { /*do nothing*/ }
@@ -878,7 +881,9 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
         }
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_, get_num_of_child(), random_none_idx))) {
+    if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_,
+                                                     get_num_of_child(),
+                                                     random_none_idx))) {
       LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx));
     }
   }

@@ -106,7 +106,7 @@ int ObDfoSchedulerBasic::on_sqc_threads_inited(ObExecContext &ctx, ObDfo &dfo) c
 int ObDfoSchedulerBasic::build_data_mn_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const
 {
   int ret = OB_SUCCESS;
-  if (SM_NONE != parent.get_slave_mapping_type()
+  if ((parent.is_in_slave_mapping() && child.is_out_slave_mapping())
       || ObPQDistributeMethod::Type::PARTITION == child.get_dist_method()
       || ObPQDistributeMethod::Type::PARTITION_RANDOM == child.get_dist_method()
       || ObPQDistributeMethod::Type::PARTITION_HASH == child.get_dist_method()
@@ -301,11 +301,13 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
           OB_FAIL(ObPXServerAddrUtil::alloc_by_local_distribution(ctx, *parent))) {
         LOG_WARN("fail to alloc local distribution", K(ret));
       } else if (!parent->is_root_dfo() && !parent->is_thread_inited() &&
-                 ObPQDistributeMethod::PARTITION_HASH == child->get_dist_method()) {
+                 parent->is_in_slave_mapping() &&
+                 (SlaveMappingType::SM_PWJ_HASH_HASH == parent->get_in_slave_mapping_type() ||
+                  SlaveMappingType::SM_PPWJ_HASH_HASH == parent->get_in_slave_mapping_type())) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
             coord_info_.pruning_table_location_,
             ctx,
-            *child, *parent))) {
+            *parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
         }
       } else if (!parent->is_root_dfo() && !parent->is_thread_inited() &&
@@ -1459,19 +1461,14 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
           }
           LOG_TRACE("alloc_by_local_distribution", K(parent));
-        } else if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
+        } else if (parent.is_in_slave_mapping() &&
+                  (SlaveMappingType::SM_PWJ_HASH_HASH == parent.get_in_slave_mapping_type() ||
+                   SlaveMappingType::SM_PPWJ_HASH_HASH == parent.get_in_slave_mapping_type())) {
           if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
                   coord_info_.pruning_table_location_,
                   exec_ctx,
-                  child, parent))) {
+                  parent))) {
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
-          }
-        } else if (child.is_slave_mapping()) {
-          if (OB_UNLIKELY(ObPQDistributeMethod::HASH != child.get_dist_method())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected dist method for slave mapping", K(ret), K(parent), K(child));
-          } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_child_distribution(child, parent))) {
-            LOG_WARN("alloc by child distribution failed", K(ret));
           }
         } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_random_distribution(exec_ctx, child, parent, px_node_pool_))) {
           LOG_WARN("fail alloc addr by random distribution", K(parent), K(child), K(ret));

@@ -78,7 +78,6 @@ namespace sql
         join_type_(UNKNOWN_JOIN),
         local_methods_(0),
         distributed_methods_(0),
-        force_slave_mapping_(false),
         force_mat_(false),
         force_no_mat_(false),
         prune_mj_(true),
@@ -91,7 +90,6 @@ namespace sql
       join_type_ = UNKNOWN_JOIN;
       local_methods_ = 0;
       distributed_methods_ = 0;
-      force_slave_mapping_ = false;
       force_mat_ = false;
       force_no_mat_ = false;
       prune_mj_ = true;
@@ -102,7 +100,6 @@ namespace sql
     TO_STRING_KV(K_(join_type),
                  K_(local_methods),
                  K_(distributed_methods),
-                 K_(force_slave_mapping),
                  K_(force_mat),
                  K_(force_no_mat),
                  K_(prune_mj),
@@ -112,7 +109,6 @@ namespace sql
     ObJoinType join_type_;
     int64_t local_methods_;
     int64_t distributed_methods_;
-    bool force_slave_mapping_;  // force to use slave mapping
     bool force_mat_;    // force to add material
     bool force_no_mat_; // force to not add material
     bool prune_mj_; // prune merge join path
@@ -544,10 +540,10 @@ class Path
       }
       return ret;
     }
-    inline bool parallel_more_than_part_cnt() const
+    inline bool parallel_more_than_part_cnt(const int64_t ratio = 1) const
     {
       const ObShardingInfo *sharding = try_get_sharding_with_table_location();
-      return NULL != sharding && parallel_ > sharding->get_part_cnt();
+      return NULL != sharding && parallel_ > sharding->get_part_cnt() * ratio;
     }
     int compute_path_property_from_log_op();
     int set_parallel_and_server_info_for_match_all();
@@ -902,7 +898,6 @@ class Path
       right_path_(NULL),
       join_algo_(INVALID_JOIN_ALGO),
       join_dist_algo_(DistAlgo::DIST_INVALID_METHOD),
-      is_slave_mapping_(false),
       use_hybrid_hash_dm_(false),
       join_type_(UNKNOWN_JOIN),
       need_mat_(false),
@@ -931,7 +926,6 @@ class Path
              const Path* right_path,
              JoinAlgo join_algo,
              DistAlgo join_dist_algo,
-             bool is_slave_mapping,
              ObJoinType join_type,
              bool need_mat = false)
       : Path(parent),
@@ -939,7 +933,6 @@ class Path
         right_path_(right_path),
         join_algo_(join_algo),
         join_dist_algo_(join_dist_algo),
-        is_slave_mapping_(is_slave_mapping),
         use_hybrid_hash_dm_(false),
         join_type_(join_type),
         need_mat_(need_mat),
@@ -1050,30 +1043,7 @@ class Path
     inline bool is_partition_wise() const
     {
       return (join_dist_algo_ == DistAlgo::DIST_PARTITION_WISE ||
-              join_dist_algo_ == DistAlgo::DIST_EXT_PARTITION_WISE) &&
-              !is_slave_mapping_;
-    }
-    inline SlaveMappingType get_slave_mapping_type() const
-    {
-      SlaveMappingType sm_type = SlaveMappingType::SM_NONE;
-      if (!is_slave_mapping_) {
-        sm_type = SlaveMappingType::SM_NONE;
-      } else if (join_dist_algo_ == DIST_PARTITION_WISE ||
-                 join_dist_algo_ == DIST_EXT_PARTITION_WISE) {
-        sm_type = SlaveMappingType::SM_PWJ_HASH_HASH;
-      } else if (join_dist_algo_ == DIST_PARTITION_NONE ||
-                 join_dist_algo_ == DIST_NONE_PARTITION ||
-                 join_dist_algo_ == DIST_NONE_HASH ||
-                 join_dist_algo_ == DIST_HASH_NONE) {
-        sm_type = SlaveMappingType::SM_PPWJ_HASH_HASH;
-      } else if (join_dist_algo_ == DIST_BROADCAST_NONE) {
-        sm_type = SlaveMappingType::SM_PPWJ_BCAST_NONE;
-      } else if (join_dist_algo_ == DIST_NONE_BROADCAST) {
-        sm_type = SlaveMappingType::SM_PPWJ_NONE_BCAST;
-      } else {
-        sm_type = SlaveMappingType::SM_NONE;
-      }
-      return sm_type;
+              join_dist_algo_ == DistAlgo::DIST_EXT_PARTITION_WISE);
     }
     bool contain_normal_nl() const { return contain_normal_nl_; }
     void set_contain_normal_nl(bool contain) { contain_normal_nl_ = contain; }
@@ -1129,7 +1099,6 @@ class Path
                                                          const Path *right_path,
                                                          const DistAlgo join_dist_algo,
                                                          const JoinAlgo join_algo,
-                                                         bool const is_slave_mapping,
                                                          int64_t &parallel,
                                                          int64_t &available_parallel,
                                                          int64_t &server_cnt,
@@ -1157,7 +1126,6 @@ class Path
   public:
     TO_STRING_KV(K_(join_algo),
                  K_(join_dist_algo),
-                 K_(is_slave_mapping),
                  K_(join_type),
                  K_(need_mat),
                  K_(left_need_sort),
@@ -1182,7 +1150,6 @@ class Path
     const Path *right_path_;
     JoinAlgo join_algo_; // e.g., merge, hash, nested loop
     DistAlgo join_dist_algo_; // e.g, partition_wise_join, repartition, hash-hash
-    bool is_slave_mapping_; // whether should enable slave mapping
     bool use_hybrid_hash_dm_; // if use hybrid hash distribution method for hash-hash dm
     ObJoinType join_type_;
     bool need_mat_;
@@ -2358,7 +2325,6 @@ struct NullAwareAntiJoinInfo {
                                      const ObIArray<ObRawExpr*> &right_join_exprs,
                                      const ObIArray<Path*> &right_path_list,
                                      const DistAlgo join_dist_algo,
-                                     const bool is_slave_mapping,
                                      ObIArray<OrderItem> &best_order_items,
                                      Path *&best_path,
                                      bool &best_need_sort,
@@ -2383,7 +2349,6 @@ struct NullAwareAntiJoinInfo {
                                const Path *right_path,
                                const ObJoinType join_type,
                                const DistAlgo join_dist_algo,
-                               const bool is_slave_mapping,
                                const common::ObIArray<ObRawExpr*> &on_conditions,
                                const common::ObIArray<ObRawExpr*> &where_conditions,
                                const bool has_equal_cond,
@@ -2394,7 +2359,6 @@ struct NullAwareAntiJoinInfo {
                                  const Path *right_path,
                                  const ObJoinType join_type,
                                  const DistAlgo join_dist_algo,
-                                 const bool is_slave_mapping,
                                  const common::ObIArray<ObRawExpr*> &equal_join_conditions,
                                  const common::ObIArray<ObRawExpr*> &other_join_conditions,
                                  const common::ObIArray<ObRawExpr*> &filters,
@@ -2467,7 +2431,6 @@ struct NullAwareAntiJoinInfo {
                                const Path *right_path,
                                const ObJoinType join_type,
                                const DistAlgo join_dist_algo,
-                               const bool is_slave_mapping,
                                const common::ObIArray<ObOrderDirection> &merge_directions,
                                const common::ObIArray<ObRawExpr*> &equal_join_conditions,
                                const common::ObIArray<ObRawExpr*> &other_join_conditions,
@@ -2491,8 +2454,7 @@ struct NullAwareAntiJoinInfo {
                                     const JoinAlgo join_algo,
                                     const bool is_push_down,
                                     const bool is_naaj,
-                                    int64_t &distributed_types,
-                                    bool &can_slave_mapping);
+                                    int64_t &distributed_types);
 
     bool is_partition_wise_valid(const Path &left_path,
                                  const Path &right_path);
@@ -2708,7 +2670,6 @@ struct NullAwareAntiJoinInfo {
                             const bool reverse_join_tree,
                             ValidPathInfo &path_info);
     int get_valid_path_info_from_hint(const ObRelIds &table_set,
-                                      bool both_access,
                                       bool contain_fake_cte,
                                       ValidPathInfo &path_info);
 

@@ -41,7 +41,6 @@ namespace sql
         connect_by_root_exprs_(),
         sys_connect_by_path_exprs_(),
         partition_id_expr_(nullptr),
-        slave_mapping_type_(SM_NONE),
         connect_by_extra_exprs_(),
         enable_px_batch_rescan_(false),
         can_use_batch_nlj_(false),
@@ -145,10 +144,6 @@ namespace sql
     {
       return connect_by_extra_exprs_.assign(exprs);
     }
-    void set_slave_mapping_type(SlaveMappingType slave_mapping_type)
-    {
-      slave_mapping_type_ = slave_mapping_type;
-    }
 
     inline bool enable_px_batch_rescan() { return enable_px_batch_rescan_; }
     inline void set_px_batch_rescan(bool flag) { enable_px_batch_rescan_ = flag; }
@@ -201,7 +196,6 @@ namespace sql
     int get_pq_distribution_method(const DistAlgo join_dist_algo,
                                    ObPQDistributeMethod::Type &left_dist_method,
                                    ObPQDistributeMethod::Type &right_dist_method);
-    bool is_using_slave_mapping() { return SM_NONE != slave_mapping_type_; }
     int allocate_startup_expr_post() override;
     int allocate_startup_expr_post(int64_t child_idx) override;
 
@@ -258,7 +252,6 @@ namespace sql
     // NLJ 模式下记录左侧 pkey exchange 生成的 partition id 列
     // 用于在 CG 阶段定位 part id 列位置，然后生成行下标
     ObOpPseudoColumnRawExpr *partition_id_expr_;
-    SlaveMappingType slave_mapping_type_;
     ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> connect_by_extra_exprs_;
     // for nestloop join
     bool enable_px_batch_rescan_;

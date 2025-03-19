@@ -1103,6 +1103,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PARTITION { return PARTITION; }
 <hint>ALL { return ALL; }
 <hint>HASH { return HASH; }
+<hint>HASH_LOCAL { return HASH_LOCAL; }
 <hint>LOCAL { return LOCAL; }
 <hint>BC2HOST { return BC2HOST; }
 <hint>RANGE { return RANGE; }

@@ -187,7 +187,6 @@ public:
                                          ObDfo &root);
   static int alloc_by_reference_child_distribution(const ObIArray<ObTableLocation> *table_locations,
                                                    ObExecContext &exec_ctx,
-                                                   ObDfo &child,
                                                    ObDfo &parent);
   static int add_pdml_merge_gindex_locations(const ObTableModifySpec &dml_op,
                                              ObExecContext &ctx,
