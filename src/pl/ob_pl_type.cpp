@@ -704,6 +704,7 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
   ObSEArray<jit::ObLLVMValue, 4> args;
   jit::ObLLVMValue llvm_value;
   jit::ObLLVMValue dest_type;
+  jit::ObLLVMValue type_info_id_value;
   ObPLCGBufferGuard buffer_guard(generator);
 
   OZ (args.push_back(generator.get_vars()[generator.CTX_IDX]));
@@ -724,6 +725,8 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
   OZ (args.push_back(dest_type));
   OZ (generator.get_helper().get_int64(package_id, llvm_value));
   OZ (args.push_back(llvm_value));
+  OZ (generator.get_helper().get_int64(get_type_info_id(), type_info_id_value));
+  OZ (args.push_back(type_info_id_value));
   if (OB_SUCC(ret)) {
     jit::ObLLVMValue ret_err;
     if (OB_FAIL(generator.get_helper().create_call(ObString("spi_copy_datum"), generator.get_spi_service().spi_copy_datum_, args, ret_err))) {
@@ -1623,6 +1626,39 @@ int ObPLEnumSetCtx::get_enum_type_info(uint16_t type_info_id, ObIArray<common::O
   int ret = OB_SUCCESS;
   CK (type_info_id < enum_type_info_array_.count());
   OX (type_info = enum_type_info_array_.at(type_info_id));
+  return ret;
+}
+
+int ObPLEnumSetCtx::assgin(const ObPLEnumSetCtx &other)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<common::ObString>* src_type_info = NULL;
+  ObIArray<common::ObString>* dst_type_info = NULL;
+  if (!other.is_inited() || other.enum_type_info_array_.count() == 0) {
+    // no cached type info, do nothing
+  } else {
+    if (is_inited() && enum_type_info_array_.count() > 0) {
+      reset();
+    }
+    if (!is_inited() && OB_FAIL(init())) {
+      LOG_WARN("fail to init pl enum set ctx", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.enum_type_info_array_.count(); ++i) {
+        uint16_t type_info_id = i;
+        src_type_info = other.get_enum_type_info(type_info_id);
+        CK (OB_NOT_NULL(src_type_info));
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(deep_copy_type_info(get_allocator(),
+                                               dst_type_info,
+                                               *src_type_info))) {
+          LOG_WARN("failed to deep copy type info");
+        } else if (OB_FAIL(set_enum_type_info(type_info_id, dst_type_info))) {
+          LOG_WARN("failed to set new type info", K(ret));
+        }
+      }
+      OX (used_type_info_id_ = other.used_type_info_id_);
+    }
+  }
   return ret;
 }
 

@@ -369,8 +369,9 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                 if (OB_LIKELY(IS_CONST_TYPE(expr_type))) {
                   const ObObj &value = expr->get_expr_items().at(0).get_obj();
                   if (T_QUESTIONMARK == expr_type) {
-                    int64_t idx = value.get_unknown();
-                    ctx.get_physical_plan_ctx()->get_param_store_for_update().at(idx) = params.at(i);
+                    int64_t param_idx = value.get_unknown();
+                    ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
+                    ctx.get_physical_plan_ctx()->get_param_store_for_update().at(param_idx) = value;
                   } else {
                     /* do nothing */
                   }
@@ -393,7 +394,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                   LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
                 }
               } else {
-                ctx.get_physical_plan_ctx()->get_param_store_for_update().at(i) = params.at(i);
+                ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
+                ctx.get_physical_plan_ctx()->get_param_store_for_update().at(i) = value;
               }
             }
           } // for end

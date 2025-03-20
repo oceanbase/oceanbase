@@ -120,6 +120,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_reset_composite));
   jit::ObLLVMHelper::add_symbol(ObString("spi_copy_datum"),
                                 (void*)(sql::ObSPIService::spi_copy_datum));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_cast_enum_set_to_string"),
+                                (void*)(sql::ObSPIService::spi_cast_enum_set_to_string));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
                                 (void*)(sql::ObSPIService::spi_destruct_obj));
   jit::ObLLVMHelper::add_symbol(ObString("spi_sub_nestedtable"),
@@ -1655,7 +1657,15 @@ int ObPL::execute(ObExecContext &ctx,
               OX (params->at(i) = pl.get_params().at(i));
             }
           } else {
-            OZ (deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
+            ObObj str_obj;
+            if (ob_is_enum_or_set_type(pl.get_params().at(i).get_type())) {
+              common::ObIArray<common::ObString>* type_info = NULL;
+              OZ (routine.get_variables().at(i).get_type_info(type_info));
+              CK (OB_NOT_NULL(type_info));
+              OZ (ObSPIService::cast_enum_set_to_string(ctx, *type_info, pl.get_params().at(i), str_obj));
+            }
+            ObObj& param = ob_is_enum_or_set_type(pl.get_params().at(i).get_type()) ? str_obj : pl.get_params().at(i);
+            OZ (deep_copy_obj(allocator, param, params->at(i)));
             ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());

@@ -402,6 +402,10 @@ public:
                                      const ObIArray<ObString> &enum_set_values,
                                      ObObjParam &src,
                                      ObObj &result);
+  static int spi_cast_enum_set_to_string(pl::ObPLExecCtx *ctx,
+                                     uint64_t type_info_id,
+                                     ObObj &src,
+                                     ObObj &result);
   static int spi_calc_raw_expr(ObSQLSessionInfo *session_info,
                                ObIAllocator *allocator,
                                const ObRawExpr *rawexpr,
@@ -436,7 +440,8 @@ public:
                          bool ignore_fail = false,
                          const ObIArray<ObString> *type_info = nullptr);
   static int spi_convert(ObSQLSessionInfo *session, ObIAllocator *allocator,
-                         ObObjParam &src, const ObExprResType &result_type, ObObjParam &result);
+                         ObObjParam &src, const ObExprResType &result_type, ObObjParam &result,
+                         const ObIArray<ObString> *type_info = nullptr);
   static int spi_convert_objparam(pl::ObPLExecCtx *ctx, ObObjParam *src, const int64_t result_idx, ObObjParam *result, bool need_set);
   static int spi_set_package_variable(pl::ObPLExecCtx *ctx,
                              uint64_t package_id,
@@ -782,7 +787,8 @@ public:
                             ObObj *src,
                             ObObj *dest,
                             ObDataType *dest_type,
-                            uint64_t package_id = OB_INVALID_ID);
+                            uint64_t package_id = OB_INVALID_ID,
+                            uint64_t type_info_id = OB_INVALID_ID);
 
   static int spi_destruct_obj(pl::ObPLExecCtx *ctx,
                               ObObj *obj);

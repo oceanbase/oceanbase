@@ -1335,6 +1335,37 @@ int ObRecordType::add_record_member(const ObString &record_name,
   return ret;
 }
 
+//not the same enum_set_ctx
+int ObRecordType::add_record_member(ObPLEnumSetCtx &enum_set_ctx,
+                                    const ObString &record_name,
+                                    const ObPLDataType &record_type,
+                                    int64_t default_idx,
+                                    sql::ObRawExpr *default_raw_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(record_members_.count() >= MAX_RECORD_COUNT)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_ERROR("record member count is too many", K(record_members_.count()));
+  } else if (record_type.get_not_null() && OB_INVALID_INDEX == default_idx) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("record member with not null modifier must hava default value", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
+      if (common::ObCharset::case_compat_mode_equal(
+        record_members_.at(i).member_name_, record_name)) {
+        ret = OB_ENTRY_EXIST;
+        LOG_WARN("dup record member found", K(ret), K(record_name), K(i));
+        break;
+      }
+    }
+    ObPLDataType member_type;
+    OZ (member_type.deep_copy(enum_set_ctx, record_type));
+    OZ (record_members_.push_back(ObRecordMember(
+                                 record_name, member_type, default_idx, default_raw_expr)));
+  }
+  return ret;
+}
+
 int ObRecordType::get_record_member_type(const ObString &record_name,
                                          ObPLDataType *&record_type)
 {
@@ -1457,7 +1488,6 @@ int64_t ObRecordType::get_init_size(int64_t count)
   return ObRecordType::get_data_offset(count);
 }
 
-
 int ObRecordType::deep_copy(
   common::ObIAllocator &alloc, const ObRecordType &other, bool shadow_copy)
 {
@@ -1473,6 +1503,26 @@ int ObRecordType::deep_copy(
                           record_member->default_expr_,
                           shadow_copy ? record_member->default_raw_expr_ : NULL));
   } 
+  return ret;
+}
+
+//not the same enum_set_ctx
+int ObRecordType::deep_copy(
+  ObPLEnumSetCtx &enum_set_ctx, common::ObIAllocator &alloc, const ObRecordType &other, bool shadow_copy)
+{
+  int ret = OB_SUCCESS;
+  OZ (ObUserDefinedType::deep_copy(alloc, other));
+  OZ (record_members_init(&alloc, other.get_record_member_count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.get_record_member_count(); i++) {
+    const ObRecordMember *record_member = other.get_record_member(i);
+    ObString new_member_name;
+    OZ (ob_write_string(alloc, record_member->member_name_, new_member_name));
+    OZ (add_record_member(enum_set_ctx,
+                          new_member_name,
+                          record_member->member_type_,
+                          record_member->default_expr_,
+                          shadow_copy ? record_member->default_raw_expr_ : NULL));
+  }
   return ret;
 }
 

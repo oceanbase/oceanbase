@@ -1237,6 +1237,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     ObObjType src_type;
     uint64_t src_type_id;
     ObPLDataType dst_pl_type;
+    pl::ObPLEnumSetCtx enum_set_ctx(resolve_ctx.allocator_);
     ObRawExpr* expr = NULL;
     CK (OB_NOT_NULL(expr_params.at(i)));
     if (OB_FAIL(ret)) {
@@ -1281,7 +1282,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     } else if (routine_param->is_schema_routine_param()) {
       ObRoutineParam *param = static_cast<ObRoutineParam*>(routine_param);
       CK (OB_NOT_NULL(param));
-      OX (dst_pl_type.set_enum_set_ctx(resolve_ctx.enum_set_ctx_));
+      OX (dst_pl_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   resolve_ctx.schema_guard_,
                                                   resolve_ctx.session_info_,

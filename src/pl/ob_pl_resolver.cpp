@@ -7356,6 +7356,7 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
   if (OB_SUCC(ret)) {
     // Step: get real parameter type
     ObPLDataType expected_type, actually_type;
+    pl::ObPLEnumSetCtx enum_set_ctx(resolve_ctx_.allocator_);
     bool is_anonymous_array_type = false;
     if (param->is_obj_access_expr()) {
       const ObObjAccessRawExpr *obj_access = NULL;
@@ -7390,10 +7391,10 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
           CK (OB_NOT_NULL(udt));
           OX (expected_type.set_user_type_id(udt->get_type(), udt->get_user_type_id()));
           OX (expected_type.set_type_from(ObPLTypeFrom::PL_TYPE_DBLINK));
-          OX (expected_type.set_enum_set_ctx(resolve_ctx_.enum_set_ctx_));
+          OX (expected_type.set_enum_set_ctx(&enum_set_ctx));
           OZ (expected_type.set_type_info(iparam->get_extended_type_info()));
         } else {
-          OX (expected_type.set_enum_set_ctx(resolve_ctx_.enum_set_ctx_));
+          OX (expected_type.set_enum_set_ctx(&enum_set_ctx));
           OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                       resolve_ctx_.schema_guard_,
                                                       resolve_ctx_.session_info_,
@@ -7683,9 +7684,10 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
           OZ (resolve_inout_param(params.at(i), param_mode, out_idx), K(i), K(params), K(exprs));
           if (OB_SUCC(ret) && is_question_mark_value(params.at(i), &(current_block_->get_namespace()))) {
             ObPLDataType data_type;
+            pl::ObPLEnumSetCtx enum_set_ctx(resolve_ctx_.allocator_);
             if (param_info->is_schema_routine_param()) {
               const ObRoutineParam* iparam = static_cast<const ObRoutineParam*>(param_info);
-              OX (data_type.set_enum_set_ctx(resolve_ctx_.enum_set_ctx_));
+              OX (data_type.set_enum_set_ctx(&enum_set_ctx));
               OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                           resolve_ctx_.schema_guard_,
                                                           resolve_ctx_.session_info_,
@@ -7719,6 +7721,26 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
   if (OB_SUCC(ret) && PL_CALL == stmt->get_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
       OZ (check_in_param_type_legal(params_list.at(i), params.at(i)));
+    }
+  }
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+      bool need_wrap = false;
+      // expr T_OBJ_ACCESS_REF will add cast to string when CodeGenerate call stmt
+      OZ (ObRawExprUtils::need_wrap_to_string(params.at(i)->get_result_type(),
+                                              params_list.at(i)->get_pl_data_type().get_obj_type(),
+                                              true,
+                                              need_wrap));
+      if (OB_SUCC(ret) && need_wrap) {
+        ObSysFunRawExpr *out_expr = NULL;
+        OZ (ObRawExprUtils::create_type_to_str_expr(expr_factory_,
+                                                    func.get_expr(expr_idx.at(i)),
+                                                    out_expr,
+                                                    &resolve_ctx_.session_info_,
+                                                    true));
+        CK (OB_NOT_NULL(out_expr));
+        OX (func.set_expr(out_expr, expr_idx.at(i)));
+      }
     }
   }
   return ret;

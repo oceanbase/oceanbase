@@ -387,6 +387,7 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
   if (OB_SUCC(ret) && func.get_action() != 0) {
     OZ (cg.prepare_expression(func));
     OZ (cg.final_expression(func));
+    OZ (func.get_enum_set_ctx().assgin(func_ast.get_enum_set_ctx()));
     OZ (func.set_variables(func_ast.get_symbol_table()));
     OZ (func.set_types(func_ast.get_user_type_table()));
     OZ (func.get_dependency_table().assign(func_ast.get_dependency_table()));
@@ -1312,7 +1313,8 @@ int ObPLCompiler::compile_types(const ObIArray<const ObUserDefinedType*> &types,
           LOG_WARN("allocate memory failed", K(ret), KPC(ast_type), K(i));
         } else {
           new (record_type) ObRecordType();
-          if (OB_FAIL(record_type->deep_copy(alloc,
+          if (OB_FAIL(record_type->deep_copy(unit.get_enum_set_ctx(),
+                                             alloc,
                                              *(static_cast<ObRecordType *>(ast_type)),
                                              false))) {
             LOG_WARN("pl user type deep copy failed", K(ret), KPC(ast_type), K(i));

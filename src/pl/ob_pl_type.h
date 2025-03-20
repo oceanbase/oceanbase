@@ -377,7 +377,7 @@ public:
   void reset_charset() { charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI; }
   ObCollationType get_charset() const { return charsetnr_; }
 
-  uint64_t get_type_info_id() const { return type_info_id_; }
+  uint64_t get_type_info_id() const { return is_enum_or_set_type() ? type_info_id_ : OB_INVALID_ID; }
   int set_type_info(const ObIArray<common::ObString> &type_info);
   pl::ObPLEnumSetCtx* get_enum_set_ctx() { return enum_set_ctx_; }
   void set_enum_set_ctx(pl::ObPLEnumSetCtx *enum_set_ctx) { enum_set_ctx_ = enum_set_ctx; }

@@ -719,6 +719,44 @@ int ObSPIService::spi_pad_binary(ObSQLSessionInfo *session_info,
   return ret;
 }
 
+int ObSPIService::spi_cast_enum_set_to_string(pl::ObPLExecCtx *ctx,
+                                              uint64_t type_info_id,
+                                              ObObj &src,
+                                              ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = NULL;
+  ObRawExprFactory *expr_factory = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObConstRawExpr *c_expr = NULL;
+  ObSysFunRawExpr *out_expr = NULL;
+  ObExprResType result_type;
+  ObIArray<common::ObString>* type_info = NULL;
+  CK (OB_INVALID_ID != type_info_id);
+  CK (OB_NOT_NULL(ctx));
+  OX (exec_ctx = ctx->exec_ctx_);
+  CK (OB_NOT_NULL(ctx->func_));
+  OZ (ctx->func_->get_enum_set_ctx().get_enum_type_info(type_info_id, type_info));
+  CK (OB_NOT_NULL(type_info));
+  CK (OB_NOT_NULL(exec_ctx));
+  OX (expr_factory = exec_ctx->get_expr_factory());
+  OX (session_info = exec_ctx->get_my_session());
+  CK (OB_NOT_NULL(expr_factory));
+  CK (OB_NOT_NULL(session_info));
+  OZ (expr_factory->create_raw_expr(static_cast<ObItemType>(src.get_type()), c_expr));
+  CK (OB_NOT_NULL(c_expr));
+  OZ (c_expr->set_enum_set_values(*type_info));
+  OX (c_expr->set_value(src));
+  OX (result_type.reset());
+  OX (result_type.set_meta(src.get_meta()));
+  OX (c_expr->set_result_type(result_type));
+  OX (c_expr->mark_enum_set_skip_build_subschema());
+  OZ (ObRawExprUtils::create_type_to_str_expr(*expr_factory, c_expr, out_expr, session_info, true));
+  CK (OB_NOT_NULL(out_expr));
+  OZ (ObSPIService::spi_calc_raw_expr(session_info, &(exec_ctx->get_allocator()), out_expr, &result));
+  return ret;
+}
+
 int ObSPIService::cast_enum_set_to_string(ObExecContext &ctx,
                                           const ObIArray<ObString> &enum_set_values,
                                           ObObjParam &src,
@@ -797,13 +835,14 @@ int ObSPIService::spi_convert(ObSQLSessionInfo *session,
                               ObIAllocator *allocator,
                               ObObjParam &src,
                               const ObExprResType &result_type,
-                              ObObjParam &result)
+                              ObObjParam &result,
+                              const ObIArray<ObString> *type_info)
 {
   int ret = OB_SUCCESS;
   ObObj dst;
   CK (OB_NOT_NULL(session));
   CK (OB_NOT_NULL(allocator));
-  OZ (spi_convert(*session, *allocator, src, result_type, dst));
+  OZ (spi_convert(*session, *allocator, src, result_type, dst, false, type_info));
   OX (src.set_param_meta());
   OX (result.set_accuracy(result_type.get_accuracy()));
   OX (result.set_meta_type(result_type.get_obj_meta()));
@@ -854,7 +893,9 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
       }
     } else {
       ObObjParam value;
-      OZ (spi_convert(ctx->exec_ctx_->get_my_session(), &tmp_alloc, *src, result_type, value));
+      ObIArray<common::ObString> *type_info = NULL;
+      OZ (expected_type->get_type_info(type_info));
+      OZ (spi_convert(ctx->exec_ctx_->get_my_session(), &tmp_alloc, *src, result_type, value, type_info));
       OZ (deep_copy_obj(*ctx->allocator_, value, result_value));
       if (OB_SUCC(ret) && need_set) {
         void *ptr = ctx->params_->at(result_idx).get_deep_copy_obj_ptr();
@@ -4501,7 +4542,8 @@ int ObSPIService::spi_pipe_row_to_result(pl::ObPLExecCtx *ctx,
     ObObj *copied = coll->get_data() + coll->get_count() - 1;
     OZ (spi_copy_datum(ctx, coll->get_allocator(), single_row, copied,
                        const_cast<ObDataType *>(&coll->get_element_type()),
-                       OB_INVALID_ID /* package_id */));
+                       OB_INVALID_ID /* package_id */,
+                       OB_INVALID_ID));
     //OZ (coll->set_row(copied, coll->get_count() - 1));
   }
 
@@ -5982,7 +6024,8 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
                                  ObObj *src,
                                  ObObj *dest,
                                  ObDataType *dest_type,
-                                 uint64_t package_id)
+                                 uint64_t package_id,
+                                 uint64_t type_info_id)
 {
   int ret = OB_SUCCESS;
   ObExprResType result_type;
@@ -6030,9 +6073,14 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
             || (ObSetType == src->get_type() && ObSetType == result_type.get_type())) {
           result = *src;
         } else {
+          ObIArray<common::ObString>* type_info = NULL;
+          if (OB_INVALID_ID != type_info_id) {
+            OZ (ctx->func_->get_enum_set_ctx().get_enum_type_info(type_info_id, type_info));
+            CK (OB_NOT_NULL(type_info));
+          }
           OX (src_tmp = *src);
           OZ (spi_convert(
-            ctx->exec_ctx_->get_my_session(), &tmp_alloc, src_tmp, result_type, result),
+            ctx->exec_ctx_->get_my_session(), &tmp_alloc, src_tmp, result_type, result, type_info),
             K(src_tmp), K(result_type),KPC(src));
         }
       }

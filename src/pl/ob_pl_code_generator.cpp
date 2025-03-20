@@ -2867,7 +2867,17 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                 ObString("cast_addr_to_obj_ptr"), p_obj, obj_type_ptr, p_obj));
               OZ (generator_.get_helper().create_load(ObString("load obj value"), p_obj, src_obj));
               OZ (generator_.extract_datum_ptr_from_objparam(p_result_obj, ObNullType, p_dest_obj));
-              OZ (generator_.get_helper().create_store(src_obj, p_dest_obj));
+              if (final_type.is_enum_or_set_type()) {
+                OZ (generator_.cast_enum_set_to_str(*s.get_namespace(),
+                                                    final_type.get_type_info_id(),
+                                                    p_obj,
+                                                    p_dest_obj,
+                                                    s.get_location(),
+                                                    s.get_block()->in_notfound(),
+                                                    s.get_block()->in_warning()));
+              } else {
+                OZ (generator_.get_helper().create_store(src_obj, p_dest_obj));
+              }
             } else if (!is_no_copy_param) {
               ObLLVMValue allocator;
               ObLLVMValue src_datum;
@@ -4383,8 +4393,18 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(obj_pointer_type)); //dest
     OZ (arg_types.push_back(data_type_pointer_type)); //dest type
     OZ (arg_types.push_back(int64_type)); // package id
+    OZ (arg_types.push_back(int64_type)); // type info id
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_copy_datum"), ft, spi_service_.spi_copy_datum_));
+  }
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type)); //函数第一个参数必须是基础环境信息隐藏参数
+    OZ (arg_types.push_back(int64_type)); // type info id
+    OZ (arg_types.push_back(obj_pointer_type)); //src
+    OZ (arg_types.push_back(obj_pointer_type)); //dest
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_cast_enum_set_to_string"), ft, spi_service_.spi_cast_enum_set_to_string_));
   }
   if (OB_SUCC(ret)) {
     arg_types.reset();
@@ -8787,6 +8807,7 @@ int ObPLCodeGenerator::generate_simple(ObPLFunction &pl_func)
   CK (ast.get_is_all_sql_stmt());
   OZ (prepare_expression(pl_func));
   OZ (final_expression(pl_func));
+  OZ (pl_func.get_enum_set_ctx().assgin(get_ast().get_enum_set_ctx()));
   OZ (pl_func.set_variables(get_ast().get_symbol_table()));
   OZ (pl_func.get_dependency_table().assign(get_ast().get_dependency_table()));
   OZ (pl_func.add_members(get_ast().get_flag()));
@@ -9009,6 +9030,8 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
 
     if (OB_FAIL(final_expression(pl_func))) {
       LOG_WARN("generate obj access expr failed", K(ret));
+    } else if (OB_FAIL(pl_func.get_enum_set_ctx().assgin(get_ast().get_enum_set_ctx()))) {
+     LOG_WARN("failed to assgin enum set ctx", K(ret));
     } else if (OB_FAIL(pl_func.set_variables(get_ast().get_symbol_table()))) {
       LOG_WARN("failed to set variables", K(get_ast().get_symbol_table()), K(ret));
     } else if (OB_FAIL(pl_func.get_dependency_table().assign(get_ast().get_dependency_table()))) {
@@ -9201,6 +9224,32 @@ int ObPLCodeGenerator::extract_obobj_from_objparam(ObLLVMValue &p_objparam, ObLL
   } else if (OB_FAIL(helper_.create_load(ObString("load_value"), p_obj, result))) {
     LOG_WARN("failed to create load", K(ret));
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObPLCodeGenerator::cast_enum_set_to_str(const ObPLBlockNS &ns,
+                                            uint64_t type_info_id,
+                                            jit::ObLLVMValue &src,
+                                            jit::ObLLVMValue &dest,
+                                            uint64_t location,
+                                            bool in_notfound,
+                                            bool in_warning)
+{
+  UNUSED(ns);
+  int ret = OB_SUCCESS;
+  ObSEArray<jit::ObLLVMValue, 4> args;
+  jit::ObLLVMValue type_info_id_value;
+
+  OZ (args.push_back(get_vars()[CTX_IDX]));
+  OZ (get_helper().get_int64(type_info_id, type_info_id_value));
+  OZ (args.push_back(type_info_id_value));
+  OZ (args.push_back(src));
+  OZ (args.push_back(dest));
+  if (OB_SUCC(ret)) {
+    jit::ObLLVMValue ret_err;
+    OZ (get_helper().create_call(ObString("spi_cast_enum_set_to_string"), get_spi_service().spi_cast_enum_set_to_string_, args, ret_err));
+    OZ (check_success(ret_err, location, in_notfound, in_warning));
+  }
   return ret;
 }
 
