@@ -449,7 +449,6 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
   } else {
     bool trigger_enabled = false;
     bool has_udt_column = false;
-    bool has_invisible_column = false;
     bool has_unused_column = false;
     // check if it is an oracle temporary table
     if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
@@ -479,13 +478,6 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_udt_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
-    }
-    // check has invisible column
-    else if (OB_FAIL(ObTableLoadSchema::check_has_invisible_column(table_schema, has_invisible_column))) {
-      LOG_WARN("fail to check has invisible column", KR(ret));
-    } else if (has_invisible_column) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has invisible column", KR(ret));
     }
     // check has unused column
     else if (OB_FAIL(ObTableLoadSchema::check_has_unused_column(table_schema, has_unused_column))) {

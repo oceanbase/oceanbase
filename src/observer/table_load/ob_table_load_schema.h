@@ -44,19 +44,10 @@ public:
                               const share::schema::ObTableSchema *&table_schema);
 
   static int get_user_column_schemas(const share::schema::ObTableSchema *table_schema,
-                                     ObIArray<const share::schema::ObColumnSchemaV2 *> &column_schemas);
-  static int get_user_column_schemas(share::schema::ObSchemaGetterGuard &schema_guard,
-                                     uint64_t tenant_id,
-                                     uint64_t table_id,
-                                     ObIArray<const share::schema::ObColumnSchemaV2 *> &column_schemas);
+                                     ObIArray<const share::schema::ObColumnSchemaV2 *> &column_schemas,
+                                     bool contain_invisible_column = false);
   static int get_user_column_ids(const share::schema::ObTableSchema *table_schema,
                                  common::ObIArray<uint64_t> &column_ids);
-  static int get_user_column_ids(share::schema::ObSchemaGetterGuard &schema_guard,
-                                 uint64_t tenant_id,
-                                 uint64_t table_id,
-                                 common::ObIArray<uint64_t> &column_ids);
-  static int get_user_column_names(const share::schema::ObTableSchema *table_schema,
-                                   common::ObIArray<common::ObString> &column_names);
   static int get_user_column_id_and_names(const share::schema::ObTableSchema *table_schema,
                                           common::ObIArray<uint64_t> &column_ids,
                                           common::ObIArray<common::ObString> &column_names);
@@ -71,8 +62,6 @@ public:
                             bool contain_hidden_pk_column = false);
 
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
 
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);

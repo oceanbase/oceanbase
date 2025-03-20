@@ -2411,8 +2411,11 @@ int ObLoadDataDirectImpl::init_execute_param()
     } else { // 指定列导入
       const static uint64_t INVALID_COLUMN_ID = UINT64_MAX;
       ObArray<uint64_t> user_column_ids;
-      if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, user_column_ids))) {
-        LOG_WARN("fail to get user column ids", KR(ret));
+      ObArray<ObString> user_column_names;
+      user_column_ids.set_tenant_id(MTL_ID());
+      user_column_names.set_tenant_id(MTL_ID());
+      if (OB_FAIL(ObTableLoadSchema::get_user_column_id_and_names(table_schema, user_column_ids, user_column_names))) {
+        LOG_WARN("fail to get user column ids and names", KR(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < field_or_var_list.count(); ++i) {
         const ObLoadDataStmt::FieldOrVarStruct &field_or_var_struct = field_or_var_list.at(i);
