@@ -237,7 +237,7 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
         }
         break;
       }
-    } // end swtich
+    } // end switch
   }
 }
 
@@ -251,7 +251,7 @@ int get_bucket_object_name_for_list(const ObString &uri, ObString &bucket, ObStr
     OB_LOG(WARN, "get bucket object name error", K(uri), K(ret));
   } else if (object.length() <= OSS_INVALID_OBJECT_LENGTH) {
     ret = OB_URI_ERROR;
-    OB_LOG(WARN, "uri has invaild object", K(uri), K(object), K(ret));
+    OB_LOG(WARN, "uri has invalid object", K(uri), K(object), K(ret));
   } else {
     //object not end with '/', object last is '\0'
     const char last = *(object.ptr() + object.length() - 1 - 1);
@@ -736,7 +736,7 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "fail to create oss config", K(ret));
   } else if (OB_FAIL(init_oss_endpoint())) {
-    OB_LOG(WARN, "fail to init oss endpoind", K(ret));
+    OB_LOG(WARN, "fail to init oss endpoint", K(ret));
   } else if (OB_ISNULL(oss_option->ctl = aos_http_controller_create(oss_option->pool, 0))) {
     ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "fail to create aos http controller", K(ret));
@@ -1625,7 +1625,7 @@ int ObStorageOssReader::pread(
     if (has_meta_) {
       if (file_length_ < offset) {
         ret = OB_FILE_LENGTH_INVALID;
-        OB_LOG(WARN, "File lenth is invilid", K_(file_length),
+        OB_LOG(WARN, "File length is invalid", K_(file_length),
             K(offset), K_(bucket), K_(object), K(ret));
       } else {
         get_data_size = MIN(buf_size, file_length_ - offset);
@@ -2336,7 +2336,7 @@ int ObStorageOssUtil::list_files(
         } else if (OB_FAIL(list_ctx.handle_object(content->key.data,
                                                   content->key.len,
                                                   object_size))) {
-          OB_LOG(WARN, "fail to add listed oss obejct meta into ctx",
+          OB_LOG(WARN, "fail to add listed oss object meta into ctx",
               K(ret), K(object_path), K(full_dir_path), K(content->size.data), K(object_size));
         }
 
@@ -2719,7 +2719,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
           OB_LOG(WARN, "fail to pack buf", K(content), K(ret));
         } else if ((checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO)
             && OB_FAIL(add_content_md5(oss_option_, buf, size, headers2))) {
-          OB_LOG(WARN, "fail to add content md5 when apending object", K(ret));
+          OB_LOG(WARN, "fail to add content md5 when appending object", K(ret));
         } else {
           aos_list_add_tail(&content->node, &buffer);
           // append interface, do not retry

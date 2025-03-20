@@ -151,7 +151,7 @@ public:
   // Log_level=INFO in the startup scenario, and then optimize the schema to WARN afterwards
   DEF_STR(init_log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:INFO", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
   DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN;CLOG.*:WARN;STORAGE.*:WARN;ARCHIVE.*:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
-  // root server info for oblog, seperated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
+  // root server info for oblog, separated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
   DEF_STR(rootserver_list, OB_CLUSTER_PARAMETER, "|", "OB RootServer list");
   DEF_STR(cluster_url, OB_CLUSTER_PARAMETER, "|", "OB configure url");
   DEF_STR(cluster_user, OB_CLUSTER_PARAMETER, "default", "OB login user");

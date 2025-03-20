@@ -48,7 +48,7 @@ public:
                                     l.ptr_, l.len_, l.is_null(),
                                     r.ptr_, r.len_, r.is_null(),
                                     cmp_res);
-    // when compare new comming data with origin data, we always want maintan the smaller one.
+    // when compare new coming data with origin data, we always want maintain the smaller one.
     if (!is_ascending_) {
       cmp_res = -cmp_res;
     }
@@ -67,7 +67,7 @@ public:
 public:
   // in join scene, the join cond is T1.a=T2.b, sometimes a and b are not same type but not need to
   // cast if the sql with order by T1.a, the topn filter can pushdown to T2.b, but the compare info
-  // is differnet in build stage and filter stage
+  // is different in build stage and filter stage
   ObTopNFilterCmpMeta build_meta_;
   ObTopNFilterCmpMeta filter_meta_;
   bool is_ascending_;
@@ -102,7 +102,7 @@ public:
   ObP2PDatahubMsgBase::ObP2PDatahubMsgType dh_msg_type_;
   uint32_t expr_ctx_id_;
   bool is_shared_; // whether the filter is shared in sql level
-  bool is_shuffle_; // whether need shuffle topn msg between differnet dfos
+  bool is_shuffle_; // whether need shuffle topn msg between different dfos
   int64_t max_batch_size_;
   double adaptive_filter_ratio_;
   TO_STRING_KV(K(enabled_), K(p2p_dh_id_), K(dh_msg_type_), K(expr_ctx_id_), K(is_shared_),

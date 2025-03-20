@@ -126,7 +126,7 @@ private:
   bool is_written_;
 };
 
-// allow to call pwrite() mulitle times. the real file is not readable until close, which rename
+// allow to call pwrite() multiple times. the real file is not readable until close, which rename
 // tmp file to real file. only used for implementing MultiPartWriter.
 class ObStorageFileMultipleWriter: public ObStorageFileSingleWriter
 {

@@ -261,7 +261,7 @@ int ObMemtable::safe_to_destroy(bool &is_safe)
   // check frozen to flush
   const int64_t frozen_to_flush_time = mt_stat_.create_flush_dag_time_ - mt_stat_.ready_for_flush_time_;
   if (frozen_to_flush_time > 60LL * 1000LL * 1000LL /* 60 seconds */) {
-    STORAGE_LOG(WARN, "it costs too much time from forzen to flush", K(frozen_to_flush_time), KP(this));
+    STORAGE_LOG(WARN, "it costs too much time from frozen to flush", K(frozen_to_flush_time), KP(this));
   }
 
   int64_t ref_cnt = get_ref();
@@ -2059,7 +2059,7 @@ int ObMemtable::resolve_snapshot_version_()
 // using the max decided log ts.
 // Before the revision, the end_scn of the memtable is the max committed log
 // ts of the data on the memtable. So for all 2pc txn and some 1pc txn whose
-// data log is seperated with the commit log, the end_scn of the memtable is
+// data log is separated with the commit log, the end_scn of the memtable is
 // smaller than the commit_scn of the txn. And when the merge happens, the
 // txn node will therefore not be cleanout. And the read after merge will be
 // very slow due to tx data table lookup.
