@@ -234,6 +234,7 @@ protected:
 protected:
   ObDomainDMLMode mode_;
   uint32_t row_idx_;
+  // every element holds a pointer to in a sequential array
   ObDomainIndexRow rows_;
   const IntFixedArray *row_projector_;
   ObDASWriteBuffer::Iterator &write_iter_;

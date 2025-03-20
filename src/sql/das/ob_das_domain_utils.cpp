@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/container/ob_se_array.h"
 #define USING_LOG_PREFIX SQL_DAS
 
 #include "ob_das_domain_utils.h"
@@ -1102,6 +1103,8 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
     } else if (OB_FAIL(ft_doc_word_iter_.do_scan(doc_word_info_->doc_word_table_id_, doc_id))) {
       LOG_WARN("fail to do scan", K(ret), KPC(doc_word_info_), K(doc_id));
     } else {
+      // gather ft word rows
+      ObDomainIndexRow tmp_rows;
       do {
         blocksstable::ObDatumRow *row = nullptr;
         blocksstable::ObDatumRow *ft_word_row = nullptr;
@@ -1111,15 +1114,40 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
           }
         } else if (OB_FAIL(build_ft_word_row(row, ft_word_row))) {
           LOG_WARN("fail to build ft word row", K(ret), KPC(row));
-        } else if (OB_FAIL(rows_.push_back(ft_word_row))) {
+        } else if (OB_FAIL(tmp_rows.push_back(ft_word_row))) {
           LOG_WARN("fail push back ft word row", K(ret), KPC(ft_word_row));
         } else {
           LOG_TRACE("succeed to get one ft word from fts doc word", KPC(ft_word_row));
         }
       } while (OB_SUCC(ret));
+
+      // make it sequential
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
-        LOG_TRACE("succeed to scan ft word rows", K(doc_id), K(rows_.count()), K(doc_id_str));
+        blocksstable::ObDatumRow *row_array = nullptr;
+        if (0 == tmp_rows.count()) {
+          // do nothing
+        } else if (OB_ISNULL(
+                       row_array
+                       = OB_NEW_ARRAY(blocksstable::ObDatumRow, &allocator_, tmp_rows.count()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < tmp_rows.count(); ++i) {
+            if (OB_ISNULL(tmp_rows[i])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to get row", K(ret));
+            } else if (OB_FAIL(row_array[i].shallow_copy(*(tmp_rows[i])))) {
+              LOG_WARN("fail to shallow copy row", K(ret));
+            } else if (OB_FAIL(rows_.push_back(&row_array[i]))) {
+              LOG_WARN("fail to push back row", K(ret));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            LOG_TRACE("succeed to scan ft word rows", K(doc_id), K(rows_.count()), K(doc_id_str));
+          }
+        }
       }
     }
   }
