@@ -111,8 +111,6 @@ int ObTableLoadAssignedMemoryManager::refresh_avail_memory(int64_t avail_memory)
     ObMutexGuard guard(mutex_);
     avail_sort_memory_ += avail_memory - avail_memory_;
     avail_memory_ = avail_memory;
-    LOG_INFO("ObTableLoadAssignedMemoryManager::refresh_avail_memory",
-        K(MTL_ID()), K(avail_memory), K(chunk_count_), K(avail_sort_memory_), K(avail_memory_));
   }
 
   return ret;
