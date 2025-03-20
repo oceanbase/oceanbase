@@ -812,6 +812,9 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_EVICT_COUNT, "ss_micro_cache total evicted mic
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DELETE_COUNT, "ss_micro_cache total deleted micro_block count", ObStatClassIds::CACHE, 240029, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REORGAN_FREE_BLK_COUNT, "ss_micro_cache released phy_block count by reorgan_task", ObStatClassIds::CACHE, 240030, true, true, true)
 
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_STORAGE_CACHE_POLICY_PREWARM, "ss_micro_cache storage_cache_policy prewarm count", ObStatClassIds::CACHE, 240031, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_STORAGE_CACHE_POLICY_PREWARM_BYTES, "ss_micro_cache storage_cache_policy prewarm bytes", ObStatClassIds::CACHE, 240032, true, true, true)
+
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
 
