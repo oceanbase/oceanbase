@@ -177,6 +177,11 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
   ARRAY_FOREACH(var_table_, var_idx) {
     const ObPLVar *var = var_table_.at(var_idx);
     const ObPLDataType &var_type = var->get_type();
+    OZ (package_state.add_package_var_val(value, var_type.get_type()));
+  }
+  ARRAY_FOREACH(var_table_, var_idx) {
+    const ObPLVar *var = var_table_.at(var_idx);
+    const ObPLDataType &var_type = var->get_type();
     value.reset();
     if (OB_ISNULL(var)) {
       ret = OB_ERR_UNEXPECTED;
@@ -198,7 +203,8 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
       LOG_WARN("cannot assign null to var with not null attribution", K(ret));
     }
     //NOTE: do not remove package user variable! distribute plan will sync it to remote if needed!
-    OZ (package_state.add_package_var_val(value, var_type.get_type()));
+    //OZ (package_state.add_package_var_val(value, var_type.get_type()));
+    OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, false));
     if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
       // package ref cursor variable, refrence outside, do not destruct it.
     } else if (OB_FAIL(ret)) {
