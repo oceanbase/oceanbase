@@ -12423,6 +12423,7 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
   if (OB_SUCC(ret)
       && !coll_type->get_element_type().is_obj_type()
       && !coll_type->get_element_type().is_record_type()
+      && !coll_type->get_element_type().is_collection_type()
       && !(coll_type->get_element_type().is_opaque_type() && coll_type->get_element_type().get_user_type_id() == T_OBJ_XML)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported udt type", K(ret), K(coll_type->get_user_type_id()));
@@ -12492,24 +12493,32 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
     for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
       const ObPLDataType *pl_type = record_type->get_record_member_type(i);
       ObString column_name;
+      ObAccuracy accuracy = ObAccuracy(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
+      common::ObObjMeta meta;
       OX (col_item = NULL);
       CK (OB_NOT_NULL(pl_type));
       CK (OB_NOT_NULL(record_type->get_record_member_name(i)));
       OZ (ob_write_string(*(params_.allocator_), *(record_type->get_record_member_name(i)), column_name));
       CK (OB_NOT_NULL(column_name));
-      if (OB_SUCC(ret) && !pl_type->is_obj_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "table(coll(object)) : object`s element is not basic type");
-        LOG_WARN("table(coll(object)) : object`s element is not basic type not supported", K(ret), KPC(pl_type));
+      if (OB_SUCC(ret)) {
+        if (pl_type->is_obj_type()) {
+          CK (OB_NOT_NULL(pl_type->get_data_type()));
+          OX (meta = pl_type->get_data_type()->get_meta_type());
+          OX (accuracy.set_accuracy(pl_type->get_data_type()->get_accuracy()));
+        } else {
+          OX (meta.set_ext());
+          OX (meta.set_extend_type(pl_type->get_type()));
+          OX (accuracy.set_accuracy(pl_type->get_user_type_id()));
+        }
       }
-      CK (OB_NOT_NULL(pl_type->get_data_type()));
+
       if (OB_FAIL(ret)) { // do nothing ...
       } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
         //exist, ignore resolve...
       } else {
         OZ (resolve_function_table_column_item(table_item,
-                                               pl_type->get_data_type()->get_meta_type(),
-                                               pl_type->get_data_type()->get_accuracy(),
+                                               meta,
+                                               accuracy,
                                                column_name,
                                                OB_APP_MIN_COLUMN_ID + i,
                                                col_item));
@@ -12517,6 +12526,27 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
       CK (OB_NOT_NULL(col_item));
       OZ (col_items.push_back(*col_item));
     }
+  }
+
+  // The array element type is collection
+  if (OB_SUCC(ret) && coll_type->get_element_type().is_collection_type()) {
+    if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, ObString("COLUMN_VALUE")))) {
+      //exist, ignore resolve...
+    } else {
+      ObAccuracy accuracy = ObAccuracy(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
+      common::ObObjMeta meta;
+      accuracy.set_accuracy(coll_type->get_element_type().get_user_type_id());
+      meta.set_ext();
+      meta.set_extend_type(coll_type->get_element_type().get_type());
+      OZ (resolve_function_table_column_item(table_item,
+                                             meta,
+                                             accuracy,
+                                             ObString("COLUMN_VALUE"),
+                                             OB_APP_MIN_COLUMN_ID,
+                                             col_item));
+    }
+    CK (OB_NOT_NULL(col_item));
+    OZ (col_items.push_back(*col_item));
   }
 
   return ret;

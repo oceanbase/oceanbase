@@ -168,14 +168,22 @@ int ObFunctionTableOp::inner_get_next_row_udf()
         OZ (get_current_result(record_obj));
         if (OB_FAIL(ret)) {
         } else if (ObUserDefinedSQLType == record_obj.get_type()) {
-         obj_stack[0] = record_obj;
-        } else if (OB_SUCC(ret) && record_obj.is_pl_extend()) {
+          obj_stack[0] = record_obj;
+        } else if (record_obj.is_pl_extend()) {
           CK (OB_NOT_NULL(composite = reinterpret_cast<pl::ObPLComposite*>(record_obj.get_ext())));
-          CK (composite->is_record());
-          OX (record = static_cast<pl::ObPLRecord*>(composite));
-          CK (record->get_count() == col_count_);
-          for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
-            OZ (record->get_element(i, obj_stack[i]));
+          if (OB_SUCC(ret)) {
+            if (composite->is_record()) {
+              OX (record = static_cast<pl::ObPLRecord*>(composite));
+              CK (record->get_count() == col_count_);
+              for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
+                OZ (record->get_element(i, obj_stack[i]));
+              }
+            } else if (composite->is_collection()) {
+              OX (obj_stack[0] = record_obj);
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected composite type", K(ret), K(composite->get_type()));
+            }
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
