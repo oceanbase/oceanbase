@@ -21,6 +21,7 @@ use test;
 # Create table
 --disable_warnings
 drop table if exists lineitem;
+drop table if exists t1;
 --enable_warnings
 create table lineitem(
     l_orderkey           bigint NOT NULL ,
@@ -73,9 +74,13 @@ eval load data /*+ direct(true,0) parallel(2) load_batch_size(100) */ infile "$O
 set @@ob_query_timeout = 1000000*60*60*10, @@ob_trx_timeout=1000000*60*60*10;
 select count(*) from lineitem;
 
+create table t1 (c1 int, c2 int);
+explain extended_noaddr insert /*+ enable_parallel_dml parallel(2) direct(true, 0) */ into t1 select /*+ parallel(2) */ * from t1;
+
 disconnect conn_query;
 
 # Clean Up
+drop table t1;
 drop table lineitem;
 
 --source mysql_test/test_suite/direct_load_data/include/set_direct_load_allow_fallback_true.inc

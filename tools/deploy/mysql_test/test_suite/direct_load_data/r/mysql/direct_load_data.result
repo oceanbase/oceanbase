@@ -1,6 +1,7 @@
 use test;
 alter system set direct_load_allow_fallback=False;
 drop table if exists lineitem;
+drop table if exists t1;
 create table lineitem(
 l_orderkey           bigint NOT NULL ,
 l_partkey            bigint NOT NULL ,
@@ -34,5 +35,84 @@ set @@ob_query_timeout = 1000000*60*60*10, @@ob_trx_timeout=1000000*60*60*10;
 select count(*) from lineitem;
 count(*)
 100000
+create table t1 (c1 int, c2 int);
+explain extended_noaddr insert /*+ enable_parallel_dml parallel(2) direct(true, 0) */ into t1 select /*+ parallel(2) */ * from t1;
+Query Plan
+==============================================================================
+|ID|OPERATOR                           |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------
+|0 |PX COORDINATOR                     |               |1       |16          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001       |1       |15          |
+|2 |  └─INSERT                         |               |1       |15          |
+|3 |    └─EXCHANGE IN DISTR            |               |1       |2           |
+|4 |      └─EXCHANGE OUT DISTR (RANDOM)|:EX10000       |1       |2           |
+|5 |        └─SUBPLAN SCAN             |ANONYMOUS_VIEW1|1       |2           |
+|6 |          └─PX BLOCK ITERATOR      |               |1       |2           |
+|7 |            └─TABLE FULL SCAN      |t1             |1       |2           |
+==============================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=2
+  2 - output(nil), filter(nil), rowset=16
+      columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2)})}]), partitions(p0), 
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+  3 - output([T_HIDDEN_PK], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  4 - output([T_HIDDEN_PK], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      dop=2
+  5 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  6 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  7 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+Used Hint:
+-------------------------------------
+  /*+
+      
+      PARALLEL(2)
+      ENABLE_PARALLEL_DML
+      DIRECT(TRUE, 0, 'FULL')
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, INS$1
+  stmt_id:2, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      PARALLEL(@"SEL$1" "test"."t1"@"SEL$1" 2)
+      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      PARALLEL(2)
+      DML_PARALLEL(2)
+      ENABLE_PARALLEL_DML
+      OPTIMIZER_FEATURES_ENABLE('')
+      DIRECT(TRUE, 0, 'FULL')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t1:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:2
+      dop_method:Global DOP
+      avaiable_index_name:[t1]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      DISTRIBUTED
+  Note:
+      Degree of Parallelism is 2 because of hint
+      Direct-mode full is enabled in insert into select
+drop table t1;
 drop table lineitem;
 alter system set direct_load_allow_fallback=True;

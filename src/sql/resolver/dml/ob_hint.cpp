@@ -3451,11 +3451,13 @@ void ObDirectLoadHint::reset()
 
 void ObDirectLoadHint::merge(const ObDirectLoadHint &other)
 {
-  has_direct_ = other.has_direct_;
-  need_sort_ = other.need_sort_;
   has_no_direct_ |= other.has_no_direct_;
-  max_error_row_count_ = other.max_error_row_count_;
-  load_method_ = other.load_method_;
+  if (other.has_direct_) {
+    has_direct_ = other.has_direct_;
+    need_sort_ = other.need_sort_;
+    max_error_row_count_ = other.max_error_row_count_;
+    load_method_ = other.load_method_;
+  }
 }
 
 int ObDirectLoadHint::print_direct_load_hint(PlanText &plan_text) const
