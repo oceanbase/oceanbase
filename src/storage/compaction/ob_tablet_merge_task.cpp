@@ -836,12 +836,20 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
+
+  ctx_->merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
+  ctx_->read_base_version_ = 0;
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), K(ctx_));
   } else if (OB_UNLIKELY(!ctx_->param_.tablet_id_.is_ls_tx_data_tablet())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only tx data tablet can execute minor merge", K(ret), K(ctx_->param_));
+  } else if (!(ctx_->scn_range_.start_scn_.is_base_scn())) {
+    ctx_->is_full_merge_ = false;
+    FLOG_INFO("Skip filtering because this minor merge does not contain the oldest minor sstable",
+              K(ctx_->scn_range_),
+              K(ctx_->is_full_merge_));
   } else if (OB_ISNULL(buf = ctx_->allocator_.alloc(sizeof(ObTransStatusFilter)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObTransStatusFilter)));
@@ -864,8 +872,6 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
       FLOG_INFO("success to init compaction filter", K(tmp_ret), K(recycle_scn));
     }
 
-    ctx_->merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-    ctx_->read_base_version_ = 0;
     if (OB_SUCCESS == tmp_ret) {
       ctx_->progressive_merge_num_ = 0;
       ctx_->is_full_merge_ = true;
@@ -877,7 +883,6 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
       ctx_->allocator_.free(buf);
       buf = nullptr;
     }
-
   }
   return ret;
 }
