@@ -15879,7 +15879,7 @@ def_table_schema(
 # 12521: __all_virtual_sswriter_lease_mgr
 
 # 12522: __all_virtual_tenant_flashback_log_scn
-# 12523: __all_virtual_pl_recompile_objinfo
+# 12523: __all_pl_recompile_objinfo
 # 12524: __all_virtual_vector_index_task
 # 12525: __all_virtual_vector_index_task_history
 # 12526: __tenant_virtual_show_create_catalog
@@ -16438,7 +16438,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15500: __idx_15494_idx_catalog_name_real_agent
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 # 15502: __all_virtual_tenant_flashback_log_scn
-# 15503: __all_virtual_pl_recompile_objinfo
+# 15503: __all_pl_recompile_objinfo
 # 15504: __tenant_virtual_show_create_catalog
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status
