@@ -186,6 +186,10 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
     if (OB_ISNULL(var)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("variable is null", K(ret), KPC(var), K(var_idx));
+    } else if (resolve_ctx.is_sync_package_var_ && var->is_default_expr_access_external_state()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("package var default expr access external state not support", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "package var default expr access external state");
     } else if (var_type.is_cursor_type()
         && OB_FAIL(resolve_ctx.session_info_.init_cursor_cache())) {
       LOG_WARN("failed to init cursor cache", K(ret));

@@ -125,7 +125,8 @@ public:
       is_not_null_(false),
       is_default_construct_(false),
       is_formal_param_(false),
-      is_referenced_(false) {}
+      is_referenced_(false),
+      is_default_expr_access_external_state_(false) {}
   virtual ~ObPLVar() {}
 
   inline const common::ObString &get_name() const { return name_; }
@@ -152,6 +153,8 @@ public:
   inline bool is_dup_declare() const { return is_dup_declare_; }
   inline void set_is_referenced(bool is_referenced) { is_referenced_ = is_referenced; }
   inline bool is_referenced() const { return is_referenced_; }
+  inline void set_is_default_expr_has_reroute_factor(bool val) { is_default_expr_access_external_state_ = val; }
+  inline bool is_default_expr_access_external_state() const { return is_default_expr_access_external_state_; }
 
   TO_STRING_KV(K_(name),
                K_(type),
@@ -159,7 +162,8 @@ public:
                K_(is_readonly),
                K_(is_not_null),
                K_(is_default_construct),
-               K_(is_formal_param));
+               K_(is_formal_param),
+               K_(is_default_expr_access_external_state));
 private:
   common::ObString name_;
   ObPLDataType type_; //主要用来表示类型，同时要存储变量的初始值或default值，运行状态的值不存储在这里
@@ -171,6 +175,7 @@ private:
   bool is_formal_param_; // this is formal param of a routine
   bool is_dup_declare_;
   bool is_referenced_;
+  bool is_default_expr_access_external_state_;
 };
 
 class ObPLSymbolTable
@@ -189,7 +194,8 @@ public:
                  const bool not_null = false,
                  const bool default_construct_ = false,
                  const bool is_formal_param = false,
-                 const bool is_dup_declare = false);
+                 const bool is_dup_declare = false,
+                 const bool has_access_external_state = false);
   int delete_symbol(int64_t symbol_idx);
 
   inline void set_self_param_idx() { self_param_idx_ = variables_.count() - 1; }
@@ -1335,7 +1341,8 @@ public:
   int add_symbol(const ObString &name, const ObPLDataType &type, const sql::ObRawExpr *expr = NULL,
                  const bool read_only = false, const bool not_null = false,
                  const bool default_construct = false,
-                 const bool is_formal_param = false);
+                 const bool is_formal_param = false,
+                 const bool has_access_external_state = false);
   int delete_symbols();
   inline const common::ObIArray<int64_t> &get_labels() const { return labels_; }
   inline ObPLLabelTable *get_label_table() { return label_table_; }
