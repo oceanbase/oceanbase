@@ -660,6 +660,9 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
         dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
         dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
       }
+    } else if (is_explicit_cast && lib::is_oracle_mode() && dst_type.is_number_float()) {
+      dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
+      dst_type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
