@@ -817,7 +817,7 @@ int ObInnerTableSchema::cdb_ob_tablet_checksum_error_info_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,          TABLET_ID   FROM     (       SELECT A.TENANT_ID AS TENANT_ID,              A.TABLET_ID AS TABLET_ID,              A.ROW_COUNT AS ROW_COUNT,              A.DATA_CHECKSUM AS DATA_CHECKSUM,              A.B_COLUMN_CHECKSUMS AS B_COLUMN_CHECKSUMS       FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM A       JOIN OCEANBASE.__ALL_VIRTUAL_MERGE_INFO B       ON A.TENANT_ID = B.TENANT_ID AND A.COMPACTION_SCN = B.FROZEN_SCN     ) J   GROUP BY J.TENANT_ID, J.TABLET_ID   HAVING MIN(J.DATA_CHECKSUM) != MAX(J.DATA_CHECKSUM)          OR MIN(J.ROW_COUNT) != MAX(J.ROW_COUNT)          OR MIN(J.B_COLUMN_CHECKSUMS) != MAX(J.B_COLUMN_CHECKSUMS)   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,          TABLET_ID   FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM   GROUP BY TENANT_ID, TABLET_ID   HAVING MIN(DATA_CHECKSUM) != MAX(DATA_CHECKSUM)          OR MIN(ROW_COUNT) != MAX(ROW_COUNT)          OR MIN(B_COLUMN_CHECKSUMS) != MAX(B_COLUMN_CHECKSUMS)   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

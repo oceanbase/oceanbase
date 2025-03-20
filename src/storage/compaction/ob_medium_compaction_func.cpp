@@ -569,14 +569,17 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
     if (OB_SUCC(ret) || OB_NO_NEED_MERGE == ret) {
       if (tablet->get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
         ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-        LOG_INFO("errsim", K(ret), KPC(this));
+        LOG_INFO("errsim EN_SCHEDULE_MEDIUM_COMPACTION", K(ret), KPC(this));
         if (OB_FAIL(ret)) {
           const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
           medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
           if (medium_info.medium_snapshot_ > max_sync_medium_scn
-            && medium_info.medium_snapshot_ >= max_reserved_snapshot) {
-            FLOG_INFO("set schedule medium with errsim", KPC(this));
-            ret = OB_SUCCESS;
+              && medium_info.medium_snapshot_ >= max_reserved_snapshot) {
+            if (OB_FAIL(choose_medium_schema_version(allocator_, medium_info.medium_snapshot_, *tablet, schema_version))) {
+              LOG_WARN("failed to choose medium schema version", K(ret), K(tablet));
+            } else {
+              FLOG_INFO("set schedule medium with errsim", KPC(this), K(medium_info), K(schema_version));
+            }
           }
         }
       }
