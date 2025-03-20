@@ -209,7 +209,6 @@ bool ObIOMemoryPool<SIZE>::contain(void *ptr)
 ObIOAllocator::ObIOAllocator()
   : is_inited_(false),
     memory_limit_(0),
-    block_count_(0),
     inner_allocator_()
 {
 
@@ -234,8 +233,7 @@ int ObIOAllocator::init(const uint64_t tenant_id, const int64_t memory_limit)
                                            tenant_id,
                                            memory_limit))) {
     LOG_WARN("init inner allocator failed", K(ret), K(tenant_id), K(memory_limit));
-  } else if (OB_FAIL(init_macro_pool(memory_limit))) {
-    LOG_WARN("init macro pool failed", K(ret), K(memory_limit));
+  } else if(FALSE_IT(inner_allocator_.set_nway(16))) {
   } else {
     memory_limit_ = memory_limit;
     is_inited_ = true;
@@ -249,7 +247,6 @@ int ObIOAllocator::init(const uint64_t tenant_id, const int64_t memory_limit)
 void ObIOAllocator::destroy()
 {
   is_inited_ = false;
-  macro_pool_.destroy();
   inner_allocator_.destroy();
 }
 
@@ -290,19 +287,8 @@ void *ObIOAllocator::alloc(const int64_t size)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(size));
   } else {
-    // try pop from cache block pool if size equals cache block size
-    if (size == macro_pool_.get_block_size()) {
-      if (OB_FAIL(macro_pool_.alloc(ret_buf))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_ERROR("failed to alloc buf from fixed size pool", K(ret), K(size));
-        } else {
-          ret = OB_SUCCESS;
-        }
-      }
-    }
-
     // get buf from normal allocator
-    if (OB_SUCC(ret) && OB_ISNULL(ret_buf)) {
+    if (OB_ISNULL(ret_buf)) {
       if (OB_ISNULL(ret_buf = inner_allocator_.alloc(size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate io mem block", K(ret), K(size));
@@ -314,45 +300,7 @@ void *ObIOAllocator::alloc(const int64_t size)
 
 void ObIOAllocator::free(void *ptr)
 {
-  if (macro_pool_.contain(ptr)) {
-    macro_pool_.free(ptr);
-  } else {
-    inner_allocator_.free(ptr);
-  }
-}
-
-int ObIOAllocator::calculate_pool_block_count(const int64_t memory_limit, int64_t &block_count)
-{
-  int ret = OB_SUCCESS;
-  block_count = 0;
-  if (OB_UNLIKELY(memory_limit <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(memory_limit));
-  } else {
-    const double DEFAULT_MACRO_POOL_RATIO = 0.01;
-    const int64_t MIN_MACRO_POOL_COUNT = 1;
-    const int64_t MAX_MACRO_POOL_COUNT = OB_MAX_SYS_BKGD_THREAD_NUM * 4;
-    int64_t macro_pool_count = memory_limit * DEFAULT_MACRO_POOL_RATIO / MACRO_POOL_BLOCK_SIZE;
-    macro_pool_count = max(macro_pool_count, MIN_MACRO_POOL_COUNT);
-    macro_pool_count = min(macro_pool_count, MAX_MACRO_POOL_COUNT);
-    block_count = macro_pool_count;
-  }
-  return ret;
-}
-
-int ObIOAllocator::init_macro_pool(const int64_t memory_limit)
-{
-  int ret = OB_SUCCESS;
-  int64_t block_count = 0;
-  if (OB_FAIL(calculate_pool_block_count(memory_limit, block_count))) {
-    LOG_WARN("calculate pool block count failed", K(ret));
-  } else if (OB_FAIL(macro_pool_.init(block_count, inner_allocator_))) {
-    LOG_WARN("failed to init macro block memory pool", K(ret), K(block_count));
-  } else {
-    block_count_ = block_count;
-    LOG_INFO("succ to init io macro pool", K(memory_limit), K(block_count));
-  }
-  return ret;
+  inner_allocator_.free(ptr);
 }
 
 /******************             IOStat              **********************/

@@ -498,7 +498,7 @@ public:
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),
        K(io_config_), K(io_clock_), K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_memory_limit_),
-       K(request_count_), K(result_count_), K(io_request_pool_), K(io_result_pool_));
+       K(request_count_), K(result_count_));
 private:
   friend class ObIORequest;
   friend class ObIOResult;
@@ -521,12 +521,6 @@ private:
   ObIOTracer io_tracer_;
   DRWLock io_config_lock_;                                      // for map and config
   hash::ObHashMap<ObIOGroupKey, uint64_t> group_id_index_map_;  // key:group_id, value:index
-#ifdef OB_BUILD_SHARED_STORAGE
-  ObIOObjectPool<ObIORequest, ObSSIORequest> io_request_pool_;
-#else
-  ObIOObjectPool<ObIORequest, ObIORequest> io_request_pool_;
-#endif
-  ObIOObjectPool<ObIOResult, ObIOResult> io_result_pool_;
   ObTenantIOSchedulerV2 qsched_;
 };
 

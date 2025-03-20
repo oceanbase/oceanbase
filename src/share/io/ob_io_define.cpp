@@ -864,13 +864,8 @@ void ObIOResult::dec_ref(const char *msg)
       ret = OB_ERR_SYS;
       LOG_ERROR("tenant io manager is null, memory leak", K(ret));
     } else {
-      if (tenant_holder.get_ptr()->io_result_pool_.contain(this)) {
-        reset();
-        tenant_holder.get_ptr()->io_result_pool_.recycle(this);
-      } else {
-        // destroy will be called when free
-        tenant_holder.get_ptr()->io_allocator_.free(this);
-      }
+      // destroy will be called when free
+      tenant_holder.get_ptr()->io_allocator_.free(this);
     }
   }
 }
@@ -1116,13 +1111,8 @@ void ObIORequest::free()
   if (OB_ISNULL(tenant_holder.get_ptr())) {
     //not set yet, do nothing
   } else {
-    if (tenant_holder.get_ptr()->io_request_pool_.contain(this)) {
-      destroy();
-      tenant_holder.get_ptr()->io_request_pool_.recycle(this);
-    } else {
-      // destroy will be called when free
-      tenant_holder.get_ptr()->io_allocator_.free(this);
-    }
+    // destroy will be called when free
+    tenant_holder.get_ptr()->io_allocator_.free(this);
   }
 }
 
@@ -1604,13 +1594,8 @@ void ObIORequest::dec_ref(const char *msg)
       ret = OB_ERR_SYS;
       LOG_ERROR("tenant io manager is null, memory leak", K(ret), KCSTRING(lbt()), K(*this));
     } else {
-      if (tenant_holder.get_ptr()->io_request_pool_.contain(this)) {
-        destroy();
-        tenant_holder.get_ptr()->io_request_pool_.recycle(this);
-      } else {
-        // destroy will be called when free
-        tenant_holder.get_ptr()->io_allocator_.free(this);
-      }
+      // destroy will be called when free
+      tenant_holder.get_ptr()->io_allocator_.free(this);
     }
   }
 }

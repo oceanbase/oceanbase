@@ -896,44 +896,44 @@ TEST_F(TestIOStruct, IOFaultDetector)
 //   }
 // };
 
-TEST_F(TestIOStruct, memory_pool)
-{
-  ObRefHolder<ObTenantIOManager> tenant_holder;
-  ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(500, tenant_holder));
-  ASSERT_NE(nullptr, tenant_holder.get_ptr());
+// TEST_F(TestIOStruct, memory_pool)
+// {
+//   ObRefHolder<ObTenantIOManager> tenant_holder;
+//   ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(500, tenant_holder));
+//   ASSERT_NE(nullptr, tenant_holder.get_ptr());
 
-  ObIORequest *io_request = nullptr;
-  ASSERT_SUCC(tenant_holder.get_ptr()->io_request_pool_.alloc(io_request));
-  ASSERT_NE(nullptr, io_request);
-  io_request->tenant_io_mgr_.hold(tenant_holder.get_ptr());
-  ASSERT_TRUE(tenant_holder.get_ptr()->io_request_pool_.contain(io_request));
-  ASSERT_SUCC(tenant_holder.get_ptr()->io_request_pool_.recycle(io_request));
-  io_request->tenant_io_mgr_.reset();
+//   ObIORequest *io_request = nullptr;
+//   ASSERT_SUCC(tenant_holder.get_ptr()->io_request_pool_.alloc(io_request));
+//   ASSERT_NE(nullptr, io_request);
+//   io_request->tenant_io_mgr_.hold(tenant_holder.get_ptr());
+//   ASSERT_TRUE(tenant_holder.get_ptr()->io_request_pool_.contain(io_request));
+//   ASSERT_SUCC(tenant_holder.get_ptr()->io_request_pool_.recycle(io_request));
+//   io_request->tenant_io_mgr_.reset();
 
-  ObIOResult *io_result = nullptr;
-  ASSERT_SUCC(tenant_holder.get_ptr()->io_result_pool_.alloc(io_result));
-  ASSERT_NE(nullptr, io_result);
-  io_result->tenant_io_mgr_.hold(tenant_holder.get_ptr());
-  ASSERT_TRUE(tenant_holder.get_ptr()->io_result_pool_.contain(io_result));
-  ASSERT_SUCC(tenant_holder.get_ptr()->io_result_pool_.recycle(io_result));
-  io_result->tenant_io_mgr_.reset();
+//   ObIOResult *io_result = nullptr;
+//   ASSERT_SUCC(tenant_holder.get_ptr()->io_result_pool_.alloc(io_result));
+//   ASSERT_NE(nullptr, io_result);
+//   io_result->tenant_io_mgr_.hold(tenant_holder.get_ptr());
+//   ASSERT_TRUE(tenant_holder.get_ptr()->io_result_pool_.contain(io_result));
+//   ASSERT_SUCC(tenant_holder.get_ptr()->io_result_pool_.recycle(io_result));
+//   io_result->tenant_io_mgr_.reset();
 
-  void *result_buf = tenant_holder.get_ptr()->io_allocator_.alloc(sizeof(ObIOResult));
-  ObIOResult *result1 = new (result_buf) ObIOResult;
-  result1->tenant_io_mgr_.hold(tenant_holder.get_ptr());
-  ASSERT_FALSE(tenant_holder.get_ptr()->io_result_pool_.contain(result1));
-  ASSERT_FAIL(tenant_holder.get_ptr()->io_result_pool_.recycle(result1));
-  result1->~ObIOResult();
-  tenant_holder.get_ptr()->io_allocator_.free(result1);
+//   void *result_buf = tenant_holder.get_ptr()->io_allocator_.alloc(sizeof(ObIOResult));
+//   ObIOResult *result1 = new (result_buf) ObIOResult;
+//   result1->tenant_io_mgr_.hold(tenant_holder.get_ptr());
+//   ASSERT_FALSE(tenant_holder.get_ptr()->io_result_pool_.contain(result1));
+//   ASSERT_FAIL(tenant_holder.get_ptr()->io_result_pool_.recycle(result1));
+//   result1->~ObIOResult();
+//   tenant_holder.get_ptr()->io_allocator_.free(result1);
 
-  void *req_buf = tenant_holder.get_ptr()->io_allocator_.alloc(sizeof(ObIORequest));
-  ObIORequest *req1 = new (req_buf) ObIORequest;
-  req1->tenant_io_mgr_.hold(tenant_holder.get_ptr());
-  ASSERT_FALSE(tenant_holder.get_ptr()->io_request_pool_.contain(req1));
-  ASSERT_FAIL(tenant_holder.get_ptr()->io_request_pool_.recycle(req1));
-  req1->~ObIORequest();
-  tenant_holder.get_ptr()->io_allocator_.free(req1);
-}
+//   void *req_buf = tenant_holder.get_ptr()->io_allocator_.alloc(sizeof(ObIORequest));
+//   ObIORequest *req1 = new (req_buf) ObIORequest;
+//   req1->tenant_io_mgr_.hold(tenant_holder.get_ptr());
+//   ASSERT_FALSE(tenant_holder.get_ptr()->io_request_pool_.contain(req1));
+//   ASSERT_FAIL(tenant_holder.get_ptr()->io_request_pool_.recycle(req1));
+//   req1->~ObIORequest();
+//   tenant_holder.get_ptr()->io_allocator_.free(req1);
+// }
 
 TEST_F(TestIOStruct, simple)
 {

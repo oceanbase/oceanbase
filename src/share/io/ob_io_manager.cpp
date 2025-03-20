@@ -1551,9 +1551,7 @@ ObTenantIOManager::ObTenantIOManager()
     io_scheduler_(nullptr),
     callback_mgr_(),
     io_config_lock_(ObLatchIds::TENANT_IO_CONFIG_LOCK),
-    group_id_index_map_(),
-    io_request_pool_(),
-    io_result_pool_()
+    group_id_index_map_()
 {
 
 }
@@ -1639,8 +1637,6 @@ void ObTenantIOManager::destroy()
   io_memory_limit_ = 0;
   request_count_ = 0;
   result_count_ = 0;
-  io_request_pool_.destroy();
-  io_result_pool_.destroy();
   group_id_index_map_.destroy();
   io_allocator_.destroy();
   LOG_INFO("destroy tenant io manager success", K(tenant_id_));
@@ -1726,10 +1722,6 @@ int ObTenantIOManager::init_memory_pool(const uint64_t tenant_id, const int64_t 
     LOG_WARN("calc tenant io memory failed", K(ret), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_allocator_.init(tenant_id, io_memory_limit_))) {
     LOG_WARN("init io allocator failed", K(ret), K(tenant_id), K(io_memory_limit_));
-  } else if (OB_FAIL(io_request_pool_.init(request_count_, io_allocator_))) {
-    LOG_WARN("failed to init request memory pool", K(ret), K(request_count_));
-  } else if (OB_FAIL(io_result_pool_.init(result_count_, io_allocator_))) {
-    LOG_WARN("failed to init result memory pool", K(ret), K(result_count_));
   } else {
     LOG_INFO("init tenant io memory pool success", K(tenant_id), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
   }
@@ -1757,37 +1749,25 @@ int ObTenantIOManager::alloc_and_init_result(const ObIOInfo &info, ObIOResult *&
 {
   int ret = OB_SUCCESS;
   io_result = nullptr;
-  if (OB_FAIL(io_result_pool_.alloc(io_result))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_ERROR("failed to alloc io result from fixed size pool", K(ret));
-    } else {
+  if (OB_FAIL(alloc_io_result(io_result))) {
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      LOG_WARN("alloc io result failed, retry until timeout", K(ret));
+      //blocking foreground thread
       ret = OB_SUCCESS;
-      if (OB_FAIL(alloc_io_result(io_result))) {
-        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-          LOG_WARN("alloc io result failed, retry until timeout", K(ret));
-          //blocking foreground thread
-          ret = OB_SUCCESS;
-          if (OB_FAIL(try_alloc_result_until_timeout(ObTimeUtility::current_time() + info.timeout_us_, io_result))) {
-            LOG_WARN("retry alloc io result failed", K(ret));
-          }
-        } else {
-          LOG_WARN("alloc io result failed", K(ret), KP(io_result));
-        }
+      if (OB_FAIL(try_alloc_result_until_timeout(ObTimeUtility::current_time() + info.timeout_us_, io_result))) {
+        LOG_WARN("retry alloc io result failed", K(ret));
       }
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(io_result)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("io result is null", K(ret));
-        } else if (OB_FAIL(io_result->basic_init())) {
-          LOG_WARN("basic init io result failed", K(ret));
-        }
-      }
+    } else {
+      LOG_WARN("alloc io result failed", K(ret), KP(io_result));
     }
-  } else if (OB_ISNULL(io_result)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("io result is null", K(ret));
-  } else {
-    io_result->tenant_io_mgr_.hold(this);
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(io_result)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("io result is null", K(ret));
+    } else if (OB_FAIL(io_result->basic_init())) {
+      LOG_WARN("basic init io result failed", K(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1797,13 +1777,7 @@ int ObTenantIOManager::alloc_and_init_result(const ObIOInfo &info, ObIOResult *&
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(io_result)) {
-    if (io_result_pool_.contain(io_result)) {
-      io_result->reset();
-      io_result_pool_.recycle(io_result);
-    } else {
-      // destroy will be called when free
-      io_allocator_.free(io_result);
-    }
+    io_allocator_.free(io_result);
   }
   return ret;
 }
@@ -1820,34 +1794,25 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
     LOG_WARN("io result is null", K(ret));
   } else if (OB_FAIL(handle.set_result(*io_result))) {
     LOG_WARN("fail to set result to handle", K(ret), KPC(io_result));
-  } else if (OB_FAIL(io_request_pool_.alloc(io_request))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_ERROR("failed to alloc io io request from fixed size pool", K(ret));
-    } else {
+  } else if (OB_FAIL(alloc_io_request(io_request))) {
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      LOG_WARN("alloc io request failed, retry until timeout", K(ret));
+      //blocking foreground thread
       ret = OB_SUCCESS;
-      if (OB_FAIL(alloc_io_request(io_request))) {
-        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-          LOG_WARN("alloc io request failed, retry until timeout", K(ret));
-          //blocking foreground thread
-          ret = OB_SUCCESS;
-          if (OB_FAIL(try_alloc_req_until_timeout(ObTimeUtility::current_time() + info.timeout_us_, io_request))) {
-            LOG_WARN("retry alloc io request failed", K(ret));
-          }
-        } else {
-          LOG_WARN("alloc io request failed", K(ret), KP(io_request));
-        }
+      if (OB_FAIL(try_alloc_req_until_timeout(ObTimeUtility::current_time() + info.timeout_us_, io_request))) {
+        LOG_WARN("retry alloc io request failed", K(ret));
       }
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(io_request)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("io request is null", K(ret));
-        } else if (OB_FAIL(io_request->basic_init())) {
-          LOG_WARN("basic init io request failed", K(ret));
-        }
-      }
+    } else {
+      LOG_WARN("alloc io request failed", K(ret), KP(io_request));
     }
-  } else {
-    io_request->tenant_io_mgr_.hold(this);
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(io_request)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("io request is null", K(ret));
+    } else if (OB_FAIL(io_request->basic_init())) {
+      LOG_WARN("basic init io request failed", K(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -2741,8 +2706,6 @@ int ObTenantIOManager::print_io_status()
       double failed_iops = failed_ips + failed_ops;
       LOG_INFO("[IO STATUS TENANT]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "hold_mem", io_allocator_.get_allocated_size(),
-          "free_req_cnt", io_request_pool_.get_free_cnt(),
-          "free_result_cnt", io_result_pool_.get_free_cnt(),
           "callback_queues", queue_count_array,
           "[FAILED]: "
           "fail_ips", lround(failed_ips),
