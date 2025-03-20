@@ -763,13 +763,13 @@ int ObRecoverTableInitiator::check_remap_tablespace_target_(const share::ObRemap
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_RECOVER_TABLE_SKIP_TARGET_SCHEMA_CHECK, "The describe for ERRSIM_RECOVER_TABLE_SKIP_TARGET_SCHEMA_CHECK");
 int ObRecoverTableInitiator::check_recover_table_target_schema_(const share::ObRecoverTableJob &job)
 {
   int ret = OB_SUCCESS;
   const share::ObImportTableArg &import_table_arg = job.get_import_arg().get_import_table_arg();
   const share::ObImportRemapArg &import_remap_arg = job.get_import_arg().get_remap_table_arg();
   uint64_t target_tenant_id = job.get_target_tenant_id();
-
   if (OB_FAIL(check_specified_database_remap_table_target_(import_table_arg, import_remap_arg, target_tenant_id))) {
     LOG_WARN("check specified dababase remap table target failed", K(ret), K(job));
   } else if (OB_FAIL(check_specified_table_remap_table_target_(import_table_arg, import_remap_arg, target_tenant_id))) {
@@ -781,6 +781,11 @@ int ObRecoverTableInitiator::check_recover_table_target_schema_(const share::ObR
   } else if (OB_FAIL(check_remap_tablespace_target_(import_remap_arg.get_remap_tablespace_array(), target_tenant_id))) {
     LOG_WARN("check specified table remap table target failed", K(ret), K(job));
   }
-
+#ifdef ERRSIM
+  if (OB_UNLIKELY(ERRSIM_RECOVER_TABLE_SKIP_TARGET_SCHEMA_CHECK)) {
+    LOG_INFO("skip recover table target schema check");
+    ret = OB_SUCCESS; // overwrite ret
+  }
+#endif
   return ret;
 }
