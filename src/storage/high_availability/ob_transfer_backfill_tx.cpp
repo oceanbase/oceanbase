@@ -172,7 +172,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // Remote logical table is no longer relyed needed during physical copy, just reset has tranfser table flag.
         if (OB_FAIL(dest_ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
                                                            ObTabletRestoreStatus::EMPTY,
-                                                           true/* need reset tranfser flag */))) {
+                                                           true/* need reset tranfser flag */,
+                                                           false /*need_to_set_split_data_complete*/))) {
           LOG_WARN("fail to set empty", K(ret), KPC(tablet));
         } else {
           ObTransferUtils::transfer_tablet_restore_stat(tenant_id_, tablet->get_tablet_meta().transfer_info_.ls_id_, dest_ls_->get_ls_id());

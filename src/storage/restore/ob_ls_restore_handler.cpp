@@ -2304,7 +2304,8 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
       LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
     } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
                                                          restore_status,
-                                                         true/* need reset tranfser flag */))) {
+                                                         true/* need reset tranfser flag */,
+                                                         false/*need_to_set_split_data_complete*/))) {
       LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
     } else {
       ++total_tablet_cnt_;
