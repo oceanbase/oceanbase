@@ -14098,14 +14098,12 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     const ObJoinFilterHint *force_hint = NULL;
     bool can_part_join_filter = false;
     const ObJoinFilterHint *force_part_hint = NULL;
-    if (scan->get_index_back()) {
-      /* do nothing */
-    } else if (OB_FAIL(hint_info.check_use_join_filter(*stmt,
-                                                       stmt->get_query_ctx()->get_query_hint(),
-                                                       scan->get_table_id(),
-                                                       false,
-                                                       can_join_filter,
-                                                       force_hint))) {
+    if (OB_FAIL(hint_info.check_use_join_filter(*stmt,
+                                                stmt->get_query_ctx()->get_query_hint(),
+                                                scan->get_table_id(),
+                                                false,
+                                                can_join_filter,
+                                                force_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
     } else if (!is_fully_partition_wise &&
                OB_FAIL(hint_info.check_use_join_filter(*stmt,
@@ -14115,8 +14113,9 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                        can_part_join_filter,
                                                        force_part_hint))) {
       LOG_WARN("faile to check use join filter", K(ret));
-    } else if (!can_join_filter && !can_part_join_filter) {
-      //do nothing
+    } else if ((!can_join_filter && !can_part_join_filter)
+               || (scan->use_das() && NULL == force_hint)) {
+      // do nothing, hint disable the join filter or das scan without force hint
     } else {
       JoinFilterInfo info;
       info.table_id_ = scan->get_table_id();
