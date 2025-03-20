@@ -225,7 +225,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME USER TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
       TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE SUBMIT CANCEL JOB XA RECOVER COMPILE REUSE SETTINGS
       GEOMETRY POINT LINESTRING POLYGON MULTIPOINT MULTILINESTRING MULTIPOLYGON GEOMETRYCOLLECTION GEOMCOLLECTION
-      ROARINGBITMAP
+      ROARINGBITMAP SERIAL
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -832,6 +832,7 @@ unreserved_keyword:
   | COMPILE
   | REUSE
   | SETTINGS
+  | SERIAL
 ;
 
 /*****************************************************************************
@@ -2424,6 +2425,12 @@ scalar_data_type:
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_ROARINGBITMAP);
     $$->int32_values_[0] = 0; /* length */
   }
+  | SERIAL
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_UINT64);
+      $$->int16_values_[0] = -1;  // precision, default value -1
+      $$->int16_values_[2] = 0;   // zerofill always false for serial type
+    }
   | pl_obj_access_ref '%' ROWTYPE
   {
     if (parse_ctx->is_for_trigger_ && parse_ctx->is_inner_parse_) {
