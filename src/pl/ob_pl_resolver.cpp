@@ -11374,7 +11374,7 @@ int ObPLResolver::resolve_obj_access_node(ParseNode *node,
                                           ObArray<pl::ObObjAccessIdx> &access_idxs)
 {
   int ret = OB_SUCCESS;
-  pl::ObPLPackageGuard dummy_pkg_guard(sql::PACKAGE_RESV_HANDLE);
+  pl::ObPLPackageGuard dummy_pkg_guard(session_info.get_effective_tenant_id());
   pl::ObPLResolver pl_resolver(allocator,
                                session_info,
                                schema_guard,

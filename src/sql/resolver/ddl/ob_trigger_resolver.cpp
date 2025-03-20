@@ -1357,7 +1357,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
   if (OB_SUCC(ret)) {
     HEAP_VARS_2((ObPLPackageAST, package_spec_ast, allocator),
                   (ObPLPackageAST, package_body_ast, allocator)) {
-      ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+      ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
       const ObString &pkg_name = trigger_info.get_package_body_info().get_package_name();
       ObString source;
       ObPLCompiler compiler(allocator, *session_info, schema_guard, package_guard, *sql_proxy);
