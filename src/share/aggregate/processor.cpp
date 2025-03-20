@@ -493,12 +493,12 @@ int Processor::setup_rt_info(AggrRowPtr row,
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       MEMSET(extra_array_buf, 0, extra_size);
-      if (OB_FAIL(init_aggr_row_extra_info(
-            agg_ctx, (char *)extra_array_buf,
-            nullptr == extra_allocator ? agg_ctx.allocator_ : *extra_allocator, group_id))) {
-        SQL_LOG(WARN, "failed to init aggr row extra info", K(ret), K(group_id));
-      } else if (OB_FAIL(agg_ctx.agg_extras_.push_back((AggregateExtras)extra_array_buf))) {
+      if (OB_FAIL(agg_ctx.agg_extras_.push_back((AggregateExtras)extra_array_buf))) {
         SQL_LOG(WARN, "push back element failed", K(ret));
+      } else if (OB_FAIL(init_aggr_row_extra_info(
+                   agg_ctx, (char *)extra_array_buf,
+                   nullptr == extra_allocator ? agg_ctx.allocator_ : *extra_allocator, group_id))) {
+        SQL_LOG(WARN, "failed to init aggr row extra info", K(ret), K(group_id));
       } else {
         *reinterpret_cast<int32_t *>(row + agg_ctx.row_meta().extra_idx_offset_) =
           static_cast<int32_t>(agg_ctx.agg_extras_.count()) - 1;
