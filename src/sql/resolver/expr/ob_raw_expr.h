@@ -4794,6 +4794,7 @@ public:
   int64_t get_partition_param_index(int64_t index);
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
+  int get_order_exprs(ObIArray<ObRawExpr*> &order_exprs) const;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,

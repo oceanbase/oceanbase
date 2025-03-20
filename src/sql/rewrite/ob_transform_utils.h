@@ -2035,6 +2035,12 @@ public:
                                               bool &is_valid_join_chain);
   static int get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
                                   ObSqlBitSet<> &null_reject_rels);
+  static int check_stmt_strict_deterministic(const ObSelectStmt *stmt,
+                                            ObSQLSessionInfo *session_info,
+                                            ObSchemaChecker *schema_checker,
+                                            bool check_current_stmt,
+                                            bool check_basic_deterministic,
+                                            bool &strict_deterministic);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
@@ -2048,7 +2054,6 @@ private:
                                         ObSqlBitSet<> &expr_relation_ids,
                                         bool in_full_join,
                                         bool &is_valid);
-
   static int check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
                                                   TableItem *view_table,
                                                   ObIArray<ObRawExpr*> &outer_join_conditions,

@@ -6695,6 +6695,17 @@ int ObWinFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
   return ret;
 }
 
+int ObWinFunRawExpr::get_order_exprs(ObIArray<ObRawExpr *> &order_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_order_items().count(); ++i) {
+    if (OB_FAIL(order_exprs.push_back(get_order_items().at(i).expr_))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(Bound, type_, is_preceding_, is_nmb_literal_);
 
 int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
