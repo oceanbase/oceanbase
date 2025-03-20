@@ -3290,6 +3290,31 @@ int ObPartitionUtils::get_end_(
   return ret;
 }
 
+enum struct ObMVRefreshMethod : int64_t
+{
+  NEVER = 0,
+  COMPLETE = 1,
+  FAST = 2,
+  FORCE = 3,
+  MAX
+};
+struct ObVectorIndexRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObString exec_env_;
+  // TODO:(@wangmiao) more infos for complete refresh (aka. rebuild)
+  ObVectorIndexRefreshInfo():
+  exec_env_() {}
+  void reset() {
+    exec_env_.reset();
+  }
+  bool operator == (const ObVectorIndexRefreshInfo &other) const {
+    return exec_env_ == other.exec_env_;
+  }
+  TO_STRING_KV(K_(exec_env));
+};
+
 class ObViewSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -8844,6 +8869,15 @@ private:
   common::ObString attribute_;
 };
 
+enum ObColumnGroupType : uint8_t
+{
+  DEFAULT_COLUMN_GROUP = 0,
+  ALL_COLUMN_GROUP,
+  ROWKEY_COLUMN_GROUP,
+  SINGLE_COLUMN_GROUP,
+  NORMAL_COLUMN_GROUP,
+  MAX_COLUMN_GROUP
+};
 struct ObSkipIndexColumnAttr
 {
   OB_UNIS_VERSION(1);

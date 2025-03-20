@@ -80,6 +80,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/ob_heartbeat_handler.h"
+#include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 namespace oceanbase
 {
@@ -2211,7 +2212,15 @@ public:
       rebuild_index_arg_list_(),
       client_session_id_(0),
       client_session_create_ts_(0),
-      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL)
+      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL),
+      is_direct_load_partition_(false),
+      is_alter_column_group_delayed_(false),
+      is_alter_mview_attributes_(false),
+      alter_mview_arg_(),
+      is_alter_mlog_attributes_(false),
+      alter_mlog_arg_(),
+      part_storage_cache_policy_(),
+      data_version_(0)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2289,7 +2298,15 @@ public:
                        K_(alter_auto_partition_attr),
                        K_(client_session_id),
                        K_(client_session_create_ts),
-                       K_(lock_priority));
+                       K_(lock_priority),
+                       K_(is_direct_load_partition),
+                       K_(is_alter_column_group_delayed),
+                       K_(is_alter_mview_attributes),
+                       K_(alter_mview_arg),
+                       K_(is_alter_mlog_attributes),
+                       K_(alter_mlog_arg),
+                       K_(part_storage_cache_policy),
+                       K_(data_version));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2329,6 +2346,14 @@ public:
   uint32_t client_session_id_;
   int64_t client_session_create_ts_;
   transaction::tablelock::ObTableLockPriority lock_priority_;
+  bool is_direct_load_partition_;
+  bool is_alter_column_group_delayed_;
+  bool is_alter_mview_attributes_;
+  ObAlterMViewArg alter_mview_arg_;
+  bool is_alter_mlog_attributes_;
+  ObAlterMLogArg alter_mlog_arg_;
+  common::ObString part_storage_cache_policy_;
+  uint64_t data_version_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -2589,7 +2614,14 @@ public:
         sql_mode_(0),
         inner_sql_exec_addr_(),
         allocator_(),
-        local_session_var_(&allocator_)
+        local_session_var_(&allocator_),
+        index_cgs_(),
+        vidx_refresh_info_(),
+        is_rebuild_index_(false),
+        is_index_scope_specified_(false),
+        is_offline_rebuild_(false),
+        index_key_(-1),
+        data_version_(0)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2619,6 +2651,14 @@ public:
     inner_sql_exec_addr_.reset();
     local_session_var_.reset();
     allocator_.reset();
+    exist_all_column_group_ = false;
+    index_cgs_.reset();
+    vidx_refresh_info_.reset();
+    is_rebuild_index_ = false;
+    is_index_scope_specified_ = false;
+    is_offline_rebuild_ = false;
+    index_key_ = -1;
+    data_version_ = 0;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2653,6 +2693,13 @@ public:
       sql_mode_ = other.sql_mode_;
       inner_sql_exec_addr_ = other.inner_sql_exec_addr_;
       consumer_group_id_ = other.consumer_group_id_;
+      exist_all_column_group_ = other.exist_all_column_group_;
+      vidx_refresh_info_ = other.vidx_refresh_info_;
+      is_rebuild_index_ = other.is_rebuild_index_;
+      is_index_scope_specified_ = other.is_index_scope_specified_;
+      is_offline_rebuild_ = other.is_offline_rebuild_;
+      index_key_ = other.index_key_;
+      data_version_ = other.data_version_;
     }
     return ret;
   }
@@ -2667,6 +2714,37 @@ public:
   inline bool is_spatial_index() const { return share::schema::INDEX_TYPE_SPATIAL_LOCAL == index_type_
                                                 || share::schema::INDEX_TYPE_SPATIAL_GLOBAL == index_type_
                                                 || share::schema::INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_; }
+
+  //todo @qilu:only for each_cg now, when support customized cg ,refine this
+  typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;
+  struct ObIndexColumnGroupItem final
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    ObIndexColumnGroupItem() : is_each_cg_(false), column_list_(), cg_type_(ObColumnGroupType::SINGLE_COLUMN_GROUP)
+    {} /* to compat former version, force to set default value as single column group*/
+    ~ObIndexColumnGroupItem()
+    {
+      reset();
+    }
+    bool is_valid() const
+    {
+      return cg_type_ < ObColumnGroupType::NORMAL_COLUMN_GROUP;
+    }
+    void reset()
+    {
+      is_each_cg_ = false;
+      column_list_.reset();
+      cg_type_ = ObColumnGroupType::SINGLE_COLUMN_GROUP;
+    }
+    int assign(const ObIndexColumnGroupItem &other);
+    TO_STRING_KV(K(is_each_cg_), K(column_list_), K(cg_type_));
+
+  public:
+    bool is_each_cg_;
+    ObCGColumnList column_list_; /* column list not used yet, wait user define cg*/
+    ObColumnGroupType cg_type_;
+  };
 
   share::schema::ObIndexType index_type_;
   common::ObSEArray<ObColumnSortItem, common::OB_PREALLOCATED_NUM> index_columns_;
@@ -2689,6 +2767,14 @@ public:
   common::ObAddr inner_sql_exec_addr_;
   common::ObArenaAllocator allocator_;
   ObLocalSessionVar local_session_var_;
+  bool exist_all_column_group_;
+  common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
+  share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
+  bool is_rebuild_index_;
+  bool is_index_scope_specified_;
+  bool is_offline_rebuild_;
+  int64_t index_key_;
+  uint64_t data_version_;
 };
 
 typedef ObCreateIndexArg ObAlterPrimaryArg;

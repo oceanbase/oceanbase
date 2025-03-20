@@ -26,6 +26,7 @@ ob_set_subtarget(ob_share ALONE
   ob_device_manager.cpp
   schema/ob_schema_service_sql_impl.cpp
   parameter/ob_parameter_attr.cpp
+  ob_mview_args.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")

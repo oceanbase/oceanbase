@@ -2401,8 +2401,23 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
               rebuild_index_arg_list_,
               client_session_id_,
               client_session_create_ts_,
-              lock_priority_);
+              lock_priority_,
+              is_direct_load_partition_,
+              is_alter_column_group_delayed_);
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(rebuild_index_arg_list_.serialize(buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to serialize rebuild_index_arg_list_", K(ret));
+    }
+  }
+
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              is_alter_mview_attributes_,
+              alter_mview_arg_,
+              is_alter_mlog_attributes_,
+              alter_mlog_arg_,
+              part_storage_cache_policy_,
+              data_version_);
   return ret;
 }
 
@@ -2498,7 +2513,22 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               rebuild_index_arg_list_,
               client_session_id_,
               client_session_create_ts_,
-              lock_priority_);
+              lock_priority_,
+              is_direct_load_partition_,
+              is_alter_column_group_delayed_);
+
+  if (OB_SUCC(ret) && pos < data_len) {
+    if (OB_FAIL(rebuild_index_arg_list_.deserialize(buf, data_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to deserialize rebuild_index_arg_list_", K(ret));
+    }
+  }
+  LST_DO_CODE(OB_UNIS_DECODE,
+              is_alter_mview_attributes_,
+              alter_mview_arg_,
+              is_alter_mlog_attributes_,
+              alter_mlog_arg_,
+              part_storage_cache_policy_,
+              data_version_);
   return ret;
 }
 
@@ -2522,6 +2552,7 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
       len += nls_formats_[i].get_serialize_size();
     }
     len += foreign_key_arg_list_.get_serialize_size();
+    len += rebuild_index_arg_list_.get_serialize_size();
     len += sequence_ddl_arg_.get_serialize_size();
     len += serialization::encoded_length_i64(sql_mode_);
     LST_DO_CODE(OB_UNIS_ADD_LEN,
@@ -2548,7 +2579,15 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 rebuild_index_arg_list_,
                 client_session_id_,
                 client_session_create_ts_,
-                lock_priority_);
+                lock_priority_,
+                is_direct_load_partition_,
+                is_alter_column_group_delayed_,
+                is_alter_mview_attributes_,
+                alter_mview_arg_,
+                is_alter_mlog_attributes_,
+                alter_mlog_arg_,
+                part_storage_cache_policy_,
+                data_version_);
   }
 
   if (OB_FAIL(ret)) {
@@ -2918,6 +2957,18 @@ bool ObCreateIndexArg::is_valid() const
          && index_using_type_ >= USING_BTREE
          && index_using_type_ < USING_TYPE_MAX;
 }
+OB_SERIALIZE_MEMBER(ObCreateIndexArg::ObIndexColumnGroupItem, is_each_cg_, column_list_, cg_type_);
+
+int ObCreateIndexArg::ObIndexColumnGroupItem::assign(const ObCreateIndexArg::ObIndexColumnGroupItem &other)
+{
+  int ret = OB_SUCCESS;
+  is_each_cg_ = other.is_each_cg_;
+  cg_type_ = other.cg_type_;
+  if (OB_FAIL(column_list_.assign(other.column_list_))) {
+    LOG_WARN("fail to assign array", K(ret));
+  }
+  return ret;
+}
 
 DEF_TO_STRING(ObCreateIndexArg)
 {
@@ -2943,7 +2994,12 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(nls_timestamp_tz_format),
        K_(sql_mode),
        K_(inner_sql_exec_addr),
-       K_(local_session_var));
+       K_(local_session_var),
+       K_(exist_all_column_group),
+       K_(index_cgs),
+       K_(vidx_refresh_info),
+       K_(is_rebuild_index),
+       K_(is_index_scope_specified));
   J_OBJ_END();
   return pos;
 }
@@ -2967,7 +3023,15 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     nls_timestamp_tz_format_,
                     sql_mode_,
                     inner_sql_exec_addr_,
-                    local_session_var_);
+                    local_session_var_,
+                    exist_all_column_group_,
+                    index_cgs_,
+                    vidx_refresh_info_,
+                    is_rebuild_index_,
+                    is_index_scope_specified_,
+                    is_offline_rebuild_,
+                    index_key_,
+                    data_version_);
 
 bool ObAlterIndexArg::is_valid() const
 {
