@@ -318,6 +318,39 @@ TEST(TG, map_queue_thread)
   ASSERT_FALSE(TG_EXIST(tg_id));
 }
 
+TEST(TG, alloc_tg_id_inc)
+{
+  const int max_tg_count = 122880;
+  int test_tg_id = 137;
+  // occupy all tg_ids
+  for (int i = 0; i < test_tg_id; i++) {
+    int tg_id = TG_MGR.alloc_tg_id(0);
+    TG_MGR.free_tg_id(tg_id);
+  }
+  int alloc_tg_id = TG_MGR.alloc_tg_id(0);
+  EXPECT_EQ(test_tg_id + TGDefIDs::END, alloc_tg_id);
+  TG_MGR.free_tg_id(alloc_tg_id);
+}
+
+TEST(TG, alloc_tg_id_overflow)
+{
+  const int max_tg_count = 122880;
+  // make tg_seq_ overflow
+  for (int i = 0; i < max_tg_count; i++) {
+    int tg_id = TG_MGR.alloc_tg_id(0);
+    TG_MGR.free_tg_id(tg_id);
+    if (tg_id == max_tg_count - 1) {
+      break;
+    }
+  }
+
+  TG_MGR.free_tg_id(0);
+  // start from 0 after tg_seq_ overflow
+  int alloc_tg_id = TG_MGR.alloc_tg_id(0);
+  EXPECT_EQ(alloc_tg_id, 0);
+  TG_MGR.free_tg_id(alloc_tg_id);
+}
+
 int main(int argc, char *argv[])
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");

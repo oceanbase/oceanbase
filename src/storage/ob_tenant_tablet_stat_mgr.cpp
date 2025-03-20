@@ -541,7 +541,7 @@ ObTenantTabletStatMgr::ObTenantTabletStatMgr()
     report_queue_(),
     report_cursor_(0),
     pending_cursor_(0),
-    report_tg_id_(0),
+    report_tg_id_(-1),
     is_inited_(false)
 {
 }
@@ -622,7 +622,7 @@ void ObTenantTabletStatMgr::reset()
     stream_pool_.destroy();
     report_cursor_ = 0;
     pending_cursor_ = 0;
-    report_tg_id_ = 0;
+    report_tg_id_ = -1;
     is_inited_ = false;
   }
   bucket_lock_.destroy();

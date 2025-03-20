@@ -1050,6 +1050,7 @@ private:
   common::ObLatchMutex lock_;
   ABitSet bs_;
   char bs_buf_[ABitSet::buf_len(MAX_ID)];
+  int tg_seq_;
 public:
   ITG *tgs_[MAX_ID] = {nullptr};
 };
