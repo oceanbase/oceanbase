@@ -3686,33 +3686,48 @@ int ObPLCodeGenerator::build_record_type(const ObRecordType &record_type,
 {
   int ret = OB_SUCCESS;
 
-  //int64_t count_;
-  ObLLVMType count_type;
-  ObLLVMType is_null_type;
-  ObLLVMType null_array_type;
-  ObLLVMType meta_type;
-  ObLLVMType meta_array_type;
-  //ObObj*
-  ObLLVMType element_ir_type;
-  ObLLVMType data_array_type;
-  ObLLVMType data_array_pointer_type;
+  // in LLVM SelectionISel, a struct of more than 65535 flattened fields will cause error.
+  // consider following PL record struct:
+  //   %obj_meta = type { i8, i8, i8, i8 }
+  //   %data_type = type { %obj_meta, i64, i32, i8, i8 }
+  //   %pl_record_type = type { i32, i64, i8, i64, i32, ptr, i8 * ELEM_COUNT, %data_type * ELEM_COUNT }
+  // we have 6 + 9 * ELEM_COUNT <= 65535
+  // so ELEM_COUNT <= 7281
+  // when modifying fields to PL record type, this limit may also need to be changed.
+  // when we switch to LLVM GlobalISel, this limit may be dropped.
+  if (record_type.get_member_count() > 7281) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("too many fields in record", K(ret), K(record_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "record fields exceed 7281 is");
+  } else {
+    //int64_t count_;
+    ObLLVMType count_type;
+    ObLLVMType is_null_type;
+    ObLLVMType null_array_type;
+    ObLLVMType meta_type;
+    ObLLVMType meta_array_type;
+    //ObObj*
+    ObLLVMType element_ir_type;
+    ObLLVMType data_array_type;
+    ObLLVMType data_array_pointer_type;
 
-  OZ (build_composite(elem_type_array));
-  OZ (helper_.get_llvm_type(ObInt32Type, count_type));
-  OZ (elem_type_array.push_back(count_type));
-  OZ (adt_service_.get_obj(element_ir_type));
-  OZ (ObLLVMHelper::get_array_type(element_ir_type, record_type.get_record_member_count(), data_array_type));
-  OZ (data_array_type.get_pointer_to(data_array_pointer_type));
-  OZ (elem_type_array.push_back(data_array_pointer_type));
+    OZ (build_composite(elem_type_array));
+    OZ (helper_.get_llvm_type(ObInt32Type, count_type));
+    OZ (elem_type_array.push_back(count_type));
+    OZ (adt_service_.get_obj(element_ir_type));
+    OZ (ObLLVMHelper::get_array_type(element_ir_type, record_type.get_record_member_count(), data_array_type));
+    OZ (data_array_type.get_pointer_to(data_array_pointer_type));
+    OZ (elem_type_array.push_back(data_array_pointer_type));
 
-  OZ (helper_.get_llvm_type(ObTinyIntType, is_null_type));
-  for (int64_t i = 0; OB_SUCC(ret) && i < record_type.get_record_member_count(); ++i) {
-    OZ (elem_type_array.push_back(is_null_type));
-  }
+    OZ (helper_.get_llvm_type(ObTinyIntType, is_null_type));
+    for (int64_t i = 0; OB_SUCC(ret) && i < record_type.get_record_member_count(); ++i) {
+      OZ (elem_type_array.push_back(is_null_type));
+    }
 
-  OZ (adt_service_.get_data_type(meta_type));
-  for (int64_t i = 0; OB_SUCC(ret) && i < record_type.get_record_member_count(); ++i) {
-    OZ (elem_type_array.push_back(meta_type));
+    OZ (adt_service_.get_data_type(meta_type));
+    for (int64_t i = 0; OB_SUCC(ret) && i < record_type.get_record_member_count(); ++i) {
+      OZ (elem_type_array.push_back(meta_type));
+    }
   }
 
   return ret;
