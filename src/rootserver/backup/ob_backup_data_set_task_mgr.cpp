@@ -1211,6 +1211,7 @@ int ObBackupSetTaskMgr::backup_data_finish_(
   int ret = OB_SUCCESS;
   share::ObBackupStatus next_status;
   SCN end_scn = SCN::min_scn();
+  DEBUG_SYNC(BEFORE_GET_BACKUP_END_SCN);
   if (OB_FAIL(get_backup_end_scn_(end_scn))) {
     LOG_WARN("failed to get backup end scn", K(ret), K_(job_attr));
   } else if (ObBackupStatus::Status::BACKUP_USER_DATA == set_task_attr_.status_.status_
