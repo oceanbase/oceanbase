@@ -1063,6 +1063,10 @@ inline static bool is_local_unique_index_table(const ObIndexType index_type)
       || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type;
 }
 
+inline static bool is_heap_table_primary_key_column(const int64_t column_flags)
+{
+  return column_flags & HEAP_TABLE_PRIMARY_KEY_FLAG;
+}
 struct ObTenantTableId
 {
   ObTenantTableId() : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID)

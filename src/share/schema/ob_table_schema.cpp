@@ -4274,7 +4274,9 @@ int ObTableSchema::is_unique_key_column(ObSchemaGetterGuard &schema_guard,
       } else if (OB_UNLIKELY(NULL == index_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
-      } else if (index_schema->is_unique_index() && 1 == index_schema->get_index_column_num()) {
+      } else if (index_schema->is_unique_index() && 1 == index_schema->get_index_column_num()
+              && share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY !=
+                 index_schema->get_index_type()) {
         const ObIndexInfo &index_info = index_schema->get_index_info();
         uint64_t idx_col_id = OB_INVALID_ID;
         if (OB_FAIL(index_info.get_column_id(0, idx_col_id))) {
@@ -4310,8 +4312,9 @@ int ObTableSchema::is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
       } else if (OB_UNLIKELY(NULL == index_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
-      } else if ((index_schema->is_unique_index() && 1 < index_schema->get_index_column_num()) ||
-                 index_schema->is_normal_index()) {
+      } else if ((index_schema->is_unique_index() && 1 < index_schema->get_index_column_num()
+               && share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY !=
+                  index_schema->get_index_type()) || index_schema->is_normal_index()) {
         const ObIndexInfo &index_info = index_schema->get_index_info();
         uint64_t idx_col_id = OB_INVALID_ID;
         if (OB_FAIL(index_info.get_column_id(0, idx_col_id))) {
