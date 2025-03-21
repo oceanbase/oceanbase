@@ -2637,17 +2637,22 @@ int ObDDLUtil::generate_partition_names(const common::ObIArray<ObString> &partit
   return ret;
 }
 
-int ObDDLUtil::check_target_partition_is_running(const ObString &running_sql_info, const ObString &partition_name, common::ObIAllocator &allocator, bool &is_running_status)
+int ObDDLUtil::check_target_partition_is_running(const ObString &running_sql_info, const ObString &partition_name, const bool is_oracle_mode, common::ObIAllocator &allocator, bool &is_running_status)
 {
   int ret = OB_SUCCESS;
+  const char quote = is_oracle_mode ? '"' : '`';
+  ObArenaAllocator tmp_allocator("ObDDLTmp");
+  ObString escaped_partition_name;
   ObSqlString sql_partition_name;
   ObString tmp_name;
   is_running_status = false;
   if (OB_UNLIKELY(running_sql_info.empty() || partition_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(running_sql_info), K(partition_name));
-  } else if (OB_FAIL(sql_partition_name.append_fmt("%.*s,", static_cast<int>(partition_name.length()), partition_name.ptr()))) {
-    LOG_WARN("append partition names failed", K(ret), K(partition_name), K(sql_partition_name));
+  } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(tmp_allocator, partition_name, escaped_partition_name, is_oracle_mode))) {
+    LOG_WARN("failed to generate new name", K(ret), K(partition_name));
+  } else if (OB_FAIL(sql_partition_name.append_fmt("%c%.*s%c,", quote, static_cast<int>(escaped_partition_name.length()), escaped_partition_name.ptr(), quote))) {
+    LOG_WARN("append partition names failed", K(ret), K(escaped_partition_name), K(sql_partition_name));
   } else {
     tmp_name = sql_partition_name.string();
     if (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN, running_sql_info.ptr(), running_sql_info.length(), tmp_name.ptr(), tmp_name.length())) {
@@ -2656,8 +2661,8 @@ int ObDDLUtil::check_target_partition_is_running(const ObString &running_sql_inf
     if (is_running_status == false) {
       sql_partition_name.reuse();
       tmp_name.reset();
-      if (OB_FAIL(sql_partition_name.append_fmt("%.*s)", static_cast<int>(partition_name.length()), partition_name.ptr()))) {
-        LOG_WARN("append partition names failed", K(ret), K(partition_name), K(sql_partition_name));
+      if (OB_FAIL(sql_partition_name.append_fmt("%c%.*s%c)", quote, static_cast<int>(escaped_partition_name.length()), partition_name.ptr(), quote))) {
+        LOG_WARN("append partition names failed", K(ret), K(escaped_partition_name), K(sql_partition_name));
       } else {
         tmp_name = sql_partition_name.string();
         if (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN, running_sql_info.ptr(), running_sql_info.length(), tmp_name.ptr(), tmp_name.length())) {
@@ -4504,15 +4509,20 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
       sqlclient::ObMySQLResult *result = NULL;
       char trace_id_str[64] = { 0 };
       char charater = '%';
+      const char *trace_id_like = nullptr;
       if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get trace id string failed", K(ret), K(trace_id));
+      } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get trace id string failed", K(ret), K(trace_id_str));
       } else if (!inner_sql_exec_addr.is_valid()) {
-        if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\" "
+        if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
               " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-            trace_id_str,
+            charater,
+            trace_id_like,
             tenant_id,
             charater,
             charater,
@@ -4528,11 +4538,12 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
         if (!inner_sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ip to string failed", K(ret), K(inner_sql_exec_addr));
-        } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\" "
+        } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
               " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-            trace_id_str,
+            charater,
+            trace_id_like,
             tenant_id,
             ip_str,
             inner_sql_exec_addr.get_port(),

@@ -47,6 +47,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("tblt_sched_init");
+  bool is_oracle_mode = false;
   common::ObAddr inner_sql_exec_addr;
   common::ObArray<ObString> running_sql_info;
   common::ObArray<ObLSID> ls_ids;
@@ -72,6 +73,8 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
           && tablets.count() > 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(task_id), K(parallelism), K(snapshot_version), K(trace_id), K(tablets.count()));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("failed to check is oracle mode", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, ref_data_table_id, ref_data_table_tablets))) {
     LOG_WARN("failed to get ref data table tablet ids", K(ret), K(tenant_id), K(ref_data_table_id), K(ref_data_table_tablets));
   } else if (OB_UNLIKELY(tablets.count() != ref_data_table_tablets.count())) {
@@ -145,7 +148,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
         }
         for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
           is_running_status = false;
-          if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(0), arena, is_running_status))) {
+          if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(0), is_oracle_mode, arena, is_running_status))) {
             LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(0)), K(is_running_status));
           } else if (is_running_status) {
             break;
@@ -570,12 +573,15 @@ int ObDDLTabletScheduler::get_session_running_lsid(ObIArray<share::ObLSID> &runn
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("tblt_sched_get");
+  bool is_oracle_mode = false;
   common::ObAddr inner_sql_exec_addr;
   common::ObArray<ObString> running_sql_info;
   running_ls_ids.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id_, is_oracle_mode))) {
+    LOG_WARN("failed to check is oracle mode", K(ret), K(tenant_id_));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id_, tenant_id_, task_id_, snapshot_version_, inner_sql_exec_addr, arena, running_sql_info))) {
     LOG_WARN("get running tasks inner sql fail", K(ret), K(tenant_id_), K(trace_id_), K(task_id_), K(snapshot_version_), K(inner_sql_exec_addr), K(running_sql_info));
   } else {
@@ -592,7 +598,7 @@ int ObDDLTabletScheduler::get_session_running_lsid(ObIArray<share::ObLSID> &runn
         for (int64_t i = 0; i < partition_names.count() && OB_SUCC(ret); i++) {
           is_running_status = false;
           for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
-            if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(i), arena, is_running_status))) {
+            if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(i), is_oracle_mode, arena, is_running_status))) {
               LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(i)), K(is_running_status));
             } else if (is_running_status) {
               break;

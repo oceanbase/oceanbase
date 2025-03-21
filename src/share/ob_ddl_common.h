@@ -1186,6 +1186,7 @@ public:
   static int check_target_partition_is_running(
    const ObString &running_sql_info,
    const ObString &partition_name,
+   const bool is_oracle_mode,
    common::ObIAllocator &allocator,
    bool &is_running_status);
   static int get_tablet_leader(

@@ -4329,15 +4329,20 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
         sqlclient::ObMySQLResult *result = NULL;
         char trace_id_str[64] = { 0 };
         char spec_charater = '%';
+        const char *trace_id_like = nullptr;
         if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get trace id string failed", K(ret), K(trace_id), K(tenant_id));
+        } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get trace id string failed", K(ret), K(trace_id_str));
         } else if (!sql_exec_addrs.at(i).is_valid()) {
-          if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\" "
+          if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
               " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
               OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-              trace_id_str,
+              spec_charater,
+              trace_id_like,
               tenant_id,
               spec_charater,
               spec_charater,
@@ -4353,11 +4358,12 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
           if (!sql_exec_addrs.at(i).ip_to_string(ip_str, sizeof(ip_str))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("ip to string failed", K(ret), K(sql_exec_addrs.at(i)));
-          } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\" "
+          } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
               " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
               OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-              trace_id_str,
+              spec_charater,
+              trace_id_like,
               tenant_id,
               ip_str,
               sql_exec_addrs.at(i).get_port(),
@@ -4433,15 +4439,20 @@ int ObDDLTaskRecordOperator::get_running_tasks_inner_sql(
       sqlclient::ObMySQLResult *result = NULL;
       char trace_id_str[64] = { 0 };
       char spec_charater = '%';
+      const char *trace_id_like = nullptr;
       if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get trace id string failed", K(ret), K(trace_id), K(tenant_id));
+        LOG_WARN("get trace id string failed", K(ret), K(trace_id));
+      } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get trace id string failed", K(ret), K(trace_id_str));
       } else if (!sql_exec_addr.is_valid()) {
-        if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id = \"%s\" "
+        if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id like \"%c%s\""
             " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
             " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\" ",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-            trace_id_str,
+            spec_charater,
+            trace_id_like,
             tenant_id,
             spec_charater,
             spec_charater,
@@ -4458,11 +4469,12 @@ int ObDDLTaskRecordOperator::get_running_tasks_inner_sql(
         if (!sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ip to string failed", K(ret), K(sql_exec_addr));
-        } else if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id = \"%s\" "
+        } else if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id like \"%c%s\""
             " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
             " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\" ",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-            trace_id_str,
+            spec_charater,
+            trace_id_like,
             tenant_id,
             ip_str,
             sql_exec_addr.get_port(),
