@@ -4437,6 +4437,12 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
   } else if (is_contain_stat_log(log_block.get_cb_arg_array()) && FALSE_IT(is_2pc_state_log = true)) {
   } else if (is_2pc_state_log && OB_FAIL(merge_intermediate_participants())) {
     TRANS_LOG(WARN, "fail to merge intermediate participants", K(ret), KPC(this));
+  } else if ((!is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_ABORT_LOG)
+              && !is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_CLEAR_LOG))
+             && (need_force_abort_() || is_force_abort_logging_()
+                 || get_downstream_state() == ObTxState::ABORT)) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit other log", K(ret), KPC(this));
   } else if (big_segment_info_.segment_buf_.is_active()
              && !is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_BIG_SEGMENT_LOG)) {
     ret = OB_LOG_TOO_LARGE;
@@ -7458,7 +7464,13 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
   const int64_t replay_hint = trans_id_.get_id();
   ObTxLogCb *log_cb = nullptr;
   void *tmp_buf = nullptr;
-  if (mds_cache_.count() > 0) {
+  if (need_force_abort_() || is_force_abort_logging_()
+      || get_downstream_state() == ObTxState::ABORT) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
+  } else if (sub_state_.is_info_log_submitted()) {
+    // state log already submitted, do nothing
+  } else if (mds_cache_.count() > 0) {
     ObTxMultiDataSourceLog log;
     ObTxMDSRange range;
     while (OB_SUCC(ret)) {
