@@ -79,7 +79,7 @@ private:
 
   struct ObCostBasedPullupCtx {
     ObCostBasedPullupCtx() {};
-    uint64_t view_talbe_id_;
+    uint64_t view_table_id_;
   };
 
   int check_groupby_validity(const ObSelectStmt &stmt, bool &is_valid);
@@ -101,6 +101,12 @@ private:
 
   int check_on_conditions(ObDMLStmt &stmt,
                           ObSqlBitSet<> &ignore_tables);
+  int check_where_conditions(ObDMLStmt &stmt,
+                             ObSqlBitSet<> &ignore_tables);
+  int extract_info_from_column_expr(const ObDMLStmt &stmt,
+                                    const ObRawExpr &outer_expr,
+                                    TableItem *&table,
+                                    ObRawExpr *&select_expr);
 
   int is_valid_group_stmt(ObSelectStmt *sub_stmt,
                           bool &is_valid_group);
@@ -142,7 +148,7 @@ private:
   /**
    * @brief wrap_case_when
    * 如果当前视图是left outer join的右表或者right outer join的左表
-   * 需要对null rejuect的new column expr包裹一层case when
+   * 需要对null reject的new column expr包裹一层case when
    * 需要寻找视图的非空列，如果null_reject_columns不为空，
    * 直接拿第一个使用，否则需要在stmt中查找非空列，
    * 也可以是试图内基表的pk，但不能是outer join的补null侧
