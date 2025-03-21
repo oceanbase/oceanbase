@@ -83,7 +83,7 @@ int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
     char *ch = buf;
     char *stmt_end = buf + stmt_fmt_len_ - 3;
     while (ch < stmt_end) {
-      if (0 == ch[0] && 0 == ch[1]) {
+      if (0 == ch[0]) {
         uint16_t param_idx = *(uint16_t *)(ch + 2);
         ch[0] = '$';
         if (param_idx > 999) {

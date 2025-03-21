@@ -224,10 +224,11 @@ public:
                                 int64_t buf_len,
                                 int64_t &pos) const;
   int print_ordinary_index_column_expr(const ObColumnSchemaV2 &column,
-                              bool is_last,
-                              char *buf,
-                              int64_t buf_len,
-                              int64_t &pos) const;
+                                       bool is_oracle_mode,
+                                       bool is_last,
+                                       char *buf,
+                                       int64_t buf_len,
+                                       int64_t &pos) const;
   int print_table_definition_fulltext_indexs(
       const bool is_oracle_mode,
       const common::ObIArray<common::ObString> &fulltext_indexs,

@@ -1160,6 +1160,7 @@ int ObSchemaPrinter::print_prefix_index_column(const ObColumnSchemaV2 &column,
 }
 
 int ObSchemaPrinter::print_ordinary_index_column_expr(const ObColumnSchemaV2 &column,
+                                                      bool is_oracle_mode,
                                                       bool is_last,
                                                       char *buf,
                                                       int64_t buf_len,
@@ -1169,6 +1170,14 @@ int ObSchemaPrinter::print_ordinary_index_column_expr(const ObColumnSchemaV2 &co
   ObString expr_def;
   if (OB_FAIL(column.get_cur_default_value().get_string(expr_def))) {
     LOG_WARN("get expr def from current default value failed", K(ret), K(column.get_cur_default_value()));
+  } else if (!is_oracle_mode && expr_def.length() >= 2 &&
+             (expr_def[0] != '(' || expr_def[expr_def.length() - 1] != ')')) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                                is_last ? "(%.*s))" : "(%.*s), ",
+                                expr_def.length(),
+                                expr_def.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print index column expr", K(ret), K(expr_def));
+    }
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      is_last ? "%.*s)" : "%.*s, ",
                                      expr_def.length(),
@@ -1231,7 +1240,7 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
       if (OB_FAIL(print_prefix_index_column(column, is_last, buf, buf_len, pos))) {
         LOG_WARN("print prefix index column failed", K(ret));
       }
-    } else if (OB_FAIL(print_ordinary_index_column_expr(column, is_last, buf, buf_len, pos))) {
+    } else if (OB_FAIL(print_ordinary_index_column_expr(column, is_oracle_mode, is_last, buf, buf_len, pos))) {
       LOG_WARN("print ordinary index column expr failed", K(ret));
     }
   } else if (column.get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID) {

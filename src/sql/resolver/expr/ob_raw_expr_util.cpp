@@ -8079,11 +8079,24 @@ int ObRawExprUtils::check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_
 int ObRawExprUtils::check_is_bool_expr(const ObRawExpr *expr, bool &is_bool_expr)
 {
   int ret = OB_SUCCESS;
-  is_bool_expr = true;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("in expr is NULL", K(ret));
-  } else {
+  is_bool_expr = false;
+  bool is_implicit_cast = true;
+  while (OB_SUCC(ret) && is_implicit_cast) {
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is NULL", K(ret));
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type() &&
+               expr->has_flag(IS_INNER_ADDED_EXPR) &&
+               expr->get_param_count() > 0) {
+      expr = expr->get_param_expr(0);
+    } else {
+      is_implicit_cast = false;
+    }
+  }
+  if (OB_SUCC(ret) && expr->is_const_expr()) {
+    is_bool_expr = (T_BOOL == expr->get_expr_type());
+  }
+  if (OB_SUCC(ret) && !is_bool_expr) {
     ObItemType expr_type = expr->get_expr_type();
     switch (expr_type) {
       case T_OP_EQ:
@@ -8120,7 +8133,9 @@ int ObRawExprUtils::check_is_bool_expr(const ObRawExpr *expr, bool &is_bool_expr
       case T_OP_NOT_EXISTS:
 
       case T_OP_XOR:
-      case T_OP_BOOL:  {
+      case T_OP_BOOL:
+      case T_FUN_SYS_LNNVL:
+      case T_FUN_SYS_REGEXP_LIKE: {
         is_bool_expr = true;
         break;
       }

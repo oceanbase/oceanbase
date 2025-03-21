@@ -5180,7 +5180,8 @@ int ObHistEqualSelHelper::inner_get_sel(const OptSelectivityCtx &ctx,
   } else if (idx < 0 || idx >= histogram.get_bucket_size() || !is_equal) {
     sel = 0.0;
     is_rare_value = true;
-    if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3) &&
+    if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3, COMPAT_VERSION_4_3_0,
+                                     COMPAT_VERSION_4_3_5_BP2) &&
         OB_FAIL(refine_out_of_bounds_sel(ctx, *new_value, sel, is_rare_value))) {
       LOG_WARN("failed to refine out of bounds sel", K(ret));
     }

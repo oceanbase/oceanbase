@@ -77,7 +77,74 @@ int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_col
     scope_ = scope;
     only_column_namespace_ = only_column_namespace;
     print_cte_ = print_cte;
-    PRINT_EXPR(expr);
+    if (T_HAVING_SCOPE == scope_ ||
+        T_WHERE_SCOPE == scope_ ||
+        T_ON_SCOPE == scope_) {
+      if (OB_FAIL(print_bool_expr(expr))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else if (T_FIELD_LIST_SCOPE == scope_) {
+      if (OB_FAIL(print_select_expr(expr))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else {
+      if (OB_FAIL(print(expr))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_bool_expr(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else if (lib::is_mysql_mode() || !print_params_.for_dblink_) {
+    if (OB_FAIL(SMART_CALL(print(expr)))) {
+      LOG_WARN("failed to print expr", K(ret));
+    }
+  } else {
+    bool is_bool_expr = false;
+    if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(expr, is_bool_expr))) {
+      LOG_WARN("failed to check is bool expr", K(ret));
+    } else if (!is_bool_expr && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "("))) {
+      LOG_WARN("fail to print", K(ret));
+    } else if (OB_FAIL(SMART_CALL(print(expr)))) {
+      LOG_WARN("failed to print expr", K(ret));
+    } else if (!is_bool_expr && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, " = 1)"))) {
+      LOG_WARN("fail to print", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_select_expr(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_bool_expr = false;
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else if (lib::is_oracle_mode() &&
+             OB_FAIL(ObRawExprUtils::check_is_bool_expr(expr, is_oracle_bool_expr))) {
+    LOG_WARN("failed to check is bool expr", K(ret));
+  } else if (!is_oracle_bool_expr) {
+    if (OB_FAIL(SMART_CALL(print(expr)))) {
+      LOG_WARN("failed to print expr", K(ret));
+    }
+  } else if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "CASE WHEN "))) {
+    LOG_WARN("fail to print", K(ret));
+  } else if (OB_FAIL(SMART_CALL(print(expr)))) {
+    LOG_WARN("failed to print expr", K(ret));
+  } else if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, " THEN 1 WHEN NOT "))) {
+    LOG_WARN("fail to print", K(ret));
+  } else if (OB_FAIL(SMART_CALL(print(expr)))) {
+    LOG_WARN("failed to print expr", K(ret));
+  } else if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, " THEN 0 ELSE NULL END"))) {
+    LOG_WARN("fail to print", K(ret));
   }
   return ret;
 }
@@ -223,34 +290,12 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else if (print_params_.for_dblink_ && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
-    bool is_bool_expr = false;
-    if (expr->is_exec_param_expr()) {
-      ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
-      if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(exec_expr->get_ref_expr(), is_bool_expr))) {
-        LOG_WARN("failed to check is bool expr", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (is_bool_expr && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "(1 = "))) {
-      /**
-       * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
-       * because the where clause is always false,
-       * the optimizer will replace the filter with startup_filter.
-       * Therefore, dblink needs to handle this special case
-       * by rewriting startup_filter as "0 = 1" or "1 = 1".
-       *
-       */
-      LOG_WARN("fail to print 1 =", K(ret));
-    } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
+    if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
       OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
     } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_,
                                               expr->get_value().get_unknown(),
                                               expr->get_data_type()))) {
       LOG_WARN("fail to write param to buf", K(expr->get_value().get_unknown()), K(expr->get_expr_obj_meta()), K(ret));
-    }
-    if (is_bool_expr){
-      DATA_PRINTF(")");
     }
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
@@ -484,7 +529,11 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       } else {
         DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
         DATA_PRINTF("(");
-        PRINT_EXPR(expr->get_param_expr(0));
+        if (type == T_OP_NOT) {
+          PRINT_BOOL_EXPR(expr->get_param_expr(0));
+        } else {
+          PRINT_EXPR(expr->get_param_expr(0));
+        }
         DATA_PRINTF(")");
       }
       if (type == T_OP_NOT && lib::is_mysql_mode()) {
@@ -521,7 +570,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       } else {
         DATA_PRINTF("(");
         for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-          PRINT_EXPR(expr->get_param_expr(i));
+          PRINT_BOOL_EXPR(expr->get_param_expr(i));
           DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
         }
         if (OB_SUCC(ret)) {
@@ -957,13 +1006,19 @@ int ObRawExprPrinter::print(ObCaseOpRawExpr *expr)
     DATA_PRINTF("(case");
     if (OB_SUCC(ret)) {
       ObRawExpr *arg_expr = expr->get_arg_param_expr();
+      bool need_bool_param = true;
       if (NULL != arg_expr) {
         DATA_PRINTF(" ");
         PRINT_EXPR(arg_expr);
+        need_bool_param = false;
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_when_expr_size(); ++i) {
         DATA_PRINTF(" when ");
-        PRINT_EXPR(expr->get_when_param_expr(i));
+        if (need_bool_param) {
+          PRINT_BOOL_EXPR(expr->get_when_param_expr(i));
+        } else {
+          PRINT_EXPR(expr->get_when_param_expr(i));
+        }
         DATA_PRINTF(" then ");
         PRINT_EXPR(expr->get_then_param_expr(i));
       }
@@ -3222,7 +3277,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
         } else {
-          PRINT_EXPR(expr->get_param_expr(0));
+          PRINT_BOOL_EXPR(expr->get_param_expr(0));
           DATA_PRINTF(")");
         }
         break;
