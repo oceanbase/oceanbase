@@ -254,30 +254,24 @@ int ObTransformSimplifyOrderby::remove_order_by_duplicates(ObDMLStmt *stmt,
               } else {
                 ObRawExpr *left_param = op_expr->get_param_expr(0);
                 ObRawExpr *right_param = op_expr->get_param_expr(1);
+                bool is_consistent = false;
                 if (OB_ISNULL(left_param) || OB_ISNULL(right_param)) {
                  ret = OB_ERR_UNEXPECTED;
                  LOG_WARN("null pointer in condtion exprs", K(ret));
-                } else {
-                  bool is_consistent = false;
-                  if (right_param == cur_item.expr_) {
-                    //因为判断expr的类型的序是否可传递是有方向的，所以要情况调用，这里待确定的表达式位于等号的右端
-                    if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(left_param, right_param, is_consistent))) {
-                      LOG_WARN("check expr is order consistent failed", K(ret), K(*left_param), K(*right_param));
-                    } else if (is_consistent) {
-                      if (OB_FAIL(exist_item_by_expr(left_param, new_order_items, is_exist))) {
-                        LOG_WARN("fail to find expr in items", K(ret));
-                      }
-                    }
-                  } else if (left_param == cur_item.expr_) {
-                    //因为判断expr的类型的序是否可传递是有方向的，所以要情况调用，这里待确定的表达式位于等号的左端
-                    if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(right_param, left_param, is_consistent))) {
-                      LOG_WARN("check expr is order consistent failed", K(ret), K(*left_param), K(*right_param));
-                    } else if (is_consistent) {
-                      if (OB_FAIL(exist_item_by_expr(right_param, new_order_items, is_exist))) {
-                        LOG_WARN("fail to find expr in items", K(ret));
-                      }
-                    }
-                  } else {/* do nothing */}
+                } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(
+                                              left_param->get_result_type(),
+                                              right_param->get_result_type(), is_consistent))) {
+                  LOG_WARN("failed to check is equal transitive", K(ret), KPC(left_param), KPC(right_param));
+                } else if (!is_consistent) {
+                  // do nothing
+                } else if (right_param == cur_item.expr_) {
+                  if (OB_FAIL(exist_item_by_expr(left_param, new_order_items, is_exist))) {
+                    LOG_WARN("fail to find expr in items", K(ret));
+                  }
+                } else if (left_param == cur_item.expr_) {
+                  if (OB_FAIL(exist_item_by_expr(right_param, new_order_items, is_exist))) {
+                    LOG_WARN("fail to find expr in items", K(ret));
+                  }
                 }
               }
             } else {/* do nothing */}

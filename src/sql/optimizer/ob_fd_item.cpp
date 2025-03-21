@@ -116,7 +116,6 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   const ObRawExpr *cur_expr = NULL;
-  bool is_consistent = false;
   is_in_child = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -143,9 +142,7 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr *expr,
         } else if (cur_expr->get_relation_ids().is_empty() || 
                   !child_tables_.is_superset(cur_expr->get_relation_ids())) {
           // do nothing
-        } else if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(cur_expr, expr, is_consistent))) {
-          LOG_WARN("failed to check expr is order consistent", K(ret));
-        } else if (is_consistent) {
+        } else {
           is_in_child = true;
         }
       }

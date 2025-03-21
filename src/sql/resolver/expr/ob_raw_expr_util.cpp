@@ -7224,21 +7224,6 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
   return ret;
 }
 
-int ObRawExprUtils::expr_is_order_consistent(const ObRawExpr *from, const ObRawExpr *to, bool &is_consistent)
-{
-  int ret = OB_SUCCESS;
-  is_consistent = false;
-  if (OB_ISNULL(from) || OB_ISNULL(to)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("expr is null", K(from), K(to));
-  } else if (OB_FAIL(ObObjCaster::is_order_consistent(from->get_result_type(),
-                                                      to->get_result_type(),
-                                                      is_consistent))) {
-    LOG_WARN("check is order consistent failed", K(ret));
-  }
-  return ret;
-}
-
 int ObRawExprUtils::is_expr_comparable(const ObRawExpr *expr, bool &can_be)
 {
   int ret = OB_SUCCESS;
