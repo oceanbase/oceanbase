@@ -649,6 +649,9 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       LOG_DEBUG("try insert is not duplicated", K(ret));
+    }
+    GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=true;
+    if (OB_FAIL(ret) || !check_is_duplicated()) {
     } else if (OB_FAIL(fetch_conflict_rowkey(replace_row_store_.get_row_cnt()))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
     } else if (OB_FAIL(reset_das_env())) {
@@ -668,7 +671,7 @@ int ObTableReplaceOp::do_replace_into()
     } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
-
+    GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=false;
     if (OB_SUCC(ret) && !is_iter_end) {
       // 只有还有下一个batch时才需要做reuse，如果没有下一个batch，close和destroy中会释放内存
       // 前边逻辑执行成功，这一批batch成功完成replace, reuse环境, 准备下一个batch
@@ -707,6 +710,8 @@ int ObTableReplaceOp::replace_conflict_row_cache()
   ObInsRtDef &ins_rtdef = replace_rtdef.ins_rtdef_;
   ObDelRtDef &del_rtdef = replace_rtdef.del_rtdef_;
   const ObChunkDatumStore::StoredRow *stored_row = NULL;
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+  ObAuditRecordData &audit_record = my_session->get_raw_audit_record();
 
   NG_TRACE_TIMES(2, replace_start_shuff);
   if (OB_FAIL(replace_row_store_.begin(replace_row_iter))) {
@@ -757,6 +762,7 @@ int ObTableReplaceOp::replace_conflict_row_cache()
       }
       if (OB_SUCC(ret)) {
         modify_row.old_row_ = const_cast<ObChunkDatumStore::StoredRow *>(delete_row);
+        audit_record.insert_update_or_replace_duplicate_row_count_++;
         if (need_after_row_process(del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
           LOG_WARN("failed to push dml modify row to modified row list", K(ret));
         }

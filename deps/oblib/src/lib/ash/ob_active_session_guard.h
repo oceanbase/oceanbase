@@ -142,6 +142,7 @@ public:
       uint64_t in_check_tx_status_ : 1;
       uint64_t in_resolve_ : 1;
       uint64_t in_rewrite_ : 1;
+      uint64_t in_duplicate_conflict_resolve_ : 1;
     };
   };
 

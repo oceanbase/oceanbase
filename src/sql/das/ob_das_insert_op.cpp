@@ -179,6 +179,7 @@ int ObDASInsertOp::insert_index_with_fetch(ObDMLBaseParam &dml_param,
                                       affected_rows,
                                       duplicated_rows))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+        EVENT_INC(ObStatEventIds::SQL_INSERT_DUPLICATE_COUNT);
         ret = OB_SUCCESS;
         bool is_local_index_table = ins_ctdef->table_param_.get_data_table().is_index_local_storage();
         bool is_unique_index = ins_ctdef->table_param_.get_data_table().is_unique_index();

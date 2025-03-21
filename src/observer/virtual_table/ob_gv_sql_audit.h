@@ -183,6 +183,7 @@ private:
     PLSQL_COMPILE_TIME,
     CCL_RULE_ID,
     CCL_MATCH_TIME,
+    INSERT_DUPLICATE_ROW_COUNT,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

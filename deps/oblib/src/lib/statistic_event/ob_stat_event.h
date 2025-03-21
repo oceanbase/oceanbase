@@ -207,6 +207,7 @@ STAT_EVENT_ADD_DEF(SQL_INNER_DISTRIBUTED_COUNT, "inner sql distributed count", O
 STAT_EVENT_ADD_DEF(SQL_INNER_LOCAL_TIME, "inner sql local execute time", ObStatClassIds::SQL, 40123, false, true, false)
 STAT_EVENT_ADD_DEF(SQL_INNER_REMOTE_TIME, "inner sql remote execute time", ObStatClassIds::SQL, 40124, false, true, false)
 STAT_EVENT_ADD_DEF(SQL_INNER_DISTRIBUTED_TIME, "inner sql distributed execute time", ObStatClassIds::SQL, 40125, false, true, false)
+STAT_EVENT_ADD_DEF(SQL_INSERT_DUPLICATE_COUNT, "try insert duplicate count", ObStatClassIds::SQL, 40126, true, true, true)
 
 // CACHE
 STAT_EVENT_ADD_DEF(ROW_CACHE_HIT, "row cache hit", ObStatClassIds::CACHE, 50000, true, true, true)

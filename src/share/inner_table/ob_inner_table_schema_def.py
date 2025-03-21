@@ -9287,7 +9287,8 @@ def_table_schema(
     ('trans_status', 'varchar:256'),
     ('plsql_compile_time', 'int'),
     ('ccl_rule_id', 'int', 'true'),
-    ('ccl_match_time', 'int', 'true')
+    ('ccl_match_time', 'int', 'true'),
+    ('insert_duplicate_row_count', 'int', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -18037,7 +18038,8 @@ def_table_schema(
                          proxy_user as PROXY_USER,
                          seq_num as SEQ_NUM,
                          network_wait_time as NETWORK_WAIT_TIME,
-                         plsql_compile_time as PLSQL_COMPILE_TIME
+                         plsql_compile_time as PLSQL_COMPILE_TIME,
+                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -18451,7 +18453,8 @@ def_table_schema(
     PROXY_USER,
     SEQ_NUM,
     NETWORK_WAIT_TIME,
-    PLSQL_COMPILE_TIME
+    PLSQL_COMPILE_TIME,
+    INSERT_DUPLICATE_ROW_COUNT
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -62742,7 +62745,8 @@ def_table_schema(
                          proxy_user as PROXY_USER,
                          seq_num as SEQ_NUM,
                          network_wait_time as  NETWORK_WAIT_TIME,
-                         plsql_compile_time as PLSQL_COMPILE_TIME
+                         plsql_compile_time as PLSQL_COMPILE_TIME,
+                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -62860,7 +62864,9 @@ TOTAL_SSSTORE_READ_ROW_COUNT,
 PROXY_USER,
 SEQ_NUM,
 NETWORK_WAIT_TIME,
-PLSQL_COMPILE_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLSQL_COMPILE_TIME,
+INSERT_DUPLICATE_ROW_COUNT
+FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 

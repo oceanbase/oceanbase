@@ -367,6 +367,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
   ObInsRtDef &ins_rtdef = insert_up_rtdef.ins_rtdef_;
   ObUpdRtDef &upd_rtdef = insert_up_rtdef.upd_rtdef_;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  ObAuditRecordData &audit_record = GET_MY_SESSION(ctx_)->get_raw_audit_record();
 
   NG_TRACE_TIMES(2, insertup_start_shuff);
   if (OB_FAIL(insert_up_row_store_.begin(insert_row_iter))) {
@@ -423,6 +424,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
       ObChunkDatumStore::StoredRow *upd_new_row = NULL;
       const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
       ObDMLModifyRowNode modify_row(this, &upd_ctdef, &upd_rtdef, ObDmlEventType::DE_UPDATING);
+      audit_record.insert_update_or_replace_duplicate_row_count_++;
       clear_evaluated_flag();
       found_rows++;
       if (OB_FAIL(insert_row->to_expr(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
@@ -977,6 +979,9 @@ int ObTableInsertUpOp::do_insert_up()
         plan_ctx->set_last_insert_id_cur_stmt(last_insert_id);
       }
       LOG_TRACE("try insert is not duplicated", K(ret), K(insert_rows_));
+    }
+    GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=true;
+    if (OB_FAIL(ret) || !check_is_duplicated()) {
     } else if (OB_FAIL(fetch_conflict_rowkey(insert_up_row_store_.get_row_cnt()))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
     } else if (OB_FAIL(reset_das_env())) {
@@ -996,7 +1001,7 @@ int ObTableInsertUpOp::do_insert_up()
     } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
-
+    GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=false;
     if (OB_SUCC(ret) && !is_iter_end) {
       // 只有还有下一个batch时才需要做reuse，如果没有下一个batch，close和destroy中会释放内存
       // 前边逻辑执行成功，这一批batch成功完成replace, reuse环境, 准备下一个batch
