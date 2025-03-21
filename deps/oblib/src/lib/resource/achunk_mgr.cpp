@@ -377,6 +377,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   int64_t huge_unmaps = get_unmaps(HUGE_ACHUNK_INDEX);
   int64_t total_maps = normal_maps + large_maps + huge_maps;
   int64_t total_unmaps = normal_unmaps + large_unmaps + huge_unmaps;
+  int64_t virtual_memory_used = get_virtual_memory_used(&resident_size);
 
   int64_t max_map_count = 0;
   (void)read_one_int("/proc/sys/vm/max_map_count", max_map_count);
@@ -389,8 +390,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
       " virtual_memory_used=%'15ld",
       limit_, hold_, total_hold_, get_used(), cache_hold_,
       total_maps, total_unmaps, large_maps, large_unmaps, huge_maps, huge_unmaps,
-      resident_size, get_unmanaged_memory_size(),
-      get_virtual_memory_used(&resident_size));
+      resident_size, get_unmanaged_memory_size(), virtual_memory_used);
 #ifdef ENABLE_SANITY
   if (OB_SUCC(ret)) {
     ret = databuff_printf(buf, buf_len, pos,
