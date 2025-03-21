@@ -332,11 +332,12 @@ int ObSubSchemaCtx::init()
                                       "SubSchemaRev",
                                       "SubSchemaRev",
                                       tenant_id))) {
-      LOG_WARN("fail to create subschema map", K(ret));
+      LOG_WARN("fail to create subschema reverse map", K(ret));
     } else if (OB_FAIL(enum_set_meta_reverse_map_.create(SUBSCHEMA_BUCKET_NUM,
                                                               "SubSchemaRev",
                                                               "SubSchemaRev",
                                                                tenant_id))) {
+      LOG_WARN("fail to create enum_set meta reverse map", K(ret));
     } else {
       subschema_array_.set_attr(ObMemAttr(MTL_ID(), "SubSchemaHash"));
       is_inited_ = true;
@@ -348,10 +349,10 @@ int ObSubSchemaCtx::init()
 
 void ObSubSchemaCtx::reset() {
   // content in subschema value is alloc from plan object allocator? need a new allocator?
+  subschema_array_.destroy();
+  subschema_reverse_map_.destroy();
+  enum_set_meta_reverse_map_.destroy();
   if (is_inited_) {
-    subschema_array_.destroy();
-    subschema_reverse_map_.destroy();
-    enum_set_meta_reverse_map_.destroy();
     is_inited_ = false;
     used_subschema_id_ = MAX_NON_RESERVED_SUBSCHEMA_ID;
     reserved_ = 0;
