@@ -1768,6 +1768,7 @@ public:
      and keep the ptr of the parent stmt  */
   static int pack_stmt(ObTransformerCtx *ctx,
                        ObSelectStmt *parent_stmt,
+                       bool pack_pure_set = false,
                        ObSelectStmt **child_stmt_ptr = NULL);
 
   static int generate_select_list(ObTransformerCtx *ctx,

@@ -1420,7 +1420,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (parent_stmt->is_set_stmt()) {
-    if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, parent_stmt))) {
+    if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, parent_stmt, true))) {
       LOG_WARN("failed to create temp table for set stmt", K(ret));
     } else {
       LOG_TRACE("succeed to create temp table", KPC(parent_stmt));

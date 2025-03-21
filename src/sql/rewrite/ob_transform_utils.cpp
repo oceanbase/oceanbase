@@ -13229,13 +13229,16 @@ int ObTransformUtils::is_scalar_expr(ObRawExpr* expr, bool &is_scalar)
 
 int ObTransformUtils::pack_stmt(ObTransformerCtx *ctx,
                                 ObSelectStmt *parent_stmt,
-                                ObSelectStmt **child_stmt_ptr)
+                                bool pack_pure_set, /*=false*/
+                                ObSelectStmt **child_stmt_ptr /*=NULL*/)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *dummy_stmt = NULL;
   ObSelectStmt *child_stmt = NULL;
   TableItem *new_table_item = NULL;
   ObSEArray<ObRawExpr *, 8> column_exprs;
+  ObSEArray<ObRawExpr *, 8> old_child_select_exprs;
+  ObSEArray<ObRawExpr*, 4> pure_select_exprs;
   if (OB_ISNULL(ctx) || OB_ISNULL(ctx->stmt_factory_) ||
       OB_ISNULL(ctx->allocator_) || OB_ISNULL(parent_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -13274,15 +13277,55 @@ int ObTransformUtils::pack_stmt(ObTransformerCtx *ctx,
     LOG_WARN("failed to add from item", K(ret));
   } else if (OB_FAIL(parent_stmt->rebuild_tables_hash())) {
     LOG_WARN("failed to rebuild table hash", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx,
-                                                               *new_table_item,
-                                                               parent_stmt,
-                                                               column_exprs))) {
+  } else if (pack_pure_set && child_stmt->is_set_stmt()) {
+    // CAST expr may be added above set op expr in SELECT scope
+    // here we only project pure set op exprs for set stmt, leaving cast operation to happen in parent stmt
+    ObRawExpr *select_expr = NULL;
+    ObRawExpr *set_op_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt->get_select_item_size(); ++i) {
+      if (OB_ISNULL(select_expr = child_stmt->get_select_item(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(i));
+      } else if (!select_expr->has_flag(CNT_SET_OP)) {
+        if (OB_FAIL(pure_select_exprs.push_back(select_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (OB_ISNULL(set_op_expr = child_stmt->get_pure_set_expr(select_expr))
+                 || OB_UNLIKELY(!set_op_expr->is_set_op_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(ret), K(i), K(*select_expr));
+      } else if (OB_FAIL(pure_select_exprs.push_back(set_op_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (FAILEDx(child_stmt->get_select_exprs(old_child_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FALSE_IT(child_stmt->get_select_items().reuse())) {
+      LOG_WARN("failed to reuse array", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx->allocator_,
+                                                            pure_select_exprs,
+                                                            child_stmt))) {
+      LOG_WARN("failed to create select item", K(ret));
+    }
+  } else if (OB_FAIL(child_stmt->get_select_exprs(old_child_select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(child_stmt->get_select_exprs(pure_select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  }
+  // create columns for parent stmt and replace select exprs if need
+  if (FAILEDx(ObTransformUtils::create_columns_for_view(ctx,
+                                                        *new_table_item,
+                                                        parent_stmt,
+                                                        column_exprs))) {
     LOG_WARN("failed to create column items", K(ret));
   } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx->allocator_,
-                                                          column_exprs,
+                                                          old_child_select_exprs,
                                                           parent_stmt))) {
     LOG_WARN("failed to create select item", K(ret));
+  } else if (OB_FAIL(parent_stmt->replace_relation_exprs(pure_select_exprs, column_exprs))) {
+    LOG_WARN("failed to replace relation exprs", K(ret));
+  } else if (OB_FAIL(parent_stmt->formalize_relation_exprs(ctx->session_info_))) {
+    LOG_WARN("failed to formalize relation exprs", K(ret));
   } else {
     parent_stmt->set_select_into(child_stmt->get_select_into());
     child_stmt->set_select_into(NULL);
