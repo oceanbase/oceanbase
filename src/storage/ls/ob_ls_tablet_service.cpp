@@ -87,6 +87,8 @@ namespace storage
 {
 using namespace mds;
 
+ERRSIM_POINT_DEF(EN_CREATE_EMPTY_SHELL_TABLET_ERROR);
+
 ObLSTabletService::ObLSTabletService()
   : ls_(nullptr),
     tx_data_memtable_mgr_(),
@@ -2244,6 +2246,11 @@ int ObLSTabletService::create_empty_shell_tablet(
     ObMetaDiskAddr disk_addr;
     if (OB_FAIL(tmp_tablet->init_with_migrate_param(allocator, param, false/*is_update*/, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(param));
+  #ifdef ERRSIM
+    } else if (OB_SUCCESS != EN_CREATE_EMPTY_SHELL_TABLET_ERROR) {
+      ret = EN_CREATE_EMPTY_SHELL_TABLET_ERROR;
+      LOG_WARN("[ERRSIM] fake create empty shell tablet error", K(ret), K(param));
+  #endif
     } else if (OB_FAIL(ObTabletPersister::transform_empty_shell(*tmp_tablet, tablet_handle))) {
       LOG_WARN("failed to transform empty shell", K(ret), KPC(tmp_tablet));
     } else if (FALSE_IT(new_tablet = tablet_handle.get_obj())) {
@@ -2254,9 +2261,16 @@ int ObLSTabletService::create_empty_shell_tablet(
       LOG_WARN("failed to refresh tablet addr", K(ret), K(ls_id), K(tablet_id), K(lbt()));
       ob_usleep(1000 * 1000);
       ob_abort();
-    } else {
+    }
+
+    if (OB_SUCC(ret)) {
       ls_->get_tablet_gc_handler()->set_tablet_gc_trigger();
       LOG_INFO("succeeded to create empty shell tablet", K(ret), K(key), K(param));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
+        LOG_ERROR("fail to rollback remove tablet", K(ret), K(ls_id), K(tablet_id));
+      }
     }
   }
 

@@ -1051,7 +1051,7 @@ int ObStartMigrationTask::process()
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(ctx_));
     }
   }
-
+  DEBUG_SYNC(AFTER_START_MIGRATION_TASK);
   return ret;
 }
 
@@ -1571,6 +1571,8 @@ int ObStartMigrationTask::inner_build_ls_()
     LOG_WARN("failed to update local ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(create_all_tablets_(ob_reader))) {
     LOG_WARN("failed to create all tablets", K(ret), KPC(ctx_));
+  } else {
+    DEBUG_SYNC(AFTER_MIGRATION_CREATE_ALL_TABLET);
   }
 
   if (OB_NOT_NULL(ob_reader)) {
