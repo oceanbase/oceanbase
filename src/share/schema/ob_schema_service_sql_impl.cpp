@@ -1050,6 +1050,27 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_schema_from_inner_table(
                                                 "WHERE tenant_id = %lu AND schema_version <= %ld GROUP BY tenant_id, table_id) AS b "\
                                                 "ON a.tenant_id = b.tenant_id AND a.table_id = b.table_id AND a.schema_version = b.schema_version "\
                                                 "WHERE a.is_deleted = 0 and a.table_id != %lu"
+#define FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY     "SELECT /*+ no_rewrite */ r.* "\
+                                                "FROM ( "\
+                                                "  SELECT /*+ no_rewrite */ column_0 tid "\
+                                                "  FROM ( "\
+                                                "    SELECT /*+ no_rewrite */ * FROM ( "\
+                                                "      VALUES %.*s"  /* table id list, e.g. row(500001), row(500002), ..., row(500100) */  \
+                                                "    ) "\
+                                                "  ) "\
+                                                ") l "\
+                                                "JOIN %s r "\
+                                                "ON r.tenant_id = %lu "\
+                                                "AND r.table_id = l.tid "\
+                                                "AND r.schema_version = ( "\
+                                                "  SELECT /*+ no_rewrite */ schema_version "\
+                                                "  FROM %s "\
+                                                "  WHERE tenant_id = %lu "\
+                                                "  AND table_id = l.tid "\
+                                                "  AND schema_version <= %ld "\
+                                                "  ORDER BY schema_version DESC LIMIT 1 "\
+                                                ") "\
+                                                "ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"
 
 int ObSchemaServiceSQLImpl::get_all_tenants(ObISQLClient &client,
                                             const int64_t schema_version,
@@ -1873,11 +1894,29 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
     ObSqlString hint;
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ index(%s idx_data_table_id)*/ table_id, table_type, index_type FROM "\
-                                                "(SELECT TABLE_ID, SCHEMA_VERSION, TABLE_TYPE, INDEX_TYPE, IS_DELETED, ROW_NUMBER() OVER " \
-                                                "(PARTITION BY TABLE_ID ORDER BY SCHEMA_VERSION DESC) AS RN FROM %s " \
-                                                "WHERE TENANT_ID = %lu AND DATA_TABLE_ID = %lu AND SCHEMA_VERSION <= %ld) V "\
-                                                "WHERE RN = 1 and IS_DELETED = 0 ORDER BY TABLE_ID";
+    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ no_rewrite */ "\
+                                                "  r.table_id AS table_id, "\
+                                                "  r.table_type AS table_type, "\
+                                                "  r.index_type AS index_type "\
+                                                "FROM ( "\
+                                                "  SELECT /*+ index(%s idx_data_table_id) */ DISTINCT table_id AS tid "\
+                                                "  FROM %s "\
+                                                "  WHERE tenant_id = %lu "\
+                                                "  AND data_table_id = %lu "\
+                                                ") l "\
+                                                "JOIN %s r "\
+                                                "ON r.tenant_id = %lu "\
+                                                "AND r.table_id = l.tid "\
+                                                "AND r.schema_version = ( "\
+                                                "  SELECT /*+ no_rewrite */ schema_version "\
+                                                "  FROM %s "\
+                                                "  WHERE tenant_id = %lu "\
+                                                "  AND table_id = l.tid "\
+                                                "  AND schema_version <= %ld "\
+                                                "  ORDER BY schema_version DESC LIMIT 1 "\
+                                                ") "\
+                                                "AND is_deleted = 0 "\
+                                                "ORDER BY table_id";
     const char *table_name = NULL;
     if (!check_inner_stat()) {
       ret = OB_NOT_INIT;
@@ -1889,9 +1928,14 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
     } else {
       DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
       if (OB_FAIL(sql.append_fmt(FETCH_INDEX_SQL_FORMAT,
-                                 table_name, table_name,
+                                 table_name,
+                                 table_name,
                                  fill_extract_tenant_id(schema_status, tenant_id),
                                  fill_extract_schema_id(schema_status, table_id),
+                                 table_name,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 table_name,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
                                  schema_version))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
@@ -2888,28 +2932,20 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
       } else {
         // for obcdc compatibility, values table stmt is not supported when cluster version < 4.2.1
         if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0) {
-          if (OB_FAIL(sql.append("SELECT /*+ no_rewrite */ r.* FROM ("))) {
-            LOG_WARN("append sql failed", KR(ret));
-          } else if (OB_FAIL(sql.append("SELECT column_0 tid FROM ("))) {
-            LOG_WARN("append sql failed", KR(ret));
-          } else if (OB_FAIL(sql.append("SELECT * FROM (VALUES "))) {
-            LOG_WARN("append sql failed", KR(ret));
-          }
+          ObSqlString table_id_list;
           for (int64_t i = 0; OB_SUCC(ret) && i < table_ids_size; i++) {
-            if (OB_FAIL(sql.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, table_ids[i])))) {
-              LOG_WARN("append sql failed", KR(ret));
+            if (OB_FAIL(table_id_list.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, table_ids[i])))) {
+              LOG_WARN("append str failed", KR(ret));
             }
           }
-          if (FAILEDx(sql.append_fmt("))) l JOIN %s r ON r.tenant_id = %lu AND r.table_id = l.tid AND r.schema_version = (",
-                                    table_name,
-                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
-            LOG_WARN("append sql failed", KR(ret));
-          } else if (OB_FAIL(sql.append_fmt("SELECT schema_version FROM %s WHERE tenant_id = %lu AND table_id = l.tid AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
-                                            table_name,
-                                            fill_extract_tenant_id(schema_status, tenant_id),
-                                            schema_version))) {
-            LOG_WARN("append sql failed", KR(ret));
-          } else if (OB_FAIL(sql.append(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+          if (FAILEDx(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY,
+                                     static_cast<int32_t>(table_id_list.length()),
+                                     table_id_list.ptr(),
+                                     table_name,
+                                     fill_extract_tenant_id(schema_status, tenant_id),
+                                     table_name,
+                                     fill_extract_tenant_id(schema_status, tenant_id),
+                                     schema_version))) {
             LOG_WARN("append sql failed", KR(ret));
           }
         } else {
@@ -5205,30 +5241,26 @@ int ObSchemaServiceSQLImpl::fetch_tables(
                                  schema_version,
                                  fill_extract_schema_id(schema_status, OB_ALL_CORE_TABLE_TID)))) {
         LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+        LOG_WARN("append sql failed", KR(ret));
       }
     } else {
       // for obcdc compatibility, values table stmt is not supported when cluster version < 4.2.1
       if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0) {
-        if (OB_FAIL(sql.append("SELECT /*+ no_rewrite */ r.* FROM ("))) {
-          LOG_WARN("append sql failed", KR(ret));
-        } else if (OB_FAIL(sql.append("SELECT column_0 tid FROM ("))) {
-          LOG_WARN("append sql failed", KR(ret));
-        } else if (OB_FAIL(sql.append("SELECT * FROM (VALUES "))) {
-          LOG_WARN("append sql failed", KR(ret));
-        }
+        ObSqlString table_id_list;
         for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; i++) {
-          if (OB_FAIL(sql.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, schema_keys[i].table_id_)))) {
+          if (OB_FAIL(table_id_list.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, schema_keys[i].table_id_)))) {
             LOG_WARN("append sql failed", KR(ret));
           }
         }
-        if (FAILEDx(sql.append_fmt("))) l JOIN %s r ON r.tenant_id = %lu AND r.table_id = l.tid AND r.schema_version = (",
-                                    table_name,
-                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
-          LOG_WARN("append sql failed", KR(ret));
-        } else if (OB_FAIL(sql.append_fmt("SELECT schema_version FROM %s WHERE tenant_id = %lu AND table_id = l.tid AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
-                                          table_name,
-                                          fill_extract_tenant_id(schema_status, tenant_id),
-                                          schema_version))) {
+        if (FAILEDx(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY,
+                                   static_cast<int32_t>(table_id_list.length()),
+                                   table_id_list.ptr(),
+                                   table_name,
+                                   fill_extract_tenant_id(schema_status, tenant_id),
+                                   table_name,
+                                   fill_extract_tenant_id(schema_status, tenant_id),
+                                   schema_version))) {
           LOG_WARN("append sql failed", KR(ret));
         }
       } else {
@@ -5242,6 +5274,8 @@ int ObSchemaServiceSQLImpl::fetch_tables(
           LOG_WARN("append failed", KR(ret));
         } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(table, schema_keys, schema_key_size, sql))) {
           LOG_WARN("sql append table id failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+          LOG_WARN("append sql failed", KR(ret));
         }
       }
     }
@@ -5249,9 +5283,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
         const bool check_deleted = true; // not used
-        if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, table_id desc, schema_version desc"))) {
-          LOG_WARN("sql append failed", K(ret));
-        } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
           LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
         } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
           ret = OB_ERR_UNEXPECTED;
