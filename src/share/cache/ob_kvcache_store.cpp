@@ -1014,11 +1014,9 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
 int ObKVCacheStore::inner_push_memblock_info(const ObKVMemBlockHandle &handle, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos, int64_t tenant_id)
 {
   INIT_SUCC(ret);
-
   ObKVCacheInst* inst = handle.inst_;
   ObKVStoreMemBlock* memblock = handle.mem_block_;
-  if (nullptr == inst || nullptr == memblock) {
-  } else if (OB_SYS_TENANT_ID == tenant_id || inst->tenant_id_ == tenant_id) {
+  if (OB_SYS_TENANT_ID == tenant_id || inst->tenant_id_ == tenant_id) {
     ObKVCacheStoreMemblockInfo mb_info;
     STRNCPY(mb_info.cache_name_, inst->status_.config_->cache_name_, MAX_CACHE_NAME_LENGTH - 1);
     mb_info.tenant_id_ = inst->tenant_id_;
@@ -1059,10 +1057,17 @@ int ObKVCacheStore::get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCac
     COMMON_LOG(WARN, "The ObKVCacheStore is not inited", K(ret));
   } else {
     bool protect_success;
+    HazptrHolder hazptr_holder;
     for (int i = 0; OB_SUCC(ret) && i < cur_mb_num_; ++i) {
       ObKVMemBlockHandle& handle = mb_handles_[i];
-      if (OB_FAIL(inner_push_memblock_info(handle, memblock_infos, tenant_id))) {
-        COMMON_LOG(WARN, "Fail to inner push memblock info", K(ret));
+      if (OB_FAIL(hazptr_holder.protect(protect_success, &handle))) {
+        COMMON_LOG(WARN, "Failed to protect memblock", K(ret));
+      } else if (!protect_success) {
+      } else if (OB_FAIL(inner_push_memblock_info(handle, memblock_infos, tenant_id))) {
+        COMMON_LOG(WARN, "Failed to inner push memblock info", K(ret));
+      }
+      if (protect_success) {
+        hazptr_holder.release();
       }
     }
   }
