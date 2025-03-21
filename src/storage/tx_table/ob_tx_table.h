@@ -279,7 +279,9 @@ public:
    * @param[in] sstable_end_scn the end_scn of the data sstable which is waitting to get the upper_trans_version
    * @param[out] upper_trans_version the upper_trans_version
    */
-  int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
+  int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn,
+                                               share::SCN &upper_trans_version,
+                                               const bool force_print_log = false);
 
   /**
    * @brief When a transaction is replayed in the middle, it will read tx data from tx data sstable

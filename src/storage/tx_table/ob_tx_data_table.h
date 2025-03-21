@@ -220,7 +220,9 @@ public:  // ObTxDataTable
   /**
    * @brief see ObTxTable::get_upper_trans_version_before_given_scn()
    */
-  int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
+  int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn,
+                                               share::SCN &upper_trans_version,
+                                               const bool force_print_log = false);
 
   /**
    * @brief see ObTxTable::supplement_tx_op_if_exist
@@ -327,7 +329,7 @@ private:
   int DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
                                 const share::SCN &sstable_end_scn,
                                 share::SCN &tmp_upper_trans_version);
-  bool skip_this_sstable_end_scn_(const share::SCN &sstable_end_scn);
+  bool skip_this_sstable_end_scn_(const share::SCN &sstable_end_scn, const bool force_print_log);
   int check_min_start_in_ctx_(const share::SCN &sstable_end_scn,
                               const share::SCN &max_decided_scn,
                               share::SCN &min_start_scn,

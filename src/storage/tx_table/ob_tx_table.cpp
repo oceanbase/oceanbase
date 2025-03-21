@@ -1087,9 +1087,11 @@ void ObTxTable::recycle_tx_data_finish(const share::SCN current_recycle_scn)
             KTIME(current_ts));
 }
 
-int ObTxTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
+int ObTxTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn,
+                                                        SCN &upper_trans_version,
+                                                        const bool force_print_log)
 {
-  return tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn, upper_trans_version);
+  return tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn, upper_trans_version, force_print_log);
 }
 
 int ObTxTable::get_start_tx_scn(SCN &start_tx_scn)

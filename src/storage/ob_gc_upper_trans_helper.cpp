@@ -18,6 +18,14 @@ namespace oceanbase
 namespace storage
 {
 
+#define CALC_UPPER_WARN_LOG(LOG_LEVEL)                          \
+  LOG_##LOG_LEVEL("find a sstable without upper_trans_version", \
+                  K(ls_id),                                     \
+                  K(tablet_id),                                 \
+                  K(end_scn_ts),                                \
+                  KTIME(end_scn_ts),                            \
+                  K(current_ts),                                \
+                  KTIME(current_ts));
 int ObGCUpperTransHelper::try_get_sstable_upper_trans_version(
     ObLS &ls,
     const blocksstable::ObSSTable &sstable,
@@ -43,9 +51,22 @@ int ObGCUpperTransHelper::try_get_sstable_upper_trans_version(
     } else {
       LOG_TRACE("can not get upper trans version", K(ret), K(ls_id), K(tablet_id), K(end_scn));
     }
+
+    if (INT64_MAX == new_upper_trans_version) {
+      const int64_t WARN_LOG_THREASHOLD = 24LL * 60LL * 60LL  * 1000LL * 1000LL; // 24 hours
+      const int64_t current_ts = ObClockGenerator::getClock();
+      const int64_t end_scn_ts = end_scn.convert_to_ts();
+      if (current_ts - end_scn_ts > 2LL * WARN_LOG_THREASHOLD) {
+        CALC_UPPER_WARN_LOG(ERROR);
+        (void)ls.get_upper_trans_version_before_given_scn(end_scn, tmp_scn, true/* force_print_log */);
+      } else if (current_ts - end_scn_ts > WARN_LOG_THREASHOLD) {
+        CALC_UPPER_WARN_LOG(WARN);
+      }
+    }
   }
   return ret;
 }
+#undef CALC_UPPER_WARN_LOG
 
 int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
     ObLS &ls,
