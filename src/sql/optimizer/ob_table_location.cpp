@@ -3515,8 +3515,10 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext &exec_ctx,
           input_row.count_ = (range->start_key_.get_obj_cnt());
           if (NULL != se_gen_col_expr) {
             ObObj gen_col_val;
-            if (OB_FAIL(se_gen_col_expr->eval(exec_ctx, input_row, gen_col_val))) {
-              LOG_WARN("Failed to get column exprs", K(ret));
+            if (OB_SUCCESS != se_gen_col_expr->eval(exec_ctx, input_row, gen_col_val)) {
+              // If a generated column encounters a calculation error,
+              // suppress the error code and quit partition pruning.
+              all_part = true;
             } else {
               ObNewRow result_row;
               result_row.cells_ = &gen_col_val;
