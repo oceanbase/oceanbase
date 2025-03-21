@@ -11598,15 +11598,12 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
     const ObJoinFilterHint *force_hint = NULL;
     bool can_part_join_filter = false;
     const ObJoinFilterHint *force_part_hint = NULL;
-    if (access.est_cost_info_.index_meta_info_.is_global_index_ &&
-        access.est_cost_info_.index_meta_info_.is_index_back_) {
-      //do nothing
-    } else if (OB_FAIL(log_plan_hint.check_use_join_filter(access.table_id_,
-                                                           left_tables,
-                                                           false,
-                                                           config_disable,
-                                                           can_join_filter,
-                                                           force_hint))) {
+    if (OB_FAIL(log_plan_hint.check_use_join_filter(access.table_id_,
+                                                    left_tables,
+                                                    false,
+                                                    config_disable,
+                                                    can_join_filter,
+                                                    force_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
     } else if (!is_fully_partition_wise &&
                OB_FAIL(log_plan_hint.check_use_join_filter(access.table_id_,
@@ -11616,8 +11613,9 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                            can_part_join_filter,
                                                            force_part_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
-    } else if (!can_join_filter && !can_part_join_filter) {
-      //do nothing
+    } else if ((!can_join_filter && !can_part_join_filter)
+               || (access.use_das_ && NULL == force_hint)) {
+      // do nothing, hint disable the join filter or das scan without force hint
     } else {
       JoinFilterInfo info;
       info.table_id_ = access.table_id_;
