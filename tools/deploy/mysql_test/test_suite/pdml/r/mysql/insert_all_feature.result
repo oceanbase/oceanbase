@@ -267,18 +267,14 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
-  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil), rowset=16
-  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
       dop=2
-  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil)
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil)
       columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))])
-  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil), rowset=16
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
   5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
   6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
@@ -429,24 +425,21 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
   1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       dop=2
   3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({gindex2: (t_target.c1, t_target.c4)})}]), partitions(p[0-1]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,
       PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))])
   4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))]), filter(nil), rowset=16
   5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 
       0))))]), dop=2
   6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
@@ -476,8 +469,7 @@ Outputs & filters:
       0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
       + 1, INT(-1, 0))))])
  12 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
  13 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
  14 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
@@ -541,37 +533,29 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
   1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       dop=2
   3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({ugindex1: (t_target.c2, t_target.c1)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
   4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
   6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
       + 1, INT(-1, 0))))])
   8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
   9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
@@ -611,52 +595,40 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
   1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       dop=2
   3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({ugindex2: (t_target.c3, t_target.c1)})}]), partitions(p[0-2]), 
       column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
   4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
   5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)]), dop=2
   6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({ugindex1: (t_target.c2, t_target.c1)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
   8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
  10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
  11 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
       + 1, INT(-1, 0))))])
  12 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
  13 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
  14 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
@@ -700,25 +672,22 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
   1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       dop=2
   3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({ugindex3: (t_target.c2, t_target.c3, t_target.c4, t_target.c1)})}]), partitions(p[0-2]), 
       column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,
       0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))], [column_conv(INT,PS:(11,0),NOT NULL,
       ANONYMOUS_VIEW1.c1)])
   4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))]), filter(nil), rowset=16
   5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 
       0))))]), dop=2
   6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
@@ -762,8 +731,7 @@ Outputs & filters:
       0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
       + 1, INT(-1, 0))))])
  16 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
  17 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
  18 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
@@ -829,22 +797,18 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
   1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
   2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
       dop=2
   3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))]), filter(nil)
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
       columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
       + 1, INT(-1, 0))))])
   4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
-      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
-      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
   5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
   6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2

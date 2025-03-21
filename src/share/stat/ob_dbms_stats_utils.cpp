@@ -223,6 +223,7 @@ int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &sch
 bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
 {
   return is_virtual_index_table(table_id) ||
+         table_id == share::OB_PROC_TID ||
          table_id == share::OB_TENANT_VIRTUAL_ALL_TABLE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_TABLE_COLUMN_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TID ||

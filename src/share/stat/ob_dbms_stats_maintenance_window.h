@@ -49,7 +49,7 @@ public:
                                                    const uint64_t tenant_id,
                                                    common::ObISQLClient &sql_client);
 
-  static int is_stats_maintenance_window_attr(const sql::ObSQLSessionInfo *session,
+  static int is_stats_maintenance_window_attr(sql::ObExecContext &ctx,
                                               const ObString &job_name,
                                               const ObString &attr_name,
                                               const ObString &val_name,

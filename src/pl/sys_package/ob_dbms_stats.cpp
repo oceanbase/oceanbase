@@ -3646,10 +3646,12 @@ bool ObDbmsStats::check_column_validity(const share::schema::ObTableSchema &tab_
                                        const share::schema::ObColumnSchemaV2 &col_schema)
 {
   bool is_valid = false;
-  if (col_schema.is_hidden() &&
+  if ((col_schema.is_hidden() &&
       (!tab_schema.is_index_table() ||
         col_schema.get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM ||
-        col_schema.is_shadow_column())) {
+        col_schema.is_shadow_column())) ||
+      (!col_schema.is_index_column() &&
+       col_schema.is_virtual_generated_column())) {
     //pass
   } else {
     is_valid = true;
