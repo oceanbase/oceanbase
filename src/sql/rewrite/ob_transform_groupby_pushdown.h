@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OB_TRANSFORM_GROUPBY_PUSHDWON_H
-#define OB_TRANSFORM_GROUPBY_PUSHDWON_H
+#ifndef OB_TRANSFORM_GROUPBY_PUSHDOWN_H
+#define OB_TRANSFORM_GROUPBY_PUSHDOWN_H
 
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
@@ -120,22 +120,22 @@ private:
                           uint64_t &child_col_id);
 
   int do_groupby_push_down_into_union(ObSelectStmt *origin_stmt,
-                                      ObIArray<UnionPushdownParam> &new_colomns,
+                                      ObIArray<UnionPushdownParam> &new_columns,
                                       ObSelectStmt *&trans_stmt,
-                                      bool &trans_happend);
+                                      bool &trans_happened);
 
   int transform_basic_child_stmt(ObSelectStmt *stmt,
-                                 ObIArray<UnionPushdownParam> &new_colomns);
+                                 ObIArray<UnionPushdownParam> &new_columns);
 
   int transform_non_basic_child_stmt(ObSelectStmt *stmt,
-                                     ObIArray<UnionPushdownParam> &new_colomns);
+                                     ObIArray<UnionPushdownParam> &new_columns);
 
   int transform_union_stmt(ObSelectStmt *union_stmt,
                            ObIArray<ObSelectStmt *> &child_stmts);
 
   int transform_parent_stmt_of_union(ObSelectStmt *stmt,
                                      ObSelectStmt *union_stmt,
-                                     ObIArray<UnionPushdownParam> &new_colomns);
+                                     ObIArray<UnionPushdownParam> &new_columns);
 
   int get_new_select_expr_of_basic_child(UnionPushdownParam &param,
                                          ObIArray<ObRawExpr *> &old_exprs,
@@ -177,8 +177,22 @@ private:
 
   int compute_push_down_param(ObSelectStmt *stmt,
                               ObIArray<PushDownParam> &params,
-                              ObIArray<uint64_t> &flattern_joined_tables,
+                              const ObGroupByPlacementHint *hint,
+                              ObIArray<uint64_t> &flatten_joined_tables,
                               bool &is_valid);
+  int merge_tables_by_aggr_exprs(ObSelectStmt *stmt,
+                                 ObIArray<PushDownParam> &params,
+                                 const ObGroupByPlacementHint *hint,
+                                 bool &is_valid);
+  int merge_tables_by_join_conds(ObSelectStmt *stmt,
+                                 ObIArray<PushDownParam> &params,
+                                 const ObGroupByPlacementHint *hint,
+                                 bool &is_valid);
+  int merge_tables_by_joined_tables(ObSelectStmt *stmt,
+                                    ObIArray<PushDownParam> &params,
+                                    const ObGroupByPlacementHint *hint,
+                                    ObIArray<uint64_t> &flatten_joined_tables,
+                                    bool &is_valid);
 
   int check_groupby_validity(const ObSelectStmt &stmt, bool &is_valid);
 
@@ -206,7 +220,7 @@ private:
 
   int do_groupby_push_down_into_join(ObSelectStmt *stmt,
                            ObIArray<PushDownParam> &params,
-                           ObIArray<uint64_t> &flattern_joined_tables,
+                           ObIArray<uint64_t> &flatten_joined_tables,
                            ObSelectStmt *&trans_stmt,
                            ObCostBasedPushDownCtx &push_down_ctx,
                            bool &trans_happened);
@@ -224,14 +238,14 @@ private:
                                  JoinedTable *joined_table);
 
   int transform_groupby_push_down(ObSelectStmt *stmt,
-                                  ObIArray<uint64_t> &flattern_joined_tables,
+                                  ObIArray<uint64_t> &flatten_joined_tables,
                                   ObSqlBitSet<> &outer_join_tables,
                                   ObCostBasedPushDownCtx &push_down_ctx,
                                   ObIArray<PushDownParam> &params);
 
   int push_down_group_by_into_view(ObSelectStmt *stmt,
                                    const ObIArray<TableItem*> &table_items,
-                                   ObIArray<uint64_t> &flattern_joined_tables,
+                                   ObIArray<uint64_t> &flatten_joined_tables,
                                    PushDownParam &params,
                                    TableItem *&new_table_item);
 
@@ -292,7 +306,7 @@ private:
                        ObIArray<PushDownParam> &params,
                        bool &hint_force_pushdown,
                        bool &is_valid);
-  /* whether sum(c1) splift to sum(count(*) * c1)
+  /* whether sum(c1) split to sum(count(*) * c1)
    * YES case: 1 + 1 + 1 + 2 + 2 + 2 = 3 * 1 + 3 * 2
    * NO case: 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 != 6 * 0.1
   */

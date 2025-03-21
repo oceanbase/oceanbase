@@ -566,6 +566,10 @@ struct ObTableInHint
   static bool is_match_table_items(ObCollationType cs_type,
                                   const ObIArray<ObTableInHint> &tables,
                                   ObIArray<TableItem *> &table_items);
+  static bool is_match_table_items(ObCollationType cs_type,
+                                   const ObIArray<ObTableInHint> &tables,
+                                   ObIArray<TableItem *> &table_items,
+                                   bool &is_all_not_match);
   int print_table_in_hint(PlanText &plan_text, bool ignore_qb_name = false) const;
   static int print_join_tables_in_hint(PlanText &plan_text,
                                        const ObIArray<ObTableInHint> &tables,
@@ -911,6 +915,9 @@ public:
   const common::ObIArray<TablesInHint> & get_tb_name_list() const { return table_list_; }
   bool enable_groupby_placement(ObCollationType cs_type, const TableItem &table) const;
   bool enable_groupby_placement(ObCollationType cs_type, const ObIArray<TableItem *> &tables) const;
+  bool enable_groupby_placement(ObCollationType cs_type,
+                                const ObIArray<TableItem *> &tables,
+                                bool &is_all_not_match) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 

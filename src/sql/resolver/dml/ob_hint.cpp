@@ -1997,6 +1997,29 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type,
   return bret;
 }
 
+bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type,
+                                                      const ObIArray<TableItem *> &tables,
+                                                      bool &is_all_not_match) const
+{
+  bool bret = false;
+  int ret = OB_SUCCESS;
+  if (is_enable_hint()) {
+    ObSEArray<TableItem *, 4> check_tables;
+    if (OB_FAIL(check_tables.assign(tables))) {
+      LOG_WARN("assign failed", K(ret));
+    }
+    is_all_not_match = true;  // true if all tables are not matched with hint when bret == FALSE
+    for (int64_t i = 0; !bret && is_all_not_match && i < table_list_.count(); i++) {
+      bret = ObTableInHint::is_match_table_items(cs_type, table_list_.at(i), check_tables, is_all_not_match);
+    }
+    bret |= table_list_.empty();
+  }
+  if (OB_FAIL(ret)) {
+    bret = false;
+  }
+  return bret;
+}
+
 int ObCoalesceAggrHint::assign(const ObCoalesceAggrHint &other)
 {
   int ret = OB_SUCCESS;
@@ -3199,6 +3222,46 @@ bool ObTableInHint::is_match_table_items(ObCollationType cs_type,
     }
   }
   if (OB_FAIL(ret)) {
+    bret = false;
+  }
+  return bret;
+}
+
+bool ObTableInHint::is_match_table_items(ObCollationType cs_type,
+                                         const ObIArray<ObTableInHint> &tables,
+                                         ObIArray<TableItem *> &table_items,
+                                         bool &is_all_not_match)
+{
+  int ret = OB_SUCCESS;
+  TableItem *cur_table = NULL;
+  bool bret = true;
+  uint64_t unmatched_num = 0;
+  is_all_not_match = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count();) {
+    bool tmp_bret = false;
+    if (OB_ISNULL(cur_table = table_items.at(i))) {
+      bret = false;
+    } else if (cur_table->is_joined_table()) {
+      JoinedTable *joined_table = static_cast<JoinedTable*>(cur_table);
+      if (OB_FAIL(table_items.push_back(joined_table->right_table_))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else {
+        table_items.at(i) = joined_table->left_table_;
+      }
+    } else {
+      for (int64_t j = 0; !tmp_bret && j < tables.count(); ++j) {
+        tmp_bret = tables.at(j).is_match_table_item(cs_type, *cur_table);
+      }
+      ++i;
+    }
+    if (OB_SUCC(ret) && false == tmp_bret) {
+      bret = false;
+      ++unmatched_num;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_all_not_match = unmatched_num == table_items.count();
+  } else {
     bret = false;
   }
   return bret;
