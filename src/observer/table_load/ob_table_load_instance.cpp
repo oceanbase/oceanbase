@@ -106,6 +106,12 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
                                                                    param.load_level_,
                                                                    column_ids))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (OB_NOT_SUPPORTED == ret
+          && tenant_config.is_valid()
+          && tenant_config->direct_load_allow_fallback) {
+        ret = OB_EAGAIN;
+      }
     }
     // start direct load
     else if (OB_FAIL(start_direct_load(param, column_ids, tablet_ids))) {

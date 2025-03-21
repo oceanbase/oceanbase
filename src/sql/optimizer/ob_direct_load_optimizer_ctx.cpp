@@ -227,6 +227,12 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
     }
     LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(global_hint.has_append()), K(table_id_), K(load_method_), K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_),
         K(max_error_row_count_), K(need_sort_), K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
+
+    if (load_method_ > 0) {
+      // Only for direct load
+      DEBUG_SYNC(AFTER_DIRECT_LOAD_FIRST_CHECK_IS_SUPPORT);
+    }
+
   }
   return ret;
 }
