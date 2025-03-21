@@ -18384,22 +18384,8 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
     // do nothing ...
   } else {
     const ObUDTTypeInfo *udt_info = NULL;
-    uint64_t tenant_id = OB_INVALID_ID;
-    if (common::is_dblink_type_id(type_id)) {
-      if (OB_FAIL(package_guard_.dblink_guard_.get_dblink_type_by_id(
-                      extract_package_id(type_id), type_id, user_type))) {
-        LOG_WARN("get dblink type failed", K(ret), K(type_id));
-      } else if (NULL == user_type) {
-        const ObTableSchema* table_schema = NULL;
-        OZ (package_guard_.dblink_guard_.get_dblink_table_by_type_id(type_id, table_schema));
-        if (OB_SUCC(ret) && NULL != table_schema) {
-          ObRecordType* record_type = NULL;
-          OZ (ObPLResolver::build_dblink_record_type_by_schema(*this, table_schema, record_type));
-          OX (user_type = record_type);
-        }
-      }
-    } else if (FALSE_IT(tenant_id = get_tenant_id_by_object_id(type_id))) {
-    } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
+    uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
+    if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
       LOG_WARN("get udt info failed", K(ret), K(type_id));
     } else if (OB_NOT_NULL(udt_info)) {
       OZ (udt_info->transform_to_pl_type(*alloc, schema_guard_, user_type), type_id);
@@ -18425,7 +18411,18 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
         } else {
           OZ (package_guard_.dblink_guard_.get_dblink_type_by_id(extract_package_id(type_id), type_id,
               package_user_type), type_id);
-          CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
+          if (OB_FAIL(ret)) {
+          } else if (NULL == package_user_type) {
+            const ObTableSchema* table_schema = NULL;
+            OZ (package_guard_.dblink_guard_.get_dblink_table_by_type_id(type_id, table_schema));
+            if (OB_SUCC(ret) && NULL != table_schema) {
+              ObRecordType* record_type = NULL;
+              OZ (ObPLResolver::build_dblink_record_type_by_schema(*this, table_schema, record_type));
+              OX (user_type = record_type);
+            }
+          } else {
+            CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
+          }
         }
       }
     }

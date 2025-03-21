@@ -1403,6 +1403,7 @@ OB_INLINE bool is_inner_pl_object_id(const uint64_t object_id)
 OB_INLINE bool is_dblink_type_id(uint64_t type_id)
 {
   return type_id != common::OB_INVALID_ID
+          && (type_id >> OB_PACKAGE_ID_SHIFT) > OB_MAX_SYS_PL_OBJECT_ID
           && ((type_id <<  OB_MOCK_MASK_SHIFT) & OB_MOCK_DBLINK_UDT_ID_MASK) != 0;
 }
 
