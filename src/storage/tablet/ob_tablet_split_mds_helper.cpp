@@ -1197,7 +1197,11 @@ int ObTabletSplitMdsHelper::set_tablet_status(
     }
   } else if (OB_FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
-    LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
+    if (OB_EMPTY_RESULT == ret && !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
+    }
   } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet status not committed, retry", K(ret), K(user_data), KPC(tablet));
