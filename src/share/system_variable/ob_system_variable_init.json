@@ -11614,5 +11614,18 @@
     "info_cn": "控制优化器在基数估计时是否考虑行数目标（如 LIMIT 算子等）的影响",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_push_join_predicate": {
+    "id": 10752,
+    "name": "_push_join_predicate",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "control whether the optimizer pushes down join predicates to view",
+    "flags": "SESSION | GLOBAL | INVISIBLE | INFLUENCE_PLAN",
+    "publish_version": "435/425",
+    "info_cn": "控制优化器是否将连接谓词下推到视图",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

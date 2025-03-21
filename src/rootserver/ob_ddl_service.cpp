@@ -27697,53 +27697,54 @@ int ObDDLService::add_system_variables_(const bool &update_sys_var,
     ObSchemaGetterGuard schema_guard;
     const ObSysVariableSchema *sys_variable_schema = NULL;
     int64_t refreshed_schema_version = 0;
-    ObSysVariableSchema new_sys_variable_schema;
-    if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-      LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_variable_schema))) {
-      LOG_WARN("get sys variable schema failed", KR(ret));
-    } else if (OB_ISNULL(sys_variable_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sys variable schema is null", KR(ret));
-    } else if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
-      LOG_WARN("fail to assign new sys variable schema", KR(ret), KPC(sys_variable_schema));
-    } else {
-      new_sys_variable_schema.reset_sysvars();
-      for (int64_t i = 0; OB_SUCC(ret) && i < sysvars.count(); i++) {
-        const share::schema::ObSysVarSchema &sysvar = sysvars.at(i);
-        share::schema::ObSysVarSchema new_sysvar;
-        bool execute = true;
-        if (sysvar.get_tenant_id() != tenant_id) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tenant_id in sysvars not same", K(tenant_id), K(sysvar));
-        } else if (OB_FAIL(new_sysvar.assign(sysvar))) {
-          LOG_WARN("fail to assign sysvar", KR(ret), K(sysvar));
-        } else if (OB_FAIL(check_add_sys_variable(update_sys_var, *sys_variable_schema, new_sysvar, execute))) {
-          LOG_WARN("failed to check add sys variable", KR(ret), K(update_sys_var), K(new_sysvar));
-        } else if (!execute) {
-          // Reentrant update, do nothing in the following scenarios:
-          // case 1. add sys var, sys var exist
-          // case 2. update sys var, sys var is same with existed schema(except value)
-          LOG_INFO("skip sys variable", KR(ret), K(update_sys_var), K(new_sysvar.get_name()));
-        } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_sysvar))) {
-          LOG_WARN("add sysvar schema to new sys variable schema failed", KR(ret));
+    SMART_VAR(ObSysVariableSchema, new_sys_variable_schema) {
+      if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_variable_schema))) {
+        LOG_WARN("get sys variable schema failed", KR(ret));
+      } else if (OB_ISNULL(sys_variable_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sys variable schema is null", KR(ret));
+      } else if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
+        LOG_WARN("fail to assign new sys variable schema", KR(ret), KPC(sys_variable_schema));
+      } else {
+        new_sys_variable_schema.reset_sysvars();
+        for (int64_t i = 0; OB_SUCC(ret) && i < sysvars.count(); i++) {
+          const share::schema::ObSysVarSchema &sysvar = sysvars.at(i);
+          share::schema::ObSysVarSchema new_sysvar;
+          bool execute = true;
+          if (sysvar.get_tenant_id() != tenant_id) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tenant_id in sysvars not same", K(tenant_id), K(sysvar));
+          } else if (OB_FAIL(new_sysvar.assign(sysvar))) {
+            LOG_WARN("fail to assign sysvar", KR(ret), K(sysvar));
+          } else if (OB_FAIL(check_add_sys_variable(update_sys_var, *sys_variable_schema, new_sysvar, execute))) {
+            LOG_WARN("failed to check add sys variable", KR(ret), K(update_sys_var), K(new_sysvar));
+          } else if (!execute) {
+            // Reentrant update, do nothing in the following scenarios:
+            // case 1. add sys var, sys var exist
+            // case 2. update sys var, sys var is same with existed schema(except value)
+            LOG_INFO("skip sys variable", KR(ret), K(update_sys_var), K(new_sysvar.get_name()));
+          } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_sysvar))) {
+            LOG_WARN("add sysvar schema to new sys variable schema failed", KR(ret));
+          }
         }
       }
-    }
-    if (FAILEDx(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
-      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
-      LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else {
-      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      int64_t schema_version = OB_INVALID_VERSION;
-      const ObSchemaOperationType operation_type = OB_DDL_ALTER_SYS_VAR;
-      if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
-        LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ddl_operator.replace_sys_variable(new_sys_variable_schema, schema_version,
-              trans, operation_type, &ddl_stmt_str))) {
-        LOG_WARN("alter tenant info failed", KR(ret), K(new_sys_variable_schema), K(schema_version),
-            K(operation_type), K(ddl_stmt_str));
+      if (FAILEDx(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+        LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else {
+        ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+        int64_t schema_version = OB_INVALID_VERSION;
+        const ObSchemaOperationType operation_type = OB_DDL_ALTER_SYS_VAR;
+        if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
+          LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ddl_operator.replace_sys_variable(new_sys_variable_schema, schema_version,
+                trans, operation_type, &ddl_stmt_str))) {
+          LOG_WARN("alter tenant info failed", KR(ret), K(new_sys_variable_schema), K(schema_version),
+              K(operation_type), K(ddl_stmt_str));
+        }
       }
     }
     if (trans.is_started()) {

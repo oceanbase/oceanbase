@@ -841,6 +841,7 @@ namespace share
   static const char* const OB_SV_PORT = "port";
   static const char* const OB_SV_SOCKET = "socket";
   static const char* const OB_SV_ENABLE_OPTIMIZER_ROWGOAL = "enable_optimizer_rowgoal";
+  static const char* const OB_SV__PUSH_JOIN_PREDICATE = "_push_join_predicate";
 
 }
 }

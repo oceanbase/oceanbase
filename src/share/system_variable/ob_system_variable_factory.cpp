@@ -568,6 +568,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_optimizer_null_aware_antijoin",
   "_oracle_sql_select_limit",
   "_priv_control",
+  "_push_join_predicate",
   "_px_broadcast_fudge_factor",
   "_px_dist_agg_partial_rollup_pushdown",
   "_px_min_granules_per_slave",
@@ -1396,6 +1397,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN,
   SYS_VAR__ORACLE_SQL_SELECT_LIMIT,
   SYS_VAR__PRIV_CONTROL,
+  SYS_VAR__PUSH_JOIN_PREDICATE,
   SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,
   SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN,
   SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,
@@ -3021,7 +3023,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "pid_file",
   "port",
   "socket",
-  "enable_optimizer_rowgoal"
+  "enable_optimizer_rowgoal",
+  "_push_join_predicate"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4051,6 +4054,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarPort)
         + sizeof(ObSysVarSocket)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
+        + sizeof(ObSysVarPushJoinPredicate)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11482,6 +11486,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOptimizerRowgoal));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPushJoinPredicate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPushJoinPredicate", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__PUSH_JOIN_PREDICATE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPushJoinPredicate));
       }
     }
 
@@ -20566,6 +20579,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOptimizerRowgoal())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnableOptimizerRowgoal", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__PUSH_JOIN_PREDICATE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPushJoinPredicate)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPushJoinPredicate)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPushJoinPredicate())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPushJoinPredicate", K(ret));
       }
       break;
     }
