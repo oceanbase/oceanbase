@@ -278,7 +278,11 @@ int ObITableEntity::add_retrieve_property(const ObString &prop_name)
 
 ////////////////////////////////////////////////////////////////
 ObTableEntity::ObTableEntity()
-{}
+{
+  rowkey_.set_attr(ObMemAttr(MTL_ID(), "TblEntRk"));
+  properties_names_.set_attr(ObMemAttr(MTL_ID(), "TblEntPropN"));
+  properties_values_.set_attr(ObMemAttr(MTL_ID(), "TblEntPropV"));
+}
 
 ObTableEntity::~ObTableEntity()
 {}

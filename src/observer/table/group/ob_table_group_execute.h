@@ -220,6 +220,11 @@ public:
   {
     reset();
   }
+  virtual void reset_result()
+  {
+    result_.reset();
+    result_entity_.reset();
+  }
 public:
   ObTableOperationResult result_;
   ObTableOperation op_; // single operation

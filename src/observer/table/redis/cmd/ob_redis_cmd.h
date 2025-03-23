@@ -183,7 +183,10 @@ public:
   OB_INLINE RedisCommand* cmd() { return redis_cmd_; }
   OB_INLINE const RedisCommand* cmd() const { return redis_cmd_; }
   int get_key(ObString &key) const;
-
+  virtual void reset_result()
+  {
+    result_.reset();
+  }
   VIRTUAL_TO_STRING_KV(K_(result),
                        K_(db),
                        K_(response),

@@ -709,6 +709,11 @@ int ObTableCtx::adjust_properties()
     ObTableEntity *entity = static_cast<ObTableEntity*>(const_cast<ObITableEntity *>(entity_));
     const ObIArray<ObString> &prop_names = entity->get_properties_names();
     const ObIArray<ObObj> &prop_objs = entity->get_properties_values();
+    if (prop_names.count() != prop_objs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("property name count is not equal to property obj count", K(ret),
+                K(prop_names.count()), K(prop_objs.count()));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < prop_names.count(); i++) {
       const ObString &col_name = prop_names.at(i);
       ObObj &prop_obj = const_cast<ObObj &>(prop_objs.at(i));
@@ -1244,30 +1249,37 @@ int ObTableCtx::init_put(bool allow_insup)
     cascaded_column_ids_-(17)
   2. add new ObTableAssignment.
 */
-int ObTableCtx::add_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
-                                                const ObTableAssignment &assign)
+int ObTableCtx::add_generated_column_assignment()
 {
   int ret = OB_SUCCESS;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < col_info_array.count(); i++) {
-    ObTableColumnInfo *col_info =nullptr;
-    if (OB_ISNULL(col_info = col_info_array.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column info is NULL", K(ret), K(i));
-    } else if (col_info->is_generated_column_) {
-      bool match = false;
-      for (int64_t j = 0; j < col_info->cascaded_column_ids_.count() && !match; j++) {
-        const uint64_t column_id = col_info->cascaded_column_ids_.at(j);
-        if (column_id == assign.column_info_->column_id_) {
-          match = true;
+  if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema cache guard is NULL or not init", K(ret));
+  } else {
+    const ObIArray<ObTableColumnInfo *> &col_info_array = schema_cache_guard_->get_column_info_array();
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_info_array.count(); i++) {
+      ObTableColumnInfo *col_info =nullptr;
+      if (OB_ISNULL(col_info = col_info_array.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (col_info->is_generated_column_) {
+        bool match = false;
+        for (int64_t j = 0; OB_SUCC(ret) && j < col_info->cascaded_column_ids_.count() && !match; j++) {
+          const uint64_t column_id = col_info->cascaded_column_ids_.at(j);
+          const ObTableAssignment *assign = nullptr;
+          if (OB_FAIL(get_assignment_by_column_id(column_id, assign))) {
+            LOG_WARN("fail to get assignment", K(ret), K(column_id));
+          } else if (OB_NOT_NULL(assign)) {
+            match = true;
+          }
         }
+        if (OB_SUCC(ret) && match) {
+          ObTableAssignment tmp_assign(col_info);
+          if (OB_FAIL(assigns_.push_back(tmp_assign))) {
+            LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(tmp_assign));
+          }
+        } // end if
       }
-      if (match) { // add this generated column into assigment column array
-        ObTableAssignment tmp_assign(col_info);
-        if (OB_FAIL(assigns_.push_back(tmp_assign))) {
-          LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(tmp_assign));
-        }
-      } // end if
     }
   }
   return ret;
@@ -1312,9 +1324,6 @@ int ObTableCtx::init_assignments(const ObTableEntity &entity)
           assign.is_assigned_ = true;
           if (OB_FAIL(assigns_.push_back(assign))) {
             LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
-          } else if (has_generated_column_ &&
-                     OB_FAIL(add_generated_column_assignment(column_info_array, assign))) {
-            LOG_WARN("fail to add soterd generated column assignment", K(ret), K(assign));
           }
         }
       } else if (col_info->auto_filled_timestamp_) { // on update current timestamp
@@ -1323,6 +1332,10 @@ int ObTableCtx::init_assignments(const ObTableEntity &entity)
           LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
         }
       }
+    }
+
+    if (OB_SUCC(ret) && has_generated_column_ && OB_FAIL(add_generated_column_assignment())) {
+      LOG_WARN("fail to add generated column assignment", K(ret));
     }
   }
 

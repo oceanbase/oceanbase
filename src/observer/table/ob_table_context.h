@@ -702,8 +702,7 @@ private:
   int check_if_can_skip_update_index(const share::schema::ObTableSchema *index_schema, bool &is_exist);
   // for update
   int init_assignments(const ObTableEntity &entity);
-  int add_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
-                                             const ObTableAssignment &assign);
+  int add_generated_column_assignment();
   // Init size of aggregation project array.
   //
   // @param [in]  size      The agg size

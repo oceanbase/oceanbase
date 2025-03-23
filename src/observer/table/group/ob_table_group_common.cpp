@@ -160,6 +160,16 @@ int ObTableGroup::add_op(ObITableOp *op)
   return ret;
 }
 
+void ObTableGroup::reset_result()
+{
+  for (int64_t i = 0; i < ops_.count(); i++) {
+    ObITableOp *op = ops_.at(i);
+    if (OB_NOT_NULL(op)) {
+      op->reset_result();
+    }
+  }
+}
+
 int ObTableFailedGroups::init() {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -185,11 +195,17 @@ int ObTableFailedGroups::init() {
 int ObTableFailedGroups::add(ObTableGroup *group)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> guard(lock_);
-  if (OB_FAIL(failed_ops_.push_back(group))) {
-    LOG_WARN("fail to push back group", K(ret));
+  if (OB_ISNULL(group)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail group is NULL", K(ret));
   } else {
-    group_info_.gmt_modified_ = ObClockGenerator::getClock();
+    group->reset_result();
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (OB_FAIL(failed_ops_.push_back(group))) {
+      LOG_WARN("fail to push back group", K(ret));
+    } else {
+      group_info_.gmt_modified_ = ObClockGenerator::getClock();
+    }
   }
   return ret;
 }

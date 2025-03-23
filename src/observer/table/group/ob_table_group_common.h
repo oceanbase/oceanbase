@@ -92,6 +92,7 @@ public:
   int init(const ObTableGroupCtx &ctx, ObIArray<ObITableOp *> &ops);
   int add_op(ObITableOp *op);
   OB_INLINE ObIArray<ObITableOp *>& get_ops() { return ops_; }
+  void reset_result();
 public:
   bool is_inited_;
   ObTableGroupMeta group_meta_;
