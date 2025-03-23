@@ -208,6 +208,7 @@ int ObTxDataTable::offline()
     is_started_ = false;
     disable_upper_trans_calculation();
     calc_upper_trans_version_cache_.reset();
+    FLOG_INFO("tx data table offline", K(ls_id_), K(calc_upper_trans_is_disabled_), K(latest_transfer_scn_));
   }
   return ret;
 }
@@ -231,8 +232,8 @@ int ObTxDataTable::online()
   } else {
     // load tx data table succeed
     is_started_ = true;
-    calc_upper_trans_is_disabled_ = false;
-    latest_transfer_scn_.reset();
+    enable_upper_trans_calculation(SCN::invalid_scn() /*latest_transfer_scn*/);
+    FLOG_INFO("tx data table online", K(ls_id_), K(is_inited_), K(calc_upper_trans_is_disabled_), K(latest_transfer_scn_));
   }
 
   return ret;

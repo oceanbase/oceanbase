@@ -247,6 +247,7 @@ public:  // ObTxDataTable
   TO_STRING_KV(KP(this),
                K_(is_inited),
                K_(is_started),
+               K_(calc_upper_trans_is_disabled),
                K_(ls_id),
                K_(tablet_id),
                K_(memtables_cache),

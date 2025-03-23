@@ -380,7 +380,6 @@ private:
       share::schema::ObTableSchema &schema);
   int restore_tx_ctx_table_(ObITable &trans_sstable);
   int load_tx_ctx_table_();
-  int load_tx_data_table_();
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
   void reset_ctx_min_start_scn_info_();
