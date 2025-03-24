@@ -157,7 +157,6 @@ ObObjectStorageInfo::ObObjectStorageInfo()
   access_id_[0] = '\0';
   access_key_[0] = '\0';
   extension_[0] = '\0';
-  hdfs_extension_[0] = '\0';
   max_iops_ = 0;
   max_bandwidth_ = 0;
   role_arn_[0] = '\0';
@@ -178,7 +177,6 @@ void ObObjectStorageInfo::reset()
   access_id_[0] = '\0';
   access_key_[0] = '\0';
   extension_[0] = '\0';
-  hdfs_extension_[0] = '\0';
   role_arn_[0] = '\0';
   external_id_[0] = '\0';
   is_assume_role_mode_ = false;
@@ -198,7 +196,6 @@ int64_t ObObjectStorageInfo::hash() const
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(access_key_, static_cast<int32_t>(strlen(access_key_)), hash_value);
   hash_value = murmurhash(extension_, static_cast<int32_t>(strlen(extension_)), hash_value);
-  hash_value = murmurhash(hdfs_extension_, static_cast<int32_t>(strlen(hdfs_extension_)), hash_value);
   hash_value = murmurhash(&max_iops_, static_cast<int32_t>(sizeof(max_iops_)), hash_value);
   hash_value = murmurhash(&max_bandwidth_, static_cast<int32_t>(sizeof(max_bandwidth_)), hash_value);
   hash_value = murmurhash(role_arn_, static_cast<int32_t>(strlen(role_arn_)), hash_value);
@@ -216,7 +213,6 @@ bool ObObjectStorageInfo::operator ==(const ObObjectStorageInfo &storage_info) c
       && (0 == STRCMP(access_id_, storage_info.access_id_))
       && (0 == STRCMP(access_key_, storage_info.access_key_))
       && (0 == STRCMP(extension_, storage_info.extension_))
-      && (0 == STRCMP(hdfs_extension_, storage_info.hdfs_extension_))
       && (0 == STRCMP(role_arn_, storage_info.role_arn_))
       && (0 == STRCMP(external_id_, storage_info.external_id_))
       && is_assume_role_mode_ == storage_info.is_assume_role_mode_
@@ -355,12 +351,6 @@ int ObObjectStorageInfo::validate_arguments() const
               K(strlen(access_id_)), K(strlen(access_key_)));
         }
       }
-    }
-  } else if (OB_STORAGE_HDFS == device_type_) {
-    if (OB_UNLIKELY(0 != strlen(endpoint_) || 0 != strlen(access_id_) || 0 != strlen(access_key_)
-        || 0 != strlen(role_arn_) || 0 != strlen(external_id_) || 0 != strlen(extension_))) {
-      ret = OB_INVALID_BACKUP_DEST;
-      LOG_WARN("backup device is hdfs, endpoint/access_id/access_key/ must be empty", K(ret));
     }
   } else {
     if (OB_UNLIKELY(0 != strlen(endpoint_) || 0 != strlen(access_id_) || 0 != strlen(access_key_)
@@ -501,46 +491,6 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         } else if (OB_FAIL(set_storage_info_field_(token, external_id_, sizeof(external_id_)))) {
           LOG_WARN("failed to set external id", K(ret), KP(token), KP_(external_id),
               K(sizeof(external_id_)));
-        }
-      } else if (0 == strncmp(KRB5CONF, token, strlen(KRB5CONF))) {
-        if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
-          ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support KRB5CONF yet", K(ret),
-              K_(device_type), KP(token));
-        } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
-          LOG_WARN("failed to set krb5conf", K(ret), KP(token));
-        }
-      } else if (0 == strncmp(PRINCIPAL, token, strlen(PRINCIPAL))) {
-        if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
-          ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support PRINCIPAL yet", K(ret),
-              K_(device_type), KP(token));
-        } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
-          LOG_WARN("failed to set principal", K(ret), KP(token));
-        }
-      } else if (0 == strncmp(KEYTAB, token, strlen(KEYTAB))) {
-        if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
-          ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support KEYTAB yet", K(ret),
-              K_(device_type), KP(token));
-        } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
-          LOG_WARN("failed to set keytab", K(ret), KP(token));
-        }
-      } else if (0 == strncmp(TICKET_CACHE_PATH, token, strlen(TICKET_CACHE_PATH))) {
-        if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
-          ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support TICKET_CACHE_PATH yet", K(ret),
-              K_(device_type), KP(token));
-        } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
-          LOG_WARN("failed to set ticiket_cache_path", K(ret), KP(token));
-        }
-      } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
-        if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
-          ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("device don't support HDFS_CONFIGS yet", K(ret),
-              K_(device_type), KP(token));
-        } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
-          LOG_WARN("failed to set configs", K(ret), KP(token));
         }
       }
     }
@@ -686,7 +636,6 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
   MEMCPY(access_id_, storage_info.access_id_, sizeof(access_id_));
   MEMCPY(access_key_, storage_info.access_key_, sizeof(access_key_));
   MEMCPY(extension_, storage_info.extension_, sizeof(extension_));
-  MEMCPY(hdfs_extension_, storage_info.hdfs_extension_, sizeof(hdfs_extension_));
   max_iops_ = storage_info.max_iops_;
   max_bandwidth_ = storage_info.max_bandwidth_;
   MEMCPY(role_arn_, storage_info.role_arn_, sizeof(role_arn_));
@@ -714,15 +663,6 @@ int ObObjectStorageInfo::get_info_str_(char *storage_info, const int64_t info_le
     } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s", endpoint_, access_id_, key))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
-  } else if (OB_STORAGE_HDFS == device_type_) {
-    // Setup storage info for simple auth on hdfs, more related auth configs will get in
-    // append_extension_str_.
-    if (OB_ISNULL(hdfs_extension_) || 0 == strlen(hdfs_extension_)) {
-      int64_t str_len = strlen(storage_info);
-      if (OB_FAIL(databuff_printf(storage_info, info_len, str_len, "&"))) {
-        LOG_WARN("failed to set storage info for hdfs device", K(ret), K(info_len));
-      }
-    }
   }
   return ret;
 }
@@ -743,18 +683,6 @@ int ObObjectStorageInfo::append_extension_str_(char *storage_info, const int64_t
       LOG_WARN("failed to add delimiter to storage info", K(ret), K(info_len), K(str_len));
     } else if (OB_FAIL(databuff_printf(storage_info, info_len, str_len, "%s", extension_))) {
       LOG_WARN("failed to add extension", K(ret), K(info_len), K(str_len), K_(extension));
-    }
-  } else if (OB_STORAGE_HDFS == device_type_ && 0 != strlen(hdfs_extension_) &&
-             info_len > strlen(storage_info)) {
-    int64_t str_len = strlen(storage_info);
-    if (str_len > 0 &&
-        OB_FAIL(databuff_printf(storage_info, info_len, str_len, "&"))) {
-      LOG_WARN("failed to add delimiter to storage info", K(ret), K(info_len),
-               K(str_len));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, str_len, "%s",
-                                       hdfs_extension_))) {
-      LOG_WARN("failed to add hdfs extension", K(ret), K(info_len), K(str_len),
-               K_(hdfs_extension));
     }
   }
   return ret;
@@ -837,15 +765,6 @@ int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len
   } else if (OB_ISNULL(key_str) || (len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(key_str), K(len));
-  } else if (OB_STORAGE_HDFS == device_type_) {
-    // handle with hdfs
-    int64_t hdfs_extension_hash = murmurhash(
-        hdfs_extension_, static_cast<int32_t>(strlen(hdfs_extension_)), 0);
-    if (OB_FAIL(databuff_printf(key_str, len, "%u&%ld",
-                                static_cast<uint32_t>(device_type_),
-                                hdfs_extension_hash))) {
-      LOG_WARN("failed to set key str for hdfs", K(ret), K(len), KPC(this));
-    }
   } else if (is_assume_role_mode_) {
     // access by assume_role
     int64_t pos = 0;
@@ -877,11 +796,7 @@ int64_t ObObjectStorageInfo::get_device_map_key_len() const
   // 10(one ObStorageType) + 10(one ObStorageChecksumType) + 5(five '&') + 1(one '\0') = 26.
   // reserve some free space, increase 26 to 30.
   int64_t len = 0;
-  if (OB_STORAGE_HDFS == device_type_) {
-    // Hdfs storage info will store in hdfs_extension_, and it maybe a long string, so hash it as key.
-    // 8 is sizeof(int64_t) which is the size of murmurhash value.
-    len = 30 + 8;
-  } else if (is_assume_role_mode_) {
+  if (is_assume_role_mode_) {
     // When accessing by assume_role, the length of key_str is also need reversed free space.
     len = STRLEN(endpoint_) + STRLEN(role_arn_) + STRLEN(extension_) + 30;
     // external_id is optional

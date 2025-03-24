@@ -31,13 +31,13 @@ public:
 
   static int open_with_access_type(
       ObIODevice *&device_handle, ObIOFd &fd,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       const common::ObString &uri,
       ObStorageAccessType access_type,
       const common::ObStorageIdMod &storage_id_mod);
   static int get_and_init_device(
       ObIODevice *&dev_handle,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       const common::ObString &storage_type_prefix,
       const common::ObStorageIdMod &storage_id_mod);
   static int close_device_and_fd(ObIODevice*& device_handle, ObIOFd &fd);
@@ -46,21 +46,21 @@ public:
   static int set_append_strategy(ObIODOpts *opts, bool is_data_file, int64_t epoch, int max_opt_num);
 
   static int is_exist(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info, bool &exist);
   //TODO (@shifangdan.sfd): refine repeated logics between normal interfaces and adaptive ones
   static int adaptively_is_exist(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info, bool &exist);
   static int is_tagging(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &is_tagging);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info, bool &is_tagging);
   static int get_file_length(const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info, int64_t &file_length);
+      const common::ObObjectStorageInfo *storage_info, int64_t &file_length);
   static int get_file_size(ObIODevice *device_handle, const ObIOFd &fd, int64_t &file_length);
   static int adaptively_get_file_length(const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info, int64_t &file_length);
+      const common::ObObjectStorageInfo *storage_info, int64_t &file_length);
   static int del_file(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int adaptively_del_file(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   /**
    * Deletes a list of specified objects (files_to_delete).
    * If some objects are deleted successfully and others fail, the function
@@ -85,32 +85,32 @@ public:
    * @param failed_files_idx: The index list where indices of failed deletions will be returned.
    */
   static int batch_del_files(
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       const ObIArray<ObString> &files_to_delete,
       ObIArray<int64_t> &failed_files_idx);
 
   static int mkdir(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int mk_parent_dir(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int is_empty_directory(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       bool &is_empty_directory);
   static int is_directory(const common::ObString &uri,
-                          const share::ObBackupStorageInfo *storage_info,
+                          const common::ObObjectStorageInfo *storage_info,
                           bool &is_directory);
   static int list_files(
       const common::ObString &dir_path,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       common::ObBaseDirEntryOperator &op);
   static int adaptively_list_files(
       const common::ObString &dir_path,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       common::ObBaseDirEntryOperator &op);
   static int list_directories(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       common::ObBaseDirEntryOperator &op);
   // This function handles the deletion of directories specified by the 'uri' parameter. Its behavior varies depending
   // on the 'recursive' flag and the underlying storage mechanism (e.g., NFS or object storage).
@@ -131,16 +131,16 @@ public:
   //       Users should be aware of the performance implications and proceed with caution
   //       when choosing to recursively delete "directories" and their contents in object storage environments.
   static int del_dir(const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info, const bool recursive = false);
+      const common::ObObjectStorageInfo *storage_info, const bool recursive = false);
 
   static int write_single_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       const char *buf, const int64_t size,
       const common::ObStorageIdMod &storage_id_mod);
   static int pwrite(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       const char *buf, const int64_t offset, const int64_t size,
       const common::ObStorageAccessType access_type,
       int64_t &write_size,
@@ -154,39 +154,39 @@ public:
 
   static int read_single_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size, int64_t &read_size,
       const common::ObStorageIdMod &storage_id_mod);
   static int adaptively_read_single_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size, int64_t &read_size,
       const common::ObStorageIdMod &storage_id_mod);
   static int read_single_text_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size,
       const common::ObStorageIdMod &storage_id_mod);
   static int adaptively_read_single_text_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size,
       const common::ObStorageIdMod &storage_id_mod);
   static int read_part_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size, const int64_t offset,
       int64_t &read_size,
       const common::ObStorageIdMod &storage_id_mod);
   static int adaptively_read_part_file(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size, const int64_t offset,
       int64_t &read_size,
       const common::ObStorageIdMod &storage_id_mod);
   static int pread(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info,
+      const common::ObObjectStorageInfo *storage_info,
       char *buf, const int64_t buf_size, const int64_t offset,
       int64_t &read_size,
       const common::ObStorageIdMod &storage_id_mod);
@@ -215,11 +215,11 @@ public:
   static int complete(common::ObIODevice &device_handle, common::ObIOFd &fd);
   static int abort(common::ObIODevice &device_handle, common::ObIOFd &fd);
   static int del_unmerged_parts(
-      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+      const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
 
   static int delete_tmp_files(
       const common::ObString &uri,
-      const share::ObBackupStorageInfo *storage_info);
+      const common::ObObjectStorageInfo *storage_info);
 
   static uint64_t get_tenant_id();
 

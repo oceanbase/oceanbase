@@ -13,6 +13,7 @@
 #include "ob_storage_hdfs_cache.h"
 #include "sql/engine/connector/ob_java_env.h"
 #include "sql/engine/connector/ob_java_helper.h"
+#include "share/external_table/ob_hdfs_storage_info.h"
 
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
@@ -22,6 +23,8 @@ namespace oceanbase
 {
 namespace common
 {
+using namespace share;
+
 // --------------------- ObHdfsFsClient ---------------------
 ObHdfsFsClient::ObHdfsFsClient()
     : hdfs_fs_(nullptr), lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
@@ -202,14 +205,18 @@ int ObHdfsCacheUtils::parse_hdfs_auth_info_(ObObjectStorageInfo *storage_info,
   if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "storage info is invalid", K(ret), KPC(storage_info));
+  } else if (OB_UNLIKELY(!storage_info->is_hdfs_storage())) {
+    ret = OB_INVALID_BACKUP_DEST;
+    OB_LOG(WARN, "only hdfs storage can parse auth info", K(ret), KPC(storage_info));
   } else {
     char tmp[OB_MAX_HDFS_BACKUP_EXTENSION_LENGTH] = {0};
     char *token = nullptr;
     char *saved_ptr = nullptr;
-
-    char *hdfs_extension = storage_info->hdfs_extension_;
+    ObHDFSStorageInfo *external_storage_info =
+        static_cast<ObHDFSStorageInfo *>(storage_info);
+    char *hdfs_extension = external_storage_info->hdfs_extension_;
     const int64_t extension_len = STRLEN(hdfs_extension);
-
+    OB_LOG(TRACE, "print hdfs extension info", K(ret), KPC(storage_info), K(hdfs_extension));
     MEMCPY(tmp, hdfs_extension, extension_len);
     tmp[extension_len] = '\0';
     token = tmp;
@@ -310,8 +317,7 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
     ret = OB_HDFS_INVALID_ARGUMENT;
     OB_LOG(WARN, "failed to init hdfs_builder", K(ret));
   } else if (OB_FAIL(parse_hdfs_auth_info_(storage_info, kerberos_config))) {
-    OB_LOG(WARN, "failed to parse hdfs auth info", K(ret),
-           K(storage_info->hdfs_extension_));
+    OB_LOG(WARN, "failed to parse hdfs auth info", K(ret));
   } else {
     obHdfsBuilderSetNameNode(hdfs_builder, namenode.ptr());
     // Setup kerberized client can fallback to access with simple auth
@@ -550,7 +556,12 @@ int ObHdfsFsCache::get_connection(const ObString &namenode,
   if (OB_ISNULL(storage_info)) {
     ret = OB_HDFS_INVALID_ARGUMENT;
     OB_LOG(WARN, "failed to get storage info", K(ret), KPC(storage_info));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
+  } else if (OB_UNLIKELY(!storage_info->is_hdfs_storage())) {
+    ret = OB_INVALID_BACKUP_DEST;
+    OB_LOG(WARN, "only external storage info can get hdfs connection", K(ret),
+           K_(storage_info->device_type));
+  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str,
+                                                        sizeof(info_str)))) {
     OB_LOG(WARN, "failed to get storage info str", K(ret), KPC(storage_info));
   } else {
     key = murmurhash(info_str, static_cast<int32_t>(strlen(info_str)), key);

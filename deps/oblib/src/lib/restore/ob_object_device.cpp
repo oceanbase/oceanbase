@@ -78,6 +78,15 @@ ObObjectDevice::~ObObjectDevice()
   OB_LOG(INFO, "destory the device!", KP(storage_info_str_));
 }
 
+int ObObjectDevice::setup_storage_info(const ObIODOpts &opts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage_info_.set(device_type_, opts.opts_[0].value_.value_str))) {
+    OB_LOG(WARN, "failed to build storage info", K(ret));
+  }
+  return ret;
+}
+
 /*the app logical use call ObBackupIoAdapter::get_and_init_device*/
 /*decription: base_info just related to storage_info,
   base_info is used by the reader/appender*/
@@ -94,13 +103,14 @@ int ObObjectDevice::start(const ObIODOpts &opts)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fail to start device, args wrong !", KCSTRING(opts.opts_[0].key_), K(ret));
   } else {
-    if (OB_FAIL(storage_info_.set(device_type_, opts.opts_[0].value_.value_str))) {
-      OB_LOG(WARN, "failed to build storage_info");
+    if (OB_FAIL(setup_storage_info(opts))) {
+      OB_LOG(WARN, "failed to setup storage_info", K(ret));
     }
 
+    common::ObObjectStorageInfo &info = get_storage_info();
     if (OB_SUCCESS != ret) {
       //mem resource will be free with device destroy
-    } else if (OB_FAIL(util_.open(&storage_info_))) {
+    } else if (OB_FAIL(util_.open(&info))) {
       OB_LOG(WARN, "fail to open the util!", K(ret), KP(opts.opts_[0].value_.value_str));
     } else if (OB_FAIL(fd_mng_.init())) {
       OB_LOG(WARN, "fail to init fd manager!", K(ret));
@@ -183,7 +193,8 @@ int ObObjectDevice::open_for_reader(const char *pathname, void *&ctx, const bool
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc mem for object device reader! ", K(ret));
   } else {
-    if (OB_FAIL(reader->open(pathname, &storage_info_, head_meta))) {
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(reader->open(pathname, &info, head_meta))) {
       OB_LOG(WARN, "fail to open for read!", K(ret));
     } else {
       ctx = (void*)reader;
@@ -204,8 +215,9 @@ int ObObjectDevice::open_for_adaptive_reader_(const char *pathname, void *&ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc mem for object device adaptive_reader! ", K(ret), K(pathname));
   } else {
-    if (OB_FAIL(adaptive_reader->open(pathname, &storage_info_))) {
-      OB_LOG(WARN, "fail to open for read!", K(ret), K(pathname), K_(storage_info));
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(adaptive_reader->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for read!", K(ret), K(pathname), K(info));
     } else {
       ctx = (void*)adaptive_reader;
     }
@@ -227,7 +239,8 @@ int ObObjectDevice::open_for_overwriter(const char *pathname, void*& ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc mem for object device reader! ", K(ret));
   } else {
-    if (OB_FAIL(overwriter->open(pathname, &storage_info_))) {
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(overwriter->open(pathname, &info))) {
       OB_LOG(WARN, "fail to open for overwrite!", K(ret));
     } else {
       ctx = (void*)overwriter;
@@ -271,7 +284,8 @@ int ObObjectDevice::open_for_appender(const char *pathname, ObIODOpts *opts, voi
 
   if (OB_SUCCESS == ret) {
     appender->set_open_mode(mode);
-    if (OB_FAIL(appender->open(pathname, &storage_info_))){
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(appender->open(pathname, &info))){
       OB_LOG(WARN, "fail to open the appender!", K(ret));
     } else {
       ctx = appender;
@@ -292,8 +306,9 @@ int ObObjectDevice::open_for_multipart_writer_(const char *pathname, void *&ctx)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc multipart_writer!", K(ret), K(pathname));
   } else {
-    if (OB_FAIL(multipart_writer->open(pathname, &storage_info_))) {
-      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K_(storage_info));
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(multipart_writer->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K(info));
     } else {
       ctx = (void*)multipart_writer;
     }
@@ -313,8 +328,9 @@ int ObObjectDevice::open_for_parallel_multipart_writer_(const char *pathname, vo
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc multipart_writer!", K(ret), K(pathname));
   } else {
-    if (OB_FAIL(multipart_writer->open(pathname, &storage_info_))) {
-      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K_(storage_info));
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(multipart_writer->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K(info));
     } else {
       ctx = (void*)multipart_writer;
     }
@@ -334,8 +350,9 @@ int ObObjectDevice::open_for_buffered_multipart_writer_(const char *pathname, vo
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc multipart_writer!", K(ret), K(pathname));
   } else {
-    if (OB_FAIL(multipart_writer->open(pathname, &storage_info_))) {
-      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K_(storage_info));
+    common::ObObjectStorageInfo &info = get_storage_info();
+    if (OB_FAIL(multipart_writer->open(pathname, &info))) {
+      OB_LOG(WARN, "fail to open for multipart_writer!", K(ret), K(pathname), K(info));
     } else {
       ctx = (void*)multipart_writer;
     }

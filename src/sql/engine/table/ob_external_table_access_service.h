@@ -20,7 +20,7 @@
 #include "common/row/ob_row_iterator.h"
 #include "storage/access/ob_dml_param.h"
 #include "common/storage/ob_io_device.h"
-#include "share/backup/ob_backup_struct.h"
+#include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/ob_sql_context.h"
 
 namespace oceanbase
@@ -41,7 +41,7 @@ class ObDecompressor;
 class ObExternalDataAccessDriver
 {
 public:
-  ObExternalDataAccessDriver() : storage_type_(common::OB_STORAGE_MAX_TYPE), device_handle_(nullptr) {}
+  ObExternalDataAccessDriver() : storage_type_(common::OB_STORAGE_MAX_TYPE), access_info_(nullptr), device_handle_(nullptr) {}
   ~ObExternalDataAccessDriver();
   int init(const common::ObString &location, const ObString &access_info);
   int open(const char *url);
@@ -62,7 +62,9 @@ public:
   const char dummy_empty_char = '\0';
 private:
   common::ObStorageType storage_type_;
-  share::ObBackupStorageInfo access_info_;
+  share::ObBackupStorageInfo backup_storage_info_;
+  share::ObHDFSStorageInfo hdfs_storage_info_;
+  common::ObObjectStorageInfo *access_info_;
   ObIODevice* device_handle_;
   ObIOFd fd_;
 };

@@ -195,8 +195,6 @@ int ObStorageHdfsBase::open(const ObString &uri,
   } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty()) || !storage_info->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "failed to init hdfs base, invalid arguments", K(ret), K(uri), KPC(storage_info));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
-    OB_LOG(WARN, "failed to get storage info str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(get_or_create_fs(uri, storage_info))) {
     OB_LOG(WARN, "failed to get hdfs file system", K(ret), K(uri));
   }

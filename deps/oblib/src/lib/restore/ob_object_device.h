@@ -106,6 +106,9 @@ public:
   void set_storage_id_mod(const ObStorageIdMod &storage_id_mod);
   const ObStorageIdMod &get_storage_id_mod() const;
   int release_fd(const ObIOFd &fd);
+  // Add new : setup storage info
+  virtual int setup_storage_info(const ObIODOpts &opts);
+  virtual common::ObObjectStorageInfo &get_storage_info() { return storage_info_; }
 
 public:
   common::ObFdSimulator& get_fd_mng() {return fd_mng_;}                 

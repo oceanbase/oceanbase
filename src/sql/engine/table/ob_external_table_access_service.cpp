@@ -102,7 +102,7 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
 
   if (OB_FAIL(ob_write_string(allocator, url, url_cstring, true/*c_style*/))) {
     LOG_WARN("fail to copy string", KR(ret), K(url));
-  } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(url_cstring, &access_info_, file_size))) {
+  } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(url_cstring, access_info_, file_size))) {
     LOG_WARN("fail to get file length", KR(ret), K(url_cstring), K_(access_info));
   }
 
@@ -120,7 +120,7 @@ int ObExternalDataAccessDriver::open(const char *url)
     ret = OB_INIT_TWICE;
     LOG_WARN("Data Access Driver has been opened", KR(ret), K(url));
   } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(
-      device_handle_, fd_, &access_info_, url, OB_STORAGE_ACCESS_READER,
+      device_handle_, fd_, access_info_, url, OB_STORAGE_ACCESS_READER,
       ObStorageIdMod(OB_STORAGE_ID_EXTERNAL, ObStorageUsedMod::STORAGE_USED_EXTERNAL)))) {
     LOG_WARN("fail to open Data Access Driver", KR(ret), K_(access_info), K(url));
   }
@@ -276,7 +276,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
   ObString path_cstring;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
 
-  if (OB_UNLIKELY(!access_info_.is_valid())) {
+  if (OB_UNLIKELY(!access_info_->is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObExternalDataAccessDriver not init", KR(ret), K_(access_info));
   } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, regexp_vars))) {
@@ -302,7 +302,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
       }
     } else {
       // OB_STORAGE_HDFS
-      OZ(ObBackupIoAdapter::is_directory(path_cstring, &access_info_, is_dir));
+      OZ(ObBackupIoAdapter::is_directory(path_cstring, access_info_, is_dir));
       if (!is_dir) {
         LOG_INFO("external location is not a directory", K(path_cstring));
       } else {
@@ -317,9 +317,9 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
       ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path_cstring,
                                                pattern.empty() ? NULL : &filter, allocator);
       dir_op.set_dir_flag();
-      if (OB_FAIL(ObBackupIoAdapter::list_files(file_dir, &access_info_, file_op))) {
+      if (OB_FAIL(ObBackupIoAdapter::list_files(file_dir, access_info_, file_op))) {
         LOG_WARN("fail to list files", KR(ret), K(file_dir), K_(access_info));
-      } else if (OB_FAIL(ObBackupIoAdapter::list_directories(file_dir, &access_info_, dir_op))) {
+      } else if (OB_FAIL(ObBackupIoAdapter::list_directories(file_dir, access_info_, dir_op))) {
         LOG_WARN("fail to list dirs", KR(ret), K(file_dir), K_(access_info));
       } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
         ret = OB_SIZE_OVERFLOW;
@@ -328,7 +328,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     }
   } else {
     ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, pattern.empty() ? NULL : &filter, allocator);
-    if (OB_FAIL(ObBackupIoAdapter::list_files(path_cstring, &access_info_, file_op))) {
+    if (OB_FAIL(ObBackupIoAdapter::list_files(path_cstring, access_info_, file_op))) {
       LOG_WARN("fail to list files", KR(ret), K(path_cstring), K_(access_info));
     }
   }
@@ -348,16 +348,29 @@ int ObExternalDataAccessDriver::init(const ObString &location, const ObString &a
     LOG_WARN("fail to resove storage type", K(ret));
   } else {
     storage_type_ = device_type;
-    if (device_type == OB_STORAGE_FILE) {
-      OZ (ob_write_string(temp_allocator, location, location_cstr, true));
+    // Note: if device type is file, the storage info is empty.
+    // And if device type is hdfs, the storage info `may be` empty.
+    if (device_type == OB_STORAGE_FILE ||
+        (device_type == OB_STORAGE_HDFS &&
+         (OB_ISNULL(access_info) || OB_LIKELY(0 == access_info.length())))) {
+      OZ(ob_write_string(temp_allocator, location, location_cstr, true));
       access_info_cstr.assign_ptr(&dummy_empty_char, strlen(&dummy_empty_char));
     } else {
       OZ (ob_write_string(temp_allocator, location, location_cstr, true));
       OZ (ob_write_string(temp_allocator, access_info, access_info_cstr, true));
     }
   }
-
-  OZ (access_info_.set(device_type, access_info_cstr.ptr()));
+  if (device_type == OB_STORAGE_HDFS) {
+    access_info_ = &hdfs_storage_info_;
+  } else {
+    access_info_ = &backup_storage_info_;
+  }
+  if (OB_ISNULL(access_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("failed to get access into", K(ret), K(device_type), K(access_info_cstr));
+  }
+  LOG_TRACE("resolve storage into", K(ret), K(device_type), K(access_info_cstr));
+  OZ (access_info_->set(device_type, access_info_cstr.ptr()));
 
   return ret;
 }

@@ -24,6 +24,7 @@
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
 #include "share/schema/ob_table_param.h"        // ObColDesc
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
+#include "share/external_table/ob_hdfs_storage_info.h"    // ObHDFSStorageInfo
 #include "share/ob_simple_batch.h"
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
@@ -38,7 +39,7 @@
 namespace oceanbase
 {
 namespace share {
-class ObBackupStorageInfo;
+class ObHDFSStorageInfo;
 }
 namespace sql
 {
@@ -682,7 +683,7 @@ public:
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
 
-  static int split_remote_object_storage_url(common::ObString &url, share::ObBackupStorageInfo &storage_info);
+  static int split_remote_object_storage_url(common::ObString &url, common::ObObjectStorageInfo *storage_info);
   static bool is_external_files_on_local_disk(const common::ObString &url);
   static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
   static int check_sql_map_expected_resource_group(const ObSqlCtx &context,

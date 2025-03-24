@@ -22,6 +22,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/resolver/ddl/ob_fts_parser_resolver.h"
 namespace oceanbase
 {
@@ -1422,13 +1423,23 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
   } else {
     ObString url = table_location;
     uint64_t data_version = 0;
+    const bool is_hdfs_type = url.prefix_match(OB_HDFS_PREFIX);
+
     if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
       LOG_WARN("failed to get data version", K(ret));
-    } else if (OB_LIKELY(url.prefix_match(OB_HDFS_PREFIX)) && data_version < DATA_VERSION_4_3_5_1) {
+    } else if (OB_LIKELY(is_hdfs_type) && data_version < DATA_VERSION_4_3_5_1) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
     }
-    ObBackupStorageInfo storage_info;
+    ObHDFSStorageInfo hdfs_storage_info;
+    ObBackupStorageInfo backup_storage_info;
+
+    ObObjectStorageInfo *storage_info = nullptr;
+    if (OB_LIKELY(is_hdfs_type)) {
+      storage_info = &hdfs_storage_info;
+    } else {
+      storage_info = &backup_storage_info;
+    }
     char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
 
     ObString path = url.split_on('?');
@@ -1439,7 +1450,7 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
       ObSqlString tmp_location;
       ObSqlString prefix;
 
-      if (OB_FAIL(resolve_file_prefix(url, prefix, storage_info.device_type_, params))) {
+      if (OB_FAIL(resolve_file_prefix(url, prefix, storage_info->device_type_, params))) {
         LOG_WARN("failed to resolve file prefix", K(ret));
       } else if (OB_FAIL(tmp_location.append(prefix.string()))) {
         LOG_WARN("failed to append prefix", K(ret));
@@ -1448,8 +1459,8 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_STORAGE_FILE != storage_info.device_type_  &&
-            OB_STORAGE_HDFS != storage_info.device_type_ /* hdfs with simple auth*/) {
+        if (OB_STORAGE_FILE != storage_info->device_type_  &&
+            OB_STORAGE_HDFS != storage_info->device_type_ /* hdfs with simple auth*/) {
           if (OB_FAIL(ObSQLUtils::split_remote_object_storage_url(url, storage_info))) {
             LOG_WARN("failed to split remote object storage url", K(ret));
           }
@@ -1459,7 +1470,7 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(tmp_location.append(url))) {
           LOG_WARN("failed to append url", K(ret));
-        } else if (OB_FAIL(storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
+        } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
           LOG_WARN("failed to get storage info str", K(ret));
         } else if (OB_FAIL(table_schema.set_external_file_location(tmp_location.string()))) {
           LOG_WARN("failed to set external file location", K(ret));
@@ -1475,9 +1486,9 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
         LOG_WARN("failed to write string", K(ret));
       } else if (OB_FAIL(ob_write_string(*params.allocator_, url, storage_info_cstr, true))) {
         LOG_WARN("failed to write string", K(ret));
-      } else if (OB_FAIL(storage_info.set(uri_cstr.ptr(), storage_info_cstr.ptr()))) {
+      } else if (OB_FAIL(storage_info->set(uri_cstr.ptr(), storage_info_cstr.ptr()))) {
         LOG_WARN("failed to set storage info", K(ret));
-      } else if (OB_FAIL(storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
+      } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
         LOG_WARN("failed to get storage info str", K(ret));
       } else if (OB_FAIL(table_schema.set_external_file_location(path))) {
         LOG_WARN("failed to set external file location", K(ret));

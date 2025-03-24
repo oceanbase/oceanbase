@@ -593,6 +593,8 @@ ob_set_subtarget(ob_share stat
 )
 
 ob_set_subtarget(ob_share external_table
+  external_table/ob_hdfs_storage_info.cpp
+  external_table/ob_hdfs_table_device.cpp
   external_table/ob_external_table_file_mgr.cpp
   external_table/ob_external_table_file_rpc_processor.cpp
   external_table/ob_external_table_file_task.cpp

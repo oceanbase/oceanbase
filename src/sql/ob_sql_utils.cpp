@@ -5721,7 +5721,7 @@ bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
   return url.empty() ? false : url.prefix_match_ci(OB_FILE_PREFIX);
 }
 
-int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)
+int ObSQLUtils::split_remote_object_storage_url(ObString &url, common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   ObString https_header = "https://";
@@ -5756,15 +5756,15 @@ int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageIn
   LOG_DEBUG("check access info", K(access_id), K(access_key), K(host_name), K(url));
 
   //fill storage_info
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(storage_info)) {
     int64_t pos = 0;
-    OZ (databuff_printf(storage_info.access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH, pos,
+    OZ (databuff_printf(storage_info->access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH, pos,
                         "%s%.*s", ACCESS_ID, access_id.length(), access_id.ptr()));
     pos = 0;
-    OZ (databuff_printf(storage_info.access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH, pos,
+    OZ (databuff_printf(storage_info->access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH, pos,
                         "%s%.*s", ACCESS_KEY, access_key.length(), access_key.ptr()));
     pos = 0;
-    OZ (databuff_printf(storage_info.endpoint_, OB_MAX_BACKUP_ENDPOINT_LENGTH, pos,
+    OZ (databuff_printf(storage_info->endpoint_, OB_MAX_BACKUP_ENDPOINT_LENGTH, pos,
                         "%s%.*s", "host=", host_name.length(), host_name.ptr()));
     if (OB_FAIL(ret)) {
       ret = OB_URI_ERROR;
