@@ -299,7 +299,7 @@ void FixedTinyAllocator<T>::wash()
     int64_t list_size = iter->list_.get_size_ts();
     if (Block::MAX_NUM == list_size) {
       Block* block = blocks.erase(iter);
-      COMMON_LOG(INFO, "free block", KP(block));
+      // COMMON_LOG(INFO, "free block", KP(block));
       ob_free(block);
       ++freed_blocks_num;
     } else {
@@ -358,7 +358,7 @@ int FixedTinyAllocator<T>::prepare_block()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "failed to allocate new block", K(ret), K(attr_));
   } else {
-    COMMON_LOG(INFO, "new block", KP(new_block), K(ret), K(attr_));
+    // COMMON_LOG(INFO, "new block", KP(new_block), K(ret), K(attr_));
     new (new_block) Block();
     list = new_block->list_;
     new_block->list_.reset();
