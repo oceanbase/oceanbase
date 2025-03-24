@@ -70,6 +70,7 @@ int ObExprArrayAvg::calc_result_type1(ObExprResType &type,
   }
   if (OB_SUCC(ret)) {
     type.set_double();
+    type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObDoubleType]);
   }
   return ret;
 }

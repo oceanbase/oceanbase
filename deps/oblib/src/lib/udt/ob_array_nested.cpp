@@ -14,6 +14,7 @@
 #include "ob_array_type.h"
 #include "lib/ob_errno.h"
 #include "ob_array_nested.h"
+#include "lib/udt/ob_array_utils.h"
 
 namespace oceanbase {
 namespace common {
@@ -610,7 +611,6 @@ int ObArrayNested::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
     hash::ObHashMap<uint64_t, uint32_t> elem_set;
     ObIArrayType *inner_arr = get_child_array();
     ObIArrayType *child_obj = NULL;
-    ObIArrayType *check_obj = NULL;
     ObArrayNested *arr_obj_ptr = dynamic_cast<ObArrayNested *>(arr_obj);
     if (OB_ISNULL(arr_obj_ptr)) {
       ret = OB_ERR_ARRAY_TYPE_MISMATCH;
@@ -638,16 +638,13 @@ int ObArrayNested::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
             }
           } else if (ret == OB_HASH_EXIST) {
             // duplicate element, double check
-            if (check_obj == NULL && OB_FAIL(inner_arr->clone_empty(alloc, check_obj, false))) {
-              OB_LOG(WARN, "clone empty failed", K(ret));
-            } else if (OB_FAIL(at(i, *check_obj))) {
-              OB_LOG(WARN, "get element failed", K(ret), K(i), K(length_));
-            } else if ((*check_obj) == (*child_obj)) {
-              // do nothing
-            } else if (OB_FAIL(arr_obj_ptr->push_back(*child_obj))) {
+            bool bret = false;
+            if (OB_FAIL(arr_obj_ptr->init())) {
+              OB_LOG(WARN, "failed to init array", K(ret));
+            } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj_ptr, *child_obj, bret))) {
+              OB_LOG(WARN, "array contains failed", K(ret));
+            } else if (!bret && OB_FAIL(arr_obj_ptr->push_back(*child_obj))) {
               OB_LOG(WARN, "failed to add elemen", K(ret));
-            } else {
-              check_obj->clear();
             }
           } else {
             OB_LOG(WARN, "failed to check element exist", K(ret));

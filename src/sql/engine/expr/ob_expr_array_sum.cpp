@@ -69,11 +69,15 @@ int ObExprArraySum::calc_result_type1(ObExprResType &type, ObExprResType &type1,
   } else if (ob_is_integer_type(src_elem_type.get_obj_type())) {
     if (ob_is_unsigned_type(src_elem_type.get_obj_type())) {
       type.set_uint64();
+      type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type]);
     } else {
       type.set_int();
+      type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType]);
+
     }
   } else {
     type.set_double();
+    type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObDoubleType]);
   }
   return ret;
 }

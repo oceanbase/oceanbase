@@ -9167,6 +9167,9 @@ int ObDDLService::fill_column_collation(
   } else if (ObGeometryTC == col_tc && !column_schema.is_nullable()) {
     ret = OB_ER_INVALID_USE_OF_NULL;
     LOG_WARN("alter table add geometry column can not has not null constraint", K(ret));
+  } else if (ObCollectionSQLTC == col_tc && !column_schema.is_nullable()) {
+    ret = OB_ER_INVALID_USE_OF_NULL;
+    LOG_WARN("alter table add collectionsql column can not has not null constraint", K(ret));
   }
   return ret;
 }

@@ -10534,6 +10534,9 @@ int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
     if (OB_UNLIKELY(! is_alter_add_column)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid column id", K(ret));
+    } else if (column.get_meta_type().is_collection_sql_type()) {
+      ret = OB_ER_INVALID_USE_OF_NULL;
+      LOG_WARN("alter table add collection sql column can not has not null constraint", K(ret));
     }
   }
   if (OB_FAIL(ret)) {

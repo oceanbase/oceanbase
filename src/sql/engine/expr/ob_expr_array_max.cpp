@@ -74,7 +74,7 @@ int ObExprArrayExtreme::calc_result_type1(ObExprResType &type,
              || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     // TODO: support array of array
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "array_max with nested array");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested array");
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected ObNestedType type", K(ret), K(arr_type->element_type_->type_id_));

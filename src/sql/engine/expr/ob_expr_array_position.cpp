@@ -58,7 +58,7 @@ int ObExprArrayPosition::calc_result_type2(ObExprResType &type,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (type1.is_null()) {
-    type.set_null();
+    // do nothing
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_WARN(OB_ERR_INVALID_TYPE_FOR_OP,
@@ -70,7 +70,7 @@ int ObExprArrayPosition::calc_result_type2(ObExprResType &type,
     LOG_WARN("failed to get result array type subschema id", K(ret));
   }
 
-  if (OB_SUCC(ret) && !type1.is_null()) {
+  if (OB_SUCC(ret)) {
     type.set_int();
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);

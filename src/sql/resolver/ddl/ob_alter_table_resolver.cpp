@@ -5818,6 +5818,10 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
             add_not_null_constraint_ = true;
           }
         }
+        if (OB_SUCC(ret) && alter_column_schema.is_collection() && !alter_column_schema.is_nullable()) {
+          ret = OB_ER_INVALID_USE_OF_NULL;
+          LOG_WARN("alter table add collection sql column can not has not null constraint", K(ret));
+        }
         if (OB_SUCC(ret)) {
           if (table_schema_->is_primary_vp_table() && alter_column_schema.is_generated_column()) {
             ret = OB_NOT_SUPPORTED;
