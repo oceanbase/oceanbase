@@ -1503,7 +1503,8 @@ struct ObRebuildIndexArg: public ObIndexArg
   OB_UNIS_VERSION(1);
   //if add new member,should add to_string and serialize function
 public:
-  ObRebuildIndexArg() : ObIndexArg()
+  ObRebuildIndexArg() : ObIndexArg(),
+    vidx_refresh_info_()
   {
     index_action_type_ = REBUILD_INDEX;
     index_table_id_ = common::OB_INVALID_ID;
@@ -1516,6 +1517,7 @@ public:
       SHARE_LOG(WARN, "fail to assign base", K(ret));
     } else {
       index_table_id_ = other.index_table_id_;
+      vidx_refresh_info_ = other.vidx_refresh_info_;
     }
     return ret;
   }
@@ -1524,9 +1526,11 @@ public:
   {
     ObIndexArg::reset();
     index_action_type_ = REBUILD_INDEX;
+    vidx_refresh_info_.reset();
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
+  share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

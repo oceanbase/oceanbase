@@ -178,6 +178,10 @@ class ObVectorIndexUtil final
     ObExprVecIvfCenterIdCache pq_cache_;
   };
 public:
+  static int construct_rebuild_index_param(
+      const ObString &old_index_params,
+      ObString &new_index_params,
+      common::ObIAllocator *allocator);
   static int check_vec_index_param(
       const uint64_t tenant_id,
       const ParseNode *option_node,
@@ -189,7 +193,8 @@ public:
   static int parser_params_from_string(
       const ObString &origin_string,
       ObVectorIndexType vector_index_type,
-      ObVectorIndexParam &param);
+      ObVectorIndexParam &param,
+      const bool set_default=true);
   static int check_distance_algorithm_match(
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,

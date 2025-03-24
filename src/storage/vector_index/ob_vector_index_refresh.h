@@ -40,7 +40,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(base_tb_id), K_(domain_tb_id),
                K_(index_id_tb_id), K_(refresh_method), K_(delta_rate_threshold),
-               K_(refresh_threshold));
+               K_(refresh_threshold), K_(idx_parameters));
 
 public:
   ObArenaAllocator allocator_;

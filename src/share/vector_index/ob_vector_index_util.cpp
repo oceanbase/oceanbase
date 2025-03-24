@@ -30,7 +30,7 @@ namespace share
   预期 index_param_str 是大写的字串
 */
 int ObVectorIndexUtil::parser_params_from_string(
-    const ObString &index_param_str, ObVectorIndexType index_type, ObVectorIndexParam &param)
+    const ObString &index_param_str, ObVectorIndexType index_type, ObVectorIndexParam &param, const bool set_default)
 {
   int ret = OB_SUCCESS;
   ObString tmp_param_str = index_param_str;
@@ -163,7 +163,7 @@ int ObVectorIndexUtil::parser_params_from_string(
         }
       }
     }
-    if (OB_SUCC(ret)) {  // if vector param is not set, use default
+    if (OB_SUCC(ret) && set_default) {  // if vector param is not set, use default
       if (index_type == ObVectorIndexType::VIT_HNSW_INDEX) {
         if (param.m_ == 0) {
           param.m_ = default_m_value;
@@ -194,6 +194,151 @@ int ObVectorIndexUtil::parser_params_from_string(
       param.dim_ = 0; // TODO@xiajin: fill dim
     }
     LOG_DEBUG("parser vector index param", K(ret), K(index_param_str), K(param));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::construct_rebuild_index_param(
+    const ObString &old_index_params, ObString &new_index_params, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  ObVectorIndexParam old_vec_param;
+  ObVectorIndexParam new_vec_param;
+  ObString old_index_param_str;
+  const bool set_default = false;
+  if (old_index_params.empty() || new_index_params.empty() || OB_ISNULL(allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid params", K(ret), K(old_index_params), K(new_index_params), KP(allocator));
+  } else if (OB_FAIL(ob_simple_low_to_up(*allocator, old_index_params, old_index_param_str))) {
+    LOG_WARN("string low to up failed", K(ret), K(old_index_params));
+  } else if (OB_FAIL(ob_simple_low_to_up(*allocator, new_index_params, new_index_params))) {
+    LOG_WARN("string low to up failed", K(ret), K(new_index_params));
+  } else if (OB_FAIL(parser_params_from_string(old_index_param_str, ObVectorIndexType::VIT_HNSW_INDEX, old_vec_param, set_default))) {
+    LOG_WARN("fail to parse old index parsm", K(ret), K(old_index_param_str));
+  } else if (OB_FAIL(parser_params_from_string(new_index_params, ObVectorIndexType::VIT_HNSW_INDEX, new_vec_param, set_default))) {
+    LOG_WARN("fail to parse new index parsm", K(ret), K(new_index_params));
+  } else {
+    char not_set_params_str[OB_MAX_TABLE_NAME_LENGTH];
+    int64_t pos = 0;
+    // set distance
+    if (new_vec_param.dist_algorithm_ != ObVectorIndexDistAlgorithm::VIDA_MAX) {
+      // distance is reset, check new set is same as old, not support rebuild to new distance algorithm
+      if (new_vec_param.dist_algorithm_ != old_vec_param.dist_algorithm_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("distance must be same in rebuild now", K(ret), K(new_vec_param), K(old_vec_param));
+      }
+    } else {
+      ObString tmp_distance;
+      if (old_vec_param.dist_algorithm_ == ObVectorIndexDistAlgorithm::VIDA_L2) {
+        tmp_distance = ObString("L2");
+      } else if (old_vec_param.dist_algorithm_ == ObVectorIndexDistAlgorithm::VIDA_IP) {
+        tmp_distance = ObString("IP");
+      } else if (old_vec_param.dist_algorithm_ == ObVectorIndexDistAlgorithm::VIDA_COS) {
+        tmp_distance = ObString("COSINE");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected old vec param distance algorithm", K(ret), K(old_vec_param.dist_algorithm_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+          ", DISTANCE=%.*s", tmp_distance.length(), tmp_distance.ptr()))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(tmp_distance));
+      }
+    }
+    // set lib
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.lib_ != ObVectorIndexAlgorithmLib::VIAL_MAX) {
+      // lib is reset, check new set is same as old, not support rebuild to new lib
+      if (new_vec_param.lib_ != old_vec_param.lib_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("lib must be same in rebuild now", K(ret), K(new_vec_param), K(old_vec_param));
+      }
+    } else {
+      ObString tmp_lib;
+      if (old_vec_param.lib_ == ObVectorIndexAlgorithmLib::VIAL_VSAG) {
+        tmp_lib = ObString("VSAG");
+      } else if (old_vec_param.lib_ == ObVectorIndexAlgorithmLib::VIAL_OB) {
+        tmp_lib = ObString("OB");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected old vec param lib", K(ret), K(old_vec_param.lib_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+          ", LIB=%.*s", tmp_lib.length(), tmp_lib.ptr()))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(tmp_lib));
+      }
+    }
+    // set type
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_MAX) {
+      // type is reset, check new set is same as old, only support rebuild from hnsw <==> hnsw_sq
+      if ((new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ) ||
+          (old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("it must be rebuild from hnsw <==> hnsw_sq now", K(ret), K(new_vec_param), K(old_vec_param));
+      }
+    } else {
+      ObString tmp_type;
+      if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW) {
+        tmp_type = ObString("HNSW");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ) {
+        tmp_type = ObString("HNSW_SQ");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT) {
+        tmp_type = ObString("IVF_FLAT");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8) {
+        tmp_type = ObString("IVF_SQ8");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
+        tmp_type = ObString("IVF_PQ");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ) {
+        tmp_type = ObString("HNSW_BQ");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH) {
+        tmp_type = ObString("HGRAPH");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected old vec param type", K(ret), K(old_vec_param.type_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", TYPE=%.*s", tmp_type.length(), tmp_type.ptr()))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(tmp_type));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.m_ != 0) {
+      // m is reset
+    } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", M=%ld", old_vec_param.m_))) {
+      LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.m_));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.ef_search_ != 0) {
+      // ef_search is reset
+    } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EF_SEARCH=%ld", old_vec_param.ef_search_))) {
+      LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ef_search_));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.ef_construction_ != 0) {
+      // ef_construction is reset
+    } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EF_CONSTRUCTION=%ld", old_vec_param.ef_construction_))) {
+      LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ef_construction_));
+    }
+
+    if (OB_SUCC(ret)) {
+      char *buf = nullptr;
+      const int64_t alloc_len = new_index_params.length() + pos;
+      if (OB_ISNULL(buf = (static_cast<char *>(allocator->alloc(alloc_len))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for vector index param", K(ret), K(alloc_len));
+      } else {
+        MEMCPY(buf, new_index_params.ptr(), new_index_params.length());
+        MEMCPY(buf + new_index_params.length(), not_set_params_str, pos);
+        new_index_params.assign_ptr(buf, alloc_len);
+        LOG_DEBUG("vector index params", K(new_index_params));
+      }
+    }
+    LOG_DEBUG("construct_rebuild_index_param", K(new_index_params));
   }
   return ret;
 }
@@ -1886,7 +2031,6 @@ int ObVectorIndexUtil::update_index_tables_attributes(
   return ret;
 }
 
-
 int ObVectorIndexUtil::generate_index_schema_from_exist_table(
     const int64_t tenant_id,
     share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1898,6 +2042,7 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
   int ret = OB_SUCCESS;
   const ObTableSchema *old_index_schema = nullptr;
   const ObTableSchema *old_domain_index_schema = nullptr;
+  const ObString new_index_params = create_index_arg.vidx_refresh_info_.index_params_;
   const int64_t old_domain_table_id = create_index_arg.index_table_id_;
   const ObString database_name = create_index_arg.database_name_;
   const ObString new_index_name_suffix = create_index_arg.index_name_;  // e.g: idx_xxx_delta_buffer_table, idx_xxx_index_id_table...
@@ -1965,9 +2110,12 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
       new_index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
       new_index_schema.set_table_state_flag(data_table_schema.get_table_state_flag());
       new_index_schema.set_exec_env(create_index_arg.vidx_refresh_info_.exec_env_);
+      if (!new_index_params.empty()) {
+        new_index_schema.set_index_params(new_index_params);
+      }
     }
   }
-  LOG_DEBUG("generate_index_schema_from_exist_table", K(ret), K(new_index_table_name));
+  LOG_DEBUG("generate_index_schema_from_exist_table", K(ret), K(new_index_params), K(new_index_table_name));
   return ret;
 }
 
