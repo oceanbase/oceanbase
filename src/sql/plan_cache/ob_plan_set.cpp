@@ -568,6 +568,9 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
         }
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(pc_ctx.sql_ctx_.session_info_) && is_same) {
+      is_same = (is_cli_return_rowid_ == pc_ctx.sql_ctx_.session_info_->is_client_return_rowid());
+    }
     if (OB_SUCC(ret) && is_same) {
       if (OB_FAIL(ObPlanCacheObject::match_pre_calc_cons(all_pre_calc_constraints_, pc_ctx,
                                                          is_ignore_stmt_, is_same))) {
