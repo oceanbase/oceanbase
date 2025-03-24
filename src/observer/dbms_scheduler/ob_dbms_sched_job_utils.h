@@ -24,6 +24,10 @@
 #define DATA_VERSION_SUPPORT_JOB_CLASS(data_version) (data_version >= DATA_VERSION_4_3_2_0)
 #define DATA_VERSION_SUPPORT_RUN_DETAIL_V2(data_version) ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) || DATA_VERSION_4_3_2_0 <= data_version)
 #define DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version) (DATA_VERSION_4_3_2_1 <= data_version)
+#define DATA_VERSION_SUPPORT_EXECUTE_DATE(data_version) (DATA_VERSION_4_3_5_2 <= data_version)
+#define DATA_VERSION_SUPPORT_STOP_JOB(data_version) ((MOCK_DATA_VERSION_4_2_1_5 <= data_version && DATA_VERSION_4_2_2_0 > data_version) \
+                                                  || (MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) \
+                                                  || (DATA_VERSION_4_3_2_0 <= data_version))
 
 namespace oceanbase
 {
@@ -146,7 +150,10 @@ public:
     interval_ts_(),
     is_oracle_tenant_(true),
     max_failures_(0),
-    func_type_(ObDBMSSchedFuncType::FUNCTION_TYPE_MAXNUM) {}
+    func_type_(ObDBMSSchedFuncType::FUNCTION_TYPE_MAXNUM),
+    this_exec_date_(0),
+    this_exec_addr_(),
+    this_exec_trace_id_() {}
 
   TO_STRING_KV(K(tenant_id_),
                K(user_id_),
@@ -180,7 +187,10 @@ public:
                K(interval_ts_),
                K(max_failures_),
                K(state_),
-               K(func_type_));
+               K(func_type_),
+               K(this_exec_date_),
+               K(this_exec_addr_),
+               K(this_exec_trace_id_));
 
   bool valid()
   {
@@ -203,11 +213,13 @@ public:
   int64_t  get_start_date() { return start_date_; }
   int64_t  get_end_date() { return end_date_; }
   int64_t  get_auto_drop() { return auto_drop_; }
+  int64_t  get_this_exec_date() { return this_exec_date_; }
   ObDBMSSchedFuncType get_func_type() const;
 
   bool is_completed() { return 0 == state_.case_compare("COMPLETED"); }
   bool is_broken() { return 0 == state_.case_compare("BROKEN"); }
   bool is_running(){ return this_date_ != 0; }
+  bool is_on_executing(){ return this_exec_date_ != 0; }
   bool is_disabled() { return 0x0 == (enabled_ & 0x1); }
   bool is_killed() { return 0 == state_.case_compare("KILLED"); }
 
@@ -223,6 +235,8 @@ public:
   common::ObString &get_job_name() { return job_name_; }
   common::ObString &get_job_class() { return job_class_; }
   common::ObString &get_job_action() { return job_action_; }
+  common::ObString &get_this_exec_addr() { return this_exec_addr_; }
+  common::ObString &get_this_exec_trace_id() { return this_exec_trace_id_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
   bool is_default_job_class() const { return (0 == job_class_.case_compare("DEFAULT_JOB_CLASS")); }
@@ -281,6 +295,9 @@ public:
   bool is_oracle_tenant_;
   int64_t max_failures_;
   ObDBMSSchedFuncType func_type_;
+  int64_t this_exec_date_;
+  common::ObString this_exec_addr_;
+  common::ObString this_exec_trace_id_;
 
 public:
   static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
@@ -498,6 +515,8 @@ public:
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 无效参数
    */
+  static int get_dbms_sched_running_job_count(const ObDBMSSchedJobInfo &job_info,
+                                        int64_t &running_job_count);
   static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time);
   static int zone_check_impl(int64_t tenant_id, const ObString &zone);
   static int job_class_check_impl(int64_t tenant_id, const ObString &job_class_name);

@@ -55,13 +55,17 @@ public:
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
 
   int update_for_start(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date, ObAddr execute_addr);
+
+  int update_for_start_execute(
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
 
   int update_for_missed(ObDBMSSchedJobInfo &job_info);
   int update_for_zone_not_exist(ObDBMSSchedJobInfo &job_info);
   int update_for_enddate(ObDBMSSchedJobInfo &job_info);
   int update_for_rollback(ObDBMSSchedJobInfo &job_info);
   int update_for_timeout(ObDBMSSchedJobInfo &job_info);
+  int update_for_lost(ObDBMSSchedJobInfo &job_info);
   int update_for_end(ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
   int update_for_kill(ObDBMSSchedJobInfo &job_info);
   int get_dbms_sched_job_is_killed(const ObDBMSSchedJobInfo &job_info, bool &is_killed);

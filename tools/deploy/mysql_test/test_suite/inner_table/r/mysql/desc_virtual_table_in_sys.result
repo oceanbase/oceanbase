@@ -6379,6 +6379,9 @@ database_id	bigint(20)	YES		-1
 max_failures	bigint(20)	YES		0	
 func_type	bigint(20)	YES		0	
 schedule_type	varchar(12)	YES		NULL	
+this_exec_date	timestamp(6)	YES		NULL	
+this_exec_addr	varchar(46)	YES		NULL	
+this_exec_trace_id	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10571,6 +10574,10 @@ destination_owner	varchar(128)	YES		NULL
 destination	varchar(128)	YES		NULL	
 message	varchar(4000)	NO		NULL	
 database_name	varchar(128)	YES		NULL	
+this_date	timestamp(6)	YES		NULL	
+this_exec_date	timestamp(6)	YES		NULL	
+this_exec_addr	varchar(46)	YES		NULL	
+this_exec_trace_id	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_scheduler_job_run_detail_v2;
 IF(count(*) >= 0, 1, 0)
 1

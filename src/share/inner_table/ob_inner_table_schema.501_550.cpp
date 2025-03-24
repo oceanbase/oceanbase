@@ -3918,6 +3918,68 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_schema(ObTableSchema &ta
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_TS("this_date", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTimestampType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(ObPreciseDateTime), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      false); //is_on_update_for_timestamp
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_TS("this_exec_date", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTimestampType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(ObPreciseDateTime), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      false); //is_on_update_for_timestamp
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("this_exec_addr", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      MAX_IP_ADDR_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("this_exec_trace_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_TRACE_ID_BUFFER_SIZE, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

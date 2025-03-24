@@ -54,7 +54,7 @@ int ObDBMSSchedTableOperator::update_next_date(
 
 
 int ObDBMSSchedTableOperator::update_for_start(
-  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date)
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date, ObAddr execute_addr)
 {
   int ret = OB_SUCCESS;
 
@@ -62,6 +62,7 @@ int ObDBMSSchedTableOperator::update_for_start(
   ObSqlString sql;
   int64_t affected_rows = 0;
   const int64_t now = ObTimeUtility::current_time();
+  uint64_t data_version = 0;
 
   CK (OB_NOT_NULL(sql_proxy_));
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
@@ -75,10 +76,51 @@ int ObDBMSSchedTableOperator::update_for_start(
   OZ (dml.add_time_column("this_date", job_info.this_date_));
   OZ (dml.add_time_column("next_date", next_date));
   OZ (dml.add_column("state", "SCHEDULED"));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_SUPPORT_EXECUTE_DATE(data_version)) {
+    char ip_port_buf[common::OB_IP_PORT_STR_BUFF];
+    char trace_id_buf[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+    OZ (execute_addr.ip_port_to_string(ip_port_buf, common::OB_IP_PORT_STR_BUFF));
+    OV (0 < common::ObCurTraceId::get_trace_id()->to_string(trace_id_buf, common::OB_MAX_TRACE_ID_BUFFER_SIZE), OB_SIZE_OVERFLOW);
+    OZ (dml.add_column("this_exec_addr", ip_port_buf));
+    OZ (dml.add_column("this_exec_trace_id", trace_id_buf));
+  }
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (sql.append_fmt(" and this_date is null"));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
   CK (affected_rows == 1);
+  return ret;
+}
+
+int ObDBMSSchedTableOperator::update_for_start_execute(
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_SUPPORT_EXECUTE_DATE(data_version)) {
+    ObDMLSqlSplicer dml;
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    const int64_t now = ObTimeUtility::current_time();
+    CK (OB_NOT_NULL(sql_proxy_));
+    CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+    CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
+    OZ (dml.add_gmt_modified(now));
+    OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+    OZ (dml.add_pk_column("job", job_info.job_));
+    OZ (dml.add_pk_column("job_name", job_info.job_name_));
+    OZ (dml.add_time_column("this_exec_date", now));
+    OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+    OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
+    job_info.this_exec_date_ = now;
+  }
   return ret;
 }
 
@@ -100,6 +142,7 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   int ret = OB_SUCCESS;
   ObDMLSqlSplicer dml;
   int64_t tenant_id = job_info.tenant_id_;
+  uint64_t data_version = 0;
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id",
         ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
@@ -113,6 +156,15 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   OZ (dml.add_time_column("last_date", job_info.this_date_));
   OZ (dml.add_column("failures", job_info.failures_));
   OZ (dml.add_column("total", job_info.total_));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_SUPPORT_EXECUTE_DATE(data_version)) {
+    OZ (dml.add_column(true, "this_exec_date"));
+    OZ (dml.add_column(true, "this_exec_addr"));
+    OZ (dml.add_column(true, "this_exec_trace_id"));
+  }
   // job reach end_date before first scheduled shoule updated too
   OZ (dml.get_extra_condition().assign_fmt("(state is NULL OR state!='BROKEN') AND (last_date is null OR last_date<=usec_to_time(%ld))", job_info.last_date_));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
@@ -160,6 +212,16 @@ int ObDBMSSchedTableOperator::_build_job_log_dml(
       OZ (dml.add_column("operation", ObHexEscapeSqlStr(job_info.job_action_)));
       OZ (dml.add_column("status", job_info.state_));
       OZ (dml.add_time_column("req_start_date", job_info.start_date_));
+    }
+    if (DATA_VERSION_SUPPORT_EXECUTE_DATE(data_version)) {
+      OZ (dml.add_time_column("this_date", job_info.this_date_));
+      if (job_info.this_exec_date_ > 0) {
+        OZ (dml.add_time_column("this_exec_date", job_info.this_exec_date_));
+      } else {
+        OZ (dml.add_column(true, "this_exec_date"));
+      }
+      OZ (dml.add_column("this_exec_addr", job_info.this_exec_addr_));
+      OZ (dml.add_column("this_exec_trace_id", job_info.this_exec_trace_id_));
     }
     OZ (dml.add_pk_column("job_name", job_info.job_name_));
     OZ (dml.splice_insert_sql(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME, sql));
@@ -317,6 +379,13 @@ int ObDBMSSchedTableOperator::update_for_timeout(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   OZ (update_for_end(job_info, -4012, "check job timeout"));
+  return ret;
+}
+
+int ObDBMSSchedTableOperator::update_for_lost(ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  OZ (update_for_end(job_info, -4016, "check job lost"));
   return ret;
 }
 
@@ -533,6 +602,7 @@ do {                                                                  \
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "total", job_info_local.total_, uint64_t);
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "start_date", job_info_local.start_date_);
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "end_date", job_info_local.end_date_);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "this_exec_date", job_info_local.this_exec_date_);
 
 #undef EXTRACT_NUMBER_FIELD_MYSQL_SKIP_RET
 #undef EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET
@@ -566,6 +636,8 @@ do {                                                                  \
   //comments not used
   //credential_name not used
   //destination_name not used
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_addr", job_info_local.this_exec_addr_);
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_trace_id", job_info_local.this_exec_trace_id_);
   OZ (job_info.deep_copy(allocator, job_info_local));
 
   return ret;

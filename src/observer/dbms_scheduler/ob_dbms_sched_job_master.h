@@ -149,6 +149,7 @@ private:
   const static int FILTER_ZONE_SIZE = 1;
   const static int DEFALUT_SERVER_SIZE = 16;
   const static uint64_t PURGE_RUN_DETAIL_INTERVAL = 60 * 60 * 1000 * 1000L;//1h
+  const static int CHECK_JOB_LOST_THRESHOLD = 60 * 1000 * 1000;
 
   bool inited_;
   bool stoped_;

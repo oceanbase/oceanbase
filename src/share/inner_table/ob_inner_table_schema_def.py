@@ -4454,7 +4454,10 @@ def_table_schema(
     ('database_id', 'int', 'true', 'OB_INVALID_ID'),
     ('max_failures', 'int', 'true', '0'),
     ('func_type', 'int', 'true', '0'),
-    ('schedule_type', 'varchar:12', 'true')
+    ('schedule_type', 'varchar:12', 'true'),
+    ('this_exec_date', 'timestamp', 'true'),
+    ('this_exec_addr', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('this_exec_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
   ],
 )
 
@@ -7667,6 +7670,10 @@ def_table_schema(
     ('destination', 'varchar:128', 'true'),
     ('message', 'varchar:4000'),
     ('database_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
+    ('this_date', 'timestamp', 'true'),
+    ('this_exec_date', 'timestamp', 'true'),
+    ('this_exec_addr', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('this_exec_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
   ],
 )
 

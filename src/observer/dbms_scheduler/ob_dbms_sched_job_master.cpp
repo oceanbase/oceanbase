@@ -129,7 +129,7 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
     LOG_WARN("failed to get execute addr, retry soon", K(ret), K(job_info));
   } else if (ObTimeUtility::current_time() > job_info.get_end_date()) {
     LOG_INFO("job reach end date, not running", K(job_info));
-  } else if (OB_FAIL(table_operator_.update_for_start(job_info.get_tenant_id(), job_info, next_date))) {
+  } else if (OB_FAIL(table_operator_.update_for_start(job_info.get_tenant_id(), job_info, next_date, execute_addr))) {
     LOG_WARN("failed to update for start", K(ret), K(job_info), KPC(job_key));
   } else if (OB_FAIL(job_rpc_proxy_->run_dbms_sched_job(job_key->get_tenant_id(),
       job_key->is_oracle_tenant(),
@@ -241,13 +241,25 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       job_key = NULL;
       LOG_INFO("free invalid job", K(job_info));
     } else if (job_info.is_running()) {
-      LOG_INFO("job is running now, retry later", K(job_info));
       if (now > job_info.get_this_date() + TO_TS(job_info.get_max_run_duration())) {
         if (OB_FAIL(table_operator_.update_for_timeout(job_info))) {
           LOG_WARN("update for end failed for timeout job", K(ret));
         } else {
           LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
         }
+      } else if (job_info.is_on_executing()) {
+        int64_t running_job_count = 0;
+        if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_running_job_count(job_info, running_job_count))) {
+          LOG_WARN("update for end failed for timeout job", K(ret));
+        } else if (running_job_count == 0 && REACH_TIME_INTERVAL_NO_INSTANT(CHECK_JOB_LOST_THRESHOLD)) {
+          if (OB_FAIL(table_operator_.update_for_lost(job_info))) {
+            LOG_WARN("update for end failed for lost job", K(ret));
+          } else {
+            LOG_WARN("job session not exist, regarded as lost, force update for end", K(job_info), K(now));
+          }
+        }
+      } else {
+        LOG_INFO("job is running now, retry later", K(job_info));
       }
     } else if (job_info.is_killed()) {
       free_job_key(job_key);

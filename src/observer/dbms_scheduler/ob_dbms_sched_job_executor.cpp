@@ -377,6 +377,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       OZ (ObDBMSSchedJobExecutor::init_env(job_info, *session_info));
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
+      OZ (table_operator_.update_for_start_execute(tenant_id, job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
       OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
       if (OB_NOT_NULL(conn)) {
