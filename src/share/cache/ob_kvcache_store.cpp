@@ -869,6 +869,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
         while (OB_SUCC(ret) && size_retired < size_to_retire && head != handle) {
           bool can_try_wash = false;
           int64_t status = -1;
+          int64_t size;
           do {
             ret = hazptr_holder.protect(protect_success, handle);
           } while (OB_UNLIKELY(OB_ALLOCATE_MEMORY_FAILED == ret));
@@ -883,6 +884,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
             status = handle->get_status();
             if (FULL == status) {
               if (-1 == cache_id || cache_id == handle->inst_->cache_id_) {
+                size = handle->mem_block_->get_size();
                 can_try_wash = true;
               }
             }
@@ -890,7 +892,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
           }
           if (can_try_wash) {
             if (handle->retire()) {
-              size_retired += handle->mem_block_->get_size();
+              size_retired += size;
             }
           } else {
             if (force_flush && protect_success) {
