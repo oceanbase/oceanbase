@@ -2364,6 +2364,7 @@ DEFINE_ERROR_DEP(OB_ERR_DUPLICATE_INDEX, -9137, ER_DUP_INDEX, "HY000", "Duplicat
 DEFINE_ERROR(OB_NO_LS_REPLICA_CAN_DO_BACKUP, -9138, -1, "HY000", "No suitable replica found to perform backup");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_KMS_DEST, -9139, -1, "HY000", "kms destination is not valid", "%s is not a valid uri");
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM, -9140, -1, "HY000", "the object is locked by worm");
+DEFINE_ERROR(OB_RESOURCE_RELEASED, -9141, -1, "HY000", "the resource has been released");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
