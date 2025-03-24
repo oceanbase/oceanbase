@@ -2530,6 +2530,7 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
         if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
           LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
         } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+          ObTabletHandle lob_meta_tablet_handle;
           bool is_lob_major_sstable_exist = false;
           if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->get_tablet_mgr_and_check_major(arg_.ls_id_, ddl_data.lob_meta_tablet_id_,
                   true/* is_full_direct_load */, lob_direct_load_mgr_handle, is_lob_major_sstable_exist))) {
@@ -2542,7 +2543,12 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
           } else if (OB_ISNULL(lob_direct_load_mgr_handle.get_full_obj())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("lob direct load mgr should not be null", K(ret), K(lob_direct_load_mgr_handle));
-          } else if (OB_FAIL(lob_direct_load_mgr_handle.get_full_obj()->commit(*tablet_handle.get_obj(),
+          } else if (OB_FAIL(ls->get_tablet(ddl_data.lob_meta_tablet_id_, lob_meta_tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+            LOG_WARN("get tablet handle failed", K(ret), K(arg_.ls_id_), K(ddl_data.lob_meta_tablet_id_));
+          } else if (OB_ISNULL(lob_meta_tablet_handle.get_obj())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("lob meta tablet is null", K(ret), K(ddl_data.lob_meta_tablet_id_), K(lob_meta_tablet_handle));
+          } else if (OB_FAIL(lob_direct_load_mgr_handle.get_full_obj()->commit(*lob_meta_tablet_handle.get_obj(),
                                                                                arg_.start_scn_,
                                                                                commit_scn,
                                                                                arg_.table_id_,
