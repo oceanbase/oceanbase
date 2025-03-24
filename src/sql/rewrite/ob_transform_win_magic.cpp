@@ -47,6 +47,8 @@ int ObTransformWinMagic::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &p
   if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (stmt->get_stmt_type() == stmt::StmtType::T_MERGE) {
+    // do nothing
   } else if (OB_FAIL(get_view_to_trans(stmt, drill_down_idx, roll_up_idx, context, map_info, trans_tables))) {
     LOG_WARN("get view to trans failed", K(ret));
   } else if (drill_down_idx == -1 || roll_up_idx == -2) {
