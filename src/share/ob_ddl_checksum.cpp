@@ -447,50 +447,53 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
   }
   return ret;
 }
-int ObDDLChecksumOperator::get_tablet_checksum_record_without_execution_id(
+
+// for performance reasons, only check the checksum of index tablet here
+// the data complete sql should ensure that there are checksum values of data tablet of max execution_id of index tablet
+int ObDDLChecksumOperator::get_local_index_tablet_finish_status(
   const uint64_t tenant_id,
-  const uint64_t table_id,
+  const uint64_t data_table_id,
+  const uint64_t index_table_id,
   const int64_t ddl_task_id,
   const ObIArray<ObTabletID> &tablet_ids,
   ObMySQLProxy &sql_proxy,
-  common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_status_map)
+  common::hash::ObHashMap<uint64_t, bool> &tablet_finished_map)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  tablet_checksum_status_map.reuse();
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id|| OB_INVALID_ID == table_id || OB_INVALID_ID == ddl_task_id ||
-                  tablet_ids.count() <= 0 || !tablet_checksum_status_map.created())) {
+  tablet_finished_map.reuse();
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id|| OB_INVALID_ID == data_table_id || OB_INVALID_ID == index_table_id || OB_INVALID_ID == ddl_task_id ||
+                  tablet_ids.count() <= 0 || !tablet_finished_map.created())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(ddl_task_id), K(tablet_ids.count()), K(tablet_checksum_status_map.created()));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), K(ddl_task_id), K(tablet_ids.count()), K(tablet_finished_map.created()));
   } else {
     int64_t batch_size = 100;
     ObArray<uint64_t> batch_tablet_array;
     // check every tablet column checksum, task_id is equal to tablet_id
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-      uint64_t last_tablet_id_id = tablet_ids.at(i).id();
-      if (OB_FAIL(batch_tablet_array.push_back(last_tablet_id_id))) {
-        LOG_WARN("fail to push back tablet_id_id", K(ret), K(tenant_id), K(ddl_task_id), K(last_tablet_id_id));
-      } else {
+      uint64_t cur_tablet_id = tablet_ids.at(i).id();
+      if (OB_FAIL(batch_tablet_array.push_back(cur_tablet_id))) {
+        LOG_WARN("fail to push back tablet_id_id", K(ret), K(tenant_id), K(ddl_task_id), K(cur_tablet_id));
+      } else if ((i != 0 && i % batch_size == 0) /* reach batch size */ || i == tablet_ids.count() - 1 /* reach end */) {
         lib::ob_sort(batch_tablet_array.begin(), batch_tablet_array.end());
-        if ((i != 0 && i % batch_size == 0) /* reach batch size */ || i == tablet_ids.count() - 1 /* reach end */) {
-          if (OB_FAIL(sql.assign_fmt(
-              "SELECT task_id FROM %s "
-              "WHERE tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id >= %ld and task_id <= %ld "
-              "GROUP BY task_id",
-              OB_ALL_DDL_CHECKSUM_TNAME,
-              ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-              ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
-              ddl_task_id,
-              batch_tablet_array.at(0), // first tablet_id in one batch
-              batch_tablet_array.at(batch_tablet_array.count() - 1)))) {    // last  tablet id in one batch
-            LOG_WARN("fail to assign fmt", K(ret), K(tenant_id), K(exec_tenant_id), K(ddl_task_id), K(batch_tablet_array.at(0)), K(batch_tablet_array.at(batch_tablet_array.count() - 1)));
-          } else if (OB_FAIL(get_tablet_checksum_status(
-              sql, tenant_id, batch_tablet_array, sql_proxy, tablet_checksum_status_map))) {
-            LOG_WARN("fail to get column checksum", K(ret), K(sql), K(tenant_id), K(batch_tablet_array));
-          } else {
-            batch_tablet_array.reset();
-          }
+        const uint64_t first_tablet_id = batch_tablet_array.at(0);
+        const uint64_t last_tablet_id = batch_tablet_array.at(batch_tablet_array.count() - 1);
+        if (OB_FAIL(sql.assign_fmt(
+            "SELECT task_id FROM %s "
+            "WHERE tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id >= %ld and task_id <= %ld "
+            "GROUP BY task_id",
+            OB_ALL_DDL_CHECKSUM_TNAME,
+            ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+            ObSchemaUtils::get_extract_schema_id(exec_tenant_id, index_table_id),
+            ddl_task_id,
+            first_tablet_id, // first tablet id in one batch
+            last_tablet_id))) { // last tablet id in one batch
+          LOG_WARN("fail to assign fmt", K(ret), K(tenant_id), K(exec_tenant_id), K(ddl_task_id), K(first_tablet_id), K(last_tablet_id));
+        } else if (OB_FAIL(get_tablet_checksum_status(sql, tenant_id, batch_tablet_array, sql_proxy, tablet_finished_map))) {
+          LOG_WARN("fail to get column checksum", K(ret), K(sql), K(tenant_id), K(batch_tablet_array));
+        } else {
+          batch_tablet_array.reset();
         }
       }
     }

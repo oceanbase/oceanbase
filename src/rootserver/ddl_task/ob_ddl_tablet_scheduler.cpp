@@ -52,7 +52,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
   common::ObArray<ObString> running_sql_info;
   common::ObArray<ObLSID> ls_ids;
   common::ObArray<ObTabletID> ref_data_table_tablets;
-  common::hash::ObHashMap<uint64_t, bool> tablet_checksum_status_map;
+  common::hash::ObHashMap<uint64_t, bool> tablet_finished_map;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -96,7 +96,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     LOG_WARN("fail to create lsid location map", K(ret), K(tablets.count()));
   } else if (OB_FAIL(running_ls_to_execution_id_.create(tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create lsid to execution id map", K(ret), K(tablets.count()));
-  } else if (OB_FAIL(tablet_checksum_status_map.create(tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
+  } else if (OB_FAIL(tablet_finished_map.create(tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret), K(tablets.count()));
   } else if (OB_FAIL(tablet_id_to_data_size_.create(ref_data_table_tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret), K(ref_data_table_tablets.count()));
@@ -104,13 +104,14 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     LOG_WARN("fail to create column checksum map", K(ret), K(ref_data_table_tablets.count()));
   } else if (OB_FAIL(tablet_scheduled_times_statistic_.create(ref_data_table_tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create tablet scheduled count statistic map", K(ret), K(ref_data_table_tablets.count()));
-  } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record_without_execution_id(
+  } else if (OB_FAIL(ObDDLChecksumOperator::get_local_index_tablet_finish_status(
     tenant_id,
+    ref_data_table_id,
     table_id,
     task_id,
     tablets,
     GCTX.root_service_->get_sql_proxy(),
-    tablet_checksum_status_map))) {
+    tablet_finished_map))) {
     LOG_WARN("fail to get tablet checksum status", K(ret), K(tenant_id), K(table_id), K(task_id), K(tablets));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id, tenant_id, task_id, snapshot_version, inner_sql_exec_addr, arena, running_sql_info))) {
     LOG_WARN("get running tasks inner sql fail", K(ret), K(trace_id), K(tenant_id), K(task_id), K(snapshot_version), K(inner_sql_exec_addr), K(running_sql_info));
@@ -141,7 +142,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
       } else if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id, ref_data_table_id, table_id, part_tablets, arena, partition_names))) {
         LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id), K(ref_data_table_id), K(table_id), K(part_tablets), K(partition_names));
       } else {
-        if (OB_FAIL(tablet_checksum_status_map.get_refactored(tablets.at(i).id(), is_finished_status))) {
+        if (OB_FAIL(tablet_finished_map.get_refactored(tablets.at(i).id(), is_finished_status))) {
           if (OB_HASH_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
           }
@@ -218,7 +219,6 @@ int ObDDLTabletScheduler::get_next_batch_tablets(int64_t &parallelism, int64_t &
   leader_addr.reset();
   tablets.reset();
   share::ObDDLType task_type = share::DDL_CREATE_PARTITIONED_LOCAL_INDEX;
-  common::hash::ObHashMap<uint64_t, bool> tablet_checksum_status_map;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -682,7 +682,7 @@ int ObDDLTabletScheduler::check_target_ls_tasks_completion_status(const share::O
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletID> running_tablet_queue;
-  common::hash::ObHashMap<uint64_t, bool> tablet_checksum_status_map;
+  common::hash::ObHashMap<uint64_t, bool> tablet_finished_map;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -693,23 +693,24 @@ int ObDDLTabletScheduler::check_target_ls_tasks_completion_status(const share::O
     LOG_WARN("fail to get target running ls tablets", K(ret), K(ls_id),K(running_tablet_queue));
   } else if (OB_UNLIKELY(running_tablet_queue.count() < 1)) {
     // do nothing, the ls tasks have finished and reported
-  } else if (OB_FAIL(tablet_checksum_status_map.create(running_tablet_queue.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
+  } else if (OB_FAIL(tablet_finished_map.create(running_tablet_queue.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create tablet checksum status map", K(ret), K(running_tablet_queue.count()));
   } else if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rootservice is null", K(ret));
-  } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record_without_execution_id(
+  } else if (OB_FAIL(ObDDLChecksumOperator::get_local_index_tablet_finish_status(
     tenant_id_,
+    ref_data_table_id_,
     table_id_,
     task_id_,
     running_tablet_queue,
     GCTX.root_service_->get_sql_proxy(),
-    tablet_checksum_status_map))) {
+    tablet_finished_map))) {
     LOG_WARN("fail to get tablet checksum status", K(ret), K(tenant_id_), K(table_id_), K(task_id_), K(running_tablet_queue));
   } else {
     bool is_finished_status = true;
     for (int64_t i = 0; i < running_tablet_queue.count() && OB_SUCC(ret); i++) {
-      if (OB_FAIL(tablet_checksum_status_map.get_refactored(running_tablet_queue.at(i).id(), is_finished_status))) {
+      if (OB_FAIL(tablet_finished_map.get_refactored(running_tablet_queue.at(i).id(), is_finished_status))) {
         if (OB_HASH_NOT_EXIST == ret) {
           LOG_WARN("tablet checksum is not exist", K(ret), K(running_tablet_queue.at(i)), K(is_finished_status));
           is_finished_status = false;

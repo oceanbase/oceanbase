@@ -585,7 +585,9 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     LOG_WARN("invalid argument", K(ret), K(tablet_id), K(context_id));
   } else if (OB_FAIL(get_tablet_mgr(data_mgr_key, handle))) {
     if (OB_ENTRY_NOT_EXIST == ret && is_full_direct_load_task) {
-      if (OB_FAIL(check_and_process_finished_tablet(ls_id, tablet_id, nullptr/*row_iterator*/, task_id, table_id, execution_id))) {
+      if (!need_commit) {
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(check_and_process_finished_tablet(ls_id, tablet_id, nullptr/*row_iterator*/, task_id, table_id, execution_id))) {
         LOG_WARN("check and report checksum if need failed", K(ret), K(ls_id), K(tablet_id), K(task_id), K(execution_id));
       }
     } else {
