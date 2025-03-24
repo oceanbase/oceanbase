@@ -42,8 +42,10 @@ struct ToDecimalintCastImpl
             bool can_fast_strtoll = true;
             ObString in_str(arg_vec_->get_length(idx), arg_vec_->get_payload(idx));
             OUT_TYPE out_val = CastHelperImpl::fast_strtoll(in_str, expr.datum_meta_.precision_, can_fast_strtoll);
-            OUT_TYPE mul_val;
-            if (can_fast_strtoll && !wide::mul_overflow(out_val, sf_, mul_val)) {
+            OUT_TYPE mul_val = out_val;
+            // For scenes where datum_meta_.scale_ is 0, no need to do mul calculations.
+            if (can_fast_strtoll && (expr.datum_meta_.scale_ == 0
+                                     || !wide::mul_overflow(out_val, sf_, mul_val))) {
               switch (get_decimalint_type(expr.datum_meta_.precision_)) {
                 case common::DECIMAL_INT_32: {
                   int32_t out_val2 = mul_val;
