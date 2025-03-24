@@ -6653,39 +6653,37 @@ int ObRootService::alter_package_common(const obrpc::ObAlterPackageArg &arg,
         } else if (OB_ISNULL(package_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("package info is null", K(db_schema->get_database_id()), K(package_name), K(package_type), K(ret));
-        }
-        if (OB_SUCC(ret)) {
-          if (!(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_4_0) || PACKAGE_TYPE == package_type) {
+        } else {
+          ObPackageInfo new_package_info;
+          if (OB_FAIL(new_package_info.assign(*package_info))) {
+            LOG_WARN("failed to copy new package info", K(ret));
+          } else if (OB_FAIL(new_package_info.set_exec_env(arg.exec_env_))) {
+            LOG_WARN("fail to set exec env", K(ret));
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (!(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_4_0) || PACKAGE_TYPE == package_type) {
             if (OB_FAIL(ddl_service_.alter_package(schema_guard,
-                                                    const_cast<ObPackageInfo &>(*package_info),
-                                                    public_routine_infos,
-                                                    const_cast<ObErrorInfo &>(arg.error_info_),
-                                                    &arg.ddl_stmt_str_))) {
-              LOG_WARN("drop package failed", K(ret), K(package_name));
-            }
-            if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
-              res->store_routine_schema_version_ = package_info->get_schema_version();
+                                                   new_package_info,
+                                                   public_routine_infos,
+                                                   const_cast<ObErrorInfo &>(arg.error_info_),
+                                                   &arg.ddl_stmt_str_))) {
+              LOG_WARN("drop package failed", K(ret), K(package_name), K(new_package_info));
             }
           } else {
-            ObSArray<ObDependencyInfo> &dep_infos =
-                               const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
-            ObPackageInfo new_package_info;
-            if (OB_FAIL(new_package_info.assign(*package_info))) {
-              LOG_WARN("failed to copy new package info", K(ret));
-            } else if (OB_FAIL(new_package_info.set_exec_env(arg.exec_env_))) {
-              LOG_WARN("fail to set exec env", K(ret));
-            } else if (OB_FAIL(ddl_service_.create_package(schema_guard,
+            if (OB_FAIL(ddl_service_.create_package(schema_guard,
                                                     package_info,
                                                     new_package_info,
                                                     public_routine_infos,
                                                     const_cast<ObErrorInfo &>(arg.error_info_),
-                                                    dep_infos,
+                                                    const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_),
                                                     &arg.ddl_stmt_str_))) {
-              LOG_WARN("create package failed", K(ret), K(new_package_info));
+              LOG_WARN("create package failed", K(ret), K(package_name), K(new_package_info));
             }
-            if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
-              res->store_routine_schema_version_ = new_package_info.get_schema_version();
-            }
+          }
+
+          if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+            res->store_routine_schema_version_ = new_package_info.get_schema_version();
           }
         }
       } else {
