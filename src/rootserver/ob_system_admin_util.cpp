@@ -2236,11 +2236,12 @@ int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common
     } else if (!SVR_TRACER.has_build()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server manager hasn't built", KR(ret));
-    } else if (OB_FAIL(ctx_.unit_mgr_->check_inner_stat())) {
-      ret = OB_SERVER_IS_INIT;
-      LOG_WARN("unit manager is not inited", KR(ret));
     } else if (OB_FAIL(ctx_.unit_mgr_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
       LOG_WARN("get_pool_ids_of_tenant failed", K(tenant_id), KR(ret));
+      if (OB_NOT_INIT == ret || OB_INNER_STAT_ERROR == ret) {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("unit manager is not inited", KR(ret));
+      }
     } else {
       ObArray<ObUnitInfo> unit_infos;
       for (int64_t i = 0; OB_SUCC(ret) && i < pool_ids.count(); ++i) {

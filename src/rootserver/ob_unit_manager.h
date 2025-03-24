@@ -130,7 +130,6 @@ public:
            share::schema::ObMultiVersionSchemaService &schema_service,
            ObRootBalancer &root_balance,
            ObRootService &root_service);
-  virtual int check_inner_stat() const;
   virtual int load();
   common::SpinRWLock& get_lock() { return lock_; }
   common::ObMySQLProxy &get_sql_proxy() { return *proxy_; }
@@ -384,6 +383,8 @@ private:
   static const int64_t NOTIFY_RESOURCE_RPC_TIMEOUT = 9 * 1000000; // 9 second
 
 private:
+  // make sure lock_ is held when calling this method
+  int check_inner_stat_() const;
   // for ObServerBalancer
   IdPoolMap& get_id_pool_map() { return id_pool_map_; }
   TenantPoolsMap& get_tenant_pools_map() { return tenant_pools_map_; }
@@ -1198,7 +1199,7 @@ int ObUnitManager::check_schema_zone_unit_enough(
   int ret = OB_SUCCESS;
   enough = true;
   SpinRLockGuard guard(lock_);
-  if (OB_FAIL(check_inner_stat())) {
+  if (OB_FAIL(check_inner_stat_())) {
     RS_LOG(WARN, "variable is not init", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1225,7 +1226,7 @@ int ObUnitManager::inner_check_schema_zone_unit_enough(
   common::ObArray<share::ObZoneReplicaNumSet> zone_locality_array;
   enough = true;
   UNUSED(logonly_unit_num);
-  if (OB_FAIL(check_inner_stat())) {
+  if (OB_FAIL(check_inner_stat_())) {
     RS_LOG(WARN, "variable is not init", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
