@@ -186,8 +186,10 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     if (OB_SUCC(ret) && NULL != matched_pcv && NULL != plan) {
       if (OB_FAIL(matched_pcv->lift_tenant_schema_version(new_tenant_schema_version))) {
         LOG_WARN("failed to lift pcv's tenant schema version", K(ret));
-      } else if (!need_check_schema && OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
-        pc_ctx.exec_ctx_.get_physical_plan_ctx()->set_tenant_schema_version(new_tenant_schema_version);
+      } else if (new_tenant_schema_version != OB_INVALID_VERSION
+                 && OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
+        pc_ctx.exec_ctx_.get_physical_plan_ctx()->set_tenant_schema_version(
+          new_tenant_schema_version);
       }
     }
   }
