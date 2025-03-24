@@ -706,7 +706,8 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
             LOG_WARN("unexpected null ptr", K(ret), K(j));
           } else if (FALSE_IT(part_key_type = part_col->get_meta_type().get_type())) {
           } else if (part_key_type == ObVarcharType ||
-            part_key_type == ObCharType) {
+                     part_key_type == ObCharType ||
+                     part_key_type == ObMediumTextType) {
             oceanbase::common::ObObjMeta meta_type = part_col->get_meta_type();
             ObCollationType coll_dst = static_cast<ObCollationType>(meta_type.get_cs_type());
             ObCollationType coll_src = CS_TYPE_UTF8MB4_BIN;
@@ -725,6 +726,16 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
                 LOG_WARN("failed to alloc buf", K(ret));
               } else if (OB_FAIL(ObCharset::charset_convert(coll_src, part_spec.ptr(), part_spec.length(), coll_dst, static_cast<char*>(dst_buf), dst_buf_size, dst_len))) {
                 LOG_WARN("failed to convert charset", K(ret));
+              } else if (part_key_type == ObMediumTextType) { // string type
+                ObString lob_data(static_cast<int64_t>(dst_len), static_cast<char*>(dst_buf));
+                ObString lob_with_header;
+                if (OB_FAIL(ObLobManager::fill_lob_header(allocator, lob_data, lob_with_header))) {
+                  LOG_WARN("failed to fill lob header");
+                } else {
+                  odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
+                  odps_part_row.get_cell(j).set_string(ObMediumTextType, lob_with_header.ptr(), lob_with_header.length());
+                  odps_part_row.get_cell(j).set_has_lob_header();
+                }
               } else {
                 odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
                 odps_part_row.get_cell(j).set_varchar_value(static_cast<char*>(dst_buf),
