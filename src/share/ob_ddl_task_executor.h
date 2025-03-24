@@ -82,7 +82,7 @@ private:
   }
   static bool is_retry(const int ret_code) {
     return common::OB_EAGAIN == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code || common::OB_TASK_EXPIRED == ret_code || common::OB_NEED_RETRY == ret_code
-        || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code || common::OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code || common::OB_SCHEMA_EAGAIN == ret_code
+        || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code || common::OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code || common::OB_SCHEMA_EAGAIN == ret_code || OB_DATA_NOT_UPTODATE == ret_code
         || common::OB_ERR_REMOTE_SCHEMA_NOT_FULL == ret_code || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret_code || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret_code
         || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == ret_code || common::OB_TRANS_STMT_NEED_RETRY == ret_code || common::OB_SCHEMA_NOT_UPTODATE == ret_code
         || common::OB_TRANSACTION_SET_VIOLATION == ret_code || common::OB_TRY_LOCK_ROW_CONFLICT == ret_code || common::OB_TRANS_CANNOT_SERIALIZE == ret_code || common::OB_GTI_NOT_READY == ret_code
