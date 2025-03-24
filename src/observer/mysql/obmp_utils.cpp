@@ -550,14 +550,6 @@ int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &s
     okp.set_changed_schema(db_name);
   }
 
-  // update_global_vars_version_ to global_vars_last_modified_time
-  ObObj value;
-  value.set_int(session.get_global_vars_version());
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = session.update_sys_variable(share::SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION, value))) {
-    LOG_WARN("failed to update global variables version, we will go on anyway", K(session), K(tmp_ret));
-  }
-
   // add all sys variables
   ObIAllocator &allocator = session.get_allocator();
   for (int64_t i = 0; OB_SUCC(ret) && i < session.get_sys_var_count(); ++i) {
@@ -576,6 +568,31 @@ int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &s
     }
   }
 
+  // add changed user variables
+  if (session.is_user_var_changed()) {
+    const ObIArray<ObString> &user_var = session.get_changed_user_var();
+    ObSessionValMap &user_map = session.get_user_var_val_map();
+    for (int64_t i = 0; i < user_var.count() && OB_SUCCESS == ret; ++i) {
+      ObString name = user_var.at(i);
+      ObSessionVariable sess_var;
+      if (name.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid variable name", K(name), K(ret));
+      } else if (OB_FAIL(user_map.get_refactored(name, sess_var))) {
+        LOG_WARN("unknown user variable", K(name), K(ret));
+      } else {
+        ObStringKV str_kv;
+        str_kv.key_ = name;
+        if (OB_FAIL(get_user_sql_literal(allocator, sess_var.value_, str_kv.value_, session.create_obj_print_params()))) {
+          LOG_WARN("fail to get user sql literal", K(sess_var.value_), K(ret));
+        } else if (OB_FAIL(okp.add_user_var(str_kv))) {
+          LOG_WARN("fail to add user var", K(str_kv), K(ret));
+        } else {
+          LOG_DEBUG("succ to add user var", K(str_kv), K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 

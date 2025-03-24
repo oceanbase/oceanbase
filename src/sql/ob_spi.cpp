@@ -261,10 +261,14 @@ int ObSPIResultSet::alloc_saved_value(sql::ObSQLSessionInfo::StmtSavedValue *&se
   return ret;
 }
 
-int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString &sql, bool &has_global_variable)
+int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session,
+                                      const ObString &sql,
+                                      bool &has_global_variable,
+                                      bool &has_sys_var)
 {
   int ret = OB_SUCCESS;
   has_global_variable = false;
+  has_sys_var = false;
   ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_SET_VAR), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ParseResult parse_result;
   ParseMode parse_mode = STD_MODE;
@@ -289,6 +293,7 @@ int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString 
       } else if (T_VAR_VAL == set_node->type_ &&
                  1 == set_node->value_) { // global var
         has_global_variable = true;
+        has_sys_var = true;
       } else if (set_node->num_child_ > 0 && OB_NOT_NULL(set_node->children_[0])) {
         ParseNode *var = set_node->children_[0];
         ObString name;
@@ -299,9 +304,19 @@ int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString 
             LOG_WARN("get unexpected null", K(ret));
           } else {
             name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
+            ObBasicSysVar *sys_var = NULL;
+            if (OB_FAIL(session.get_sys_variable_by_name(name, sys_var))) {
+              if (OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
+              } else {
+                LOG_WARN("get sys variable failed", K(ret), K(name));
+              }
+            } else if (OB_NOT_NULL(sys_var)) {
+              has_sys_var = true;
+            }
           }
         } else if (T_SYSTEM_VARIABLE == var->type_) {
           name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
+          has_sys_var = true;
         }
         if (OB_SUCC(ret) && 0 == name.case_compare("ob_query_timeout")) {
           has_global_variable = true;
@@ -327,7 +342,8 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, const ObStr
     LOG_DEBUG("check nested stmt legal", K(parent_stmt_type), K(pl_ctx->in_autonomous()), K(stmt_type));
   }
   if (stmt::T_VARIABLE_SET == stmt_type && OB_NOT_NULL(exec_ctx.get_my_session())) {
-    OZ (is_set_global_var(*exec_ctx.get_my_session(), sql, has_global_variable));
+    bool has_sys_var = false;
+    OZ (is_set_global_var(*exec_ctx.get_my_session(), sql, has_global_variable, has_sys_var));
   }
   if (OB_SUCC(ret) && !pl_ctx->in_autonomous() && ObStmt::is_dml_stmt(parent_stmt_type)) {
     //only when parent stmt is dml or select, it can trigger a nested sql
@@ -1722,7 +1738,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
         LOG_TRACE("cannot batch execute", K(ret), K(sql), K(type));
       }
-
+      OZ (check_system_trigger_legal(ctx, sql, stmt_type));
       OZ (spi_result.init(*session));
       OZ (spi_result.start_nested_stmt_if_need(ctx, sqlstr, stmt_type, for_update));
       OX (spi_result.get_sql_ctx().is_dbms_sql_ = is_dbms_sql);
@@ -9485,6 +9501,33 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
   }
   LOG_TRACE("cursor setup snapshot", K(cursor->is_for_update()), K(cursor->is_streaming()),
             K(snapshot), KPC(cursor), K(need_register_snapshot));
+  return ret;
+}
+
+int ObSPIService::check_system_trigger_legal(pl::ObPLExecCtx *ctx, const ObString &sql, stmt::StmtType stmt_type)
+{
+  int ret = OB_SUCCESS;
+  sql::ObExecContext *exec_ctx = NULL;
+  pl::ObPLContext *pl_ctx = NULL;
+  if (OB_ISNULL(ctx)
+      || OB_ISNULL(exec_ctx = ctx->exec_ctx_)
+      || OB_ISNULL(pl_ctx = exec_ctx->get_pl_stack_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret), K(ctx));
+  } else if (OB_ISNULL(pl_ctx = pl_ctx->get_top_stack_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret));
+  } else if (!pl_ctx->is_system_trigger()) {
+  } else if (stmt::T_VARIABLE_SET == stmt_type && OB_NOT_NULL(exec_ctx->get_my_session())) {
+    bool has_global_var = false;
+    bool has_sys_var = false;
+    if (OB_FAIL(ObSPIResultSet::is_set_global_var(*exec_ctx->get_my_session(), sql, has_global_var, has_sys_var))) {
+      LOG_WARN("check global var failed", K(ret), K(sql));
+    } else if (has_sys_var) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set system variable in system trigger");
+    }
+  }
   return ret;
 }
 
