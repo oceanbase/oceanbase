@@ -1379,10 +1379,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCurrentCatalog::eval_current_catalog,                 /* 841 */
   NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
   NULL, // ObExprMap::eval_map,                                        /* 843 */
-  NULL, // ObExprSparseVectorIPDistance::calc_inner_product,           /* 844 */
+  NULL, // ObExprSpivValue::generate_spiv_value,                       /* 844 */
   NULL, // ObExprMapKeys::eval_map_keys,                               /* 845 */
   NULL, // ObExprMapValues::eval_map_values,                           /* 846 */
-
+  NULL, // ObExprSpivDim::generate_spiv_dim,                           /* 847 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

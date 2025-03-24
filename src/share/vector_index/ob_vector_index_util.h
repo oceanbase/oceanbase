@@ -54,6 +54,7 @@ enum ObVectorIndexType
 {
   VIT_HNSW_INDEX = 0,
   VIT_IVF_INDEX = 1,
+  VIT_SPIV_INDEX = 2,
   VIT_MAX
 };
 
@@ -66,6 +67,7 @@ enum ObVectorIndexAlgorithmType : uint16_t
   VIAT_IVF_PQ,
   VIAT_HNSW_BQ,
   VIAT_HGRAPH,
+  VIAT_SPIV,
   VIAT_MAX
 };
 
