@@ -390,7 +390,6 @@ ObMacroBlockWriter::ObMacroBlockWriter(const bool is_need_macro_buffer)
     merge_block_info_(),
     micro_writer_(nullptr),
     reader_helper_(),
-    hash_index_builder_(),
     micro_helper_(),
     current_index_(0),
     macro_seq_generator_(nullptr),
@@ -437,7 +436,6 @@ void ObMacroBlockWriter::reset()
     micro_writer_ = nullptr;
   }
   reader_helper_.reset();
-  hash_index_builder_.reset();
   micro_helper_.reset();
   macro_blocks_[0].reset();
   macro_blocks_[1].reset();
@@ -516,8 +514,6 @@ int ObMacroBlockWriter::open(
       LOG_WARN("init macro_seq_param failed", K(ret));
     } else if (OB_FAIL(init_pre_warmer(pre_warm_param))) {
       LOG_WARN("failed to init pre warmer", K(ret), K(pre_warm_param));
-    } else if (OB_FAIL(init_hash_index_builder())) {
-      STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
     } else if (OB_FAIL(build_micro_writer(data_store_desc_,
                                           allocator_,
                                           micro_writer_,
@@ -1243,21 +1239,6 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
   return ret;
 }
 
-int ObMacroBlockWriter::init_hash_index_builder()
-{
-  int ret = OB_SUCCESS;
-  if (data_store_desc_->get_tablet_id().is_user_tablet()
-      && !data_store_desc_->is_major_or_meta_merge_type()
-      && !data_store_desc_->is_for_index_or_meta()
-      && data_store_desc_->get_row_store_type() == FLAT_ROW_STORE) {
-    // only build hash index for data block in minor
-    if (OB_FAIL(hash_index_builder_.init_if_needed(data_store_desc_))) {
-      STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObMacroBlockWriter::init_macro_seq_generator(const blocksstable::ObMacroSeqParam &macro_seq_param)
 {
   int ret = OB_SUCCESS;
@@ -1315,15 +1296,6 @@ int ObMacroBlockWriter::append_row_and_hash_index(const ObDatumRow &row)
              && OB_FAIL(macro_blocks_[current_index_].get_macro_block_bloom_filter()->insert_row(datum_row_))) {
     LOG_WARN("fail to insert row to bloom filter",
              K(ret), K(datum_row_), KPC(macro_blocks_[current_index_].get_macro_block_bloom_filter()));
-  } else if (hash_index_builder_.is_valid()) {
-    if (OB_FAIL(hash_index_builder_.add(row))) {
-      if (ret != OB_NOT_SUPPORTED) {
-        STORAGE_LOG(WARN, "Failed to append hash index", K(ret), K(row));
-      } else {
-        ret = OB_SUCCESS;
-      }
-      hash_index_builder_.reset();
-      }
   }
   return ret;
 }
@@ -1391,8 +1363,6 @@ int ObMacroBlockWriter::build_micro_block()
   if (micro_writer_->get_row_count() <= 0) {
     ret = OB_INNER_STAT_ERROR;
     STORAGE_LOG(WARN, "micro_block_writer is empty", K(ret));
-  } else if (OB_FAIL(build_hash_index_block())) {
-    STORAGE_LOG(WARN, "Failed to build hash index block", K(ret));
   } else if (OB_FAIL(micro_writer_->build_micro_block_desc(micro_block_desc))) {
     STORAGE_LOG(WARN, "failed to build micro block desc", K(ret));
   } else if (need_data_aggregate && OB_FAIL(data_aggregator_->eval(*micro_writer_))) {
@@ -1436,9 +1406,6 @@ int ObMacroBlockWriter::build_micro_block()
 
   if (OB_SUCC(ret)) {
     micro_writer_->reuse();
-    if (hash_index_builder_.is_valid()) {
-      hash_index_builder_.reuse();
-    }
     merge_block_info_.original_size_ += block_size;
     merge_block_info_.compressed_size_ += micro_block_desc.buf_size_;
     merge_block_info_.new_micro_count_in_new_macro_++;
@@ -1475,25 +1442,6 @@ int ObMacroBlockWriter::build_micro_block_desc(
     LOG_WARN("fail to build micro block desc v2", K(ret), K(micro_block), K(micro_block_desc));
   }
   STORAGE_LOG(DEBUG, "build micro block desc", K(micro_block), K(micro_block_desc));
-  return ret;
-}
-
-int ObMacroBlockWriter::build_hash_index_block()
-{
-  int ret = OB_SUCCESS;
-  if (hash_index_builder_.is_valid()) {
-    if (OB_UNLIKELY(FLAT_ROW_STORE != data_store_desc_->get_row_store_type())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected row store type", K(ret), K(data_store_desc_->get_row_store_type()));
-    } else if (OB_FAIL(micro_writer_->append_hash_index(hash_index_builder_))) {
-      if (ret != OB_NOT_SUPPORTED) {
-        LOG_WARN("Failed to append hash index to micro block writer", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
-      hash_index_builder_.reset();
-    }
-  }
   return ret;
 }
 
@@ -2211,13 +2159,7 @@ int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_des
     } else if (OB_ISNULL(flat_writer = new (buf) ObMicroBlockWriter())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to new encoding writer", K(ret));
-    } else if (OB_FAIL(flat_writer->init(
-        data_store_desc->get_micro_block_size_limit(),
-        data_store_desc->get_rowkey_column_count(),
-        data_store_desc->get_row_column_count(),
-        &data_store_desc->get_rowkey_col_descs(),
-        data_store_desc->contain_full_col_descs(),
-        data_store_desc->is_major_merge_type()))) {
+    } else if (OB_FAIL(flat_writer->init(data_store_desc))) {
       STORAGE_LOG(WARN, "Fail to init micro block flat writer, ", K(ret));
     } else {
       flat_writer->set_micro_block_merge_verify_level(verify_level);

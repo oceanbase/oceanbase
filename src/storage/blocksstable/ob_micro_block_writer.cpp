@@ -11,6 +11,7 @@
  */
 
 #include "ob_micro_block_writer.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -26,6 +27,8 @@ ObMicroBlockWriter::ObMicroBlockWriter()
    row_count_(0),
    data_buffer_(),
    index_buffer_(DEFAULT_INDEX_BUFFER_SIZE),
+   hash_index_builder_(),
+   reuse_hash_index_builder_(false),
    is_major_(false),
    is_inited_(false)
 {
@@ -35,29 +38,53 @@ ObMicroBlockWriter::~ObMicroBlockWriter()
 {
 }
 
-int ObMicroBlockWriter::init(
-    const int64_t micro_block_size_limit,
-    const int64_t rowkey_column_count,
-    const int64_t column_count/* = 0*/,
-    const common::ObIArray<share::schema::ObColDesc> *col_desc_array /* nullptr */,
-    const bool need_opt_row_chksum/* false */,
-    const bool is_major/* = false*/)
+int ObMicroBlockWriter::init(const int64_t micro_block_size_limit,
+                             const int64_t rowkey_column_count,
+                             const int64_t column_count)
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_FAIL(check_input_param(micro_block_size_limit, column_count, rowkey_column_count))) {
-    STORAGE_LOG(WARN, "micro block writer fail to check input param.", K(ret),
-        K(micro_block_size_limit), K(column_count), K(rowkey_column_count));
+  if (micro_block_size_limit <= 0 || rowkey_column_count <= 0 || column_count <= 0
+      || column_count < rowkey_column_count) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN,
+                "micro block writer fail to check input param.",
+                K(ret),
+                K(micro_block_size_limit),
+                K(column_count),
+                K(rowkey_column_count));
   } else {
     micro_block_size_limit_ = micro_block_size_limit;
     rowkey_column_count_ = rowkey_column_count;
     column_count_ = column_count;
+    is_major_ = false;
+    need_check_lob_ = true;
+    col_desc_array_ = nullptr;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObMicroBlockWriter::init(const ObDataStoreDesc *data_store_desc)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_ISNULL(data_store_desc) || OB_UNLIKELY(!data_store_desc->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN,
+                "micro block writer fail to check input param.",
+                KR(ret),
+                KPC(data_store_desc));
+  } else {
+    micro_block_size_limit_ = data_store_desc->get_micro_block_size_limit();
+    rowkey_column_count_ = data_store_desc->get_rowkey_column_count();
+    column_count_ = data_store_desc->get_row_column_count();
     // major need calc column checksum
-    is_major_ = is_major;
+    is_major_ = data_store_desc->is_major_merge_type();
     // there are only rowkey column descs during minor merge, so we should alwasy check lob storage -_-
     need_check_lob_ = true;
-    if (is_major) {
-      if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
+    if (is_major_) {
+      if (OB_NOT_NULL(col_desc_array_ = &data_store_desc->get_rowkey_col_descs())) {
         for (int64_t i = 0; OB_SUCC(ret) && !need_check_lob_ && i < col_desc_array_->count(); i++) {
           need_check_lob_ = col_desc_array_->at(i).col_type_.is_lob_storage();
         }
@@ -65,13 +92,17 @@ int ObMicroBlockWriter::init(
         need_check_lob_ = false;
       }
     }
-    if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
-      if (FAILEDx(checksum_helper_.init(col_desc_array_, need_opt_row_chksum))) {
+    if (OB_NOT_NULL(col_desc_array_ = &data_store_desc->get_rowkey_col_descs())) {
+      if (FAILEDx(checksum_helper_.init(col_desc_array_, data_store_desc->contain_full_col_descs()))) {
         STORAGE_LOG(WARN, "fail to init checksum_helper", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      is_inited_ = true;
+      if (OB_FAIL(init_hash_index_builder(data_store_desc))) {
+        STORAGE_LOG(WARN, "Fail to init hash index builder", KR(ret));
+      } else {
+        is_inited_ = true;
+      }
     }
   }
   return ret;
@@ -189,6 +220,8 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
       }
     } else if (OB_FAIL(finish_row())) {
       STORAGE_LOG(WARN, "micro block writer fail to finish row.", K(ret), K(pos));
+    } else if (OB_FAIL(append_row_to_hash_index(row))) {
+      STORAGE_LOG(WARN, "Fail to append row into hash index", KR(ret), K(row));
     } else if (get_header(data_buffer_)->has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
         row, get_header(data_buffer_)->column_checksums_))) {
       STORAGE_LOG(WARN, "fail to cal column chksum", K(ret), K(row), KPC(get_header(data_buffer_)));
@@ -212,6 +245,8 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
   } else if (OB_UNLIKELY(data_buffer_.length() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected empty block", K(ret));
+  } else if (OB_FAIL(build_hash_index_block())) {
+    STORAGE_LOG(WARN, "Fail to build hash index block", KR(ret));
   } else {
     ObMicroBlockHeader *header = get_header(data_buffer_);
     if (last_rows_count_ == header->row_count_) {
@@ -253,24 +288,20 @@ int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_ind
   if (hash_index_builder.is_valid()) {
     if (is_contain_uncommitted_row()) {
       ret = OB_NOT_SUPPORTED;
+    } else if (data_buffer_.remain() < get_index_size() + hash_index_builder.estimate_size()) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "row data buffer is overflow", KR(ret), K(data_buffer_.remain()),
+                  K(get_index_size()));
     } else if (OB_FAIL(hash_index_builder.build_block(index_buffer_))) {
       if (ret != OB_NOT_SUPPORTED) {
         STORAGE_LOG(WARN, "data buffer fail to write hash index.", K(ret));
       }
-    } else if (data_buffer_.remain() < get_index_size()) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "row data buffer is overflow", K(data_buffer_.remain()), K(get_index_size()), K(ret));
     } else {
       get_header(data_buffer_)->contains_hash_index_ = 1;
       get_header(data_buffer_)->hash_index_offset_from_end_ = hash_index_builder.estimate_size();
     }
   }
   return ret;
-}
-
-bool ObMicroBlockWriter::has_enough_space_for_hash_index(const int64_t hash_index_size) const {
-  const int64_t total_size = get_data_size() + get_index_size() + hash_index_size;
-  return total_size <= micro_block_size_limit_ && total_size <= block_size_upper_bound_;
 }
 
 void ObMicroBlockWriter::reset()
@@ -283,6 +314,7 @@ void ObMicroBlockWriter::reset()
   is_major_ = false;
   data_buffer_.reset();
   index_buffer_.reset();
+  hash_index_builder_.reset();
   col_desc_array_ = nullptr;
   is_inited_ = false;
 }
@@ -292,25 +324,11 @@ void ObMicroBlockWriter::reuse()
   ObIMicroBlockWriter::reuse();
   data_buffer_.reuse();
   index_buffer_.reuse();
-  row_count_ = 0;
-}
-
-int ObMicroBlockWriter::check_input_param(
-    const int64_t micro_block_size_limit,
-    const int64_t column_count,
-    const int64_t rowkey_column_count)
-{
-  int ret = OB_SUCCESS;
-  if (micro_block_size_limit <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid micro block writer input argument.", K(micro_block_size_limit), K(ret));
-  } else if (rowkey_column_count < 0 ||
-      (column_count <= 0 || column_count < rowkey_column_count)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid micro block writer input argument.", K(ret), K(column_count),
-                    K(rowkey_column_count));
+  if (hash_index_builder_.is_valid() || reuse_hash_index_builder_) {
+    reuse_hash_index_builder_ = false;
+    hash_index_builder_.reuse();
   }
-  return ret;
+  row_count_ = 0;
 }
 
 int ObMicroBlockWriter::finish_row()
@@ -369,6 +387,56 @@ bool ObMicroBlockWriter::is_exceed_limit()
 {
   ObMicroBlockHeader *header = get_header(data_buffer_);
   return header->row_count_ > 0 && get_future_block_size() > micro_block_size_limit_;
+}
+
+int ObMicroBlockWriter::init_hash_index_builder(const ObDataStoreDesc *data_store_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(data_store_desc) && data_store_desc->get_tablet_id().is_user_tablet()
+      && !data_store_desc->is_major_or_meta_merge_type()
+      && !data_store_desc->is_for_index_or_meta()) {
+    // only build hash index for data block in minor
+    if (OB_FAIL(hash_index_builder_.init_if_needed(data_store_desc))) {
+      STORAGE_LOG(WARN, "Fail to build hash_index builder", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockWriter::append_row_to_hash_index(const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (hash_index_builder_.is_valid()) {
+    if (OB_FAIL(hash_index_builder_.add(row))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        STORAGE_LOG(WARN, "Fail to append hash index", KR(ret), K(row));
+      } else {
+        // hash index is not supported for this micro block data
+        // but the hash index builder can be reuse if we call micro_block->reuse()
+        reuse_hash_index_builder_ = true;
+        ret = OB_SUCCESS;
+      }
+      hash_index_builder_.reset();
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockWriter::build_hash_index_block()
+{
+  int ret = OB_SUCCESS;
+  if (hash_index_builder_.is_valid()) {
+    if (OB_FAIL(append_hash_index(hash_index_builder_))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        STORAGE_LOG(WARN, "Fail to append hash index to micro block writer", KR(ret));
+      } else {
+        reuse_hash_index_builder_ = true;
+        ret = OB_SUCCESS;
+      }
+      hash_index_builder_.reset();
+    }
+  }
+  return ret;
 }
 
 }//end namespace blocksstable

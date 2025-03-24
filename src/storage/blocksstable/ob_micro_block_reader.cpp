@@ -178,11 +178,17 @@ int ObMicroBlockGetReader::inner_init(
     row_count_ = header_->row_count_;
     original_data_length_ = header_->original_length_;
     read_info_ = &read_info;
+    // Fail to init hash index means the reader can not use it, but reader can still work
     if (OB_FAIL(ObIMicroBlockGetReader::init_hash_index(block_data, hash_index_, header_))) {
-      LOG_WARN("failed to init micro block hash index", K(ret), K(rowkey), K(block_data), K(read_info));
-    } else {
-      is_inited_ = true;
+      ret = OB_SUCCESS;
+      hash_index_.reset();
+      LOG_WARN("failed to init micro block hash index",
+               KR(ret),
+               K(rowkey),
+               K(block_data),
+               K(read_info));
     }
+    is_inited_ = true;
   }
   return ret;
 }

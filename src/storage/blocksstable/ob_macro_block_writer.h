@@ -203,7 +203,6 @@ private:
   int append(const ObDataMacroBlockMeta &macro_meta, const ObMicroBlockData *micro_block_data);
   int check_order(const ObDatumRow &row);
   int init_macro_seq_generator(const blocksstable::ObMacroSeqParam &macro_seq_param);
-  int init_hash_index_builder();
   int append_row_and_hash_index(const ObDatumRow &row);
   int append_batch_to_micro_block(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   int init_pre_agg_util(const ObDataStoreDesc &data_store_desc);
@@ -213,7 +212,6 @@ private:
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,
       ObMicroBlockHeader &header_for_rewrite);
-  int build_hash_index_block();
   int build_micro_block_desc_with_rewrite(
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,
@@ -255,7 +253,6 @@ protected:
 private:
   ObIMicroBlockWriter *micro_writer_;
   ObMicroBlockReaderHelper reader_helper_;
-  ObMicroBlockHashIndexBuilder hash_index_builder_;
   ObMicroBlockBufferHelper micro_helper_;
   ObMacroBlock macro_blocks_[2];
   int64_t current_index_;

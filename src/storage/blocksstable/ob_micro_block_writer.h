@@ -48,13 +48,11 @@ class ObMicroBlockWriter : public ObIMicroBlockWriter
 public:
   ObMicroBlockWriter();
   virtual ~ObMicroBlockWriter();
-  int init(
-      const int64_t micro_block_size_limit,
-      const int64_t rowkey_column_count,
-      const int64_t column_count = 0,
-      const common::ObIArray<share::schema::ObColDesc> *col_desc_array = nullptr,
-      const bool need_opt_row_chksum = false,
-      const bool is_major = false);
+  int init(const ObDataStoreDesc *data_store_desc);
+
+  int init(const int64_t micro_block_size_limit,
+           const int64_t rowkey_column_count,
+           const int64_t column_count);
 
   virtual int append_row(const ObDatumRow &row);
   virtual int build_block(char *&buf, int64_t &size);
@@ -65,7 +63,6 @@ public:
   virtual int64_t get_column_count() const override;
   virtual int64_t get_original_size() const override;
   virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder);
-  virtual bool has_enough_space_for_hash_index(const int64_t hash_index_size) const;
   void reset();
 private:
   int inner_init();
@@ -73,10 +70,6 @@ private:
   inline int64_t get_data_size() const;
   inline int64_t get_future_block_size() const;
   int try_to_append_row();
-  int check_input_param(
-      const int64_t macro_block_size,
-      const int64_t column_count,
-      const int64_t rowkey_column_count);
   int finish_row();
   int reserve_header(
       const int64_t column_count,
@@ -86,6 +79,13 @@ private:
   int64_t get_data_base_offset() const;
   int64_t get_index_base_offset() const;
   int process_out_row_columns(const ObDatumRow &row);
+
+  int init_hash_index_builder(const ObDataStoreDesc *data_store_desc = nullptr);
+
+  int append_row_to_hash_index(const ObDatumRow &row);
+
+  int build_hash_index_block();
+
 private:
   int64_t micro_block_size_limit_;
   int64_t column_count_;
@@ -94,6 +94,8 @@ private:
   int64_t row_count_;
   ObMicroBufferWriter data_buffer_;
   ObMicroBufferWriter index_buffer_;
+  ObMicroBlockHashIndexBuilder hash_index_builder_;
+  bool reuse_hash_index_builder_;
   bool is_major_;
   bool is_inited_;
 };
@@ -126,8 +128,14 @@ inline int64_t ObMicroBlockWriter::get_index_size() const
   }
   return index_size;
 }
-inline int64_t ObMicroBlockWriter::get_future_block_size() const {
-  return get_data_size() + get_index_size() + INDEX_ENTRY_SIZE;
+
+inline int64_t ObMicroBlockWriter::get_future_block_size() const
+{
+  int64_t hash_index_size = 0;
+  if (hash_index_builder_.is_valid()) {
+    hash_index_size = hash_index_builder_.estimate_size(/* plus_one = */ true);
+  }
+  return get_data_size() + get_index_size() + INDEX_ENTRY_SIZE + hash_index_size;
 }
 
 inline int64_t ObMicroBlockWriter::get_data_base_offset() const

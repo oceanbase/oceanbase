@@ -186,7 +186,7 @@ int ObMicroBlockHashIndex::init(const ObMicroBlockData &micro_block_data)
     const uint32_t hash_index_offset_from_end = micro_block_header->hash_index_offset_from_end_;
     const char* start_data = micro_block_data.get_buf() + micro_block_data.get_buf_size()
                                  - hash_index_offset_from_end;
-    const uint8 reserved_byte = reinterpret_cast<const uint8_t *>(start_data)[0];
+    const uint8_t reserved_byte = reinterpret_cast<const uint8_t *>(start_data)[0];
     bucket_table_ = reinterpret_cast<const uint8_t *>(start_data + get_fixed_header_size());
     num_buckets_ = reinterpret_cast<const uint16_t *>(start_data + 1)[0];
     STORAGE_LOG(DEBUG, "ObMicroBlockHashIndex init", K(num_buckets_), K(reserved_byte));
@@ -201,7 +201,7 @@ int ObMicroBlockHashIndex::init(const ObMicroBlockData &micro_block_data)
       is_inited_ = true;
     }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 }//end namespace blocksstable
