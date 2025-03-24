@@ -159,8 +159,12 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
          bool is_index_table = false;
          uint64_t tenant_id = session_info_->get_effective_tenant_id();
          const bool is_hidden = session_info_->is_table_name_hidden();
+         const bool is_built_in_index = true;
          if (OB_FAIL(schema_checker_->check_table_exists(tenant_id, db_name, table_name, true, is_hidden, is_index_table))) {
            LOG_WARN("fail to check and convert table name", K(tenant_id), K(db_name), K(table_name), K(ret));
+         } else if (!is_index_table && // check again
+             OB_FAIL(schema_checker_->check_table_exists(tenant_id, db_name, table_name, true, is_hidden, is_index_table, is_built_in_index))) {
+           LOG_WARN("fail to check table exist again", K(ret), K(tenant_id), K(db_name), K(table_name));
          } else if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, table_name, stmt_type, is_index_table))) {
            LOG_WARN("fail to check and convert table name", K(table_name), K(stmt_type), K(is_index_table), K(ret));
          }
