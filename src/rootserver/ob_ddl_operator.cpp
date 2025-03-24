@@ -3774,6 +3774,10 @@ int ObDDLOperator::alter_table_rename_built_in_index_(
                                                      false/*is_hidden*/,
                                                      true/*is_built_in_index*/))) {
       LOG_WARN("failed to get origin fts_doc_word schema", K(ret));
+    } else if (OB_ISNULL(origin_table_schema)) {
+      ret = OB_EAGAIN;
+      LOG_WARN("the domain index may be being built",
+          K(ret), K(tenant_id), K(origin_index_table_name));
     } else if (OB_FAIL(inner_alter_table_rename_index_(tenant_id,
                                                        origin_table_schema,
                                                        new_index_table_name,

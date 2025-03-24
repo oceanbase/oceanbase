@@ -8135,6 +8135,8 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
           ObIndexNameHashWrapper new_index_key(new_index_name);
           const ObTableSchema *orig_index_schema = nullptr;
 
+          DEBUG_SYNC(BEFORE_RENAME_INDEX);
+
           // 1. check conflicts with origin index name
           // 2. check confilicts with new index name
           // 3. alter table rename index

@@ -522,6 +522,9 @@ int ObDropFTSIndexTask::create_drop_index_task(
         "database name", database_schema->get_database_name_str(),
         K(drop_index_sql.ptr()));
   }
+
+  DEBUG_SYNC(AFTER_DROP_FTS_SUBMIT_SUBTASK);
+
   return ret;
 }
 
