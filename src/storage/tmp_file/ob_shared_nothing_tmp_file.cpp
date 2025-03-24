@@ -1853,7 +1853,6 @@ int ObSharedNothingTmpFile::collect_flush_data_page_id_(
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(inner_flush_ctx_.data_flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
-    ret = OB_ITER_END; // override error code, we will handle this err code in flush mgr
   }
   while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_STORAGE_OBJECT_MGR.get_macro_object_size()) {
     if (need_flush_tail && cur_page_id == end_page_id_ && file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0) {
@@ -1874,7 +1873,6 @@ int ObSharedNothingTmpFile::collect_flush_data_page_id_(
       LOG_WARN("fail to notify write back", KR(ret), K(fd_), K(cur_page_id));
     } else if (OB_FAIL(flush_task.get_flush_page_id_arr().push_back(cur_page_id))) {
       LOG_ERROR("fail to push back flush page id", KR(ret), K(fd_), K(cur_page_id), KPC(this));
-      ret = OB_ITER_END; // override error code
     } else {
       // ObTmpPageCacheKey cache_key(flush_task.get_block_index(),
       //                             write_offset / ObTmpFileGlobal::PAGE_SIZE, tenant_id_);
@@ -1923,6 +1921,12 @@ int ObSharedNothingTmpFile::collect_flush_data_page_id_(
     }
   }
 
+  // override error code, we will handle OB_ITER_END in flush mgr
+  if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+    ret = OB_ITER_END;
+    LOG_WARN("fail to collect flush data page id", KR(ret), K(flushing_page_num), K(flush_task), KPC(this));
+  }
+
   if (OB_SUCC(ret)) {
     // maintain flushed_page_id recorded in flush_mgr
     data_flush_context.set_flushed_page_id(cur_flushed_page_id);
@@ -1963,8 +1967,8 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
 {
   int ret = OB_SUCCESS;
 
-  ObArray<InnerFlushInfo> &flush_infos_ = inner_flush_ctx_.meta_flush_infos_;
-  int64_t origin_info_num = flush_infos_.size();
+  ObArray<InnerFlushInfo> &flush_infos = inner_flush_ctx_.meta_flush_infos_;
+  int64_t origin_info_num = flush_infos.size();
 
   const int64_t block_index = flush_task.get_block_index();
   char *buf = flush_task.get_data_buf();
@@ -1984,9 +1988,8 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
-  } else if (OB_FAIL(flush_infos_.push_back(InnerFlushInfo()))) {
+  } else if (OB_FAIL(flush_infos.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
-    ret = OB_ITER_END; // override error code, we will handle this err code in flush mgr
   } else if (OB_FAIL(meta_tree_.flush_meta_pages_for_block(block_index, flush_type, buf, write_offset,
                                                            meta_flush_context, info.flush_meta_page_array_))) {
     LOG_WARN("fail to flush meta pages for block", KR(ret), K(fd_), K(flush_task), K(meta_flush_context), KPC(this));
@@ -1995,16 +1998,23 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
   }
 
   if (OB_SUCC(ret)) {
-    int64_t flush_info_idx = flush_infos_.size() - 1;
+    int64_t flush_info_idx = flush_infos.size() - 1;
     info.batch_flush_idx_ = flush_info_idx;
 
     info.fd_ = fd_;
     // set flush_info in flush_task
     if (OB_FAIL(info.file_handle_.init(this))) {
       LOG_WARN("fail to init tmp file handle", KR(ret), K(fd_), K(flush_task), KPC(this));
-    } else if (OB_FAIL(inner_flush_ctx_.meta_flush_infos_.at(flush_info_idx).init_by_tmp_file_flush_info(info))) {
+    } else if (OB_FAIL(flush_infos.at(flush_info_idx).init_by_tmp_file_flush_info(info))) {
       LOG_WARN("fail to init_by_tmp_file_flush_info", KR(ret), K(fd_), K(flush_task), KPC(this));
     }
+  }
+
+  // override error code, we will handle OB_ITER_END in flush mgr
+  if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+    LOG_WARN("fail to alloc memory", KR(ret), K(fd_), K(flush_task),
+        K(meta_flush_context), K(need_flush_tail), KPC(this));
+    ret = OB_ITER_END;
   }
 
   if (OB_SUCC(ret)) {
@@ -2014,8 +2024,8 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
   } else {
     LOG_WARN("fail to generate meta flush info", KR(ret), K(fd_), K(flush_task),
         K(meta_flush_context), K(flush_sequence), K(need_flush_tail));
-    if (flush_infos_.size() == origin_info_num + 1) {
-      flush_infos_.pop_back();
+    if (flush_infos.size() == origin_info_num + 1) {
+      flush_infos.pop_back();
     }
   }
 
