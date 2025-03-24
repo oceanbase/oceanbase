@@ -33,7 +33,8 @@ int ObDomainIndexBuilderUtil::prepare_aux_table(bool &task_submitted,
                                                 rootserver::ObRootService *root_service,
                                                 common::hash::ObHashMap<uint64_t, ObDomainDependTaskStatus> &map,
                                                 const oceanbase::common::ObAddr &addr,
-                                                int map_num)
+                                                int map_num,
+                                                const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(root_service)) {
@@ -69,6 +70,7 @@ int ObDomainIndexBuilderUtil::prepare_aux_table(bool &task_submitted,
       } else if (OB_FAIL(arg.create_index_arg_.assign(index_arg))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to assign create index arg", K(ret));
+      } else if (OB_FALSE_IT(arg.snapshot_version_ = snapshot_version)) {
       } else if (OB_FAIL(common_rpc-> to(addr).
                           timeout(ddl_rpc_timeout).create_aux_index(arg, res))) {
         LOG_WARN("generate aux index schema failed", K(ret), K(arg));

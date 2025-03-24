@@ -47,7 +47,8 @@ public:
                                 rootserver::ObRootService *root_service,
                                 common::hash::ObHashMap<uint64_t, ObDomainDependTaskStatus> &map,
                                 const oceanbase::common::ObAddr &addr,
-                                int map_num);
+                                int map_num,
+                                const int64_t snapshot_version);
 };
 
 

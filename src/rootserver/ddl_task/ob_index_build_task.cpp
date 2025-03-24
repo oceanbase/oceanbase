@@ -409,10 +409,11 @@ int ObIndexBuildTask::init(
     if (snapshot_version > 0) {
       snapshot_version_ = snapshot_version;
     }
-    if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_)) {
+    if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
+        share::schema::is_vec_rowkey_vid_type(create_index_arg_.index_type_)) {
       if (snapshot_version_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("snapshot version is not valid", K(ret), K(snapshot_version_));
+        LOG_WARN("snapshot version is not valid", K(ret), K(snapshot_version_), K(create_index_arg_.index_type_));
       }
     }
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status) {

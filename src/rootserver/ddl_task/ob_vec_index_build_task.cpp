@@ -100,6 +100,9 @@ int ObVecIndexBuildTask::init(
         KPC(data_table_schema), KPC(index_schema), K(schema_version), K(parallelism),
         K(consumer_group_id), K(create_index_arg.is_valid()), K(create_index_arg),
         K(task_status), K(snapshot_version), K(is_rebuild_index));
+  } else if (index_schema->is_vec_rowkey_vid_type() && snapshot_version <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the snapshot version should be more than zero", K(ret), K(snapshot_version));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_,
                                          create_index_arg,
                                          create_index_arg_))) {
@@ -597,8 +600,9 @@ int ObVecIndexBuildTask::prepare_aux_table(const ObIndexType index_type,
                                                                    root_service_,
                                                                    dependent_task_result_map_,
                                                                    obrpc::ObRpcProxy::myaddr_,
-                                                                   OB_VEC_INDEX_BUILD_CHILD_TASK_NUM))) {
-      LOG_WARN("fail to prepare_aux_table", K(ret), K(index_type));
+                                                                   OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
+                                                                   snapshot_version_))) {
+      LOG_WARN("fail to prepare_aux_table", K(ret), K(index_type), K(snapshot_version_));
     }
   } // samart var
   return ret;

@@ -2081,7 +2081,12 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
         snap_valid_ratio = (float) valid_cnt / (float) snap_cnt;
       }
       valid_ratio = incr_valid_ratio < snap_valid_ratio ? incr_valid_ratio : snap_valid_ratio;
-      valid_ratio = valid_ratio < 1.0 ? valid_ratio : 1.0;
+      valid_ratio = valid_ratio < 1.0f ? valid_ratio : 1.0f;
+      // ATTENTION!!!!
+      // valid_ratio is relative to VSAG version, after version 0.13.4 need to be reviewed to see if any modifications are required
+      // get new_ratio from (1 - new_ratio) * 0.9 = 1 - (1 - old_ratio) * 0.7
+      // TOREMOVE : remove this when vsag fix skip_ratio
+      valid_ratio = (6.0f - 7.0f * valid_ratio) / 9.0f;
     }
   }
   if (OB_SUCC(ret)) {

@@ -695,7 +695,8 @@ int ObVecIVFIndexBuildTask::prepare_aux_table(
                                                                    root_service_,
                                                                    dependent_task_result_map_,
                                                                    obrpc::ObRpcProxy::myaddr_,
-                                                                   OB_VEC_IVF_MAX_BUILD_CHILD_TASK_NUM))) {
+                                                                   OB_VEC_IVF_MAX_BUILD_CHILD_TASK_NUM,
+                                                                   snapshot_version_))) {
       LOG_WARN("fail to prepare_aux_table", K(ret), K(index_type));
     }
   } // samart var

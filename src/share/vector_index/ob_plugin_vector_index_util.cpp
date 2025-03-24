@@ -294,28 +294,80 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get vids invalid.", K(ret), K(first.vids_), K(second.vids_));
   } else {
-    int64_t i = 0, j = 0;
-    while (res_num < total && i < first.total_ && j < second.total_) {
-      if (first.distances_[i] <= second.distances_[j]) {
-        float_result[res_num] = first.distances_[i];
-        vids_result[res_num++] = first.vids_[i++];
-      } else {
-        float_result[res_num] = second.distances_[j];
-        vids_result[res_num++] = second.vids_[j++];
+    const int64_t hashset_size = total;
+    common::hash::ObHashSet<int64_t> vid_hash_set;
+    if (OB_FAIL(vid_hash_set.create(hashset_size))){
+      LOG_WARN("fail to create vid hashset id set failed", KR(ret), K(hashset_size));
+    } else {
+      int64_t i = 0, j = 0;
+      while (OB_SUCC(ret) && res_num < total && i < first.total_ && j < second.total_) {
+        if (first.distances_[i] <= second.distances_[j]) {
+          int tmp_ret = vid_hash_set.exist_refactored(first.vids_[i]);
+          if (OB_HASH_EXIST == tmp_ret) {
+            i++; // skip
+          } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+            if (OB_FAIL(vid_hash_set.set_refactored(first.vids_[i]))) {
+              LOG_WARN("fail to set vid to hashset", K(first.vids_[i]));
+            } else {
+              float_result[res_num] = first.distances_[i];
+              vids_result[res_num++] = first.vids_[i++];
+            }
+          } else {
+            LOG_WARN("fail to check exist refactored", K(ret));
+          }
+        } else {
+          int tmp_ret = vid_hash_set.exist_refactored(second.vids_[j]);
+          if (OB_HASH_EXIST == tmp_ret) {
+            j++; // skip
+          } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+            if (OB_FAIL(vid_hash_set.set_refactored(second.vids_[j]))) {
+              LOG_WARN("fail to set vid to hashset", K(second.vids_[j]));
+            } else {
+              float_result[res_num] = second.distances_[j];
+              vids_result[res_num++] = second.vids_[j++];
+            }
+          } else {
+            LOG_WARN("fail to check exist refactored", K(ret));
+          }
+        }
+      }
+
+      while (OB_SUCC(ret) && res_num < total && i < first.total_) {
+        int tmp_ret = vid_hash_set.exist_refactored(first.vids_[i]);
+        if (OB_HASH_EXIST == tmp_ret) {
+          i++; // skip
+        } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+          if (OB_FAIL(vid_hash_set.set_refactored(first.vids_[i]))) {
+            LOG_WARN("fail to set vid to hashset", K(first.vids_[i]));
+          } else {
+            float_result[res_num] = first.distances_[i];
+            vids_result[res_num++] = first.vids_[i++];
+          }
+        } else {
+          LOG_WARN("fail to check exist refactored", K(ret));
+        }
+      }
+
+      while (OB_SUCC(ret) && res_num < total && j < second.total_) {
+        int tmp_ret = vid_hash_set.exist_refactored(second.vids_[j]);
+        if (OB_HASH_EXIST == tmp_ret) {
+          j++; // skip
+        } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+          if (OB_FAIL(vid_hash_set.set_refactored(second.vids_[j]))) {
+            LOG_WARN("fail to set vid to hashset", K(second.vids_[j]));
+          } else {
+            float_result[res_num] = second.distances_[j];
+            vids_result[res_num++] = second.vids_[j++];
+          }
+        } else {
+          LOG_WARN("fail to check exist refactored", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        actual_cnt = res_num;
       }
     }
-
-    while (res_num < total && i < first.total_) {
-      float_result[res_num] = first.distances_[i];
-      vids_result[res_num++] = first.vids_[i++];
-    }
-
-    while (res_num < total && j < second.total_) {
-      float_result[res_num] = second.distances_[j];
-      vids_result[res_num++] = second.vids_[j++];
-    }
-
-    actual_cnt = res_num;
   }
 
   return ret;

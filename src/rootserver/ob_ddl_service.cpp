@@ -7343,7 +7343,7 @@ int ObDDLService::create_aux_index_task_(
                                &create_index_arg,
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
-    param.fts_snapshot_version_ = snapshot_version;
+    param.new_snapshot_version_ = snapshot_version;
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
         create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
@@ -7461,6 +7461,7 @@ int ObDDLService::create_aux_index(
       } else { // 2. index schema exists && not available, create ddl task
         result.schema_generated_ = true;
         result.aux_table_id_ = index_table_id;
+        bool need_new_snapshot = idx_schema->is_rowkey_doc_id() || idx_schema->is_vec_rowkey_vid_type();
         if (OB_FAIL(create_aux_index_task_(data_schema,
                                            idx_schema,
                                            create_index_arg,
@@ -7469,7 +7470,7 @@ int ObDDLService::create_aux_index(
                                            tenant_data_version,
                                            trans,
                                            task_record,
-                                           idx_schema->is_rowkey_doc_id() ? arg.snapshot_version_ : 0))) {
+                                           need_new_snapshot ? arg.snapshot_version_ : 0))) {
           LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
         } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
         }
