@@ -51,7 +51,7 @@ struct ObLobTabletDmlCtx
 
   ~ObLobTabletDmlCtx();
 
-  bool is_all_task_done() const { return  insert_data_info_.count() != 0; }
+  bool is_all_task_done() const { return  insert_data_info_.count() == 0; }
 
   int64_t task_count() const { return insert_data_info_.count(); }
 

@@ -14,15 +14,16 @@
 #define OCEANBASE_STORAGE_MEMTABLE_MVCC_OB_MVCC_DEFINE
 #include "share/ob_define.h"
 #include "storage/ob_i_store.h"
+#include "storage/memtable/ob_memtable_key.h"
+#include "storage/memtable/mvcc/ob_row_data.h"
+#include "storage/memtable/mvcc/ob_mvcc_row.h"
 
 namespace oceanbase
 {
 namespace memtable
 {
 
-class ObMvccTransNode;
 class ObMemtableData;
-class ObRowData;
 
 // Arguments for building tx node
 struct ObTxNodeArg
@@ -33,7 +34,7 @@ struct ObTxNodeArg
   const ObMemtableData *data_;
   // old_row_ is the old row of the modificattion
   // NB: It is only used for liboblog
-  const ObRowData *old_row_;
+  ObRowData old_row_;
   // modify_count_ is used for txn checksum now
   // NB: It is began with 0
   uint32_t modify_count_;
@@ -48,11 +49,12 @@ struct ObTxNodeArg
   int64_t write_epoch_;
   // scn_ is thee log ts of the redo log
   share::SCN scn_;
+  // colume_cnt_ is the column count of the insert row
   int64_t column_cnt_;
 
   TO_STRING_KV(K_(tx_id),
                KP_(data),
-               KP_(old_row),
+               K_(old_row),
                K_(modify_count),
                K_(acc_checksum),
                K_(memstore_version),
@@ -61,10 +63,21 @@ struct ObTxNodeArg
                K_(scn),
                K_(column_cnt));
 
+  ObTxNodeArg()
+    : tx_id_(),
+    data_(nullptr),
+    old_row_(),
+    modify_count_(UINT32_MAX),
+    acc_checksum_(0),
+    memstore_version_(0),
+    seq_no_(),
+    scn_(share::SCN::max_scn()),
+    column_cnt_(0) {}
+
   // Constructor for leader
   ObTxNodeArg(const transaction::ObTransID tx_id,
               const ObMemtableData *data,
-              const ObRowData *old_row,
+              const ObRowData &old_row,
               const int64_t memstore_version,
               const transaction::ObTxSEQ seq_no,
               const int64_t write_epoch,
@@ -83,7 +96,6 @@ struct ObTxNodeArg
   // Constructor for follower
   ObTxNodeArg(const transaction::ObTransID tx_id,
               const ObMemtableData *data,
-              const ObRowData *old_row,
               const int64_t memstore_version,
               const transaction::ObTxSEQ seq_no,
               const uint32_t modify_count,
@@ -92,7 +104,7 @@ struct ObTxNodeArg
               const int64_t column_cnt)
     : tx_id_(tx_id),
     data_(data),
-    old_row_(old_row),
+    old_row_(),
     modify_count_(modify_count),
     acc_checksum_(acc_checksum),
     memstore_version_(memstore_version),
@@ -101,10 +113,52 @@ struct ObTxNodeArg
     scn_(scn),
     column_cnt_(column_cnt) {}
 
+  // Setter for leader
+  void set(const transaction::ObTransID tx_id,
+              const ObMemtableData *data,
+              const ObRowData &old_row,
+              const int64_t memstore_version,
+              const transaction::ObTxSEQ seq_no,
+              const int64_t write_epoch,
+              const int64_t column_cnt)
+  {
+    tx_id_ = tx_id;
+    data_ = data;
+    old_row_ = old_row;
+    modify_count_ = UINT32_MAX;
+    acc_checksum_ = 0;
+    memstore_version_ = memstore_version;
+    seq_no_ = seq_no;
+    write_epoch_ = write_epoch;
+    scn_ = share::SCN::max_scn();
+    column_cnt_ = column_cnt;
+  }
+
+  // Setter for follower
+  void set(const transaction::ObTransID tx_id,
+           const ObMemtableData *data,
+           const int64_t memstore_version,
+           const transaction::ObTxSEQ seq_no,
+           const uint32_t modify_count,
+           const uint32_t acc_checksum,
+           const share::SCN scn,
+           const int64_t column_cnt)
+  {
+    tx_id_ = tx_id;
+    data_ = data;
+    old_row_.reset();
+    modify_count_ = modify_count;
+    acc_checksum_ = acc_checksum;
+    memstore_version_ = memstore_version;
+    seq_no_ = seq_no;
+    scn_ = scn;
+    column_cnt_ = column_cnt;
+  }
+
   void reset() {
     tx_id_.reset();
     data_ = NULL;
-    old_row_ = NULL;
+    old_row_.reset();
     modify_count_ = 0;
     acc_checksum_ = 0;
     memstore_version_ = 0;
@@ -134,8 +188,17 @@ struct ObMvccWriteResult {
   // tx_node_ is the node used for insert, whether it is inserted is decided by
   // has_insert()
   ObMvccTransNode *tx_node_;
-  // is_checked_ is used to tell lock_rows_on_forzen_stores whether sequence_set_violation has finished its check
+  // is_checked_ is used to tell lock_rows_on_forzen_stores whether
+  // sequence_set_violation has finished its check
   bool is_checked_;
+  // value_ is the mvcc row used for insert, whether it is inserted is decided
+  // by has_insert(). You need distinguish the mvcc_row_ in lock_state(used for
+  // double check in post_lock) and value_ in mvcc_result(used for the follow-up
+  // work of mvcc_write)
+  ObMvccRow *value_;
+  // mtk_ is used for callback registration. We really need an untemporary memtable
+  // key reference for callbacks
+  ObMemtableKey mtk_;
 
   TO_STRING_KV(K_(can_insert),
                K_(need_insert),
@@ -143,7 +206,9 @@ struct ObMvccWriteResult {
                K_(is_mvcc_undo),
                K_(lock_state),
                K_(is_checked),
-               KPC_(tx_node));
+               KPC_(tx_node),
+               KPC_(value),
+               K_(mtk));
 
   ObMvccWriteResult()
     : can_insert_(false),
@@ -151,8 +216,33 @@ struct ObMvccWriteResult {
     is_new_locked_(false),
     is_mvcc_undo_(false),
     lock_state_(),
-    tx_node_(NULL),
-    is_checked_(false) {}
+    tx_node_(nullptr),
+    is_checked_(false),
+    value_(nullptr),
+    mtk_() {}
+
+  ObMvccWriteResult(const ObMvccWriteResult& other) {
+    can_insert_ = other.can_insert_;
+    need_insert_ = other.need_insert_;
+    is_new_locked_ = other.is_new_locked_;
+    is_mvcc_undo_ = other.is_mvcc_undo_;
+    lock_state_ = other.lock_state_;
+    is_checked_ = other.is_checked_;
+    tx_node_ = other.tx_node_;
+    value_ = other.value_;
+    mtk_.encode(other.mtk_);
+  }
+  void operator=(const ObMvccWriteResult& other) {
+    can_insert_ = other.can_insert_;
+    need_insert_ = other.need_insert_;
+    is_new_locked_ = other.is_new_locked_;
+    is_mvcc_undo_ = other.is_mvcc_undo_;
+    lock_state_ = other.lock_state_;
+    is_checked_ = other.is_checked_;
+    tx_node_ = other.tx_node_;
+    value_ = other.value_;
+    mtk_.encode(other.mtk_);
+  }
 
   // has_insert indicates whether the insert is succeed
   // It is decided by both can_insert_ and need_insert_
@@ -167,6 +257,8 @@ struct ObMvccWriteResult {
     lock_state_.reset();
     tx_node_ = NULL;
     is_checked_ = false;
+    value_ = NULL;
+    mtk_.reset();
   }
 };
 
@@ -198,6 +290,48 @@ struct ObMvccWriteDebugInfo {
   // TODO(handora.qc): add more debug info if necessary
   // int64_t exist_table_bitmap_;
 };
+
+struct ObStoredKV
+{
+  ObMemtableKey key_;
+  ObMvccRow *value_;
+
+  ObStoredKV()
+    : key_(),
+    value_(nullptr) {}
+
+  void reset() {
+    key_.reset();
+    value_ = nullptr;
+  }
+
+  bool empty() {
+    return nullptr == value_;
+  }
+
+  void operator=(const ObStoredKV& other) {
+    key_.encode(other.key_);
+    value_ = other.value_;
+  }
+
+  ObStoredKV(const ObStoredKV& other) {
+    key_.encode(other.key_);
+    value_ = other.value_;
+  }
+
+  TO_STRING_KV(K_(key), KPC_(value));
+};
+
+static bool is_mvcc_write_related_error_(const int ret_code)
+{
+  return OB_TRY_LOCK_ROW_CONFLICT == ret_code ||
+    OB_TRANSACTION_SET_VIOLATION == ret_code ||
+    OB_ERR_PRIMARY_KEY_DUPLICATE == ret_code;
+}
+
+void memtable_set_injection_sleep();
+
+int memtable_set_injection_error();
 
 } // namespace memtable
 } // namespace oceanbase

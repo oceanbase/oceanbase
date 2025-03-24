@@ -696,8 +696,18 @@ int ObTxNode::write(ObTxDesc &tx,
   param.read_info_ = &read_info;
 
   context.init(query_flag, write_store_ctx, allocator, trans_version_range);
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
-  OZ(txs_.revert_store_ctx(write_store_ctx));
+  const ObMemtableSetArg arg(&row,
+                             &columns_,
+                             NULL, /*update_idx*/
+                             NULL, /*old_row*/
+                             1,    /*row_count*/
+                             false /*check_exist*/,
+                             encrypt_meta);
+  OZ(memtable_->set(param, context, arg));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(txs_.revert_store_ctx(write_store_ctx))) {
+    TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(write_store_ctx));
+  }
   delete iter;
   return ret;
 }
@@ -760,7 +770,15 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
 
   OZ(context.init(query_flag, write_store_ctx, allocator, trans_version_range));
 
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
+  const ObMemtableSetArg arg(&row,
+                             &columns_,
+                             NULL, /*update_idx*/
+                             NULL, /*old_row*/
+                             1,    /*row_count*/
+                             false /*check_exist*/,
+                             encrypt_meta);
+
+  OZ(memtable_->set(param, context, arg));
 
   return ret;
 }

@@ -18,26 +18,12 @@
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+  class ObDatumRowIterator;
+}
 namespace storage
 {
-
-struct ObRowState
-{
-  bool lock_is_decided_;
-  share::SCN max_trans_version_;
-  blocksstable::ObDmlFlag row_dml_flag_;
-  ObRowState()
-      : lock_is_decided_(false),
-        max_trans_version_(share::SCN::min_scn()),
-        row_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST)
-  {}
-  inline bool is_not_exist() const { return blocksstable::ObDmlFlag::DF_NOT_EXIST == row_dml_flag_; }
-  inline bool is_delete() const { return blocksstable::ObDmlFlag::DF_DELETE == row_dml_flag_; }
-  inline bool is_lock_decided() const { return lock_is_decided_; }
-  inline share::SCN get_max_trans_version() const { return max_trans_version_; }
-  inline void set_lock_decided() { lock_is_decided_ = true; }
-  TO_STRING_KV(K_(lock_is_decided), K_(max_trans_version), K_(row_dml_flag));
-};
 
 struct ObMarkedRowkeyAndLockState
 {
@@ -94,11 +80,16 @@ public:
       const ObRelativeTable &table,
       ObStoreCtx &store_ctx,
       const ObITableReadInfo &rowkey_read_info);
-  int check_duplicate(blocksstable::ObDatumRow *rows, const int64_t row_count, ObRelativeTable &table, bool check_dup = true);
-  blocksstable::ObDatumRowkey& get_duplicate_rowkey()
-  {
-    return min_key_;
-  }
+  int assign_rows(const int64_t row_count, blocksstable::ObDatumRow *rows);
+  int assign_duplicate_splitted_rows_info(
+      const bool is_first_splitted_rows_info,
+      ObIArray<int64_t> &row_idxs, // row_idx of rows_ in origin rows_info
+      ObRowsInfo &splitted_rows_info);
+  int set_need_find_all_duplicate_rows(
+      const bool need_find_all_duplicate_key,
+      const common::ObIArray<uint64_t> *dup_row_column_ids,
+      blocksstable::ObDatumRowIterator **dup_row_iter);
+  int sort_keys();
   blocksstable::ObDatumRowkey& get_conflict_rowkey()
   {
     const int64_t conflict_rowkey_idx = 1 == rowkeys_.count() ? 0 : conflict_rowkey_idx_;
@@ -112,7 +103,7 @@ public:
   {
     return *(rowkeys_[idx].lock_state_);
   }
-  bool have_conflict()
+  bool have_conflict() const
   {
     return -1 != conflict_rowkey_idx_;
   }
@@ -128,11 +119,14 @@ public:
   {
     return error_code_;
   }
+  inline bool has_set_error() const
+  {
+    return error_code_ != OB_SUCCESS;
+  }
   inline void set_row_lock_state(
       const int64_t idx,
       ObStoreRowLockState *lock_state)
   {
-    lock_state->reset();
     rowkeys_[idx].lock_state_ = lock_state;
   }
   inline void set_row_lock_checked(
@@ -144,6 +138,15 @@ public:
       marked_rowkey.mark_row_lock_checked();
     } else if (!marked_rowkey.is_checked()) {
       marked_rowkey.mark_row_checked();
+      ++delete_count_;
+    }
+  }
+  inline void set_row_duplicate(const int64_t idx)
+  {
+    blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
+    if (!marked_rowkey.is_checked()) {
+      marked_rowkey.mark_row_checked();
+      rowkeys_[idx].marked_rowkey_.mark_row_duplicate();
       ++delete_count_;
     }
   }
@@ -175,6 +178,11 @@ public:
     const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
     return marked_rowkey.is_checked();
   }
+  inline bool is_row_duplicate(const int64_t idx) const
+  {
+    const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
+    return marked_rowkey.is_row_duplicate();
+  }
   inline bool is_row_skipped(const int64_t idx) const
   {
     const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
@@ -199,13 +207,44 @@ public:
   {
     return permutation_[idx];
   }
+  inline bool need_find_all_duplicate_key() const { return need_find_all_duplicate_key_; }
+  inline bool is_sorted() const { return is_sorted_; }
+  inline void set_row_conflict_error(const int64_t idx, int error_code)
+  {
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == error_code
+        && need_find_all_duplicate_key_) {
+      if (!has_set_error()) { // only record the error for the first time
+        set_conflict_rowkey(idx);
+        set_error_code(error_code);
+      }
+      set_row_duplicate(idx);
+    } else {
+      set_conflict_rowkey(idx);
+      set_error_code(error_code);
+    }
+  }
+  inline int64_t get_real_idx(const int64_t permutation_idx)
+  {
+    int64_t idx = -1;
+    if (!is_sorted_) {
+      idx = permutation_idx;
+    } else {
+      for (int64_t i = 0; i < rowkeys_.count(); ++i) {
+        if (permutation_[i] == permutation_idx) {
+          idx = i;
+          break;
+        }
+      }
+    }
+    return idx;
+  }
   int check_min_rowkey_boundary(const blocksstable::ObDatumRowkey &max_rowkey, bool &may_exist);
   int refine_rowkeys();
   void return_exist_iter(ObStoreRowIterator *exist_iter);
   void reuse_scan_mem_allocator() { scan_mem_allocator_.reuse(); }
   ObTableAccessContext &get_access_context() { return exist_helper_.table_access_context_; }
-  TO_STRING_KV(K_(rowkeys), K_(permutation), K_(min_key), K_(delete_count), K_(conflict_rowkey_idx), K_(error_code),
-               K_(exist_helper));
+  TO_STRING_KV(K_(rowkeys), K_(permutation), K_(delete_count), K_(conflict_rowkey_idx), K_(error_code),
+               K_(exist_helper), K_(need_find_all_duplicate_key), K_(is_sorted));
 public:
   struct ExistHelper final
   {
@@ -269,15 +308,22 @@ public:
   blocksstable::ObDatumRow *rows_;
   ExistHelper exist_helper_;
   ObTabletID tablet_id_;
+  // if need_find_all_duplicate_key_ is true and the dup keys exist,
+  // this iter will be created to store the dup rows.
+  blocksstable::ObDatumRowIterator **dup_row_iter_;
+  const common::ObIArray<uint64_t> *dup_row_column_ids_;
 private:
   const blocksstable::ObStorageDatumUtils *datum_utils_;
-  blocksstable::ObDatumRowkey min_key_;
   const ObColDescIArray *col_descs_;
   int64_t conflict_rowkey_idx_;
   int error_code_;
   int64_t delete_count_;
   int16_t rowkey_column_num_;
   bool is_inited_;
+  // In the insert_on_duplicate_update scenario, all the duplicate keys need to be found and returned,
+  // otherwise, return an error as long as one duplicate key is encountered.
+  bool need_find_all_duplicate_key_;
+  bool is_sorted_;
   DISALLOW_COPY_AND_ASSIGN(ObRowsInfo);
 };
 

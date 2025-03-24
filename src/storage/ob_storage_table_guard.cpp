@@ -261,6 +261,12 @@ void ObStorageTableGuard::reset()
 {
   if (NULL != memtable_) {
     memtable_->dec_write_ref();
+    int64_t used_time = ObClockGenerator::getClock() - init_ts_;
+    if (used_time >= 10L * 1000L * 1000L /*10s*/) {
+      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME,
+                    "dec write ref cost too much time",
+                    KPC(memtable_), K(lbt()), K(used_time));
+    }
     memtable_ = NULL;
   }
 }

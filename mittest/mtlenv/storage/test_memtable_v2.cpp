@@ -38,6 +38,13 @@ int ObTxTable::online()
   ATOMIC_STORE(&state_, TxTableState::ONLINE);
   return OB_SUCCESS;
 }
+
+void ObTenantMetaMemMgr::wait()
+{
+  TG_STOP(tg_id_);
+
+  TG_WAIT(tg_id_);
+}
 }  // namespace storage
 
 namespace memtable
@@ -167,7 +174,7 @@ public:
     is_sstable_contains_lock_ = false;
 
     // mock master key getter
-    ObMasterKeyGetter::instance().init(NULL);
+    // ASSERT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
 
     const testing::TestInfo* const test_info =
       testing::UnitTest::GetInstance()->current_test_info();
@@ -192,7 +199,8 @@ public:
     allocator_.reset();
     allocator2_.reset();
 
-    ObMasterKeyGetter::instance().stop();
+    // ObMasterKeyGetter::instance().destroy();
+
     TRANS_LOG(INFO, "teardown success");
   }
 
@@ -492,11 +500,61 @@ public:
     if (OB_FAIL(context.init(query_flag, *wtx, allocator_, trans_version_range))) {
       TRANS_LOG(WARN, "Fail to init access context", K(ret));
     }
-    ret = memtable->set(iter_param_, context, columns_, write_row, encrypt_meta_, false);
-    if (ret == -5024) {
-      TRANS_LOG(ERROR, "nima", K(ret), K(write_row));
+
+    const ObMemtableSetArg arg(&write_row,
+                               &columns_,
+                               NULL, /*update_idx*/
+                               NULL, /*old_row*/
+                               1,    /*row_count*/
+                               false /*check_exist*/,
+                               encrypt_meta_);
+
+    EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, arg)));
+
+    TRANS_LOG(INFO, "======================= end write tx ======================",
+              K(ret), K(wtx->mvcc_acc_ctx_.tx_id_), K(*wtx), K(snapshot), K(expire_time), K(write_row));
+  }
+
+  void write_txs(ObStoreCtx *wtx,
+                 ObMemtable *memtable,
+                 const int64_t snapshot,
+                 ObDatumRow &write_row,
+                 const int expect_ret = OB_SUCCESS,
+                 const int64_t expire_time = 10000000000)
+  {
+    int ret = OB_SUCCESS;
+    TRANS_LOG(INFO, "====================== start write tx =====================",
+              K(wtx->mvcc_acc_ctx_.tx_id_), K(*wtx), K(snapshot), K(expire_time), K(write_row));
+
+    share::SCN snapshot_scn;
+    snapshot_scn.convert_for_tx(snapshot);
+    start_stmt(wtx, snapshot_scn, expire_time);
+
+    ObTableAccessContext context;
+    ObVersionRange trans_version_range;
+    const bool read_latest = true;
+    ObQueryFlag query_flag;
+
+    trans_version_range.base_version_ = 0;
+    trans_version_range.multi_version_start_ = 0;
+    trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+    query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+    query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+    if (OB_FAIL(context.init(query_flag, *wtx, allocator_, trans_version_range))) {
+      TRANS_LOG(WARN, "Fail to init access context", K(ret));
     }
-    EXPECT_EQ(expect_ret, ret);
+
+    const ObMemtableSetArg arg(&write_row,
+                               &columns_,
+                               NULL, /*update_idx*/
+                               NULL, /*old_row*/
+                               1,    /*row_count*/
+                               false /*check_exist*/,
+                               encrypt_meta_);
+
+    EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, arg)));
+
     TRANS_LOG(INFO, "======================= end write tx ======================",
               K(ret), K(wtx->mvcc_acc_ctx_.tx_id_), K(*wtx), K(snapshot), K(expire_time), K(write_row));
   }
@@ -823,81 +881,79 @@ public:
                                           encrypt_info));
   }
 
-  void serialize_encrypted_redo_log(ObStoreCtx *store_ctx,
-                                    char *redo_log_buffer)
-  {
-    int64_t mutator_size = 0;
-    int64_t pos = 0;
-    ObRedoLogSubmitHelper helper;
-    ObPartTransCtx *tx_ctx = store_ctx->mvcc_acc_ctx_.tx_ctx_;
-    ObTxRedoLog redo_log(1000 /*fake cluster_version_*/);
+  // void serialize_encrypted_redo_log(ObStoreCtx *store_ctx,
+  //                                   char *redo_log_buffer)
+  // {
+  //   int64_t mutator_size = 0;
+  //   int64_t pos = 0;
+  //   ObRedoLogSubmitHelper helper;
+  //   ObPartTransCtx *tx_ctx = store_ctx->mvcc_acc_ctx_.tx_ctx_;
+  //   ObTxRedoLog redo_log(1000 /*fake cluster_version_*/);
 
-    redo_log.set_mutator_buf(redo_log_buffer);
-    redo_log.set_mutator_size(REDO_BUFFER_SIZE, false /*after_fill*/);
+  //   redo_log.set_mutator_buf(redo_log_buffer);
+  //   redo_log.set_mutator_size(REDO_BUFFER_SIZE, false /*after_fill*/);
 
-    ObIMemtableCtx *mem_ctx = store_ctx->mvcc_acc_ctx_.mem_ctx_;
-    ObTxFillRedoCtx ctx;
-    ctx.buf_ = redo_log.get_mutator_buf();
-    ctx.buf_len_ = redo_log.get_mutator_size();
-    ctx.buf_pos_ = mutator_size;
-    ctx.helper_ = &helper;
-    ctx.fill_count_ = 0;
-    EXPECT_EQ(OB_SUCCESS, mem_ctx->fill_redo_log(ctx));
+  //   ObIMemtableCtx *mem_ctx = store_ctx->mvcc_acc_ctx_.mem_ctx_;
+  //   ObTxFillRedoCtx ctx(helper.callbacks_);
+  //   ctx.buf_ = redo_log.get_mutator_buf();
+  //   ctx.buf_len_ = redo_log.get_mutator_size();
+  //   ctx.buf_pos_ = mutator_size;
+  //   ctx.fill_count_ = 0;
+  //   EXPECT_EQ(OB_SUCCESS, mem_ctx->fill_redo_log(ctx));
 
-    redo_log.set_mutator_size(ctx.buf_pos_, true /*after_fill*/);
-    EXPECT_EQ(OB_SUCCESS, redo_log.serialize(redo_log_buffer, REDO_BUFFER_SIZE, pos));
-  }
+  //   redo_log.set_mutator_size(ctx.buf_pos_, true /*after_fill*/);
+  //   EXPECT_EQ(OB_SUCCESS, redo_log.serialize(redo_log_buffer, REDO_BUFFER_SIZE, pos));
+  // }
 
-  void deserialize_redo_log_extract_encryption(char *redo_log_buffer,
-                                               ObTxRedoLog &redo_log,
-                                               ObMemtableMutatorIterator &mmi,
-                                               ObCLogEncryptInfo &encrypt_info)
-  {
-    int64_t pos = 0;
-    EXPECT_EQ(OB_SUCCESS, redo_log.deserialize(redo_log_buffer, REDO_BUFFER_SIZE, pos));
+  // void deserialize_redo_log_extract_encryption(char *redo_log_buffer,
+  //                                              ObTxRedoLog &redo_log,
+  //                                              ObMemtableMutatorIterator &mmi,
+  //                                              ObCLogEncryptInfo &encrypt_info)
+  // {
+  //   int64_t pos = 0;
+  //   EXPECT_EQ(OB_SUCCESS, redo_log.deserialize(redo_log_buffer, REDO_BUFFER_SIZE, pos));
 
-    //mock replay iterator
-    //deserialize encrypt info
-    mmi.reset();
-    pos = 0;
-    EXPECT_EQ(OB_SUCCESS, mmi.deserialize(redo_log.get_replay_mutator_buf(),
-                                          redo_log.get_mutator_size(),
-                                          pos,
-                                          encrypt_info));
-    EXPECT_EQ(redo_log.get_mutator_size(), pos);
+  //   //mock replay iterator
+  //   //deserialize encrypt info
+  //   mmi.reset();
+  //   pos = 0;
+  //   EXPECT_EQ(OB_SUCCESS, mmi.deserialize(redo_log.get_replay_mutator_buf(),
+  //                                         redo_log.get_mutator_size(),
+  //                                         pos,
+  //                                         encrypt_info));
+  //   EXPECT_EQ(redo_log.get_mutator_size(), pos);
 
-    //decrypt table key
-    ObTxEncryptMap *encrypt_map = encrypt_info.encrypt_map_;
-    char decrypted_table_key[OB_ENCRYPTED_TABLE_KEY_LEN] = {0};
-    int64_t out_len = 0;
-    if (OB_NOT_NULL(encrypt_map) && encrypt_map->begin() != encrypt_map->end()) {
-      int64_t master_key_len = 0;
-      ObEncryptMeta &meta = encrypt_map->begin()->meta_;
-      meta.tenant_id_ = 1004;
-      EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::get_master_key(meta.tenant_id_,
-                                                              meta.master_key_version_,
-                                                              meta.master_key_.ptr(),
-                                                              OB_MAX_MASTER_KEY_LENGTH,
-                                                              master_key_len));
-      meta.master_key_.get_content().set_length(master_key_len);
-      TRANS_LOG(INFO, "deserialized master key", K(meta.master_key_));
-      EXPECT_EQ(OB_SUCCESS, ObBlockCipher::decrypt(meta.master_key_.ptr(),
-                                                   meta.master_key_.size(),
-                                                   meta.encrypted_table_key_.ptr(),
-                                                   meta.encrypted_table_key_.size(),
-                                                   OB_ENCRYPTED_TABLE_KEY_LEN,
-                                                   NULL, 0, NULL, 0, NULL, 0,
-                                                   static_cast<ObCipherOpMode>(meta.encrypt_algorithm_),
-                                                   decrypted_table_key,
-                                                   out_len));
-      meta.table_key_.set_content(decrypted_table_key, out_len);
-      TRANS_LOG(INFO, "deserialized table_key", K(meta.table_key_));
-      EXPECT_EQ(true, meta.is_valid());
-    } else {
-      ob_abort();
-    }
+  //   //decrypt table key
+  //   ObTxEncryptMap *encrypt_map = encrypt_info.encrypt_map_;
+  //   char decrypted_table_key[OB_ENCRYPTED_TABLE_KEY_LEN] = {0};
+  //   int64_t out_len = 0;
+  //   if (OB_NOT_NULL(encrypt_map) && encrypt_map->begin() != encrypt_map->end()) {
+  //     int64_t master_key_len = 0;
+  //     ObEncryptMeta &meta = encrypt_map->begin()->meta_;
+  //     meta.tenant_id_ = 1004;
+  //     EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::get_master_key(meta.tenant_id_,
+  //                                                             meta.master_key_version_,
+  //                                                             meta.master_key_.ptr(),
+  //                                                             OB_MAX_MASTER_KEY_LENGTH,
+  //                                                             master_key_len));
+  //     meta.master_key_.get_content().set_length(master_key_len);
+  //     EXPECT_EQ(OB_SUCCESS, ObBlockCipher::decrypt(meta.master_key_.ptr(),
+  //                                                  meta.master_key_.size(),
+  //                                                  meta.encrypted_table_key_.ptr(),
+  //                                                  meta.encrypted_table_key_.size(),
+  //                                                  OB_ENCRYPTED_TABLE_KEY_LEN,
+  //                                                  NULL, 0, NULL, 0, NULL, 0,
+  //                                                  static_cast<ObCipherOpMode>(meta.encrypt_algorithm_),
+  //                                                  decrypted_table_key,
+  //                                                  out_len));
+  //     meta.table_key_.set_content(decrypted_table_key, out_len);
 
-  }
+  //     EXPECT_EQ(true, meta.is_valid());
+  //   } else {
+  //     ob_abort();
+  //   }
+
+  // }
 
   void replay_tx(ObStoreCtx *store_ctx,
                  ObMemtable *memtable,
@@ -1236,7 +1292,6 @@ ObLSTxCtxMgr TestMemtableV2::ls_tx_ctx_mgr_;
 ObTxTable TestMemtableV2::tx_table_;
 ObLS TestMemtableV2::ls_;
 bool TestMemtableV2::is_sstable_contains_lock_;
-
 
 TEST_F(TestMemtableV2, test_write_read_conflict)
 {
@@ -2290,9 +2345,9 @@ TEST_F(TestMemtableV2, test_replay)
 
 //   TRANS_LOG(INFO, "######## CASE1: txn1 write row in lmemtable");
 //   ObDatumRowkey rowkey;
-//   ObDatumRow write_row;
+//   ObStoreRow write_row;
 //   ObDatumRowkey rowkey2;
-//   ObDatumRow write_row2;
+//   ObStoreRow write_row2;
 
 //   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
 //                                  2, /*value*/
@@ -2378,7 +2433,7 @@ TEST_F(TestMemtableV2, test_replay)
 //                INT64_MAX, /*trans_version*/
 //                wtx_seq_no2,
 //                1,         /*modify_count*/
-//                ObMvccTransNode::F_INIT,
+//                ObMvccTransNode::TransNodeFlag::F_INIT,
 //                ObDmlFlag::DF_INSERT,
 //                1,         /*key*/
 //                3,         /*value*/
@@ -2391,7 +2446,8 @@ TEST_F(TestMemtableV2, test_replay)
 //                INT64_MAX, /*trans_version*/
 //                wtx_seq_no1,
 //                0,         /*modify_count*/
-//                ObMvccTransNode::F_INIT,
+//                ObMvccTransNode::TransNodeFlag::F_INIT,
+
 //                ObDmlFlag::DF_INSERT,
 //                1,         /*key*/
 //                2,         /*value*/
@@ -3407,20 +3463,22 @@ TEST_F(TestMemtableV2, test_seq_set_violation)
     TRANS_LOG(WARN, "Fail to init access context", K(ret));
   }
 
+  const ObMemtableSetArg arg(&write_row,
+                             &columns_,
+                             NULL, /*update_idx*/
+                             NULL, /*old_row*/
+                             1,    /*row_count*/
+                             false /*check_exist*/,
+                             encrypt_meta_);
+
   EXPECT_EQ(OB_SUCCESS, (ret = memtable->set(iter_param_,
                                              context,
-                                             columns_,
-                                             write_row,
-                                             encrypt_meta_,
-                                             false)));
+                                             arg)));
 
   start_pdml_stmt(wtx, scn_3000, read_seq_no, 1000000000/*expire_time*/);
   EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, (ret = memtable->set(iter_param_,
                                                                context,
-                                                               columns_,
-                                                               write_row,
-                                                               encrypt_meta_,
-                                                               false)));
+                                                               arg)));
   memtable->destroy();
 }
 
@@ -3592,15 +3650,13 @@ void ObITabletMemtable::unset_logging_blocked_for_active_memtable_()
 }
 } // namespace storage
 
-namespace memtable{
-
-int ObMemtable::lock_row_on_frozen_stores_(
+namespace memtable
+{
+int ObMemtable::check_row_locked_on_frozen_stores_(
     const storage::ObTableIterParam &,
-    const ObTxNodeArg &,
-    const ObMemtableKey *,
-    const bool check_exist,
     storage::ObTableAccessContext &,
-    ObMvccRow *,
+    const bool,
+    const ObMemtableKey *,
     ObMvccWriteResult &)
 {
   if (unittest::TestMemtableV2::is_sstable_contains_lock_) {

@@ -1916,7 +1916,6 @@ int ObDDLKV::check_row_locked(
     const ObDatumRowkey &rowkey,
     ObTableAccessContext &context,
     ObStoreRowLockState &lock_state,
-    ObRowState &row_state,
     bool check_exist)
 {
   int ret = OB_SUCCESS;
@@ -1934,7 +1933,7 @@ int ObDDLKV::check_row_locked(
   } else if (ddl_memtables_.count() != 1) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else if (OB_FAIL(ddl_memtables_.at(0)->check_row_locked(param, rowkey, context, lock_state, row_state, check_exist))) {
+  } else if (OB_FAIL(ddl_memtables_.at(0)->check_row_locked(param, rowkey, context, lock_state, check_exist))) {
     LOG_WARN("fail to get row", K(ret));
   }
   return ret;

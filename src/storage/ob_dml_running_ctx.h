@@ -96,7 +96,6 @@ public:
   const common::ObIArray<uint64_t> *column_ids_;
   blocksstable::ObDatumRow datum_row_;
   blocksstable::ObStoreCmpFuncs cmp_funcs_;
-  bool is_old_row_valid_for_lob_;
   bool is_need_check_old_row_;
   bool is_udf_;
   bool has_lob_rowkey_;

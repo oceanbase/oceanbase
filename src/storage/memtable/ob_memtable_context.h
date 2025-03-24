@@ -435,7 +435,9 @@ public:
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
 public:
-  void on_key_duplication_retry(const ObMemtableKey& key);
+  void on_key_duplication_retry(const ObMemtableKey& key,
+                                const ObMvccRow *value,
+                                const ObMvccWriteResult &res);
   void on_tsc_retry(const ObMemtableKey& key,
                     const share::SCN snapshot_version,
                     const share::SCN max_trans_version,
@@ -468,6 +470,12 @@ public: // callback
 
   bool is_for_replay() const { return trans_mgr_.is_for_replay(); }
   int append_callback(ObITransCallback *cb) { return trans_mgr_.append(cb); }
+  int append_callback(ObITransCallback *head,
+                      ObITransCallback *tail,
+                      const int64_t length)
+  {
+    return trans_mgr_.append(head, tail, length);
+  }
   int64_t get_pending_log_size() { return trans_mgr_.get_pending_log_size(); }
   int64_t get_flushed_log_size() { return trans_mgr_.get_flushed_log_size(); }
   int acquire_callback_list(const bool new_epoch)

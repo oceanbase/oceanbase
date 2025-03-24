@@ -246,8 +246,11 @@ int ObDASDMLIterator::rewind(const ObDASDMLBaseCtDef *das_ctdef, const ObFTDocWo
 {
   int ret = common::OB_SUCCESS;
   cur_datum_row_ = nullptr;
-  cur_datum_rows_ = nullptr;
   ft_doc_word_info_ = ft_doc_word_info;
+  if (nullptr != cur_datum_rows_) {
+    allocator_.free(cur_datum_rows_);
+    cur_datum_rows_ = nullptr;
+  }
   set_ctdef(das_ctdef);
   if (OB_NOT_NULL(domain_iter_)) {
     if (OB_FAIL(domain_iter_->rewind())) {

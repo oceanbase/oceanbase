@@ -1349,7 +1349,7 @@ int ObTFMIndexBlockRowIterator::locate_range_by_rowkey_vector(
 ObIndexBlockRowScanner::ObIndexBlockRowScanner()
   : query_range_(nullptr), macro_id_(), allocator_(nullptr), raw_iter_(nullptr), transformed_iter_(nullptr),
     ddl_iter_(nullptr), ddl_merge_iter_(nullptr), ddl_slice_iter_(nullptr), iter_(nullptr), datum_utils_(nullptr),
-    range_idx_(0), nested_offset_(0), rowkey_begin_idx_(0), rowkey_end_idx_(0),
+    range_idx_(0), nested_offset_(0), curr_rowkey_begin_idx_(0), rowkey_end_idx_(0),
     index_format_(ObIndexFormat::INVALID), parent_row_range_(), is_get_(false), is_reverse_scan_(false),
     is_left_border_(false), is_right_border_(false), is_inited_(false),
     is_normal_cg_(false), is_normal_query_(true), filter_constant_type_(sql::ObBoolMaskType::PROBABILISTIC),
@@ -1429,7 +1429,7 @@ void ObIndexBlockRowScanner::reset()
   datum_utils_ = nullptr;
   range_idx_ = 0;
   nested_offset_ = 0;
-  rowkey_begin_idx_ = 0;
+  curr_rowkey_begin_idx_ = 0;
   rowkey_end_idx_ = 0;
   index_format_ = ObIndexFormat::INVALID;
   is_get_ = false;
@@ -1553,7 +1553,7 @@ int ObIndexBlockRowScanner::open(
   } else {
     macro_id_ = macro_id;
     rows_info_ = rows_info;
-    rowkey_begin_idx_ = rowkey_begin_idx;
+    curr_rowkey_begin_idx_ = rowkey_begin_idx;
     rowkey_end_idx_ = rowkey_end_idx;
     is_get_ = false;
   }
@@ -1580,7 +1580,7 @@ int ObIndexBlockRowScanner::open(
       LOG_WARN("Fail to open", K(ret));
     } else {
       rowkeys_info_ = row_keys_info;
-      rowkey_begin_idx_ = rowkey_begin_idx;
+      curr_rowkey_begin_idx_ = rowkey_begin_idx;
       rowkey_end_idx_ = rowkey_end_idx;
     }
   }
@@ -1677,7 +1677,7 @@ int ObIndexBlockRowScanner::get_next(
     ret = OB_ITER_END;
   } else if (is_multi_check && OB_FAIL(skip_to_next_valid_position(idx_block_row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("Failed to skip to next valid position", K(ret), K(rowkey_begin_idx_), K(rowkey_end_idx_), KPC(rows_info_));
+      LOG_WARN("Failed to skip to next valid position", K(ret), K(curr_rowkey_begin_idx_), K(rowkey_end_idx_), KPC(rows_info_));
     } else if (OB_ISNULL(iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("iter is null", K(index_format_), K(ret));
@@ -1688,8 +1688,8 @@ int ObIndexBlockRowScanner::get_next(
     LOG_WARN("Failed to get next idx row", K(ret), K(is_multi_check));
   } else if (is_sorted_multi_get) {
     idx_block_row.rowkeys_info_ = rowkeys_info_;
-    idx_block_row.rowkey_begin_idx_ = rowkey_begin_idx_;
-    idx_block_row.rowkey_end_idx_ = rowkey_begin_idx_ + 1;
+    idx_block_row.rowkey_begin_idx_ = curr_rowkey_begin_idx_;
+    idx_block_row.rowkey_end_idx_ = curr_rowkey_begin_idx_ + 1;
     if (OB_ISNULL(iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("iter is null", K(index_format_), K(ret));
@@ -2049,35 +2049,35 @@ int ObIndexBlockRowScanner::get_next_idx_row(ObMicroIndexInfo &idx_block_row)
   return ret;
 }
 
-void ObIndexBlockRowScanner::skip_index_rows()
-{
-  for (; rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
-    if (!rows_info_->is_row_skipped(rowkey_begin_idx_)) {
-      break;
-    }
-  }
-}
-
 int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row)
 {
   int ret = OB_SUCCESS;
-  skip_index_rows();
+  for (; curr_rowkey_begin_idx_ < rowkey_end_idx_; ++curr_rowkey_begin_idx_) {
+    if (!rows_info_->is_row_skipped(curr_rowkey_begin_idx_)) {
+      break;
+    }
+  }
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
-  } else if (rowkey_begin_idx_ == rowkey_end_idx_) {
+  } else if (curr_rowkey_begin_idx_ == rowkey_end_idx_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(iter_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter is null", K(index_format_), K(ret));
-  } else if (OB_FAIL(iter_->skip_to_next_valid_position(rows_info_->get_rowkey(rowkey_begin_idx_)))) {
+  } else if (OB_FAIL(iter_->skip_to_next_valid_position(rows_info_->get_rowkey(curr_rowkey_begin_idx_)))) {
     if (OB_ITER_END != ret) {
-      LOG_WARN("fail to skip to next valid position", K(ret), K(rowkey_begin_idx_), K(rowkey_end_idx_), KPC(rows_info_), KPC(iter_));
+      LOG_WARN("fail to skip to next valid position", K(ret), K(curr_rowkey_begin_idx_), K(rowkey_end_idx_), KPC(rows_info_), KPC(iter_));
     }
   } else {
     idx_block_row.rows_info_ = rows_info_;
-    idx_block_row.rowkey_begin_idx_ = rowkey_begin_idx_;
-    if (OB_FAIL(iter_->find_rowkeys_belong_to_same_idx_row(idx_block_row, rowkey_begin_idx_, rowkey_end_idx_, rows_info_))) {
+    idx_block_row.rowkey_begin_idx_ = curr_rowkey_begin_idx_;
+    // If a rowkey happens to be the endkey of the microblock, the rowkey idx must also be included in the rowkey idx range of next index row,
+    // because there may be multiple versions of one row across the microblock. Otherwise, some multi-version rows may be missed when do check_rows_lock.
+    // We must recognize this situation and treat it specifically when checking macro block bloom filters in prefetching phase,
+    // Otherwise, this border row may be filtered out incorrectly.
+    // At present, when we check bf, we just mindlessly skip the first row in the rowkeys idx range.
+    if (OB_FAIL(iter_->find_rowkeys_belong_to_same_idx_row(idx_block_row, curr_rowkey_begin_idx_, rowkey_end_idx_, rows_info_))) {
       LOG_WARN("Failed to find rowkeys belong to same index row", K(ret), KPC(iter_));
     }
   }

@@ -921,6 +921,8 @@ int ObSSTable::check_rows_locked(
         LOG_WARN("Fail to convert_for_tx", K(get_upper_trans_version()), K_(meta), K(ret));
       }
     }
+  } else if (!rows_info.is_sorted() && OB_FAIL(rows_info.sort_keys())) {
+    LOG_WARN("fail to sort rows", K(ret), K(rows_info));
   } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
     LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
   } else if (OB_ISNULL(sstable_endkey)) {
@@ -953,7 +955,6 @@ int ObSSTable::check_row_locked(
     const blocksstable::ObDatumRowkey &rowkey,
     ObTableAccessContext &context,
     ObStoreRowLockState &lock_state,
-    ObRowState &row_state,
     bool check_exist)
 {
   int ret = OB_SUCCESS;
@@ -964,6 +965,7 @@ int ObSSTable::check_row_locked(
   int cmp_ret = 0;
   lock_state.trans_version_ = SCN::min_scn();
   lock_state.is_locked_ = false;
+  lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
@@ -980,12 +982,8 @@ int ObSSTable::check_row_locked(
     // return false if not multi version minor sstable
   } else if (!check_exist && get_upper_trans_version() <= context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()) {
     // there is no lock at this sstable
-    if (row_state.max_trans_version_.get_val_for_tx() < get_upper_trans_version()) {
-      // skip reference upper_trans_version of empty_sstable, which may greater than real
-      // committed transaction's version
-      if (OB_FAIL(row_state.max_trans_version_.convert_for_tx(get_upper_trans_version()))) {
-        LOG_WARN("Fail to convert_for_tx", K(get_upper_trans_version()), K_(meta), K(ret));
-      }
+    if (OB_FAIL(lock_state.trans_version_.convert_for_tx(get_upper_trans_version()))) {
+      LOG_WARN("Fail to convert_for_tx", K(get_upper_trans_version()), K_(meta), K(ret));
     }
   } else {
     ObSSTableRowLockChecker row_checker;
@@ -993,7 +991,7 @@ int ObSSTable::check_row_locked(
     share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
     if (OB_FAIL(row_checker.init(param, context, this, &rowkey))) {
       LOG_WARN("failed to open row locker", K(ret), K(param), K(context), K(rowkey));
-    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, lock_state, row_state))) {
+    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, lock_state))) {
       LOG_WARN("failed to check row lock checker");
     }
   }
@@ -1828,7 +1826,10 @@ int ObSSTable::build_multi_row_lock_checker(
   iter = nullptr;
   ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableRowLockMultiChecker, tmp_iter);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(tmp_iter->init(rows_info.exist_helper_.table_iter_param_, context, this, &rows_info))) {
+    if (OB_UNLIKELY(!rows_info.is_sorted())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("rows_info must be sorted", K(ret), K(rows_info));
+    } else if (OB_FAIL(tmp_iter->init(rows_info.exist_helper_.table_iter_param_, context, this, &rows_info))) {
       LOG_WARN("Failed to init row lock multi checker", K(ret), K(rows_info));
     } else {
       iter = static_cast<ObSSTableRowLockMultiChecker *>(tmp_iter);

@@ -978,17 +978,16 @@ int ObAccessService::insert_rows(
   return ret;
 }
 
-int ObAccessService::insert_row(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    transaction::ObTxDesc &tx_desc,
-    const ObDMLBaseParam &dml_param,
-    const common::ObIArray<uint64_t> &column_ids,
-    const common::ObIArray<uint64_t> &duplicated_column_ids,
-    blocksstable::ObDatumRow &row,
-    const ObInsertFlag flag,
-    int64_t &affected_rows,
-    blocksstable::ObDatumRowIterator *&duplicated_rows)
+int ObAccessService::insert_rows_with_fetch_dup(const share::ObLSID &ls_id,
+                                                const common::ObTabletID &tablet_id,
+                                                transaction::ObTxDesc &tx_desc,
+                                                const ObDMLBaseParam &dml_param,
+                                                const common::ObIArray<uint64_t> &column_ids,
+                                                const common::ObIArray<uint64_t> &duplicated_column_ids,
+                                                blocksstable::ObDatumRowIterator *row_iter,
+                                                const ObInsertFlag flag,
+                                                int64_t &affected_rows,
+                                                blocksstable::ObDatumRowIterator *&duplicated_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
@@ -1007,11 +1006,10 @@ int ObAccessService::insert_row(
       || OB_UNLIKELY(!tx_desc.is_valid())
       || OB_UNLIKELY(!dml_param.is_valid())
       || OB_UNLIKELY(column_ids.count() <= 0)
-      || OB_UNLIKELY(duplicated_column_ids.count() <= 0)
-      || OB_UNLIKELY(!row.is_valid())) {
+      || OB_UNLIKELY(duplicated_column_ids.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(tx_desc),
-             K(dml_param), K(column_ids), K(duplicated_column_ids), K(row));
+             K(dml_param), K(column_ids), K(duplicated_column_ids));
   } else if (OB_FAIL(check_write_allowed_(ls_id,
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
@@ -1028,15 +1026,15 @@ int ObAccessService::insert_row(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
   } else {
-    ret = tablet_service->insert_row(tablet_handle,
-                                     dml_param.store_ctx_guard_->get_store_ctx(),
-                                     dml_param,
-                                     column_ids,
-                                     duplicated_column_ids,
-                                     row,
-                                     flag,
-                                     affected_rows,
-                                     duplicated_rows);
+    ret = tablet_service->insert_rows_with_fetch_dup(tablet_handle,
+                                                     dml_param.store_ctx_guard_->get_store_ctx(),
+                                                     dml_param,
+                                                     column_ids,
+                                                     duplicated_column_ids,
+                                                     row_iter,
+                                                     flag,
+                                                     affected_rows,
+                                                     duplicated_rows);
   }
   return ret;
 }

@@ -126,6 +126,29 @@ bool ObStoreCtx::is_uncommitted_data_rollbacked() const
   return bret;
 }
 
+int ObStoreCtx::get_all_tables(ObIArray<ObITable *> &iter_tables)
+{
+  int ret = OB_SUCCESS;
+  table_iter_->resume();
+  while (OB_SUCC(ret)) {
+    ObITable *table_ptr = nullptr;
+    if (OB_FAIL(table_iter_->get_next(table_ptr))) {
+      if (OB_ITER_END != ret) {
+        TRANS_LOG(WARN, "failed to get next tables", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        break;
+      }
+    } else if (OB_ISNULL(table_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "table must not be null", K(ret), KPC(table_iter_));
+    } else if (OB_FAIL(iter_tables.push_back(table_ptr))) {
+      TRANS_LOG(WARN, "rowkey_exists check::", K(ret), KPC(table_ptr));
+    }
+  }
+  return ret;
+}
+
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;
@@ -134,7 +157,6 @@ void ObStoreRowLockState::reset()
   lock_data_sequence_.reset();
   lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   is_delayed_cleanout_ = false;
-  exist_flag_ = ObExistFlag::UNKNOWN;
   mvcc_row_ = NULL;
   trans_scn_ = SCN::max_scn();
 }

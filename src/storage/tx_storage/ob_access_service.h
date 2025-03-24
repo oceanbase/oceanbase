@@ -162,14 +162,14 @@ public:
       const common::ObIArray<uint64_t> &column_ids,
       blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
-  int insert_row(
+  int insert_rows_with_fetch_dup(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       transaction::ObTxDesc &tx_desc,
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
       const common::ObIArray<uint64_t> &duplicated_column_ids,
-      blocksstable::ObDatumRow &row,
+      blocksstable::ObDatumRowIterator *row_iter,
       const ObInsertFlag flag,
       int64_t &affected_rows,
       blocksstable::ObDatumRowIterator *&duplicated_rows);

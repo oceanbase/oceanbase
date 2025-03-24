@@ -93,16 +93,18 @@ ObRowsInfo::ObRowsInfo()
     rows_(nullptr),
     exist_helper_(),
     tablet_id_(),
+    dup_row_iter_(nullptr),
+    dup_row_column_ids_(nullptr),
     datum_utils_(nullptr),
-    min_key_(),
     col_descs_(nullptr),
     conflict_rowkey_idx_(-1),
-    error_code_(0),
+    error_code_(OB_SUCCESS),
     delete_count_(0),
     rowkey_column_num_(0),
-    is_inited_(false)
+    is_inited_(false),
+    need_find_all_duplicate_key_(false),
+    is_sorted_(false)
 {
-  min_key_.set_max_rowkey();
 }
 
 ObRowsInfo::~ObRowsInfo()
@@ -112,20 +114,18 @@ ObRowsInfo::~ObRowsInfo()
 void ObRowsInfo::reset()
 {
   exist_helper_.reset();
-  min_key_.set_max_rowkey();
   rows_ = nullptr;
   delete_count_ = 0;
   rowkey_column_num_ = 0;
-  rows_ = nullptr;
   datum_utils_ = nullptr;
   tablet_id_.reset();
   permutation_.reset();
   rowkeys_.reset();
   scan_mem_allocator_.reset();
   key_allocator_.reset();
-  delete_count_ = 0;
-  error_code_ = 0;
+  error_code_ = OB_SUCCESS;
   conflict_rowkey_idx_ = -1;
+  is_sorted_ = false;
   is_inited_ = false;
   col_descs_ = nullptr;
 }
@@ -155,22 +155,20 @@ int ObRowsInfo::init(
 
 void ObRowsInfo::reuse()
 {
-  min_key_.set_max_rowkey();
+  is_sorted_ = false;
   rows_ = nullptr;
   delete_count_ = 0;
-  error_code_ = 0;
+  error_code_ = OB_SUCCESS;;
   conflict_rowkey_idx_ = -1;
   scan_mem_allocator_.reuse();
   rowkeys_.reuse();
   key_allocator_.reuse();
+  need_find_all_duplicate_key_ = false;
 }
 
-//not only checking duplicate, but also assign rowkeys
-int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRelativeTable &table, bool check_dup)
+int ObRowsInfo::assign_rows(const int64_t row_count, blocksstable::ObDatumRow *rows)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObITable *itable_ptr = nullptr;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -180,10 +178,8 @@ int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRel
     STORAGE_LOG(WARN, "Invalid parameter", K(rows), K(row_count), K(ret));
   } else {
     reuse();
-    table.tablet_iter_.table_iter()->resume();
     rows_ = rows;
   }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(rowkeys_.reserve(row_count))) {
       STORAGE_LOG(WARN, "Failed to reserve rowkeys", K(ret), K(row_count));
@@ -203,23 +199,102 @@ int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRel
           STORAGE_LOG(WARN, "Failed to prepare rowkey", K(ret), K(rowkey_column_num_), K(rows_[i]));
         } else if (OB_FAIL(rowkeys_.push_back(marked_rowkey_and_lock_state))) {
           STORAGE_LOG(WARN, "Failed to push back rowkey", K(ret), K(marked_rowkey_and_lock_state));
+        } else {
+          permutation_[i] = i;
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      if (row_count > 1) {
-        RowsCompare rows_cmp(*datum_utils_, min_key_, check_dup, ret);
-        lib::ob_sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
+    if (OB_SUCC(ret) && 1 == row_count) {
+      is_sorted_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObRowsInfo::assign_duplicate_splitted_rows_info(
+    const bool is_first_splitted_rows_info,
+    ObIArray<int64_t> &row_idxs, // row_idx of rows_ in origin rows_info
+    ObRowsInfo &splitted_rows_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t origin_row_cnt = get_rowkey_cnt();
+  const int64_t splitted_row_cnt = splitted_rows_info.get_rowkey_cnt();
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObRowsInfo not init", K(ret));
+  } else if (OB_UNLIKELY(splitted_rows_info.get_error_code() != OB_ERR_PRIMARY_KEY_DUPLICATE ||
+      row_idxs.count() != splitted_row_cnt || origin_row_cnt < splitted_row_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(row_idxs.count()), K(origin_row_cnt), K(splitted_rows_info), K(ret));
+  } else {
+    // rows_info needs to be reset to a non-sorted state
+    if (is_first_splitted_rows_info && is_sorted_) {
+      for (int64_t i = 0; i < origin_row_cnt; i++) {
+        permutation_[i] = i;
+        rowkeys_.at(i).row_idx_ = i;
       }
-      if (OB_SUCC(ret)) {
-        for (int64_t i = 0; i < row_count; i++) {
-          permutation_[rowkeys_[i].row_idx_] = i;
-        }
-        min_key_ = rowkeys_.at(0).marked_rowkey_.get_rowkey();
+      is_sorted_ = false;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < splitted_row_cnt; i++) {
+      if (splitted_rows_info.rowkeys_.at(i).marked_rowkey_.is_row_duplicate()) {
+        const int64_t origin_row_idx = row_idxs.at(splitted_rows_info.rowkeys_.at(i).row_idx_);
+        rowkeys_.at(origin_row_idx) = splitted_rows_info.rowkeys_.at(i);
+        rowkeys_.at(origin_row_idx).row_idx_ = origin_row_idx;
+        set_row_conflict_error(origin_row_idx, OB_ERR_PRIMARY_KEY_DUPLICATE);
+        STORAGE_LOG(DEBUG, "assign duplicate rowkey", K(i), K(splitted_rows_info.rowkeys_.at(i)), K(origin_row_idx), K(rowkeys_.at(origin_row_idx)));
       }
     }
   }
+  return ret;
+}
 
+int ObRowsInfo::set_need_find_all_duplicate_rows(
+    const bool need_find_all_duplicate_key,
+    const common::ObIArray<uint64_t> *dup_row_column_ids,
+    blocksstable::ObDatumRowIterator **dup_row_iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObRowsInfo not init", K(ret));
+  } else if (OB_UNLIKELY(need_find_all_duplicate_key && (nullptr == dup_row_column_ids || nullptr == dup_row_iter))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(dup_row_column_ids), KP(dup_row_column_ids));
+  } else {
+    need_find_all_duplicate_key_ = need_find_all_duplicate_key;
+    dup_row_column_ids_ = dup_row_column_ids;
+    dup_row_iter_ = dup_row_iter;
+  }
+  return ret;
+}
+
+int ObRowsInfo::sort_keys()
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_count = rowkeys_.count();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObRowsInfo not init", K(ret));
+  } else if (OB_UNLIKELY(0 == row_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "row count error", K(ret));
+  } else if (is_sorted_) {
+    // has sorted, do nothing
+  } else {
+    blocksstable::ObDatumRowkey not_used_dup_key;
+    RowsCompare rows_cmp(*datum_utils_, not_used_dup_key, false/*check_dup*/, ret);
+    lib::ob_sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < row_count; i++) {
+        permutation_[rowkeys_[i].row_idx_] = i;
+      }
+      is_sorted_ = true;
+      if (conflict_rowkey_idx_ != -1) {
+        conflict_rowkey_idx_ = permutation_[conflict_rowkey_idx_];
+      }
+    }
+  }
   return ret;
 }
 
@@ -235,12 +310,14 @@ int ObRowsInfo::check_min_rowkey_boundary(const blocksstable::ObDatumRowkey &max
   } else if (OB_UNLIKELY(!max_rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to check min rowkey", K(ret), K(max_rowkey));
-  } else if (OB_FAIL(min_key_.compare(max_rowkey, *datum_utils_, cmp_ret))) {
-    STORAGE_LOG(WARN, "Failed to compare datum rowkey", K(ret), K(min_key_), K(max_rowkey));
+  } else if (OB_UNLIKELY(!is_sorted_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "rows must be has sorted", K(ret));
+  } else if (OB_FAIL(rowkeys_.at(0).marked_rowkey_.get_rowkey().compare(max_rowkey, *datum_utils_, cmp_ret))) {
+    STORAGE_LOG(WARN, "Failed to compare datum rowkey", K(ret), K(max_rowkey));
   } else if (cmp_ret > 0) {
     may_exist = false;
   }
-
   return ret;
 }
 

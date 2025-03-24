@@ -228,6 +228,9 @@ public:
   void *alloc_mvcc_row_callback();
   void free_mvcc_row_callback(ObITransCallback *cb);
   int append(ObITransCallback *node);
+  int append(ObITransCallback *head,
+             ObITransCallback *tail,
+             const int64_t length);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
   void trans_start();
@@ -456,7 +459,7 @@ public:
   void set(const ObMemtableKey *key,
            ObMvccTransNode *node,
            const int64_t data_size,
-           const ObRowData *old_row,
+           const ObRowData &old_row,
            const bool is_replay,
            const transaction::ObTxSEQ seq_no,
            const int64_t column_cnt,
@@ -470,14 +473,7 @@ public:
 
     tnode_ = node;
     data_size_ = data_size;
-    if (NULL != old_row) {
-      old_row_ = *old_row;
-      if (old_row_.size_ == 0 && old_row_.data_ != NULL) {
-        ob_abort();
-      }
-    } else {
-      old_row_.reset();
-    }
+    old_row_ = old_row;
     seq_no_ = seq_no;
     if (tnode_) {
       tnode_->set_seq_no(seq_no_);
@@ -505,8 +501,8 @@ public:
   transaction::ObTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
-  virtual void after_append(const bool is_replay) override;
   virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
+  virtual void after_append_fail(const bool is_replay) override;
   int64_t get_data_size()
   {
     return data_size_;

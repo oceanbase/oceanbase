@@ -40,7 +40,6 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     column_ids_(nullptr),
     datum_row_(),
     cmp_funcs_(),
-    is_old_row_valid_for_lob_(false),
     is_need_check_old_row_(is_need_row_datum_utils),
     is_udf_(false),
     has_lob_rowkey_(false),

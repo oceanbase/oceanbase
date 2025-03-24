@@ -55,6 +55,11 @@ namespace memtable
 class ObMemtableCtxCbAllocator;
 class ObMemtableKey;
 class ObMvccRow;
+
+using ObMvccWriteResults = common::ObSEArray<ObMvccWriteResult, 8>;
+using ObTxNodeArgs = common::ObSEArray<ObTxNodeArg, 8>;
+using ObStoredKVs = common::ObSEArray<ObStoredKV, 8>;
+
 class ObIMvccCtx
 {
 public:
@@ -89,15 +94,18 @@ public: // for mvcc engine invoke
   virtual int read_lock_yield() { return common::OB_SUCCESS; }
   virtual int write_lock_yield() { return common::OB_SUCCESS; }
   virtual int append_callback(ObITransCallback *cb) = 0;
-  virtual void inc_lock_for_read_retry_count() = 0;
-  virtual void add_lock_for_read_elapse(const int64_t n) = 0;
-  virtual int64_t get_lock_for_read_elapse() const = 0;
-  virtual void on_key_duplication_retry(const ObMemtableKey& key) = 0;
+  virtual int append_callback(ObITransCallback *head,
+                              ObITransCallback *tail,
+                              const int64_t length) = 0;
+  virtual void on_key_duplication_retry(const ObMemtableKey& key,
+                                        const ObMvccRow *value,
+                                        const ObMvccWriteResult &res) = 0;
   virtual void on_tsc_retry(const ObMemtableKey& key,
                             const share::SCN snapshot_version,
                             const share::SCN max_trans_version,
                             const transaction::ObTransID &conflict_tx_id) = 0;
-  virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
+  virtual void on_wlock_retry(const ObMemtableKey& key,
+                              const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
   virtual void inc_pending_log_size(const int64_t size) = 0;
@@ -140,24 +148,22 @@ public:
       max_table_version_ = table_version;
     }
   }
-  inline bool is_commit_version_valid() const { return commit_version_ != share::SCN::min_scn() && commit_version_ != share::SCN::max_scn(); }
-  inline void set_lock_start_time(const int64_t start_time) { lock_start_time_ = start_time; }
-  inline int64_t get_lock_start_time() { return lock_start_time_; }
+  virtual void set_for_replay(const bool for_replay) = 0;
   inline void set_lock_wait_start_ts(const int64_t lock_wait_start_ts)
   { lock_wait_start_ts_ = lock_wait_start_ts; }
   share::SCN get_replay_compact_version() const { return replay_compact_version_; }
   void  set_replay_compact_version(const share::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
   int register_row_commit_cb(
-      const ObMemtableKey *key,
-      ObMvccRow *value,
-      ObMvccTransNode *node,
-      const int64_t data_size,
-      const ObRowData *old_row,
-      ObMemtable *memtable,
-      const transaction::ObTxSEQ seq_no,
-      const int64_t column_cnt,
-      const bool is_non_unique_local_index);
+    const storage::ObTableIterParam &param,
+    ObTxNodeArg &arg,
+    ObMvccWriteResult &res,
+    ObMemtable *memtable);
+  int register_row_commit_cb(
+    const storage::ObTableIterParam &param,
+    ObTxNodeArgs &tx_node_args,
+    ObMvccWriteResults &mvcc_results,
+    ObMemtable *memtable);
   int register_row_replay_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,

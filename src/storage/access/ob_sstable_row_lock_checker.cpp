@@ -80,8 +80,7 @@ int ObSSTableRowLockChecker::init_micro_scanner()
 int ObSSTableRowLockChecker::check_row_locked(
     const bool check_exist,
     const share::SCN &snapshot_version,
-    ObStoreRowLockState &lock_state,
-    ObRowState &row_state)
+    ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
   const ObDatumRow *store_row = nullptr;
@@ -91,9 +90,8 @@ int ObSSTableRowLockChecker::check_row_locked(
   } else if (OB_FAIL(init_micro_scanner())) {
     LOG_WARN("Failed to init micro scanner", K(ret));
   } else {
-    auto *row_lock_checker = static_cast<ObMicroBlockRowLockChecker *>(micro_scanner_);
+    ObMicroBlockRowLockChecker *row_lock_checker = static_cast<ObMicroBlockRowLockChecker *>(micro_scanner_);
     row_lock_checker->set_lock_state(&lock_state);
-    row_lock_checker->set_row_state(&row_state);
     row_lock_checker->set_snapshot_version(snapshot_version);
     row_lock_checker->set_check_exist(check_exist);
     if (OB_FAIL(ObSSTableRowScanner::inner_get_next_row(store_row))) {
@@ -106,11 +104,10 @@ int ObSSTableRowLockChecker::check_row_locked(
   }
   if (OB_SUCC(ret) &&
       transaction::ObTransVersion::INVALID_TRANS_VERSION != prefetcher_.row_lock_check_version_) {
-    if (OB_UNLIKELY(lock_state.trans_version_ != SCN::min_scn() || lock_state.is_locked_)) {
+    if (OB_UNLIKELY(lock_state.is_row_decided())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected lock state", K(ret), K_(lock_state.trans_version), K_(lock_state.is_locked));
-    } else if (row_state.max_trans_version_.get_val_for_tx() < prefetcher_.row_lock_check_version_
-               && OB_FAIL(row_state.max_trans_version_.convert_for_tx(prefetcher_.row_lock_check_version_))) {
+    } else if (OB_FAIL(lock_state.trans_version_.convert_for_tx(prefetcher_.row_lock_check_version_))) {
       LOG_WARN("failed to convert_for_tx", K(ret), K(prefetcher_.row_lock_check_version_));
     } else {/*do nothing*/}
   }

@@ -32,10 +32,17 @@ public:
   void reset();
 
   // append_callback will append your callback into the callback list
+  int append_callback(ObITransCallback *head,
+                      ObITransCallback *tail,
+                      const int64_t length,
+                      const bool for_replay,
+                      const bool parallel_replay = false,
+                      const bool serial_final = false);
   int append_callback(ObITransCallback *callback,
                       const bool for_replay,
                       const bool parallel_replay = false,
                       const bool serial_final = false);
+
 
   // concat_callbacks will append all callbacks in other into itself and reset
   // other. And it will return the concat number during concat_callbacks.

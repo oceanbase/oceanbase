@@ -178,6 +178,10 @@ public:
   {
     return checked_;
   }
+  inline bool is_row_duplicate() const
+  {
+    return is_row_duplicate_;
+  }
   inline bool is_row_bf_checked() const
   {
     return row_bf_checked_;
@@ -192,6 +196,10 @@ public:
   {
     row_lock_checked_ = 1;
   };
+  inline void mark_row_duplicate()
+  {
+    is_row_duplicate_ = 1;
+  }
   inline void mark_row_exist_checked()
   {
     row_exist_checked_ = 1;
@@ -226,7 +234,8 @@ private:
       uint8_t row_bf_checked_    : 1;
       uint8_t skipped_this_time_ : 1;
       uint8_t checked_           : 1;
-      uint8_t reserved_          : 3;
+      uint8_t is_row_duplicate_  : 1;
+      uint8_t reserved_          : 2;
     };
     uint8_t row_mark_;
   };

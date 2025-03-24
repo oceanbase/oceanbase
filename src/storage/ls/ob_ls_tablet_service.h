@@ -350,13 +350,13 @@ public:
       const common::ObIArray<uint64_t> &column_ids,
       blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
-  int insert_row(
+  int insert_rows_with_fetch_dup(
       ObTabletHandle &tablet_handle,
       ObStoreCtx &ctx,
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
       const common::ObIArray<uint64_t> &duplicated_column_ids,
-      blocksstable::ObDatumRow &row,
+      blocksstable::ObDatumRowIterator *row_iter,
       const ObInsertFlag flag,
       int64_t &affected_rows,
       blocksstable::ObDatumRowIterator *&duplicated_rows);
@@ -686,33 +686,25 @@ private:
       const blocksstable::ObDatumRow &old_row);
   static int check_new_row_legitimacy(
       ObDMLRunningCtx &run_ctx,
-      const blocksstable::ObDatumRow &datum_row);
+      const int64_t row_count,
+      const blocksstable::ObDatumRow *datum_rows);
   static int insert_rows_to_tablet(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow *rows,
-      const int64_t row_count,
-      ObRowsInfo &rows_info,
-      int64_t &afct_num,
-      int64_t &dup_num);
+      ObRowsInfo &rows_info);
+
   static int put_rows_to_tablet(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow *rows,
-      const int64_t row_count,
       ObRowsInfo &rows_info,
       int64_t &afct_num);
   static int insert_tablet_rows(
-      const int64_t row_count,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow *rows,
       ObRowsInfo &rows_info);
   static int put_tablet_rows(
-      const int64_t row_count,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow *rows,
       ObRowsInfo &rows_info);
   static int insert_vector_index_rows(
       ObTabletHandle &data_tablet,
@@ -743,14 +735,27 @@ private:
   static int check_rowkey_change(
       const ObIArray<uint64_t> &update_ids,
       const ObRelativeTable &relative_table,
-      bool &rowkey_change,
-      bool &delay_new);
-  static int check_rowkey_value_change(
-      const ObDatumRow &old_row,
-      const ObDatumRow &new_row,
-      const int64_t rowkey_len,
-      const blocksstable::ObStorageDatumUtils &rowkey_datum_utils,
       bool &rowkey_change);
+  static int process_delta_lob(
+      ObDMLRunningCtx &run_ctx,
+      const ObColDesc &column,
+      ObObj &old_obj,
+      ObLobLocatorV2 &delta_lob,
+      ObObj &obj);
+  static int register_ext_info_commit_cb(
+      ObDMLRunningCtx &run_ctx,
+      ObObj &col_data,
+      ObObj &ext_info_data,
+      const ObExtInfoLogHeader &header);
+  static int set_lob_storage_params(
+      ObDMLRunningCtx &run_ctx,
+      const ObColDesc &column,
+      ObLobAccessParam &lob_param);
+  static int cache_rows_to_row_store(
+      const int64_t row_count,
+      ObDatumRow *old_rows,
+      ObDatumRow *new_rows,
+      ObDatumRowStore &row_store);
   static int update_row_to_tablet(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
@@ -760,28 +765,53 @@ private:
       const bool lob_update,
       ObDatumRow &old_row,
       ObDatumRow &new_row,
-      ObDatumRowStore *row_store,
-      bool &duplicate);
+      ObDatumRowStore &row_store);
+  static int update_rows_to_tablet(
+      ObTabletHandle &tablet_handle,
+      ObDMLRunningCtx &run_ctx,
+      const bool rowkey_change,
+      const ObIArray<int64_t> &update_idx,
+      const bool delay_new,
+      const bool lob_update,
+      ObDatumRow *tmp_rows,
+      ObRowsInfo &old_rows_info,
+      ObRowsInfo &new_rows_info,
+      ObDatumRowStore &row_store);
   static int process_old_row(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      const bool data_tbl_rowkey_change,
+      const bool rowkey_change,
       const bool lob_update,
       ObDatumRow &datum_row);
+  static int process_old_rows(
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    const bool rowkey_change,
+    const bool lob_update,
+    ObDatumRow *tmp_rows,
+    ObRowsInfo &old_rows_info);
+
+  static int process_new_rows(
+      ObTabletHandle &tablet_handle,
+      ObDMLRunningCtx &run_ctx,
+      const common::ObIArray<int64_t> &update_idx,
+      const bool rowkey_change,
+      ObRowsInfo &old_rows_info,
+      ObRowsInfo &new_rows_info);
   static int process_new_row(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       const common::ObIArray<int64_t> &update_idx,
+      const bool rowkey_change,
       const ObDatumRow &old_datum_row,
-      ObDatumRow &new_datum_row,
-      const bool rowkey_change);
-  static int process_data_table_row(
-      ObTabletHandle &data_tablet,
+      ObDatumRow &new_datum_row);
+  static int delay_process_new_rows(
       ObDMLRunningCtx &run_ctx,
-      const ObIArray<int64_t> &update_idx,
-      const ObDatumRow &old_datum_row,
-      ObDatumRow &new_datum_row,
-      const bool rowkey_change);
+      const common::ObIArray<int64_t> &update_idx,
+      const bool rowkey_change,
+      ObDatumRow &old_row,
+      ObDatumRow &new_row,
+      ObDatumRowStore &row_store);
   static int check_datum_row_nullable_value(
       const common::ObIArray<share::schema::ObColDesc> &col_descs,
       ObRelativeTable &relative_table,
@@ -798,15 +828,21 @@ private:
       const blocksstable::ObDatumRowkey &rowkey,
       bool &locked);
   static int get_conflict_rows(
-      ObTabletHandle &tablet_handle,
-      ObRelativeTable &relative_table,
-      ObStoreCtx &store_ctx,
-      const ObDMLBaseParam &dml_param,
-      const ObInsertFlag flag,
-      const common::ObIArray<uint64_t> &out_col_ids,
-      const ObColDescIArray &col_descs,
-      blocksstable::ObDatumRow &row,
-      blocksstable::ObDatumRowIterator *&duplicated_rows);
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const ObColDescIArray &col_descs,
+    const ObRowsInfo &rows_info);
+  static int get_conflict_row(
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &data_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const common::ObIArray<uint64_t> &out_col_ids,
+    const ObColDescIArray &col_descs,
+    const ObDatumRowkey &datum_rowkey,
+    blocksstable::ObDatumRowIterator *&dup_row_iter);
   static int init_single_row_getter(
       ObSingleRowGetter &row_getter,
       ObStoreCtx &store_ctx,
@@ -814,20 +850,13 @@ private:
       const ObIArray<uint64_t> &out_col_ids,
       ObRelativeTable &relative_table,
       bool skip_read_lob = false);
-  static int add_duplicate_row(
-      ObDatumRow *storage_row,
-      const blocksstable::ObStorageDatumUtils &rowkey_datum_utils,
-      blocksstable::ObDatumRowIterator *&duplicated_rows);
-  static int get_next_row_from_iter(
-      blocksstable::ObDatumRowIterator *row_iter,
-      ObDatumRow &datum_row,
-      const bool need_copy_cells);
-  static int insert_row_to_tablet(
-      const bool check_exist,
-      ObTabletHandle &tablet_handle,
-      ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow &datum_row);
-    static int process_old_row_lob_col(
+
+  static int process_old_rows_lob_col(
+    ObTabletHandle &data_tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    const int64_t row_count,
+    blocksstable::ObDatumRow *old_rows);
+  static int process_old_row_lob_col(
       ObTabletHandle &data_tablet_handle,
       ObDMLRunningCtx &run_ctx,
       blocksstable::ObDatumRow &datum_row);
@@ -838,12 +867,18 @@ private:
       const ObDMLBaseParam &dml_param,
       const ObColDescIArray &col_descs,
       ObIAllocator &lob_allocator,
-      blocksstable::ObDatumRow &row,
-      bool &is_old_row_valid_for_lob);
-  static int delete_row_in_tablet(
+      blocksstable::ObDatumRow &datum_row);
+  static int delete_rows_in_tablet(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow &datum_row);
+      blocksstable::ObDatumRow *tbl_rows,
+      ObRowsInfo &rows_info);
+  static int delete_lob_col(
+      ObDMLRunningCtx &run_ctx,
+      const ObColDesc &column,
+      ObObj &obj,
+      ObLobCommon *&lob_common,
+      ObLobAccessParam &lob_param);
   static int delete_lob_tablet_rows(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
@@ -888,16 +923,18 @@ private:
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       const ObIArray<int64_t> &update_idx,
-      blocksstable::ObDatumRow &old_datum_row,
-      blocksstable::ObDatumRow &new_datum_row,
-      const bool data_tbl_rowkey_change);
+      const bool rowkey_change,
+      const int64_t row_count,
+      blocksstable::ObDatumRow *old_datum_rows,
+      blocksstable::ObDatumRow *new_datum_rows);
   static int process_lob_after_update(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       const ObIArray<int64_t> &update_idx,
-      blocksstable::ObDatumRow &old_datum_row,
-      blocksstable::ObDatumRow &new_datum_row,
-      const bool data_tbl_rowkey_change);
+      const bool rowkey_change,
+      const int64_t row_count,
+      blocksstable::ObDatumRow *old_datum_rows,
+      blocksstable::ObDatumRow *new_datum_rows);
 
 private:
   static int get_storage_row(const blocksstable::ObDatumRow &sql_row,
@@ -935,6 +972,16 @@ private:
       const blocksstable::ObDatumRow &old_row,
       blocksstable::ObDatumRow &new_row,
       const ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
+  static int update_rows_wrap(
+      ObTabletHandle &tablet_handle,
+      const blocksstable::ObDatumRow *data_row_for_lob,
+      ObRelativeTable &relative_table,
+      ObStoreCtx &store_ctx,
+      const ObColDescIArray &col_descs,
+      const ObIArray<int64_t> &update_idx,
+      const blocksstable::ObDatumRow *old_rows,
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+      ObRowsInfo &rows_info);
   static int batch_calc_split_dst_rows(
       ObLS &ls,
       ObTabletHandle &tablet_handle,
@@ -943,21 +990,16 @@ private:
       const int64_t row_count,
       const int64_t abs_timeout_us,
       ObIArray<ObTabletID> &dst_tablet_ids,
-      ObIArray<ObArray<blocksstable::ObDatumRow *>> &dst_rows);
+      ObIArray<ObArray<int64_t>> &dst_row_ids);
   static int insert_rows_wrap(
       ObTabletHandle &tablet_handle,
-      const blocksstable::ObDatumRow *data_row_for_lob,
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
-      blocksstable::ObDatumRow *rows,
-      ObRowsInfo &rows_info,
+      const ObDMLBaseParam &dml_param,
       const bool check_exist,
       const ObColDescIArray &col_descs,
-      const int64_t row_count,
-      const ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
-      const common::ObTimeZoneInfo *tz_info,
-      const bool need_log_user_error);
-  static int insert_row_without_rowkey_check_wrap(
+      ObRowsInfo &rows_info);
+  static int insert_row_wrap(
       ObTabletHandle &tablet_handle,
       const blocksstable::ObDatumRow *data_row_for_lob,
       ObRelativeTable &relative_table,
@@ -973,17 +1015,6 @@ private:
       ObStoreCtx &store_ctx,
       const blocksstable::ObDatumRowkey &rowkey,
       bool &locked);
-  static int get_conflict_rows_wrap(
-      ObTabletHandle &tablet_handle,
-      const blocksstable::ObDatumRow *data_row_for_lob,
-      ObRelativeTable &relative_table,
-      ObStoreCtx &store_ctx,
-      const ObDMLBaseParam &dml_param,
-      const ObInsertFlag flag,
-      const ObIArray<uint64_t> &out_col_ids,
-      const ObColDescIArray &col_descs,
-      blocksstable::ObDatumRow &row,
-      blocksstable::ObDatumRowIterator *&duplicated_rows);
   static int table_refresh_row_wrap(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
@@ -992,12 +1023,13 @@ private:
       const blocksstable::ObStoreCmpFuncs &cmp_funcs,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
-      const blocksstable::ObDatumRow &old_row);
-  static void handle_insert_rows_duplicate(
-      ObRowsInfo &rows_info,
-      const ObRelativeTable &table,
-      const common::ObTimeZoneInfo *tz_info,
-      const bool need_log_user_error);
+      const int64_t row_count,
+      const blocksstable::ObDatumRow *old_rows,
+      int64_t &error_row_idx);
+  static int add_duplicate_row(
+      ObDatumRow *storage_row,
+      const blocksstable::ObStorageDatumUtils &rowkey_datum_utils,
+      blocksstable::ObDatumRowIterator *&duplicated_rows);
 
 private:
   friend class ObLSTabletIterator;

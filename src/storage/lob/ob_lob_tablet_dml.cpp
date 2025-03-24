@@ -298,8 +298,7 @@ int ObLobTabletDmlHelper::delete_lob_col(
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]get lob manager instance failed.", K(ret));
-  } else if (!column.col_type_.is_lob_storage() || datum.is_nop_value() || datum.is_null() ||
-             !run_ctx.is_old_row_valid_for_lob_) {
+  } else if (!column.col_type_.is_lob_storage() || datum.is_nop_value() || datum.is_null()) {
     // do nothing
   } else {
     ObString data = datum.get_string();

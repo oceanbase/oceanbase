@@ -421,7 +421,7 @@ public:
                       const ObITableReadInfo *table_read_info = nullptr);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter), KP_(ddl_slice_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),
-               K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
+               K_(curr_rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
                K_(is_normal_cg), K_(parent_row_range), K_(filter_constant_type), K_(is_normal_query),
                K_(iter_param), KP_(table_read_info));
 private:
@@ -437,7 +437,6 @@ private:
       const int64_t limit_idx,
       ObCSRange &cs_range);
   int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
-  void skip_index_rows();
   int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
 private:
   union {
@@ -458,7 +457,7 @@ private:
   const ObStorageDatumUtils *datum_utils_;
   int64_t range_idx_;
   int64_t nested_offset_;
-  int64_t rowkey_begin_idx_;
+  int64_t curr_rowkey_begin_idx_;
   int64_t rowkey_end_idx_;
   ObIndexFormat index_format_;
   ObCSRange parent_row_range_;

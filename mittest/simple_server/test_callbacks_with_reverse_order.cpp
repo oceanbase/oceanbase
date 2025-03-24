@@ -27,10 +27,8 @@ namespace oceanbase
 namespace storage
 {
 int ObLSTabletService::insert_tablet_rows(
-    const int64_t row_count,
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    ObDatumRow *rows,
     ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
@@ -66,12 +64,10 @@ int ObLSTabletService::insert_tablet_rows(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tablet_handle.get_obj()->insert_rows(table,
                                                      run_ctx.store_ctx_,
-                                                     rows,
-                                                     rows_info,
                                                      check_exists,
                                                      *run_ctx.col_descs_,
-                                                     row_count,
-                                                     run_ctx.dml_param_.encrypt_meta_))) {
+                                                     run_ctx.dml_param_.encrypt_meta_,
+                                                     rows_info))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
         blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
         TRANS_LOG(WARN, "Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
@@ -88,8 +84,8 @@ int ObLSTabletService::insert_tablet_rows(
     char rowkey_buffer[OB_TMP_BUF_SIZE_256];
     ObString index_name = "PRIMARY";
     if (OB_TMP_FAIL(extract_rowkey(table, rows_info.get_conflict_rowkey(),
-         rowkey_buffer, OB_TMP_BUF_SIZE_256, run_ctx.dml_param_.tz_info_))) {
-      TRANS_LOG(WARN, "Failed to extract rowkey", K(ret), K(tmp_ret));
+        rowkey_buffer, OB_TMP_BUF_SIZE_256, run_ctx.dml_param_.tz_info_))) {
+      TRANS_LOG(WARN, "failed to extract rowkey", K(ret), K(tmp_ret));
     }
     if (table.is_index_table()) {
       if (OB_TMP_FAIL(table.get_index_name(index_name))) {

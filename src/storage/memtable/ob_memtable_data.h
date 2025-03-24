@@ -71,11 +71,20 @@ public:
 class ObMemtableData
 {
 public:
+  ObMemtableData()
+    : dml_flag_(blocksstable::ObDmlFlag::DF_MAX), buf_len_(0), buf_(nullptr)
+    {}
   ObMemtableData(blocksstable::ObDmlFlag dml_flag, int64_t buf_len, const char *buf)
       : dml_flag_(dml_flag), buf_len_(buf_len), buf_(buf)
   {}
   ~ObMemtableData() {}
   TO_STRING_KV(K_(dml_flag), K_(buf_len));
+  void reset()
+  {
+    dml_flag_ = blocksstable::ObDmlFlag::DF_MAX;
+    buf_len_ = 0;
+    buf_ = nullptr;
+  }
   void set(blocksstable::ObDmlFlag dml_flag, const int64_t data_len, char *buf)
   {
     dml_flag_ = dml_flag;

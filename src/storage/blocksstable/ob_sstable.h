@@ -29,8 +29,6 @@ class ObAllMicroBlockRangeIterator;
 struct ObTabletCreateSSTableParam;
 class ObStoreRowIterator;
 class ObSSTableRowLockMultiChecker;
-class ObRowState;
-struct ObSSTableLinkBlockWriteInfo;
 }
 namespace blocksstable
 {
@@ -196,8 +194,7 @@ public:
       const blocksstable::ObDatumRowkey &rowkey,
       ObTableAccessContext &context,
       ObStoreRowLockState &lock_state,
-      ObRowState &row_state,
-      bool check_exist = false);
+      bool check_exist);
   int check_rows_locked(
       const bool check_exist,
       storage::ObTableAccessContext &context,

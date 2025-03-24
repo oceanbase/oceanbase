@@ -133,10 +133,126 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
         logged_data_size_ += data_size;
         ++synced_;
       }
-      // Once callback is appended into callback lists, we can not handle the
-      // error after it. So it should never report the error later. What's more,
-      // after_append also should never return the error.
-      (void)callback->after_append_cb(for_replay);
+
+      // NB: It is important to note that once the callback is successfully
+      // appended to the callback_list, it may have already been logged and
+      // freed, making subsequent access potentially unsafe. Therefore, the
+      // rule for append_callback is that the access is not allowed after a
+      // successful append, while the access is permitted after a failure
+      // append
+    }
+  }
+
+  return ret;
+}
+
+// the semantic of the append_callback is atomic which means the cb is removed
+// and no side effect is taken effects if some unexpected failure has happened.
+int ObTxCallbackList::append_callback(ObITransCallback *head,
+                                      ObITransCallback *tail,
+                                      const int64_t length,
+                                      const bool for_replay,
+                                      const bool parallel_replay,
+                                      const bool serial_final)
+{
+  int ret = OB_SUCCESS;
+  // It is important that we should put the before_append_cb and after_append_cb
+  // into the latch guard otherwise the callback may already paxosed and released
+  // before callback it.
+  LockGuard gaurd(*this, LOCK_MODE::LOCK_APPEND);
+
+  if (OB_ISNULL(head) || OB_ISNULL(tail)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "before_append_cb failed", K(ret));
+  } else {
+    // Step1: prepare the callback append(unsubmitted_cnt for memtable and so on)
+    ObITransCallback *last_succeed_cb = nullptr;
+    int64_t data_size = 0;
+    for (ObITransCallback *cb = head;
+         OB_SUCC(ret) && nullptr != cb;
+         cb = cb->get_next()) {
+      if (OB_FAIL(cb->before_append_cb(for_replay))) {
+        TRANS_LOG(WARN, "before_append_cb failed", K(ret), KPC(cb));
+      } else {
+        data_size += cb->get_data_size();
+        last_succeed_cb = cb;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+#ifdef ENABLE_DEBUG_LOG
+    } else if (OB_FAIL(memtable_set_injection_error())) {
+      TRANS_LOG(WARN, "memtable injection error", K(ret));
+#endif
+    } else {
+      // Tip1: remember whether to reposition the log cursor
+      const bool repos_lc = !for_replay && (log_cursor_ == &head_);
+
+      // Step2: ensure the append position
+      ObITransCallback *append_pos = NULL;
+      if (!for_replay || parallel_replay || serial_final || !parallel_start_pos_) {
+        append_pos = get_tail();
+      } else {
+        append_pos = parallel_start_pos_->get_prev();
+      }
+
+      // Tip2: for replay, do sanity check: scn is incremental
+      if (for_replay
+          && append_pos != &head_  // the head with scn max
+          && append_pos->get_scn() > head->get_scn()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "replay callback scn out of order", K(ret), KPC(head), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
+      } else {
+
+#ifdef ENABLE_DEBUG_LOG
+        memtable_set_injection_sleep();
+#endif
+        // Step4: start to append
+        append_pos->append(head, tail);
+#ifdef ENABLE_DEBUG_LOG
+        memtable_set_injection_sleep();
+#endif
+
+        // Tip3: start parallel replay while not serial finial, remember the position
+        if (for_replay && parallel_replay && !serial_final && !parallel_start_pos_) {
+          ATOMIC_STORE(&parallel_start_pos_, get_tail());
+        }
+
+        // Step5: reposition the log_cursor if necessary
+        if (repos_lc) {
+          set_log_cursor_(head);
+        }
+
+        // Step6: maintain the callbacklist statistics
+        appended_ += length;
+        ATOMIC_FAA(&length_, length);
+        data_size_ += data_size;
+        if (for_replay) {
+          logged_ += length;
+          synced_ += length;
+          logged_data_size_ += data_size;
+        }
+
+        // NB: It is important to note that once the callback is successfully
+        // appended to the callback_list, it may have already been logged and
+        // freed, making subsequent access potentially unsafe. Therefore, the
+        // rule for append_callback is that the access is not allowed after a
+        // successful append, while the access is permitted after a failure
+        // append
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // In order to ensure the atomicity of the interface, we need clear the
+      // side-effects of previous callbacks that have called before_append
+      for (ObITransCallback *cb = head;
+           nullptr != cb && last_succeed_cb != cb->get_prev();
+           cb = cb->get_next()) {
+        (void)cb->after_append_fail_cb(for_replay);
+      }
     }
   }
   return ret;

@@ -3051,7 +3051,6 @@ int ObLSTabletService::insert_rows(
 
   NG_TRACE(S_insert_rows_begin);
   int64_t afct_num = 0;
-  int64_t dup_num = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -3068,24 +3067,28 @@ int ObLSTabletService::insert_rows(
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_INSERT);
     int64_t row_count = 0;
+    int64_t batch_idx = 0;
     ObDatumRow *rows = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      tablet_handle.reset();
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
-        const ObRelativeTable &data_table = run_ctx.relative_table_;
+        ObRelativeTable &relative_table = run_ctx.relative_table_;
         const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
+        blocksstable::ObDatumRowIterator *unused_dup_row_iter = nullptr;
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
           // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
           dml_param.lob_allocator_.reuse();
           // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
           // outside the while loop.
-          if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+          if (tmp_handle.get_obj() != relative_table.tablet_iter_.get_tablet_handle().get_obj()) {
             tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
             rows_info.reset();
-            if (OB_FAIL(rows_info.init(col_descs, data_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
-              LOG_WARN("Failed to init rows info", K(ret), K(data_table));
+            if (OB_FAIL(rows_info.init(
+                col_descs, relative_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
             }
           }
           if (OB_FAIL(ret)) {
@@ -3098,11 +3101,14 @@ int ObLSTabletService::insert_rows(
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(insert_rows_to_tablet(tablet_handle, run_ctx, rows,
-              row_count, rows_info, afct_num, dup_num))) {
+          } else if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
+            LOG_WARN("fail to assign rows", K(ret), K(batch_idx), K(row_count));
+          } else if (OB_FAIL(insert_rows_to_tablet(tmp_handle, run_ctx, rows_info))) {
             LOG_WARN("insert to each tablets fail", K(ret));
+          } else {
+            afct_num += row_count;
           }
-        }
+        } // end of while
       } else {
         LOG_WARN("Failed to allocate ObRowsInfo", K(ret));
       }
@@ -3111,12 +3117,13 @@ int ObLSTabletService::insert_rows(
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    if (OB_SUCC(ret) && run_ctx.lob_dml_ctx_.is_all_task_done()) {
+    if (OB_SUCC(ret) && !run_ctx.lob_dml_ctx_.is_all_task_done()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("lob data may not be insert", K(ret), K(run_ctx.lob_dml_ctx_));
     }
 
   }
+
   if (OB_SUCC(ret)) {
     LOG_DEBUG("succeeded to insert rows", K(ret), K(afct_num));
     affected_rows = afct_num;
@@ -3175,19 +3182,19 @@ int ObLSTabletService::mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&
   return ret;
 }
 
-int ObLSTabletService::insert_row(
+int ObLSTabletService::insert_rows_with_fetch_dup(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
     const common::ObIArray<uint64_t> &duplicated_column_ids,
-    blocksstable::ObDatumRow &row,
+    blocksstable::ObDatumRowIterator *row_iter,
     const ObInsertFlag flag,
     int64_t &affected_rows,
     blocksstable::ObDatumRowIterator *&duplicated_rows)
 {
   int ret = OB_SUCCESS;
-  const ObTabletID &data_tablet_id = ctx.tablet_id_;
+  int64_t afct_num = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -3196,72 +3203,111 @@ int ObLSTabletService::insert_row(
              || !dml_param.is_valid()
              || column_ids.count() <= 0
              || duplicated_column_ids.count() <= 0
-             || !row.is_valid())) {
+             || nullptr == row_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param),
-        K(column_ids), K(duplicated_column_ids), K(row), K(flag));
-  } else if (OB_ISNULL(dml_param.dml_allocator_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dml_allocator is null", K(ret), K(ctx), K(dml_param));
+        K(column_ids), K(duplicated_column_ids), KP(row_iter), K(flag));
   } else {
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_INSERT);
-    ObIAllocator &work_allocator = run_ctx.allocator_;
-    duplicated_rows = nullptr;
-    const ObRelativeTable &data_table = run_ctx.relative_table_;
+    int64_t row_count = 0;
+    ObDatumRow *rows = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
-      row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      const bool check_exist = !data_table.is_storage_index_table() ||
-        data_table.is_unique_index() ||
-        ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
-      if (OB_FAIL(insert_row_to_tablet(check_exist,
-                                       tablet_handle,
-                                       run_ctx,
-                                       row))) {
-        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-          int tmp_ret = OB_SUCCESS;
-          // For primary key conflicts caused by concurrent insertions within
-          // a statement, we need to return the corresponding duplicated_rows.
-          // However, under circumstances where an exception may unexpectedly
-          // prevent us from reading the conflicting rows within statements,
-          // at such times, it becomes necessary for us to mock the rows.
-          if (OB_TMP_FAIL(get_conflict_rows_wrap(tablet_handle,
-                                        run_ctx.dml_param_.data_row_for_lob_,
-                                        run_ctx.relative_table_,
-                                        run_ctx.store_ctx_,
-                                        run_ctx.dml_param_,
-                                        flag,
-                                        duplicated_column_ids,
-                                        *run_ctx.col_descs_,
-                                        row,
-                                        duplicated_rows))) {
-            LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
-            ret = tmp_ret;
-          } else if (nullptr == duplicated_rows) {
-            if (OB_TMP_FAIL(mock_duplicated_rows_(duplicated_rows))) {
-              LOG_WARN("failed to mock duplicated row(s)", K(ret), K(duplicated_column_ids), K(row));
-              ret = tmp_ret;
+      tablet_handle.reset();
+      ObTabletHandle tmp_handle;
+      SMART_VAR(ObRowsInfo, rows_info) {
+        int64_t dup_row_count = 0;
+        bool has_ignore_dup_error = false;
+        ObRelativeTable &relative_table = run_ctx.relative_table_;
+        const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
+        while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
+          // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+          dml_param.lob_allocator_.reuse();
+          // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+          // outside the while loop.
+          if (tmp_handle.get_obj() != relative_table.tablet_iter_.get_tablet_handle().get_obj()) {
+            tmp_handle = relative_table.tablet_iter_.get_tablet_handle();
+            rows_info.reset();
+            if (OB_FAIL(rows_info.init(col_descs,
+                                       relative_table,
+                                       ctx,
+                                       tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
             }
           }
+          if (OB_FAIL(ret)) {
+          } else if (row_count <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("row_count should be greater than 0", K(ret));
+          } else {
+            for (int64_t i = 0; i < row_count; i++) {
+              rows[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+            }
+            if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
+              LOG_WARN("fail to assign rows", K(ret), K(row_count));
+            } else if (OB_FAIL(rows_info.set_need_find_all_duplicate_rows(true, /*need_find_all_duplicate_key*/
+                                                                          &duplicated_column_ids,
+                                                                          &duplicated_rows))) {
+              LOG_WARN("fail to set_need_find_all_duplicate_rows", K(ret), K(row_count));
+            } else if (OB_FAIL(insert_rows_to_tablet(tmp_handle, run_ctx, rows_info))) {
+              // the dup error is ignored here, so need clean up lob tasks that were successfully created but not executed
+              run_ctx.lob_dml_ctx_.reuse();
+              if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+                for (int64_t i = 0; i < row_count; i++) {
+                  if (rows_info.is_row_duplicate(i)) {
+                    dup_row_count++;
+                  }
+                }
+                has_ignore_dup_error = true;
+                ret = OB_SUCCESS; // ignore this error to continue to find all duplicate rows
+              } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+                LOG_WARN("failed to write row", K(ret));
+              }
+            } else {
+              afct_num += row_count;
+            }
+          }
+        } // end of while
+
+        if (OB_ITER_END == ret) {
+          if (has_ignore_dup_error) {
+            ret = OB_ERR_PRIMARY_KEY_DUPLICATE; // recover the duplicate key error
+            EVENT_ADD(ObStatEventIds::SQL_INSERT_DUPLICATE_COUNT, dup_row_count);
+            if (nullptr == duplicated_rows) {
+              // For primary key conflicts caused by concurrent insertions within
+              // a statement, we need to return the corresponding duplicated_rows.
+              // However, under circumstances where an exception may unexpectedly
+              // prevent us from reading the conflicting rows within statements,
+              // at such times, it becomes necessary for us to mock the rows.
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(mock_duplicated_rows_(duplicated_rows))) {
+                LOG_WARN("failed to mock duplicated rows", K(tmp_ret));
+                ret = tmp_ret;
+              }
+            }
+          } else {
+            ret = OB_SUCCESS;
+          }
         }
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to write row", K(ret));
+
+        if (OB_SUCC(ret) && !run_ctx.lob_dml_ctx_.is_all_task_done()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("lob data may not be insert", K(ret), K(run_ctx.lob_dml_ctx_));
         }
       } else {
-        LOG_DEBUG("succeeded to insert row", K(ret), K(row));
-        affected_rows = 1;
-        EVENT_INC(STORAGE_INSERT_ROW_COUNT);
+        LOG_WARN("Failed to allocate ObRowsInfo", K(ret));
       }
     }
-    if (OB_SUCC(ret) && run_ctx.lob_dml_ctx_.is_all_task_done()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("lob data may not be insert", K(ret), K(run_ctx.lob_dml_ctx_));
-    }
+  }
 
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("succeeded to insert rows with fetch dup", K(ret));
+    affected_rows = afct_num;
+    EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
   }
   return ret;
 }
@@ -3299,8 +3345,6 @@ int ObLSTabletService::update_rows(
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   int64_t afct_num = 0;
   int64_t dup_num = 0;
-  int64_t got_row_count = 0;
-  ObTimeGuard timeguard(__func__, 3_s);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3315,174 +3359,264 @@ int ObLSTabletService::update_rows(
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param),
         K(column_ids), K(updated_column_ids), KP(row_iter));
   } else {
-    timeguard.click("Get");
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_UPDATE,
                             true /* is_need_row_datum_utils */);
-    ObDatumRow old_datum_row;
-    ObDatumRow &new_datum_row = run_ctx.datum_row_;
+    ObIAllocator &work_allocator = run_ctx.allocator_;
     bool rowkey_change = false;
     UpdateIndexArray update_idx;
     ObDatumRowStore row_store;
-    bool delay_new = false;
     bool lob_update = false;
-    const ObRelativeTable &relative_table = run_ctx.relative_table_;
+    ObRelativeTable &relative_table = run_ctx.relative_table_;
+
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, &updated_column_ids, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else if (FALSE_IT(tablet_handle.reset())) {
-    } else if (FALSE_IT(timeguard.click("Prepare"))) {
     } else if (OB_UNLIKELY(!relative_table.is_valid())) {
       ret = OB_ERR_SYS;
       LOG_ERROR("data table is not prepared", K(ret));
     } else if (OB_FAIL(construct_update_idx(relative_table.get_rowkey_column_num(),
-        run_ctx.col_map_,
-        updated_column_ids, update_idx))) {
+        run_ctx.col_map_, updated_column_ids, update_idx))) {
       LOG_WARN("failed to construct update_idx", K(ret), K(updated_column_ids));
-    } else if (FALSE_IT(timeguard.click("Construct"))) {
-    } else if (OB_FAIL(check_rowkey_change(updated_column_ids, relative_table, rowkey_change, delay_new))) {
+    } else if (OB_FAIL(check_rowkey_change(updated_column_ids, relative_table, rowkey_change))) {
       LOG_WARN("failed to check rowkey changes", K(ret));
     } else {
-      timeguard.click("Check");
-      if (OB_FAIL(old_datum_row.init(run_ctx.allocator_, relative_table.get_column_count()))) {
-        LOG_ERROR("failed to init old datum row", K(ret), K(relative_table.get_column_count()));
-      } else {
-        timeguard.click("AllocOld");
-      }
+      int64_t cur_time = 0;
       lob_update = is_lob_update(run_ctx, update_idx);
-    }
+      ObDatumRow *old_rows = nullptr;
+      ObDatumRow *new_rows = nullptr;
+      ObDatumRow *tmp_rows = nullptr;
+      int64_t old_rows_count = 0;
+      int64_t new_rows_count = 0;
+      ObTabletHandle tmp_handle;
+      ObRowsInfo *rows_infos = nullptr;
+      int64_t max_tmp_row_cnt = 0;
 
-    if (OB_SUCC(ret)) {
+      const bool check_exist = rowkey_change && (
+           !relative_table.is_storage_index_table() || relative_table.is_unique_index() ||
+                ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
+      // delay_new is for oracle compatible, refer to
+      //const bool delay_new = check_exist && lib::is_oracle_mode();
+      // batch interface can be compatible with the oracle behavior in a batch, so no need delay_new for performance
+      const bool delay_new = false;
+      const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
+
       // for major mv base table need update full column
       if (dml_param.table_param_->get_data_table().get_mv_mode().table_referenced_by_fast_lsm_mv_flag_) {
         ctx.update_full_column_ =  true;
       }
-    }
 
-    int64_t cur_time = 0;
-    ObTabletHandle tmp_handle;
-    while (OB_SUCC(ret)
-        && OB_SUCC(get_next_row_from_iter(row_iter, old_datum_row, true))
-        && OB_SUCC(get_next_row_from_iter(row_iter, new_datum_row, false))) {
-      LOG_DEBUG("get_dml_update_row", KP(row_iter), K(old_datum_row), K(new_datum_row));
-      // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
-      dml_param.lob_allocator_.reuse();
-      // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
-      // outside the while loop.
-      if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-        tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
-      }
-      bool duplicate = false;
-      ++got_row_count;
-      cur_time = ObClockGenerator::getClock();
-      if ((0 == (0x1FF & got_row_count)) && (cur_time > dml_param.timeout_)) {
-        //checking timeout cost too much, so check every 512 rows
-        ret = OB_TIMEOUT;
-        LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
-      } else if (OB_FAIL(update_row_to_tablet(tmp_handle,
-                                              run_ctx,
-                                              rowkey_change,
-                                              update_idx,
-                                              delay_new,
-                                              lob_update,
-                                              old_datum_row,
-                                              new_datum_row,
-                                              &row_store,
-                                              duplicate))) {
-        LOG_WARN("failed to update row to tablets", K(ret), K(old_datum_row), K(new_datum_row));
-      } else if (duplicate) {
-        dup_num++;
-      } else {
-        afct_num++;
-      }
-      timeguard.click("Update");
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-
-    if (OB_SUCC(ret) && row_store.get_row_count() > 0) {
-      new_datum_row.storage_datums_ = nullptr;
-      if (OB_FAIL(new_datum_row.init(run_ctx.allocator_, relative_table.get_column_count()))) {
-        LOG_ERROR("failed to init new datum row", K(ret), K(relative_table.get_column_count()));
-      } else {
-        timeguard.click("AllocNew");
-        ObDatumRowStore::Iterator row_iter2 = row_store.begin();
-        ObTabletHandle tmp_handle;
-        const share::schema::ObTableDMLParam *table_param = dml_param.table_param_;
-        // when total_quantity_log is true, we should iterate new_datum_row and old_datum_row, and
-        // dispose these two rows together, otherwise, when total_quantity_log is false,
-        // row_iter2 doesn't contain old rows, and old_datum_row is a dummy param in process_new_row
-        while (OB_SUCC(ret) && OB_SUCC(row_iter2.get_next_row(new_datum_row))) {
-          // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
-          dml_param.lob_allocator_.reuse();
-          // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
-          // outside the while loop.
-          if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-            tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+      while (OB_SUCC(ret)
+          && OB_SUCC(row_iter->get_next_rows(old_rows, old_rows_count))
+          && OB_SUCC(row_iter->get_next_rows(new_rows, new_rows_count))) {
+        // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+        dml_param.lob_allocator_.reuse();
+        // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+        // outside the while loop.
+        if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+          tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+          if (nullptr != rows_infos) {
+            rows_infos[0].reset();
+            rows_infos[1].reset();
+            if (OB_FAIL(rows_infos[0].init(col_descs, relative_table, ctx,
+                tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
+            } else if (OB_FAIL(rows_infos[1].init(col_descs, relative_table, ctx,
+                tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
+            }
           }
-          int64_t data_tbl_rowkey_len = relative_table.get_rowkey_column_num();
-          bool tbl_rowkey_change = false;
-          if (OB_FAIL(row_iter2.get_next_row(old_datum_row))) {
-            LOG_WARN("fail to get old row from row stores", K(ret));
-          } else if (FALSE_IT(timeguard.click("GetNext"))) {
-          } else if (OB_ISNULL(table_param)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("get invalid table param", K(ret));
-          } else if (rowkey_change && OB_FAIL(check_rowkey_value_change(old_datum_row,
-                                                                        new_datum_row,
-                                                                        data_tbl_rowkey_len,
-                                                                        table_param->get_data_table().get_read_info().get_datum_utils(),
-                                                                        tbl_rowkey_change))) {
-            LOG_WARN("check data table rowkey change failed", K(ret), K(old_datum_row),
-                K(new_datum_row), K(data_tbl_rowkey_len));
-          } else if (OB_FAIL(process_lob_before_update(tmp_handle,
-                                            run_ctx,
-                                            update_idx,
-                                            old_datum_row,
-                                            new_datum_row,
-                                            tbl_rowkey_change))) {
-            LOG_WARN("process_lob_before_update fail", K(ret), K(old_datum_row), K(old_datum_row));
-          } else if (OB_FAIL(process_new_row(tmp_handle,
-                                             run_ctx,
-                                             update_idx,
-                                             old_datum_row,
-                                             new_datum_row,
-                                             tbl_rowkey_change))) {
-            LOG_WARN("fail to process new row", K(ret), K(old_datum_row), K(new_datum_row));
-          } else if (OB_FAIL(process_lob_after_update(tablet_handle,
-                                            run_ctx,
-                                            update_idx,
-                                            old_datum_row,
-                                            new_datum_row,
-                                            tbl_rowkey_change))) {
-            LOG_WARN("process_lob_after_update fail", K(ret), K(old_datum_row), K(new_datum_row));
-          }
-          timeguard.click("Process");
         }
-        new_datum_row.reset();
+        cur_time = ObClockGenerator::getClock();
+        if (OB_UNLIKELY(cur_time > dml_param.timeout_)) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
+        } else if (OB_UNLIKELY(old_rows_count != new_rows_count)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row count is not equal", K(ret), K(old_rows_count), K(new_rows_count));
+        } else if (1 == new_rows_count) {
+          old_rows[0].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+          new_rows[0].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+        } else if (nullptr == rows_infos) { // is first batch
+          if (OB_ISNULL(rows_infos = static_cast<ObRowsInfo*>(work_allocator.alloc(2 * sizeof(ObRowsInfo) )))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory", K(ret));
+          } else {
+            new (rows_infos) ObRowsInfo[2];
+            if (OB_FAIL(rows_infos[0].init(
+                col_descs, relative_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
+            } else if (OB_FAIL(rows_infos[1].init(
+                col_descs, relative_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && nullptr != rows_infos) {
+          for (int64_t i = 0; i < new_rows_count; i++) {
+            old_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+            new_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+          }
+          if (OB_FAIL(rows_infos[0].assign_rows(old_rows_count, old_rows))) {
+            LOG_WARN("fail to assign old rows", K(ret), K(old_rows_count));
+          } else if (OB_FAIL(rows_infos[1].assign_rows(new_rows_count, new_rows))) {
+            LOG_WARN("fail to assign old rows", K(ret), K(new_rows_count));
+          }
+          // the tmp_tbl_rows is used to delete the old row if the rowkey change
+          if (OB_SUCC(ret) && rowkey_change && (tmp_rows == nullptr || new_rows_count > max_tmp_row_cnt)) {
+            max_tmp_row_cnt = new_rows_count;
+            if (tmp_rows != nullptr) {
+              work_allocator.free(tmp_rows);
+              tmp_rows = nullptr;
+            }
+            if (OB_ISNULL(tmp_rows = static_cast<ObDatumRow*>(work_allocator.alloc(new_rows_count * sizeof(ObDatumRow))))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to allocate memory", K(ret));
+            } else {
+              new (tmp_rows) ObDatumRow[new_rows_count];
+            }
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          if (1 == new_rows_count) {
+            if (OB_FAIL(update_row_to_tablet(tmp_handle,
+                                             run_ctx,
+                                             rowkey_change,
+                                             update_idx,
+                                             delay_new,
+                                             lob_update,
+                                             old_rows[0],
+                                             new_rows[0],
+                                             row_store))) {
+              LOG_WARN("failed to update row to tablet", K(ret), K(old_rows[0]), K(new_rows[0]));
+            }
+          } else {
+            // for mysql compatible, batch primary key updation can only be processed row by row
+            if (check_exist && lib::is_mysql_mode()) {
+              for (int64_t i = 0; OB_SUCC(ret) && i < new_rows_count; i++) {
+                if (OB_FAIL(update_row_to_tablet(tmp_handle,
+                                                 run_ctx,
+                                                 rowkey_change,
+                                                 update_idx,
+                                                 delay_new,
+                                                 lob_update,
+                                                 old_rows[i],
+                                                 new_rows[i],
+                                                 row_store))) {
+                  LOG_WARN("failed to update row to tablet", K(ret), K(i), K(old_rows[i]), K(new_rows[i]));
+                }
+              }
+            } else {
+              if (OB_FAIL(update_rows_to_tablet(tmp_handle,
+                                                run_ctx,
+                                                rowkey_change,
+                                                update_idx,
+                                                delay_new,
+                                                lob_update,
+                                                tmp_rows,
+                                                rows_infos[0],
+                                                rows_infos[1],
+                                                row_store))) {
+                LOG_WARN("failed to update row to tablets", K(ret), K(new_rows_count));
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            afct_num += new_rows_count;
+          }
+        }
+      } // end of while
+
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+      if (OB_SUCC(ret) && !run_ctx.lob_dml_ctx_.is_all_task_done()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("lob data may not be insert", K(ret), K(run_ctx.lob_dml_ctx_));
+      }
+      if (OB_SUCC(ret) && row_store.get_row_count() > 0) {
+        ObDatumRow &old_row_for_delay = old_rows[0];
+        ObDatumRow &new_row_for_delay = new_rows[0];
+        if (OB_FAIL(delay_process_new_rows(run_ctx,
+                                           update_idx,
+                                           rowkey_change,
+                                           old_row_for_delay,
+                                           new_row_for_delay,
+                                           row_store))) {
+          LOG_WARN("fail to delay process new rows", K(ret));
+        }
+      }
+      if (nullptr != rows_infos) {
+        rows_infos[0].~ObRowsInfo();
+        rows_infos[1].~ObRowsInfo();
+        work_allocator.free(rows_infos);
+      }
+      if (nullptr != tmp_rows) {
+        work_allocator.free(tmp_rows);
       }
     }
 
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret) && run_ctx.lob_dml_ctx_.is_all_task_done()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("lob data may not be insert", K(ret), K(run_ctx.lob_dml_ctx_));
-    }
-    old_datum_row.reset();
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
       EVENT_ADD(STORAGE_UPDATE_ROW_COUNT, afct_num);
     }
-    if (timeguard.get_diff() > 3_s) {
-      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "update rows use too much time", K(afct_num), K(got_row_count));
-    }
   }
   NG_TRACE(S_update_rows_end);
+  return ret;
+}
 
+// delay_new is for oracle compatible, refer to
+int ObLSTabletService::delay_process_new_rows(
+    ObDMLRunningCtx &run_ctx,
+    const common::ObIArray<int64_t> &update_idx,
+    const bool rowkey_change,
+    ObDatumRow &old_row,
+    ObDatumRow &new_row,
+    ObDatumRowStore &row_store)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tmp_handle;
+  ObDatumRowStore::Iterator row_iter = row_store.begin();
+  while (OB_SUCC(ret) && OB_SUCC(row_iter.get_next_row(new_row))) {
+    // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+    // outside the while loop.
+    if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+      tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+    }
+    if (OB_FAIL(row_iter.get_next_row(old_row))) {
+      LOG_WARN("fail to get row from row stores", K(ret));
+    } else if (OB_FAIL(process_lob_before_update(tmp_handle,
+                                                 run_ctx,
+                                                 update_idx,
+                                                 rowkey_change,
+                                                 1,
+                                                 &old_row,
+                                                 &new_row))) {
+      LOG_WARN("process_lob_before_update fail", K(ret), K(old_row), K(new_row));
+    } else if (OB_FAIL(process_new_row(tmp_handle,
+                                       run_ctx,
+                                       update_idx,
+                                       rowkey_change,
+                                       old_row,
+                                       new_row))) {
+      LOG_WARN("fail to process new row", K(ret), K(old_row), K(new_row));
+    } else if (OB_FAIL(process_lob_after_update(tmp_handle,
+                                                run_ctx,
+                                                update_idx,
+                                                rowkey_change,
+                                                1,
+                                                &old_row,
+                                                &new_row))) {
+      LOG_WARN("process_lob_after_update fail", K(ret), K(old_row), K(new_row));
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 
@@ -3533,7 +3667,8 @@ int ObLSTabletService::put_rows(
           if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
             tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
             rows_info.reset();
-            if (OB_FAIL(rows_info.init(col_descs, data_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
+            if (OB_FAIL(rows_info.init(
+                col_descs, data_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
               LOG_WARN("Failed to init rows info", K(ret), K(data_table));
             }
           }
@@ -3546,13 +3681,19 @@ int ObLSTabletService::put_rows(
             for (int64_t i = 0; i < row_count; i++) {
               rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
             }
+            if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
+              LOG_WARN("fail to assign rows", K(ret), K(row_count));
+            }
           }
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(put_rows_to_tablet(tablet_handle, run_ctx, rows, row_count,
-              rows_info, afct_num))) {
+          } else if (OB_FAIL(put_rows_to_tablet(tmp_handle, run_ctx, rows_info, afct_num))) {
             LOG_WARN("put to each tablets fail", K(ret));
           }
+        }  // end of while
+
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
         }
       } else {
         LOG_WARN("Failed to allocate ObRowsInfo", K(ret));
@@ -3562,11 +3703,12 @@ int ObLSTabletService::put_rows(
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    if (OB_SUCC(ret) && run_ctx.lob_dml_ctx_.is_all_task_done()) {
+    if (OB_SUCC(ret) && !run_ctx.lob_dml_ctx_.is_all_task_done()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("lob data may not be insert", K(ret), K(run_ctx.lob_dml_ctx_));
     }
   }
+
   if (OB_SUCC(ret)) {
     LOG_DEBUG("succeeded to put rows", K(ret));
     affected_rows = afct_num;
@@ -3590,7 +3732,6 @@ int ObLSTabletService::delete_rows(
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   ObRowReshape *row_reshape = nullptr;
   int64_t afct_num = 0;
-  ObTimeGuard timeguard(__func__, 3_s);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3604,40 +3745,82 @@ int ObLSTabletService::delete_rows(
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            ObDmlFlag::DF_DELETE,
-                            true /* is_need_row_datum_utils */);
-    ObDatumRow *row = nullptr;
+                            ObDmlFlag::DF_DELETE);
+    int64_t row_count = 0;
+    ObDatumRow *rows = nullptr;
+    ObDatumRow *tmp_rows = nullptr;
+    char *tmp_rows_buf = nullptr;
+    int64_t max_tmp_row_cnt = 0;
+
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
       tablet_handle.reset();
-    }
-    // delete table rows
-    int64_t cur_time = 0;
-    ObTabletHandle tmp_handle;
-    while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
-      // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
-      dml_param.lob_allocator_.reuse();
-      // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
-      // outside the while loop.
-      if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-        tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+      SMART_VAR(ObRowsInfo, rows_info) {
+        ObRelativeTable &relative_table = run_ctx.relative_table_;
+        const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
+         ObIAllocator &work_allocator = run_ctx.allocator_;
+        int64_t cur_time = 0;
+        ObTabletHandle tmp_handle;
+        int64_t max_row_cnt = 0;
+
+        while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
+          // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+          dml_param.lob_allocator_.reuse();
+          // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+          // outside the while loop.
+          if (tmp_handle.get_obj() != relative_table.tablet_iter_.get_tablet_handle().get_obj()) {
+            tmp_handle = relative_table.tablet_iter_.get_tablet_handle();
+            rows_info.reset();
+            if (OB_FAIL(rows_info.init(
+                col_descs, relative_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
+            }
+          }
+          cur_time = ObClockGenerator::getClock();
+          if (OB_FAIL(ret)) {
+          } else if (cur_time > run_ctx.dml_param_.timeout_) {
+            ret = OB_TIMEOUT;
+            LOG_WARN("query timeout", K(cur_time), K(run_ctx.dml_param_), K(ret));
+          } else if (row_count <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("row_count should be greater than 0", K(ret));
+          } else if (row_count == 1) {
+            tmp_rows = &run_ctx.datum_row_;
+          } else if (tmp_rows_buf == nullptr || row_count > max_tmp_row_cnt) {
+            max_tmp_row_cnt = row_count;
+            if (tmp_rows_buf != nullptr) {
+              work_allocator.free(tmp_rows_buf);
+            }
+            if (OB_ISNULL(tmp_rows_buf = static_cast<char*>(work_allocator.alloc(sizeof(ObDatumRow) * row_count)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to allocate memory", K(ret), K(row_count));
+            } else {
+              tmp_rows = new (tmp_rows_buf) ObDatumRow[row_count];
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            for (int64_t i = 0; i < row_count; i++) {
+              rows[i].row_flag_.set_flag(ObDmlFlag::DF_DELETE);
+            }
+            if (OB_FAIL(rows_info.assign_rows(row_count, rows))) {
+              LOG_WARN("fail to assign rows", K(ret), K(row_count));
+            } else if (OB_FAIL(delete_rows_in_tablet(tmp_handle, run_ctx, tmp_rows, rows_info))) {
+              LOG_WARN("fail to delete rows in tablet", K(ret), K(rows_info));
+            } else {
+              afct_num += row_count;
+            }
+          }
+        } // end of while
+
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+        if (tmp_rows_buf != nullptr) {
+          work_allocator.free(tmp_rows_buf);
+        }
       }
-      cur_time = ObClockGenerator::getClock();
-      if (cur_time > run_ctx.dml_param_.timeout_) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("query timeout", K(cur_time), K(run_ctx.dml_param_), K(ret));
-      } else if (OB_ISNULL(row)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get next row from iterator failed", KP(row), K(ret));
-      } else if (OB_FAIL(delete_row_in_tablet(tmp_handle, run_ctx, *row))) {
-        LOG_WARN("fail to delete row", K(ret), K(row));
-      } else {
-        ++afct_num;
-      }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
@@ -3645,7 +3828,6 @@ int ObLSTabletService::delete_rows(
     }
   }
   NG_TRACE(S_delete_rows_end);
-
   return ret;
 }
 
@@ -3696,6 +3878,7 @@ int ObLSTabletService::lock_rows(
       run_ctx.column_ids_ = &column_ids;
       run_ctx.col_descs_ = &col_desc;
       ObTabletHandle tmp_handle;
+      int64_t error_row_idx = 0;
       while (OB_SUCCESS == ret && OB_SUCC(row_iter->get_next_row(row))) {
         // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
         // outside the while loop.
@@ -3710,7 +3893,7 @@ int ObLSTabletService::lock_rows(
           int64_t cur_time = ObClockGenerator::getClock();
           LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
         } else if (GCONF.enable_defensive_check()
-            && OB_FAIL(check_old_row_legitimacy_wrap(datum_utils.get_cmp_funcs(), tmp_handle, run_ctx, *row))) {
+            && OB_FAIL(check_old_row_legitimacy_wrap(datum_utils.get_cmp_funcs(), tmp_handle, run_ctx, 1, row, error_row_idx))) {
           LOG_WARN("check row legitimacy failed", K(ret), KPC(row));
         } else if (GCONF.enable_defensive_check()
             && OB_FAIL(check_datum_row_nullable_value(col_desc, relative_table, *row))) {
@@ -4171,8 +4354,9 @@ int ObLSTabletService::check_old_row_legitimacy(
           } else if (!is_nop) {
             err_col_id = column_ids.at(i);
             ret = OB_ERR_DEFENSIVE_CHECK;
-            FLOG_WARN("storage old row is not matched with sql old row", K(ret),
-                    K(i), K(column_ids.at(i)), K(storage_val), K(sql_val));
+            err_col_id = column_ids.at(i);
+            FLOG_WARN("storage_val is not equal with sql_val, maybe catch a bug", K(ret),
+                 K(i), K(column_ids.at(i)), K(storage_val), K(sql_val));
           }
         } else if (sql_val.is_nop_value()) {
           //this column is nop val, means that this column does not be touched by DML
@@ -4309,7 +4493,8 @@ int ObLSTabletService::check_is_gencol_check_failed(const ObRelativeTable &data_
 
 int ObLSTabletService::check_new_row_legitimacy(
     ObDMLRunningCtx &run_ctx,
-    const blocksstable::ObDatumRow &datum_row)
+    const int64_t row_count,
+    const ObDatumRow *datum_rows)
 {
   int ret = OB_SUCCESS;
   ObRelativeTable &data_table = run_ctx.relative_table_;
@@ -4317,15 +4502,18 @@ int ObLSTabletService::check_new_row_legitimacy(
   if (OB_ISNULL(run_ctx.column_ids_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column ids is nullptr", K(ret));
-  } else if (OB_FAIL(check_datum_row_nullable_value(*run_ctx.col_descs_, data_table, datum_row))) {
-    LOG_WARN("check datum row nullable value failed", K(ret),
-             "dml_param", run_ctx.dml_param_,
-             "dml_type", run_ctx.dml_flag_);
-  } else if (OB_FAIL(check_datum_row_shadow_pk(*run_ctx.column_ids_, data_table, datum_row,
-                                               run_ctx.dml_param_.table_param_->get_data_table().get_read_info().get_datum_utils()))) {
-    LOG_WARN("check datum row nullable value failed", K(ret),
-             "dml_param", run_ctx.dml_param_,
-             "dml_type", run_ctx.dml_flag_);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    if (OB_FAIL(check_datum_row_nullable_value(*run_ctx.col_descs_, data_table, datum_rows[i]))) {
+      LOG_WARN("check datum row nullable value failed", K(ret),
+               "dml_param", run_ctx.dml_param_,
+               "dml_type", run_ctx.dml_flag_);
+    } else if (OB_FAIL(check_datum_row_shadow_pk(*run_ctx.column_ids_, data_table, datum_rows[i],
+        run_ctx.dml_param_.table_param_->get_data_table().get_read_info().get_datum_utils()))) {
+      LOG_WARN("check datum row nullable value failed", K(ret),
+               "dml_param", run_ctx.dml_param_,
+               "dml_type", run_ctx.dml_flag_);
+    }
   }
   return ret;
 }
@@ -4333,63 +4521,33 @@ int ObLSTabletService::check_new_row_legitimacy(
 int ObLSTabletService::insert_rows_to_tablet(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    blocksstable::ObDatumRow *rows,
-    const int64_t row_count,
-    ObRowsInfo &rows_info,
-    int64_t &afct_num,
-    int64_t &dup_num)
+    ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
   ObStoreCtx &ctx = run_ctx.store_ctx_;
   const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
   ObRelativeTable &data_table = run_ctx.relative_table_;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
   if (OB_FAIL(ret)) {
   } else if (ObClockGenerator::getClock() > dml_param.timeout_) {
     ret = OB_TIMEOUT;
     int64_t cur_time = ObClockGenerator::getClock();
     LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
-  } else if (OB_FAIL(rows_info.check_duplicate(rows, row_count, data_table))) {
-    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-      char rowkey_buffer[OB_TMP_BUF_SIZE_256];
-      if (OB_SUCCESS != extract_rowkey(data_table,
-                                       rows_info.get_duplicate_rowkey(),
-                                       rowkey_buffer,
-                                       OB_TMP_BUF_SIZE_256,
-                                       run_ctx.dml_param_.tz_info_)) {
-        LOG_WARN("extract rowkey failed");
-      } else {
-        int tmp_ret = OB_SUCCESS;
-        ObString index_name = "PRIMARY";
-        if (data_table.is_index_table()) {
-          data_table.get_index_name(index_name);
-        } else if (lib::is_oracle_mode() && OB_TMP_FAIL(data_table.get_primary_key_name(index_name))) {
-          LOG_WARN("Failed to get pk name", K(ret), K(tmp_ret));
-        }
-        LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE,
-                       rowkey_buffer, index_name.length(), index_name.ptr());
-      }
-    } else {
-      LOG_WARN("fail to check duplicate", K(ret));
-    }
-  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, rows, row_count))) {
+  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, rows_info.rows_, row_count))) {
     LOG_WARN("failed to process vector index rows", K(ret));
-  } else if (OB_FAIL(process_lob_before_insert(tablet_handle, run_ctx, rows, row_count))) {
+  } else if (OB_FAIL(process_lob_before_insert(tablet_handle, run_ctx, rows_info.rows_, row_count))) {
     LOG_WARN("process_lob_before_insert fail", K(ret), K(row_count));
-  } else if (OB_FAIL(insert_tablet_rows(row_count, tablet_handle, run_ctx, rows, rows_info))) {
+  } else if (OB_FAIL(insert_tablet_rows(tablet_handle, run_ctx, rows_info))) {
     LOG_WARN("failed to insert rows to data tablet", K(ret));
-  } else if (OB_FAIL(process_lob_after_insert(tablet_handle, run_ctx, rows, row_count))) {
+  } else if (OB_FAIL(process_lob_after_insert(tablet_handle, run_ctx, rows_info.rows_, row_count))) {
     LOG_WARN("process_lob_after_insert fail", K(ret), K(row_count));
-  } else {
-    afct_num = afct_num + row_count;
   }
   return ret;
 }
 
 int ObLSTabletService::insert_tablet_rows(
-    const int64_t row_count,
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    ObDatumRow *rows,
     ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
@@ -4404,37 +4562,26 @@ int ObLSTabletService::insert_tablet_rows(
     table.is_fts_index() ||
     run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
 #endif
+  const int64_t row_count = rows_info.get_rowkey_cnt();
   // 1. Defensive checking of new rows.
   if (GCONF.enable_defensive_check()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
-      ObDatumRow &datum_row = rows[i];
-      if (OB_FAIL(check_new_row_legitimacy(run_ctx, datum_row))) {
-        LOG_WARN("Failed to check new row legitimacy", K(ret), K(datum_row));
-      }
+    if (OB_FAIL(check_new_row_legitimacy(run_ctx, row_count, rows_info.rows_))) {
+      LOG_WARN("Failed to check new row legitimacy", K(ret), K(rows_info));
     }
   }
-
-  // 2. Skip check uniqueness constraint on both memetables and sstables It
-  // would be more efficient and elegant to completely merge the uniqueness
-  // constraint and write conflict checking.
-  //
-  // if (check_exists && OB_FAIL(rowkeys_exists_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, table, run_ctx.store_ctx_,
-  //                                                 rows_info, exists))) {
-  //   LOG_WARN("Failed to check the uniqueness constraint", K(ret), K(rows_info));
-  // } else if (exists) {
-  //   ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-  //   blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
-  //   LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey));
-  // }
-
-  // 3. Insert rows with uniqueness constraint and write conflict checking.
-  // Check write conflict in memtable + sstable.
-  // Check uniqueness constraint in sstable only.
+  // 2. Insert rows with uniqueness constraint and write conflict checking.
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(insert_rows_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, table, run_ctx.store_ctx_, rows, rows_info,
-        check_exists, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_, run_ctx.dml_param_.tz_info_,
-        !run_ctx.dml_param_.is_ignore_/*need_log_user_error*/))) {
+    if (OB_FAIL(insert_rows_wrap(tablet_handle,
+                                 table,
+                                 run_ctx.store_ctx_,
+                                 run_ctx.dml_param_,
+                                 check_exists,
+                                 *run_ctx.col_descs_,
+                                 rows_info))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+        blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
+        LOG_WARN("Rowkey already exist", K(ret), K(duplicate_rowkey), K(row_count),
+            K(rows_info.get_conflict_idx()), "need_find_all_duplicate_key", rows_info.need_find_all_duplicate_key());
 #ifndef OB_BUILD_PACKAGE
         if (table.is_fts_index()) {
           ret = OB_ERR_UNEXPECTED;
@@ -4446,25 +4593,13 @@ int ObLSTabletService::insert_tablet_rows(
       }
     }
   }
-  return ret;
-}
-
-void ObLSTabletService::handle_insert_rows_duplicate(
-    ObRowsInfo &rows_info,
-    const ObRelativeTable &table,
-    const common::ObTimeZoneInfo *tz_info,
-    const bool need_log_user_error)
-{
-  int ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-  blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
-  LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
-      K(rows_info.get_conflict_idx()));
-  if (need_log_user_error) {
+  // 3. Log user error message if rowkey is duplicate.
+  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && !run_ctx.dml_param_.is_ignore_ && !rows_info.need_find_all_duplicate_key()) {
     int tmp_ret = OB_SUCCESS;
     char rowkey_buffer[OB_TMP_BUF_SIZE_256];
     ObString index_name = "PRIMARY";
     if (OB_TMP_FAIL(extract_rowkey(table, rows_info.get_conflict_rowkey(),
-            rowkey_buffer, OB_TMP_BUF_SIZE_256, tz_info))) {
+            rowkey_buffer, OB_TMP_BUF_SIZE_256, run_ctx.dml_param_.tz_info_))) {
       LOG_WARN("Failed to extract rowkey", K(ret), K(tmp_ret));
     }
     if (table.is_index_table()) {
@@ -4476,14 +4611,12 @@ void ObLSTabletService::handle_insert_rows_duplicate(
     }
     LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, rowkey_buffer, index_name.length(), index_name.ptr());
   }
-  return;
+  return ret;
 }
 
 int ObLSTabletService::put_rows_to_tablet(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    ObDatumRow *rows,
-    const int64_t row_count,
     ObRowsInfo &rows_info,
     int64_t &afct_num)
 {
@@ -4491,6 +4624,8 @@ int ObLSTabletService::put_rows_to_tablet(
   ObStoreCtx &ctx = run_ctx.store_ctx_;
   const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
   ObRelativeTable &data_table = run_ctx.relative_table_;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+
   for (int64_t i = 0; i < run_ctx.col_descs_->count() && OB_SUCC(ret); ++i) {
     const ObColDesc &column = run_ctx.col_descs_->at(i);
     if (column.col_type_.is_lob_storage()) {
@@ -4504,9 +4639,7 @@ int ObLSTabletService::put_rows_to_tablet(
     ret = OB_TIMEOUT;
     int64_t cur_time = ObClockGenerator::getClock();
     LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
-  } else if (OB_FAIL(rows_info.check_duplicate(rows, row_count, data_table, false))) {
-    LOG_WARN("fail to check duplicate", K(ret));
-  } else if (OB_FAIL(put_tablet_rows(row_count, tablet_handle, run_ctx, rows, rows_info))) {
+  } else if (OB_FAIL(put_tablet_rows(tablet_handle, run_ctx, rows_info))) {
     LOG_WARN("failed to put rows to data tablet", K(ret));
   } else {
     afct_num = afct_num + row_count;
@@ -4515,30 +4648,29 @@ int ObLSTabletService::put_rows_to_tablet(
 }
 
 int ObLSTabletService::put_tablet_rows(
-    const int64_t row_count,
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    ObDatumRow *rows,
     ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
   ObRelativeTable &table = run_ctx.relative_table_;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
   // 1. Defensive checking of new rows.
   if (GCONF.enable_defensive_check()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
-      ObDatumRow &datum_row = rows[i];
-      if (OB_FAIL(check_new_row_legitimacy(run_ctx, datum_row))) {
-        LOG_WARN("Failed to check new row legitimacy", K(ret), K(datum_row));
-      }
+    if (OB_FAIL(check_new_row_legitimacy(run_ctx, row_count, rows_info.rows_))) {
+      LOG_WARN("Failed to check new row legitimacy", K(ret), K(rows_info));
     }
   }
-
   // 2. Insert rows with write conflict checking.
   // Check write conflict in memtable + sstable.
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(insert_rows_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, table, run_ctx.store_ctx_, rows, rows_info,
-        false /* check_exists */, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_, run_ctx.dml_param_.tz_info_,
-        false/*need_log_user_error*/))) {
+    if (OB_FAIL(insert_rows_wrap(tablet_handle,
+                                 table,
+                                 run_ctx.store_ctx_,
+                                 run_ctx.dml_param_,
+                                 false /* check_exists */,
+                                 *run_ctx.col_descs_,
+                                 rows_info))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("Failed to insert rows to tablet", K(ret), K(rows_info));
       }
@@ -4865,8 +4997,7 @@ int ObLSTabletService::construct_update_idx(
 int ObLSTabletService::check_rowkey_change(
     const ObIArray<uint64_t> &update_ids,
     const ObRelativeTable &relative_table,
-    bool &rowkey_change,
-    bool &delay_new)
+    bool &rowkey_change)
 {
   int ret = OB_SUCCESS;
 
@@ -4877,7 +5008,6 @@ int ObLSTabletService::check_rowkey_change(
     const int64_t count = update_ids.count();
     bool is_rowkey = false;
     rowkey_change = false;
-    delay_new = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < count && !rowkey_change; ++i) {
       if (OB_FAIL(relative_table.is_rowkey_column_id(update_ids.at(i), is_rowkey))) {
         LOG_WARN("check is_rowkey fail", K(ret), K(update_ids.at(i)));
@@ -4917,60 +5047,26 @@ int ObLSTabletService::check_rowkey_change(
       }
     }
 
-    if (OB_SUCC(ret) && rowkey_change) {
-      delay_new = true;
-    }
-    LOG_DEBUG("check rowkey change for update", K(rowkey_change), K(delay_new), K(update_ids), K(relative_table));
+    LOG_DEBUG("check rowkey change for update", K(rowkey_change), K(update_ids), K(relative_table));
   }
 
   return ret;
 }
 
-int ObLSTabletService::check_rowkey_value_change(
-    const ObDatumRow &old_row,
-    const ObDatumRow &new_row,
-    const int64_t rowkey_len,
-    const blocksstable::ObStorageDatumUtils &rowkey_datum_utils,
-    bool &rowkey_change)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(rowkey_len <= 0)
-      || OB_UNLIKELY(old_row.count_ < rowkey_len)
-      || OB_UNLIKELY(new_row.count_ < rowkey_len)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(old_row), K(new_row),
-        K(rowkey_len), K(ret));
-  } else {
-    rowkey_change = false;
-    for (int i = 0; OB_SUCC(ret) && !rowkey_change && i < rowkey_len; ++i) {
-      int cmp_ret = 0;
-      if (OB_FAIL(rowkey_datum_utils.get_cmp_funcs().at(i).compare(old_row.storage_datums_[i], new_row.storage_datums_[i], cmp_ret))) {
-        LOG_WARN("compare old datum and new datum failed", K(old_row.storage_datums_[i]), K(new_row.storage_datums_[i]));
-      } else if (0 != cmp_ret) {
-        rowkey_change = true;
-      }
-    }
-  }
-  LOG_DEBUG("check rowkey value for update", K(rowkey_change), K(old_row), K(new_row));
-  return ret;
-}
 
 int ObLSTabletService::process_lob_before_update(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
     const ObIArray<int64_t> &update_idx,
-    blocksstable::ObDatumRow &old_row,
-    blocksstable::ObDatumRow &new_row,
-    bool data_tbl_rowkey_change)
+    const bool rowkey_change,
+    const int64_t row_count,
+    blocksstable::ObDatumRow *old_rows,
+    blocksstable::ObDatumRow *new_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(old_row.count_ != new_row.count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[STORAGE_LOB]invalid args", K(old_row), K(new_row), K(ret));
-  } else if (OB_UNLIKELY(old_row.count_ != run_ctx.col_descs_->count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[STORAGE_LOB]invalid args", K(old_row), K(new_row), KPC(run_ctx.col_descs_));
-  } else if (OB_FAIL(update_lob_meta_table_seq_no(run_ctx, 1/*row_count*/))) {
+  const int64_t col_cnt = run_ctx.col_descs_->count();
+
+  if (OB_FAIL(update_lob_meta_table_seq_no(run_ctx, 1/*row_count*/))) {
     LOG_WARN("update_lob_meta_table_seq_no fail", K(ret), K(run_ctx.dml_param_));
   } else {
     const int64_t cur_time = ObClockGenerator::getClock();
@@ -4980,11 +5076,9 @@ int ObLSTabletService::process_lob_before_update(
       LOG_WARN("timeout has reached", K(ret), "timeout", run_ctx.dml_param_.timeout_, K(cur_time));
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < old_row.count_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);
       if (column.col_type_.is_lob_storage()) {
-        ObStorageDatum &old_datum = old_row.storage_datums_[i];
-        ObStorageDatum &new_datum = new_row.storage_datums_[i];
         bool is_col_update = false;
         const bool is_rowkey_col = i < run_ctx.relative_table_.get_rowkey_column_num();
         for (int64_t j = 0; !is_rowkey_col && !is_col_update && j < update_idx.count(); ++j) {
@@ -4992,61 +5086,153 @@ int ObLSTabletService::process_lob_before_update(
             is_col_update = true;
           }
         }
-        if (is_rowkey_col || is_col_update) {
-          // get new lob locator
-          ObString new_lob_str = (new_datum.is_null() || new_datum.is_nop_value())
-                                 ? ObString(0, nullptr) : new_datum.get_string();
-          // for not strict sql mode, will insert empty string without lob header
-          bool has_lob_header = new_datum.has_lob_header() && new_lob_str.length() > 0;
-          ObLobLocatorV2 new_lob(new_lob_str, has_lob_header);
-          if (OB_FAIL(ret)) {
-          } else if (new_datum.is_null() ||
-                     new_datum.is_nop_value() ||
-                     new_lob.is_full_temp_lob() ||
-                     new_lob.is_persist_lob() ||
-                     (new_lob.is_lob_disk_locator() && new_lob.has_inrow_data())) {
-            if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(run_ctx, old_row, new_row, data_tbl_rowkey_change, 0/*row_idx*/, i, old_datum, new_datum))) {
-              LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(new_datum), K(new_lob));
-            }
-          } else if (new_lob.is_delta_temp_lob()) {
-            if (OB_FAIL(ObLobTabletDmlHelper::process_delta_lob(run_ctx, old_row, i, old_datum, new_lob, new_datum))) {
-              LOG_WARN("failed to process delta lob.", K(ret), K(i));
-            }
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected obj for new lob", K(ret), K(i), K(new_datum), K(new_lob));
-          }
-        } else {
-          if (old_datum.is_null()) {
-            new_datum.set_null();
-          } else if (old_datum.is_nop_value()) {
-            new_datum.set_nop();
-          } else if (new_datum.is_nop_value() || new_datum.is_null()) {
-            // do nothing
-          } else {
-            ObString val_str = old_datum.get_string();
-            ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
-            if (!lob_common->in_row_ && data_tbl_rowkey_change) {
-              if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
-              } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(
-                    run_ctx, old_row, new_row, data_tbl_rowkey_change, 0/*row_idx*/, i, old_datum, new_datum))) {
-                LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(new_datum));
+
+        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; row_idx++) {
+          ObStorageDatum &old_datum = old_rows[row_idx].storage_datums_[i];
+          ObStorageDatum &new_datum = new_rows[row_idx].storage_datums_[i];
+          if (is_rowkey_col || is_col_update) {
+            // get new lob locator
+            ObString new_lob_str = (new_datum.is_null() || new_datum.is_nop_value())
+                                   ? ObString(0, nullptr) : new_datum.get_string();
+            // for not strict sql mode, will insert empty string without lob header
+            bool has_lob_header = new_datum.has_lob_header() && new_lob_str.length() > 0;
+            ObLobLocatorV2 new_lob(new_lob_str, has_lob_header);
+            if (OB_FAIL(ret)) {
+            } else if (new_datum.is_null() ||
+                       new_datum.is_nop_value() ||
+                       new_lob.is_full_temp_lob() ||
+                       new_lob.is_persist_lob() ||
+                       (new_lob.is_lob_disk_locator() && new_lob.has_inrow_data())) {
+              if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(
+                  run_ctx, old_rows[row_idx], new_rows[row_idx], rowkey_change, row_idx, i, old_datum, new_datum))) {
+                LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(row_idx), K(new_datum), K(new_lob));
+              }
+            } else if (new_lob.is_delta_temp_lob()) {
+              if (OB_FAIL(ObLobTabletDmlHelper::process_delta_lob(run_ctx, old_rows[row_idx], i, old_datum, new_lob, new_datum))) {
+                LOG_WARN("failed to process delta lob.", K(ret), K(i), K(row_idx));
               }
             } else {
-              new_datum.reuse();
-              new_datum.set_string(val_str.ptr(), val_str.length());
-              if (old_datum.has_lob_header()) {
-                new_datum.set_has_lob_header();
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected obj for new lob", K(ret), K(i), K(row_idx), K(new_datum), K(new_lob));
+            }
+          } else {
+            if (old_datum.is_null()) {
+              new_datum.set_null();
+            } else if (old_datum.is_nop_value()) {
+              new_datum.set_nop();
+            } else if (new_datum.is_nop_value() || new_datum.is_null()) {
+              // do nothing
+            } else {
+              ObString val_str = old_datum.get_string();
+              ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
+              if (!lob_common->in_row_ && rowkey_change) {
+                if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
+                } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(
+                      run_ctx, old_rows[row_idx], new_rows[row_idx], rowkey_change, row_idx, i, old_datum, new_datum))) {
+                  LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(row_idx), K(new_datum));
+                }
+              } else {
+                new_datum.reuse();
+                new_datum.set_string(val_str.ptr(), val_str.length());
+                if (old_datum.has_lob_header()) {
+                  new_datum.set_has_lob_header();
+                }
               }
             }
           }
-        }
+        } // end of for row
+      }
+    } // end of for column
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; row_idx++) {
+      if (OB_FAIL(check_rowkey_length(run_ctx, new_rows[row_idx]))) {
+        LOG_WARN("failed to check rowkey length", K(ret), K(row_idx), K(new_rows[row_idx]));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(check_rowkey_length(run_ctx, new_row))) {
-      LOG_WARN("failed to check rowkey length", K(ret), K(new_row));
+  }
+  return ret;
+}
+
+int ObLSTabletService::update_rows_to_tablet(
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    const bool rowkey_change,
+    const ObIArray<int64_t> &update_idx,
+    const bool delay_new,
+    const bool lob_update,
+    ObDatumRow *tmp_rows,
+    ObRowsInfo &old_rows_info,
+    ObRowsInfo &new_rows_info,
+    ObDatumRowStore &row_store)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
+  const ObColDescIArray &col_descs = *run_ctx.col_descs_;
+  const int64_t row_count = new_rows_info.get_rowkey_cnt();
+
+  if (OB_UNLIKELY(!old_rows_info.is_valid() || !new_rows_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rows info", K(ret), K(old_rows_info), K(new_rows_info));
+  } else if (OB_FAIL(process_old_rows(tablet_handle,
+                                      run_ctx,
+                                      rowkey_change,
+                                      lob_update,
+                                      tmp_rows,
+                                      old_rows_info))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+      LOG_WARN("fail to process old rows", K(ret), K(old_rows_info),
+        K(col_descs), K(rowkey_change), K(lob_update), K(row_count));
+    }
+  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, new_rows_info.rows_, row_count))) {
+    LOG_WARN("failed to process vector index insert", K(ret), K(new_rows_info));
+  } else if (delay_new) {
+    if (OB_FAIL(cache_rows_to_row_store(row_count,
+                                        old_rows_info.rows_,
+                                        new_rows_info.rows_,
+                                        row_store))) {
+      LOG_WARN("fail to cache_rows_to_row_store", K(ret), K(row_count));
+    }
+  } else if (OB_FAIL(process_lob_before_update(tablet_handle,
+                                               run_ctx,
+                                               update_idx,
+                                               rowkey_change,
+                                               row_count,
+                                               old_rows_info.rows_,
+                                               new_rows_info.rows_))) {
+    LOG_WARN("process_lob_before_update fail", K(ret), K(row_count));
+  } else if (OB_FAIL(process_new_rows(tablet_handle,
+                                      run_ctx,
+                                      update_idx,
+                                      rowkey_change,
+                                      old_rows_info,
+                                      new_rows_info))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+      LOG_WARN("fail to process new row", K(ret), K(old_rows_info), K(new_rows_info));
+    }
+  } else if (OB_FAIL(process_lob_after_update(tablet_handle,
+                                              run_ctx,
+                                              update_idx,
+                                              rowkey_change,
+                                              row_count,
+                                              old_rows_info.rows_,
+                                              new_rows_info.rows_))) {
+    LOG_WARN("process_lob_after_update fail", K(ret), K(row_count));
+  }
+  return ret;
+}
+
+int ObLSTabletService::cache_rows_to_row_store(const int64_t row_count,
+                                               ObDatumRow *old_rows,
+                                               ObDatumRow *new_rows,
+                                               ObDatumRowStore &row_store)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    if (OB_FAIL(row_store.add_row(new_rows[i]))) {
+      LOG_WARN("failed to store new row", K(i), K(new_rows[i]), K(ret));
+    } else if (OB_FAIL(row_store.add_row(old_rows[i]))) {
+      LOG_WARN("failed to store old row", K(i), K(old_rows[i]), K(ret));
     }
   }
   return ret;
@@ -5061,93 +5247,165 @@ int ObLSTabletService::update_row_to_tablet(
     const bool lob_update,
     ObDatumRow &old_datum_row,
     ObDatumRow &new_datum_row,
-    ObDatumRowStore *row_store,
-    bool &duplicate)
+    ObDatumRowStore &row_store)
 {
   int ret = OB_SUCCESS;
   const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
   const ObColDescIArray &col_descs = *run_ctx.col_descs_;
-  bool data_tbl_rowkey_change = false;
-  int64_t data_tbl_rowkey_len = run_ctx.relative_table_.get_rowkey_column_num();
-  ObSQLMode sql_mode = dml_param.sql_mode_;
-  const share::schema::ObTableDMLParam *table_param = dml_param.table_param_;
-  duplicate = false;
 
-  if (OB_UNLIKELY(col_descs.count() != old_datum_row.count_
-      || col_descs.count() != new_datum_row.count_ || OB_ISNULL(table_param))) {
+  if (OB_UNLIKELY(col_descs.count() != old_datum_row.count_ || col_descs.count() != new_datum_row.count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(col_descs.count()),
-        K(old_datum_row), K(new_datum_row));
-  } else if (rowkey_change && OB_FAIL(check_rowkey_value_change(old_datum_row,
-                                                                new_datum_row,
-                                                                data_tbl_rowkey_len,
-                                                                table_param->get_data_table().get_read_info().get_datum_utils(),
-                                                                data_tbl_rowkey_change))) {
-    LOG_WARN("failed to check data table rowkey change", K(ret),
-        K(old_datum_row), K(new_datum_row), K(data_tbl_rowkey_len));
+    LOG_WARN("invalid args", K(ret), K(col_descs.count()), K(old_datum_row.count_), K(new_datum_row.count_));
   } else if (OB_FAIL(process_old_row(tablet_handle,
                                      run_ctx,
-                                     data_tbl_rowkey_change,
+                                     rowkey_change,
                                      lob_update,
                                      old_datum_row))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-      LOG_WARN("fail to process old row", K(ret), K(col_descs),
-          K(old_datum_row), K(data_tbl_rowkey_change));
+      LOG_WARN("fail to process old row", K(ret), K(*run_ctx.col_descs_), K(old_datum_row), K(rowkey_change));
     }
   } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, &new_datum_row, 1))) {
     LOG_WARN("failed to process vector index insert", K(ret), K(new_datum_row));
-  } else if (delay_new && lib::is_oracle_mode()) {
-    // if total quantity log is needed, we should cache both new row and old row,
-    // and the sequence is new_row1, old_row1, new_row2, old_row2....,
-    // if total quantity log isn't needed, just cache new row
-    if (OB_ISNULL(row_store)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("row_store is NULL", K(ret));
-    } else if (OB_FAIL(row_store->add_row(new_datum_row))) {
-      LOG_WARN("failed to store new row", K(new_datum_row), K(ret));
-    } else if (OB_FAIL(row_store->add_row(old_datum_row))) {
-      LOG_WARN("failed to store old row", K(old_datum_row), K(ret));
-    } else {
-      LOG_DEBUG("add row store for delay new", K(old_datum_row), K(new_datum_row));
+  } else if (delay_new) {
+    if (OB_FAIL(cache_rows_to_row_store(1, &old_datum_row, &new_datum_row, row_store))) {
+      LOG_WARN("fail to cache_rows_to_row_store", K(ret));
     }
   } else if (OB_FAIL(process_lob_before_update(tablet_handle,
-                                     run_ctx,
-                                     update_idx,
-                                     old_datum_row,
-                                     new_datum_row,
-                                     data_tbl_rowkey_change))) {
+                                               run_ctx,
+                                               update_idx,
+                                               rowkey_change,
+                                               1,
+                                               &old_datum_row,
+                                               &new_datum_row))) {
     LOG_WARN("process_lob_before_update fail", K(ret), K(old_datum_row), K(new_datum_row));
   } else if (OB_FAIL(process_new_row(tablet_handle,
                                      run_ctx,
                                      update_idx,
+                                     rowkey_change,
                                      old_datum_row,
-                                     new_datum_row,
-                                     data_tbl_rowkey_change))) {
+                                     new_datum_row))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
       LOG_WARN("fail to process new row", K(new_datum_row), K(ret));
     }
   } else if (OB_FAIL(process_lob_after_update(tablet_handle,
-                                     run_ctx,
-                                     update_idx,
-                                     old_datum_row,
-                                     new_datum_row,
-                                     data_tbl_rowkey_change))) {
+                                              run_ctx,
+                                              update_idx,
+                                              rowkey_change,
+                                              1,
+                                              &old_datum_row,
+                                              &new_datum_row))) {
     LOG_WARN("process_lob_after_update fail", K(ret), K(old_datum_row), K(new_datum_row));
   }
 
   return ret;
 }
 
+int ObLSTabletService::process_old_rows(
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    const bool rowkey_change,
+    const bool lob_update,
+    ObDatumRow *tmp_rows,
+    ObRowsInfo &old_rows_info)
+{
+  int ret = OB_SUCCESS;
+  ObStoreCtx &store_ctx = run_ctx.store_ctx_;
+  ObRelativeTable &relative_table = run_ctx.relative_table_;
+  bool is_delete_total_quantity_log = run_ctx.dml_param_.is_total_quantity_log_;
+  int64_t error_row_idx = 0;
+  ObDatumRow *old_rows = old_rows_info.rows_;
+  const int64_t row_count = old_rows_info.get_rowkey_cnt();
+
+  if (OB_UNLIKELY(!relative_table.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid relative tables", K(ret), K(relative_table));
+  } else if (OB_UNLIKELY(!store_ctx.is_valid()
+      || nullptr == run_ctx.col_descs_
+      || run_ctx.col_descs_->count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(store_ctx), KP(run_ctx.col_descs_), K(is_delete_total_quantity_log));
+  } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_,
+      tablet_handle, run_ctx, row_count, old_rows, error_row_idx))) {
+    if (OB_ERR_DEFENSIVE_CHECK == ret) {
+      dump_diag_info_for_old_row_loss(run_ctx, old_rows[error_row_idx]);
+    }
+    LOG_WARN("check old row legitimacy failed", K(error_row_idx), K(old_rows[error_row_idx]));
+  } else if (OB_FAIL(process_old_rows_lob_col(tablet_handle, run_ctx, row_count, old_rows))){
+    LOG_WARN("failed to process old rows lob col", K(ret));
+  } else {
+    ObColDescIArray &col_descs = const_cast<ObColDescIArray&>(*run_ctx.col_descs_);
+    const uint64_t &table_id = relative_table.get_table_id();
+    if (OB_UNLIKELY(run_ctx.dml_param_.prelock_)) {
+      bool locked = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+        const ObDatumRowkey &datum_rowkey = old_rows_info.get_rowkey(i);
+        if (OB_FAIL(check_row_locked_by_myself_wrap(tablet_handle,
+            run_ctx.dml_param_.data_row_for_lob_, relative_table, store_ctx, datum_rowkey, locked))) {
+          LOG_WARN("fail to check row locked", K(ret), K(datum_rowkey));
+        } else if (!locked) {
+          ret = OB_ERR_ROW_NOT_LOCKED;
+          LOG_DEBUG("row has not been locked", K(ret), K(datum_rowkey));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (rowkey_change) {
+      if (OB_ISNULL(tmp_rows)) { // tmp_rows must be not null if rowkey changed
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid tmp rows", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+        old_rows[i].row_flag_.set_flag(ObDmlFlag::DF_DELETE);
+        if (OB_FAIL(tmp_rows[i].shallow_copy(old_rows[i]))) {
+          LOG_WARN("fail to shallow copy", K(i));
+        } else {
+          tmp_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObSEArray<int64_t, 8> update_idx;
+        if (OB_FAIL(update_rows_wrap(tablet_handle,
+                                     run_ctx.dml_param_.data_row_for_lob_,
+                                     relative_table,
+                                     run_ctx.store_ctx_,
+                                     col_descs,
+                                     update_idx,
+                                     tmp_rows,
+                                     run_ctx.dml_param_.encrypt_meta_,
+                                     old_rows_info))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+            LOG_WARN("failed to update rows", K(ret), K(old_rows_info));
+          }
+        }
+      }
+    } else if (lob_update) {
+      // need to lock main table rows that don't need to be deleted
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+        const ObDatumRowkey &datum_rowkey = old_rows_info.get_rowkey(i);
+        if (OB_FAIL(lock_row_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, relative_table, store_ctx, datum_rowkey))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+            LOG_WARN("lock row failed", K(ret), K(table_id), K(i), K(datum_rowkey));
+          }
+        }
+      }
+      LOG_DEBUG("generate lock node before update lob columns", K(ret), K(table_id));
+    }
+  }
+  return ret;
+}
+
 int ObLSTabletService::process_old_row(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    const bool data_tbl_rowkey_change,
+    const bool rowkey_change,
     const bool lob_update,
     ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   ObStoreCtx &store_ctx = run_ctx.store_ctx_;
   ObRelativeTable &relative_table = run_ctx.relative_table_;
+  int64_t error_row_idx = 0;
   bool is_delete_total_quantity_log = run_ctx.dml_param_.is_total_quantity_log_;
   if (OB_UNLIKELY(!relative_table.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -5158,7 +5416,7 @@ int ObLSTabletService::process_old_row(
       || !datum_row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(store_ctx), KP(run_ctx.col_descs_), K(datum_row), K(is_delete_total_quantity_log));
-  } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_, tablet_handle, run_ctx, datum_row))) {
+  } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_, tablet_handle, run_ctx, 1, &datum_row, error_row_idx))) {
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
       dump_diag_info_for_old_row_loss(run_ctx, datum_row);
     }
@@ -5183,7 +5441,7 @@ int ObLSTabletService::process_old_row(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (data_tbl_rowkey_change) {
+    } else if (rowkey_change) {
       ObDatumRow del_row;
       ObDatumRow new_row;
 
@@ -5221,46 +5479,99 @@ int ObLSTabletService::process_old_row(
   }
   return ret;
 }
-
-int ObLSTabletService::process_new_row(
+int ObLSTabletService::process_new_rows(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
     const common::ObIArray<int64_t> &update_idx,
-    const ObDatumRow &old_datum_row,
-    ObDatumRow &new_datum_row,
-    const bool rowkey_change)
+    const bool rowkey_change,
+    ObRowsInfo &old_rows_info,
+    ObRowsInfo &new_rows_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(update_idx.count() < 0 || !old_datum_row.is_valid())) {
+  const int64_t row_count = new_rows_info.get_rowkey_cnt();
+
+  if (OB_UNLIKELY(update_idx.count() < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(update_idx), K(old_datum_row), K(rowkey_change));
+    LOG_WARN("invalid args", K(ret), K(update_idx));
   } else if (GCONF.enable_defensive_check()
-      && OB_FAIL(check_new_row_legitimacy(run_ctx, old_datum_row))) {
-    LOG_WARN("check datum row legitimacy failed", K(ret), K(old_datum_row));
+      && OB_FAIL(check_new_row_legitimacy(run_ctx, row_count, new_rows_info.rows_))) {
+    LOG_WARN("check new row legitimacy failed", K(ret), K(new_rows_info));
   } else {
-    // write full column clog needs to construct update_idx and pass to memtable
-    if (OB_FAIL(process_data_table_row(tablet_handle,
-                                       run_ctx,
-                                       update_idx,
-                                       old_datum_row,
-                                       new_datum_row,
-                                       rowkey_change))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-        LOG_WARN("fail to process data table row", K(ret),
-            K(update_idx), K(old_datum_row), K(new_datum_row), K(rowkey_change));
+    const ObColDescIArray &col_descs = *run_ctx.col_descs_;
+    ObRelativeTable &relative_table = run_ctx.relative_table_;
+    bool is_update_total_quantity_log = run_ctx.dml_param_.is_total_quantity_log_;
+    const common::ObTimeZoneInfo *tz_info = run_ctx.dml_param_.tz_info_;
+    const int64_t row_count = new_rows_info.get_rowkey_cnt();
+
+    if (!rowkey_change) {
+      if (!is_update_total_quantity_log) {
+        // For minimal mode, set pk columns of old_row to nop value, because
+        // they are already stored in new_row.
+        const int64_t rowkey_col_cnt = relative_table.get_rowkey_column_num();
+        for (int64_t i = 0; i < row_count; i++) {
+          for (int64_t j = 0; j < rowkey_col_cnt; ++j) {
+            (old_rows_info.rows_[i].storage_datums_[j]).set_nop();
+          }
+        }
+      }
+      if (OB_FAIL(update_rows_wrap(tablet_handle,
+                                   run_ctx.dml_param_.data_row_for_lob_,
+                                   relative_table,
+                                   run_ctx.store_ctx_,
+                                   col_descs,
+                                   update_idx,
+                                   old_rows_info.rows_,
+                                   run_ctx.dml_param_.encrypt_meta_,
+                                   new_rows_info))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+          LOG_WARN("failed to update to row", K(ret), K(new_rows_info));
+        }
+      }
+    } else {
+      for (int64_t i = 0; i < row_count; i++) {
+        new_rows_info.rows_[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      }
+      const bool check_exist = !relative_table.is_storage_index_table() ||
+        relative_table.is_unique_index() || run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
+      if (OB_FAIL(insert_rows_wrap(tablet_handle,
+                                   relative_table,
+                                   run_ctx.store_ctx_,
+                                   run_ctx.dml_param_,
+                                   check_exist,
+                                   col_descs,
+                                   new_rows_info))) {
+        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+          int tmp_ret = OB_SUCCESS;
+          char rowkey_buffer[OB_TMP_BUF_SIZE_256];
+          ObString index_name = "PRIMARY";
+          if (OB_TMP_FAIL(extract_rowkey(relative_table, new_rows_info.get_conflict_rowkey(),
+               rowkey_buffer, OB_TMP_BUF_SIZE_256, run_ctx.dml_param_.tz_info_))) {
+            LOG_WARN("Failed to extract rowkey", K(ret), K(tmp_ret));
+          }
+          if (relative_table.is_index_table()) {
+            if (OB_TMP_FAIL(relative_table.get_index_name(index_name))) {
+              LOG_WARN("Failed to get index name", K(ret), K(tmp_ret));
+            }
+          } else if (lib::is_oracle_mode() && OB_TMP_FAIL(relative_table.get_primary_key_name(index_name))) {
+            LOG_WARN("Failed to get pk name", K(ret), K(tmp_ret));
+          }
+          LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, rowkey_buffer, index_name.length(), index_name.ptr());
+        } else if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+          LOG_WARN("failed to update to row", K(ret), K(new_rows_info));
+        }
       }
     }
   }
   return ret;
 }
 
-int ObLSTabletService::process_data_table_row(
-    ObTabletHandle &data_tablet,
+int ObLSTabletService::process_new_row(
+    ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
     const ObIArray<int64_t> &update_idx,
+    const bool rowkey_change,
     const ObDatumRow &old_datum_row,
-    ObDatumRow &new_datum_row,
-    const bool rowkey_change)
+    ObDatumRow &new_datum_row)
 {
   int ret = OB_SUCCESS;
   ObStoreCtx &ctx = run_ctx.store_ctx_;
@@ -5295,7 +5606,7 @@ int ObLSTabletService::process_data_table_row(
             (old_row.storage_datums_[i]).set_nop();
           }
         }
-        if (OB_FAIL(update_row_wrap(data_tablet, run_ctx.dml_param_.data_row_for_lob_, relative_table,
+        if (OB_FAIL(update_row_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, relative_table,
             ctx, col_descs, update_idx, old_row, new_datum_row, run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to update to row", K(ret), K(old_row), K(new_datum_row));
@@ -5307,14 +5618,14 @@ int ObLSTabletService::process_data_table_row(
         relative_table.is_unique_index() ||
         ctx.mvcc_acc_ctx_.write_flag_.is_immediate_row_check() ||
         ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
-      if (OB_FAIL(insert_row_without_rowkey_check_wrap(data_tablet,
-                                                       run_ctx.dml_param_.data_row_for_lob_,
-                                                       relative_table,
-                                                       ctx,
-                                                       check_exist,
-                                                       col_descs,
-                                                       new_datum_row,
-                                                       run_ctx.dml_param_.encrypt_meta_))) {
+      if (OB_FAIL(insert_row_wrap(tablet_handle,
+                                  run_ctx.dml_param_.data_row_for_lob_,
+                                  relative_table,
+                                  ctx,
+                                  check_exist,
+                                  col_descs,
+                                  new_datum_row,
+                                  run_ctx.dml_param_.encrypt_meta_))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
           char buffer[OB_TMP_BUF_SIZE_256];
           ObDatumRowkey rowkey;
@@ -5507,44 +5818,47 @@ int ObLSTabletService::check_row_locked_by_myself(
   return ret;
 }
 
-int ObLSTabletService::get_conflict_rows(
+int ObLSTabletService::get_conflict_row(
     ObTabletHandle &tablet_handle,
     ObRelativeTable &data_table,
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
-    const ObInsertFlag flag,
     const common::ObIArray<uint64_t> &out_col_ids,
     const ObColDescIArray &col_descs,
-    blocksstable::ObDatumRow &row,
-    blocksstable::ObDatumRowIterator *&duplicated_rows)
+    const ObDatumRowkey &datum_rowkey,
+    blocksstable::ObDatumRowIterator *&dup_row_iter)
 {
-  TRANS_LOG(DEBUG, "get conflict rows", K(flag), K(row), K(lbt()));
   int ret = OB_SUCCESS;
   ObArenaAllocator scan_allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_TABLE_SCAN_ITER));
   ObTablet *data_tablet = tablet_handle.get_obj();
-  ObSingleRowGetter storage_row_getter(scan_allocator, *data_tablet);
   ObDatumRow *out_row = nullptr;
 
   if (OB_ISNULL(data_tablet)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(get_storage_row(row, out_col_ids, col_descs, storage_row_getter, data_table, store_ctx, dml_param, out_row))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("get next row from single row getter failed", K(ret));
-    } else {
-      ret = OB_SUCCESS;
+  } else {
+    ObSingleRowGetter row_getter(scan_allocator, *data_tablet);
+    if (OB_FAIL(init_single_row_getter(row_getter, store_ctx, dml_param, out_col_ids, data_table, true/*skip_read_lob*/))) {
+      LOG_WARN("failed to init single row getter", K(ret), K(out_col_ids));
+    } else if (OB_FAIL(row_getter.open(datum_rowkey, false/*use_fuse_row_cache*/))) {
+      LOG_WARN("failed to oenp storage row", K(ret), K(datum_rowkey));
+    } else if (OB_FAIL(row_getter.get_next_row(out_row))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get single storage row", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(add_duplicate_row(out_row, data_tablet->get_rowkey_read_info().get_datum_utils(), dup_row_iter))) {
+      LOG_WARN("failed to single get row", K(ret), K(datum_rowkey), K(out_row));
     }
-  } else if (OB_FAIL(add_duplicate_row(out_row, data_tablet->get_rowkey_read_info().get_datum_utils(), duplicated_rows))) {
-    LOG_WARN("failed to single get row", K(ret), K(row), K(out_row));
   }
 
   if (OB_FAIL(ret)) {
-    if (nullptr != duplicated_rows) {
-      ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
-      duplicated_rows = nullptr;
+    if (nullptr != dup_row_iter) {
+      ObQueryIteratorFactory::free_insert_dup_iter(dup_row_iter);
+      dup_row_iter = nullptr;
     }
   }
-
   return ret;
 }
 
@@ -5582,7 +5896,7 @@ int ObLSTabletService::add_duplicate_row(
       LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
     } else {
       duplicated_rows = dup_iter;
-      if (OB_FAIL(dup_iter->init(true))) {
+      if (OB_FAIL(dup_iter->init(false))) {
         LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
       }
     }
@@ -5599,101 +5913,27 @@ int ObLSTabletService::add_duplicate_row(
   return ret;
 }
 
-/* this func is an encapsulation of ObNewRowIterator->get_next_row.
- * 1. need_copy_cells is true, perform a cells copy, but not a deep copy.
- *    memory for store_row.row_val.cells_ has already allocated before
- *    this func is invoked, no need to alloc memory in this func.
- * 2. need_copy_cells is false, just perform an assignment, no any copy behavior,
- */
-int ObLSTabletService::get_next_row_from_iter(
-    blocksstable::ObDatumRowIterator *row_iter,
-    ObDatumRow &datum_row,
-    const bool need_copy_cells)
+int ObLSTabletService::process_old_rows_lob_col(
+    ObTabletHandle &data_tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    const int64_t row_count,
+    blocksstable::ObDatumRow *old_rows)
 {
   int ret = OB_SUCCESS;
-  ObDatumRow *row = nullptr;
-
-  if (OB_ISNULL(row_iter)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(row_iter));
-  } else if (OB_FAIL(row_iter->get_next_row(row))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to iterate a row", K(ret), K(row));
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    if (OB_FAIL(process_old_row_lob_col(data_tablet_handle, run_ctx, old_rows[i]))) {
+      LOG_WARN("fail to process_old_row_lob_col", K(ret), K(i));
     }
-  } else {
-    if (need_copy_cells) {
-      // in this situation, datum_row has already hold mem for storage_datums_,
-      // no need to alloc mem here, we copy storage_datums_ only.
-      datum_row.count_ = row->count_;
-      for (int64_t i = 0; i < row->count_; ++i) {
-        datum_row.storage_datums_[i] = row->storage_datums_[i];
-      }
-    } else if (OB_FAIL(datum_row.shallow_copy(*row))) {
-      LOG_WARN("fail to shallow copy from iterator", K(ret), KPC(row), K(datum_row));
-    }
-    datum_row.row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
   }
-
   return ret;
 }
 
-int ObLSTabletService::insert_row_to_tablet(
-  const bool check_exist,
-  ObTabletHandle &tablet_handle,
-  ObDMLRunningCtx &run_ctx,
-  blocksstable::ObDatumRow &datum_row)
-{
-  int ret = OB_SUCCESS;
-  ObStoreCtx &store_ctx = run_ctx.store_ctx_;
-  ObRelativeTable &relative_table = run_ctx.relative_table_;
-
-  if (OB_UNLIKELY(!store_ctx.is_valid()
-      || !relative_table.is_valid()
-      || nullptr == run_ctx.col_descs_
-      || run_ctx.col_descs_->count() <= 0
-      || !datum_row.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(store_ctx), KP(run_ctx.col_descs_), K(datum_row), K(ret));
-  } else if (GCONF.enable_defensive_check()
-      && OB_FAIL(check_new_row_legitimacy(run_ctx, datum_row))) {
-    LOG_WARN("check new row legitimacy failed", K(ret), K(datum_row));
-  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, &datum_row, 1))) {
-    LOG_WARN("failed to process vector index rows", K(ret));
-  } else if (OB_FAIL(process_lob_before_insert(tablet_handle, run_ctx, &datum_row, 1/*row_count*/))) {
-    LOG_WARN("process_lob_before_insert fail", K(ret), K(datum_row));
-  } else {
-    const ObColDescIArray &col_descs = *run_ctx.col_descs_;
-    if (OB_FAIL(insert_row_without_rowkey_check_wrap(
-                                                tablet_handle,
-                                                run_ctx.dml_param_.data_row_for_lob_,
-                                                relative_table,
-                                                store_ctx,
-                                                check_exist /*check_exist*/,
-                                                col_descs,
-                                                datum_row,
-                                                run_ctx.dml_param_.encrypt_meta_))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to write table row", K(ret),
-            "table id", relative_table.get_table_id(),
-            K(col_descs), K(datum_row));
-      }
-    } else if (OB_FAIL(process_lob_after_insert(tablet_handle, run_ctx, &datum_row, 1/*row_count*/))) {
-      LOG_WARN("process_lob_after_insert fail", K(ret), K(datum_row));
-    }
-  }
-
-  return ret;
-}
-
-// revert start
 int ObLSTabletService::process_old_row_lob_col(
     ObTabletHandle &data_tablet_handle,
     ObDMLRunningCtx &run_ctx,
     blocksstable::ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
-
-  run_ctx.is_old_row_valid_for_lob_ = false;
   bool has_lob_col = false;
   bool need_reread = is_sys_table(run_ctx.relative_table_.get_table_id());
   int64_t col_cnt = run_ctx.col_descs_->count();
@@ -5738,7 +5978,6 @@ int ObLSTabletService::process_old_row_lob_col(
               if (has_lob_header) {
                 datum.set_has_lob_header();
               }
-              run_ctx.is_old_row_valid_for_lob_ = true;
             }
           }
         }
@@ -5759,8 +5998,7 @@ int ObLSTabletService::table_refresh_row(
     const ObDMLBaseParam &dml_param,
     const ObColDescIArray &col_descs,
     ObIAllocator &lob_allocator,
-    blocksstable::ObDatumRow &datum_row,
-    bool &is_old_row_valid_for_lob)
+    blocksstable::ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator scan_allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_LOB_ACCESS_BUFFER));
@@ -5797,52 +6035,65 @@ int ObLSTabletService::table_refresh_row(
           LOG_WARN("copy storage datum error", K(ret), K(i), K(new_row->storage_datums_[i]));
         }
       }
-      if (OB_SUCC(ret)) {
-        is_old_row_valid_for_lob = true;
-      }
     }
   }
   return ret;
 }
 
-int ObLSTabletService::delete_row_in_tablet(
+int ObLSTabletService::delete_rows_in_tablet(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    blocksstable::ObDatumRow &datum_row)
+    ObDatumRow *tmp_rows,
+    ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
   const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
   ObStoreCtx &ctx = run_ctx.store_ctx_;
   ObRelativeTable &relative_table = run_ctx.relative_table_;
-  ObSEArray<int64_t, 8> update_idx; // update_idx is a dummy param here
-  datum_row.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
+  const ObStorageDatumUtils &datum_utils = dml_param.table_param_->get_data_table().get_read_info().get_datum_utils();
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+  ObDatumRow *rows = rows_info.rows_;
+  int64_t error_row_idx = 0;
 
-  if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_, tablet_handle, run_ctx, datum_row))) {
+  if (OB_FAIL(check_old_row_legitimacy_wrap(
+      datum_utils.get_cmp_funcs(), tablet_handle, run_ctx, row_count, rows, error_row_idx))) {
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
-      dump_diag_info_for_old_row_loss(run_ctx, datum_row);
+      dump_diag_info_for_old_row_loss(run_ctx, rows[error_row_idx]);
     }
-    LOG_WARN("check old row legitimacy failed", K(ret), K(datum_row));
-  } else if (OB_FAIL(process_old_row_lob_col(tablet_handle, run_ctx, datum_row))) {
-    LOG_WARN("failed to process old row lob col", K(ret), K(datum_row));
-  } else if (OB_FAIL(delete_lob_tablet_rows(tablet_handle, run_ctx, datum_row))) {
-    LOG_WARN("failed to delete lob rows.", K(ret), K(datum_row));
+    LOG_WARN("check old row legitimacy failed", K(rows_info));
+  } else if (OB_FAIL(process_old_rows_lob_col(tablet_handle, run_ctx, row_count, rows))){
+    LOG_WARN("failed to process old rows lob col", K(ret));
   } else {
-    update_idx.reset(); // update_idx is a dummy param here
-    ObDatumRow new_datum_row;
-    datum_row.row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
-    if (OB_FAIL(new_datum_row.shallow_copy(datum_row))) {
-      LOG_WARN("failed to shallow copy datum row", K(ret), K(datum_row), K(new_datum_row));
-    } else if (FALSE_IT(new_datum_row.row_flag_.set_flag(ObDmlFlag::DF_DELETE))) {
-    } else if (OB_FAIL(update_row_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, relative_table, ctx,
-        *run_ctx.col_descs_, update_idx, datum_row, new_datum_row, dml_param.encrypt_meta_))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-        LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(datum_row), K(new_datum_row));
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+      if (OB_FAIL(delete_lob_tablet_rows(tablet_handle, run_ctx, rows[i]))) {
+        LOG_WARN("failed to delete lob rows.", K(ret), K(i), K(rows[i]));
       }
-    } else {
-      LOG_DEBUG("succeeded to del main table row", K(datum_row), K(new_datum_row));
     }
   }
 
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    if (OB_FAIL(tmp_rows[i].shallow_copy(rows[i]))) {
+      LOG_WARN("failed to shallow copy datum row", K(ret), K(i));
+    } else {
+      tmp_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObSEArray<int64_t, 8> update_idx; // update_idx is a dummy param here
+    if (OB_FAIL(update_rows_wrap(tablet_handle,
+                                 dml_param.data_row_for_lob_,
+                                 relative_table,
+                                 ctx,
+                                 *run_ctx.col_descs_,
+                                 update_idx,
+                                 tmp_rows,
+                                 dml_param.encrypt_meta_,
+                                 rows_info))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+        LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(rows_info));
+      }
+    }
+  }
   return ret;
 }
 
@@ -7447,16 +7698,19 @@ int ObLSTabletService::ObDmlSplitCtx::prepare_write_dst(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls", K(ret));
   } else if (is_lob) {
-    if (OB_FAIL(ObTabletSplitMdsHelper::calc_split_dst_lob(*store_ctx.ls_, *tablet_handle.get_obj(), *data_row_for_lob, abs_timeout_us, dst_tablet_id))) {
+    if (OB_FAIL(ObTabletSplitMdsHelper::calc_split_dst_lob(
+        *store_ctx.ls_, *tablet_handle.get_obj(), *data_row_for_lob, abs_timeout_us, dst_tablet_id))) {
       LOG_WARN("failed to calc split dst lob", K(ret));
     }
   } else {
-    if (OB_FAIL(ObTabletSplitMdsHelper::calc_split_dst(*store_ctx.ls_, *tablet_handle.get_obj(), rowkey, abs_timeout_us, dst_tablet_id))) {
+    if (OB_FAIL(ObTabletSplitMdsHelper::calc_split_dst(
+        *store_ctx.ls_, *tablet_handle.get_obj(), rowkey, abs_timeout_us, dst_tablet_id))) {
       LOG_WARN("failed to calc split dst tablet", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(prepare_write_dst(tablet_handle.get_obj()->get_tablet_meta().tablet_id_, dst_tablet_id, store_ctx, relative_table))) {
+  } else if (OB_FAIL(prepare_write_dst(
+      tablet_handle.get_obj()->get_tablet_meta().tablet_id_, dst_tablet_id, store_ctx, relative_table))) {
     LOG_WARN("failed to prepare write dst", K(ret));
   }
   return ret;
@@ -7538,12 +7792,14 @@ int ObLSTabletService::update_row_wrap(
     blocksstable::ObDatumRow &new_row,
     const ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
-  int ret = tablet_handle.get_obj()->update_row(relative_table, store_ctx, col_descs, update_idx, old_row, new_row, encrypt_meta_arr);
+  int ret = tablet_handle.get_obj()->update_row(
+      relative_table, store_ctx, col_descs, update_idx, old_row, new_row, encrypt_meta_arr);
   if (OB_TABLET_IS_SPLIT_SRC == ret) {
     ObDmlSplitCtx dml_split_ctx;
     if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, data_row_for_lob, store_ctx, relative_table, new_row))) {
       LOG_WARN("failed to prepare split dml ctx", K(ret));
-    } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->update_row(dml_split_ctx.dst_relative_table_, store_ctx, col_descs, update_idx, old_row, new_row, encrypt_meta_arr))) {
+    } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->update_row(
+        dml_split_ctx.dst_relative_table_, store_ctx, col_descs, update_idx, old_row, new_row, encrypt_meta_arr))) {
       LOG_WARN("failed to update row", K(ret));
     }
   }
@@ -7558,14 +7814,14 @@ int ObLSTabletService::batch_calc_split_dst_rows(
     const int64_t row_count,
     const int64_t abs_timeout_us,
     ObIArray<ObTabletID> &dst_tablet_ids,
-    ObIArray<ObArray<ObDatumRow *>> &dst_rows)
+    ObIArray<ObArray<int64_t>> &dst_row_ids)
 {
   int ret = OB_SUCCESS;
   ObTabletSplitMdsUserData src_split_data;
   ObSEArray<ObTabletSplitMdsUserData, 2> dst_split_datas;
   ObTabletHandle dst_tablet_handle;
   const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
-  dst_rows.reset();
+  dst_row_ids.reset();
   if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_split_data(src_split_data, abs_timeout_us - ObTimeUtility::current_time()))) {
     LOG_WARN("failed to get split data", K(ret));
   } else if (OB_FAIL(src_split_data.get_split_dst_tablet_ids(dst_tablet_ids))) {
@@ -7583,7 +7839,7 @@ int ObLSTabletService::batch_calc_split_dst_rows(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(dst_rows.prepare_allocate(dst_tablet_ids.count()))) {
+  } else if (OB_FAIL(dst_row_ids.prepare_allocate(dst_tablet_ids.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
@@ -7595,10 +7851,10 @@ int ObLSTabletService::batch_calc_split_dst_rows(
       LOG_WARN("failed to from rowkey", K(ret));
     } else if (OB_FAIL(src_split_data.calc_split_dst(rowkey_read_info, dst_split_datas, rowkey, dst_tablet_id, dst_idx))) {
       LOG_WARN("failed to calc split dst tablet", K(ret));
-    } else if (OB_UNLIKELY(dst_idx >= dst_rows.count() || dst_idx >= dst_tablet_ids.count() || dst_tablet_ids.at(dst_idx) != dst_tablet_id)) {
+    } else if (OB_UNLIKELY(dst_idx >= dst_row_ids.count() || dst_idx >= dst_tablet_ids.count() || dst_tablet_ids.at(dst_idx) != dst_tablet_id)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dst idx out of range", K(ret), K(dst_idx), K(dst_rows.count()), K(dst_tablet_id), K(dst_tablet_ids));
-    } else if (OB_FAIL(dst_rows.at(dst_idx).push_back(&rows[i]))) {
+      LOG_WARN("dst idx out of range", K(ret), K(dst_idx), K(dst_row_ids.count()), K(dst_tablet_id), K(dst_tablet_ids));
+    } else if (OB_FAIL(dst_row_ids.at(dst_idx).push_back(i))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
@@ -7607,61 +7863,180 @@ int ObLSTabletService::batch_calc_split_dst_rows(
 
 int ObLSTabletService::insert_rows_wrap(
     ObTabletHandle &tablet_handle,
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const bool check_exist,
+    const ObColDescIArray &col_descs,
+    ObRowsInfo &rows_info)
+{
+  int tmp_ret = OB_SUCCESS;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+  int ret = tablet_handle.get_obj()->insert_rows(
+      relative_table, store_ctx, check_exist, col_descs, dml_param.encrypt_meta_, rows_info);
+  if (rows_info.need_find_all_duplicate_key() && OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+    if (OB_TMP_FAIL(get_conflict_rows(tablet_handle,
+                                      relative_table,
+                                      store_ctx,
+                                      dml_param,
+                                      col_descs,
+                                      rows_info))) {
+      LOG_WARN("failed to get conflict row(s)", K(ret), K(rows_info));
+      ret = tmp_ret;
+    }
+  } else if (OB_TABLET_IS_SPLIT_SRC == ret) {
+    ret = OB_SUCCESS;
+    ObDmlSplitCtx dml_split_ctx;
+    if (nullptr != dml_param.data_row_for_lob_) {
+      if (OB_FAIL(dml_split_ctx.prepare_write_dst(
+          tablet_handle, dml_param.data_row_for_lob_, store_ctx, relative_table, *dml_param.data_row_for_lob_))) {
+        LOG_WARN("failed to prepare split dml ctx", K(ret));
+      } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_rows(
+          dml_split_ctx.dst_relative_table_, store_ctx, check_exist, col_descs,
+          dml_param.encrypt_meta_, rows_info))) {
+        LOG_WARN("failed to insert rows", K(ret));
+      }
+    } else {
+      ObSEArray<ObTabletID, 2> dst_tablet_ids;
+      ObSEArray<ObArray<int64_t>, 2> dst_row_ids;
+      const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
+      bool has_ignore_dup_error = false;
+      bool is_first_dup_tmp_rows_info = true;
+      if (OB_FAIL(batch_calc_split_dst_rows(*store_ctx.ls_, tablet_handle, relative_table,
+          rows_info.rows_, row_count, store_ctx.timeout_, dst_tablet_ids, dst_row_ids))) {
+        LOG_WARN("failed to batch calc split dst rows", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < dst_row_ids.count(); i++) {
+        if (dst_row_ids[i].empty()) {
+          // do nothing
+        } else {
+          const int64_t dst_row_count = dst_row_ids[i].count();
+          SMART_VAR(ObRowsInfo, tmp_rows_info) {
+            ObDatumRow *dst_tbl_rows = nullptr;
+            dml_split_ctx.reuse();
+            if (OB_FAIL(dml_split_ctx.prepare_write_dst(
+                tablet_handle.get_obj()->get_tablet_meta().tablet_id_, dst_tablet_ids.at(i), store_ctx, relative_table))) {
+              LOG_WARN("failed to prepare split dml ctx", K(ret));
+            } else if (OB_FAIL(ObDatumRowUtils::ob_create_rows_shallow_copy(
+                dml_split_ctx.allocator_, rows_info.rows_, dst_row_ids[i], dst_tbl_rows))) {
+              LOG_WARN("failed to create rows", K(ret));
+            } else if (OB_FAIL(tmp_rows_info.init(col_descs, dml_split_ctx.dst_relative_table_, store_ctx, rowkey_read_info))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(dml_split_ctx.dst_relative_table_));
+            } else if (OB_FAIL(tmp_rows_info.assign_rows(dst_row_count, dst_tbl_rows))) {
+              LOG_WARN("failed to assign rows", K(ret));
+            } else if (OB_FAIL(tmp_rows_info.set_need_find_all_duplicate_rows(rows_info.need_find_all_duplicate_key(),
+                                                                              rows_info.dup_row_column_ids_,
+                                                                              rows_info.dup_row_iter_))) {
+              LOG_WARN("failed to set_need_find_all_duplicate_rows", K(ret));
+            } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_rows(
+                  dml_split_ctx.dst_relative_table_, store_ctx, check_exist, col_descs,
+                  dml_param.encrypt_meta_, tmp_rows_info))) {
+              LOG_WARN("fail to insert splitted tablet", K(ret), K(i), K(dst_row_count), K(tmp_rows_info.need_find_all_duplicate_key()));
+              if (OB_ERR_PRIMARY_KEY_DUPLICATE != ret) {
+                // do nothing
+              } else if (tmp_rows_info.need_find_all_duplicate_key()) {
+                has_ignore_dup_error = true;
+                ret = OB_SUCCESS; // ignore this error to continue to find all duplicate rows
+                int tmp_ret = OB_SUCCESS;
+                if (OB_TMP_FAIL(get_conflict_rows(dml_split_ctx.dst_tablet_handle_,
+                                                  dml_split_ctx.dst_relative_table_,
+                                                  store_ctx,
+                                                  dml_param,
+                                                  col_descs,
+                                                  tmp_rows_info))) {
+                  LOG_WARN("failed to get conflict row(s)", K(ret), K(tmp_rows_info));
+                  ret = tmp_ret;
+                }
+                if (OB_SUCC(ret)) {
+                  if (OB_FAIL(rows_info.assign_duplicate_splitted_rows_info(is_first_dup_tmp_rows_info,  dst_row_ids[i], tmp_rows_info))) {
+                    LOG_WARN("fail to assign_duplicate_splitted_rows_info", K(ret), K(i), K(tmp_rows_info), K(rows_info));
+                  }
+                  if (is_first_dup_tmp_rows_info) {
+                    is_first_dup_tmp_rows_info = false;
+                  }
+                }
+              } else { // no need to get duplicate key
+                OB_ASSERT(is_first_dup_tmp_rows_info == true);
+                int tmp_ret = OB_SUCCESS;
+                if (OB_TMP_FAIL(rows_info.assign_duplicate_splitted_rows_info(is_first_dup_tmp_rows_info,  dst_row_ids[i], tmp_rows_info))) {
+                  LOG_WARN("fail to assign_duplicate_splitted_rows_info", K(ret), K(i), K(tmp_rows_info), K(rows_info));
+                  ret = tmp_ret;
+                }
+              }
+            } else {
+              // success
+            }
+          }
+        }
+      } // end of for
+      if (OB_SUCC(ret)) {
+        ret = has_ignore_dup_error ? OB_ERR_PRIMARY_KEY_DUPLICATE : OB_SUCCESS; // recover the error
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::update_rows_wrap(
+    ObTabletHandle &tablet_handle,
     const blocksstable::ObDatumRow *data_row_for_lob,
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
-    ObDatumRow *rows,
-    ObRowsInfo &rows_info,
-    const bool check_exist,
     const ObColDescIArray &col_descs,
-    const int64_t row_count,
+    const ObIArray<int64_t> &update_idx,
+    const blocksstable::ObDatumRow *old_rows,
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
-    const common::ObTimeZoneInfo *tz_info,
-    const bool need_log_user_error)
+    ObRowsInfo &rows_info)
 {
-  int ret = tablet_handle.get_obj()->insert_rows(relative_table, store_ctx, rows, rows_info, check_exist, col_descs, row_count, encrypt_meta_arr);
-  // 4. Log user error message if rowkey is duplicate.
-  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-    handle_insert_rows_duplicate(rows_info, relative_table, tz_info, need_log_user_error);
-  }
-
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+  int ret = tablet_handle.get_obj()->update_rows(relative_table, store_ctx,
+      col_descs, update_idx, old_rows, encrypt_meta_arr, rows_info);
   if (OB_TABLET_IS_SPLIT_SRC == ret) {
     ret = OB_SUCCESS;
     ObDmlSplitCtx dml_split_ctx;
     if (nullptr != data_row_for_lob) {
-      if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, data_row_for_lob, store_ctx, relative_table, *data_row_for_lob))) {
+      if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, data_row_for_lob,
+          store_ctx, relative_table, *data_row_for_lob))) {
         LOG_WARN("failed to prepare split dml ctx", K(ret));
-      } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_rows(
-              dml_split_ctx.dst_relative_table_, store_ctx, rows, rows_info, check_exist, col_descs, row_count, encrypt_meta_arr))) {
+      } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->update_rows(
+          dml_split_ctx.dst_relative_table_, store_ctx, col_descs, update_idx,
+          old_rows, encrypt_meta_arr, rows_info))) {
         LOG_WARN("failed to update row", K(ret));
       }
     } else {
       ObSEArray<ObTabletID, 2> dst_tablet_ids;
-      ObSEArray<ObArray<ObDatumRow *>, 2> dst_rows;
+      ObSEArray<ObArray<int64_t>, 2> dst_row_ids;
       const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
-      if (OB_FAIL(batch_calc_split_dst_rows(*store_ctx.ls_, tablet_handle, relative_table, rows, row_count, store_ctx.timeout_, dst_tablet_ids, dst_rows))) {
+      if (OB_FAIL(batch_calc_split_dst_rows(*store_ctx.ls_, tablet_handle, relative_table,
+          rows_info.rows_, row_count, store_ctx.timeout_, dst_tablet_ids, dst_row_ids))) {
         LOG_WARN("failed to batch calc split dst rows", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < dst_rows.count(); i++) {
-        if (!dst_rows[i].empty()) {
-          SMART_VAR(ObRowsInfo, rows_info) {
-            ObDatumRow *dst_tbl_rows = nullptr;
-            const int64_t dst_row_count = dst_rows[i].count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < dst_row_ids.count(); i++) {
+        if (!dst_row_ids[i].empty()) {
+          SMART_VAR(ObRowsInfo, tmp_rows_info) {
+            ObDatumRow *dst_old_rows = nullptr;
+            ObDatumRow *dst_new_rows = nullptr;
+            const int64_t dst_row_count = dst_row_ids[i].count();
             dml_split_ctx.reuse();
-            if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle.get_obj()->get_tablet_meta().tablet_id_, dst_tablet_ids.at(i), store_ctx, relative_table))) {
+            if (OB_FAIL(dml_split_ctx.prepare_write_dst(
+                tablet_handle.get_obj()->get_tablet_meta().tablet_id_,
+                dst_tablet_ids.at(i), store_ctx, relative_table))) {
               LOG_WARN("failed to prepare split dml ctx", K(ret));
-            } else if (OB_FAIL(ObDatumRowUtils::ob_create_rows_shallow_copy(dml_split_ctx.allocator_, dst_rows[i], dst_tbl_rows))) {
-              LOG_WARN("failed to create rows", K(ret));
-            } else if (OB_FAIL(rows_info.init(col_descs, dml_split_ctx.dst_relative_table_, store_ctx, rowkey_read_info))) {
+            } else if (OB_FAIL(ObDatumRowUtils::ob_create_rows_shallow_copy(
+                  dml_split_ctx.allocator_, old_rows, dst_row_ids[i], dst_old_rows))) {
+              LOG_WARN("failed to create old rows", K(ret));
+            } else if (OB_FAIL(ObDatumRowUtils::ob_create_rows_shallow_copy(
+                  dml_split_ctx.allocator_, rows_info.rows_, dst_row_ids[i], dst_new_rows))) {
+              LOG_WARN("failed to create new rows", K(ret));
+            } else if (OB_FAIL(tmp_rows_info.init(
+                col_descs, dml_split_ctx.dst_relative_table_, store_ctx, rowkey_read_info))) {
               LOG_WARN("Failed to init rows info", K(ret), K(dml_split_ctx.dst_relative_table_));
-            } else if (OB_FAIL(rows_info.check_duplicate(dst_tbl_rows, dst_row_count, dml_split_ctx.dst_relative_table_))) {
-              LOG_WARN("failed to check duplicate", K(ret));
-            } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_rows(
-                  dml_split_ctx.dst_relative_table_, store_ctx, dst_tbl_rows, rows_info, check_exist, col_descs, dst_row_count, encrypt_meta_arr))) {
-              LOG_WARN("failed to insert tablet rows", K(ret), K(check_exist));
-              if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-                handle_insert_rows_duplicate(rows_info, dml_split_ctx.dst_relative_table_, tz_info, need_log_user_error);
-              }
+            } else if (OB_FAIL(tmp_rows_info.assign_rows(dst_row_count, dst_new_rows))) {
+              LOG_WARN("failed to assign rows", K(ret));
+            } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->update_rows(
+                dml_split_ctx.dst_relative_table_, store_ctx, col_descs, update_idx,
+                dst_old_rows, encrypt_meta_arr, tmp_rows_info))) {
+              LOG_WARN("failed to update tablet rows", K(ret));
             }
           }
         }
@@ -7670,8 +8045,7 @@ int ObLSTabletService::insert_rows_wrap(
   }
   return ret;
 }
-
-int ObLSTabletService::insert_row_without_rowkey_check_wrap(
+int ObLSTabletService::insert_row_wrap(
     ObTabletHandle &tablet_handle,
     const blocksstable::ObDatumRow *data_row_for_lob,
     ObRelativeTable &relative_table,
@@ -7681,13 +8055,14 @@ int ObLSTabletService::insert_row_without_rowkey_check_wrap(
     ObDatumRow &row,
     const ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
-  int ret = tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table, store_ctx, check_exists, col_descs, row, encrypt_meta_arr);
+  int ret = tablet_handle.get_obj()->insert_row(
+      relative_table, store_ctx, check_exists, col_descs, row, encrypt_meta_arr);
   if (OB_TABLET_IS_SPLIT_SRC == ret) {
     ObDmlSplitCtx dml_split_ctx;
     if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, data_row_for_lob, store_ctx, relative_table, row))) {
       LOG_WARN("failed to prepare split dml ctx", K(ret));
-    } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_row_without_rowkey_check(
-            dml_split_ctx.dst_relative_table_, store_ctx, check_exists, col_descs, row, encrypt_meta_arr))) {
+    } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_row(
+        dml_split_ctx.dst_relative_table_, store_ctx, check_exists, col_descs, row, encrypt_meta_arr))) {
       LOG_WARN("failed to do insert to in dst tablet", K(ret));
     }
   }
@@ -7713,26 +8088,41 @@ int ObLSTabletService::check_row_locked_by_myself_wrap(
   }
   return ret;
 }
-
-int ObLSTabletService::get_conflict_rows_wrap(
+int ObLSTabletService::get_conflict_rows(
     ObTabletHandle &tablet_handle,
-    const blocksstable::ObDatumRow *data_row_for_lob,
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
-    const ObInsertFlag flag,
-    const ObIArray<uint64_t> &out_col_ids,
     const ObColDescIArray &col_descs,
-    ObDatumRow &row,
-    ObDatumRowIterator *&duplicated_rows)
+    const ObRowsInfo &rows_info)
 {
-  int ret = get_conflict_rows(tablet_handle, relative_table, store_ctx, dml_param, flag, out_col_ids, col_descs, row, duplicated_rows);
-  if (OB_TABLET_IS_SPLIT_SRC == ret) {
-    ObDmlSplitCtx dml_split_ctx;
-    if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, data_row_for_lob, store_ctx, relative_table, row))) {
-      LOG_WARN("failed to prepare split dml ctx", K(ret));
-    } else if (OB_FAIL(get_conflict_rows(dml_split_ctx.dst_tablet_handle_, dml_split_ctx.dst_relative_table_, store_ctx, dml_param, flag, out_col_ids, col_descs, row, duplicated_rows))) {
-      LOG_WARN("failed to get conflict rows", K(ret));
+  int ret = OB_SUCCESS;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+
+  if (OB_UNLIKELY(!rows_info.has_set_error() || !rows_info.have_conflict())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no confict rows in rows_info", K(ret), K(rows_info));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    const ObDatumRowkey &datum_rowkey = rows_info.get_rowkey(i);
+    if (!rows_info.is_row_duplicate(i)) {
+      LOG_DEBUG("not conflict row", K(row_count), K(i), K(datum_rowkey));
+    } else if (OB_FAIL(get_conflict_row(tablet_handle, relative_table,
+        store_ctx, dml_param, *rows_info.dup_row_column_ids_, col_descs,
+        datum_rowkey, *rows_info.dup_row_iter_))) {
+      if (OB_TABLET_IS_SPLIT_SRC == ret) {
+        ObDmlSplitCtx dml_split_ctx;
+        if (OB_FAIL(dml_split_ctx.prepare_write_dst(
+            tablet_handle, dml_param.data_row_for_lob_, store_ctx, relative_table, datum_rowkey))) {
+          LOG_WARN("failed to prepare split dml ctx", K(ret));
+        } else if (OB_FAIL(get_conflict_row(dml_split_ctx.dst_tablet_handle_,
+            dml_split_ctx.dst_relative_table_, store_ctx, dml_param,
+            *rows_info.dup_row_column_ids_, col_descs, datum_rowkey, *rows_info.dup_row_iter_))) {
+          LOG_WARN("failed to get conflict rows", K(ret));
+        }
+      } else {
+        LOG_WARN("fail to get conflict row", K(ret), K(datum_rowkey));
+      }
     }
   }
   return ret;
@@ -7743,12 +8133,18 @@ int ObLSTabletService::table_refresh_row_wrap(
     ObDMLRunningCtx &run_ctx,
     blocksstable::ObDatumRow &row)
 {
-  int ret = table_refresh_row(tablet_handle, run_ctx.relative_table_, run_ctx.store_ctx_, run_ctx.dml_param_, *run_ctx.col_descs_, run_ctx.dml_param_.lob_allocator_, row, run_ctx.is_old_row_valid_for_lob_);
+  int ret = table_refresh_row(tablet_handle, run_ctx.relative_table_,
+      run_ctx.store_ctx_, run_ctx.dml_param_, *run_ctx.col_descs_,
+      run_ctx.dml_param_.lob_allocator_, row);
   if (OB_TABLET_IS_SPLIT_SRC == ret) {
     ObDmlSplitCtx dml_split_ctx;
-    if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, run_ctx.store_ctx_, run_ctx.relative_table_, row))) {
+    if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle,
+        run_ctx.dml_param_.data_row_for_lob_,
+        run_ctx.store_ctx_, run_ctx.relative_table_, row))) {
       LOG_WARN("failed to prepare split dml ctx", K(ret));
-    } else if (OB_FAIL(table_refresh_row(dml_split_ctx.dst_tablet_handle_, dml_split_ctx.dst_relative_table_, run_ctx.store_ctx_, run_ctx.dml_param_, *run_ctx.col_descs_, run_ctx.dml_param_.lob_allocator_, row, run_ctx.is_old_row_valid_for_lob_))) {
+    } else if (OB_FAIL(table_refresh_row(dml_split_ctx.dst_tablet_handle_,
+        dml_split_ctx.dst_relative_table_, run_ctx.store_ctx_, run_ctx.dml_param_,
+        *run_ctx.col_descs_, run_ctx.dml_param_.lob_allocator_, row))) {
       LOG_WARN("failed to table refresh row", K(ret));
     }
   }
@@ -7759,15 +8155,29 @@ int ObLSTabletService::check_old_row_legitimacy_wrap(
     const ObStoreCmpFuncs &cmp_funcs,
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
-    const blocksstable::ObDatumRow &old_row)
+    const int64_t row_count,
+    const blocksstable::ObDatumRow *old_rows,
+    int64_t &error_row_idx)
 {
-  int ret = check_old_row_legitimacy(cmp_funcs, tablet_handle, run_ctx.relative_table_, run_ctx.store_ctx_, run_ctx.dml_param_, run_ctx.column_ids_, run_ctx.col_descs_, run_ctx.is_need_check_old_row_, run_ctx.is_udf_, run_ctx.dml_flag_, old_row);
-  if (OB_TABLET_IS_SPLIT_SRC == ret) {
-    ObDmlSplitCtx dml_split_ctx;
-    if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, run_ctx.store_ctx_, run_ctx.relative_table_, old_row))) {
-      LOG_WARN("failed to prepare split dml ctx", K(ret));
-    } else if (OB_FAIL(check_old_row_legitimacy(cmp_funcs, dml_split_ctx.dst_tablet_handle_, dml_split_ctx.dst_relative_table_, run_ctx.store_ctx_, run_ctx.dml_param_, run_ctx.column_ids_, run_ctx.col_descs_, run_ctx.is_need_check_old_row_, run_ctx.is_udf_, run_ctx.dml_flag_, old_row))) {
-      LOG_WARN("failed to check old row legitimacy", K(ret));
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    ret = check_old_row_legitimacy(cmp_funcs, tablet_handle, run_ctx.relative_table_,
+        run_ctx.store_ctx_, run_ctx.dml_param_, run_ctx.column_ids_, run_ctx.col_descs_,
+        run_ctx.is_need_check_old_row_, run_ctx.is_udf_, run_ctx.dml_flag_, old_rows[i]);
+
+    if (OB_TABLET_IS_SPLIT_SRC == ret) {
+      ObDmlSplitCtx dml_split_ctx;
+      if (OB_FAIL(dml_split_ctx.prepare_write_dst(tablet_handle, run_ctx.dml_param_.data_row_for_lob_,
+          run_ctx.store_ctx_, run_ctx.relative_table_, old_rows[i]))) {
+        LOG_WARN("failed to prepare split dml ctx", K(ret));
+      } else if (OB_FAIL(check_old_row_legitimacy(cmp_funcs, dml_split_ctx.dst_tablet_handle_,
+          dml_split_ctx.dst_relative_table_, run_ctx.store_ctx_, run_ctx.dml_param_, run_ctx.column_ids_,
+          run_ctx.col_descs_, run_ctx.is_need_check_old_row_, run_ctx.is_udf_, run_ctx.dml_flag_, old_rows[i]))) {
+        LOG_WARN("failed to check old row legitimacy", K(ret));
+        error_row_idx = i;
+      }
+    } else {
+      error_row_idx = i;
     }
   }
   return ret;
@@ -7830,20 +8240,22 @@ int ObLSTabletService::process_lob_after_update(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
     const ObIArray<int64_t> &update_idx,
-    blocksstable::ObDatumRow &old_datum_row,
-    blocksstable::ObDatumRow &new_datum_row,
-    const bool data_tbl_rowkey_change)
+    const bool rowkey_change,
+    const int64_t row_count,
+    blocksstable::ObDatumRow *old_datum_rows,
+    blocksstable::ObDatumRow *new_datum_rows)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < run_ctx.lob_dml_ctx_.task_count(); ++i) {
     ObLobDataInsertTask &task = run_ctx.lob_dml_ctx_.task(i);
-    const ObColDesc &column = run_ctx.col_descs_->at(task.col_idx_);
-    if (task.col_idx_ >= run_ctx.col_descs_->count() || task.row_idx_ != 0) {
+    blocksstable::ObDatumRow &old_datum_row = old_datum_rows[task.row_idx_];
+    blocksstable::ObDatumRow &new_datum_row = new_datum_rows[task.row_idx_];
+    if (task.col_idx_ >= run_ctx.col_descs_->count() || task.row_idx_ >= row_count) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col idx or row idx is invalid", K(ret), K(task), KPC(run_ctx.col_descs_));
     } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_after_update(
-        run_ctx, old_datum_row, new_datum_row, data_tbl_rowkey_change, task))) {
-      LOG_WARN("process_lob_column_after_update fail", K(ret), K(column), K(i), K(task));
+        run_ctx, old_datum_row, new_datum_row, rowkey_change, task))) {
+      LOG_WARN("process_lob_column_after_update fail", K(ret), K(i), K(task));
     }
   }
   if (OB_SUCC(ret)) {
@@ -7851,6 +8263,7 @@ int ObLSTabletService::process_lob_after_update(
   }
   return ret;
 }
+
 
 } // namespace storage
 } // namespace oceanbase

@@ -37,55 +37,154 @@ bool ObIMvccCtx::is_prepared() const
   return (prepare_version >= SCN::min_scn() && SCN::max_scn() != prepare_version);
 }
 
-int ObIMvccCtx::register_row_commit_cb(
-    const ObMemtableKey *key,
-    ObMvccRow *value,
-    ObMvccTransNode *node,
-    const int64_t data_size,
-    const ObRowData *old_row,
-    ObMemtable *memtable,
-    const transaction::ObTxSEQ seq_no,
-    const int64_t column_cnt,
-    const bool is_non_unique_local_index)
+int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
+                                       ObTxNodeArg &arg,
+                                       ObMvccWriteResult &res,
+                                       ObMemtable *memtable)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = false;
-  ObMvccRowCallback *cb = NULL;
+  const bool is_non_unique_local_index = param.is_non_unique_local_index_;
 
-  if (OB_ISNULL(key)
-      || OB_ISNULL(value)
-      || OB_ISNULL(node)
-      || data_size <= 0
-      || OB_ISNULL(memtable)
-      || column_cnt <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size), K(memtable), K(column_cnt));
-  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc row callback failed", K(ret));
+  if (!res.has_insert()) {
   } else {
-    //统计当前trans_node占用的内存大小
-    // not used now, is hotspot in pdml, so comment out
-    // add_trans_mem_total_size(data_size);
-    cb->set(key,
-            node,
-            data_size,
-            old_row,
-            is_replay,
-            seq_no,
-            column_cnt,
-            is_non_unique_local_index);
-    cb->set_is_link();
+    ObMvccRowCallback *cb = NULL;
+    ObMvccRow *value = res.value_;
+    ObMvccTransNode *node = res.tx_node_;
 
-    if (OB_FAIL(append_callback(cb))) {
-      TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
-    }
+    // store_key's lifecycle needs to be the same as the lifecycle of the callback
+    const ObMemtableKey *stored_key = &res.mtk_;
+    const int64_t data_size = node->get_data_size();
+    const ObRowData &old_row = arg.old_row_;
+    const transaction::ObTxSEQ seq_no = arg.seq_no_;
+    const int64_t column_cnt = arg.column_cnt_;
 
-    if (OB_FAIL(ret)) {
-      free_mvcc_row_callback(cb);
-      TRANS_LOG(WARN, "append callback failed", K(ret));
+    if (OB_ISNULL(stored_key)
+        || OB_ISNULL(value)
+        || OB_ISNULL(node)
+        || data_size <= 0
+        || OB_ISNULL(memtable)
+        || column_cnt <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(stored_key), K(value), K(node),
+                K(data_size), K(memtable), K(column_cnt));
+    } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "alloc row callback failed", K(ret));
+    } else {
+      // not used now, is hotspot in pdml, so comment out
+      // add_trans_mem_total_size(data_size);
+
+      cb->set(stored_key,
+              node,
+              data_size,
+              old_row,
+              is_replay,
+              seq_no,
+              column_cnt,
+              is_non_unique_local_index);
+      cb->set_is_link();
+
+      if (OB_FAIL(append_callback(cb))) {
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+        free_mvcc_row_callback(cb);
+        TRANS_LOG(WARN, "append callback failed", K(ret));
+      }
     }
   }
+  return ret;
+}
+
+int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
+                                       ObTxNodeArgs &tx_node_args,
+                                       ObMvccWriteResults &mvcc_results,
+                                       ObMemtable *memtable)
+{
+  int ret = OB_SUCCESS;
+  const bool is_replay = false;
+  const bool is_non_unique_local_index = param.is_non_unique_local_index_;
+  ObMvccRowCallback *head = NULL;
+  ObMvccRowCallback *tail = NULL;
+  int64_t length = 0;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < mvcc_results.count(); ++i) {
+    ObTxNodeArg &tx_node_arg = tx_node_args[i];
+    ObMvccWriteResult &res = mvcc_results[i];
+
+    if (res.has_insert()) {
+      ObMvccRowCallback *cb = NULL;
+      ObMvccRow *value = res.value_;
+      ObMvccTransNode *node = res.tx_node_;
+
+      // it needs to be the same as the lifecycle of the callback
+      const ObMemtableKey *stored_key = &res.mtk_;
+      const int64_t data_size = node->get_data_size();
+      const ObRowData &old_row = tx_node_arg.old_row_;
+      const transaction::ObTxSEQ seq_no = tx_node_arg.seq_no_;
+      const int64_t column_cnt = tx_node_arg.column_cnt_;
+
+      if (OB_ISNULL(stored_key)
+          || OB_ISNULL(value)
+          || OB_ISNULL(node)
+          || data_size <= 0
+          || OB_ISNULL(memtable)
+          || column_cnt <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+        TRANS_LOG(WARN, "invalid argument", K(tx_node_arg), K(res), K(ret));
+      } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        TRANS_LOG(WARN, "alloc row callback failed", K(ret));
+      } else {
+        // not used now, is hotspot in pdml, so comment out
+        // add_trans_mem_total_size(data_size);
+
+        cb->set(stored_key,
+                node,
+                data_size,
+                old_row,
+                is_replay,
+                seq_no,
+                column_cnt,
+                is_non_unique_local_index);
+        cb->set_is_link();
+
+        if (nullptr == head) {
+          head = cb;
+          tail = cb;
+        } else {
+          cb->set_prev(tail);
+          tail->set_next(cb);
+          tail = cb;
+        }
+        length++;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(append_callback(head, tail, length))) {
+      TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+    } else {
+      TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
+                KPC(head), KPC(tail), K(length), K(mvcc_results));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    ObITransCallback *remove_cb = head;
+    while (nullptr != remove_cb) {
+      ObITransCallback *next = remove_cb->get_next();
+      free_mvcc_row_callback(remove_cb);
+      remove_cb = next;
+      TRANS_LOG(WARN, "free failed mvcc row callback succeed", K(ret), KPC(remove_cb));
+    }
+    head = nullptr;
+    tail = nullptr;
+  }
+
   return ret;
 }
 
@@ -110,10 +209,11 @@ int ObIMvccCtx::register_row_replay_cb(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
   } else {
+    ObRowData empty_old_row;
     cb->set(key,
             node,
             data_size,
-            NULL,
+            empty_old_row,
             is_replay,
             seq_no,
             column_cnt,
