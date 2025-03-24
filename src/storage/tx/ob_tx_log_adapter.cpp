@@ -130,9 +130,14 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   const bool is_big_log = (size > palf::MAX_NORMAL_LOG_BODY_SIZE);
   const bool allow_compression = true;
 
+  if (base_scn.convert_to_ts() > cur_ts + 86400000000L) {
+    // only print error log
+    if (REACH_TIME_INTERVAL(1000000)) {
+      TRANS_LOG(ERROR, "base scn is too large", K(base_scn));
+    }
+  }
   if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_scn.is_valid()
-      || retry_timeout_us < 0 || size > palf::MAX_LOG_BODY_SIZE ||
-      base_scn.convert_to_ts() > cur_ts + 86400000000L) {
+      || retry_timeout_us < 0 || size > palf::MAX_LOG_BODY_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size), K(base_scn), KP(cb));
   } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
