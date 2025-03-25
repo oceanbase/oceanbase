@@ -120,6 +120,16 @@ eval select part_name, high_bound_val from oceanbase.__all_virtual_proxy_partiti
 eval select part_name, sub_part_position from oceanbase.__all_virtual_proxy_sub_partition where tenant_name = 'mysql' and table_id = $table_id;
 --enable_query_log
 
+# added validation for the new column spare1 (changed to schema_version)
+# verify that the schema_version is the same across four proxy-related tables.
+let $schema_version = query_get_value(select schema_version from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_name ='proxy_list_hash' order by schema_version desc limit 1, schema_version, 1);
+--disable_query_log
+eval select count(*) as compare_result from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id and spare1 != $schema_version;
+eval select count(*) as compare_result from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id and spare1 != $schema_version;
+eval select count(*) as compare_result from oceanbase.__all_virtual_proxy_sub_partition where tenant_name = 'mysql' and table_id = $table_id and spare1 != $schema_version;
+eval select count(*) as compare_result from oceanbase.__all_virtual_proxy_schema where (tenant_name, database_name, table_name) = ('mysql', 'TEST', 'proxy_list_hash') and schema_version != $schema_version;
+--enable_query_log
+
 connection default;
 --disable_warnings
 drop table if exists proxy_list_hash;

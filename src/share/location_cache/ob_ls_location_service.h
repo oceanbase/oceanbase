@@ -193,6 +193,15 @@ public:
   int schedule_dump_cache_timer_task();
   // Dump all ls locations in cache.
   int dump_cache();
+  /*
+    Check if the ls_id cache needs renewal:
+    renew if cache time < expire_renew_time or ls_id info is missing.
+  */
+  int check_ls_needing_renew(
+      const uint64_t tenant_id,
+      const ObLSID &ls_id,
+      const int64_t expire_renew_time,
+      bool &need_renew);
   static bool is_valid_key(
       const int64_t cluster_id,
       const uint64_t tenant_id,

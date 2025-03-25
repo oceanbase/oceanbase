@@ -45,7 +45,7 @@ class ObAllVirtualProxySubPartition : public ObAllVirtualProxyBaseIterator
     SUB_PART_POSITION,
     TABLET_ID,
 
-    SPARE1,
+    SPARE1, // replace this with a table-level schema_version
     SPARE2,
     SPARE3,
     SPARE4,

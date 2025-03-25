@@ -76,15 +76,26 @@ public:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id);
   // Batch renew the mapping between the tablet and LS synchronously
+  //
+  // The default value of expire_renew_time is INT64_MAX, which indicates a full refresh.
+  // If expire_renew_time is set to a different value, on-demand refresh will be triggered.
+  //
+  // Two scenarios that prompt an on-demand synchronous refresh are:
+  // 1. The location_cache does not contain the necessary entry.
+  // 2. The refresh time in location_cache is less than expire_renew_time.
+  //
   // @param [in] tenant_id: target tenant which the tablet belongs to
   // @param [in] tablet_ids: target tablet_id list
+  // @param [in] expire_renew_time: INT64_MAX for full tablet_list refresh; otherwise, on-demand.
+  //                                Default is INT64_MAX.
   // @param [out] ls_ids: array of ls_ids that tablet belongs to
   // @return OB_SUCCESS: process successfully
   //         other: inner_sql execution error
   int batch_renew_tablet_ls_cache(
       const uint64_t tenant_id,
       const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
-      common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
+      common::ObIArray<ObTabletLSCache> &tablet_ls_caches,
+      const int64_t expire_renew_time = INT64_MAX);
   // Add update task into async_queue_.
   int add_update_task(const ObTabletLSUpdateTask &task);
   // Process update tasks.
@@ -121,7 +132,21 @@ private:
   bool is_valid_key_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
   int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
   bool belong_to_sys_ls_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
+  /*
+    Fetch tablet_ls_caches with tablet_id renew time greater than expire_renew_time.
+    If none is found or the renew time is outdated (less than expire_renew_time),
+    return an invalid tablet_ls_cache
 
+    @param [in] tenant_id               target tenant which the tablet belongs to
+    @param [in] tablet_id               target tablet_id
+    @param [in] expire_renew_time       retrieve cache newer than the expiration time.
+    @param [out] tablet_ls_cache        return the tablet cache or an invalid one if none match.
+  */
+  int nonblock_get_by_expire_renew_time_(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    const int64_t expire_renew_time,
+    ObTabletLSCache &tablet_ls_cache);
 private:
   class IsDroppedTenantCacheFunctor; // use to clear expired cache of dropped tenant
 

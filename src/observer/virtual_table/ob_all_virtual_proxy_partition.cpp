@@ -172,6 +172,7 @@ int ObAllVirtualProxyPartition::fill_row_(const ObPartition &partition)
   const int64_t table_id = partition.get_table_id();
   const uint64_t tenant_id = partition.get_tenant_id();
   bool is_oracle_mode = false;
+  const ObTableSchema *table_schema = NULL;
   if (OB_ISNULL(cells)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cur row cell is NULL", KR(ret));
@@ -180,6 +181,14 @@ int ObAllVirtualProxyPartition::fill_row_(const ObPartition &partition)
       table_id,
       is_oracle_mode))) {
     LOG_WARN("fail to get oracle mode", KR(ret), K(partition));
+  } else if (OB_FAIL(tenant_schema_guard_.get_table_schema(
+      tenant_id,
+      table_id,
+      table_schema))) {
+    LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the table_schema is null", KR(ret), K(tenant_id), K(table_id));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     uint64_t col_id = output_column_ids_.at(i);
@@ -284,8 +293,9 @@ int ObAllVirtualProxyPartition::fill_row_(const ObPartition &partition)
         }
         break;
       }
+    // replace the meaning of the 'spare1' column with that of table-level 'schema_version'
     case SPARE1: {
-        cells[i].set_int(0);
+        cells[i].set_int(table_schema->get_schema_version());
         break;
       }
     case SPARE2: {

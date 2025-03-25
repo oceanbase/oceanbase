@@ -400,7 +400,8 @@ int ObLocationService::batch_renew_tablet_locations(
     const uint64_t tenant_id,
     const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
     const int error_code,
-    const bool is_nonblock)
+    const bool is_nonblock,
+    const int64_t expire_renew_time /* = INT64_MAX */)
 {
   ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RENEW_TABLET_LOCATION);
   int ret = OB_SUCCESS;
@@ -427,8 +428,9 @@ int ObLocationService::batch_renew_tablet_locations(
       } else if (OB_FAIL(tablet_ls_service_.batch_renew_tablet_ls_cache( // block
           tenant_id,
           tablet_list,
-          tablet_ls_caches))) {
-        LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list));
+          tablet_ls_caches,
+          expire_renew_time))) {
+        LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(expire_renew_time));
       }
     }
     // 2. renew ls location
@@ -441,19 +443,35 @@ int ObLocationService::batch_renew_tablet_locations(
       } else if (!tablet_ls_caches.empty()) { // block renew both
         ls_ids.reset();
         ARRAY_FOREACH(tablet_ls_caches, idx) {
+          bool need_renew = true;
           const ObTabletLSCache &tablet_ls = tablet_ls_caches.at(idx);
           if (!common::has_exist_in_array(ls_ids, tablet_ls.get_ls_id())) {
-            if (OB_FAIL(ls_ids.push_back(tablet_ls.get_ls_id()))) {
-              LOG_WARN("push back failed", KR(ret), K(tablet_ls));
+            if (INT64_MAX != expire_renew_time) {
+              if (OB_FAIL(ls_location_service_.check_ls_needing_renew(
+                  tenant_id,
+                  tablet_ls.get_ls_id(),
+                  expire_renew_time,
+                  need_renew))) {
+                LOG_WARN("failed to check_ls_needing_renew", KR(ret), K(tenant_id),
+                    "ls_id", tablet_ls.get_ls_id(), K(expire_renew_time));
+              }
+            }
+
+            if (OB_SUCC(ret) && need_renew) {
+              if (OB_FAIL(ls_ids.push_back(tablet_ls.get_ls_id()))) {
+                LOG_WARN("push back failed", KR(ret), K(tablet_ls));
+              }
             }
           }
-        }
-        if (FAILEDx(ls_location_service_.batch_renew_ls_locations(
-            GCONF.cluster_id,
-            tenant_id,
-            ls_ids,
-            ls_locations))) {
-          LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(ls_ids));
+        } // end ARRAY_FOREACH
+        if (OB_SUCC(ret) && !ls_ids.empty()){
+          if (OB_FAIL(ls_location_service_.batch_renew_ls_locations(
+              GCONF.cluster_id,
+              tenant_id,
+              ls_ids,
+              ls_locations))) {
+            LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(ls_ids));
+          }
         }
       } else { // block only renew ls location or block renew both with empty tablet_ls_caches
         if (OB_FAIL(ls_location_service_.renew_location_for_tenant(
@@ -465,8 +483,8 @@ int ObLocationService::batch_renew_tablet_locations(
       }
     }
     FLOG_INFO("[TABLET_LOCATION] batch renew tablet locations finished",
-        KR(ret), K(tenant_id), K(renew_type), K(is_nonblock), K(tablet_list), K(ls_ids),
-        K(error_code));
+        KR(ret), K(tenant_id), K(renew_type), K(is_nonblock), K(tablet_list), K(tablet_ls_caches),
+        "need_refresh_ls_ids", ls_ids, K(error_code), K(expire_renew_time));
   }
   return ret;
 }

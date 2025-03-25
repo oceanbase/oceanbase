@@ -462,8 +462,9 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
         cells[i].set_int(static_cast<int64_t>(accuracy.get_scale()));
         break;
       }
-    case SPARE1: {// int, unused
-        cells[i].set_int(0);
+    // replace the meaning of the 'spare1' column with that of 'schema_version'
+    case SPARE1: {
+        cells[i].set_int(table_schema.get_schema_version());
         break;
       }
     case SPARE2: {// int, unused

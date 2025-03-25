@@ -107,6 +107,11 @@ connection default;
 eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'sys' and table_id = $table_id_sys_tbl1_h;
 eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_h;
 
+# added validation for the new column spare1 (changed to schema_version)
+let $tenant_id = `select effective_tenant_id()`;
+let $schema_version = query_get_value(select schema_version from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_name = 'tbl1_h' order by schema_version desc limit 1, schema_version, 1);
+eval select count(*) as compare_result from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_h and spare1 != $schema_version;
+
 drop table tbl1_r;
 drop table tbl1_log_rc;
 drop table tbl1_l;

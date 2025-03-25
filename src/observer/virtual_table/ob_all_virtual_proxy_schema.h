@@ -68,7 +68,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator
     REPLICA_TYPE,
     DUP_REPICA_TYPE,
     MEMSTORE_PERCENT,
-    SPARE1,//int, unused
+    SPARE1,// replace this with a svr_port(rpc_port)
     SPARE2,//int, unused
     SPARE3,//int, unused
     SPARE4,//varchar, unused
@@ -122,7 +122,9 @@ public:
       common::ObIAllocator *allocator);
 
 private:
-  int init_data();
+  int init_data_(
+      const ObIArray<ObTabletID> &input_tablet_ids,
+      const ObIArray<ObString> &input_table_names);
   // get base table's schema from view
   int get_view_decoded_schema_(
       const uint64_t tenant_id,
@@ -161,9 +163,7 @@ private:
       const common::ObString &table_name,
       const share::schema::ObTableSchema *table_schema,
       const common::ObTabletID &tablet_id);
-  int get_table_tablet_location_(
-      const int64_t table_idx,
-      const common::ObTabletID &tablet_id);
+  int get_table_tablet_location_(const int64_t table_idx);
   // add fake location to location_ for virtual table
   int add_virtual_tablet_location_();
   int fetch_tablet_location_(
@@ -177,7 +177,19 @@ private:
   int convert_output_row(ObNewRow *&cur_row);
   int gen_column_value(char *&buf, int64_t len,
                        const ObString &str, const bool is_oracle_mode);
-
+  int convert_to_actual_tablet_id_(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObTabletID &tablet_id);
+  bool is_virtual_or_temporary_table_(
+      const share::schema::ObTableSchema &table_schema) const;
+  bool need_tenant_server_to_fill_row_(
+      const ObTabletID &tablet_id,
+      const share::schema::ObTableSchema &table_schema) const;
+  int batch_refresh_required_locations_(
+      const uint64_t tenant_id_,
+      const ObIArray<ObTabletID> &input_tablet_ids,
+      const ObIArray<ObString> &input_table_names);
+  bool is_mapping_valid_() const;
 private:
   bool is_inited_;
   common::ObArenaAllocator inner_alloc_;
@@ -191,7 +203,7 @@ private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   common::ObString input_tenant_name_;
   common::ObString input_db_name_;
-  common::ObSEArray<common::ObString, 1> input_table_names_;
+  common::ObSEArray<common::ObString, 1> table_names_;
   // use for decoding synonym and view schema
   common::ObString level1_decoded_db_name_;
   common::ObString level1_decoded_table_name_;
@@ -208,6 +220,7 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   share::ObLocationService *location_service_;
   common::ObMySQLProxy *sql_proxy_;
+  common::ObSEArray<common::ObTabletID, 1> actual_tablet_ids_;
 
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualProxySchema);
 };

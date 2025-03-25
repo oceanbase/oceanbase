@@ -1227,6 +1227,37 @@ int ObLSLocationService::dump_cache()
   return ret;
 }
 
+int ObLSLocationService::check_ls_needing_renew(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const int64_t expire_renew_time,
+    bool &need_renew)
+{
+  int ret = OB_SUCCESS;
+  need_renew = true;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || !is_valid_key(GCONF.cluster_id, tenant_id, ls_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the input parameters are invalid", KR(ret), K(tenant_id), K(ls_id), K(expire_renew_time));
+  } else {
+    ObLSLocation ls_loc;
+    ret = get_from_cache_(GCONF.cluster_id, tenant_id, ls_id, ls_loc);
+    if (OB_SUCCESS != ret && OB_CACHE_NOT_HIT != ret) {
+      LOG_WARN("failed to get_from_cache_", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_CACHE_NOT_HIT == ret
+        || ls_loc.get_renew_time() <= expire_renew_time) {
+      // ignore ret
+      ret = OB_SUCCESS;
+      need_renew = true;
+    } else {
+      need_renew = false;
+    }
+  }
+  return ret;
+}
+
 int ObLSLocationService::batch_renew_ls_locations(
     const int64_t cluster_id,
     const uint64_t tenant_id,
