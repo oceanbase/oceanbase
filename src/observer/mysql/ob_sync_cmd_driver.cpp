@@ -148,8 +148,6 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     if (!result.is_pl_stmt(result.get_stmt_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Not SELECT, should not have any row!!!", K(ret));
-    } else if (is_mysql_mode() && session_.client_non_standard()) {
-      // do nothing
     } else if (OB_FAIL(response_query_result(result))) {
       LOG_WARN("response query result fail", K(ret));
       free_output_row(result);
