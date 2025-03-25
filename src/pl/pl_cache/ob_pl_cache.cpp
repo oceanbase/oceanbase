@@ -627,7 +627,7 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
       if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
         // in same db, no need check for objects with the same name if synonym name is same as linked object name
         if (pc_ctx.session_info_->get_database_id() == synonym_info->get_object_database_id() &&
-            synonym_info->get_synonym_name() == synonym_info->get_object_name()) {
+            synonym_info->get_synonym_name_str() == synonym_info->get_object_name_str()) {
           new_version = synonym_info->get_schema_version();
         } else if (!pcv_schema.is_explicit_db_name_) { // not top synonym, only collect schema version
           new_version = synonym_info->get_schema_version();
@@ -636,7 +636,7 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
           bool is_private_syn = false;
           OZ (schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
                                                                         session_info->get_database_id(),
-                                                                        synonym_info->get_synonym_name(),
+                                                                        synonym_info->get_synonym_name_str(),
                                                                         exist,
                                                                         is_private_syn));
           if (OB_FAIL(ret)) {
