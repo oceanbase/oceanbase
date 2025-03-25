@@ -32,7 +32,7 @@ enum ObVecAuxTableIdx { //FARM COMPAT WHITELIST
   SECOND_VEC_AUX_TBL_IDX = 2,
   THIRD_VEC_AUX_TBL_IDX = 3,
   FOURTH_VEC_AUX_TBL_IDX = 4,
-  COM_AUX_TBL_IDX = 5,
+  FIFTH_VEC_AUX_TBL_IDX = 5,
 };
 
 enum ObVectorIndexDistAlgorithm

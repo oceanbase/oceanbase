@@ -43,8 +43,8 @@ public:
   int64_t get_delta_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
   int64_t get_index_id_tbl_idx() const { return ObVecAuxTableIdx::SECOND_VEC_AUX_TBL_IDX; }
   int64_t get_snapshot_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
-  int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::COM_AUX_TBL_IDX; }
-  int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
+  int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
+  int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
 
   // IVF
   int64_t get_ivf_centroid_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }

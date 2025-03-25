@@ -1977,11 +1977,13 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->children_[1] = first_aux_ctdef;
         vec_scan_ctdef->children_[2] = second_aux_ctdef;
         vec_scan_ctdef->children_[3] = third_aux_ctdef;
-        if (!vc_info.is_ivf_flat_scan()) {
+        if (!vc_info.is_ivf_flat_scan() && !vc_info.is_hnsw_vec_scan()) {
           vec_scan_ctdef->children_[4] = fourth_aux_ctdef;
         }
         if (vc_info.is_hnsw_vec_scan()) {
-          vec_scan_ctdef->children_[5] = com_aux_ctdef;
+          // compatible with version 435, the fourth child must be com_aux_ctdef
+          vec_scan_ctdef->children_[4] = com_aux_ctdef;
+          vec_scan_ctdef->children_[5] = fourth_aux_ctdef;
         }
         vec_scan_ctdef->dim_ = dim;
         vec_scan_ctdef->vec_type_ = op.get_vector_index_info().vec_type_;
