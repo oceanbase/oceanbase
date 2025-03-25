@@ -35,7 +35,8 @@ ObBatchUnbindTabletArg::ObBatchUnbindTabletArg()
     schema_version_(OB_INVALID_VERSION),
     orig_tablet_ids_(),
     hidden_tablet_ids_(),
-    is_old_mds_(false)
+    is_old_mds_(false),
+    is_write_defensive_(false)
 {
 }
 
@@ -51,6 +52,7 @@ int ObBatchUnbindTabletArg::assign(const ObBatchUnbindTabletArg &other)
     ls_id_ = other.ls_id_;
     schema_version_ = other.schema_version_;
     is_old_mds_ = other.is_old_mds_;
+    is_write_defensive_ = other.is_write_defensive_;
   }
   return ret;
 }
@@ -116,14 +118,14 @@ int ObBatchUnbindTabletArg::is_old_mds(const char *buf,
 OB_DEF_SERIALIZE(ObBatchUnbindTabletArg)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_);
+  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_, is_write_defensive_);
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObBatchUnbindTabletArg)
 {
   int len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_, is_write_defensive_);
   return len;
 }
 
@@ -138,6 +140,7 @@ OB_DEF_DESERIALIZE(ObBatchUnbindTabletArg)
       LST_DO_CODE(OB_UNIS_DECODE, is_old_mds_);
     }
   }
+  LST_DO_CODE(OB_UNIS_DECODE, is_write_defensive_);
   return ret;
 }
 
