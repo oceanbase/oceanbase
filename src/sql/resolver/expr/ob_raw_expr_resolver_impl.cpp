@@ -1002,6 +1002,16 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_SYS_GUID: {
+        ObSysFunRawExpr *f_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_GUID, f_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else {
+          f_expr->set_func_name(ObString::make_string(N_SYS_GUID));
+          expr = f_expr;
+        }
+        break;
+      }
       case T_COLLATION: {
         // used in internal function `set_collation' to implement COLLATE clause
         if (OB_FAIL(process_collation_node(node, expr))) {
