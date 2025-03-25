@@ -369,9 +369,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |1       |5           |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |4           |
-|2 |  └─NESTED-LOOP ANTI JOIN        |        |1       |4           |
+|0 |PX COORDINATOR                   |        |1       |7           |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |7           |
+|2 |  └─NESTED-LOOP ANTI JOIN        |        |1       |6           |
 |3 |    ├─EXCHANGE IN DISTR          |        |3       |4           |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|3       |3           |
 |5 |    │   └─PX BLOCK ITERATOR      |        |3       |2           |
@@ -491,9 +491,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |2       |6           |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |5           |
-|2 |  └─NESTED-LOOP SEMI JOIN        |        |2       |4           |
+|0 |PX COORDINATOR                   |        |2       |8           |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |7           |
+|2 |  └─NESTED-LOOP SEMI JOIN        |        |2       |6           |
 |3 |    ├─EXCHANGE IN DISTR          |        |3       |4           |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|3       |3           |
 |5 |    │   └─PX BLOCK ITERATOR      |        |3       |2           |

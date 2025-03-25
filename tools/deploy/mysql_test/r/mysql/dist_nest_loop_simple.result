@@ -24,9 +24,9 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |8           |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |7           |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |5           |
+|0 |PX COORDINATOR                     |        |1       |11          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |10          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |8           |
 |3 |    ├─PX PARTITION ITERATOR        |        |1       |5           |
 |4 |    │ └─TABLE FULL SCAN            |t1      |1       |5           |
 |5 |    └─MATERIAL                     |        |1       |6           |
@@ -65,9 +65,9 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |8           |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |7           |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |5           |
+|0 |PX COORDINATOR                     |        |1       |11          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |10          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |8           |
 |3 |    ├─PX PARTITION ITERATOR        |        |1       |5           |
 |4 |    │ └─TABLE FULL SCAN            |t1      |1       |5           |
 |5 |    └─MATERIAL                     |        |1       |6           |
@@ -144,7 +144,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |        |1       |7           |
+|0 |NESTED-LOOP JOIN             |        |1       |13          |
 |1 |├─PX COORDINATOR             |        |1       |7           |
 |2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |6           |
 |3 |│   └─PX PARTITION ITERATOR  |        |1       |5           |
@@ -220,9 +220,9 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |8           |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |7           |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |5           |
+|0 |PX COORDINATOR                     |        |1       |11          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |10          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |8           |
 |3 |    ├─PX PARTITION ITERATOR        |        |1       |5           |
 |4 |    │ └─TABLE FULL SCAN            |t1      |1       |5           |
 |5 |    └─MATERIAL                     |        |1       |6           |
@@ -289,9 +289,9 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |8           |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |7           |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |5           |
+|0 |PX COORDINATOR                     |        |1       |11          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |10          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |8           |
 |3 |    ├─PX PARTITION ITERATOR        |        |1       |5           |
 |4 |    │ └─TABLE FULL SCAN            |t1      |1       |5           |
 |5 |    └─MATERIAL                     |        |1       |6           |
@@ -676,7 +676,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |NESTED-LOOP OUTER JOIN       |        |1       |9           |
+|0 |NESTED-LOOP OUTER JOIN       |        |1       |17          |
 |1 |├─PX COORDINATOR             |        |1       |9           |
 |2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
 |3 |│   └─PX PARTITION ITERATOR  |        |1       |7           |
@@ -745,10 +745,10 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |11          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |10          |
-|2 |  └─PX PARTITION ITERATOR|        |1       |7           |
-|3 |    └─NESTED-LOOP JOIN   |        |1       |7           |
+|0 |PX COORDINATOR           |        |1       |13          |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |12          |
+|2 |  └─PX PARTITION ITERATOR|        |1       |9           |
+|3 |    └─NESTED-LOOP JOIN   |        |1       |9           |
 |4 |      ├─TABLE FULL SCAN  |t4      |1       |7           |
 |5 |      └─MATERIAL         |        |1       |7           |
 |6 |        └─TABLE FULL SCAN|t5      |1       |7           |
@@ -805,10 +805,10 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |11          |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |10          |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |7           |
-|3 |    └─NESTED-LOOP OUTER JOIN |        |1       |7           |
+|0 |PX COORDINATOR               |        |1       |13          |
+|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |12          |
+|2 |  └─PX PARTITION ITERATOR    |        |1       |9           |
+|3 |    └─NESTED-LOOP OUTER JOIN |        |1       |9           |
 |4 |      ├─TABLE FULL SCAN      |t4      |1       |7           |
 |5 |      └─MATERIAL             |        |1       |7           |
 |6 |        └─TABLE FULL SCAN    |t5      |1       |7           |
@@ -836,9 +836,9 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |11          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |10          |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |7           |
+|0 |PX COORDINATOR                     |        |1       |14          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |13          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |10          |
 |3 |    ├─PX PARTITION ITERATOR        |        |1       |7           |
 |4 |    │ └─TABLE FULL SCAN            |t4      |1       |7           |
 |5 |    └─MATERIAL                     |        |1       |7           |

@@ -1371,6 +1371,14 @@ int ObLogicalOperator::get_plan_item_info(PlanText &plan_text,
   if (get_parent()) {
     plan_item.parent_id_ = static_cast<int64_t>(get_parent()->op_id_);
   }
+  int tracepoint_code = (OB_E(EventTable::EN_COST_MODEL_TEST) OB_SUCCESS);
+  if (tracepoint_code != OB_SUCCESS) {
+    if (op_id_ == -tracepoint_code-1) {
+      plan_item.cost_ = static_cast<int64_t>(ceil(op_cost_));
+    } else {
+      plan_item.cost_ = 0;
+    }
+  }
   const ObIArray<ObRawExpr*> &output = output_exprs_;
   const ObIArray<ObRawExpr*> &startup_filter = startup_exprs_;
   if (OB_SUCC(ret)) {

@@ -1150,13 +1150,13 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT              |        |2       |455         |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10000|2       |455         |
-|2 |  └─SORT                               |        |2       |454         |
-|3 |    └─SUBPLAN FILTER                   |        |2       |454         |
+|0 |PX COORDINATOR MERGE SORT              |        |2       |634         |
+|1 |└─EXCHANGE OUT DISTR                   |:EX10000|2       |634         |
+|2 |  └─SORT                               |        |2       |633         |
+|3 |    └─SUBPLAN FILTER                   |        |2       |633         |
 |4 |      ├─PX BLOCK ITERATOR              |        |5       |6           |
 |5 |      │ └─TABLE FULL SCAN              |t1      |5       |6           |
-|6 |      ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |90          |
+|6 |      ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |162         |
 |7 |      │ ├─DISTRIBUTED TABLE FULL SCAN  |t2      |1       |90          |
 |8 |      │ └─MATERIAL                     |        |5       |72          |
 |9 |      │   └─DISTRIBUTED TABLE FULL SCAN|t3      |5       |72          |
@@ -1211,13 +1211,13 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT              |        |2       |679         |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10000|2       |679         |
-|2 |  └─SORT                               |        |2       |678         |
-|3 |    └─SUBPLAN FILTER                   |        |2       |678         |
+|0 |PX COORDINATOR MERGE SORT              |        |2       |858         |
+|1 |└─EXCHANGE OUT DISTR                   |:EX10000|2       |858         |
+|2 |  └─SORT                               |        |2       |857         |
+|3 |    └─SUBPLAN FILTER                   |        |2       |857         |
 |4 |      ├─PX BLOCK ITERATOR              |        |5       |6           |
 |5 |      │ └─TABLE FULL SCAN              |t1      |5       |6           |
-|6 |      ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |90          |
+|6 |      ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |162         |
 |7 |      │ ├─DISTRIBUTED TABLE FULL SCAN  |t2      |1       |90          |
 |8 |      │ └─MATERIAL                     |        |5       |72          |
 |9 |      │   └─DISTRIBUTED TABLE FULL SCAN|t3      |5       |72          |
@@ -1475,15 +1475,15 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                                   |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT                  |        |3       |233         |
-|1 |└─EXCHANGE OUT DISTR                       |:EX10000|3       |233         |
-|2 |  └─SORT                                   |        |3       |232         |
-|3 |    └─SUBPLAN FILTER                       |        |3       |232         |
+|0 |PX COORDINATOR MERGE SORT                  |        |3       |591         |
+|1 |└─EXCHANGE OUT DISTR                       |:EX10000|3       |591         |
+|2 |  └─SORT                                   |        |3       |591         |
+|3 |    └─SUBPLAN FILTER                       |        |3       |590         |
 |4 |      ├─PX BLOCK ITERATOR                  |        |5       |6           |
 |5 |      │ └─TABLE FULL SCAN                  |t1      |5       |6           |
-|6 |      └─MERGE GROUP BY                     |        |1       |91          |
-|7 |        └─NESTED-LOOP JOIN CARTESIAN       |        |25      |91          |
-|8 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |90          |
+|6 |      └─MERGE GROUP BY                     |        |1       |234         |
+|7 |        └─NESTED-LOOP JOIN CARTESIAN       |        |25      |234         |
+|8 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |162         |
 |9 |          │ ├─DISTRIBUTED TABLE FULL SCAN  |t2      |1       |90          |
 |10|          │ └─MATERIAL                     |        |5       |72          |
 |11|          │   └─DISTRIBUTED TABLE FULL SCAN|t3      |5       |72          |

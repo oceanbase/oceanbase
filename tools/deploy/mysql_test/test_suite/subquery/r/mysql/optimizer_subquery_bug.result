@@ -1287,8 +1287,8 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SUBPLAN FILTER                 |    |1       |452         |
-|1 |├─NESTED-LOOP OUTER JOIN       |    |5       |3           |
+|0 |SUBPLAN FILTER                 |    |1       |454         |
+|1 |├─NESTED-LOOP OUTER JOIN       |    |5       |5           |
 |2 |│ ├─TABLE FULL SCAN            |T11 |5       |3           |
 |3 |│ └─MATERIAL                   |    |1       |3           |
 |4 |│   └─TABLE FULL SCAN          |T12 |1       |3           |

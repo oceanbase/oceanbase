@@ -1493,8 +1493,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |5       |6           |
-|1 |└─NESTED-LOOP OUTER JOIN |    |5       |4           |
+|0 |SORT                     |    |5       |10          |
+|1 |└─NESTED-LOOP OUTER JOIN |    |5       |8           |
 |2 |  ├─TABLE FULL SCAN      |t7  |5       |3           |
 |3 |  └─MATERIAL             |    |13      |5           |
 |4 |    └─TABLE FULL SCAN    |t2  |13      |3           |
@@ -1658,8 +1658,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |13      |9           |
-|1 |└─NESTED-LOOP OUTER JOIN |    |13      |5           |
+|0 |SORT                     |    |13      |12          |
+|1 |└─NESTED-LOOP OUTER JOIN |    |13      |8           |
 |2 |  ├─TABLE FULL SCAN      |t2  |13      |3           |
 |3 |  └─MATERIAL             |    |5       |4           |
 |4 |    └─TABLE FULL SCAN    |t7  |5       |3           |

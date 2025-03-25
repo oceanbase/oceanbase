@@ -9620,6 +9620,8 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
     int64_t right_part_cnt = 1;
     double left_ex_cost = 0.0;
     double right_ex_cost = 0.0;
+    int64_t max_parallel = std::max(left_out_parallel, right_out_parallel);
+    max_parallel = std::max(max_parallel, in_parallel);
     if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel/server_cnt_);
       right_cost = right_cost * right_out_parallel / server_cnt_;
@@ -9666,7 +9668,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
                                    need_mat_,
                                    is_right_need_exchange() ||
                                    right_path_->exchange_allocated_,
-                                   in_parallel,
+                                   max_parallel,
                                    equal_join_conditions_,
                                    other_join_conditions_,
                                    filter_,
@@ -9701,10 +9703,12 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
     } else {
       cost = op_cost + left_cost + ObOptEstCost::cost_get_rows(left_rows, opt_ctx)
           + left_ex_cost + right_ex_cost;
-      if (need_mat_ && !re_est_for_op) {
-        cost += ObOptEstCost::cost_get_rows(right_rows, opt_ctx) + right_path_->get_cost();
-        cost += ObOptEstCost::cost_material(right_rows, right_join_order->get_output_row_size(),
+      if (need_mat_) {
+        if (!re_est_for_op) {
+          cost += ObOptEstCost::cost_material(right_rows, right_join_order->get_output_row_size(),
                                             opt_ctx);
+        }
+        cost += ObOptEstCost::cost_get_rows(right_rows, opt_ctx) + right_cost;
       }
       LOG_TRACE("succeed to compute nested loop join cost", K(cost), K(op_cost), K(re_est_for_op),
           K(in_parallel), K(left_out_parallel), K(right_out_parallel),
