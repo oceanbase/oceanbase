@@ -360,6 +360,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ALTER_LS, get_sys_tenant_alter_system_priv, 370)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_GRANT_PROXY, no_priv_needed, 368)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REVOKE_PROXY, no_priv_needed, 369)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_LOAD_LICENSE, get_sys_tenant_super_priv, 378)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif

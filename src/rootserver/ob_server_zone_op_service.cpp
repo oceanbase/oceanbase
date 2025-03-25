@@ -22,6 +22,7 @@
 #include "rootserver/ob_root_service.h" // callback
 #include "share/ob_all_server_tracer.h"
 #include "rootserver/ob_server_manager.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -95,6 +96,8 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
+  } else if (OB_FAIL(ObLicenseUtils::check_add_server_allowed(servers.count()))) {
+    LOG_WARN("fail to check add server allowed", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant's min data version", KR(ret));
   } else if (OB_ISNULL(rpc_proxy_)) {

@@ -297,6 +297,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 528	__all_ncomp_dll_v2	0	201001	1
 529	__all_object_balance_weight	0	201001	1
 530	__wr_sql_plan_aux_key2snapshot	0	201001	1
+543	__all_license	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -1238,6 +1239,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21628	proc	1	201003	1
 21629	DBA_OB_OBJECT_BALANCE_WEIGHT	1	201001	1
 21630	CDB_OB_OBJECT_BALANCE_WEIGHT	1	201001	1
+21639	DBA_OB_LICENSE	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

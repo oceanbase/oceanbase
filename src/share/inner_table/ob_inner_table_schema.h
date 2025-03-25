@@ -629,6 +629,7 @@ public:
   static int all_ncomp_dll_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_object_balance_weight_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sql_plan_aux_key2snapshot_schema(share::schema::ObTableSchema &table_schema);
+  static int all_license_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1859,6 +1860,7 @@ public:
   static int proc_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_object_balance_weight_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_object_balance_weight_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_license_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -2640,6 +2642,7 @@ public:
   static int all_ncomp_dll_v2_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_object_balance_weight_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sql_plan_aux_key2snapshot_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_license_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2937,6 +2940,7 @@ public:
   static int all_ncomp_dll_v2_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_object_balance_weight_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sql_plan_aux_key2snapshot_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_license_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3461,6 +3465,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_ncomp_dll_v2_schema,
   ObInnerTableSchema::all_object_balance_weight_schema,
   ObInnerTableSchema::wr_sql_plan_aux_key2snapshot_schema,
+  ObInnerTableSchema::all_license_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4800,6 +4805,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::proc_schema,
   ObInnerTableSchema::dba_ob_object_balance_weight_schema,
   ObInnerTableSchema::cdb_ob_object_balance_weight_schema,
+  ObInnerTableSchema::dba_ob_license_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -13432,6 +13438,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     ObInnerTableSchema::wr_sql_plan_aux_key2snapshot_aux_lob_piece_schema
   },
 
+  {
+    OB_ALL_LICENSE_TID,
+    OB_ALL_LICENSE_AUX_LOB_META_TID,
+    OB_ALL_LICENSE_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_license_aux_lob_meta_schema,
+    ObInnerTableSchema::all_license_aux_lob_piece_schema
+  },
+
 };
 
 static inline bool get_sys_table_lob_aux_table_id(const uint64_t tid, uint64_t& meta_tid, uint64_t& piece_tid)
@@ -13469,12 +13483,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 294;
+const int64_t OB_SYS_TABLE_COUNT = 295;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 846;
-const int64_t OB_SYS_VIEW_COUNT = 968;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2113;
+const int64_t OB_SYS_VIEW_COUNT = 969;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2115;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2116;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2118;
 
 } // end namespace share
 } // end namespace oceanbase

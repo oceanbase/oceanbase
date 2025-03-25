@@ -70,6 +70,10 @@ ob_unittest(test_geo_func_union)
 ob_unittest(test_geo_func_box)
 ob_unittest(test_throttling_utils)
 
+if (OB_BUILD_STANDALONE)
+  ob_unittest(test_license_mgr)
+endif()
+
 ob_unittest(test_json_base)
 ob_unittest(test_json_bin)
 ob_unittest(test_json_path)

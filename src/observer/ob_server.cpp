@@ -130,6 +130,7 @@
 #endif
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "storage/backup/ob_backup_meta_cache.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -1207,6 +1208,11 @@ int ObServer::start()
             "replay_log_cost_us", ObTimeUtility::current_time() - schema_refreshed_ts);
       }
     }
+
+    if (OB_SUCC(ret)) {
+      (void) ObLicenseUtils::clear_license_table_if_need();
+    }
+
   }
 
   if (OB_FAIL(ret)) {

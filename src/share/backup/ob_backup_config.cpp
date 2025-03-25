@@ -19,6 +19,7 @@
 #include "ob_backup_connectivity.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -122,12 +123,15 @@ int BackupConfigItemPair::set_value(const int64_t &value)
 int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uint64_t tenant_id, const common::ObSqlString &value)
 {
   int ret = OB_SUCCESS;
+
   if (is_setted_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("config parser generator has been setted", K(ret));
   } else if (!type.is_valid() || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(type), K(tenant_id));
+  } else if (type.get_type() == ObBackupConfigType::LOG_RESTORE_SOURCE && OB_FAIL(ObLicenseUtils::check_standby_allowed())) {
+    LOG_WARN("fail to check standby allowed, set log restore source is not allowed", KR(ret));
   } else if (nullptr != config_parser_) {
     config_parser_->~ObIBackupConfigItemParser();
     allocator_.free(config_parser_);

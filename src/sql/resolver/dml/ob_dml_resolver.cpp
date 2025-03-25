@@ -31,6 +31,7 @@
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/resolver/dml/ob_multi_mode_dml_resolver.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -2719,6 +2720,14 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         LOG_WARN("failed to check table item generate column with udf", K(ret), KPC(table_item));
       }
     }
+  }
+
+  if (OB_SUCC(ret)
+      && OB_NOT_NULL(session_info_)
+      && session_info_->is_user_session()
+      && MTL_ID() != OB_SYS_TENANT_ID
+      && OB_FAIL(ObLicenseUtils::check_dml_allowed())) {
+    LOG_WARN("failed to check dml license allowed", K(ret), K(MTL_ID()));
   }
 
   return ret;
@@ -13323,6 +13332,14 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
   } else if (OB_FAIL(resolve_basic_table_without_cte(parse_tree, table_item))) {
     LOG_WARN("fail to resolve basic table without cte", K(ret));
   }
+
+  if (OB_SUCC(ret)
+      && OB_NOT_NULL(session_info_)
+      && session_info_->is_user_session() && MTL_ID() != OB_SYS_TENANT_ID
+      && OB_FAIL(ObLicenseUtils::check_dml_allowed())) {
+    LOG_WARN("failed to check dml license allowed", K(ret), K(MTL_ID()));
+  }
+
   return ret;
 }
 

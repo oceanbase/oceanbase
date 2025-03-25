@@ -473,6 +473,9 @@ DEFINE_ORACLE_ERROR(OB_ERR_KILL_CLIENT_SESSION, -4401, 4401, "HY000", "Client Se
 DEFINE_ERROR(OB_ERR_KILL_CLIENT_SESSION_FAILED, -4402, -1, "HY000", "Kill Client Session failed");
 DEFINE_ERROR(OB_IMPROPER_OS_PARAM, -4403, -1, "HY000", "OS params check failed, because the operating system has improper parameter configurations");
 DEFINE_ERROR(OB_IO_TIMEOUT, -4404, 4012, "HY000", "IO timeout");
+DEFINE_ERROR_EXT_DEP(OB_INVALID_LICENSE, -4405, -1, "HY000", "license is invalid", "license is invalid because: %s");
+DEFINE_ERROR(OB_LICENSE_EXPIRED, -4406, -1, "HY000", "license is expired");
+DEFINE_ERROR_EXT_DEP(OB_LICENSE_SCOPE_EXCEEDED, -4407, -1, "HY000", "exceed the license scope", "exceed the license scope: %s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

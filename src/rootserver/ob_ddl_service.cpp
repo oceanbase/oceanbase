@@ -119,6 +119,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -24102,6 +24103,7 @@ int ObDDLService::create_tenant(
     UInt64 &tenant_id)
 {
   int ret = OB_SUCCESS;
+  int64_t user_tenant_count = 0;
   share::ObTenantRole tenant_role = share::PRIMARY_TENANT_ROLE;
   SCN recovery_until_scn = SCN::max_scn();
   uint64_t user_tenant_id = OB_INVALID_TENANT_ID;
@@ -24116,7 +24118,11 @@ int ObDDLService::create_tenant(
               (ObTenantSchema, meta_tenant_schema),
               (ObSysVariableSchema, user_sys_variable),
               (ObSysVariableSchema, meta_sys_variable)) {
-    if (OB_FAIL(check_inner_stat())) {
+    if (OB_FAIL(schema_guard.get_user_tenant_count(user_tenant_count))) {
+      LOG_WARN("fail to get tenant ids", KR(ret));
+    } else if (OB_FAIL(ObLicenseUtils::check_for_create_tenant(user_tenant_count, arg.is_creating_standby_))) {
+      LOG_WARN("fail to check create tenant allowed", KR(ret), K(user_tenant_count));
+    } else if (OB_FAIL(check_inner_stat())) {
       LOG_WARN("fail to check inner stat", KR(ret));
     } else if (arg.is_restore_) {
       tenant_role = share::RESTORE_TENANT_ROLE;
@@ -24237,6 +24243,7 @@ int ObDDLService::create_tenant_schema(
   LOG_INFO("[CREATE_TENANT] STEP 1. start create tenant schema", K(arg));
   int ret = OB_SUCCESS;
   const uint64_t user_tenant_id = user_tenant_schema.get_tenant_id();
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(schema_service_)

@@ -1464,6 +1464,37 @@ int ObReportReplicaResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObLoadLicenseResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(T_LOAD_LICENSE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_LOAD_LICENSE", "type", get_type_name(parse_tree.type_), KR(ret));
+  } else {
+    ObLoadLicenseStmt *stmt = create_stmt<ObLoadLicenseStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObReportReplicaStmt failed", KR(ret));
+    } else {
+      stmt_ = stmt;
+      if (OB_ISNULL(parse_tree.children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null", KR(ret));
+      } else if (OB_UNLIKELY(parse_tree.children_[0]->str_len_ == 0)) {
+        ret = OB_FILE_NOT_EXIST;
+        LOG_WARN("license path is empty", K(ret));
+      } else if (OB_ISNULL(parse_tree.children_[0]->str_value_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children string value should not be null", KR(ret));
+      } else {
+        stmt->get_path().assign_ptr(parse_tree.children_[0]->str_value_, parse_tree.children_[0]->str_len_);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRecycleReplicaResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;

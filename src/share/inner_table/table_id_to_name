@@ -352,6 +352,7 @@
 # 528: __all_ncomp_dll_v2
 # 529: __all_object_balance_weight
 # 530: __wr_sql_plan_aux_key2snapshot
+# 543: __all_license
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -2248,6 +2249,7 @@
 # 21628: proc
 # 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
 # 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
+# 21639: DBA_OB_LICENSE
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

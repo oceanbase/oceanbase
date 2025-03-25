@@ -7364,6 +7364,31 @@ def_table_schema(
   ],
 )
 
+def_table_schema(
+  owner = 'gengli.wzy',
+  table_id = '543',
+  table_name = '__all_license',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+    ('LICENSE_ID',	'varchar:128'),
+  ],
+  normal_columns = [
+    ('END_USER',	'varchar:512'),
+    ('LICENSE_CODE',	'varchar:128'),
+    ('LICENSE_TYPE',	'varchar:128'),
+    ('PRODUCT_TYPE',	'varchar:128'),
+    ('ISSUANCE_DATE',	'timestamp:6'),
+    ('ACTIVATION_TIME',	'timestamp:6'),
+    ('EXPIRED_TIME',	'timestamp:6'),
+    ('OPTIONS',	'varchar:1024'),
+    ('CORE_NUM',	'bigint unsigned'),
+    ('NODE_NUM',	'bigint unsigned'),
+    ('LTS_TIME', 'timestamp:6'),
+    ('CLUSTER_ULID', 'varchar:30'),
+  ],
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -37235,6 +37260,31 @@ def_table_schema(
       ON A.TENANT_ID = D.TENANT_ID AND B.TABLEGROUP_ID = D.TABLEGROUP_ID
   ORDER BY A.TENANT_ID, A.TABLE_ID, A.PARTITION_ID, A.SUBPARTITION_ID
   """.replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'gengli.wzy',
+    table_name     = 'DBA_OB_LICENSE',
+    table_id       = '21639',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    view_definition = """
+     SELECT END_USER,
+            LICENSE_ID,
+            LICENSE_CODE,
+            LICENSE_TYPE,
+            PRODUCT_TYPE,
+            DATE_FORMAT(ISSUANCE_DATE, '%Y-%m-%d %H:%i:%s') as ISSUANCE_DATE,
+            DATE_FORMAT(ACTIVATION_TIME, '%Y-%m-%d %H:%i:%s') as ACTIVATION_TIME,
+            DATE_FORMAT(EXPIRED_TIME, '%Y-%m-%d %H:%i:%s') as EXPIRED_TIME,
+            OPTIONS,
+            CORE_NUM,
+            NODE_NUM,
+            CLUSTER_ULID FROM OCEANBASE.__ALL_LICENSE
+""".replace("\n", " "),
+    normal_columns = [
+    ],
 )
 
 # 余留位置（此行之前占位）

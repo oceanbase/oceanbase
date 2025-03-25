@@ -56,6 +56,13 @@ install(PROGRAMS
   COMPONENT server)
 endif()
 
+if (OB_BUILD_STANDALONE)
+  install(PROGRAMS
+  deps/3rd/home/admin/oceanbase/bin/obshell
+  DESTINATION bin
+  COMPONENT server)
+endif()
+
 install(FILES
   src/sql/fill_help_tables-ob.sql
   src/share/parameter/default_parameter.json
@@ -359,7 +366,7 @@ if (NOT OB_BUILD_OPENSOURCE)
   endif()
 endif()
 
-## oceanbase-libs
+  ## oceanbase-libs
 list(APPEND CPACK_COMPONENTS_ALL libs)
 install(PROGRAMS
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
@@ -369,17 +376,15 @@ install(PROGRAMS
   COMPONENT libs
 )
 
-if(OB_BUILD_OPENSOURCE)
-  if(OB_BUILD_OBADMIN)
-    ## oceanbase-utils
-    list(APPEND CPACK_COMPONENTS_ALL utils)
-    install(PROGRAMS
-      ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-      ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-      ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
-      ${DEVTOOLS_DIR}/bin/obstack
-      DESTINATION /usr/bin
-      COMPONENT utils
-    )
-  endif()
+if(OB_BUILD_OPENSOURCE AND OB_BUILD_OBADMIN)
+  ## oceanbase-utils
+  list(APPEND CPACK_COMPONENTS_ALL utils)
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+    ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+    ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+    ${DEVTOOLS_DIR}/bin/obstack
+    DESTINATION /usr/bin
+    COMPONENT utils
+  )
 endif()
