@@ -143,7 +143,8 @@ private:
   bool is_enable_fill_cache_user_() const {
     return (LogIOUser::RESTART == user_ ||
             LogIOUser::FETCHLOG == user_ ||
-            LogIOUser::META_INFO == user_) ? false : true;
+            LogIOUser::META_INFO == user_ ||
+            LogIOUser::REPLAY == user_) ? false : true;
   }
 private:
   int64_t palf_id_;
