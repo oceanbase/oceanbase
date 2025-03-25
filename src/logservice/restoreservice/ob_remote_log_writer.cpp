@@ -129,6 +129,7 @@ void ObRemoteLogWriter::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        ObBKGDSessInActiveGuard inactive_guard;
         task_cond_.timedwait(wait_interval);
       }
     }
