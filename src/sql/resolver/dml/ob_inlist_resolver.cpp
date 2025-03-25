@@ -483,6 +483,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                  enable_decimal_int,
                                                  compat_type,
                                                  enable_mysql_compatible_dates,
+                                                 session_info->get_min_const_integer_precision(),
                                                  is_from_pl))) {
         LOG_WARN("failed to resolve const", K(ret));
       } else if (OB_FAIL(table_def.access_objs_.push_back(obj_param))) {

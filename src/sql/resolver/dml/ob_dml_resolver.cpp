@@ -6395,6 +6395,7 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
   ObCharsetType character_set_connection = CHARSET_INVALID;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolve status is invalid", K_(params_.expr_factory), K_(params_.session_info));
@@ -6412,6 +6413,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
     LOG_WARN("failed to get compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
+                                                                     enable_mysql_compatible_dates))) {
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&parse_tree,
                                              // stmt_type is only used in oracle mode
                                              lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -6425,6 +6428,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
                                              session_info->get_sql_mode(),
                                              enable_decimal_int,
                                              compat_type,
+                                             enable_mysql_compatible_dates,
+                                             session_info->get_min_const_integer_precision(),
                                              nullptr != params_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value

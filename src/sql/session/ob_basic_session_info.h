@@ -2533,6 +2533,7 @@ private:
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
 public:
   bool get_enable_hyperscan_regexp_engine() const;
+  int8_t get_min_const_integer_precision() const;
 };
 
 

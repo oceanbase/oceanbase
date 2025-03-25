@@ -3082,6 +3082,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              enable_decimal_int, // FIXME: enable decimal int
                                              compat_type,
                                              enable_mysql_compatible_dates,
+                                             session_info->get_min_const_integer_precision(),
                                              nullptr != ctx_.secondary_namespace_,
                                              ctx_.formalize_const_int_prec_))) {
     LOG_WARN("failed to resolve const", K(ret));

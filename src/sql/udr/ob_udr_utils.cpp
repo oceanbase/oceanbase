@@ -236,7 +236,8 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
                                                         NULL, session->get_sql_mode(),
                                                         enable_decimal_int,
                                                         compat_type,
-                                                        enable_mysql_compatible_dates))) {
+                                                        enable_mysql_compatible_dates,
+                                                        session->get_min_const_integer_precision()))) {
         LOG_WARN("fail to resolve const", K(ret));
       } else if (OB_FAIL(add_param_to_param_store(value, param_store))) {
         LOG_WARN("failed to add param to param store", K(ret), K(value), K(param_store));

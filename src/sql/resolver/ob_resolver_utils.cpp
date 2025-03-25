@@ -2506,6 +2506,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    bool enable_decimal_int_type,
                                    const ObCompatType compat_type,
                                    const bool enable_mysql_compatible_dates,
+                                   int8_t min_const_integer_precision,
                                    bool is_from_pl /* false */,
                                    bool fmt_int_or_ch_decint /* false */)
 {
@@ -2808,8 +2809,6 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_uint64(static_cast<uint64_t>(node->value_));
         }
         val.set_scale(0);
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-        int16_t min_int_precision = tenant_config.is_valid() ? tenant_config->_min_const_integer_precision : 1;
         int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
         // for constant integers, reset precision to 4/8/16/20
         if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
@@ -2825,7 +2824,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             } else {
               formalized_prec = 20;
             }
-            formalized_prec = MAX(min_int_precision, formalized_prec);
+            formalized_prec = MAX(min_const_integer_precision, formalized_prec);
           } else {
             formalized_prec = 20;
           }
@@ -10250,6 +10249,7 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        enable_decimal_int,
                        compat_type,
                        enable_mysql_compatible_dates,
+                       session.get_min_const_integer_precision(),
                        false, /* is_from_pl */
                        fmt_int_or_ch_decint_idx.has_member(param_idx)))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
