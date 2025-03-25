@@ -12,6 +12,7 @@ latch_hold	varchar(256)	NO		NULL
 trace_id	varchar(40)	NO		NULL	
 loop_ts	timestamp(6)	NO		NULL	
 cgroup_path	varchar(256)	NO		NULL	
+numa_node	bigint(20)	NO		NULL	
 desc oceanbase.GV$OB_THREAD;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

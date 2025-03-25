@@ -234,6 +234,11 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               }
               break;
             }
+            case NUMA_NODE: {
+              int64_t numa_node = -1;
+              cells[i].set_int(numa_node);
+              break;
+            }
             default: {
               ret = OB_ERR_UNEXPECTED;
               SERVER_LOG(WARN, "unexpected column id", K(col_id), K(i), K(ret));

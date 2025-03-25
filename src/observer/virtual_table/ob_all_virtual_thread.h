@@ -35,7 +35,8 @@ class ObAllVirtualThread : public common::ObVirtualTableScannerIterator
     LATCH_HOLD,
     TRACE_ID,
     LOOP_TS,
-    CGROUP_PATH
+    CGROUP_PATH,
+    NUMA_NODE
   };
 
 public:

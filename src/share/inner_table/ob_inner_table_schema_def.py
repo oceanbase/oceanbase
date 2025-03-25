@@ -14334,7 +14334,8 @@ def_table_schema(
     ('latch_hold',          'varchar:256'),
     ('trace_id',            'varchar:40'),
     ('loop_ts',             'timestamp'),
-    ('cgroup_path',         'varchar:256')
+    ('cgroup_path',         'varchar:256'),
+    ('numa_node',           'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
