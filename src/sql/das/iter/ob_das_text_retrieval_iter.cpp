@@ -902,7 +902,9 @@ int ObDASTextRetrievalIter::fill_token_cnt_with_doc_len()
   } else {
     ObDatum &agg_datum = agg_expr->locate_datum_for_write(*eval_ctx);
     if (agg_expr->datum_meta_.get_type() == ObDecimalIntType) {
-      agg_datum.set_decimal_int(doc_length_datum->get_uint());
+      if(OB_FAIL(set_decimal_int_by_precision(agg_datum, doc_length_datum->get_uint(), agg_expr->datum_meta_.precision_))) {
+        LOG_WARN("fail to set decimal int", K(ret));
+      }
     } else {
       const int64_t in_val = doc_length_datum->get_uint64();
       number::ObNumber nmb;
@@ -941,7 +943,9 @@ int ObDASTextRetrievalIter::batch_fill_token_cnt_with_doc_len(const int64_t &cou
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_LIKELY(!skip_->at(i))) {
         if (agg_expr->datum_meta_.get_type() == ObDecimalIntType) {
-          agg_datum[i].set_decimal_int(datums[i].get_uint());
+          if (OB_FAIL(set_decimal_int_by_precision(agg_datum[i], datums[i].get_uint(), agg_expr->datum_meta_.precision_))) {
+            LOG_WARN("fail to set decimal int", K(ret));
+          }
         } else {
           const int64_t in_val = datums[i].get_uint64();
           number::ObNumber nmb;

@@ -137,6 +137,28 @@ protected:
   int add_rowkey_range_key(const ObNewRange &range);
   int add_agg_rang_key(const ObNewRange &range);
   int check_inv_idx_scan_and_agg_param();
+
+  // tools method
+  // In ivector2.0, need use the size which is created by precision to alloc the memeory.
+  int set_decimal_int_by_precision(ObDatum &result_datum, const uint64_t decint, const ObPrecision precision) const
+  {
+    int ret = OB_SUCCESS;
+    if (precision <= MAX_PRECISION_DECIMAL_INT_64) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected precision, precision is too short", K(ret), K(precision));
+    } else if (precision <= MAX_PRECISION_DECIMAL_INT_128) {
+      const int128_t result = decint;
+      result_datum.set_decimal_int(result);
+    } else if (precision <= MAX_PRECISION_DECIMAL_INT_256) {
+      const int256_t result = decint;
+      result_datum.set_decimal_int(result);
+    } else {
+      const int512_t result = decint;
+      result_datum.set_decimal_int(result);
+    }
+    return ret;
+  }
+
 protected:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
