@@ -2431,7 +2431,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
           }
           retry_cnt++;
           __useconds_t tmp_sleep_time = static_cast<useconds_t>(sleep_time);
-          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(tmp_sleep_time, tmp_sleep_time, schema_version, 0);
+          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(tmp_sleep_time, schema_version, local_schema_version, 0);
         }
       }
     }
