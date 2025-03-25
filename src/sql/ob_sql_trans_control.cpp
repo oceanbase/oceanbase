@@ -104,6 +104,8 @@ static inline int build_tx_param_(ObSQLSessionInfo *session, ObTxParam &p, const
   return ret;
 }
 
+// NOTE that only for mysql mode
+// in mysql xa, the session id is 0 by default
 int ObSqlTransControl::create_stash_savepoint(ObExecContext &ctx, const ObString &name)
 {
   int ret = OB_SUCCESS;
@@ -1332,7 +1334,10 @@ int ObSqlTransControl::release_stash_savepoint(ObExecContext &exec_ctx,
   // CHECK_SESSION (session);
   OZ (get_tx_service(session, txs), *session);
   OZ (acquire_tx_if_need_(txs, *session));
-  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), *session, sp_name);
+  // NOTE that stash savepoint only for mysql mode
+  // since the session id is 0 (default value) in create stash savepoint,
+  // we MUST set session id to 0 in release
+  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, 0/*session id*/), *session, sp_name);
   return ret;
 }
 
