@@ -401,6 +401,7 @@ void ObMacroBlockBloomFilterLoadTG::run1()
     }
 
     // Wait for next request.
+    ObBKGDSessInActiveGuard inactive_guard;
     ObThreadCondGuard guard(idle_cond_);
     idle_cond_.wait(10 * 1000 /* 10s */);
   }

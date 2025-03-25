@@ -590,6 +590,7 @@ void ObTimerService::run1()
       ObMonitor<Mutex>::Lock guard(monitor_);
 
       while(!is_stopped_ && 0 == priority_task_queue_.size()) {
+        ObBKGDSessInActiveGuard inactive_guard;
         monitor_.wait();
       }
       if (is_stopped_) {
@@ -613,6 +614,7 @@ void ObTimerService::run1()
             int64_t wait_time = st - now;
             wait_time = MIN(wait_time, MAX_WAIT_INTERVAL);
             wait_time = MAX(wait_time, MIN_WAIT_INTERVAL);
+            ObBKGDSessInActiveGuard inactive_guard;
             monitor_.timed_wait(ObSysTime(wait_time));
           } else {
             VecIter it = nullptr;
@@ -634,6 +636,7 @@ void ObTimerService::run1()
           }
         } else {
           check_clock();
+          ObBKGDSessInActiveGuard inactive_guard;
           monitor_.timed_wait(ObSysTime(first_token->scheduled_time_ - now));
         }
       }

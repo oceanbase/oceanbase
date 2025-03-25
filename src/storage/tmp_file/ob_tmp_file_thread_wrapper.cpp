@@ -939,6 +939,7 @@ void ObTmpFileSwapTG::run1()
     int64_t flush_idle_time = flush_tg_ref_.cal_idle_time();
     int64_t idle_time = min(swap_idle_time, flush_idle_time);
     if (!has_set_stop() && idle_time != 0) {
+      ObBKGDSessInActiveGuard inactive_guard;
       idle_cond_.wait(idle_time);
     }
   }

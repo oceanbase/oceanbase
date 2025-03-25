@@ -615,7 +615,7 @@ void ObSimpleThreadPoolDynamicMgr::run1()
       dec_pools[i]->dec_ref();
     }
     ++loop_cnt;
-    ob_usleep(CHECK_INTERVAL_US);
+    ob_usleep(CHECK_INTERVAL_US, true);
   }
 }
 

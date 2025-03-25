@@ -231,7 +231,7 @@ void ObArchiveSender::do_thread_task_()
     if (OB_FAIL(try_free_send_task_())) {
       ARCHIVE_LOG(WARN, "try free send task failed", K(ret));
     }
-    usleep(100 * 1000L);
+    ob_usleep(100 * 1000L, true /*idle sleep*/);
   }
 
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
@@ -326,6 +326,7 @@ int ObArchiveSender::get_send_task_(ObArchiveSendTask *&task, bool &exist)
 
   // if no task exist, sleep
   if (! exist) {
+    common::ObBKGDSessInActiveGuard inactive_guard;
     send_cond_.timedwait(10 * 1000L);
   }
 
