@@ -6810,6 +6810,12 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       } else {
         // do nothing
       }
+      if (OB_SUCC(ret)
+          && is_oracle_mode
+          && CS_TYPE_BINARY != data_type.get_collation_type()
+          && LS_DEFAULT == type_node.length_semantics_) {
+        data_type.set_length_semantics(nls_session_param.nls_length_semantics_);
+      }
       break;
     case ObJsonTC:
       if (is_oracle_mode && !is_for_pl_type) {
