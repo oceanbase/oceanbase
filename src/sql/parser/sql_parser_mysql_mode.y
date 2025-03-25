@@ -2750,8 +2750,7 @@ MOD '(' expr ',' expr ')'
 }
 | PERCENTILE_CONT '(' opt_distinct_or_all expr ',' expr_list ')'
 {
-  ParseNode *percentile_cont_exprs = $6;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_PERCENTILE_CONT, 4, $3, percentile_cont_exprs, $4, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_PERCENTILE_CONT, 4, $3, $4, $6, NULL);
 }
 | GROUPING '(' expr ')'
 {

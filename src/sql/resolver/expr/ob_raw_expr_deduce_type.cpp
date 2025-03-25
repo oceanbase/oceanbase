@@ -1936,7 +1936,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             }
           } else { // mysql mode
             if (T_FUN_GROUP_PERCENTILE_CONT == expr.get_expr_type()){
-              if (ObDoubleType == from_type) {
+              if (ObDoubleType == from_type || ObNullType == from_type) {
                 keep_from_type = true;
               } else if (ob_is_numeric_type(from_type)) {
                 keep_from_type = false;
