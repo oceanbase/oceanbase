@@ -943,7 +943,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   int64_t resolve_end = ObTimeUtility::current_time();
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - compile_start);
 #ifdef OB_BUILD_ORACLE_PL
-  if (package_info.is_package()) {
+  if (OB_FAIL(ret) && package_info.is_package()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObPLPackageType::update_package_type_info(package_info, package_ast, OB_FAIL(ret)))) {
       LOG_WARN("update package type info failed", K(tmp_ret), K(ret));
@@ -992,7 +992,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   session_info_.set_for_trigger_package(saved_trigger_flag);
   OZ (check_dep_schema(schema_guard_, package.get_dependency_table()));
 
-  if (OB_SUCC(ret) && !is_from_disk) {
+  if (OB_SUCC(ret) && !is_from_disk && session_info_.get_effective_tenant_id() == package_info.get_tenant_id()) {
     ObMutexGuard guard(package_dep_info_lock_);
     OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
                                       package_info.get_tenant_id(),
@@ -1000,6 +1000,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                                       package_info.get_package_id(),
                                       package_info.get_schema_version(),
                                       package_info.get_object_type()));
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_SUCC(ret) && package_info.is_package()) {
+      OZ (ObPLPackageType::update_package_type_info(package_info, package_ast, false));
+    }
+#endif
   }
 
   ObErrorInfo error_info;
