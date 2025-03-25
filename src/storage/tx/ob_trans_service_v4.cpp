@@ -2290,6 +2290,7 @@ bool ObTransService::common_retryable_error_(const int ret) {
   return (OB_NOT_MASTER == ret
           || OB_EAGAIN == ret
           || OB_NEED_RETRY == ret
+          || OB_TX_NOLOGCB == ret
           || OB_PARTITION_IS_BLOCKED == ret
           || OB_REPLICA_NOT_READABLE == ret
           || OB_LS_NOT_EXIST == ret
@@ -2577,8 +2578,7 @@ int ObTransService::gen_trans_id(ObTransID &trans_id)
 
 bool ObTransService::commit_need_retry_(const int ret)
 {
-  return OB_TX_NOLOGCB == ret
-    || OB_BLOCK_FROZEN == ret
+  return OB_BLOCK_FROZEN == ret
     || common_retryable_error_(ret);
 }
 
