@@ -169,7 +169,7 @@ create or replace package body utl_recomp AS
     for i in 1 .. compile_arr.count() loop
       begin
         compile_arr(i).compile_time := systimestamp;
-        sys.dbms_utility.VALIDATE(compile_arr(i).object_id);
+        execute immediate 'begin sys.dbms_utility.VALIDATE(?); end;' using compile_arr(i).object_id;
         exception when others then
           error_msg := sys.dbms_utility.format_error_stack();
           execute immediate 'insert into sys.utl_recomp_errors values (:1, :2, :3)'
