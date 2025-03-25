@@ -38,9 +38,17 @@ int RowHolderMapper::init() {
   return ret;
 }
 
+static bool AlwaysTrue(const RowHolderMapper::KeyWrapper &key, ObTxCallbackHashHolderList &list)
+{
+  UNUSED(key);
+  UNUSED(list);
+  return true;
+}
+
 void RowHolderMapper::clear()
 {
-  holder_map_.clear();
+  // TODO. make ObLinearHashMap::clear thread safe
+  holder_map_.remove_if(AlwaysTrue);
 }
 
 int64_t RowHolderMapper::list_count() const
