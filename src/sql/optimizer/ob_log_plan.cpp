@@ -15473,16 +15473,18 @@ int ObLogPlan::deduce_redundant_join_conds_with_equal_set(
   ObRelIds table_ids;
   ObRawExpr *new_expr = NULL;
   bool contain_const = false;
-  if (OB_ISNULL(get_optimizer_context().get_session_info())) {
+  if (OB_ISNULL(get_optimizer_context().get_session_info())
+      || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !contain_const && i < equal_set.count(); i ++) {
-    if (OB_ISNULL(equal_set.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (equal_set.at(i)->is_const_expr()) {
-      contain_const = true;
+    LOG_WARN("get unexpected null", K(ret), K(get_optimizer_context().get_session_info()), K(get_optimizer_context().get_query_ctx()));
+  } else if (get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3)) {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain_const && i < equal_set.count(); ++i) {
+      if (OB_ISNULL(equal_set.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (equal_set.at(i)->is_const_expr()) {
+        contain_const = true;
+      }
     }
   }
   if (OB_SUCC(ret) && !contain_const) {
