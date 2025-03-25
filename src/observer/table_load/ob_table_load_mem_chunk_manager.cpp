@@ -204,6 +204,7 @@ int ObTableLoadMemChunkManager::close_and_acquire_chunk(int64_t chunk_node_id, C
     } else if (OB_FAIL(mem_ctx_->mem_chunk_queue_.push(chunk))) {
       LOG_WARN("fail to push", KR(ret));
     } else {
+      chunk_node.chunk_ = nullptr;
       while (mem_ctx_->fly_mem_chunk_count_ >= mem_ctx_->max_mem_chunk_count_ && OB_LIKELY(!mem_ctx_->has_error_)) {
         usleep(50000);
       }
