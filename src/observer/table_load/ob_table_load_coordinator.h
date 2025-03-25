@@ -53,7 +53,7 @@ public:
                       const common::ObIArray<uint64_t> &column_ids,
                       const common::ObIArray<ObTabletID> &tablet_ids,
                       ObTableLoadExecCtx *exec_ctx);
-  static void abort_ctx(ObTableLoadTableCtx *ctx);
+  static void abort_ctx(ObTableLoadTableCtx *ctx, int error_code);
   int init();
   bool is_valid() const { return is_inited_; }
 private:

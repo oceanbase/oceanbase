@@ -212,7 +212,7 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
       status_ = status;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       add_to_all_server_event();
-      LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
+      FLOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
     }
   }
   return ret;
@@ -233,13 +233,13 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
       error_code_ = error_code;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       add_to_all_server_event();
-      LOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code));
+      FLOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code_), K(lbt()));
     }
   }
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::set_status_abort()
+int ObTableLoadCoordinatorCtx::set_status_abort(int error_code)
 {
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard guard(status_lock_);
@@ -247,10 +247,12 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
     LOG_INFO("LOAD DATA COORDINATOR already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    error_code_ = (error_code_ == OB_SUCCESS ? OB_CANCELED : error_code_);
+    if (OB_SUCCESS == error_code_) {
+      error_code_ = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
+    }
     table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
     add_to_all_server_event();
-    LOG_INFO("LOAD DATA COORDINATOR status abort");
+    FLOG_INFO("LOAD DATA COORDINATOR status abort", KR(error_code_), K(lbt()));
   }
   return ret;
 }

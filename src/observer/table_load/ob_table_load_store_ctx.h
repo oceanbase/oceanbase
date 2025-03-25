@@ -146,7 +146,7 @@ public:
     return advance_status(table::ObTableLoadStatusType::COMMIT);
   }
   int set_status_error(int error_code);
-  int set_status_abort();
+  int set_status_abort(int error_code);
   int check_status(table::ObTableLoadStatusType status) const;
   void heart_beat();
   bool check_heart_beat_expired(const uint64_t expired_time_us);

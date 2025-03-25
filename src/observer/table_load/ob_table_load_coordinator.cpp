@@ -89,7 +89,7 @@ int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx,
   return ret;
 }
 
-void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
+void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx, int error_code)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == ctx || !ctx->is_valid())) {
@@ -102,7 +102,7 @@ void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
     LOG_INFO("coordinator abort");
     int tmp_ret = OB_SUCCESS;
     // 1. mark status abort, speed up background task exit
-    if (OB_SUCCESS != (tmp_ret = ctx->coordinator_ctx_->set_status_abort())) {
+    if (OB_SUCCESS != (tmp_ret = ctx->coordinator_ctx_->set_status_abort(error_code))) {
       LOG_WARN("fail to set coordinator status abort", KR(tmp_ret));
     }
     // 2. mark all active trans abort
@@ -163,6 +163,7 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
     addr_array2.set_tenant_id(MTL_ID());
     arg.table_id_ = ctx->param_.table_id_;
     arg.task_id_ = ctx->ddl_param_.task_id_;
+    arg.error_code_ = ctx->coordinator_ctx_->get_error_code();
     for (int64_t i = 0; i < ctx->coordinator_ctx_->store_infos_.count(); ++i) {
       StoreInfo *store_info = &(ctx->coordinator_ctx_->store_infos_.at(i));
       if (OB_FAIL(curr_round->push_back(store_info))) {
@@ -179,7 +180,7 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
         StoreInfo *store_info = curr_round->at(i);
         const ObAddr &addr = store_info->addr_;
         if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
-          ObTableLoadStore::abort_ctx(ctx, res.is_stopped_);
+          ObTableLoadStore::abort_ctx(ctx, arg.error_code_, res.is_stopped_);
           ret = OB_SUCCESS;
         } else { // 远端, 发送rpc
           // use default timeout value, avoid timeout immediately

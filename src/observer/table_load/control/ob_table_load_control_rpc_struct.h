@@ -284,12 +284,16 @@ class ObDirectLoadControlAbortArg final
   OB_UNIS_VERSION(1);
 
 public:
-  ObDirectLoadControlAbortArg() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
-  TO_STRING_KV(K_(table_id), K_(task_id));
+  ObDirectLoadControlAbortArg()
+    : table_id_(common::OB_INVALID_ID), task_id_(0), error_code_(OB_CANCELED)
+  {
+  }
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(error_code));
 
 public:
   uint64_t table_id_;
   int64_t task_id_;
+  int error_code_;
 };
 
 class ObDirectLoadControlAbortRes final

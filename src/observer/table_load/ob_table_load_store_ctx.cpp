@@ -299,7 +299,7 @@ int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
     else {
       status_ = status;
       table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
-      LOG_INFO("LOAD DATA STORE advance status", K(status));
+      FLOG_INFO("LOAD DATA STORE advance status", K(status));
     }
   }
   return ret;
@@ -319,13 +319,13 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
       table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
-      LOG_INFO("LOAD DATA STORE status error", KR(error_code));
+      FLOG_INFO("LOAD DATA STORE status error", KR(error_code_), K(lbt()));
     }
   }
   return ret;
 }
 
-int ObTableLoadStoreCtx::set_status_abort()
+int ObTableLoadStoreCtx::set_status_abort(int error_code)
 {
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard guard(status_lock_);
@@ -333,9 +333,11 @@ int ObTableLoadStoreCtx::set_status_abort()
     LOG_INFO("LOAD DATA STORE already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    error_code_ = (error_code_ == OB_SUCCESS ? OB_CANCELED : error_code_);
+    if (OB_SUCCESS == error_code_) {
+      error_code_ = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
+    }
     table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
-    LOG_INFO("LOAD DATA STORE status abort");
+    FLOG_INFO("LOAD DATA STORE status abort", KR(error_code_), K(lbt()));
   }
   return ret;
 }

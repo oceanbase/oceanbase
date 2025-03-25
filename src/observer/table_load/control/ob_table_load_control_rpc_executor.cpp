@@ -311,7 +311,7 @@ int ObDirectLoadControlAbortExecutor::process()
       res_.is_stopped_ = true;
     }
   } else {
-    ObTableLoadStore::abort_ctx(table_ctx, res_.is_stopped_);
+    ObTableLoadStore::abort_ctx(table_ctx, arg_.error_code_, res_.is_stopped_);
     table_ctx->mark_delete();
     if (res_.is_stopped_ && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
       LOG_WARN("fail to remove table ctx", KR(ret), K(key));

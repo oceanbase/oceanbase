@@ -60,6 +60,11 @@ public:
     obsys::ObRLockGuard guard(status_lock_);
     return status_;
   }
+  OB_INLINE int get_error_code() const
+  {
+    obsys::ObRLockGuard guard(status_lock_);
+    return error_code_;
+  }
   OB_INLINE void get_status(table::ObTableLoadStatusType &status, int &error_code) const
   {
     obsys::ObRLockGuard guard(status_lock_);
@@ -91,7 +96,7 @@ public:
     return advance_status(table::ObTableLoadStatusType::COMMIT);
   }
   int set_status_error(int error_code);
-  int set_status_abort();
+  int set_status_abort(int error_code);
   int check_status(table::ObTableLoadStatusType status) const;
   OB_INLINE bool enable_heart_beat() const { return enable_heart_beat_; }
   OB_INLINE void set_enable_heart_beat(bool enable_heart_beat)

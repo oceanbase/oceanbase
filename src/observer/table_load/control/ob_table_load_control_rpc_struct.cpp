@@ -244,7 +244,8 @@ OB_SERIALIZE_MEMBER(ObDirectLoadControlCommitRes,
 // abort
 OB_SERIALIZE_MEMBER(ObDirectLoadControlAbortArg,
                     table_id_,
-                    task_id_);
+                    task_id_,
+                    error_code_);
 
 OB_SERIALIZE_MEMBER(ObDirectLoadControlAbortRes,
                     is_stopped_);

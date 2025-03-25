@@ -686,7 +686,7 @@ int ObTableLoadInstance::end_direct_load(const bool commit)
     }
     if (need_abort) {
       // must abort here, abort redef table need exec_ctx session_info
-      ObTableLoadCoordinator::abort_ctx(table_ctx_);
+      ObTableLoadCoordinator::abort_ctx(table_ctx_, OB_CANCELED);
     }
     if (OB_TMP_FAIL(add_tx_result_to_user_session())) {
       LOG_WARN("fail to add tx result to user session", KR(tmp_ret));

@@ -58,7 +58,7 @@ int ObTableLoadStore::init_ctx(
   return ret;
 }
 
-void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
+void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, int error_code, bool &is_stopped)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -76,7 +76,7 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
       LOG_WARN("fail to kill query", KR(tmp_ret));
     }
     // 1. mark status abort, speed up background task exit
-    if (OB_TMP_FAIL(ctx->store_ctx_->set_status_abort())) {
+    if (OB_TMP_FAIL(ctx->store_ctx_->set_status_abort(error_code))) {
       LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
     // 2. mark all active trans abort

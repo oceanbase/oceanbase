@@ -156,7 +156,7 @@ bool ObTableLoadService::ObGCTask::gc_heart_beat_expired_ctx(ObTableLoadTableCtx
             table_ctx->store_ctx_->check_heart_beat_expired(HEART_BEEAT_EXPIRED_TIME_US))) {
         FLOG_INFO("store heart beat expired, abort", K(table_id), K(task_id), K(dest_table_id));
         bool is_stopped = false;
-        ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
+        ObTableLoadStore::abort_ctx(table_ctx, OB_CANCELED, is_stopped);
         table_ctx->mark_delete();
         if (is_stopped && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
           LOG_WARN("fail to remove table ctx", KR(ret), K(table_id), K(task_id), K(dest_table_id));
@@ -971,12 +971,12 @@ void ObTableLoadService::fail_all_ctx(int error_code)
       // fail coordinator
       if (nullptr != table_ctx->coordinator_ctx_) {
         table_ctx->coordinator_ctx_->set_status_error(error_code);
-        ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
+        ObTableLoadCoordinator::abort_ctx(table_ctx, error_code);
       }
       // fail store
-      if (nullptr != table_ctx->store_ctx_) {
+      else if (nullptr != table_ctx->store_ctx_) {
         table_ctx->store_ctx_->set_status_error(error_code);
-        ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
+        ObTableLoadStore::abort_ctx(table_ctx, error_code, is_stopped);
       }
       manager_.revert_table_ctx(table_ctx);
     }
