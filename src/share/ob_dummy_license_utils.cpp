@@ -84,6 +84,12 @@ int ObLicenseUtils::load_license(const ObString &file_path)
   return ret;
 }
 
+int ObLicenseUtils::start_license_mgr()
+{
+  return OB_SUCCESS;
+}
+
+
 int ObLicenseUtils::check_create_table_allowed(uint64_t tenant_id)
 {
   return OB_SUCCESS;

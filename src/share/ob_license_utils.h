@@ -34,6 +34,7 @@ public:
   static int check_add_tenant_allowed(int current_user_tenant_num);
   static int check_for_create_tenant(int current_user_tenant_num, bool is_create_standby);
   static void clear_license_table_if_need();
+  static int start_license_mgr();
   static int check_create_table_allowed(uint64_t tenant_id);
 };
 

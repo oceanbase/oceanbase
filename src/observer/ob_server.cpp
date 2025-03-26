@@ -1211,6 +1211,9 @@ int ObServer::start()
 
     if (OB_SUCC(ret)) {
       (void) ObLicenseUtils::clear_license_table_if_need();
+      if (OB_FAIL(ObLicenseUtils::start_license_mgr())) {
+        FLOG_ERROR("failed to start license manager", KR(ret));
+      }
     }
 
   }
