@@ -217,6 +217,7 @@ int ObDASHNSWScanIter::inner_reuse()
   }
   vec_op_alloc_.reset();
   go_brute_force_ = false;
+  only_complete_data_ = false;
 
   if (OB_SUCC(ret) && OB_FAIL(set_vec_index_param(vec_aux_ctdef_->vec_index_param_))) {
     LOG_WARN("failed to set vec index param", K(ret));
@@ -507,10 +508,13 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force(
                         ObVectorQueryAdaptorResultContext *ada_ctx,
                         ObPluginVectorIndexAdaptor* adaptor,
                         int64_t *&brute_vids,
-                        int& brute_cnt)
+                        int& brute_cnt,
+                        bool& need_complete_data,
+                        bool check_need_complete_data)
 {
   INIT_SUCC(ret);
   ObString search_vec;
+  need_complete_data = false;
   const float* distances_inc = nullptr;
   const float* distances_snap = nullptr;
   uint64_t limit = limit_param_.limit_ + limit_param_.offset_;
@@ -536,32 +540,38 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force(
   } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(search_vec.ptr()), brute_vids, brute_cnt, distances_snap, true))) {
     LOG_WARN("failed to query vids.", K(ret), K(brute_cnt));
   } else if (distances_inc == nullptr && distances_snap == nullptr) {
-    // do nothing
+    need_complete_data = check_need_complete_data ? true : false;
   } else if (distances_inc == nullptr || distances_snap == nullptr) {
-    for (int i = 0; i < brute_cnt && OB_SUCC(ret); ++i) {
+    for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
       double distance = distances_inc == nullptr ? distances_snap[i] : distances_inc[i];
       // if distances == -1, means vid not exist
       if (distance != -1) {
         max_heap.push(brute_vids[i], distance);
+      } else {
+        need_complete_data = check_need_complete_data ? true : false;
       }
     }
   } else {
-    for (int i = 0; i < brute_cnt && OB_SUCC(ret); ++i) {
+    for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
       double distance = distances_inc[i] == -1 ? distances_snap[i] : distances_inc[i];
       // if distances == -1, means vid not exist
       if (distance != -1) {
         max_heap.push(brute_vids[i], distance);
+      } else {
+        need_complete_data = check_need_complete_data ? true : false;
       }
     }
   }
 
   // sort
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !need_complete_data) {
     max_heap.max_heap_sort();
   }
 
   // check heap size
   if (OB_FAIL(ret)) {
+  } else if (need_complete_data) {
+    // do nothing
   } else if (max_heap.get_size() == 0) {
     ret = OB_ITER_END;
   } else {
@@ -630,8 +640,16 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   }
   if (OB_FAIL(ret)) {
   } else if (go_brute_force_) {
-    if (OB_FAIL(process_adaptor_state_pre_filter_brute_force(ada_ctx, adaptor, brute_vids, brute_cnt))) {
+    bool need_complete_data = false;
+    if (OB_FAIL(process_adaptor_state_pre_filter_brute_force(ada_ctx, adaptor, brute_vids, brute_cnt, need_complete_data, true))) {
       LOG_WARN("hnsw pre filter(brute force) failed to query result.", K(ret));
+    } else if (need_complete_data) {
+      only_complete_data_ = true;
+      if (OB_FAIL(process_adaptor_state_post_filter(ada_ctx, adaptor))) {
+        LOG_WARN("failed to process adaptor state post filter", K(ret));
+      } else if (OB_FAIL(process_adaptor_state_pre_filter_brute_force(ada_ctx, adaptor, brute_vids, brute_cnt, need_complete_data, false))) {
+        LOG_WARN("hnsw pre filter(brute force) failed to query result.", K(ret));
+      }
     }
   } else if (adaptor->check_if_complete_data(ada_ctx)) {
     if (OB_FAIL(process_adaptor_state_post_filter(ada_ctx, adaptor))) {
@@ -1184,6 +1202,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     query_cond.query_order_ = true;
     query_cond.row_iter_ = snapshot_iter_->get_output_result_iter();
     query_cond.query_scn_ = snapshot_scan_param_.snapshot_.core_.version_;
+    query_cond.only_complete_data_ = only_complete_data_; // ture when search brute force
 
     uint64_t ob_hnsw_ef_search = 0;
     if (OB_FAIL(get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {

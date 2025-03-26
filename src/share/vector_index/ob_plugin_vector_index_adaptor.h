@@ -181,6 +181,7 @@ private:
 struct ObVectorQueryConditions {
   uint32_t query_limit_;
   bool query_order_; // true: asc, false: desc
+  bool only_complete_data_; // true when search brute force
   int64_t ef_search_;
   ObString query_vector_;
   SCN query_scn_;

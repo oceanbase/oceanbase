@@ -142,7 +142,8 @@ public:
       search_vec_(nullptr),
       distance_calc_(nullptr),
       is_primary_pre_with_rowkey_with_filter_(false),
-      go_brute_force_(false) {
+      go_brute_force_(false),
+      only_complete_data_(false) {
       }
 
   virtual ~ObDASHNSWScanIter() {}
@@ -190,7 +191,8 @@ private:
   int process_adaptor_state_pre_filter_with_rowkey(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, int64_t *&vids,
                         int& brute_cnt, bool is_vectorized);
   int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
-                                                    int64_t *&brute_vids, int& brute_cnt);
+                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_next_single_row(bool is_vectorized);
 
@@ -296,6 +298,7 @@ private:
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
+  bool only_complete_data_;
 };
 
 

@@ -2223,7 +2223,9 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
     LOG_WARN("failed to allocator iter.", K(ret));
   } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator())) {
   } else if (ctx->flag_ == PVQP_FIRST) {
-    if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
+    if (query_cond->only_complete_data_) {
+      // do nothing
+    } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
 
@@ -2250,7 +2252,10 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       }
     }
 
-    if (OB_SUCC(ret) && OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
+    if (OB_FAIL(ret)) {
+    } else if (query_cond->only_complete_data_) {
+      // do nothing
+    } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
   }
