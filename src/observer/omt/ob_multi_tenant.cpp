@@ -2599,8 +2599,10 @@ void ObMultiTenant::run1()
     {
       SpinRLockGuard guard(lock_);
       bool need_regist_cgroup = false;
-      if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
-        need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {  // every 1s
+        if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
+          need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
+        }
       }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
