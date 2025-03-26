@@ -19,6 +19,7 @@
 #include "test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
+#include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 
 namespace oceanbase
 {
@@ -192,6 +193,43 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_alloc_phy_block_abnormal)
   ASSERT_EQ(2, tmp_block_idx);
   ASSERT_EQ(true, phy_blk_handle.is_valid());
   phy_blk_handle.reset();
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_ckpt_write_abnormal)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache*)->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache*)->cache_stat_;
+  const int64_t phy_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_cnt_;
+  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_used_cnt_);
+  const int64_t block_size = phy_blk_mgr.get_block_size();
+
+  const int64_t item_size = 4 * 1024;
+  char buf[item_size];
+  MEMSET(buf, 'a', item_size);
+
+  // 1. mock already execute one round phy_blk checkpoint
+  const int64_t cur_phy_ckpt_blk_cnt = 10;
+  phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_cnt_ = cur_phy_ckpt_blk_cnt;
+  phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_used_cnt_ = cur_phy_ckpt_blk_cnt / 2;
+
+
+  // 2. mock write ckpt item abnormal
+  ObSSLinkedPhyBlockItemWriter item_writer;
+  ASSERT_EQ(OB_SUCCESS, item_writer.init(tenant_id, phy_blk_mgr, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
+  const int64_t item_cnt = block_size / item_size;
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 1);
+  for (int64_t i = 0; OB_SUCC(ret) && i < item_cnt; ++i) {
+    if (OB_FAIL(item_writer.write_item(buf, item_size))) {
+      LOG_WARN("fail to write item", KR(ret), K(i));
+    }
+  }
+  ASSERT_EQ(OB_TIMEOUT, ret);
+  ObArray<int64_t> block_id_list;
+  ASSERT_EQ(OB_SUCCESS, item_writer.get_block_id_list(block_id_list));
+  ASSERT_EQ(1, block_id_list.count());
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 0);
 }
 
 TEST_F(TestSSMicroCacheAbnormalCase, test_micro_cache_abnormal_health)

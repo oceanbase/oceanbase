@@ -86,6 +86,10 @@ TEST_F(TestSSMicroCacheCheckpoint, test_compress_micro_ckpt)
   char *io_buf = static_cast<char *>(allocator.alloc(block_size));
   ASSERT_NE(nullptr, io_buf);
 
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
+  micro_ckpt_task.is_inited_ = false;
+  ob_usleep(1000 * 1000);
+
   // 1. gen micro_meta
   for (int64_t i = 0; i < macro_cnt; ++i) {
     MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2000 + i);
@@ -194,7 +198,6 @@ TEST_F(TestSSMicroCacheCheckpoint, test_compress_micro_ckpt)
 
   // 6. use checkpoint_op logic to gen micro_ckpt, mock micro_ckpt_block is not enough, we will allow this situation
   SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
-  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
   const int64_t origin_micro_ckpt_blk_used_cnt = blk_cnt_info.meta_blk_.used_cnt_;
   // mock only one micro_ckpt_blk can be allocated.
   blk_cnt_info.meta_blk_.min_cnt_ = origin_micro_ckpt_blk_used_cnt + 1;
