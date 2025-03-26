@@ -304,6 +304,7 @@ int ObTenantRoleTransitionService::failover_to_primary()
     (void)broadcast_tenant_info(ObTenantRoleTransitionConstants::SWITCH_TO_PRIMARY_LOG_MOD_STR);
     ObBroadcastSchemaArg arg;
     arg.tenant_id_ = tenant_id_;
+    arg.need_clear_ddl_epoch_ = true;
     if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy is null", KR(ret), KP(GCTX.rs_mgr_), KP(GCTX.rs_rpc_proxy_));

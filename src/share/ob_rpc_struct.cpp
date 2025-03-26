@@ -7843,12 +7843,13 @@ int ObTenantSchemaVersions::add(const int64_t tenant_id, const int64_t schema_ve
 
 
 OB_SERIALIZE_MEMBER((ObGetSchemaArg, ObDDLArg), reserve_, ignore_fail_);
-OB_SERIALIZE_MEMBER(ObBroadcastSchemaArg, tenant_id_, schema_version_);
+OB_SERIALIZE_MEMBER(ObBroadcastSchemaArg, tenant_id_, schema_version_, need_clear_ddl_epoch_);
 
 void ObBroadcastSchemaArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   schema_version_ = OB_INVALID_VERSION;
+  need_clear_ddl_epoch_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObGetRecycleSchemaVersionsArg, tenant_ids_);
