@@ -986,28 +986,27 @@ int ObExternalTableFileManager::collect_odps_table_statistics(const bool collect
 {
   int ret = OB_SUCCESS;
   bool is_odps_external_table = false;
-  if (OB_FAIL(ObSQLUtils::is_odps_external_table(tenant_id, table_id, is_odps_external_table))) {
+  if (updated_part_ids.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(tenant_id, table_id, is_odps_external_table))) {
     LOG_WARN("failed to check is odps table or not", K(ret), K(tenant_id), K(table_id));
   } else if (is_odps_external_table && collect_statistic) {
     int64_t update_rows = 0;
     ObSqlString update_sql;
-    int64_t dop_of_collect_external_table_statistics = 16;
-    if (updated_part_ids.count() <= 32) {
-      // do nothing
+    int64_t dop_of_collect_external_table_statistics = 1;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_LIKELY(tenant_config.is_valid()) && static_cast<int64_t>(tenant_config->_dop_of_collect_external_table_statistics) > 0) {
+      dop_of_collect_external_table_statistics = tenant_config->_dop_of_collect_external_table_statistics;
     } else {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      if (OB_LIKELY(tenant_config.is_valid()) && static_cast<int64_t>(tenant_config->_dop_of_collect_external_table_statistics) > 0) {
-        dop_of_collect_external_table_statistics = tenant_config->_dop_of_collect_external_table_statistics;
+      int64_t default_dop = (updated_part_ids.count() / 4 > 0) ? (updated_part_ids.count() / 4) : 1;
+      double min_cpu;
+      double max_cpu;
+      if (OB_ISNULL(GCTX.omt_)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
+        LOG_WARN("fail to get tenant cpu", K(ret));
       } else {
-        double min_cpu;
-        double max_cpu;
-        if (OB_ISNULL(GCTX.omt_)) {
-          ret = OB_ERR_UNEXPECTED;
-        } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
-          LOG_WARN("fail to get tenant cpu", K(ret));
-        } else {
-          dop_of_collect_external_table_statistics = max_cpu;
-        }
+        dop_of_collect_external_table_statistics = std::min(updated_part_ids.count() / 4, static_cast<int64_t>(max_cpu));
       }
     }
     OZ(update_sql.assign_fmt("UPDATE /*+ enable_parallel_dml parallel(%ld) */ %s SET FILE_SIZE = CALC_ODPS_SIZE(FILE_URL, TABLE_ID) WHERE TABLE_ID = %ld and PART_ID IN (",
@@ -1015,9 +1014,8 @@ int ObExternalTableFileManager::collect_odps_table_statistics(const bool collect
                             OB_ALL_EXTERNAL_TABLE_FILE_TNAME,
                             table_id));
     for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
-      OZ(update_sql.append_fmt("%ld%c", updated_part_ids.at(i), ((updated_part_ids.count() - 1) == i) ? ' ' : ','));
+      OZ(update_sql.append_fmt("%ld%c", updated_part_ids.at(i), ((updated_part_ids.count() - 1) == i) ? ')' : ','));
     }
-    OZ(update_sql.append(")"));
     OZ(trans.write(tenant_id, update_sql.ptr(), update_rows));
   }
   return ret;
