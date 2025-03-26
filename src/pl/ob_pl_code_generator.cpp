@@ -5160,6 +5160,7 @@ int ObPLCodeGenerator::generate_get_attr(ObLLVMValue &param_array,
   }
   OZ (helper_.create_store(value, value_ptr));
   if (OB_SUCC(ret) &&
+      false &&
       for_write &&
       (obj_access.at(0).var_type_.is_record_type() ||
        obj_access.at(0).var_type_.is_collection_type())) {
@@ -8741,7 +8742,7 @@ int ObPLCodeGenerator::generate(ObPLPackage &pl_package)
   OZ (prepare_external());
   OZ (prepare_local_user_type());
   OZ (prepare_expression(pl_package));
-  //OZ (generate_obj_access_expr());
+  OZ (generate_obj_access_expr());
 
   if (OB_SUCC(ret)) {
 #ifndef NDEBUG
@@ -8978,9 +8979,9 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
   }
 
   if (OB_SUCC(ret)) {
-    /*if (OB_FAIL(generate_obj_access_expr())) {
+    if (OB_FAIL(generate_obj_access_expr())) {
       LOG_WARN("generate obj access expr failed", K(ret));
-    } else */if (debug_mode_ && OB_FAIL(di_helper_.finalize())) {
+    } else if (debug_mode_ && OB_FAIL(di_helper_.finalize())) {
       LOG_WARN("failed to finalize", K(ret));
     }
   }

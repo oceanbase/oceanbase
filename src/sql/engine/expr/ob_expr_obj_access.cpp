@@ -456,7 +456,7 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
     int64_t *param_ptr = const_cast<int64_t *>(param_array.head());
     int64_t attr_addr = 0;
     int64_t allocator_addr = 0;
-    if (false && OB_NOT_NULL(get_attr)) {
+    if (!for_write_ && OB_NOT_NULL(get_attr)) {
       OZ (get_attr(param_array.count(), param_ptr, &attr_addr, &allocator_addr));
     } else {
       OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, *ctx, &allocator_addr, ctx->exec_ctx_.get_my_session()));
