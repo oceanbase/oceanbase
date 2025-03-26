@@ -1088,6 +1088,12 @@ private:
       bool &is_inner_ur,
       uint64_t &new_user_id);
 
+protected:
+  int drop_obj_privs(
+      const uint64_t tenant_id,
+      const uint64_t obj_id,
+      const uint64_t obj_ypte,
+      common::ObMySQLTransaction &trans);
 
 private:
   int alter_table_rename_built_in_index_(
@@ -1143,12 +1149,6 @@ private:
       common::ObMySQLTransaction &trans,
       const share::schema::ObObjPrivSortKey &old_key,
       share::ObRawObjPrivArray &old_array);
-
-  int drop_obj_privs(
-      const uint64_t tenant_id,
-      const uint64_t obj_id,
-      const uint64_t obj_ypte,
-      common::ObMySQLTransaction &trans);
 
   int revoke_table_all(
       share::schema::ObSchemaGetterGuard &schema_guard,

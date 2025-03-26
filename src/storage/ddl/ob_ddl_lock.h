@@ -147,14 +147,7 @@ public:
       const transaction::tablelock::ObTableLockMode lock_mode,
       ObMySQLTransaction &trans);
 
-private:
-  static int lock_table_lock_in_trans(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const ObIArray<ObTabletID> &tablet_ids,
-      const transaction::tablelock::ObTableLockMode lock_mode,
-      const int64_t timeout_us,
-      ObMySQLTransaction &trans);
+protected:
   static int do_table_lock(
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -163,6 +156,15 @@ private:
     const int64_t timeout_us,
     const bool is_lock,
     ObMySQLTransaction &trans);
+
+private:
+  static int lock_table_lock_in_trans(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const ObIArray<ObTabletID> &tablet_ids,
+      const transaction::tablelock::ObTableLockMode lock_mode,
+      const int64_t timeout_us,
+      ObMySQLTransaction &trans);
   static int do_table_lock(
     const uint64_t tenant_id,
     const uint64_t table_id,
