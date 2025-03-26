@@ -643,7 +643,7 @@ int ObDirectLoadMergeRangeSplitter::init_sstable_rowkey_merger(
         sstable_array, table_data_desc, allocator_, iter_guard_))) {
     LOG_WARN("fail to construct origin table rowkey iters", KR(ret));
   } else if (OB_FAIL(sstable_rowkey_merger_.init(iter_guard_.get_iters(), &compare_,
-                                                 sample_info_.origin_step_))) {
+                                                 sample_info_.sstable_step_))) {
     LOG_WARN("fail to init merger", KR(ret));
   } else {
     total_sample_count_ += sample_info_.sstable_sample_num_ / sample_info_.sstable_step_;
