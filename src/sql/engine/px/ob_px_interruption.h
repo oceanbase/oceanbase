@@ -73,7 +73,10 @@ public:
   static int interrupt_tasks(ObPxSqcMeta &sqc, int code);
   // DFO 重试时，需要使用新的中断号，避免遇到中断残余，被误中断
   static int regenerate_interrupt_id(ObDfo &dfo);
-  static void update_schema_error_code(ObExecContext *exec_ctx, int &code);
+  // Only in normal px worker thread executing process call this function will set
+  // px_worker_execute_start_schema_version
+  static void update_schema_error_code(ObExecContext *exec_ctx, int &code,
+                           int64_t px_worker_execute_start_schema_version = OB_INVALID_VERSION);
   // SQC 以及 Tasks 向 QC 发送中断
   static int interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exec_ctx);
   static int interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_ctx);

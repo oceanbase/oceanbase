@@ -984,7 +984,8 @@ public:
       fb_info_(),
       err_msg_(),
       memstore_read_row_count_(0),
-      ssstore_read_row_count_(0)
+      ssstore_read_row_count_(0),
+      px_worker_execute_start_schema_version_(0)
   {
 
   }
@@ -1020,6 +1021,7 @@ public:
     fb_info_.assign(other.fb_info_);
     memstore_read_row_count_ = other.memstore_read_row_count_;
     ssstore_read_row_count_ = other.ssstore_read_row_count_;
+    px_worker_execute_start_schema_version_ = other.px_worker_execute_start_schema_version_;
     return *this;
   }
 public:
@@ -1047,7 +1049,8 @@ public:
                K_(is_use_local_thread),
                K_(fb_info),
                K_(memstore_read_row_count),
-               K_(ssstore_read_row_count));
+               K_(ssstore_read_row_count),
+               K_(px_worker_execute_start_schema_version));
   dtl::ObDtlChannelInfo &get_sqc_channel_info() { return sqc_ch_info_; }
   dtl::ObDtlChannelInfo &get_task_channel_info() { return task_ch_info_; }
   void set_task_channel(dtl::ObDtlChannel *ch) { task_channel_ = ch; }
@@ -1099,6 +1102,8 @@ public:
   void set_ssstore_read_row_count(int64_t v) { ssstore_read_row_count_ = v; }
   int64_t get_memstore_read_row_count() const { return memstore_read_row_count_; }
   int64_t get_ssstore_read_row_count() const { return ssstore_read_row_count_; }
+  void set_px_execute_start_schema_version(int64_t schema_version) { px_worker_execute_start_schema_version_ = schema_version; }
+  int64_t get_px_execute_start_schema_version() const { return px_worker_execute_start_schema_version_; }
 public:
   // 小于等于0表示设置了rc 值, task default ret值为1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
@@ -1133,6 +1138,11 @@ public:
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg
   int64_t memstore_read_row_count_; // the count of row from mem
   int64_t ssstore_read_row_count_; // the count of row from disk
+  //the schema version that px worker start executing
+  //Note: this parameter only valid in px worker
+  //we don't need to serialize it from sqc rpc thread to px worker thread
+  //because it is inited used only in px worker
+  int64_t px_worker_execute_start_schema_version_;
 };
 
 class ObPxRpcInitTaskArgs

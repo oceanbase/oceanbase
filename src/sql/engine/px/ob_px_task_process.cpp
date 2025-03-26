@@ -411,6 +411,9 @@ int ObPxTaskProcess::do_process()
                   arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
                   schema_guard_))) {
         LOG_WARN("fail to get schema guard", K(ret));
+      } else if (OB_FAIL(schema_guard_.get_schema_version(
+                 arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(), arg_.task_.px_worker_execute_start_schema_version_))) {
+        LOG_WARN("get px worker start schema version failed", K(ret));
       } else {
         // 用于远端执行的虚拟表的参数的初始化
         ObVirtualTableCtx vt_ctx;
