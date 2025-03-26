@@ -65,6 +65,7 @@ void ObMViewMdsOpTask::stop()
   is_stop_ = true;
   in_sched_ = false;
   cancel_task();
+  (void)MTL(ObMViewMaintenanceService*)->get_mview_mds_op().clear();
 }
 
 void ObMViewMdsOpTask::destroy()
