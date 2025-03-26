@@ -3455,7 +3455,7 @@ int ObLSTabletService::update_rows(
           }
         }
 
-        if (OB_SUCC(ret) && nullptr != rows_infos) {
+        if (OB_SUCC(ret) && nullptr != rows_infos && 1 != new_rows_count) {
           for (int64_t i = 0; i < new_rows_count; i++) {
             old_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
             new_rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
@@ -3791,6 +3791,7 @@ int ObLSTabletService::delete_rows(
             max_tmp_row_cnt = row_count;
             if (tmp_rows_buf != nullptr) {
               work_allocator.free(tmp_rows_buf);
+              tmp_rows_buf = nullptr;
             }
             if (OB_ISNULL(tmp_rows_buf = static_cast<char*>(work_allocator.alloc(sizeof(ObDatumRow) * row_count)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3798,6 +3799,8 @@ int ObLSTabletService::delete_rows(
             } else {
               tmp_rows = new (tmp_rows_buf) ObDatumRow[row_count];
             }
+          } else {
+            tmp_rows = reinterpret_cast<ObDatumRow*>(tmp_rows_buf);
           }
 
           if (OB_SUCC(ret)) {
