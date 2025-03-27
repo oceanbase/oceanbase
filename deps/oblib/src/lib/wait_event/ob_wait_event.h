@@ -45,6 +45,7 @@ WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "fd", "offset", "size", SYSTEM_I
 WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(TMP_FILE_WRITE, 11020, "tmp file write", "fd", "offset", "size", USER_IO, true, true)
+WAIT_EVENT_DEF(TMP_FILE_READ, 11021, "tmp file read", "fd", "offset", "size", USER_IO, true, true)
 
 // SCHEDULER 12001-12999
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)
