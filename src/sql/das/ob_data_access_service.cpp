@@ -722,6 +722,8 @@ int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTa
   int ret = OB_SUCCESS;
   ObDASParallelTask *task = nullptr;
   omt::ObMultiTenant *omt = GCTX.omt_;
+  ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
+  int64_t timeout_ts = plan_ctx->get_timeout_timestamp();
   DISABLE_SQL_MEMLEAK_GUARD;
   if (NULL == omt) {
     ret = OB_ERR_UNEXPECTED;
@@ -729,7 +731,7 @@ int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTa
   } else if (OB_ISNULL(task = ObDASParallelTaskFactory::alloc(das_ref.get_das_ref_count_ctx()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret));
-  } else if (OB_FAIL(task->init(&agg_task, group_id))) {
+  } else if (OB_FAIL(task->init(&agg_task, timeout_ts, group_id))) {
     LOG_WARN("init parallel task failed", K(ret), K(agg_task));
   } else if (OB_FAIL(omt->recv_request(MTL_ID(), *task))) {
     LOG_WARN("fail to push parallel_das_task", K(ret), KPC(task));

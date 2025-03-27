@@ -52,11 +52,13 @@ public:
     : agg_task_(nullptr),
       das_ref_count_ctx_(das_ref_count_ctx),
       trace_id_(),
+      timeout_ts_(INT64_MAX),
       handler_()
   {}
   ~ObDASParallelTask() {}
-  int init(ObDasAggregatedTask *agg_task, int32_t group_id);
+  int init(ObDasAggregatedTask *agg_task, int64_t timeout_ts, int32_t group_id);
   const ObCurTraceId::TraceId &get_trace_id() const { return trace_id_; }
+  int64_t get_timeout_ts() { return timeout_ts_; }
   void reset()
   {
     agg_task_ = nullptr;
@@ -70,6 +72,7 @@ private:
   ObDasAggregatedTask *agg_task_;
   DASRefCountContext &das_ref_count_ctx_;
   ObCurTraceId::TraceId trace_id_;
+  int64_t timeout_ts_;
   ObDASParallelHandler handler_;
 };
 class ObDASParallelTaskFactory
