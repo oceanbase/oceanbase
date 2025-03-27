@@ -800,25 +800,46 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
     .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param) {
     ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
-    ObPhysicalPlanCtx phy_plan_ctx(tmp_allocator);
-    phy_plan_ctx.set_rich_format(session->use_rich_format());
+    ObPhysicalPlanCtx tmp_phy_plan_ctx(tmp_allocator);
+    ObPhysicalPlanCtx *phy_plan_ctx = nullptr;
+    bool use_tmp_phy_plan_ctx = false;
+
+    if (out_ctx != NULL
+        && out_ctx->get_physical_plan_ctx() != NULL
+        && (&params == &out_ctx->get_physical_plan_ctx()->get_param_store())) {
+      phy_plan_ctx = out_ctx->get_physical_plan_ctx();
+      if (OB_UNLIKELY(!phy_plan_ctx->is_param_datum_frame_inited())) {
+        phy_plan_ctx->set_rich_format(session->use_rich_format());
+        if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
+          LOG_WARN("init datum param store failed", K(ret));
+        }
+      }
+    } else {
+      phy_plan_ctx = &tmp_phy_plan_ctx;
+      phy_plan_ctx->set_rich_format(session->use_rich_format());
+      for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
+        if (OB_FAIL(phy_plan_ctx->get_param_store_for_update().push_back(params.at(i)))) {
+          LOG_WARN("failed to push back element", K(ret));
+        }
+      } // end for
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
+        LOG_WARN("init datum param store failed", K(ret));
+      } else {
+        use_tmp_phy_plan_ctx = true;
+      }
+    }
     // pass the outside timeout timestamp if available
-    if (NULL != out_ctx && NULL != out_ctx->get_physical_plan_ctx()) {
-      phy_plan_ctx.set_timeout_timestamp(
+    if (OB_FAIL(ret)) {
+    } else if (NULL != out_ctx && NULL != out_ctx->get_physical_plan_ctx()) {
+      phy_plan_ctx->set_timeout_timestamp(
           out_ctx->get_physical_plan_ctx()->get_timeout_timestamp());
     }
-    if (expr != NULL && OB_FAIL(expr->fast_check_status())) {
+    if (OB_FAIL(ret)) {
+    } else if (expr != NULL && OB_FAIL(expr->fast_check_status())) {
       LOG_WARN("check status failed", K(ret));
     }
-    for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
-      if (OB_FAIL(phy_plan_ctx.get_param_store_for_update().push_back(params.at(i)))) {
-        LOG_WARN("failed to push back element", K(ret));
-      }
-    } // end for
     if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(phy_plan_ctx.init_datum_param_store())) {
-      LOG_WARN("failed to init datum param store", K(ret));
     } else {
       ObSchemaGetterGuard *schema_guard = NULL;
       if (NULL != out_ctx) {
@@ -838,21 +859,21 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
       SMART_VARS_2((ObExecContext, exec_ctx, tmp_allocator),
                    (ObStaticEngineExprCG, expr_cg, tmp_allocator,
                     session, schema_guard,
-                    phy_plan_ctx.get_original_param_cnt(),
-                    phy_plan_ctx.get_datum_param_store().count(),
+                    phy_plan_ctx->get_original_param_cnt(),
+                    phy_plan_ctx->get_datum_param_store().count(),
                     (NULL != out_ctx ? out_ctx->get_min_cluster_version() : GET_MIN_CLUSTER_VERSION()))) {
         LinkExecCtxGuard link_guard(*session, exec_ctx);
         exec_ctx.set_my_session(session);
         exec_ctx.set_mem_attr(ObMemAttr(effective_tenant_id,
                                         ObModIds::OB_SQL_EXEC_CONTEXT,
                                         ObCtxIds::EXECUTE_CTX_ID));
-        exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
+        exec_ctx.set_physical_plan_ctx(phy_plan_ctx);
         if (NULL != out_ctx) {
           exec_ctx.set_sql_ctx(out_ctx->get_sql_ctx());
           if (NULL != out_ctx->get_original_package_guard()) {
             exec_ctx.set_package_guard(out_ctx->get_original_package_guard());
           }
-          if (NULL != out_ctx->get_physical_plan_ctx()) {
+          if (NULL != out_ctx->get_physical_plan_ctx() && use_tmp_phy_plan_ctx) {
             ObSubSchemaCtx & subschema_ctx = out_ctx->get_physical_plan_ctx()->get_subschema_ctx();
             int tmp_ret = OB_SUCCESS;
             if (OB_TMP_FAIL(exec_ctx.get_physical_plan_ctx()->get_subschema_ctx().assgin(subschema_ctx))) {
@@ -864,7 +885,7 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
         ObPreCalcExprFrameInfo *pre_calc_frame = NULL;
         ObRawExpr *copied_expr = NULL;
         ObRawExprFactory expr_factory(tmp_allocator);
-        int org_obj_cnt = phy_plan_ctx.get_param_store().count();
+        ObExpr *calc_expr = nullptr;
         if (OB_FAIL(ObRawExprCopier::copy_expr(expr_factory, expr, copied_expr))) {
           LOG_WARN("failed to copy raw expr", K(ret));
         } else if (OB_ISNULL(copied_expr)) {
@@ -875,23 +896,29 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
           LOG_WARN("failed to allocate memory", K(ret));
         } else {
           pre_calc_frame = new(frame_buf)ObPreCalcExprFrameInfo(tmp_allocator);
-          if (OB_FAIL(expr_cg.generate_calculable_expr(copied_expr, *pre_calc_frame))) {
+          if (OB_FAIL(expr_cg.generate_calculable_expr(copied_expr, *pre_calc_frame, calc_expr))) {
             LOG_WARN("failed to generate calculable expr", K(ret));
             // set current time before do pre calculation
-          } else if (FALSE_IT(phy_plan_ctx.set_cur_time(ObTimeUtility::current_time(), *session))) {
+          } else if (OB_ISNULL(calc_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid null expr", K(ret));
+          } else if (FALSE_IT(phy_plan_ctx->set_cur_time(ObTimeUtility::current_time(), *session))) {
             // do nothing
-          } else if (FALSE_IT(phy_plan_ctx.set_last_trace_id(session->get_last_trace_id()))) {
+          } else if (FALSE_IT(phy_plan_ctx->set_last_trace_id(session->get_last_trace_id()))) {
             // do nothing
           } else if (OB_FAIL(ObPlanCacheObject::pre_calculation(false,
                                                                 *pre_calc_frame,
                                                                 exec_ctx))) {
             LOG_WARN("failed to pre calculate", K(ret));
-          } else if (OB_UNLIKELY(org_obj_cnt + 1 != phy_plan_ctx.get_param_store().count())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unpected param store", K(phy_plan_ctx.get_param_store()), K(org_obj_cnt));
           } else {
-            const ObObj &tmp_result = phy_plan_ctx.get_param_store().at(org_obj_cnt);
-            if (!tmp_result.is_ext()) {
+            ObDatum res_datum;
+            ObObj tmp_result;
+            ObEvalCtx eval_ctx(exec_ctx);
+            if (FALSE_IT(res_datum = calc_expr->locate_expr_datum(eval_ctx))) {
+              LOG_WARN("locate expr datum failed", K(ret));
+            } else if (OB_FAIL(res_datum.to_obj(tmp_result, calc_expr->obj_meta_))) {
+              LOG_WARN("to object failed", K(ret));
+            } else if (!tmp_result.is_ext()) {
               if (OB_FAIL(deep_copy_obj(allocator, tmp_result, result))) {
                 LOG_WARN("failed to deep copy obj", K(ret));
               }
@@ -939,6 +966,8 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
           // avoid out_ctx.package_guard_ be freed
           exec_ctx.set_package_guard(NULL);
         }
+        // must set to null, otherwise, out_ctx->phy_plan_ctx_ maybe destroy
+        exec_ctx.set_physical_plan_ctx(nullptr);
       }
     }
   }

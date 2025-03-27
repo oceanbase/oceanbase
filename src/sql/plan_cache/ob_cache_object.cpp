@@ -277,8 +277,6 @@ int ObPlanCacheObject::pre_calculation(const bool is_ignore_stmt,
   ObPhysicalPlanCtx *phy_plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
   ObSEArray<ObDatumObjParam, 4> datum_params;
-  // datum_store will be used out of the block, use exec_ctx's allocator
-  DatumParamStore datum_store(ObWrapperAllocator(exec_ctx.get_allocator()));
   // TODO [zongmei.zzm]
   // create table t (a int primary key) partition by hash(a) partitions 2;
   // select * from t where a = '1' + 1
@@ -293,11 +291,6 @@ int ObPlanCacheObject::pre_calculation(const bool is_ignore_stmt,
   } else if (OB_FAIL(pre_calc_frame.eval(exec_ctx, datum_params))) {
     LOG_WARN("failed to eval pre calc expr frame info", K(ret),
              K(calc_types));
-  } else if (OB_FAIL(datum_store.assign(datum_params))) {
-    LOG_WARN("failed to push back datum param", K(ret), K(calc_types));
-  } else if (PRE_CALC_DEFAULT == calc_types &&
-             OB_FAIL(phy_plan_ctx->extend_datum_param_store(datum_store))) {
-    LOG_WARN("failed to extend param frame", K(ret), K(calc_types));
   } else { /* do nothing */
   }
 

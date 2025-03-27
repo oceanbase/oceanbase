@@ -7778,8 +7778,10 @@ int ObTransformPreProcess::add_rowid_constraint(ObDMLStmt &stmt)
                                          plan_ctx->get_datum_param_store().count(),
                                          exec_ctx->get_min_cluster_version());
             rowid_cons->expect_result_ = PreCalcExprExpectResult::PRE_CALC_ROWID;
+            ObExpr *calc_expr = nullptr;
             if (OB_FAIL(expr_cg.generate_calculable_expr(const_expr,
-                                                         rowid_cons->pre_calc_expr_info_))) {
+                                                         rowid_cons->pre_calc_expr_info_,
+                                                         calc_expr))) {
               LOG_WARN("failed to generate calculable expr", K(ret));
             } else if (OB_UNLIKELY(!stmt.get_query_ctx()->all_pre_calc_constraints_.add_last(rowid_cons))) {
               LOG_WARN("failed to add rowid constraint", K(ret));

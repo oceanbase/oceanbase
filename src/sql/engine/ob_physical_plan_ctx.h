@@ -209,7 +209,6 @@ public:
     original_param_cnt_ = 0;
     param_frame_capacity_ = 0;
   }
-  int extend_datum_param_store(DatumParamStore &ext_datum_store);
   ObRemoteSqlInfo &get_remote_sql_info() { return remote_sql_info_; }
   bool is_terminate(int &ret) const;
   void set_cur_time(const int64_t &session_val)
@@ -562,6 +561,7 @@ public:
     is_direct_insert_plan_ = is_direct_insert_plan;
   }
   inline bool get_is_direct_insert_plan() const { return is_direct_insert_plan_; }
+  bool is_param_datum_frame_inited() const { return param_frame_ptrs_.count() > 0; }
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
