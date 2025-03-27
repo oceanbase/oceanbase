@@ -582,6 +582,10 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     }
   }
 
+  int64_t rpc_net_delay = req.get_receive_timestamp() - req.get_send_timestamp();
+  if (rpc_net_delay < 0) {
+    rpc_net_delay = 0;
+  }
   if (!OB_SUCC(ret)) {
 
   } else if (NULL != queue) {
@@ -591,8 +595,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES,
                 pkt.get_encoded_size() + OB_NET_HEADER_LENGTH);
-      EVENT_ADD(RPC_NET_DELAY,
-                req.get_receive_timestamp() - req.get_send_timestamp());
+      EVENT_ADD(RPC_NET_DELAY, rpc_net_delay);
       EVENT_ADD(RPC_NET_FRAME_DELAY,
                 now - req.get_receive_timestamp());
     }
@@ -630,8 +633,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES,
                 pkt.get_encoded_size() + OB_NET_HEADER_LENGTH);
-      EVENT_ADD(RPC_NET_DELAY,
-                req.get_receive_timestamp() - req.get_send_timestamp());
+      EVENT_ADD(RPC_NET_DELAY, rpc_net_delay);
       EVENT_ADD(RPC_NET_FRAME_DELAY,
                 now - req.get_receive_timestamp());
     }
