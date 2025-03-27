@@ -209,7 +209,7 @@ public:
       } else {
         q = decint;
       }
-    } else if (OB_LIKELY(INT64_MIN <= lhs && lhs <= INT64_MAX)) {
+    } else if (scale < 19 && OB_LIKELY(INT64_MIN <= lhs && lhs <= INT64_MAX)) {
       uint64_t sf = pow10(scale);
       q = scale_to_integer(decint, sf, scale, err, round_up);
     } else {
@@ -282,7 +282,7 @@ public:
       } else {
         q = decint;
       }
-    } else if (OB_LIKELY(lhs <= UINT64_MAX)) {
+    } else if (scale < 19 && OB_LIKELY(lhs <= UINT64_MAX)) {
       uint64_t sf = pow10(scale);
       q = scale_to_unsigned_integer(decint, sf, scale, err, round_up);
     } else {
