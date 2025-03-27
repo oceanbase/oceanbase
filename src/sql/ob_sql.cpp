@@ -2630,7 +2630,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     }
   }
 
-  if (!(pc_ctx->sql_ctx_.is_sensitive_)) {
+  if ((NULL != pc_ctx) && !(pc_ctx->sql_ctx_.is_sensitive_)) {
     // if sql context contains sensitive data, can not flush sql info to trace.log
     FLT_SET_TAG(sql_text, trimed_stmt);
   }
@@ -2802,7 +2802,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
     }
   }
 
-  if (!(pc_ctx->sql_ctx_.is_sensitive_)) {
+  if ((NULL != pc_ctx) && !(pc_ctx->sql_ctx_.is_sensitive_)) {
     // if sql context contains sensitive data, can not flush sql info to trace.log
     FLT_SET_TAG(sql_text, trimed_stmt);
   }
