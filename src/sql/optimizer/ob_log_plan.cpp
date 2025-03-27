@@ -3539,8 +3539,8 @@ int ObLogPlan::get_histogram_by_join_exprs(ObOptimizerContext &optimizer_ctx,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo* session_info = optimizer_ctx.get_session_info();
-  ObSchemaGetterGuard *schema_guard = optimizer_ctx.get_schema_guard();
-  if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+  ObSqlSchemaGuard *sql_schema_guard = optimizer_ctx.get_sql_schema_guard();
+  if (OB_ISNULL(stmt) || OB_ISNULL(sql_schema_guard) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info get unexpected null", K(ret));
   } else {
@@ -3553,12 +3553,12 @@ int ObLogPlan::get_histogram_by_join_exprs(ObOptimizerContext &optimizer_ctx,
       LOG_WARN("Invalid argument passed in", K(table_id), K(ret));
     } else if (!table_item->is_basic_table()) {
       // nop, don't skip none base table (such as view) for now.
-    } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                      table_item->ref_id_, table_schema))) {
+    } else if (OB_FAIL(sql_schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                          table_item->ref_id_, table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(table_id), K(column_id), K(table_item->ref_id_), K(*table_item));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
+      LOG_WARN("get unexpected null", K(ret), KPC(table_item));
     } else if (OB_FAIL(optimizer_ctx.get_opt_stat_manager()->get_column_stat(
                 session_info->get_effective_tenant_id(),
                 table_item->ref_id_,
@@ -12665,20 +12665,20 @@ int ObLogPlan::check_pwj_cons(const ObPwjConstraint &pwj_cons,
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < pwj_cons.count(); ++i) {
       const int64_t table_idx = pwj_cons.at(i);
       ObTablePartitionInfo *table_part_info = NULL;
-      ObSchemaGetterGuard *schema_guard = get_optimizer_context().get_schema_guard();
+      ObSqlSchemaGuard *sql_schema_guard = get_optimizer_context().get_sql_schema_guard();
       ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
       const ObTableSchema *table_schema = NULL;
       PwjTable table;
       if (table_idx < 0 || table_idx >= base_location_cons.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table index is invalid", K(ret), K(table_idx), K(base_location_cons.count()));
-      } else if (OB_ISNULL(schema_guard) || OB_ISNULL(session) ||
+      } else if (OB_ISNULL(sql_schema_guard) || OB_ISNULL(session) ||
                  OB_ISNULL(table_part_info = base_location_cons.at(table_idx).table_partition_info_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid table part info", K(ret), K(table_part_info), K(schema_guard), K(session));
-      } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                        base_location_cons.at(table_idx).key_.ref_table_id_,
-                                                        table_schema))) {
+        LOG_WARN("invalid table part info", K(ret), K(table_part_info), K(sql_schema_guard), K(session));
+      } else if (OB_FAIL(sql_schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                            base_location_cons.at(table_idx).key_.ref_table_id_,
+                                                            table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(table_schema),
                                              K(base_location_cons.at(table_idx).key_.ref_table_id_));
       } else if (OB_ISNULL(table_schema)) {

@@ -535,6 +535,25 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
   return ret;
 }
 
+int ObSqlSchemaGuard::get_table_schema(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const share::schema::ObTableSchema *&table_schema,
+                                      bool is_link /* = false*/)
+{
+  int ret = OB_SUCCESS;
+  if (is_link) {
+    OZ (get_link_table_schema(table_id, table_schema), table_id, is_link);
+  } else if (is_external_object_id(table_id)) {
+    if (OB_FAIL(get_mocked_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get mocked table schema", K(table_id), K(ret));
+    }
+  } else {
+    OV (OB_NOT_NULL(schema_guard_));
+    OZ (schema_guard_->get_table_schema(tenant_id, table_id, table_schema), table_id, is_link);
+  }
+  return ret;
+}
+
 int ObSqlSchemaGuard::get_database_schema(const uint64_t database_id,
                                           const ObDatabaseSchema *&database_schema)
 {

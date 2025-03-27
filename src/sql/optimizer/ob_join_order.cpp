@@ -189,7 +189,6 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
   ObSqlSchemaGuard *sql_schema_guard = NULL;
   const ObDMLStmt *stmt = NULL;
   const ParamStore *params = NULL;
@@ -201,7 +200,6 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
   table_partition_info = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(allocator_) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-      OB_ISNULL(schema_guard = opt_ctx->get_schema_guard()) ||
       OB_ISNULL(sql_schema_guard = opt_ctx->get_sql_schema_guard()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id)) ||
@@ -211,7 +209,7 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
       OB_ISNULL(phy_plan_ctx = exec_ctx->get_physical_plan_ctx())
    || OB_ISNULL(session_info = sql_ctx->session_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(schema_guard), K(sql_schema_guard),
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(sql_schema_guard),
         K(stmt), K(params), K(exec_ctx), K(sql_ctx), K(phy_plan_ctx),
         K(session_info), K(allocator_), K(ret));
   } else if (OB_ISNULL(table_partition_info = reinterpret_cast<ObTablePartitionInfo*>(
@@ -15805,7 +15803,6 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   ObSEArray<ObColumnRefRawExpr*, 16> column_exprs;
   ObSEArray<uint64_t, 16> column_ids;
   ObSQLSessionInfo *session_info = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id) ||
       OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -15813,8 +15810,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   } else if (OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
              OB_ISNULL(get_plan()) ||
              OB_ISNULL(table_partition_info_) ||
-             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
-             OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid params", K(get_plan()),  K(ret));
   } else if (OB_FAIL(get_plan()->get_column_exprs(table_id, column_exprs))) {

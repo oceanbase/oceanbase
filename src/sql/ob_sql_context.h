@@ -464,6 +464,10 @@ public:
   int get_table_schema(uint64_t table_id,
                        const share::schema::ObTableSchema *&table_schema,
                        bool is_link = false) const;
+  int get_table_schema(const uint64_t tenant_id,
+                       const uint64_t table_id,
+                       const share::schema::ObTableSchema *&table_schema,
+                       bool is_link = false);
   int get_database_schema(const uint64_t database_id,
                           const ObDatabaseSchema *&database_schema);
   int get_column_schema(uint64_t table_id, const common::ObString &column_name,
