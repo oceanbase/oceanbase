@@ -150,6 +150,7 @@ public:
       schema_column_count_(0),
       compat_version_(READ_INFO_VERSION_V3),
       is_cs_replica_compat_(false),
+      is_delete_insert_table_(false),
       reserved_(0),
       schema_rowkey_cnt_(0),
       rowkey_cnt_(0),
@@ -232,6 +233,7 @@ public:
     return false;
   }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
+  OB_INLINE bool is_delete_insert_table() const { return is_delete_insert_table_; }
   DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
                                 const ObColDesc &desc,
@@ -251,7 +253,7 @@ protected:
   static const int64_t READ_INFO_VERSION_V2 = 2;
   static const int64_t READ_INFO_VERSION_V3 = 3;
   static const int32_t READ_INFO_ONE_BIT = 1;
-  static const int32_t READ_INFO_RESERVED_BITS = 15;
+  static const int32_t READ_INFO_RESERVED_BITS = 14;
 
   bool is_inited_;
   bool is_oracle_mode_;
@@ -262,8 +264,9 @@ protected:
     struct {
       uint32_t schema_column_count_;
       uint16_t compat_version_;
-      uint16_t is_cs_replica_compat_ : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
-      uint16_t reserved_             : READ_INFO_RESERVED_BITS;
+      uint16_t is_cs_replica_compat_   : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
+      uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT;
+      uint16_t reserved_               : READ_INFO_RESERVED_BITS;
     };
   };
   int64_t schema_rowkey_cnt_;

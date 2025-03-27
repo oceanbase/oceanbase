@@ -223,6 +223,7 @@ void ObReadInfoStruct::reset()
   schema_column_count_ = 0;
   compat_version_ = READ_INFO_VERSION_V3;
   is_cs_replica_compat_ = false;
+  is_delete_insert_table_ = false;
   reserved_ = 0;
   schema_rowkey_cnt_ = 0;
   rowkey_cnt_ = 0;
@@ -281,6 +282,7 @@ int64_t ObReadInfoStruct::to_string(char *buf, const int64_t buf_len) const
     J_OBJ_START();
     J_KV(K_(is_inited), K_(compat_version), K_(is_oracle_mode),
         K_(is_cs_replica_compat),
+        K_(is_delete_insert_table),
         K_(schema_column_count),
         K_(schema_rowkey_cnt),
         K_(rowkey_cnt),
