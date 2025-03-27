@@ -5205,7 +5205,8 @@ int ObDMLResolver::set_basic_info_for_mocked_table(ObTableSchema &table_schema,
   ObSqlString temp_str;
   int64_t schema_version = 0;
 
-  if (OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, table_location))) {
+  if (ObExternalFileFormat::ODPS_FORMAT != format.format_type_ &&
+    OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, table_location))) {
     LOG_WARN("failed to resolve external file location", K(ret));
   } else if (OB_FAIL(temp_str.assign_fmt("temp_external_%lu", new_table_id))) {
     LOG_WARN("failed to assign table name", K(ret));
@@ -5296,7 +5297,7 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
   ObString table_location;
   if (OB_SUCC(ret)) {
     if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
-      table_location = ObString("mock_path");
+      // do nothing
     } else {
       if (OB_ISNULL(location_node->children_[0])) {
         ret = OB_ERR_UNEXPECTED;

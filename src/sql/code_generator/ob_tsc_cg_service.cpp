@@ -21,7 +21,7 @@ namespace oceanbase
 
 namespace share
 {
-  struct ObPartitionIdRowPair;
+  struct ObExternalTablePartInfo;
 }
 using namespace common;
 using namespace share;
@@ -87,7 +87,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
           LOG_WARN("failed to reserve partition infos array", K(ret), K(partition_num));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_partition_num(); ++i) {
-            share::ObPartitionIdRowPair part_info;
+            share::ObExternalTablePartInfo part_info;
             ObBasePartition *part = NULL;
             if (OB_FAIL(table_schema->get_part_by_idx(i, -1, part))) {
               LOG_WARN("failed to get part by idx", K(ret));
@@ -96,11 +96,12 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
               LOG_WARN("invalid partition", K(ret), K(i));
             } else {
               part_info.part_id_ = part->get_part_id();
+              ObIAllocator &ctdef_alloc = cg_.phy_plan_->get_allocator();
+
               const ObIArray<ObNewRow> &list_row_values = part->get_list_row_values();
               if (!list_row_values.empty()) {
                 int64_t pos = 0;
                 int64_t size = list_row_values.at(0).get_deep_copy_size();
-                ObIAllocator &ctdef_alloc = cg_.phy_plan_->get_allocator();
                 char *buf = (char *)ctdef_alloc.alloc(size);
                 if (OB_ISNULL(buf)) {
                   ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -110,7 +111,21 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
                                                                       size,
                                                                       pos))) {
                   LOG_WARN("failed to deep copy list row value", K(ret), K(i));
-                } else if (OB_FAIL(scan_ctdef.partition_infos_.set_part_pair_by_idx(i, part_info))) {
+                }
+              }
+
+              if (OB_SUCC(ret)) {
+                if (!part->get_external_location().empty()) {
+                  if (OB_FAIL(ob_write_string(ctdef_alloc,
+                                              part->get_external_location(),
+                                              part_info.partition_spec_))) {
+                    LOG_WARN("fail to write file url", K(ret));
+                  }
+                }
+              }
+
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(scan_ctdef.partition_infos_.set_part_pair_by_idx(i, part_info))) {
                   LOG_WARN("failed to push back partition info", K(ret), K(i));
                 }
               }
@@ -129,6 +144,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
           LOG_WARN("fail to set string", K(ret));
         } else if (OB_FAIL(scan_ctdef.external_file_access_info_.store_str(table_schema->get_external_file_location_access_info()))) {
           LOG_WARN("fail to set access info", K(ret));
+        } else if (OB_FAIL(scan_ctdef.external_file_pattern_.store_str(table_schema->get_external_file_pattern()))) {
+          LOG_WARN("fail to set pattern", K(ret));
         }
       }
     }

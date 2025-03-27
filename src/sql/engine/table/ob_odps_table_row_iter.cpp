@@ -2463,14 +2463,10 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
       const share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
       apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
-      if (0 != odps_partition.file_id_) {
-        if (INT64_MAX == odps_partition.file_id_ && 0 == odps_partition.file_url_.compare("#######DUMMY_FILE#######")) {
-          // do nothing
-          *(const_cast<int64_t*>(&odps_partition.file_size_)) = 0;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected file id", K(ret), K(i), K(odps_partition.file_id_), K(odps_partition.part_id_));
-        }
+      if (INT64_MAX == odps_partition.file_id_
+          && 0 == odps_partition.file_url_.compare("#######DUMMY_FILE#######")) {
+        // do nothing
+        *(const_cast<int64_t*>(&odps_partition.file_size_)) = 0;
       } else if (odps_partition.file_size_ >= 0) {
         // do nothing
       } else if (OB_FAIL(odps_driver.create_downloader(odps_partition.file_url_,

@@ -6440,7 +6440,7 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
   static const double AVG_COLUMN_STORE_COLUMN_RATIO = 0.5;
 
   const ObTableSchema *table_schema = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObLogicalOperator *best_plan = NULL;
   const ObDMLStmt *stmt = NULL;
   double group_ndv = 1.0;
@@ -6455,9 +6455,12 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FALSE_IT(column = static_cast<ObColumnRefRawExpr*>(pushdown_groupby_columns.at(0)))) {
-  } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
-  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+  } else if (FALSE_IT(sql_schema_guard = get_optimizer_context().get_sql_schema_guard())) {
+  } else if (OB_FAIL(sql_schema_guard->get_table_schema(table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_id(0, first_column_id))) {
     LOG_WARN("failed to get first rowkey column id", K(ret));
   } else if (column->get_column_id() == first_column_id) {

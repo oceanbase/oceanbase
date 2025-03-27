@@ -214,85 +214,84 @@ int ObExternalTableFileManager::get_external_files_by_part_ids(
 
 int ObExternalTableFileManager::get_mocked_external_table_files(
     const uint64_t tenant_id,
-    const uint64_t table_id,
     ObIArray<int64_t> &partition_ids,
-    ObIArray<ObExternalFileInfo> &external_files,
-    const ObTableSchema *table_schema,
-    sql::ObExecContext &ctx)
+    sql::ObExecContext &ctx,
+    const ObDASScanCtDef &das_ctdef,
+    ObIArray<ObExternalFileInfo> &external_files)
 {
   int ret = OB_SUCCESS;
   ObExprRegexpSessionVariables regexp_vars;
   ObSqlString full_path;
   ObArray<ObString> file_urls;
   ObArray<int64_t> file_sizes;
+  bool is_part_table = das_ctdef.table_param_.is_partition_table();
 
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret));
+  bool is_odps_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(das_ctdef.external_file_format_str_.str_,
+                                                  external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
   } else {
-    bool is_odps_table = false;
-    if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_table))) {
-      LOG_WARN("failed to check is odps external table or not", K(ret));
+    is_odps_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
+  }
+
+  if (!is_odps_table) {
+    OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
+    OZ (ObExternalTableUtils::collect_external_file_list(
+                                                        tenant_id,
+                                                        das_ctdef.ref_table_id_,
+                                                        das_ctdef.external_file_location_.str_,
+                                                        das_ctdef.external_file_access_info_.str_,
+                                                        das_ctdef.external_file_pattern_.str_,
+                                                        common::ObString::make_empty_string(),
+                                                        is_part_table,
+                                                        regexp_vars,
+                                                        ctx.get_allocator(),
+                                                        full_path,
+                                                        file_urls, file_sizes));
+    bool is_local_file_on_disk = ObSQLUtils::is_external_files_on_local_disk(
+                                                            das_ctdef.external_file_location_.str_);
+    for (int i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
+      ObExternalFileInfo file;
+      file.file_id_ = i + 1;
+      file.file_size_ = file_sizes.at(i);
+      ObString file_url = file_urls.at(i);
+      if (is_local_file_on_disk) {
+        ObString ip_port = file_url.split_on(ip_delimiter);
+        OZ (file.file_addr_.parse_from_string(ip_port));
+      }
+      file.file_url_ = file_url;
+      file.part_id_ = is_part_table ? i + 1 : 0;
+      OZ (external_files.push_back(file));
     }
-    if (!is_odps_table) {
-      OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
-      OZ (ObExternalTableUtils::collect_external_file_list(
-                  tenant_id,
-                  table_id,
-                  table_schema->get_external_file_location(),
-                  table_schema->get_external_file_location_access_info(),
-                  table_schema->get_external_file_pattern(),
-                  table_schema->get_external_properties(),
-                  table_schema->is_partitioned_table(),
-                  regexp_vars,
-                  ctx.get_allocator(),
-                  full_path,
-                  file_urls, file_sizes));
-      bool is_local_file_on_disk = ObSQLUtils::is_external_files_on_local_disk(
-                                                        table_schema->get_external_file_location());
-      for (int i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
+  } else {
+    if (is_part_table) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
+        int64_t part_id = partition_ids.at(i);
+
         ObExternalFileInfo file;
-        file.file_id_ = i + 1;
-        file.file_size_ = file_sizes.at(i);
-        ObString file_url = file_urls.at(i);
-        if (is_local_file_on_disk) {
-          ObString ip_port = file_url.split_on(ip_delimiter);
-          OZ (file.file_addr_.parse_from_string(ip_port));
+        bool found = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !found && j < das_ctdef.partition_infos_.count(); j++) {
+          share::ObExternalTablePartInfo part_info = das_ctdef.partition_infos_.at(j);
+          if (part_id == part_info.part_id_) {
+            file.file_url_ = part_info.partition_spec_;
+            file.part_id_ = part_id;
+            found = true;
+          }
         }
-        file.file_url_ = file_url;
-        file.part_id_ = table_schema->is_partitioned_table() ? i + 1 : 0;
-        OZ (external_files.push_back(file));
+
+        if (found) {
+          file.file_id_ = i + 1;
+          file.file_addr_ = GCTX.self_addr();
+          OZ (external_files.push_back(file));
+        }
       }
     } else {
-      if (table_schema->is_partitioned_table()) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
-          int64_t part_id = partition_ids.at(i);
-
-          ObExternalFileInfo file;
-          bool found = false;
-          for (int i = 0; OB_SUCC(ret) && !found && i < table_schema->get_partition_num(); i++) {
-            ObBasePartition *part = NULL;
-            if (OB_FAIL(table_schema->get_part_by_idx(i, -1, part))) {
-              LOG_WARN("failed to get part by idx", K(ret));
-            } else if (part_id == part->get_part_id()) {
-              file.file_url_ = part->get_external_location();
-              file.part_id_ = part_id;
-              found = true;
-            }
-          }
-
-          if (found) {
-            file.file_id_ = 0;
-            file.file_addr_ = GCTX.self_addr();
-            OZ (external_files.push_back(file));
-          }
-        }
-      } else {
-        ObExternalFileInfo file;
-        file.file_id_ = 0;
-        file.file_addr_ = GCTX.self_addr();
-        OZ (external_files.push_back(file));
-      }
+      ObExternalFileInfo file;
+      file.file_id_ = 1;
+      file.file_addr_ = GCTX.self_addr();
+      OZ (external_files.push_back(file));
     }
   }
   return ret;

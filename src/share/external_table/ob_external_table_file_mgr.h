@@ -134,11 +134,10 @@ public:
 
   int get_mocked_external_table_files(
       const uint64_t tenant_id,
-      const uint64_t table_id,
       ObIArray<int64_t> &partition_ids,
-      ObIArray<ObExternalFileInfo> &external_files,
-      const ObTableSchema *table_schema,
-      sql::ObExecContext &ctx);
+      sql::ObExecContext &ctx,
+      const ObDASScanCtDef &das_ctdef,
+      ObIArray<ObExternalFileInfo> &external_files);
 
   int get_external_files_by_part_id(
       const uint64_t tenant_id,

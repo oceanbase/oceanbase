@@ -2084,11 +2084,6 @@ int ObOdpsPartitionJNIScannerMgr::fetch_row_count(uint64_t tenant_id,
       for (int64_t i = 0; OB_SUCC(ret) && i < local_odps_partition_count; ++i) {
         const share::ObExternalFileInfo &odps_partition =
             external_table_files.at(i);
-        if (0 != odps_partition.file_id_) {
-          ret = OB_INVALID_PARTITION;
-          LOG_WARN("unexpected file id", K(ret), K(i),
-                  K(odps_partition.file_id_), K(odps_partition.part_id_));
-        }
 
         bool is_found = false;
         for (int64_t j = 0; OB_SUCC(ret) && j < remote_odps_partition_count; ++j) {

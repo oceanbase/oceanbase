@@ -235,24 +235,27 @@ int ObPXServerAddrUtil::get_external_table_loc(
       ret = part_ids.push_back((*iter)->partition_id_);
     }
 
-    bool is_external_object = is_external_object_id(ref_table_id);
-    const ObTableSchema *table_schema = NULL;
-
-    if (OB_SUCC(ret) && is_external_object) {
-      const ObSqlSchemaGuard& sql_schema_guard = ctx.get_sql_ctx()->cur_stmt_->get_query_ctx()->sql_schema_guard_;
-      OZ (sql_schema_guard.get_table_schema(ref_table_id, table_schema));
-    }
-
     OZ (ObSQLUtils::extract_pre_query_range(pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())));
 
-    if (is_external_object) {
-      OZ (ObExternalTableFileManager::get_instance().get_mocked_external_table_files(tenant_id,
-                                                                                      ref_table_id,
-                                                                                      part_ids,
-                                                                                      ext_file_urls,
-                                                                                      table_schema,
-                                                                                      ctx));
+    if (is_external_object_id(ref_table_id)) {
+      ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+      const ObOpSpec *root_op = NULL;
+      dfo.get_root(root_op);
+      if (OB_ISNULL(root_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+        LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+      } else if (scan_ops.count() == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("empty scan_ops", K(ret));
+      } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
+                                                            tenant_id, part_ids, ctx,
+                                                            scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
+                                                            ext_file_urls))) {
+        LOG_WARN("fail to get mocked external table files", K(ret));
+      }
     } else {
       OZ (ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(tenant_id,
                                                                                     ref_table_id,
