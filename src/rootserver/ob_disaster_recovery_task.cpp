@@ -237,6 +237,7 @@ static const char* disaster_recovery_task_type_strs[] = {
   "REMOVE PAXOS REPLICA",
   "REMOVE NON PAXOS REPLICA",
   "MODIFY PAXOS REPLICA NUMBER",
+  "REPLACE REPLICA",
   "MAX_TYPE"
 };
 

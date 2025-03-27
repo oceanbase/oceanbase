@@ -65,6 +65,7 @@ struct ObMigrationOpType
     REMOVE_LS_OP = 4,
     RESTORE_STANDBY_LS_OP = 5,
     REBUILD_TABLET_OP = 6,
+    REPLACE_LS_OP = 7,
     MAX_LS_OP,
   };
   static const char *get_str(const TYPE &status);
