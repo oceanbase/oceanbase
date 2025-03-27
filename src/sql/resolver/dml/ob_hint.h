@@ -340,7 +340,7 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_5_BP2  (oceanbase::common::cal_version(4, 3, 5, 2))
 #define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5_BP2
   static bool is_valid_opt_features_version(uint64_t version)
-  { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
+  { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
   static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
   static const int64_t UNSET_QUERY_TIMEOUT = -1;
