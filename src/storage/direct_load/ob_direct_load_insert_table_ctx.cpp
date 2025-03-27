@@ -55,8 +55,12 @@ ObDirectLoadInsertTableParam::~ObDirectLoadInsertTableParam()
 
 bool ObDirectLoadInsertTableParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && OB_INVALID_ID != dest_table_id_ && schema_version_ >= 0 &&
-         snapshot_version_ >= 0 && ls_partition_ids_.count() > 0;
+  return OB_INVALID_ID != table_id_
+            && OB_INVALID_ID != dest_table_id_
+            && schema_version_ >= 0
+            && snapshot_version_ >= 0
+            && ls_partition_ids_.count() > 0
+            && (column_count_ >= rowkey_column_count_);
 }
 
 int ObDirectLoadInsertTableParam::assign(const ObDirectLoadInsertTableParam &other)
@@ -297,7 +301,13 @@ int ObDirectLoadInsertTableContext::collect_obj(const ObDatumRow &datum_row)
     if (OB_FAIL(get_sql_stat(sql_stat))) {
       LOG_WARN("fail to get sql stat", KR(ret));
     } else {
-      if (param_.is_heap_table_ ) {
+      const int64_t iter_count = OB_MAX(param_.rowkey_column_count_, param_.column_count_);
+      if (OB_UNLIKELY(iter_count > sql_stat->get_col_stat_array().count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter_count exceeds the size of col_stat_array",
+            KR(ret), K(iter_count), K(sql_stat->get_col_stat_array().count()),
+            K(param_.rowkey_column_count_), K(param_.column_count_));
+      } else if (param_.is_heap_table_ ) {
         for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; i++) {
           const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
           const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
