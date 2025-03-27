@@ -185,6 +185,7 @@ private:
   int get_table_store_from_committed_trans_stores(ObDirectLoadTableStore &table_store);
   void clear_committed_trans_stores();
   int start_merge_op();
+  int init_collection_subschema();
 public:
   int commit_autoinc_value();
 public:

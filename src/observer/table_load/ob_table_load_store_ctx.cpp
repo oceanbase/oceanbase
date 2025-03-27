@@ -244,6 +244,8 @@ int ObTableLoadStoreCtx::init(
   // init sort param
   else if (OB_FAIL(init_sort_param())) {
     LOG_WARN("fail to init sort param", KR(ret));
+  } else if (OB_FAIL(init_collection_subschema())) {
+    LOG_WARN("fail to init subschema for collection type", KR(ret));
   }
   if (OB_SUCC(ret)) {
     is_inited_ = true;
@@ -1196,6 +1198,42 @@ int ObTableLoadStoreCtx::start_merge_op()
     LOG_WARN("fail to new ObTableLoadMergeRootOp", KR(ret));
   } else if (OB_FAIL(merge_root_op_->start())) {
     LOG_WARN("fail to start merge op", KR(ret));
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::init_collection_subschema()
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  ObExecContext *exec_ctx = ctx_->exec_ctx_;
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_, ctx_->param_.table_id_,
+                                                  schema_guard, table_schema))) {
+    LOG_WARN("fail to get database and table schema", K(ret), K(ctx_->param_.tenant_id_));
+  }
+  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid column schema", K(column_schema));
+    } else {
+      if (column_schema->is_collection()) {
+        // generate subschema for collection type
+        uint16_t subschema_id = 0;
+        const ObIArray<common::ObString> &extended_type_info = column_schema->get_extended_type_info();
+        if (OB_ISNULL(exec_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("exec_ctx is null", K(exec_ctx));
+        } else if (extended_type_info.count() != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected type name", K(ret), K(extended_type_info.count()));
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(extended_type_info.at(0), subschema_id))) {
+          LOG_WARN("failed to get array type subschema id", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
