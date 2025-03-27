@@ -533,6 +533,10 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
   }
 
   const int64_t now = ObTimeUtility::current_time();
+  int64_t rpc_net_delay = req.get_receive_timestamp() - req.get_send_timestamp();
+  if (rpc_net_delay < 0) {
+    rpc_net_delay = 0;
+  }
 
   const bool need_update_stat =
       !req.is_retry_on_lock() && oceanbase::lib::is_diagnose_info_enabled();
@@ -582,10 +586,6 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     }
   }
 
-  int64_t rpc_net_delay = req.get_receive_timestamp() - req.get_send_timestamp();
-  if (rpc_net_delay < 0) {
-    rpc_net_delay = 0;
-  }
   if (!OB_SUCC(ret)) {
 
   } else if (NULL != queue) {
