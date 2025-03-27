@@ -614,29 +614,6 @@ int ObCOMergeBatchExeDag::diagnose_compaction_info(compaction::ObDiagnoseTabletC
   return ret;
 }
 
-bool ObCOMergeBatchExeDag::check_can_schedule()
-{
-  int ret = OB_SUCCESS;
-  bool bret = false;
-  ObCOMergeDagNet *dag_net = static_cast<ObCOMergeDagNet*>(get_dag_net());
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(dag_net->get_merge_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("merge ctx is null", K(ret), KPC(dag_net));
-  } else if (start_cg_idx_ <= dag_net->get_merge_ctx()->base_rowkey_cg_idx_ && dag_net->get_merge_ctx()->base_rowkey_cg_idx_ < end_cg_idx_) {
-    if ((end_cg_idx_ - start_cg_idx_) == dag_net->get_merge_ctx()->get_unfinished_cg_cnt()) {
-      bret = true;
-    } else if (REACH_THREAD_TIME_INTERVAL(20 * 60 * 1000 * 1000L /*20 min*/)) {
-      LOG_INFO("waiting other batch exe dag finished", KPC(this));
-    }
-  } else {
-    bret = true;
-  }
-  return bret;
-}
-
 bool ObCOMergeBatchExeDag::check_need_stop_dag(const int error_code)
 {
   return OB_TRANS_CTX_NOT_EXIST == error_code
