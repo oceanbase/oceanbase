@@ -12079,6 +12079,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
               K(q_name),
               K(udf_info.ref_expr_->get_param_exprs().count()),
               K(object_type->get_member_count()));
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
     }
   }
   for (; OB_SUCC(ret) && param_pos < udf_info.ref_expr_->get_param_exprs().count(); ++param_pos) {
@@ -12128,6 +12129,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
               K(q_name),
               K(udf_info.ref_expr_->get_param_exprs().count()),
               K(object_type->get_member_count()));
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
     }
   }
   if (OB_SUCC(ret) && total_assign_cnt != udf_info.param_names_.count()) {
@@ -12137,6 +12139,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
               K(q_name),
               K(udf_info.ref_expr_->get_param_exprs().count()),
               K(object_type->get_member_count()));
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
   }
   OZ (user_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize));
   OX (object_expr->set_rowsize(rowsize));
@@ -12198,6 +12201,7 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   if (OB_SUCC(ret) && udf_info.param_names_.count() > 0) { // 构造函数不允许使用=>赋值
     ret = OB_ERR_CALL_WRONG_ARG;
     LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
   }
   CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(user_type)));
   OX (coll_expr->set_type(user_type->get_type()));
@@ -12273,6 +12277,7 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
         ret = OB_ERR_CALL_WRONG_ARG;
         LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
                 K(ret), K(actual_udt_id), K(coll_type->get_element_type()));
+        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
       } else {
         OZ (coll_expr->add_param_expr(child));
       }
