@@ -403,12 +403,28 @@ int ObTransformLeftJoinToAnti::check_condition_expr_validity(const ObRawExpr *ex
     const ObRawExpr *first_param = expr->get_param_expr(0);
     ObNotNullContext not_null_context(*ctx_, stmt);
     ObArray<ObRawExpr *> tmp_constraints;
-    /* do the following two things:
-     * 1. check the first param is not null
-     * 2. the first param contain col in right table
-     *    && the first param is non_propagate to the col in right table.
-     */
-    if (right_table->is_joined_table() &&
+    ObIArray<JoinedTable*> &joined_tables = stmt->get_joined_tables();
+    /* a condition `expr IS NULL` is valid to transform a left join to anti join
+       if all the following conditions are met:
+       1. The `expr` contains column(s) in right table,
+       2. The `expr` is null-propagate-able.
+       3. The `expr` is NOT NULL, unless the column(s) in right table are filled
+          as NULL for a non-matched join row, and propagate the NULL result to the `expr`.
+    */
+    for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables.count(); ++i) {
+      // other joined_table in stmt may produce NULL columns for a non-matched join row
+      // ane make `expr` NULL.
+      JoinedTable *other_joined_table = joined_tables.at(i);
+      if (OB_ISNULL(joined_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (other_joined_table == joined_table) {
+      } else if (OB_FAIL(not_null_context.add_joined_table(other_joined_table))) {
+        LOG_WARN("failed to add context", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (right_table->is_joined_table() &&
         OB_FAIL(not_null_context.add_joined_table(static_cast<JoinedTable *>(right_table)))) {
       LOG_WARN("failed to add context", K(ret));
     } else if (OB_FAIL(not_null_context.add_filter(joined_table->get_join_conditions()))) {
