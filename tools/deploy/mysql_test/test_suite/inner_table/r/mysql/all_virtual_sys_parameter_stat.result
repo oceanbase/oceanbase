@@ -536,6 +536,7 @@ _regex_engine
 _resource_limit_max_session_num
 _resource_limit_spec
 _restore_idle_time
+_restore_io_max_retry_count
 _rowsets_enabled
 _rowsets_max_rows
 _rowsets_target_maxsize

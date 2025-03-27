@@ -210,6 +210,28 @@ int ObLSBackupRestoreUtil::read_macro_block_data(const common::ObString &path, c
   return ret;
 }
 
+int ObLSBackupRestoreUtil::read_macro_block_data_with_retry(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
+      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
+      blocksstable::ObBufferReader &data_buffer)
+{
+  int ret = OB_SUCCESS;
+  int64_t io_retry_cnt = 0;
+  const int64_t max_retry_cnt = GCONF._restore_io_max_retry_count;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(read_macro_block_data(path, storage_info, mod, macro_index, align_size, read_buffer, data_buffer))) {
+      LOG_WARN("fail to inner read macro block data", K(ret), K(path), K(macro_index),  K(align_size));
+      if (is_io_error(ret) && ++io_retry_cnt <= max_retry_cnt) {
+        ret = OB_SUCCESS;
+        LOG_INFO("read macro block data retry", K(io_retry_cnt), K(max_retry_cnt));
+        ob_usleep(READ_MACRO_BLOCK_RETRY_INTERVAL);
+      }
+    } else {
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObLSBackupRestoreUtil::read_ddl_sstable_other_block_id_list_in_ss_mode(
     const share::ObBackupDest &backup_set_dest, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod,
     const ObBackupMetaIndex &meta_index, const storage::ObITable::TableKey &table_key, common::ObIArray<ObBackupLinkedItem> &link_item_list)

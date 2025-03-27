@@ -2561,3 +2561,8 @@ DEF_BOOL(_enable_delete_insert_scan, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_kvcache_hazard_pointer, OB_CLUSTER_PARAMETER, "True",
          "use hazard pointer(default) or reference counting to manage memory in kvcache",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY))
+
+DEF_INT(_restore_io_max_retry_count, OB_CLUSTER_PARAMETER, "3", "[0, 64]",
+        "max retry times for restore when encounting io error"
+        "Range: [0,64] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
