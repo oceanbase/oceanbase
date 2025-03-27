@@ -11,12 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "ob_inner_table_schema.h"
 
 #include "share/schema/ob_schema_macro_define.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -1260,7 +1257,7 @@ int ObInnerTableSchema::dba_ob_license_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(      SELECT END_USER,             LICENSE_ID,             LICENSE_CODE,             LICENSE_TYPE,             PRODUCT_TYPE,             DATE_FORMAT(ISSUANCE_DATE, '%Y-%m-%d %H:%i:%s') as ISSUANCE_DATE,             DATE_FORMAT(ACTIVATION_TIME, '%Y-%m-%d %H:%i:%s') as ACTIVATION_TIME,             DATE_FORMAT(EXPIRED_TIME, '%Y-%m-%d %H:%i:%s') as EXPIRED_TIME,             OPTIONS,             CORE_NUM,             NODE_NUM,             CLUSTER_ULID FROM OCEANBASE.__ALL_LICENSE )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(      SELECT END_USER,             LICENSE_ID,             LICENSE_CODE,             LICENSE_TYPE,             PRODUCT_TYPE,             DATE_FORMAT(ISSUANCE_DATE, '%Y-%m-%d %H:%i:%s') as ISSUANCE_DATE,             DATE_FORMAT(ACTIVATION_TIME, '%Y-%m-%d %H:%i:%s') as ACTIVATION_TIME,             DATE_FORMAT(EXPIRED_TIME, '%Y-%m-%d %H:%i:%s') as EXPIRED_TIME,             OPTIONS,             NODE_NUM,             CLUSTER_ULID FROM OCEANBASE.__ALL_LICENSE )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -37279,7 +37279,6 @@ def_table_schema(
             DATE_FORMAT(ACTIVATION_TIME, '%Y-%m-%d %H:%i:%s') as ACTIVATION_TIME,
             DATE_FORMAT(EXPIRED_TIME, '%Y-%m-%d %H:%i:%s') as EXPIRED_TIME,
             OPTIONS,
-            CORE_NUM,
             NODE_NUM,
             CLUSTER_ULID FROM OCEANBASE.__ALL_LICENSE
 """.replace("\n", " "),
