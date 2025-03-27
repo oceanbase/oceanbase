@@ -3239,6 +3239,21 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
             c_expr->set_result_type(result_type);
           }
+          if (OB_SUCC(ret) && nullptr != ctx_.secondary_namespace_) {
+            const pl::ObPLSymbolTable* symbol_table = NULL;
+            const pl::ObPLVar* var = NULL;
+            CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+            CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
+            if (OB_SUCC(ret)) {
+              if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
+                if (!var->is_readonly()) {
+                  // set in out flag
+                  OX (const_cast<pl::ObPLVar*>(var)->set_name(pl::ObPLResolver::ANONYMOUS_INOUT_ARG));
+                }
+                OX (const_cast<pl::ObPLVar*>(var)->set_is_referenced(true));
+              }
+            }
+          }
 //execute阶段不需要统计prepare_param_count_的个数
 //          ctx_.prepare_param_count_++;
 //          LOG_DEBUG("prepare stmt add new param", K(ctx_.prepare_param_count_));
@@ -3309,6 +3324,21 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             c_expr->set_accuracy(param.get_accuracy());
             c_expr->set_result_flag(param.get_result_flag()); // not_null etc
             c_expr->set_param(param);
+          }
+          if (OB_SUCC(ret) && nullptr != ctx_.secondary_namespace_) {
+            const pl::ObPLSymbolTable* symbol_table = NULL;
+            const pl::ObPLVar* var = NULL;
+            CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+            CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
+            if (OB_SUCC(ret)) {
+              if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
+                if (!var->is_readonly()) {
+                  // set in out flag
+                  OX (const_cast<pl::ObPLVar*>(var)->set_name(pl::ObPLResolver::ANONYMOUS_INOUT_ARG));
+                }
+                OX (const_cast<pl::ObPLVar*>(var)->set_is_referenced(true));
+              }
+            }
           }
         }
       }
