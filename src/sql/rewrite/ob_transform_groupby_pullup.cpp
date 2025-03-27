@@ -234,9 +234,11 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_on_conditions(*stmt, ignore_tables))) {
       LOG_WARN("failed to check ignore views", K(ret));
-    } else if (OB_FAIL(check_where_conditions(*stmt, ignore_tables))) {
-      LOG_WARN("failed to check ignore views", K(ret));
-    }
+    } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3)) {
+      if (OB_FAIL(check_where_conditions(*stmt, ignore_tables))) {
+        LOG_WARN("failed to check ignore views", K(ret));
+      } else { /* do nothing */ }
+    } else { /* do nothing */ }
   }
   // check view validity
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_from_item_size(); ++i) {
