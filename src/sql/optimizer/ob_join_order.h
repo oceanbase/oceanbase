@@ -2256,6 +2256,8 @@ struct NullAwareAntiJoinInfo {
                                    const ObJoinOrder &right_tree,
                                    bool &is_valid);
 
+    int check_can_push_join_pred(bool &can_push) const;
+
     int generate_inner_nl_paths(const EqualSets &equal_sets,
                                 const ObIArray<Path*> &left_paths,
                                 Path *right_path,

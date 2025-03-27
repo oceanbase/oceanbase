@@ -11963,14 +11963,16 @@ int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_con
                                             bool &is_valid)
 {
   int ret = OB_SUCCESS;
+  bool right_tree_can_push_pred = false;
   is_valid = true;
   if (path_info.force_inner_nl_) {
     is_valid = true;
   } else if (join_conditions.empty() || path_info.force_mat_ ||
       (ACCESS != right_tree.get_type() && SUBQUERY != right_tree.get_type())) {
     is_valid = false;
-  } else if (!OPT_CTX.is_push_join_pred_into_view_enabled() &&
-             SUBQUERY == right_tree.get_type()) {
+  } else if (OB_FAIL(right_tree.check_can_push_join_pred(right_tree_can_push_pred))) {
+    LOG_WARN("failed to check right tree can push join pred", K(ret));
+  } else if (!right_tree_can_push_pred) {
     is_valid = false;
   } else if (CONNECT_BY_JOIN == path_info.join_type_) {
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_conditions.count(); i++) {
@@ -11980,6 +11982,49 @@ int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_con
       } else if (join_conditions.at(i)->has_flag(CNT_ROWNUM)) {
         is_valid = false;
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_can_push_join_pred(bool &can_push) const
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *parent_stmt = NULL;
+  const TableItem *table_item = NULL;
+  const ObSelectStmt *child_stmt = NULL;
+  can_push = true;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(OPT_CTX.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (OPT_CTX.is_push_join_pred_into_view_enabled()
+             || SUBQUERY != get_type()) {
+    // do nothing
+  } else if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3,
+                                                                COMPAT_VERSION_4_3_0,
+                                                                COMPAT_VERSION_4_3_5_BP2)) {
+    can_push = false;
+  } else if (OB_ISNULL(parent_stmt = get_plan()->get_stmt())
+             || OB_ISNULL(table_item = parent_stmt->get_table_item_by_id(table_id_))
+             || OB_ISNULL(child_stmt = table_item->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(parent_stmt), K(table_item), K(child_stmt));
+  } else {
+    while (OB_SUCC(ret) && can_push) {
+      if (!child_stmt->is_spj() || 1 != child_stmt->get_table_size()) {
+        can_push = false;
+      } else if (OB_ISNULL(table_item = child_stmt->get_table_item(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), KPC(child_stmt));
+      } else if (table_item->is_generated_table()) {
+        if (OB_ISNULL(child_stmt = table_item->ref_query_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), KPC(table_item));
+        }
+      } else {
+        // view contains only one base table, just push the predicates
+        break;
+      }
     }
   }
   return ret;
