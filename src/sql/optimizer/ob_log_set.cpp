@@ -607,6 +607,16 @@ int ObLogSet::allocate_granule_pre(AllocGIContext &ctx)
      */
     ctx.set_in_partition_wise_state(this);
     LOG_TRACE("in find partition wise state", K(ctx));
+  } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_
+             && CLUSTER_VERSION_4_3_5_2 > GET_MIN_CLUSTER_VERSION()) {
+    // BLOCK GI for set partition is not supported before version 4352
+    if (!ctx.is_in_partition_wise_state() &&
+        !ctx.is_in_pw_affinity_state()) {
+      ctx.set_in_partition_wise_state(this);
+      if (OB_FAIL(ctx.set_pw_affinity_state())) {
+        LOG_WARN("set affinity state failed", K(ret), K(ctx));
+      }
+    }
   } else if (ctx.is_in_partition_wise_state()) {
     /**
      *       (partition wise join below)
