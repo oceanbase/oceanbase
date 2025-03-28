@@ -23,12 +23,12 @@ ObKVFeatureMode::ObKVFeatureMode(const uint8_t *values)
     value_ = 0;
     is_valid_ = false;
   } else {
-    value_ = values[0];
+    value_ = static_cast<uint16_t>(values[0]);
     is_valid_ = true;
   }
 }
 
-void ObKVFeatureMode::set_ttl_mode(uint8_t mode)
+void ObKVFeatureMode::set_ttl_mode(uint16_t mode)
 {
   is_valid_ = check_mode_valid(mode);
   if (is_valid_) {
@@ -36,7 +36,7 @@ void ObKVFeatureMode::set_ttl_mode(uint8_t mode)
   }
 }
 
-void ObKVFeatureMode::set_rerouting_mode(uint8_t mode)
+void ObKVFeatureMode::set_rerouting_mode(uint16_t mode)
 {
   is_valid_ = check_mode_valid(mode);
   if (is_valid_) {
@@ -44,7 +44,7 @@ void ObKVFeatureMode::set_rerouting_mode(uint8_t mode)
   }
 }
 
-void ObKVFeatureMode::set_hotkey_mode(uint8_t mode)
+void ObKVFeatureMode::set_hotkey_mode(uint16_t mode)
 {
   is_valid_ = check_mode_valid(mode);
   if (is_valid_) {
@@ -52,7 +52,7 @@ void ObKVFeatureMode::set_hotkey_mode(uint8_t mode)
   }
 }
 
-void ObKVFeatureMode::set_value(uint8_t value)
+void ObKVFeatureMode::set_value(uint16_t value)
 {
   if ((value & 0b11) == 0b11 || ((value >> 2) & 0b11) == 0b11 || ((value >> 4) & 0b11) == 0b11) {
     is_valid_ = false;

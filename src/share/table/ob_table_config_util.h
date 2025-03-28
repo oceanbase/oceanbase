@@ -25,6 +25,7 @@ enum ObKVFeatureType {
   TTL,
   REROUTING,
   HOTKEY,
+  DISTRIBUTED_EXECUTE,
   MAXTYPE
 };
 
@@ -34,24 +35,25 @@ public:
   ObKVFeatureMode(): is_valid_(false), value_(0) {}
   ObKVFeatureMode(const uint8_t *values);
   bool is_valid() { return is_valid_; }
-  bool check_mode_valid(uint8_t mode) { return mode > 2 ? false : true; }
+  bool check_mode_valid(uint16_t mode) { return mode > 2 ? false : true; }
   bool is_ttl_enable();
   bool is_rerouting_enable();
   bool is_hotkey_enable();
-  void set_ttl_mode(uint8_t mode);
-  void set_rerouting_mode(uint8_t mode);
-  void set_hotkey_mode(uint8_t mode);
-  void set_value(uint8_t value);
-  int8_t get_value() const { return value_; }
+  void set_ttl_mode(uint16_t mode);
+  void set_rerouting_mode(uint16_t mode);
+  void set_hotkey_mode(uint16_t mode);
+  void set_value(uint16_t value);
+  uint16_t get_value() const { return value_; }
 private:
   bool is_valid_;
 	union {
-    uint8_t value_;
+    uint16_t value_; //FARM COMPAT WHITELIST
     struct {
         uint8_t ttl_mode_ : 2;
         uint8_t rerouting_mode_ : 2;
         uint8_t hotkey_mode_ : 2;
-        uint8_t reserver_mode_ :2;
+        uint8_t distributed_execute_mode_ : 2;
+        uint8_t reserver_mode_ :8;
       };
     };
 private:

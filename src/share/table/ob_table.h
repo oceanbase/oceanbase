@@ -1227,18 +1227,18 @@ public:
   void set_deserialize_allocator(common::ObIAllocator *allocator);
   void set_entity_factory(ObITableEntityFactory *entity_factory);
 
-  bool is_check_and_execute() const override { return is_check_and_execute_; }
-  bool is_check_exists() const override { return is_check_and_execute_ && !is_check_no_exists_; }
-  bool rollback_when_check_failed() const override { return is_check_and_execute_ && rollback_when_check_failed_; }
+  bool is_check_and_execute() const override { return table_flag_.is_check_and_execute_; }
+  bool is_check_exists() const override { return table_flag_.is_check_and_execute_ && !table_flag_.is_check_no_exists_; }
+  bool rollback_when_check_failed() const override { return table_flag_.is_check_and_execute_ && table_flag_.rollback_when_check_failed_; }
   uint64_t get_checksum();
 
   TO_STRING_KV(K_(query),
                K_(mutations),
                K_(return_affected_entity),
                K_(flag),
-               K_(is_check_and_execute),
-               K_(is_check_no_exists),
-               K_(rollback_when_check_failed));
+               K_(table_flag_.is_check_and_execute),
+               K_(table_flag_.is_check_no_exists),
+               K_(table_flag_.rollback_when_check_failed));
 private:
   ObTableQuery query_;
   ObTableBatchOperation mutations_;
@@ -1251,8 +1251,14 @@ private:
       bool is_check_and_execute_ : 1;
       bool is_check_no_exists_ : 1;
       bool rollback_when_check_failed_ : 1;
-      int64_t reserved : 61;
-    };
+      uint64_t reserved : 61; // 64 - 3
+    } table_flag_;
+    struct
+    {
+      uint64_t reversed_1 : 3;
+      uint64_t is_user_specific_T_ : 1;
+      uint64_t reserved : 60; // 64 - 4
+    } hbase_flag_;
   };
 };
 
@@ -1778,8 +1784,8 @@ public:
     deserialize_alloc_ = allocator;
   }
 
-  OB_INLINE bool is_check_no_exists() const { return is_check_no_exists_; }
-  OB_INLINE bool rollback_when_check_failed() const { return rollback_when_check_failed_; }
+  OB_INLINE bool is_check_no_exists() const { return table_flag_.is_check_no_exists_; }
+  OB_INLINE bool rollback_when_check_failed() const { return table_flag_.rollback_when_check_failed_; }
 
   OB_INLINE void set_dictionary(const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names) {
     all_rowkey_names_ = all_rowkey_names;
@@ -1798,7 +1804,7 @@ public:
 
   TO_STRING_KV(K_(op_type),
                K_(flag),
-               K_(is_check_no_exists),
+               K_(table_flag_.is_check_no_exists),
                K_(op_query),
                K_(entities));
 private:
@@ -1808,10 +1814,17 @@ private:
     uint64_t flag_;
     struct
     {
-      bool is_check_no_exists_ : 1;
-      bool rollback_when_check_failed_ : 1;
-      int64_t reserved : 62;
-    };
+        bool is_check_no_exists_ : 1;
+        bool rollback_when_check_failed_ : 1;
+        uint64_t reserved : 62; // 64 - 2
+    } table_flag_;
+
+    struct
+    {
+        uint64_t reversed_1 : 2;
+        uint64_t is_user_specific_T_ : 1;
+        uint64_t reserved : 61; // 64 - 3
+    } hbase_flag_;
   };
   // Note: Only the HBase checkAndMutate operation may have multiple entities,
   // In such cases, we decode the size first and prepare_allocate the entities at once.
