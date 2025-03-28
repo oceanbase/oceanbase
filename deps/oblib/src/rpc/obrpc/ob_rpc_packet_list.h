@@ -1262,6 +1262,8 @@ PCODE_DEF(OB_REVOKE_CATALOG, 0x1650)
 
 PCODE_DEF(OB_SERVER_SYNC_BASELINE, 0x1653)
 
+// fetch arbitration member of log stream
+//PCODE_DEF(OB_FETCH_ARB_MEMBER, 0x1654)
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：
