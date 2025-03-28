@@ -2239,7 +2239,7 @@ int ObTransformGroupByPushdown::push_down_group_by_into_view(ObSelectStmt *stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < table_index_array.count(); ++i) {
     int64_t idx = table_index_array.at(i);
     TableItem *table_item = NULL;
-    ObSEArray<ObDMLStmt::PartExprItem, 4> part_exprs;
+    ObSEArray<PartExprItem, 4> part_exprs;
     FromItem from_item;
     if (idx <= 0 || idx > table_items.count()) {
       ret = OB_ERR_UNEXPECTED;

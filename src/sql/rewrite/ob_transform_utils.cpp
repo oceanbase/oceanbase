@@ -1369,10 +1369,10 @@ int ObTransformUtils::update_table_id_for_joined_table(const JoinedTable &other,
   return ret;
 }
 
-int ObTransformUtils::update_table_id_for_part_item(const ObIArray<ObDMLStmt::PartExprItem> &other_part_expr_items,
+int ObTransformUtils::update_table_id_for_part_item(const ObIArray<PartExprItem> &other_part_expr_items,
                                                     const uint64_t old_table_id,
                                                     const uint64_t new_table_id,
-                                                    ObIArray<ObDMLStmt::PartExprItem> &part_expr_items)
+                                                    ObIArray<PartExprItem> &part_expr_items)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(other_part_expr_items.count() != part_expr_items.count())) {
@@ -1389,10 +1389,10 @@ int ObTransformUtils::update_table_id_for_part_item(const ObIArray<ObDMLStmt::Pa
 }
 
 int ObTransformUtils::update_table_id_for_check_constraint_items(
-    const common::ObIArray<ObDMLStmt::CheckConstraintItem> &other_check_constraint_items,
+    const common::ObIArray<CheckConstraintItem> &other_check_constraint_items,
     const uint64_t old_table_id,
     const uint64_t new_table_id,
-    common::ObIArray<ObDMLStmt::CheckConstraintItem> &check_constraint_items)
+    common::ObIArray<CheckConstraintItem> &check_constraint_items)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(other_check_constraint_items.count() != check_constraint_items.count())) {
@@ -7101,7 +7101,7 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
                                             ObIArray<uint64_t>* origin_table_ids /* = NULL*/)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObDMLStmt::PartExprItem, 4> part_exprs;
+  ObSEArray<PartExprItem, 4> part_exprs;
   ObSelectStmt *view_stmt = NULL;
   ObRawExprCopier copier(expr_factory);
   ObSEArray<ObRawExpr *, 4> select_list;
@@ -7142,7 +7142,7 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
         LOG_WARN("failed to get part expr items", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < part_exprs.count(); ++i) {
-        ObDMLStmt::PartExprItem part_item;
+        PartExprItem part_item;
         if (OB_FAIL(part_item.deep_copy(copier, part_exprs.at(i)))) {
           LOG_WARN("failed to deep copy part expr item", K(ret));
         } else {
@@ -7262,7 +7262,7 @@ int ObTransformUtils::create_stmt_with_joined_table(ObTransformerCtx *ctx,
                                                       ctx->src_hash_val_))) {
     LOG_WARN("failed to adjust statement id", K(ret));
   } else {
-    ObSEArray<ObDMLStmt::PartExprItem, 8> part_items;
+    ObSEArray<PartExprItem, 8> part_items;
     ObSEArray<ColumnItem, 8> column_items;
     ObSqlBitSet<> from_tables_set;
     ObSEArray<ObRawExpr *, 8> tmp_column_exprs;
@@ -7347,7 +7347,7 @@ int ObTransformUtils::create_stmt_with_basic_table(ObTransformerCtx *ctx,
                                                       ctx->src_hash_val_))) {
     LOG_WARN("failed to adjust statement id", K(ret));
   } else {
-    ObSEArray<ObDMLStmt::PartExprItem, 8> part_items;
+    ObSEArray<PartExprItem, 8> part_items;
     ObSEArray<ColumnItem, 8> column_items;
     if (OB_FAIL(stmt->get_part_expr_items(table->table_id_, part_items))) {
       LOG_WARN("failed to get part expr items", K(ret));
@@ -7610,8 +7610,8 @@ int ObTransformUtils::create_inline_view(ObTransformerCtx *ctx,
     uint64_t table_id = basic_table_ids.at(i);
     TableItem *table = NULL;
     ObArray<ColumnItem> column_items;
-    ObArray<ObDMLStmt::PartExprItem> part_expr_items;
-    ObDMLStmt::CheckConstraintItem check_constraint_item;
+    ObArray<PartExprItem> part_expr_items;
+    CheckConstraintItem check_constraint_item;
     if (OB_ISNULL(table = stmt->get_table_item_by_id(table_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null", K(ret), K(table));

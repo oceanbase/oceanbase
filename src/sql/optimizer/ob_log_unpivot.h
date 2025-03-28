@@ -13,7 +13,6 @@
 #ifndef _OB_LOG_UNPIVOT_H_
 #define _OB_LOG_UNPIVOT_H_
 #include "sql/optimizer/ob_logical_operator.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
 
 
 namespace oceanbase
@@ -25,41 +24,46 @@ class ObLogUnpivot : public ObLogicalOperator
 public:
   ObLogUnpivot(ObLogPlan &plan)
   : ObLogicalOperator(plan),
-    subquery_id_(common::OB_INVALID_ID),
-    subquery_name_(),
-    access_exprs_()
+    origin_exprs_(),
+    label_exprs_(),
+    value_exprs_(),
+    is_include_null_(false)
   {}
 
   ~ObLogUnpivot() {}
+
+  inline common::ObIArray<ObRawExpr *> &get_origin_exprs() { return origin_exprs_; }
+  inline common::ObIArray<ObRawExpr *> &get_label_exprs() { return label_exprs_; }
+  inline common::ObIArray<ObRawExpr *> &get_value_exprs() { return value_exprs_; }
+  int set_origin_exprs(const common::ObIArray<ObRawExpr *> &origin_exprs) { return origin_exprs_.assign(origin_exprs); }
+  int set_label_exprs(const common::ObIArray<ObRawExpr *> &label_exprs) { return label_exprs_.assign(label_exprs); }
+  int set_value_exprs(const common::ObIArray<ObRawExpr *> &value_exprs) { return value_exprs_.assign(value_exprs); }
+
+  inline bool is_include_null() { return is_include_null_; }
+  inline bool is_exclude_null() { return !is_include_null_; }
+  inline void set_include_null(bool is_include_null) { is_include_null_ = is_include_null; }
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
-  virtual int allocate_expr_post(ObAllocExprContext &ctx);
-  virtual int compute_sharding_info() override;
-  virtual int est_cost() override;
-  virtual int est_width() override;
-  void set_subquery_id(uint64_t subquery_id) { subquery_id_ = subquery_id; }
-  inline const uint64_t &get_subquery_id() const { return subquery_id_; }
-  inline common::ObString &get_subquery_name() { return subquery_name_; }
-  inline const common::ObIArray<ObRawExpr *> &get_access_exprs() const { return access_exprs_; }
-  inline common::ObIArray<ObRawExpr *> &get_access_exprs() { return access_exprs_; }
-  virtual int compute_op_ordering() override;
-  virtual int compute_fd_item_set() override;
-  virtual int compute_const_exprs() override;
-  virtual int compute_equal_set() override;
-  virtual int compute_one_row_info() override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+
+  virtual int est_cost() override;
+  virtual int est_width() override;
+  virtual int compute_op_ordering() override;
+  virtual int compute_fd_item_set() override;
+  virtual int compute_one_row_info() override;
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int compute_sharding_info() override;
+
+  VIRTUAL_TO_STRING_KV(K_(origin_exprs), K_(label_exprs), K_(value_exprs), K_(is_include_null));
+
 private:
-  int generate_access_exprs();
-  bool is_in_old_columns(const ObSelectStmt &select_stmt,
-                         const ObUnpivotInfo &unpivot_info,
-                         ObRawExpr *expr);
-public:
-  uint64_t subquery_id_;
-  common::ObString subquery_name_;
-  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> access_exprs_;
-  ObUnpivotInfo unpivot_info_;
-private:
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> origin_exprs_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> label_exprs_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> value_exprs_;
+  bool is_include_null_;
   DISALLOW_COPY_AND_ASSIGN(ObLogUnpivot);
 };
 

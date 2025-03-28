@@ -5562,9 +5562,9 @@ int ObSelectLogPlan::allocate_plan_top()
     if (OB_SUCC(ret) && select_stmt->is_unpivot_select()) {
       // group-by or rollup both allocate group by logical operator.
       if (OB_FAIL(candi_allocate_unpivot())) {
-        LOG_WARN("failed to allocate unpovit operator", K(ret));
+        LOG_WARN("failed to allocate unpivot operator", K(ret));
       } else {
-        LOG_TRACE("succeed to allocate unpovit operator",
+        LOG_TRACE("succeed to allocate unpivot operator",
             K(candidates_.candidate_plans_.count()));
       }
     }
@@ -9074,12 +9074,14 @@ int ObSelectLogPlan::allocate_unpivot_as_top(ObLogicalOperator *&old_top)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = static_cast<const ObDMLStmt *>(get_stmt());
+  const ObUnpivotItem *unpivot_item = NULL;
   ObLogUnpivot *unpivot = NULL;
   if (OB_ISNULL(old_top)
       || OB_ISNULL(stmt)
       || OB_UNLIKELY(!stmt->is_unpivot_select())
       || OB_UNLIKELY(stmt->get_table_items().empty())
-      || OB_ISNULL(stmt->get_table_item(0))) {
+      || OB_ISNULL(stmt->get_table_item(0))
+      || OB_ISNULL(unpivot_item = stmt->get_unpivot_item())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Get unexpected null", K(ret), K(old_top), KPC(stmt));
   } else if (OB_ISNULL(unpivot = static_cast<ObLogUnpivot*>
@@ -9088,12 +9090,19 @@ int ObSelectLogPlan::allocate_unpivot_as_top(ObLogicalOperator *&old_top)
     LOG_ERROR("failed to allocate subquery operator", K(ret));
   } else {
     const TableItem *table_item = stmt->get_table_item(0);
-    unpivot->unpivot_info_ = stmt->get_unpivot_info();
-    unpivot->set_subquery_id(table_item->table_id_);
-    unpivot->get_subquery_name().assign_ptr(table_item->table_name_.ptr(),
-                                            table_item->table_name_.length());
     unpivot->set_child(ObLogicalOperator::first_child, old_top);
-    if (OB_FAIL(unpivot->compute_property())) {
+    unpivot->set_include_null(unpivot_item->is_include_null_);
+    if (OB_UNLIKELY(unpivot_item->label_exprs_.count() <= 0) ||
+        OB_ISNULL(unpivot_item->label_exprs_.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid unpivot info", K(ret));
+    } else if (OB_FAIL(unpivot->set_origin_exprs(unpivot_item->origin_exprs_))) {
+      LOG_WARN("failed to set key exprs", K(ret));
+    } else if (OB_FAIL(unpivot->set_label_exprs(unpivot_item->label_exprs_))) {
+      LOG_WARN("failed to set for exprs", K(ret));
+    } else if (OB_FAIL(unpivot->set_value_exprs(unpivot_item->value_exprs_))) {
+      LOG_WARN("failed to set val exprs", K(ret));
+    } else if (OB_FAIL(unpivot->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
       old_top = unpivot;

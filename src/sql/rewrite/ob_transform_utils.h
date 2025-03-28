@@ -363,15 +363,15 @@ public:
                                               const uint64_t old_table_id,
                                               const uint64_t new_table_id,
                                               JoinedTable &joined_table);
-  static int update_table_id_for_part_item(const common::ObIArray<ObDMLStmt::PartExprItem> &other_part_items,
+  static int update_table_id_for_part_item(const common::ObIArray<PartExprItem> &other_part_items,
                                            const uint64_t old_table_id,
                                            const uint64_t new_table_id,
-                                           common::ObIArray<ObDMLStmt::PartExprItem> &part_items);
+                                           common::ObIArray<PartExprItem> &part_items);
   static int update_table_id_for_check_constraint_items(
-             const common::ObIArray<ObDMLStmt::CheckConstraintItem> &other_check_constraint_items,
+             const common::ObIArray<CheckConstraintItem> &other_check_constraint_items,
              const uint64_t old_table_id,
              const uint64_t new_table_id,
-             common::ObIArray<ObDMLStmt::CheckConstraintItem> &check_constraint_items);
+             common::ObIArray<CheckConstraintItem> &check_constraint_items);
   static int update_table_id_for_semi_info(const ObIArray<SemiInfo*> &other_semi_infos,
                                            const uint64_t old_table_id,
                                            const uint64_t new_table_id,
@@ -2070,10 +2070,12 @@ private:
                             ObIArray<ObRawExpr*> &from_exprs, 
                             ObIArray<ObRawExpr*> &view_exprs);
 
+public:
   static int extract_shared_exprs(ObDMLStmt *parent,
                                   ObSelectStmt *view_stmt,
                                   ObIArray<ObRawExpr *> &common_exprs,
                                   const ObIArray<ObRawExpr *> *extra_view_exprs = NULL);
+private:
   static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
 
   static int check_is_bypass_string_expr(const ObRawExpr *expr,

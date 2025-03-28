@@ -10121,5 +10121,33 @@ int ObRawExprUtils::need_extra_cast_for_enumset(const ObExprResType &src_type,
   return ret;
 }
 
+int ObRawExprUtils::build_unpivot_expr(ObRawExprFactory &expr_factory,
+                                       ObIArray<ObRawExpr *> &param_exprs,
+                                       ObRawExpr *&expr,
+                                       bool is_label_expr)
+{
+  int ret = OB_SUCCESS;
+  ObUnpivotRawExpr *unpivot_expr = NULL;
+  if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_UNPIVOT, unpivot_expr))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(unpivot_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unpivot_expr is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_exprs.count(); ++i) {
+    ObRawExpr *param_expr = param_exprs.at(i);
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_expr is null", K(ret));
+    } else if (OB_FAIL(unpivot_expr->add_param_expr(param_expr))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    unpivot_expr->set_label_expr(is_label_expr);
+    expr = unpivot_expr;
+  }
+  return ret;
+}
 }
 }

@@ -1321,6 +1321,11 @@ public:
                                 ObIArray<ObRawExpr *> &new_exprs,
                                 ObRawExprCopier *copier,
                                 ObSQLSessionInfo *session_info);
+
+  static int build_unpivot_expr(ObRawExprFactory &expr_factory,
+                                ObIArray<ObRawExpr *> &param_exprs,
+                                ObRawExpr *&unpivot_expr,
+                                bool is_label_expr);
 private:
   static int need_extra_cast_for_enumset(const ObExprResType &src_type,
                                          const ObExprResType &dst_type,

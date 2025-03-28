@@ -234,6 +234,13 @@ int ObRawExprPartExprChecker::visit(ObMatchFunRawExpr &expr)
   return ret;
 }
 
+int ObRawExprPartExprChecker::visit(ObUnpivotRawExpr &expr)
+{
+  int ret = OB_ERR_UNEXPECTED;
+  UNUSED(expr);
+  return ret;
+}
+
 int ObRawExprPartExprChecker::visit(ObSysFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;

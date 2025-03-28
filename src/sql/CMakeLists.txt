@@ -1430,6 +1430,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
   resolver/dml/ob_inlist_resolver.cpp
+  resolver/dml/ob_transpose_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_expr

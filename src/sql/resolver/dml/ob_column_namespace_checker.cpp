@@ -87,22 +87,34 @@ int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName
     } else {/*do nothing*/}
   } else {
     ObTableItemIterator table_item_iter(*this);
-    while (OB_SUCC(ret) && (cur_table = table_item_iter.get_next_table_item()) != NULL) {
+    if (is_transpose_) {
+      // 解析 pivot 时需要仅从origin table中解析聚合函数，此时需要这样一个屏蔽其他table item的方式
+      cur_table = origin_table_;
       if (OB_FAIL(find_column_in_table(*cur_table, q_name, table_item, need_check_unique))) {
         if (OB_ERR_BAD_FIELD_ERROR == ret) {
           ret = OB_SUCCESS;
-          //continue to search
         } else {
           LOG_WARN("find column in table failed", K(ret));
         }
-      } else {
-        break; //found column in table
+      }
+    } else {
+      while (OB_SUCC(ret) && (cur_table = table_item_iter.get_next_table_item()) != NULL) {
+        if (OB_FAIL(find_column_in_table(*cur_table, q_name, table_item, need_check_unique))) {
+          if (OB_ERR_BAD_FIELD_ERROR == ret) {
+            ret = OB_SUCCESS;
+            //continue to search
+          } else {
+            LOG_WARN("find column in table failed", K(ret));
+          }
+        } else {
+          break; //found column in table
+        }
       }
     }
     if (OB_SUCC(ret) && NULL == table_item) {
       ret = OB_ERR_BAD_FIELD_ERROR;
     }
-    if (OB_SUCC(ret) && need_check_unique) {
+    if (OB_SUCC(ret) && need_check_unique && !is_transpose_) {
       //check table column whether unique in all tables
       const TableItem *tmp_table = NULL;
       bool tmp_check = false;

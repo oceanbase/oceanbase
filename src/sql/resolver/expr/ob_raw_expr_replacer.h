@@ -53,6 +53,7 @@ public:
   virtual int visit(ObAliasRefRawExpr &expr) override;
   virtual int visit(ObPseudoColumnRawExpr &expr) override;
   virtual int visit(ObMatchFunRawExpr &expr) override;
+  virtual int visit(ObUnpivotRawExpr &expr) override;
 
   virtual bool skip_child(ObRawExpr &expr) override;
   bool get_replace_happened() const { return replace_happened_; }

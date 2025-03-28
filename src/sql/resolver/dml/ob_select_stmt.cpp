@@ -36,7 +36,6 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
     esc_str_flag_ = other.esc_str_flag_;
     need_check_dup_name_ = other.need_check_dup_name_;
     implicit_filled_ = other.implicit_filled_;
-    is_unpivot_mocked_column_ = other.is_unpivot_mocked_column_;
     is_implicit_added_ = other.is_implicit_added_;
     is_hidden_rowid_ = other.is_hidden_rowid_;
   }
@@ -735,7 +734,6 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
     } else {
       J_KV(
            N_STMT_TYPE, stmt_type_,
-           K_(transpose_item),
            N_TABLE, table_items_,
            N_JOINED_TABLE, joined_tables_,
            N_SEMI_INFO, semi_infos_,
@@ -1006,15 +1004,12 @@ bool ObSelectStmt::is_spjg() const
   return bret;
 }
 
-int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs,
-    const bool is_for_outout/* = false*/)
+int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *expr = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); ++i) {
-    if (is_for_outout && select_items_.at(i).is_unpivot_mocked_column_) {
-      //continue
-    } else if (OB_ISNULL(expr = select_items_.at(i).expr_)) {
+    if (OB_ISNULL(expr = select_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null select expr", K(ret));
     } else if (OB_FAIL(select_exprs.push_back(expr))) {
@@ -1024,16 +1019,13 @@ int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs,
   return ret;
 }
 
-int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs,
-    const bool is_for_outout/* = false*/) const
+int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs) const
 {
   int ret = OB_SUCCESS;
   ObRawExpr *expr = NULL;
   LOG_DEBUG("before get_select_exprs", K(select_items_), K(table_items_), K(lbt()));
   for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); ++i) {
-    if (is_for_outout && select_items_.at(i).is_unpivot_mocked_column_) {
-      //continue
-    } else if (OB_ISNULL(expr = select_items_.at(i).expr_)) {
+    if (OB_ISNULL(expr = select_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null select expr", K(ret));
     } else if (OB_FAIL(select_exprs.push_back(expr))) {

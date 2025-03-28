@@ -1184,6 +1184,13 @@ public:
                                             ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL);
+
+  static int check_oracle_mode_set_type_validity(bool is_ps_prepare_stage,
+                                                 const ObExprResType &left_type,
+                                                 const ObExprResType &right_type,
+                                                 bool is_distinct = false,
+                                                 bool *skip_add_cast = NULL);
+
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObSelectStmt*> &stmts,

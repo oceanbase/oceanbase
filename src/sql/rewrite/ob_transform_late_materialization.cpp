@@ -642,7 +642,7 @@ int ObTransformLateMaterialization::replace_expr_skip_part(ObSelectStmt &select_
   int ret = OB_SUCCESS;
   ObStmtExprReplacer replacer;
   ObSEArray<ObRawExpr *, 8> part_exprs;
-  const ObIArray<ObDMLStmt::PartExprItem> &part_items = select_stmt.get_part_exprs();
+  const ObIArray<PartExprItem> &part_items = select_stmt.get_part_exprs();
   for (int64_t i = 0; OB_SUCC(ret) && i < part_items.count(); ++i) {
     if (part_items.at(i).part_expr_ != NULL &&
         OB_FAIL(part_exprs.push_back(part_items.at(i).part_expr_))) {

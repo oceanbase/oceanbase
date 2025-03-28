@@ -61,6 +61,7 @@ class ObLogTableScan;
 class ObTableScanSpec;
 class ObLogUnpivot;
 class ObUnpivotSpec;
+class ObUnpivotV2Spec;
 class ObFakeCTETableSpec;
 class ObHashJoinSpec;
 class ObHashJoinVecSpec;
@@ -340,7 +341,8 @@ private:
   int generate_spec(ObLogTableScan &op, ObTableScanSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTableScan &op, ObFakeCTETableSpec &spec, const bool in_root_job);
 
-  int generate_spec(ObLogUnpivot &op, ObUnpivotSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogUnpivot &op, ObUnpivotSpec&spec, const bool in_root_job);
+  int generate_spec(ObLogUnpivot &op, ObUnpivotV2Spec &spec, const bool in_root_job);
 
   int generate_spec(ObLogTempTableAccess &op, ObTempTableAccessOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableInsert &op, ObTempTableInsertOpSpec &spec, const bool in_root_job);

@@ -1407,7 +1407,7 @@ int ObLogicalOperator::get_plan_item_info(PlanText &plan_text,
                   plan_item.projection_len_);
   }
   // print filter
-  if (OB_SUCC(ret) && !filter_exprs_.empty() && LOG_UNPIVOT != get_type()) {
+  if (OB_SUCC(ret) && !filter_exprs_.empty()) {
     const ObIArray<ObRawExpr *> &filter = filter_exprs_;
     BEGIN_BUF_PRINT;
     EXPLAIN_PRINT_EXPRS(filter, type);
@@ -3772,7 +3772,7 @@ int ObLogicalOperator::set_plan_root_output_exprs()
     const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(get_stmt());
     bool is_unpivot = (LOG_UNPIVOT == type_ && sel_stmt->is_unpivot_select());
     uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-    if (!sel_stmt->has_select_into() && OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
+    if (!sel_stmt->has_select_into() && OB_FAIL(sel_stmt->get_select_exprs(output_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));
     } else { /*do nothing*/ }
   } else if (stmt->is_returning()) {

@@ -1427,7 +1427,7 @@ int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt,
   // push down table
   for (int64_t i = 0; OB_SUCC(ret) && i < roll_up_stmt->get_table_size(); i++) {
     TableItem *table = NULL;
-    ObSEArray<ObDMLStmt::PartExprItem, 4> part_exprs;
+    ObSEArray<PartExprItem, 4> part_exprs;
     if (OB_ISNULL(table = roll_up_stmt->get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null", K(ret));
@@ -1963,7 +1963,7 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
   int ret = OB_SUCCESS;
   ObSelectStmt *view_stmt = NULL;
   ObSEArray<ObRawExpr *, 4> renamed_cond;
-  ObSEArray<ObDMLStmt::PartExprItem,4> part_exprs;
+  ObSEArray<PartExprItem,4> part_exprs;
   ObSEArray<ObRawExpr *, 4> view_select_list;
   ObSEArray<ObRawExpr *, 4> view_column_list;
   ObSEArray<ObQueryRefRawExpr *, 4> query_refs;

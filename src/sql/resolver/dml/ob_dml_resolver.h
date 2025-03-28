@@ -189,6 +189,7 @@ public:
   inline void set_parent_namespace_resolver(ObDMLResolver *parent_namespace_resolver)
   { parent_namespace_resolver_ = parent_namespace_resolver; }
   inline ObDMLResolver *get_parent_namespace_resolver() { return parent_namespace_resolver_; }
+  inline ObColumnNamespaceChecker& get_column_namespace_checker() { return column_namespace_checker_; }
   virtual int resolve_column_ref_for_subquery(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_generated_column_expr(const common::ObString &expr_str,
                                     const TableItem &table_item,
@@ -403,6 +404,11 @@ protected:
   int generate_subschema_id(ObColumnRefRawExpr &col_expr);
 public:
   virtual int resolve_table(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_all_basic_table_columns(const TableItem &table_item,
+                                      bool included_hidden,
+                                      common::ObIArray<ColumnItem> *column_items);
+  int resolve_all_generated_table_columns(const TableItem &table_item,
+                                          common::ObIArray<ColumnItem> &column_items);
 protected:
   virtual int resolve_generate_table(const ParseNode &table_node,
                                      const ParseNode *alias_node,
@@ -443,11 +449,6 @@ protected:
                                               const common::ObString &synonym_db_name,
                                               TableItem *&table_item,
                                               bool is_reverse_link);
-  int resolve_all_basic_table_columns(const TableItem &table_item,
-                                      bool included_hidden,
-                                      common::ObIArray<ColumnItem> *column_items);
-  int resolve_all_generated_table_columns(const TableItem &table_item,
-                                          common::ObIArray<ColumnItem> &column_items);
   int resolve_columns_for_partition_expr(ObRawExpr *&expr, ObIArray<ObQualifiedName> &columns,
                                          const TableItem &table_item,
                                          bool is_hidden);
@@ -459,8 +460,10 @@ protected:
   int resolve_limit_clause(const ParseNode *node, bool disable_offset = false);
   int resolve_approx_clause(const ParseNode *approx_node);
   int resolve_into_clause(const ParseNode *node);
+public:
   int resolve_hints(const ParseNode *node);
   int resolve_outline_data_hints();
+protected:
   const ParseNode *get_outline_data_hint_node();
   int inner_resolve_hints(const ParseNode &node,
                           const bool filter_embedded_hint,
@@ -528,25 +531,9 @@ protected:
                             TableItem &table_item);
 
   int check_pivot_aggr_expr(ObRawExpr *expr) const;
-  int resolve_transpose_table(const ParseNode *transpose_node, TableItem *&table_item);
-  int resolve_transpose_clause(const ParseNode &transpose_node, TransposeItem &transpose_item,
-                               ObIArray<ObString> &columns_in_aggr);
-  int resolve_transpose_columns(const ParseNode &transpose_node, ObIArray<ObString> &columns);
-  int resolve_const_exprs(const ParseNode &transpose_node, ObIArray<ObRawExpr*> &const_exprs);
-  int get_transpose_target_sql(const ObIArray<ObString> &columns_in_aggrs, TableItem &table_item,
-                               TransposeItem &transpose_item, ObSqlString &target_sql);
-  int get_target_sql_for_pivot(const ObIArray<ColumnItem> &column_items, TableItem &table_item,
-                               TransposeItem &transpose_item, ObSqlString &target_sql);
-  int get_target_sql_for_unpivot(const ObIArray<ColumnItem> &column_items, TableItem &table_item,
-                                 TransposeItem &transpose_item, ObSqlString &target_sql);
-  int format_from_subquery(const ObString &unpivot_alias_name, TableItem &table_item,
-                           char *expr_str_buf, ObSqlString &target_sql);
-  int get_partition_for_transpose(TableItem &table_item, ObSqlString &sql);
-  int expand_transpose(const ObSqlString &transpose_def, TransposeItem &transpose_item,
-                       TableItem *&table_item);
-  int mark_unpivot_table(TransposeItem &transpose_item, TableItem *table_item);
-  int remove_orig_table_item(TableItem &table_item);
-
+public:
+  int resolve_transpose_table(const ParseNode &parse_tree, TableItem *&table_item);
+protected:
   int check_basic_column_generated(const ObColumnRefRawExpr *col_expr,
                                   ObDMLStmt *dml_stmt,
                                   bool &is_generated);

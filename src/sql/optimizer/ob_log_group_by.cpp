@@ -79,7 +79,8 @@ int ObLogGroupBy::get_explain_name_internal(char *buf,
   }
 
   if (OB_SUCC(ret) && from_pivot_) {
-    ret = BUF_PRINTF(" PIVOT");
+    // Don't mark this for now, and add it after specific optimization is done.
+    // ret = BUF_PRINTF(" PIVOT");
   }
 
   if (OB_FAIL(ret)) {

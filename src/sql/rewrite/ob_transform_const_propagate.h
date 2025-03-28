@@ -305,7 +305,7 @@ private:
                                      bool &trans_happened);
 
   int check_constraint_expr_validity(ObRawExpr *check_constraint_expr,
-                                     const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                     const ObIArray<PartExprItem> &part_items,
                                      ObIArray<ExprConstInfo> &expr_const_infos,
                                      ObRawExpr *&part_column_expr,
                                      ObIArray<ObRawExpr*> &old_column_exprs,
@@ -315,7 +315,7 @@ private:
 
   int do_check_constraint_param_expr_vaildity(ObRawExpr *column_param_expr,
                                               ObRawExpr *non_column_param_expr,
-                                              const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                              const ObIArray<PartExprItem> &part_items,
                                               ObIArray<ExprConstInfo> &expr_const_infos,
                                               ObIArray<ObRawExpr*> &old_column_exprs,
                                               ObIArray<ObRawExpr*> &new_const_exprs,

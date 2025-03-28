@@ -46,7 +46,6 @@ struct SelectItem
       esc_str_flag_(false),
       need_check_dup_name_(false),
       implicit_filled_(false),
-      is_unpivot_mocked_column_(false),
       is_implicit_added_(false),
       is_hidden_rowid_(false)
   {
@@ -64,7 +63,6 @@ struct SelectItem
     esc_str_flag_ = false;
     need_check_dup_name_ = false;
     implicit_filled_ = false;
-    is_unpivot_mocked_column_ = false;
     is_implicit_added_ = false;
     is_hidden_rowid_ = false;
   }
@@ -89,7 +87,6 @@ struct SelectItem
                K_(esc_str_flag),
                K_(need_check_dup_name),
                K_(implicit_filled),
-               K_(is_unpivot_mocked_column),
                K_(is_hidden_rowid));
 
   ObRawExpr *expr_;
@@ -107,7 +104,6 @@ struct SelectItem
   bool need_check_dup_name_;
   // select item is implicit filled in updatable view, to pass base table's column to top view.
   bool implicit_filled_;
-  bool is_unpivot_mocked_column_; //used for unpivot
   bool is_implicit_added_; //used for temporary table and label security at insert resolver
 
   bool is_hidden_rowid_;
@@ -516,8 +512,8 @@ public:
   SelectItem &get_select_item(int64_t index) { return select_items_[index]; }
   common::ObIArray<SelectItem> &get_select_items() { return select_items_; }
   const common::ObIArray<SelectItem> &get_select_items() const { return select_items_; }
-  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs, const bool is_for_outout = false);
-  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs, const bool is_for_outout = false) const;
+  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs);
+  int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs) const;
   int get_select_exprs_without_lob(ObIArray<ObRawExpr*> &select_exprs) const;
   const common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() const { return agg_items_; }
   common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() { return agg_items_; }

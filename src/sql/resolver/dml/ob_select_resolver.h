@@ -71,7 +71,6 @@ public:
   void set_in_exists_subquery(bool in_exists_subquery) { in_exists_subquery_ = in_exists_subquery; }
   bool is_in_exists_subquery() const { return in_exists_subquery_; }
   virtual int resolve_column_ref_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
-  void set_transpose_item(const TransposeItem *transpose_item) { transpose_item_ = transpose_item; }
   void set_is_left_child(const bool is_left_child) { is_left_child_ = is_left_child; }
   void set_having_has_self_column() { having_has_self_column_ = true; }
   bool has_having_self_column() const { return having_has_self_column_; }
@@ -251,9 +250,11 @@ protected:
   int resolve_table_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_alias_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_column_ref_in_group_by(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
+public:
   int resolve_all_function_table_columns(const TableItem &table_item, ObIArray<ColumnItem> *column_items);
   int resolve_all_json_table_columns(const TableItem &table_item, ObIArray<ColumnItem> *column_items);
   int resolve_all_generated_table_columns(const TableItem &table_item, common::ObIArray<ColumnItem> *column_items);
+protected:
   virtual int set_select_item(SelectItem &select_item, bool is_auto_gen);
   int resolve_query_options(const ParseNode *node);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
@@ -397,7 +398,6 @@ protected:
   // query is subquery in exists
   bool in_exists_subquery_;
   ObStandardGroupChecker standard_group_checker_;
-  const TransposeItem *transpose_item_;
   bool is_left_child_;
   uint64_t auto_name_id_;
   // denote having exists ref columns that belongs to current stmt

@@ -6807,7 +6807,6 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
         new_select_item.params_idx_ = select_item.params_idx_;
         new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
         new_select_item.esc_str_flag_ = select_item.esc_str_flag_;
-        new_select_item.is_unpivot_mocked_column_ = select_item.is_unpivot_mocked_column_;
         new_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
         new_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
         if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory, i, set_op_type,
@@ -6917,6 +6916,69 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
   return ret;
 }
 
+int ObOptimizerUtil::check_oracle_mode_set_type_validity(bool is_ps_prepare_stage,
+                                                         const ObExprResType &left_type,
+                                                         const ObExprResType &right_type,
+                                                         bool is_distinct /* = false */,
+                                                         bool *skip_add_cast /* = NULL */) {
+  int ret = OB_SUCCESS;
+  /*
+  * Oracle has more strict constraints for data types used in set operator
+  * https://docs.oracle.com/cd/B19306_01/server.102/b14200/queries004.htm
+  */
+  // need to refine this when more data type are added in oracle mode
+  if (!((left_type.is_null() && !right_type.is_lob() && !right_type.is_lob_locator())
+      || (left_type.is_null() && (right_type.is_lob() || right_type.is_lob_locator()) && !is_distinct)
+      || (right_type.is_null() && !left_type.is_lob() && !left_type.is_lob_locator())
+      || (right_type.is_null() && (left_type.is_lob() || left_type.is_lob_locator()) && !is_distinct)
+      || (left_type.is_raw() && right_type.is_raw())
+      || (left_type.is_character_type() && right_type.is_character_type())
+      || (ob_is_oracle_numeric_type(left_type.get_type()) && ob_is_oracle_numeric_type(right_type.get_type()))
+      || (ob_is_oracle_temporal_type(left_type.get_type()) && (ob_is_oracle_temporal_type(right_type.get_type())))
+      || (left_type.is_urowid() && right_type.is_urowid())
+      || (left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
+      || (left_type.is_geometry() && right_type.is_geometry())
+      || (left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
+      || ((ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
+            && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
+      // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
+      // Originally, cases like "select clob from t union all select blob from t" return errorif (is_ps_prepare_stage) {
+    if (is_ps_prepare_stage) {
+      if (skip_add_cast != NULL) {
+        *skip_add_cast = true;
+      }
+      LOG_WARN("ps prepare stage expression has different datatype", K(left_type), K(right_type));
+    } else {
+      ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
+      LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
+                K(right_type.is_varchar_or_char()), K(left_type), K(right_type));
+    }
+  } else if (left_type.is_character_type() &&
+              right_type.is_character_type() &&
+              (left_type.is_varchar_or_char() != right_type.is_varchar_or_char())) {
+    ret = OB_ERR_CHARACTER_SET_MISMATCH;
+    LOG_WARN("character set mismatch", K(ret), K(left_type), K(right_type));
+  } else if (left_type.is_string_or_lob_locator_type() &&
+              right_type.is_string_or_lob_locator_type()) {
+    ObCharsetType left_cs = left_type.get_charset_type();
+    ObCharsetType right_cs = right_type.get_charset_type();
+    if (left_cs != right_cs) {
+      if (CHARSET_UTF8MB4 == left_cs || CHARSET_UTF8MB4 == right_cs) {
+        //sys table column exist utf8 varchar types, let it go
+      } else {
+        ret = OB_ERR_COLLATION_MISMATCH; //ORA-12704
+        LOG_WARN("character set mismatch", K(ret), K(left_cs), K(right_cs));
+      }
+    }
+  } else if (is_distinct && (right_type.is_geometry() || left_type.is_geometry())) {
+    ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+    LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+  }
+  return ret;
+}
+
+
+
 /*
 * Oracle has more strict constraints for data types used in set operator
 * https://docs.oracle.com/cd/B19306_01/server.102/b14200/queries004.htm
@@ -6933,50 +6995,9 @@ int ObOptimizerUtil::check_set_child_res_types(const ObExprResType &left_type,
   const bool is_oracle_mode = lib::is_oracle_mode();
   if (left_type != right_type || ob_is_enumset_tc(right_type.get_type()) || is_mysql_recursive_union) {
     if (is_oracle_mode) {
-      if (!((left_type.is_null() && !right_type.is_lob() && !right_type.is_lob_locator())
-          || (left_type.is_null() && (right_type.is_lob() || right_type.is_lob_locator()) && !is_distinct)
-          || (right_type.is_null() && !left_type.is_lob() && !left_type.is_lob_locator())
-          || (right_type.is_null() && (left_type.is_lob() || left_type.is_lob_locator()) && !is_distinct)
-          || (left_type.is_raw() && right_type.is_raw())
-          || (left_type.is_character_type() && right_type.is_character_type())
-          || (ob_is_oracle_numeric_type(left_type.get_type()) && ob_is_oracle_numeric_type(right_type.get_type()))
-          || (ob_is_oracle_temporal_type(left_type.get_type()) && (ob_is_oracle_temporal_type(right_type.get_type())))
-          || (left_type.is_urowid() && right_type.is_urowid())
-          || (left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
-          || (left_type.is_geometry() && right_type.is_geometry())
-          || (left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
-          || ((ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
-               && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
-          // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
-          // Originally, cases like "select clob from t union all select blob from t" return errorif (is_ps_prepare_stage) {
-        if (is_ps_prepare_stage) {
-          skip_add_cast = true;
-          LOG_WARN("ps prepare stage expression has different datatype", K(left_type), K(right_type));
-        } else {
-          ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
-          LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
-                   K(right_type.is_varchar_or_char()), K(left_type), K(right_type));
-        }
-      } else if (left_type.is_character_type() &&
-                 right_type.is_character_type() &&
-                 (left_type.is_varchar_or_char() != right_type.is_varchar_or_char())) {
-        ret = OB_ERR_CHARACTER_SET_MISMATCH;
-        LOG_WARN("character set mismatch", K(ret), K(left_type), K(right_type));
-      } else if (left_type.is_string_or_lob_locator_type() &&
-                 right_type.is_string_or_lob_locator_type()) {
-        ObCharsetType left_cs = left_type.get_charset_type();
-        ObCharsetType right_cs = right_type.get_charset_type();
-        if (left_cs != right_cs) {
-          if (CHARSET_UTF8MB4 == left_cs || CHARSET_UTF8MB4 == right_cs) {
-            //sys table column exist utf8 varchar types, let it go
-          } else {
-            ret = OB_ERR_COLLATION_MISMATCH; //ORA-12704
-            LOG_WARN("character set mismatch", K(ret), K(left_cs), K(right_cs));
-          }
-        }
-      } else if (is_distinct && (right_type.is_geometry() || left_type.is_geometry())) {
-        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
-        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      if (OB_FAIL(check_oracle_mode_set_type_validity(
+              is_ps_prepare_stage, left_type, right_type, is_distinct, &skip_add_cast))) {
+        LOG_WARN("left and right type of set operator not valid in oracle mode", K(ret));
       }
     }
     if (OB_SUCC(ret) && is_mysql_recursive_union && left_type.is_null()) {

@@ -618,7 +618,7 @@ int ObTransformPredicateMoveAround::generate_basic_table_pullup_preds(ObDMLStmt 
     LOG_WARN("get unexpected null", K(ret), K(stmt));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_check_constraint_items().count(); i++) {
-      ObDMLStmt::CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
+      CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
       bool on_null_side = false;
       if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(
                         stmt, item.table_id_, on_null_side))) {
@@ -636,8 +636,8 @@ int ObTransformPredicateMoveAround::generate_basic_table_pullup_preds(ObDMLStmt 
               OB_UNLIKELY(item.check_constraint_exprs_.count() != item.check_flags_.count())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(item));
-          } else if (!(item.check_flags_.at(j) & ObDMLStmt::CheckConstraintFlag::IS_VALIDATE_CHECK) &&
-                    !(item.check_flags_.at(j) & ObDMLStmt::CheckConstraintFlag::IS_RELY_CHECK)) {
+          } else if (!(item.check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
+                    !(item.check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
             //do nothing
           } else if (OB_FAIL(preds.push_back(check_constraint_expr))) {
             LOG_WARN("push back failed", K(ret));

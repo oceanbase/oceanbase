@@ -496,6 +496,12 @@ class ObUnpivotOp;
 REGISTER_OPERATOR(ObLogUnpivot, PHY_UNPIVOT, ObUnpivotSpec,
                   ObUnpivotOp, NOINPUT, VECTORIZED_OP);
 
+class ObUnpivotV2Spec;
+class ObUnpivotV2Op;
+REGISTER_OPERATOR(ObLogUnpivot, PHY_UNPIVOT_V2, ObUnpivotV2Spec, ObUnpivotV2Op,
+                  NOINPUT, VECTORIZED_OP, 0 /*+version*/, SUPPORT_RICH_FORMAT,
+                  "PHY_VEC_UNPIVOT");
+
 class ObLogForUpdate;
 class ObTableLockOpInput;
 class ObTableLockSpec;

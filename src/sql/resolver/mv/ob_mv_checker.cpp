@@ -240,8 +240,8 @@ const char *ObMVChecker::get_table_type_str(const TableItem::TableType type)
   case TableItem::FUNCTION_TABLE:
     type_str = "FUNCTION_TABLE";
     break;
-  case TableItem::UNPIVOT_TABLE:
-    type_str = "UNPIVOT_TABLE";
+  case TableItem::TRANSPOSE_TABLE:
+    type_str = "TRANSPOSE_TABLE";
     break;
   case TableItem::TEMP_TABLE:
     type_str = "TEMP_TABLE";

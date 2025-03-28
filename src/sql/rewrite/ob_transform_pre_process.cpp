@@ -312,7 +312,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         LOG_TRACE("succeed to transform for preserve order for fulltext search",K(is_happened), K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(reset_view_base_item(stmt))) {
+    if (OB_SUCC(ret) && OB_FAIL(reset_view_base_and_transpose_item(stmt))) {
       LOG_WARN("failed to reset view base item", K(ret));
     }
     if (OB_SUCC(ret)) {
@@ -2884,7 +2884,7 @@ int ObTransformPreProcess::pull_up_part_exprs(ObDMLStmt *stmt,
       LOG_WARN("failed to add replace pair", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_part_exprs().count(); ++i) {
-      ObDMLStmt::PartExprItem pei = sel_stmt->get_part_exprs().at(i);
+      PartExprItem pei = sel_stmt->get_part_exprs().at(i);
       if (OB_FAIL(copier.copy_on_replace(pei.part_expr_, pei.part_expr_))) {
         LOG_WARN("failed to copy part expr", K(ret));
       } else if (pei.subpart_expr_ != NULL
@@ -5565,8 +5565,8 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
   SemiInfo  *semi_info = NULL;
   TableItem *view_table = NULL;
   TableItem *inner_target_table = NULL;
-  ObSEArray<ObDMLStmt::PartExprItem, 8> part_items;
-  ObSEArray<ObDMLStmt::PartExprItem, 8> inner_part_items;
+  ObSEArray<PartExprItem, 8> part_items;
+  ObSEArray<PartExprItem, 8> inner_part_items;
   ObSEArray<ColumnItem, 8> column_items;
   ObSEArray<ColumnItem, 8> inner_column_items;
   ObSEArray<ObRawExpr*, 8> old_column_exprs;
@@ -5657,7 +5657,7 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
       LOG_WARN("failed to add column itemes", K(ret));
     } else if (OB_FAIL(insert_stmt->get_part_expr_items(target_table->table_id_, part_items))) {
       LOG_WARN("failed to get part expr items", K(ret));
-    } else if (OB_FAIL(deep_copy_stmt_objects<ObDMLStmt::PartExprItem>(expr_copier,
+    } else if (OB_FAIL(deep_copy_stmt_objects<PartExprItem>(expr_copier,
                                                                        part_items,
                                                                        inner_part_items))) {
       LOG_WARN("failed to deep copy part expr items", K(ret));
@@ -11029,7 +11029,7 @@ int ObTransformPreProcess::construct_leaf_leading_table(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformPreProcess::reset_view_base_item(ObDMLStmt *stmt)
+int ObTransformPreProcess::reset_view_base_and_transpose_item(ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -11044,6 +11044,7 @@ int ObTransformPreProcess::reset_view_base_item(ObDMLStmt *stmt)
         LOG_WARN("unexpected null", K(ret), KP(table_item));
       } else {
         table_item->view_base_item_ = NULL;
+        table_item->transpose_table_def_ = NULL;
       }
     }
   }

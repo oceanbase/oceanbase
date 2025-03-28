@@ -1847,7 +1847,8 @@ public:
     return is_column_ref_expr() || is_query_ref_expr() || is_aggr_expr() || is_set_op_expr()
           || is_win_func_expr() || has_flag(IS_ROWNUM) || has_flag(IS_PSEUDO_COLUMN)
           || has_flag(IS_SEQ_EXPR) || has_flag(IS_SYS_CONNECT_BY_PATH)
-          || has_flag(IS_CONNECT_BY_ROOT) || has_flag(IS_OP_PSEUDO_COLUMN);
+          || has_flag(IS_CONNECT_BY_ROOT) || has_flag(IS_OP_PSEUDO_COLUMN)
+          || has_flag(IS_UNPIVOT_EXPR);
   }
 
   // The expr result is vectorized, the batch result is the same if not vectorized result e.g:
@@ -2709,7 +2710,6 @@ public:
       dependant_expr_(NULL),
       is_lob_column_(false),
       is_joined_dup_column_(false),
-      is_unpivot_mocked_column_(false),
       is_hidden_(false),
       from_alias_table_(false),
       is_rowkey_column_(false),
@@ -2737,7 +2737,6 @@ public:
       dependant_expr_(NULL),
       is_lob_column_(false),
       is_joined_dup_column_(false),
-      is_unpivot_mocked_column_(false),
       is_hidden_(false),
       from_alias_table_(false),
       is_rowkey_column_(false),
@@ -2765,7 +2764,6 @@ public:
       dependant_expr_(NULL),
       is_lob_column_(false),
       is_joined_dup_column_(false),
-      is_unpivot_mocked_column_(false),
       is_hidden_(false),
       from_alias_table_(false),
       is_rowkey_column_(false),
@@ -2873,8 +2871,6 @@ public:
   void set_strict_json_column(int8_t v) { is_strict_json_column_ = v; }
   bool is_joined_dup_column() const { return is_joined_dup_column_; }
   void set_joined_dup_column(bool is_joined_dup_column) { is_joined_dup_column_ = is_joined_dup_column; }
-  bool is_unpivot_mocked_column() const { return is_unpivot_mocked_column_; }
-  void set_unpivot_mocked_column(const bool value) { is_unpivot_mocked_column_ = value; }
   bool is_hidden_column() const { return is_hidden_; }
   void set_hidden_column(const bool value) { is_hidden_ = value; }
   bool is_from_alias_table() const { return from_alias_table_; }
@@ -2911,7 +2907,6 @@ public:
                        K_(enum_set_values),
                        K_(is_lob_column),
                        K_(is_joined_dup_column),
-                       K_(is_unpivot_mocked_column),
                        K_(is_hidden),
                        K_(from_alias_table),
                        K_(is_rowkey_column),
@@ -2934,7 +2929,6 @@ private:
   ObRawExpr *dependant_expr_; //TODO: @yuming.wyc @ryan.ly
   bool is_lob_column_; //TODO @hanhui add lob column
   bool is_joined_dup_column_; //is duplicated column in join (not in using). e.g., t1 (c1, c2) cross join t2 (c2,c3), c2 in t1 and t2 are joined_dup_column_
-  bool is_unpivot_mocked_column_; //used for unpivot
   bool is_hidden_; //used for print hidden column
   bool from_alias_table_;
   bool is_rowkey_column_;
@@ -5014,6 +5008,122 @@ private:
   ObRawExpr *search_key_; // user defined search query
 };
 
+class ObUnpivotRawExpr : public ObRawExpr
+{
+public:
+  ObUnpivotRawExpr()
+    : ObRawExpr(), is_label_expr_(false)
+  {
+    set_expr_class(ObIRawExpr::EXPR_UNPIVOT);
+  }
+
+  ObUnpivotRawExpr(common::ObIAllocator &alloc)
+    : ObRawExpr(alloc), is_label_expr_(false)
+  {
+    set_expr_class(ObIRawExpr::EXPR_UNPIVOT);
+  }
+  virtual ~ObUnpivotRawExpr() {}
+  int assign(const ObRawExpr &other) override;
+  virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
+
+  virtual void clear_child() override;
+  int add_param_expr(ObRawExpr *expr);
+  int remove_param_expr(int64_t index);
+  int replace_param_expr(int64_t index, ObRawExpr *expr);
+  virtual int64_t get_param_count() const override;
+  virtual const ObRawExpr *get_param_expr(int64_t index) const override;
+  virtual ObRawExpr *&get_param_expr(int64_t index) override;
+  virtual void reset();
+  virtual void inner_calc_hash() override;
+  virtual bool inner_same_as(const ObRawExpr &expr,
+                             ObExprEqualCheckContext *check_context = NULL) const override;
+
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+
+  virtual uint64_t hash_internal(uint64_t seed) const;
+
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
+  inline bool is_label_expr() const { return is_label_expr_; }
+  inline void set_label_expr(bool is_label_expr) { is_label_expr_ = is_label_expr; }
+
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
+                                            N_RESULT_TYPE, result_type_,
+                                            N_EXPR_INFO, info_,
+                                            K_(enum_set_values),
+                                            N_CHILDREN, exprs_,
+                                            K_(is_label_expr));
+
+protected:
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> exprs_;
+  bool is_label_expr_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUnpivotRawExpr);
+};
+
+inline const ObRawExpr *ObUnpivotRawExpr::get_param_expr(int64_t index) const
+{
+  const ObRawExpr *expr = NULL;
+  if (index >= 0 && index < exprs_.count()) {
+    expr = exprs_.at(index);
+  }
+  return expr;
+}
+
+//here must return in two branch, because ret value is a *&
+inline ObRawExpr *&ObUnpivotRawExpr::get_param_expr(int64_t index)
+{
+  if (index >= 0 && index < exprs_.count()) {
+    return exprs_.at(index);
+  } else {
+    return USELESS_POINTER;
+  }
+}
+
+inline int ObUnpivotRawExpr::add_param_expr(ObRawExpr *expr)
+{
+  return exprs_.push_back(expr);
+}
+
+inline int ObUnpivotRawExpr::remove_param_expr(int64_t index)
+{
+  int ret = common::OB_SUCCESS;
+  if (index < 0 || index >= exprs_.count()) {
+    ret = common::OB_INVALID_ARGUMENT;
+  } else {
+    ret = exprs_.remove(index);
+  }
+  return ret;
+}
+
+inline int ObUnpivotRawExpr::replace_param_expr(int64_t index, ObRawExpr *expr)
+{
+  int ret = common::OB_SUCCESS;
+  if (index < 0 || index >= exprs_.count()) {
+    ret = common::OB_INVALID_ARGUMENT;
+  } else {
+    ObRawExpr *&target_expr = exprs_.at(index);
+    target_expr = expr;
+  }
+  return ret;
+}
+
+inline int64_t ObUnpivotRawExpr::get_param_count() const
+{
+  return exprs_.count();
+}
+
+inline uint64_t ObUnpivotRawExpr::hash_internal(uint64_t seed) const
+{
+  uint64_t hash_value = seed;
+  for (int64_t i = 0; i < exprs_.count(); ++i) {
+    if (NULL != exprs_.at(i)) {
+      hash_value = common::do_hash(*(exprs_.at(i)), hash_value);
+    }
+  }
+  return hash_value;
+}
+
 /// visitor interface
 class ObRawExprVisitor
 {
@@ -5051,6 +5161,7 @@ public:
   virtual int visit(ObWinFunRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
   virtual int visit(ObPseudoColumnRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
   virtual int visit(ObMatchFunRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
+  virtual int visit(ObUnpivotRawExpr &expr) = 0;
   virtual bool skip_child(ObRawExpr &expr) { UNUSED(expr); return false; }
 private:
   // disallow copy

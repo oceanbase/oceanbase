@@ -2463,7 +2463,7 @@ int ObDelUpdResolver::view_pullup_part_exprs()
         LOG_WARN("failed to add replace pair", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_part_exprs().count(); ++i) {
-        ObDMLStmt::PartExprItem pei = sel_stmt->get_part_exprs().at(i);
+        PartExprItem pei = sel_stmt->get_part_exprs().at(i);
         if (pei.table_id_ != table->get_base_table_item().table_id_) {
           continue;
         } else if (OB_FAIL(copier.copy(pei.part_expr_, pei.part_expr_))) {
@@ -2489,7 +2489,7 @@ int ObDelUpdResolver::view_pullup_part_exprs()
       } else if (OB_NOT_NULL(table_schema)) {
         const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
         for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_part_exprs().count(); ++i) {
-          ObDMLStmt::PartExprItem pei = sel_stmt->get_part_exprs().at(i);
+          PartExprItem pei = sel_stmt->get_part_exprs().at(i);
           if (!is_fk_parent_table(foreign_key_infos, pei.index_tid_)) {
             continue;
           } else if (OB_FAIL(copier.copy(pei.part_expr_, pei.part_expr_))) {

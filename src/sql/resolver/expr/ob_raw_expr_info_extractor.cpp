@@ -745,5 +745,21 @@ int ObRawExprInfoExtractor::add_deterministic(ObRawExpr &expr)
   return ret;
 }
 
+int ObRawExprInfoExtractor::visit(ObUnpivotRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("failed to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
+    LOG_WARN("pull match against info failed", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_UNPIVOT_EXPR))) {
+    LOG_WARN("add flag failed", K(ret));
+  } else if (OB_FAIL(expr.add_flag(CNT_UNPIVOT_EXPR))) {
+    LOG_WARN("add flag failed", K(ret));
+  }
+  return ret;
+}
+
+
 }  // namespace sql
 }  // namespace oceanbase

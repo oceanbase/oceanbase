@@ -11504,7 +11504,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         op->set_child(i, child);
         if (op->get_type() == log_op_def::LOG_SET ||
             op->get_type() == log_op_def::LOG_SUBPLAN_SCAN ||
-            op->get_type() == log_op_def::LOG_UNPIVOT ||
             (op->get_type() == log_op_def::LOG_SUBPLAN_FILTER && i > 0)) {
           child->mark_is_plan_root();
           child->get_plan()->set_plan_root(child);

@@ -84,7 +84,8 @@ int ObRawExprCheckDep::check(const ObRawExpr &expr)
     case ObRawExpr::EXPR_OPERATOR:
     case ObRawExpr::EXPR_SET_OP:
     case ObRawExpr::EXPR_CASE_OPERATOR:
-    case ObRawExpr::EXPR_WINDOW: {
+    case ObRawExpr::EXPR_WINDOW:
+    case ObRawExpr::EXPR_UNPIVOT: {
       if (OB_FAIL(check_expr(expr, found))) {
         LOG_WARN("failed to check expr", K(expr), K(ret));
       } else if (!found) {

@@ -83,6 +83,7 @@ public:
   virtual int visit(ObPseudoColumnRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
   virtual int visit(ObPlQueryRefRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
   virtual int visit(ObMatchFunRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
+  virtual int visit(ObUnpivotRawExpr &expr) { UNUSED(expr); return OB_SUCCESS; }
   virtual bool skip_child(ObRawExpr &expr);
 private:
   ObStandardGroupChecker *checker_;

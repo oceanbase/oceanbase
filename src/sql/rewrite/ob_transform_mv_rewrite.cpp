@@ -2743,7 +2743,7 @@ int ObTransformMVRewrite::create_mv_column_item(MvRewriteHelper &helper)
       }
       // 3.2. do fill part expr for query_stmt_
       for (int64_t i = 0; OB_SUCC(ret) && i < mv_info.select_mv_stmt_->get_part_exprs().count(); ++i) {
-        ObDMLStmt::PartExprItem &part_item = mv_info.select_mv_stmt_->get_part_exprs().at(i);
+        PartExprItem &part_item = mv_info.select_mv_stmt_->get_part_exprs().at(i);
         ObRawExpr *part_expr = NULL;
         ObRawExpr *subpart_expr = NULL;
         if (OB_FAIL(part_expr_copier.copy_on_replace(part_item.part_expr_, part_expr))) {

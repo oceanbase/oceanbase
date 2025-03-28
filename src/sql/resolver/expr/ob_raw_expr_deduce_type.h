@@ -66,6 +66,7 @@ public:
   virtual int visit(ObUDFRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
   virtual int visit(ObMatchFunRawExpr &expr);
+  virtual int visit(ObUnpivotRawExpr &expr);
 
   int add_implicit_cast(ObOpRawExpr &parent, const ObCastMode &cast_mode);
   int add_implicit_cast(ObCaseOpRawExpr &parent, const ObCastMode &cast_mode);

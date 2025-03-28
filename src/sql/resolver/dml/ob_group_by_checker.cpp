@@ -914,6 +914,16 @@ int ObGroupByChecker::visit(ObMatchFunRawExpr &expr)
   return ret;
 }
 
+int ObGroupByChecker::visit(ObUnpivotRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
+    set_skip_expr(&expr);
+  }
+  return ret;
+}
+
 
 // following case is allowed
 // select max(max(data)) from test group by id order by id, max(max(data)) ;

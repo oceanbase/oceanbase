@@ -189,5 +189,15 @@ int ObRawExprPrintVisitor::visit(ObMatchFunRawExpr &expr)
   return ret;
 }
 
+int ObRawExprPrintVisitor::visit(ObUnpivotRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(buf_, buf_len_, pos_, "%s<%ld>|", get_type_name(expr.get_expr_type()),
+                              expr.get_param_count()))) {
+    LOG_WARN("databuff setop failed", K(ret));
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

@@ -2038,7 +2038,7 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
   } else {
     LOG_TRACE("begin replace check constraint exprs", K(const_ctx), K(stmt->get_check_constraint_items()));
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_check_constraint_items().count(); ++i) {
-      ObDMLStmt::CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
+      CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < item.check_constraint_exprs_.count(); ++j) {
         ObRawExpr *check_constraint_expr = item.check_constraint_exprs_.at(j);
         bool is_valid = false;
@@ -2050,8 +2050,8 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
             OB_UNLIKELY(item.check_constraint_exprs_.count() != item.check_flags_.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(item));
-        } else if (!(item.check_flags_.at(j) & ObDMLStmt::CheckConstraintFlag::IS_VALIDATE_CHECK) &&
-                   !(item.check_flags_.at(j) & ObDMLStmt::CheckConstraintFlag::IS_RELY_CHECK)) {
+        } else if (!(item.check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
+                   !(item.check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
           //do nothing
         } else if (OB_FAIL(check_constraint_expr_validity(check_constraint_expr,
                                                           stmt->get_part_exprs(),
@@ -2081,7 +2081,7 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
 }
 
 int ObTransformConstPropagate::check_constraint_expr_validity(ObRawExpr *check_constraint_expr,
-                                                              const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                                              const ObIArray<PartExprItem> &part_items,
                                                               ObIArray<ExprConstInfo> &expr_const_infos,
                                                               ObRawExpr *&part_column_expr,
                                                               ObIArray<ObRawExpr*> &old_column_exprs,
@@ -2138,7 +2138,7 @@ int ObTransformConstPropagate::check_constraint_expr_validity(ObRawExpr *check_c
 int ObTransformConstPropagate::do_check_constraint_param_expr_vaildity(
                                                               ObRawExpr *column_param_expr,
                                                               ObRawExpr *non_column_param_expr,
-                                                              const ObIArray<ObDMLStmt::PartExprItem> &part_items,
+                                                              const ObIArray<PartExprItem> &part_items,
                                                               ObIArray<ExprConstInfo> &expr_const_infos,
                                                               ObIArray<ObRawExpr*> &old_column_exprs,
                                                               ObIArray<ObRawExpr*> &new_const_exprs,

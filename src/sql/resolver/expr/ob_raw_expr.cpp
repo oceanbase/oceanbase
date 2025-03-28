@@ -209,12 +209,13 @@ ObRawExpr::~ObRawExpr()
 //ObUnaryRefExpr(即subquery ref)必须由SubPlanFilter产生
 //PSEUDO_COLUMN一般是由CTE或者层次查询产生
 //SYS_CONNECT_BY_PATH,CONNECT_BY_ROOT由cby nestloop join产生
+//UNPIVOT必须由Unpivot operator产生
 bool ObRawExpr::has_generalized_column(bool ignore_column/* = false */) const
 {
   return (!ignore_column && has_flag(CNT_COLUMN)) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
          || has_flag(CNT_WINDOW_FUNC) || has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN)
          || has_flag(CNT_SEQ_EXPR) || has_flag(CNT_SYS_CONNECT_BY_PATH) || has_flag(CNT_CONNECT_BY_ROOT)
-         || has_flag(CNT_OP_PSEUDO_COLUMN) || has_flag(CNT_MATCH_EXPR);
+         || has_flag(CNT_OP_PSEUDO_COLUMN) || has_flag(CNT_UNPIVOT_EXPR) || has_flag(CNT_MATCH_EXPR);
 
 }
 
@@ -252,7 +253,10 @@ bool ObRawExpr::is_vectorize_result() const
   //  coredump because evaluate flag not cleared which reset datum's pointers depends.
   bool is_const = is_const_expr();
 
-  return not_pre_calc && !is_const;
+  bool is_unpivot_label_expr = is_unpivot_expr()
+      && static_cast<const ObUnpivotRawExpr *> (this)->is_label_expr();
+
+  return not_pre_calc && !is_const && !is_unpivot_label_expr;
 }
 
 int ObRawExpr::assign(const ObRawExpr &other)
@@ -2238,7 +2242,6 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       column_name_ = tmp.column_name_;
       column_flags_ = tmp.column_flags_;
       dependant_expr_ = tmp.dependant_expr_;
-      is_unpivot_mocked_column_ = tmp.is_unpivot_mocked_column_;
       is_hidden_ = tmp.is_hidden_;
       is_lob_column_ = tmp.is_lob_column_;
       is_joined_dup_column_ = tmp.is_joined_dup_column_;
@@ -7530,6 +7533,16 @@ int ObRawExprFactory::create_raw_expr(ObRawExpr::ExprClass expr_class,
     }
     break;
   }
+  case ObRawExpr::EXPR_UNPIVOT: {
+    ObUnpivotRawExpr *dest_unpivot_expr = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_unpivot_expr)) ||
+        OB_ISNULL(dest_unpivot_expr)) {
+      LOG_WARN("failed to allocate raw expr", KPC(dest_unpivot_expr), K(ret));
+    } else {
+      dest = dest_unpivot_expr;
+    }
+    break;
+  }
   case ObRawExpr::EXPR_INVALID_CLASS: {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("does not implement expr type copy", K(ret), K(expr_type), K(expr_class));
@@ -7787,6 +7800,115 @@ int ObMatchFunRawExpr::replace_param_expr(int64_t index, ObRawExpr *expr)
   } else {
     ObRawExpr *&target_expr = get_param_expr(index);
     target_expr = expr;
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+
+void ObUnpivotRawExpr::reset()
+{
+  ObRawExpr::reset();
+  clear_child();
+}
+
+int ObUnpivotRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else {
+      const ObUnpivotRawExpr &tmp = static_cast<const ObUnpivotRawExpr &>(other);
+      if (OB_FAIL(exprs_.assign(tmp.exprs_))) {
+        LOG_WARN("failed to assign exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnpivotRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                   const ObIArray<ObRawExpr *> &new_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, exprs_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+void ObUnpivotRawExpr::clear_child()
+{
+  exprs_.reset();
+}
+
+void ObUnpivotRawExpr::inner_calc_hash()
+{
+  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
+  expr_hash_ = common::do_hash(is_label_expr(), expr_hash_);
+}
+
+bool ObUnpivotRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
+{
+  bool bool_ret = false;
+  if (expr.get_expr_class() != ObRawExpr::EXPR_UNPIVOT ||
+      this->get_param_count() != expr.get_param_count()) {
+    /* do nothing */
+  } else if (static_cast<const ObUnpivotRawExpr &>(expr).is_label_expr() != is_label_expr()) {
+    /* do nothing */
+  } else {
+    bool_ret = true;
+    for (int64_t i = 0; bool_ret && i < expr.get_param_count(); ++i) {
+      if (NULL == this->get_param_expr(i) || NULL == expr.get_param_expr(i)
+          || !(this->get_param_expr(i)->same_as(*expr.get_param_expr(i), check_context))) {
+        bool_ret = false;
+      }
+    }
+  }
+  return bool_ret;
+}
+
+int ObUnpivotRawExpr::do_visit(ObRawExprVisitor &visitor)
+{
+  return visitor.visit(*this);
+}
+
+int ObUnpivotRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                   ExplainType type) const {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(BUF_PRINTF("UNPIVOT("))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
+      if (OB_ISNULL(get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is NULL", K(i), K(ret));
+      } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get_name", K(i), K(ret));
+      } else if (i < get_param_count() - 1) {
+        if (OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        }
+      } else {}
+    }
+    if (OB_SUCCESS == ret && OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (EXPLAIN_EXTENDED == type) {
+      if (OB_FAIL(BUF_PRINTF("("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(")"))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      } else {}
+    }
   }
   return ret;
 }

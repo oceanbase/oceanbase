@@ -18,66 +18,20 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-int TransposeItem::InPair::assign(const TransposeItem::InPair &other)
+int ObUnpivotItem::deep_copy(ObIRawExprCopier &expr_copier,
+                             const ObUnpivotItem &other)
 {
   int ret = OB_SUCCESS;
-  if (this == &other) {
-    //do nothing
-  } else if (OB_FAIL(exprs_.assign(other.exprs_))) {
-    LOG_WARN("assign searray failed", K(other), K(ret));
-  } else if (OB_FAIL(column_names_.assign(other.column_names_))) {
-    LOG_WARN("assign searray failed", K(other), K(ret));
-  } else {
-    pivot_expr_alias_ = other.pivot_expr_alias_;
+  is_include_null_ = other.is_include_null_;
+  if (OB_FAIL(expr_copier.copy(other.origin_exprs_, origin_exprs_))) {
+    LOG_WARN("failed to copy key exprs");
+  } else if (OB_FAIL(expr_copier.copy(other.label_exprs_ , label_exprs_))) {
+    LOG_WARN("failed to copy for exprs");
+  } else if (OB_FAIL(expr_copier.copy(other.value_exprs_ , value_exprs_))) {
+    LOG_WARN("failed to copy val exprs");
   }
   return ret;
 }
-
-int TransposeItem::assign(const TransposeItem &other)
-{
-  int ret = OB_SUCCESS;
-  if (this == &other) {
-    //do nothing
-  } else if (OB_FAIL(for_columns_.assign(other.for_columns_))) {
-    LOG_WARN("assign searray failed", K(other), K(ret));
-  } else if (OB_FAIL(in_pairs_.assign(other.in_pairs_))) {
-    LOG_WARN("assign searray failed", K(other), K(ret));
-  } else if (OB_FAIL(unpivot_columns_.assign(other.unpivot_columns_))) {
-    LOG_WARN("assign searray failed", K(other), K(ret));
-  } else {
-    aggr_pairs_.reset();
-    old_column_count_ = other.old_column_count_;
-    is_unpivot_ = other.is_unpivot_;
-    is_incude_null_ = other.is_incude_null_;
-    alias_name_ = other.alias_name_;
-  }
-  return ret;
-}
-
-int TransposeItem::deep_copy(ObIRawExprCopier &expr_copier,
-                             const TransposeItem &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(assign(other))) {
-    LOG_WARN("assign failed", K(other), K(ret));
-  }
-
-  for (int64_t i = 0; i < in_pairs_.count() && OB_SUCC(ret); ++i) {
-    InPair &in_pair = in_pairs_.at(i);
-    in_pair.exprs_.reuse();
-    if (OB_FAIL(expr_copier.copy(other.in_pairs_.at(i).exprs_,
-                                 in_pair.exprs_))) {
-      LOG_WARN("deep copy expr failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObUnpivotInfo,
-                    old_column_count_,
-                    unpivot_column_count_,
-                    for_column_count_,
-                    is_include_null_);
 
 int SemiInfo::deep_copy(ObIRawExprCopier &expr_copier, const SemiInfo &other)
 {
@@ -372,7 +326,7 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
   return ret;
 }
 
-int ObDMLStmt::PartExprItem::deep_copy(ObIRawExprCopier &expr_copier,
+int PartExprItem::deep_copy(ObIRawExprCopier &expr_copier,
                                        const PartExprItem &other)
 {
   int ret = OB_SUCCESS;
@@ -412,7 +366,7 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type)
       pseudo_column_like_exprs_(),
       tables_hash_(),
       subquery_exprs_(),
-      transpose_item_(NULL),
+      unpivot_item_(NULL),
       user_var_exprs_(),
       check_constraint_items_(),
       dblink_id_(OB_INVALID_ID),
@@ -527,7 +481,7 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     is_contains_assignment_ = other.is_contains_assignment_;
     affected_last_insert_id_ = other.affected_last_insert_id_;
     has_part_key_sequence_ = other.has_part_key_sequence_;
-    transpose_item_ = other.transpose_item_;
+    unpivot_item_ = other.unpivot_item_;
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
     has_vec_approx_ = other.has_vec_approx_;
@@ -699,14 +653,14 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     has_vec_approx_ = other.has_vec_approx_;
   }
   if (OB_SUCC(ret)) {
-    TransposeItem *tmp = NULL;
-    if (OB_FAIL(deep_copy_stmt_object<TransposeItem>(allocator,
+    ObUnpivotItem *tmp = NULL;
+    if (OB_FAIL(deep_copy_stmt_object<ObUnpivotItem>(allocator,
                                                      expr_copier,
-                                                     other.transpose_item_,
+                                                     other.unpivot_item_,
                                                      tmp))) {
-      LOG_WARN("failed to deep copy transpose item", K(ret));
+      LOG_WARN("failed to deep copy unpivot info", K(ret));
     } else {
-      transpose_item_ = tmp;
+      unpivot_item_ = tmp;
     }
   }
   return ret;
@@ -957,15 +911,6 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else if (OB_FAIL(visitor.visit(match_exprs_, SCOPE_DICT_FIELDS))) {
       LOG_WARN("failed to visit fts exprs", K(ret));
     } else {}
-  }
-
-  if (NULL != transpose_item_) {
-    for (int64_t i = 0; i < transpose_item_->in_pairs_.count() && OB_SUCC(ret); ++i) {
-      TransposeItem::InPair &in_pair = const_cast<TransposeItem::InPair &>(transpose_item_->in_pairs_.at(i));
-      if (OB_FAIL(visitor.visit(in_pair.exprs_, SCOPE_PIVOT))) {
-        LOG_WARN("failed to visit in pair exprs", K(ret));
-      }
-    }
   }
 
   if (OB_SUCC(ret) && visitor.is_recursive()) {
@@ -4864,8 +4809,8 @@ int ObDMLStmt::check_hint_table_matched_table_item(ObCollationType cs_type,
   return ret;
 }
 
-int ObDMLStmt::CheckConstraintItem::deep_copy(ObIRawExprCopier &expr_copier,
-                                              const CheckConstraintItem &other)
+int CheckConstraintItem::deep_copy(ObIRawExprCopier &expr_copier,
+                                   const CheckConstraintItem &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr_copier.copy(other.check_constraint_exprs_, check_constraint_exprs_))) {
@@ -4879,7 +4824,7 @@ int ObDMLStmt::CheckConstraintItem::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObDMLStmt::CheckConstraintItem::assign(const CheckConstraintItem &other)
+int CheckConstraintItem::assign(const CheckConstraintItem &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_constraint_exprs_.assign(other.check_constraint_exprs_))) {

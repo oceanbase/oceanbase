@@ -37,6 +37,7 @@ public:
   virtual int visit(ObSetOpRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
   virtual int visit(ObMatchFunRawExpr &expr);
+  virtual int visit(ObUnpivotRawExpr &expr);
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   // types and constants

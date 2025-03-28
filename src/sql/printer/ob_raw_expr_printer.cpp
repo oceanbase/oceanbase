@@ -271,6 +271,11 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       }
       break;
     }
+    case ObRawExpr::EXPR_UNPIVOT: {
+      ObUnpivotRawExpr *unpivot_expr = static_cast<ObUnpivotRawExpr*>(expr);
+      PRINT_EXPR(unpivot_expr);
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown expr class", K(ret), K(expr->get_expr_class()));

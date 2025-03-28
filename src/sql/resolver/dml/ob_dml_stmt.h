@@ -34,122 +34,24 @@ class ObStmtResolver;
 class ObDMLStmt;
 class ObStmtExprVisitor;
 class ObStmtExprGetter;
+struct TransposeDef;
 
-struct TransposeItem
+struct ObUnpivotItem
 {
-  enum UnpivotNullsType
-  {
-    UNT_NOT_SET = 0,
-    UNT_EXCLUDE,
-    UNT_INCLUDE,
-  };
+public:
+  ObUnpivotItem() : is_include_null_(false) {}
 
-  struct AggrPair
-  {
-    ObRawExpr *expr_;
-    ObString alias_name_;
-    AggrPair() : expr_(NULL), alias_name_() {}
-    ~AggrPair() {}
-    TO_STRING_KV(KPC_(expr), K_(alias_name));
-  };
+  void reset() { new (this) ObUnpivotItem(); }
 
-  struct ForPair
-  {
-    ObString column_name_;
-    ForPair() : column_name_() {}
-    ~ForPair() {}
-
-    TO_STRING_KV(K_(column_name));
-  };
-
-
-  struct InPair
-  {
-    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> exprs_;
-    ObString pivot_expr_alias_;
-    common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> column_names_;
-    InPair() : pivot_expr_alias_() {}
-    ~InPair() {}
-    int assign(const InPair &other);
-    TO_STRING_KV(K_(exprs), K_(pivot_expr_alias), K_(column_names));
-  };
-
-  TransposeItem()
-      : old_column_count_(0), is_unpivot_(false), is_incude_null_(false)
-  {}
-  void reset()
-  {
-    old_column_count_ = 0;
-    is_unpivot_ = false;
-    is_incude_null_ = false;
-    aggr_pairs_.reset();
-    for_columns_.reset();
-    in_pairs_.reset();
-    unpivot_columns_.reset();
-  }
-  inline bool is_pivot() const { return !is_unpivot_; }
-  inline bool is_unpivot() const { return is_unpivot_; }
-  inline bool is_include_null() const { return is_incude_null_; }
-  inline bool is_exclude_null() const { return !is_incude_null_; }
-  inline bool need_use_unpivot_op() const
-  {
-    return is_unpivot_ && in_pairs_.count() > 1;
-  }
-  void set_pivot() { is_unpivot_ = false; }
-  void set_unpivot() { is_unpivot_ = true; }
-  void set_include_nulls(const bool is_include_nulls)
-  {
-    is_incude_null_ = is_include_nulls;
-  }
-  int assign(const TransposeItem &other);
   int deep_copy(ObIRawExprCopier &expr_copier,
-                const TransposeItem &other);
-  TO_STRING_KV(K_(old_column_count), K_(is_unpivot), K_(is_incude_null), K_(aggr_pairs),
-               K_(for_columns), K_(in_pairs), K_(unpivot_columns), K_(alias_name));
+                const ObUnpivotItem &other);
 
-  int64_t old_column_count_;
-  bool is_unpivot_;
-  bool is_incude_null_;
-
-  common::ObSEArray<AggrPair, 16, common::ModulePageAllocator, true> aggr_pairs_;
-  common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> for_columns_;
-  common::ObSEArray<InPair, 16, common::ModulePageAllocator, true> in_pairs_;
-  common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> unpivot_columns_;
-
-  ObString alias_name_;
-};
-
-struct ObUnpivotInfo
-{
-public:
-  OB_UNIS_VERSION(1);
-public:
-  ObUnpivotInfo()
-    : is_include_null_(false),
-      old_column_count_(0),
-      for_column_count_(0),
-      unpivot_column_count_(0)
-  {}
-  ObUnpivotInfo(const bool is_include_null, const int64_t old_column_count,
-                const int64_t for_column_count, const int64_t unpivot_column_count)
-    : is_include_null_(is_include_null), old_column_count_(old_column_count),
-      for_column_count_(for_column_count), unpivot_column_count_(unpivot_column_count)
-  {}
-
-  void reset() { new (this) ObUnpivotInfo(); }
-  OB_INLINE bool has_unpivot() const
-  { return old_column_count_>= 0 && unpivot_column_count_ > 0 && for_column_count_ > 0; };
-  OB_INLINE int64_t get_new_column_count() const
-  { return unpivot_column_count_ + for_column_count_; }
-  OB_INLINE int64_t get_output_column_count() const
-  { return old_column_count_ + get_new_column_count(); }
-  TO_STRING_KV(K_(is_include_null), K_(old_column_count), K_(unpivot_column_count),
-               K_(for_column_count));
+  TO_STRING_KV(K_(is_include_null), K_(origin_exprs), K_(label_exprs), K_(value_exprs));
 
   bool is_include_null_;
-  int64_t old_column_count_;
-  int64_t for_column_count_;
-  int64_t unpivot_column_count_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> origin_exprs_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> label_exprs_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> value_exprs_;
 };
 
 enum MulModeTableType {
@@ -273,6 +175,7 @@ struct TableItem
     table_type_ = MAX_TABLE_TYPE;
     values_table_def_ = NULL;
     sample_info_ = nullptr;
+    transpose_table_def_ = NULL;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -306,7 +209,7 @@ struct TableItem
     JOINED_TABLE,
     CTE_TABLE,
     FUNCTION_TABLE,
-    UNPIVOT_TABLE,
+    TRANSPOSE_TABLE,
     TEMP_TABLE,
     LINK_TABLE,
     JSON_TABLE,
@@ -345,6 +248,7 @@ struct TableItem
   bool is_has_sample_info() const { return sample_info_ != nullptr; }
   bool is_joined_table() const { return JOINED_TABLE == type_; }
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
+  bool is_transpose_table() const { return TRANSPOSE_TABLE == type_; }
   bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
   bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
   bool is_json_table() const { return JSON_TABLE == type_; }  // json_table_def_->table_type_ == MulModeTableType::OB_ORA_JSON_TABLE_TYPE
@@ -402,7 +306,7 @@ struct TableItem
   // type == BASE_TABLE? ref_id_ is the real Id of the schema
   // type == ALIAS_TABLE? ref_id_ is the real Id of the schema, while table_id_ new generated
   // type == GENERATED_TABLE? ref_id_ is the reference of the sub-query.
-  // type == UNPIVOT_TABLE? ref_id_ is the reference of the sub-query,
+  // type == TRANSPOSE_TABLE? ref_id_ is the reference of the sub-query,
   // which like   SELECT  "normal_column",
   //                      'in_pair_literal1' AS "for_column1", 'in_pair_literal2' AS "for_column2",
   //                      "in_pair_column1" AS "unpivot_column1", "in_pair_column2" AS "unpivot_column2"
@@ -449,6 +353,8 @@ struct TableItem
   common::ObString external_table_partition_;
   // sample scan infos
   SampleInfo *sample_info_;
+  // transpose table
+  TransposeDef *transpose_table_def_;
 };
 
 struct ColumnItem
@@ -645,70 +551,70 @@ public:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> semi_conditions_;
 };
 
-/// In fact, ObStmt is ObDMLStmt.
+struct PartExprItem
+{
+  PartExprItem()
+      : table_id_(common::OB_INVALID_ID),
+        index_tid_(common::OB_INVALID_ID),
+        part_expr_(NULL),
+        subpart_expr_(NULL)
+  {
+  }
+  uint64_t table_id_;
+  uint64_t index_tid_;
+  ObRawExpr *part_expr_;
+  ObRawExpr *subpart_expr_;
+  void reset() {
+    table_id_ = common::OB_INVALID_ID;
+    index_tid_ = common::OB_INVALID_ID;
+    part_expr_ = NULL;
+    subpart_expr_ = NULL;
+  }
+  int deep_copy(ObIRawExprCopier &expr_copier,
+                const PartExprItem &other);
+  TO_STRING_KV(K_(table_id),
+                K_(index_tid),
+                KPC_(part_expr),
+                KPC_(subpart_expr));
+};
+
+enum CheckConstraintFlag
+{
+  IS_ENABLE_CHECK       = 1,
+  IS_VALIDATE_CHECK     = 1 << 1,
+  IS_RELY_CHECK         = 1 << 2
+};
+struct CheckConstraintItem
+{
+  CheckConstraintItem()
+      : table_id_(common::OB_INVALID_ID),
+        ref_table_id_(common::OB_INVALID_ID),
+        check_constraint_exprs_(),
+        check_flags_()
+  {
+  }
+  void reset() {
+    table_id_ = common::OB_INVALID_ID;
+    ref_table_id_ = common::OB_INVALID_ID;
+    check_constraint_exprs_.reset();
+    check_flags_.reset();
+  }
+  int deep_copy(ObIRawExprCopier &expr_copier,
+                const CheckConstraintItem &other);
+  int assign(const CheckConstraintItem &other);
+  TO_STRING_KV(K_(table_id),
+                K_(ref_table_id),
+                K_(check_constraint_exprs),
+                K_(check_flags));
+  uint64_t table_id_;
+  uint64_t ref_table_id_;
+  ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> check_constraint_exprs_;
+  ObSEArray<int64_t, 4,common::ModulePageAllocator, true> check_flags_;
+};
+
 class ObDMLStmt : public ObStmt
 {
 public:
-  struct PartExprItem
-  {
-    PartExprItem()
-        : table_id_(common::OB_INVALID_ID),
-          index_tid_(common::OB_INVALID_ID),
-          part_expr_(NULL),
-          subpart_expr_(NULL)
-    {
-    }
-    uint64_t table_id_;
-    uint64_t index_tid_;
-    ObRawExpr *part_expr_;
-    ObRawExpr *subpart_expr_;
-    void reset() {
-      table_id_ = common::OB_INVALID_ID;
-      index_tid_ = common::OB_INVALID_ID;
-      part_expr_ = NULL;
-      subpart_expr_ = NULL;
-    }
-    int deep_copy(ObIRawExprCopier &expr_copier,
-                  const PartExprItem &other);
-    TO_STRING_KV(K_(table_id),
-                 K_(index_tid),
-                 KPC_(part_expr),
-                 KPC_(subpart_expr));
-  };
-
-  enum CheckConstraintFlag
-  {
-    IS_ENABLE_CHECK       = 1,
-    IS_VALIDATE_CHECK     = 1 << 1,
-    IS_RELY_CHECK         = 1 << 2
-  };
-  struct CheckConstraintItem
-  {
-    CheckConstraintItem()
-        : table_id_(common::OB_INVALID_ID),
-          ref_table_id_(common::OB_INVALID_ID),
-          check_constraint_exprs_(),
-          check_flags_()
-    {
-    }
-    void reset() {
-      table_id_ = common::OB_INVALID_ID;
-      ref_table_id_ = common::OB_INVALID_ID;
-      check_constraint_exprs_.reset();
-      check_flags_.reset();
-    }
-    int deep_copy(ObIRawExprCopier &expr_copier,
-                  const CheckConstraintItem &other);
-    int assign(const CheckConstraintItem &other);
-    TO_STRING_KV(K_(table_id),
-                 K_(ref_table_id),
-                 K_(check_constraint_exprs),
-                 K_(check_flags));
-    uint64_t table_id_;
-    uint64_t ref_table_id_;
-    ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> check_constraint_exprs_;
-    ObSEArray<int64_t, 4,common::ModulePageAllocator, true> check_flags_;
-  };
 
   typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode,
                                   common::hash::hash_func<uint64_t>,
@@ -1180,22 +1086,9 @@ public:
                         const uint64_t seq_id) const;
   int get_sequence_exprs(common::ObIArray<ObRawExpr *> &exprs) const;
   int get_udf_exprs(common::ObIArray<ObRawExpr *> &exprs) const;
-  const TransposeItem *get_transpose_item() const { return transpose_item_; }
-  void set_transpose_item(const TransposeItem *transpose_item) { transpose_item_ = transpose_item; }
-  const ObUnpivotInfo get_unpivot_info() const
-  {
-    return (transpose_item_ != NULL
-            ? ObUnpivotInfo(transpose_item_->is_include_null(),
-                            transpose_item_->old_column_count_,
-                            transpose_item_->for_columns_.count(),
-                            transpose_item_->unpivot_columns_.count())
-            : ObUnpivotInfo());
-  }
-  bool is_unpivot_select() const
-  {
-    const ObUnpivotInfo &unpivot_info = get_unpivot_info();
-    return unpivot_info.has_unpivot();
-  }
+  const ObUnpivotItem *get_unpivot_item() const { return unpivot_item_; }
+  void set_unpivot_item(ObUnpivotItem *unpivot_item) { unpivot_item_ = unpivot_item; }
+  bool is_unpivot_select() const { return unpivot_item_ != NULL; }
   int remove_subquery_expr(const ObRawExpr *expr);
   // rebuild query ref exprs
   int adjust_subquery_list();
@@ -1358,7 +1251,7 @@ protected:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> pseudo_column_like_exprs_;
   ObDMLStmtTableHash tables_hash_;
   common::ObSEArray<ObQueryRefRawExpr*, 4, common::ModulePageAllocator, true> subquery_exprs_;
-  const TransposeItem *transpose_item_;
+  ObUnpivotItem *unpivot_item_;
 
   common::ObSEArray<ObUserVarIdentRawExpr *, 4, common::ModulePageAllocator, true> user_var_exprs_;
   common::ObSEArray<CheckConstraintItem, 8, common::ModulePageAllocator, true> check_constraint_items_;

@@ -704,8 +704,8 @@ const ObLogicalOperator *ObLogJoin::find_child_join(const ObLogicalOperator *op)
 bool ObLogJoin::is_scan_operator(log_op_def::ObLogOpType type)
 {
   return LOG_TABLE_SCAN == type || LOG_SUBPLAN_SCAN == type ||
-         LOG_FUNCTION_TABLE == type || LOG_UNPIVOT == type ||
-         LOG_TEMP_TABLE_ACCESS == type || LOG_JSON_TABLE == type || LOG_VALUES_TABLE_ACCESS == type;
+         LOG_FUNCTION_TABLE == type || LOG_TEMP_TABLE_ACCESS == type ||
+         LOG_JSON_TABLE == type || LOG_VALUES_TABLE_ACCESS == type;
 }
 
 int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)

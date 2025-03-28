@@ -45,7 +45,6 @@ ObSelectResolver::ObSelectResolver(ObResolverParams &params)
     is_sub_stmt_(false),
     in_exists_subquery_(false),
     standard_group_checker_(),
-    transpose_item_(NULL),
     is_left_child_(false),
     having_has_self_column_(false),
     has_grouping_(false),
@@ -2665,9 +2664,7 @@ int ObSelectResolver::expand_target_list(
     LOG_WARN("unexpected table type", K_(table_item.type), K(ret));
   }
 
-  const bool is_child_unpivot_select = (NULL != table_item.ref_query_
-                                        && table_item.ref_query_->is_unpivot_select());
-  LOG_DEBUG("do expand_target_list", K(is_child_unpivot_select), KPC(table_item.ref_query_));
+  LOG_DEBUG("do expand_target_list", KPC(table_item.ref_query_));
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
     const ColumnItem &col_item = column_items.at(i);
     SelectItem tmp_select_item;
@@ -2678,26 +2675,22 @@ int ObSelectResolver::expand_target_list(
                  K(i), K(table_item.ref_query_->get_select_item_size()));
       } else {
         const SelectItem &select_item = table_item.ref_query_->get_select_item(i);
-        if (is_child_unpivot_select && select_item.is_unpivot_mocked_column_) {
-          LOG_DEBUG("continue", K(select_item));
-          continue;
-        } else {
-          tmp_select_item.questions_pos_ = select_item.questions_pos_;
-          tmp_select_item.params_idx_ = select_item.params_idx_;
-          tmp_select_item.neg_param_idx_ = select_item.neg_param_idx_;
-          tmp_select_item.esc_str_flag_ = select_item.esc_str_flag_;
-          tmp_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
-          tmp_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
-          tmp_select_item.is_unpivot_mocked_column_ = select_item.is_unpivot_mocked_column_;
-        }
+        tmp_select_item.questions_pos_ = select_item.questions_pos_;
+        tmp_select_item.params_idx_ = select_item.params_idx_;
+        tmp_select_item.neg_param_idx_ = select_item.neg_param_idx_;
+        tmp_select_item.esc_str_flag_ = select_item.esc_str_flag_;
+        tmp_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
+        tmp_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
       }
     }
-    tmp_select_item.alias_name_ = col_item.column_name_;
-    tmp_select_item.expr_name_ = col_item.column_name_;
-    tmp_select_item.is_real_alias_ = false;
-    tmp_select_item.expr_ = col_item.expr_;
-    if (OB_FAIL(target_list.push_back(tmp_select_item))) {
-      LOG_WARN("push back target list failed", K(ret));
+    if (OB_SUCC(ret)) {
+      tmp_select_item.alias_name_ = col_item.column_name_;
+      tmp_select_item.expr_name_ = col_item.column_name_;
+      tmp_select_item.is_real_alias_ = false;
+      tmp_select_item.expr_ = col_item.expr_;
+      if (OB_FAIL(target_list.push_back(tmp_select_item))) {
+        LOG_WARN("push back target list failed", K(ret));
+      }
     }
   }
   return ret;
@@ -2804,6 +2797,7 @@ int ObSelectResolver::resolve_star_for_table_groups(ObStarExpansionInfo &star_ex
   int ret = OB_SUCCESS;
   int64_t num = 0;
   int64_t jointable_idx = -1;
+  ObSEArray<int64_t, 4> visited_jointable_idx;
   bool oracle_star_expand = lib::is_oracle_mode() && is_top_stmt();
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2843,11 +2837,13 @@ int ObSelectResolver::resolve_star_for_table_groups(ObStarExpansionInfo &star_ex
         LOG_WARN("find_joined_table_group_for_table failed", K(ret), K(table_item));
       } else if (jointable_idx != -1) {
         // located in joined table with jointable_idx of joined_tables
-        if (OB_FAIL(find_select_columns_for_join_group(jointable_idx, &target_list))) {
+        if (is_contain(visited_jointable_idx, jointable_idx)) {
+          // skip table in visited joined group
+        } else if (OB_FAIL(find_select_columns_for_join_group(jointable_idx, &target_list))) {
           LOG_WARN("find_select_columns_for_join_group failed", K(ret));
+        } else if (OB_FAIL(visited_jointable_idx.push_back(jointable_idx))) {
+          LOG_WARN("failed to push back", K(ret));
         } else {
-          // skip next tables in joined group
-          i += select_stmt->get_joined_tables().at(jointable_idx)->single_table_ids_.count() - 1;
           // push back select items to select stmt
           for (int j = 0; OB_SUCC(ret) && j < target_list.count(); j++) {
             SelectItem &item = target_list.at(j);
@@ -2954,11 +2950,6 @@ int ObSelectResolver::resolve_all_generated_table_columns(
         static_cast<ObColumnRefRawExpr *>(select_item.expr_)->is_joined_dup_column():false;
     bool need_check_col_dup = true;
     bool is_skip = is_oracle_mode() && !table_ref->is_view_stmt() && is_joined_dup_column;
-    /* 这里进行一次重复列名检测是原因是oracle支持generated table含有重复列名的不引用重复列名的查询，比如：
-    *  select 1 from (select c1,c1 from t1)；因此在oracle模式resolve generated table时会跳过检查重复列
-    *  但是对于select * from(select c1,c1 from t1)；这样的查询肯定引用了，因此必须在展开*对应的查询时进行一次
-    *  检查，如果存在重复列是不允许的；
-     */
     if (OB_FAIL(resolve_generated_table_column_item(table_item,
                                                     select_item.alias_name_,
                                                     col_item,
@@ -3970,142 +3961,7 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
         select_stmt->set_has_reverse_link(table_item->is_reverse_link_);
       }
     }
-    OZ( gen_unpivot_target_column(node->num_child_, *select_stmt, *table_item) );
     OZ( check_recursive_cte_usage(*select_stmt) );
-  }
-  return ret;
-}
-
-int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
-    ObSelectStmt &select_stmt, TableItem &table_item)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != transpose_item_ && 1 == table_count) {
-    select_stmt.set_from_pivot(transpose_item_->is_pivot());
-     //mark this stmt is transpose item
-    if (transpose_item_->is_unpivot() && transpose_item_->need_use_unpivot_op()) {
-      //use unpivot operation
-      select_stmt.set_transpose_item(const_cast<TransposeItem *>(transpose_item_));
-
-      const int64_t old_column_count = transpose_item_->old_column_count_;
-      const int64_t new_column_count = transpose_item_->unpivot_columns_.count()
-                                        + transpose_item_->for_columns_.count();
-
-      ObSelectStmt *child_select_stmt = table_item.ref_query_;
-      int64_t select_item_count = 0;
-      ObCollationType coll_type = CS_TYPE_INVALID;
-      LOG_DEBUG("begin gen_unpivot_target_column", K(table_item), KPC(child_select_stmt));
-      if (OB_ISNULL(params_.expr_factory_)
-          || OB_ISNULL(session_info_)
-          || OB_ISNULL(child_select_stmt)
-          || FALSE_IT(select_item_count = child_select_stmt->get_select_item_size())
-          || OB_UNLIKELY(new_column_count < 0)
-          || OB_UNLIKELY(old_column_count < 0)
-          || OB_UNLIKELY(old_column_count >= select_item_count)
-          || OB_UNLIKELY((select_item_count - old_column_count) % new_column_count != 0)
-          || OB_UNLIKELY((select_item_count - old_column_count) / new_column_count <= 1)
-          ) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("params is invalid", K(ret), K(table_item),
-                 K(params_.expr_factory_), K(old_column_count), K(new_column_count),
-                 K(select_item_count), KPC(child_select_stmt));
-      } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
-        LOG_WARN("fail to get_collation_connection", K(ret));
-      } else {
-        ObSEArray<ObExprResType, 16> types;
-        ObExprResType res_type;
-        ObExprVersion dummy_op(*allocator_);
-        ObExprTypeCtx type_ctx;
-        ObSQLUtils::init_type_ctx(session_info_, type_ctx);
-        for (int64_t colum_idx = 0; OB_SUCC(ret) && colum_idx < new_column_count; colum_idx++) {
-          res_type.reset();
-          types.reset();
-
-          int64_t item_idx = old_column_count + colum_idx;
-          SelectItem &first_select_item = child_select_stmt->get_select_item(item_idx);
-          item_idx += new_column_count;
-          if (OB_ISNULL(first_select_item.expr_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr is null", K(ret), K(first_select_item.expr_));
-          } else if (OB_FAIL(types.push_back(first_select_item.expr_->get_result_type()))) {
-            LOG_WARN("fail to push left_type", K(ret));
-          }
-          while (OB_SUCC(ret) && item_idx < select_item_count) {
-            SelectItem &tmp_select_item = child_select_stmt->get_select_item(item_idx);
-            if (OB_ISNULL(tmp_select_item.expr_) ) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("expr is null", K(ret), K(tmp_select_item.expr_));
-            } else if (first_select_item.expr_->get_result_type()
-                       != tmp_select_item.expr_->get_result_type()) {
-              const ObExprResType &first_type = first_select_item.expr_->get_result_type();
-              const ObExprResType &tmp_type = tmp_select_item.expr_->get_result_type();
-              if (!((first_type.is_null() && !tmp_type.is_lob())
-                    || (tmp_type.is_null() && !first_type.is_lob())
-                    || (first_type.is_character_type() && tmp_type.is_character_type())
-                    || (ob_is_oracle_numeric_type(first_type.get_type())
-                        && ob_is_oracle_numeric_type(tmp_type.get_type()))
-                    || (ob_is_oracle_temporal_type(first_type.get_type())
-                        && (ob_is_oracle_temporal_type(tmp_type.get_type()))))) {
-                ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
-                LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
-                         K(first_type), K(tmp_type));
-              } else if (first_type.is_character_type()
-                         && tmp_type.is_character_type()
-                         && (first_type.is_varchar_or_char() != tmp_type.is_varchar_or_char())) {
-                ret = OB_ERR_CHARACTER_SET_MISMATCH;
-                LOG_WARN("character set mismatch", K(ret), K(first_type), K(tmp_type));
-              } else if (OB_FAIL(types.push_back(tmp_type))) {
-                LOG_WARN("fail to push type", K(ret), K(tmp_type));
-              }
-            }
-            item_idx += new_column_count;
-          }
-
-          if (OB_SUCC(ret)) {
-            if (types.count() == 1) {
-              res_type = first_select_item.expr_->get_result_type();
-            } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type,
-                                                                        &types.at(0),
-                                                                        types.count(),
-                                                                        true,
-                                                                        type_ctx))) {
-              LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            if (OB_UNLIKELY(ObNullType == res_type.get_type() || ObMaxType == res_type.get_type())) {
-              ret = OB_ERR_INVALID_TYPE_FOR_OP;
-              LOG_WARN("column type incompatible", K(ret), K(res_type));
-            } else {
-              item_idx = old_column_count + colum_idx;
-              while (OB_SUCC(ret) && item_idx < select_item_count) {
-                SelectItem &select_item = child_select_stmt->get_select_item(item_idx);
-                if (select_item.expr_->get_result_type() != res_type) {
-                  ObSysFunRawExpr *new_expr = NULL;
-                  if (OB_FAIL(ObRawExprUtils::create_cast_expr(*params_.expr_factory_,
-                                                               select_item.expr_,
-                                                               res_type,
-                                                               new_expr,
-                                                               session_info_))) {
-                    LOG_WARN("create cast expr for stmt failed", K(ret));
-                  } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
-                    LOG_WARN("failed to add flag", K(ret));
-                  } else {
-                    select_item.expr_ = new_expr;
-                    LOG_DEBUG("add cast for column", K(select_item), K(res_type));
-                  }
-                }
-                item_idx += new_column_count;
-              }
-            }
-          }
-        }//end of for
-      }
-      LOG_DEBUG("finish gen_unpivot_target_column", K(table_item), KPC(child_select_stmt));
-    }
-    //reset
-    transpose_item_ = NULL;
   }
   return ret;
 }

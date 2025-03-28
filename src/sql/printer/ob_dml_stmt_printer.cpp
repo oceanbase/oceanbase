@@ -13,6 +13,13 @@
 #define USING_LOG_PREFIX SQL
 #include "ob_dml_stmt_printer.h"
 #include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/ob_sql_context.h"
+#include "sql/resolver/dml/ob_del_upd_stmt.h"
+#include "common/ob_smart_call.h"
+#include "lib/charset/ob_charset.h"
+#include "sql/optimizer/ob_log_plan.h"
+#include "sql/monitor/ob_sql_plan.h"
+#include "sql/resolver/dml/ob_transpose_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -271,6 +278,205 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
   return ret;
 }
 
+int ObDMLStmtPrinter::print_table_with_transpose(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  TransposeDef *trans_def = NULL;
+  if (OB_ISNULL(table_item) ||
+      OB_ISNULL(trans_def = table_item->transpose_table_def_) ||
+      OB_ISNULL(trans_def->orig_table_item_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(print_table(trans_def->orig_table_item_))) {
+    LOG_WARN("failed to print origin table", K(ret));
+  } else if (trans_def->is_pivot()) {
+    PivotDef *pivot_def = static_cast<PivotDef *> (trans_def);
+    DATA_PRINTF(" PIVOT (");
+    for (int64_t i = 0; OB_SUCC(ret) && i < pivot_def->aggr_pairs_.count(); ++i) {
+      const PivotDef::AggrPair &aggr_pair = pivot_def->aggr_pairs_.at(i);
+      HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
+        MEMSET(expr_str_buf, 0 , sizeof(expr_str_buf));
+        int64_t pos = 0;
+        ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                      schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
+        if (OB_FAIL(expr_printer.do_print(aggr_pair.expr_, T_NONE_SCOPE, true))) {
+          LOG_WARN("print expr definition failed", KPC(aggr_pair.expr_), K(ret));
+        } else {
+          DATA_PRINTF("%.*s", static_cast<int32_t>(pos), expr_str_buf);
+        }
+      }
+      if (OB_SUCC(ret) && !aggr_pair.alias_name_.empty()) {
+        DATA_PRINTF(" AS ");
+        PRINT_IDENT_WITH_QUOT(aggr_pair.alias_name_);
+      }
+      if (i != pivot_def->aggr_pairs_.count() - 1) {
+        DATA_PRINTF(",");
+      }
+    }
+
+    DATA_PRINTF(" FOR ");
+    if (OB_SUCC(ret)) {
+      if (pivot_def->for_columns_.count() == 1) {
+        PRINT_IDENT_WITH_QUOT(pivot_def->for_column_names_[0]);
+      } else {
+        DATA_PRINTF("(");
+        for (int64_t i = 0; i < pivot_def->for_columns_.count() && OB_SUCC(ret); ++i) {
+          PRINT_IDENT_WITH_QUOT(pivot_def->for_column_names_[i]);
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --(*pos_);
+          DATA_PRINTF(")");
+        }
+      }
+    }
+
+    DATA_PRINTF(" IN (");
+    for (int64_t i = 0; OB_SUCC(ret) && i < pivot_def->in_pairs_.count(); ++i) {
+      const PivotDef::InPair &in_pair = pivot_def->in_pairs_.at(i);
+      if (OB_SUCC(ret) && !in_pair.const_exprs_.empty()) {
+        if (OB_SUCC(ret)) {
+          HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
+            MEMSET(expr_str_buf, 0 , sizeof(expr_str_buf));
+            if (in_pair.const_exprs_.count() == 1) {
+              ObRawExpr *expr = in_pair.const_exprs_.at(0);
+              int64_t pos = 0;
+              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                            schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
+              if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
+                LOG_WARN("print expr definition failed", KPC(expr), K(ret));
+              } else {
+                DATA_PRINTF("%.*s", static_cast<int32_t>(pos), expr_str_buf);
+              }
+            } else {
+              DATA_PRINTF("(");
+              for (int64_t j = 0; j < in_pair.const_exprs_.count() && OB_SUCC(ret); ++j) {
+                ObRawExpr *expr = in_pair.const_exprs_.at(j);
+                int64_t pos = 0;
+                ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                              schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
+                if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
+                  LOG_WARN("print expr definition failed", KPC(expr), K(ret));
+                } else {
+                  DATA_PRINTF("%.*s,", static_cast<int32_t>(pos), expr_str_buf);
+                }
+              }
+              if (OB_SUCC(ret)) {
+                --(*pos_);
+                DATA_PRINTF(")");
+              }
+            }
+          }
+        }
+      }
+      DATA_PRINTF(" AS ");
+      PRINT_IDENT_WITH_QUOT(in_pair.name_);
+      if (i != pivot_def->in_pairs_.count() - 1) {
+        DATA_PRINTF(",");
+      }
+    }
+    DATA_PRINTF(")"); // in (
+    DATA_PRINTF(")"); // pivot (
+
+  } else if (trans_def->is_unpivot()) {
+    UnpivotDef *unpivot_def = static_cast<UnpivotDef *> (trans_def);
+    DATA_PRINTF(" UNPIVOT %s (", (unpivot_def->is_include_null() ? "INCLUDE NULLS" : "EXCLUDE NULLS"));
+    if (OB_SUCC(ret)) {
+      if (unpivot_def->value_columns_.count() == 1) {
+        PRINT_IDENT_WITH_QUOT(unpivot_def->value_columns_[0]);
+      } else {
+        DATA_PRINTF("(");
+        for (int64_t i = 0; i < unpivot_def->value_columns_.count() && OB_SUCC(ret); ++i) {
+          PRINT_IDENT_WITH_QUOT(unpivot_def->value_columns_[i]);
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --(*pos_);
+          DATA_PRINTF(")");
+        }
+      }
+    }
+
+    DATA_PRINTF(" FOR ");
+    if (OB_SUCC(ret)) {
+      if (unpivot_def->label_columns_.count() == 1) {
+        PRINT_IDENT_WITH_QUOT(unpivot_def->label_columns_[0]);
+      } else {
+        DATA_PRINTF("(");
+        for (int64_t i = 0; i < unpivot_def->label_columns_.count() && OB_SUCC(ret); ++i) {
+          PRINT_IDENT_WITH_QUOT(unpivot_def->label_columns_[i]);
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --(*pos_);
+          DATA_PRINTF(")");
+        }
+      }
+    }
+
+    DATA_PRINTF(" IN (");
+    for (int64_t i = 0; i < unpivot_def->in_pairs_.count() && OB_SUCC(ret); ++i) {
+      const UnpivotDef::InPair &in_pair = unpivot_def->in_pairs_[i];
+      if (in_pair.column_names_.count() == 1) {
+        PRINT_IDENT_WITH_QUOT(in_pair.column_names_[0]);
+      } else {
+        DATA_PRINTF("(");
+        for (int64_t j = 0; j < in_pair.column_names_.count() && OB_SUCC(ret); ++j) {
+          PRINT_IDENT_WITH_QUOT(in_pair.column_names_[j]);
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --(*pos_);
+          DATA_PRINTF(")");
+        }
+      }
+
+      if (OB_SUCC(ret) && !in_pair.const_exprs_.empty()) {
+        DATA_PRINTF(" AS ");
+        if (OB_SUCC(ret)) {
+          HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
+            MEMSET(expr_str_buf, 0 , sizeof(expr_str_buf));
+            if (in_pair.const_exprs_.count() == 1) {
+              ObRawExpr *expr = in_pair.const_exprs_.at(0);
+              int64_t pos = 0;
+              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                            schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
+              if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
+                LOG_WARN("print expr definition failed", KPC(expr), K(ret));
+              } else {
+                DATA_PRINTF("%.*s", static_cast<int32_t>(pos), expr_str_buf);
+              }
+            } else {
+              DATA_PRINTF("(");
+              for (int64_t j = 0; j < in_pair.const_exprs_.count() && OB_SUCC(ret); ++j) {
+                ObRawExpr *expr = in_pair.const_exprs_.at(j);
+                int64_t pos = 0;
+                ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                              schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
+                if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
+                  LOG_WARN("print expr definition failed", KPC(expr), K(ret));
+                } else {
+                  DATA_PRINTF("%.*s,", static_cast<int32_t>(pos), expr_str_buf);
+                }
+              }
+              if (OB_SUCC(ret)) {
+                --(*pos_);
+                DATA_PRINTF(")");
+              }
+            }
+          }
+        }
+      }
+      if (i != unpivot_def->in_pairs_.count() - 1) {
+        DATA_PRINTF(",");
+      }
+    }
+    DATA_PRINTF(")");
+    DATA_PRINTF(")");
+  }
+  return ret;
+}
+
 int ObDMLStmtPrinter::print_table(const TableItem *table_item,
                                   bool no_print_alias/*default false*/)
 {
@@ -422,6 +628,13 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
           PRINT_TABLE_NAME(print_params_, table_item);
           if (table_item->alias_name_.length() > 0) {
             DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          }
+        } else if (NULL != table_item->transpose_table_def_) {
+          if (OB_FAIL(print_table_with_transpose(table_item))) {
+            LOG_WARN("failed to print table with transpose", K(ret));
+          } else if (!no_print_alias) {
+            DATA_PRINTF(" ");
+            PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
           }
         } else if (OB_FAIL(print_table_with_subquery(table_item))) {
           LOG_WARN("failed to print table with subquery", K(ret));

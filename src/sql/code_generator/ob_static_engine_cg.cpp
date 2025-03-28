@@ -411,10 +411,11 @@ int ObStaticEngineCG::check_expr_columnlized(const ObRawExpr *expr)
              || (expr->is_column_ref_expr() && is_shadow_column(static_cast<const ObColumnRefRawExpr*>(expr)->get_column_id()))
              || expr->is_var_expr()) {
     // skip
-  } else if ((expr->is_aggr_expr() || (expr->is_win_func_expr()) || expr->is_match_against_expr())
+  } else if ((expr->is_aggr_expr() || (expr->is_win_func_expr())
+              || expr->is_match_against_expr() || expr->is_unpivot_expr())
              && !expr->has_flag(IS_COLUMNLIZED)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("aggr, win_func, match_against exprs should be columnlized", K(ret), KPC(expr));
+    LOG_WARN("aggr, win_func, match_against and unpivot exprs should be columnlized", K(ret), KPC(expr));
   } else if (!expr->has_flag(IS_COLUMNLIZED)) {
     if (0 == expr->get_param_count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -5034,24 +5035,68 @@ int ObStaticEngineCG::generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETable
   return ret;
 }
 
-int ObStaticEngineCG::generate_spec(ObLogUnpivot &op, ObUnpivotSpec &spec, const bool in_root_job)
+int ObStaticEngineCG::generate_spec(ObLogUnpivot &op, ObUnpivotSpec&spec, const bool in_root_job)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(op);
+  UNUSED(spec);
+  UNUSED(in_root_job);
+  LOG_WARN("unpivot is not support on high version machine during updating", K(ret));
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogUnpivot &op, ObUnpivotV2Spec &spec, const bool in_root_job)
 {
   UNUSED(in_root_job);
   int ret = OB_SUCCESS;
-  CK(typeid(spec) == typeid(ObUnpivotSpec));
-  OX(spec.unpivot_info_ = op.unpivot_info_);
-  ObOpSpec *child = spec.get_child(0);
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("no child", K(ret));
-    } else if (!spec.unpivot_info_.has_unpivot()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unpivot_info_ is invalid", K(ret));
-    } else {
-      CK(0 != spec.unpivot_info_.get_new_column_count());
-      spec.max_part_count_ = (child->get_output_count() - spec.unpivot_info_.old_column_count_)
-                            / spec.unpivot_info_.get_new_column_count();
+  if (OB_UNLIKELY(op.get_num_of_child() != 1) || OB_ISNULL(op.get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("wrong number of children", K(ret), K(op.get_num_of_child()));
+  } else if (OB_FAIL(spec.origin_exprs_.init(op.get_origin_exprs().count())) ||
+             OB_FAIL(spec.label_exprs_.init(op.get_label_exprs().count())) ||
+             OB_FAIL(spec.value_exprs_.init(op.get_value_exprs().count()))) {
+    LOG_WARN("failed to init ExprFixedArray", K(ret));
+  } else {
+    spec.is_include_null_ = op.is_include_null();
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_origin_exprs().count(); ++i) {
+      ObRawExpr *old_expr = op.get_origin_exprs().at(i);
+      ObExpr *rt_expr = NULL;
+      if (OB_ISNULL(old_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid old_expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*old_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (OB_FAIL(spec.origin_exprs_.push_back(rt_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_label_exprs().count(); ++i) {
+      ObRawExpr *label_expr = op.get_label_exprs().at(i);
+      ObExpr *rt_expr = NULL;
+      if (OB_ISNULL(label_expr) || OB_UNLIKELY(ObRawExpr::EXPR_UNPIVOT != label_expr->get_expr_class())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid label_expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*label_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (OB_FAIL(spec.label_exprs_.push_back(rt_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(mark_expr_self_produced(label_expr))) {
+        LOG_WARN("mark expr self produced failed", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_exprs().count(); ++i) {
+      ObRawExpr *val_expr = op.get_value_exprs().at(i);
+      ObExpr *rt_expr = NULL;
+      if (OB_ISNULL(val_expr) || OB_UNLIKELY(ObRawExpr::EXPR_UNPIVOT != val_expr->get_expr_class())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid val_expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*val_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (OB_FAIL(spec.value_exprs_.push_back(rt_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(mark_expr_self_produced(val_expr))) {
+        LOG_WARN("mark expr self produced failed", K(ret));
+      }
     }
   }
   return ret;
@@ -10055,7 +10100,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       break;
     }
     case log_op_def::LOG_UNPIVOT: {
-      type = PHY_UNPIVOT;
+      type = PHY_UNPIVOT_V2;
       break;
     }
     case log_op_def::LOG_LINK_SCAN: {
@@ -10298,6 +10343,7 @@ int ObStaticEngineCG::add_output_datum_check_flag(ObOpSpec &spec)
       // Because the Unpivot will affect the output datum of the SubplanScan,
       // which is an by designed case, we need to set the SubplanScan operator
       // to not check the output datum.
+      // tuliwei.tlw update: unpivot v2 (PHY_UNPIVOT_V2) do not need this
       spec.get_child(0)->need_check_output_datum_ = false;
     }
   } else {
