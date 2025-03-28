@@ -1018,6 +1018,11 @@ int ObOperator::inner_rescan()
   if (spec_.need_check_output_datum_ && brs_checker_) {
     brs_checker_->reset();
   }
+  if (OB_UNLIKELY(stash_rows_cnt_ > 0)) {
+    stash_rows_cnt_ = 0;
+    stash_rows_idx_ = 0;
+    stash_brs_.size_ = 0;
+  }
   return ret;
 }
 
@@ -1493,9 +1498,6 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
               continue;
             }
           }
-          if (OB_SUCC(ret) && OB_FAIL(try_push_stash_rows(op_max_row_cnt))) {
-            LOG_WARN("try push stash rows failed", K(ret));
-          }
         }
 #ifdef ENABLE_SANITY
         if (OB_SUCC(ret) && spec_.use_rich_format_ && !all_filtered) {
@@ -1521,6 +1523,10 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
                                        : (*e)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_);
           (*e)->get_eval_info(eval_ctx_).projected_ = true;
         }
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(try_push_stash_rows(op_max_row_cnt))) {
+        LOG_WARN("try push stash rows failed", K(ret));
       }
 
       if (brs_.end_ && 0 == brs_.size_) {
