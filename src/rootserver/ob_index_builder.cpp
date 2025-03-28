@@ -393,6 +393,14 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
             ret = OB_EAGAIN;
             LOG_WARN("has doing other ddl task", K(ret), K(tenant_id), K(data_table_id), K(index_table_schema->get_table_id()));
           }
+        } else if (index_table_schema->is_vec_rowkey_vid_type() || index_table_schema->is_vec_vid_rowkey_type()) {
+          if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(trans, *index_table_schema, tenant_id, data_table_id,
+              has_other_domain_index))) {
+            LOG_WARN("fail to check has rowkey vid or vid rowkey task", K(ret), K(tenant_id), K(arg), KPC(index_table_schema));
+          } else if (has_other_domain_index) {
+            ret = OB_EAGAIN;
+            LOG_WARN("has doing other ddl task", K(ret), K(tenant_id), K(data_table_id), K(index_table_schema->get_table_id()));
+          }
         }
 
         if (OB_FAIL(ret) || has_other_domain_index) {

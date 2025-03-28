@@ -3742,7 +3742,9 @@ int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
       if (OB_FAIL(check_rebuild_vec_index_task_exist(tenant_id, data_table_id, index_table_id, proxy, allocator, has_index_task))) {
         LOG_WARN("fail to check rebuild vec index task", K(ret), K(data_table_id), K(index_table_id));
       }
-    } else {
+    }
+    if OB_FAIL(ret) {
+    } else if (!has_index_task) {
       ObSqlString sql_string;
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         sqlclient::ObMySQLResult *result = NULL;
