@@ -79,7 +79,8 @@ public:
                K_(storage_schema_addr),
                K_(tablet_macro_info_addr),
                KP_(tablet_macro_info_ptr),
-               K_(is_row_store));
+               K_(is_row_store),
+               K_(is_tablet_referenced_by_collect_mv));
 public:
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
   const ObTabletMacroInfo *tablet_macro_info_ptr_;
@@ -88,6 +89,7 @@ public:
   ObMetaDiskAddr storage_schema_addr_;
   ObMetaDiskAddr tablet_macro_info_addr_;
   bool is_row_store_;
+  bool is_tablet_referenced_by_collect_mv_;
   ObDDLKV **ddl_kvs_;
   int64_t ddl_kv_count_;
   ObIMemtable *memtables_[MAX_MEMSTORE_CNT];

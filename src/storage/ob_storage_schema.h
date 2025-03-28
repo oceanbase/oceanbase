@@ -278,6 +278,10 @@ public:
   {
     return share::schema::IS_MV_MAJOR_REFRESH == (enum share::schema::ObMVMajorRefreshFlag)mv_mode_.mv_major_refresh_flag_;
   }
+  inline bool is_tablet_referenced_by_collect_mv() const
+  {
+    return share::schema::IS_REFERENCED_BY_FAST_LSM_MV == (enum share::schema::ObTableReferencedByFastLSMMVFlag)mv_mode_.table_referenced_by_fast_lsm_mv_flag_;
+  }
   inline bool is_mv_major_refresh_table() const
   {
     return is_mv_container_table() && is_mv_major_refresh();

@@ -123,14 +123,15 @@ public:
   int init(
       const ObSSTableArray &major_tables,
       const ObSSTableArray &minor_tables,
-      const bool is_row_store);
+      const bool is_row_store,
+      const bool is_tablet_referenced_by_collect_mv);
   void assign(const ObTableStoreCache &other);
   inline bool is_last_major_column_store() const { return ObMajorStoreType::PURE_COLUMN_STORE == last_major_store_type_
                                                        || ObMajorStoreType::REDUNDANT_ROW_STORE == last_major_store_type_; }
   inline bool is_last_major_row_store() const { return ObMajorStoreType::ROW_STORE == last_major_store_type_; }
   TO_STRING_KV(K_(last_major_snapshot_version), K_(major_table_cnt),
       K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count),
-      K_(last_major_macro_block_cnt), K_(is_row_store),
+      K_(last_major_macro_block_cnt), K_(is_row_store), K_(is_tablet_referenced_by_collect_mv),
       K_(last_major_compressor_type), K_(last_major_latest_row_store_type),
       K_(last_major_store_type));
 
@@ -142,6 +143,7 @@ public:
   int64_t last_major_column_count_;
   int64_t last_major_macro_block_cnt_;
   bool is_row_store_;
+  bool is_tablet_referenced_by_collect_mv_;     //indicate tablet referenced by collect mv
   common::ObCompressorType last_major_compressor_type_;
   common::ObRowStoreType last_major_latest_row_store_type_;
   ObMajorStoreType last_major_store_type_;
@@ -192,6 +194,7 @@ public:
   inline common::ObTabletID get_data_tablet_id() const { return tablet_meta_.data_tablet_id_; }
   inline int64_t get_last_compaction_scn() const { return tablet_meta_.extra_medium_info_.last_medium_scn_; }
   inline bool is_row_store() const { return table_store_cache_.is_row_store_; }
+  inline bool is_tablet_referenced_by_collect_mv() const { return table_store_cache_.is_tablet_referenced_by_collect_mv_; }
   inline bool is_user_tablet() const { return tablet_meta_.tablet_id_.is_user_tablet(); }
   inline bool is_user_data_table() const { return tablet_meta_.table_store_flag_.is_user_data_table(); }
   inline bool is_last_major_column_store() const { return table_store_cache_.is_last_major_column_store(); }

@@ -111,6 +111,7 @@ public:
     common::ObArenaAllocator &allocator,
     const int64_t clog_checkpoint_ts,
     const int64_t snapshot_version,
+    const bool is_tablet_referenced_by_collect_mv,
     ObTabletHandle &tablet_handle);
   static int mock_table_store(
     common::ObArenaAllocator &allocator,
@@ -150,7 +151,8 @@ public:
     const char *key_data,
     const int64_t clog_checkpoint_ts,
     const int64_t snapshot_version,
-    const bool have_row_cnt = false);
+    const bool have_row_cnt = false,
+    const bool is_tablet_referenced_by_collect_mv = false);
 public:
   virtual void SetUp() override;
   virtual void TearDown() override;
@@ -525,6 +527,7 @@ int TestCompactionPolicy::mock_tablet(
     common::ObArenaAllocator &allocator,
     const int64_t clog_checkpoint_ts,
     const int64_t snapshot_version,
+    const bool is_tablet_referenced_by_collect_mv,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -572,6 +575,7 @@ int TestCompactionPolicy::mock_tablet(
   } else {
     tablet->tablet_meta_.clog_checkpoint_scn_.convert_for_logservice(clog_checkpoint_ts);
     tablet->tablet_meta_.snapshot_version_ = snapshot_version;
+    tablet->table_store_cache_.is_tablet_referenced_by_collect_mv_ = is_tablet_referenced_by_collect_mv;
   }
   return ret;
 }
@@ -764,7 +768,8 @@ int TestCompactionPolicy::prepare_tablet(
     const char *key_data,
     const int64_t clog_checkpoint_ts,
     const int64_t snapshot_version,
-    const bool have_row_cnt)
+    const bool have_row_cnt,
+    const bool is_tablet_referenced_by_collect_mv)
 {
   int ret = OB_SUCCESS;
   tablet_handle_.reset();
@@ -775,7 +780,7 @@ int TestCompactionPolicy::prepare_tablet(
   if (OB_UNLIKELY(clog_checkpoint_ts <= 0 || snapshot_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(mock_tablet(allocator_, clog_checkpoint_ts, snapshot_version, tablet_handle_))) {
+  } else if (OB_FAIL(mock_tablet(allocator_, clog_checkpoint_ts, snapshot_version, is_tablet_referenced_by_collect_mv, tablet_handle_))) {
     LOG_WARN("failed to mock tablet", K(ret));
   } else if (OB_ISNULL(key_data)) {
   } else if (OB_FAIL(batch_mock_tables(allocator_, key_data, have_row_cnt, major_tables_, minor_tables_, memtables_, tablet_handle_))) {
@@ -855,7 +860,7 @@ TEST_F(TestCompactionPolicy, basic_create_tablet)
   ASSERT_NE(nullptr, t3m);
 
   ObTabletHandle tablet_handle;
-  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, tablet_handle);
+  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, false, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, tablet_handle.is_valid());
 
@@ -868,7 +873,7 @@ TEST_F(TestCompactionPolicy, basic_create_memtable)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, tablet_handle);
+  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, false, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, tablet_handle.is_valid());
 
@@ -901,7 +906,7 @@ TEST_F(TestCompactionPolicy, basic_create_table_store)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, tablet_handle);
+  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, false, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObTableHandleV2, 4> major_tables;
@@ -1587,6 +1592,138 @@ TEST_F(TestCompactionPolicy, test_freeze_info_boundary_func)
   ASSERT_EQ(OB_SUCCESS,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(600, freeze_info));
   ASSERT_EQ(500, freeze_info.frozen_scn_.get_val_for_tx());
 
+}
+
+TEST_F(TestCompactionPolicy, check_mv_minor_merge_policy_with_large_minor)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
+      "10            0            1          1          1                  1\n"
+      "11            1            150        150        150          3000000\n"
+      "12            150          200        200        200              100\n"
+      "12            200          350        350        350           750000\n";
+
+  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  // mv's sstable not care about if large sstable, mini/minor sstable count (3) > minor_compact_trigger (2) , schedule minor merge for mv tablet
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestCompactionPolicy, check_mv_minor_merge_policy_with_two_mini)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
+      "10            0            1          1          1                  1\n"
+      "12            150          200        200        200              100\n"
+      "12            200          350        350        350           750000\n";
+
+  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  //  2 <= (minor_compact_trigger = 2) , no need schedule minor merge
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+}
+
+
+TEST_F(TestCompactionPolicy, check_mv_hist_minor_merge_policy_with_large_minor)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
+      "10            0            1          1          1                  1\n"
+      "11            1            150        150        150          3000000\n"
+      "12            150          200        200        200              100\n"
+      "12            200          350        350        350           750000\n"
+      "10            0            400        400        400                1\n";
+
+  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  // mv not care about if large sstable, sstable count (3) > minor_compact_trigger (2), schedule minor merge
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestCompactionPolicy, check_mv_hist_minor_merge_policy_with_two_mini)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
+      "10            0            1          1          1                  1\n"
+      "12            150          200        200        200              100\n"
+      "12            200          350        350        350           750000\n"
+      "10            0            400        400        400                1\n";
+
+  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 }
 
 } //unittest

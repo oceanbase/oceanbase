@@ -501,7 +501,6 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
     }
 #endif
   }
-
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(find_minor_merge_tables(param,
                                              min_snapshot_version,
@@ -677,7 +676,7 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
     DEL_SUSPECT_INFO(MINOR_MERGE,
                     tablet.get_tablet_meta().ls_id_, tablet.get_tablet_meta().tablet_id_,
                     ObDiagnoseTabletType::TYPE_MINOR_MERGE);
-    if (OB_FAIL(refine_minor_merge_result(param.merge_type_, minor_compact_trigger, result))) {
+    if (OB_FAIL(refine_minor_merge_result(param.merge_type_, minor_compact_trigger, tablet.is_tablet_referenced_by_collect_mv(), result))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to refine minor_merge result", K(ret));
       }
@@ -755,7 +754,6 @@ int ObPartitionMergePolicy::get_hist_minor_merge_tables(
   const ObMergeType merge_type = param.merge_type_;
   int64_t max_snapshot_version = 0;
   result.reset();
-
   if (OB_UNLIKELY(!is_history_minor_merge(merge_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), "merge_type", merge_type_to_str(merge_type));
@@ -779,12 +777,12 @@ int ObPartitionMergePolicy::deal_hist_minor_merge(
     int64_t &max_snapshot_version)
 {
   int ret = OB_SUCCESS;
-  const int64_t hist_threshold = cal_hist_minor_merge_threshold();
+  int64_t hist_threshold = 0;
   ObITable *first_major_table = nullptr;
   max_snapshot_version = 0;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-
-  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+  if (FALSE_IT(hist_threshold = cal_hist_minor_merge_threshold(tablet.is_tablet_referenced_by_collect_mv()))) {
+  } else if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_UNLIKELY(!table_store_wrapper.get_member()->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -977,6 +975,7 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
 int ObPartitionMergePolicy::refine_minor_merge_result(
     const ObMergeType merge_type,
     const int64_t minor_compact_trigger,
+    const bool is_tablet_referenced_by_collect_mv,
     ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
@@ -987,7 +986,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
   } else if (OB_UNLIKELY(!is_minor_merge_type(merge_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected merge type to refine merge tables", K(result), K(ret));
-  } else if (0 == minor_compact_trigger || result.handle_.get_count() >= OB_UNSAFE_TABLE_CNT) {
+  } else if (0 == minor_compact_trigger || result.handle_.get_count() >= OB_UNSAFE_TABLE_CNT || is_tablet_referenced_by_collect_mv) {
     // no refine
   } else {
     ObTablesHandleArray mini_tables;
@@ -1008,6 +1007,14 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
         }
       }
     }
+#ifdef ERRSIM
+if (OB_SUCC(ret)) {
+  int tmp_ret = OB_E(EventTable::EN_MV_LARGE_SSTABLE_THRESHOLD) OB_SUCCESS;
+  if (tmp_ret) {
+    write_amplification_threshold = 10;
+  }
+}
+#endif
 
     for (int64_t i = 0; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) {
       ObTableHandleV2 tmp_table_handle;
@@ -1071,14 +1078,17 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
   return ret;
 }
 
-int64_t ObPartitionMergePolicy::cal_hist_minor_merge_threshold()
+int64_t ObPartitionMergePolicy::cal_hist_minor_merge_threshold(const bool is_tablet_referenced_by_collect_mv)
 {
   int64_t compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
     compact_trigger = tenant_config->minor_compact_trigger;
   }
-  return MIN((1 + compact_trigger) * OB_HIST_MINOR_FACTOR, MAX_TABLE_CNT_IN_STORAGE / 2);
+  if (!is_tablet_referenced_by_collect_mv) {
+    compact_trigger = MIN((1 + compact_trigger) * OB_HIST_MINOR_FACTOR, MAX_TABLE_CNT_IN_STORAGE / 2);
+  }
+  return compact_trigger;
 }
 
 int ObPartitionMergePolicy::get_multi_version_start(

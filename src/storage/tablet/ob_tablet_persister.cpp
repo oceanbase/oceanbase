@@ -60,6 +60,7 @@ ObTabletTransformArg::ObTabletTransformArg()
     storage_schema_addr_(),
     tablet_macro_info_addr_(),
     is_row_store_(true),
+    is_tablet_referenced_by_collect_mv_(false),
     ddl_kvs_(nullptr),
     ddl_kv_count_(0),
     memtable_count_(0)
@@ -81,6 +82,7 @@ void ObTabletTransformArg::reset()
   storage_schema_addr_.reset();
   tablet_macro_info_addr_.reset();
   is_row_store_ = true;
+  is_tablet_referenced_by_collect_mv_ = false;
   ddl_kvs_ = nullptr;
   ddl_kv_count_ = 0;
   for (int64_t i = 0; i < MAX_MEMSTORE_CNT; ++i) {
@@ -687,6 +689,7 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     arg.table_store_addr_ = tablet.table_store_addr_.addr_;
     arg.storage_schema_addr_ = tablet.storage_schema_addr_.addr_;
     arg.is_row_store_ = tablet.is_row_store();
+    arg.is_tablet_referenced_by_collect_mv_ = tablet.is_tablet_referenced_by_collect_mv();
     arg.ddl_kvs_ = tablet.ddl_kvs_;
     arg.ddl_kv_count_ = tablet.ddl_kv_count_;
     MEMCPY(arg.memtables_, tablet.memtables_, sizeof(ObIMemtable*) * MAX_MEMSTORE_CNT);
@@ -746,6 +749,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
       type = ObTabletPoolType::TP_LARGE;
     }
     arg.is_row_store_ = tablet.is_row_store();
+    arg.is_tablet_referenced_by_collect_mv_ = tablet.is_tablet_referenced_by_collect_mv();
   }
 
   return ret;
@@ -1267,7 +1271,8 @@ int ObTabletPersister::transform(const ObTabletTransformArg &arg, char *buf, con
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tiny_tablet->table_store_cache_.init(table_store->get_major_sstables(),
                                                        table_store->get_minor_sstables(),
-                                                       arg.is_row_store_))) {
+                                                       arg.is_row_store_,
+                                                       arg.is_tablet_referenced_by_collect_mv_))) {
         LOG_WARN("failed to init table store cache", K(ret), KPC(table_store), K(arg));
       } else {
         time_stats->click("init_table_store_cache");

@@ -150,13 +150,14 @@ private:
   static int refine_minor_merge_result(
       const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
+      const bool is_tablet_referenced_by_collect_mv,
       storage::ObGetMergeTablesResult &result);
   static int deal_with_minor_result(
       const compaction::ObMergeType &merge_type,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-  static int64_t cal_hist_minor_merge_threshold();
+  static int64_t cal_hist_minor_merge_threshold(const bool is_tablet_referenced_by_collect_mv = false);
   static int generate_input_result_array(
       const storage::ObGetMergeTablesResult &input_result,
       ObMinorExecuteRangeMgr &minor_range_mgr,
