@@ -39,7 +39,7 @@ namespace observer
 class ObAllVirtualTabletSSTableMacroInfo : public common::ObVirtualTableScannerIterator,
                                            public omt::ObMultiTenantOperator
 {
-  enum COLUMN_ID_LIST
+  enum COLUMN_ID_LIST  //FARM COMPAT WHITELIST
   {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
