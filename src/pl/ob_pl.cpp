@@ -3851,6 +3851,8 @@ do {                                                                  \
             ObObjMeta param_meta = get_params().at(i).get_param_meta();
             get_params().at(i) = params->at(i); // 空值不做cast
             params->at(i).is_null() ? get_params().at(i).set_param_meta(param_meta) : (void)NULL;
+          } else if (params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type() && ob_is_enumset_tc(params->at(i).get_meta().get_type())) {
+            get_params().at(i) = params->at(i); // they are both of enum/set type, no cast is performed.
           } else if (lib::is_oracle_mode()
                        && params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
                        && params->at(i).get_meta().is_numeric_type()) {

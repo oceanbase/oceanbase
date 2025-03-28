@@ -4340,7 +4340,7 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
               } else {
                 OZ (resolve_expr(value_node, func, value_expr,
                                  combine_line_and_col(value_node->stmt_loc_),
-                                 true, need_expect_type ? expected_type : NULL));
+                                 false, need_expect_type ? expected_type : NULL));
                 if (OB_SUCC(ret)
                     && T_DEFAULT == value_node->type_
                     && into_expr->get_expr_type() != T_OP_GET_SYS_VAR) {
@@ -4348,6 +4348,16 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                   LOG_WARN("default value only used by system variables");
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "default value not used by system variables");
                 }
+                //enum or set value assign to user var need add cast to str
+                if (OB_SUCC(ret)
+                    && T_OP_GET_USER_VAR == into_expr->get_expr_type()
+                    && ob_is_enum_or_set_type(value_expr->get_result_type().get_type())) {
+                  ObSysFunRawExpr *str_expr = NULL;
+                  OZ (ObRawExprUtils::create_type_to_str_expr(expr_factory_, value_expr, str_expr, &resolve_ctx_.session_info_, true));
+                  CK (OB_NOT_NULL(str_expr));
+                  OX (value_expr = str_expr);
+                }
+                OZ (func.add_expr(value_expr));
                 OZ (stmt->add_value(func.get_expr_count() - 1));
               }
             }
