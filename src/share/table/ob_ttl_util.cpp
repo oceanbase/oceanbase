@@ -901,7 +901,12 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
           is_end = true;
         }
         ObTableTTLExpr ttl_expr;
+        // example: "`column` INTERVAL 40 MINUTE" or "column INTERVAL 40 MINUTE"
         ObString column_str = left.split_on('+').trim();
+        if (column_str.length() > 2 && column_str[column_str.length() - 1] == '`' && column_str[0] == '`') {
+          ++column_str;
+          column_str.assign(column_str.ptr(), column_str.length() - 1);
+        }
         // example: "  INTERVAL 40 MINUTE"
         left = left.trim();
         // example: "INTERVAL 40 MINUTE"
@@ -992,6 +997,10 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
                 }
               }
             }
+            if (OB_SUCC(ret) && row_cell_ids_.count() != ttl_definition_.count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("row cell ids count not match ttl definition count", K(ret), K(row_cell_ids_), K(ttl_definition_));
+            }
           }
         }
       }
@@ -1027,7 +1036,7 @@ int ObTableTTLChecker::check_row_expired(const common::ObNewRow &row, bool &is_e
 {
   int ret = OB_SUCCESS;
   is_expired = false;
-  for (int i = 0; OB_SUCC(ret) && !is_expired && i < ttl_definition_.count(); i++) {
+  for (int i = 0; OB_SUCC(ret) && !is_expired && i < ttl_definition_.count() && i < row_cell_ids_.count(); i++) {
     ObTableTTLExpr ttl_expr = ttl_definition_.at(i);
     ObObj column = row.get_cell(row_cell_ids_.at(i));
     int64_t column_ts = column.get_timestamp();
