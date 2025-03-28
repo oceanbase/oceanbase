@@ -2757,31 +2757,25 @@ int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::o
   int64_t value = 0;
   OdpsPartitionDownloader *odps_downloader = NULL;
   if (OB_FAIL(odps_mgr_map_.get_refactored(part_id, value))) {
-    LOG_WARN("failed to get downloader", K(ret), K(part_id));
+    if (OB_UNLIKELY(ret != OB_HASH_NOT_EXIST)) {
+      LOG_WARN("failed to get downloader", K(ret), K(part_id));
+    }
   } else if (OB_ISNULL(odps_downloader = reinterpret_cast<OdpsPartitionDownloader *>(value))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected value", K(ret), K(part_id), K(value));
   } else { // wait tunnel to be ready
     int64_t wait_times = 0;
-    //timeout is 60s, the initialization of the downloader typically takes under 5 seconds,
-    // and 60 seconds is sufficient for that.
-    int64_t timeout_ts = ObTimeUtility::current_time() + 60000000;
-    while (0 == odps_downloader->downloader_init_status_ && OB_SUCC(THIS_WORKER.check_status())) { // wait odps_downloader to finish initialization
+    while (OB_SUCC(ret) && 0 == odps_downloader->downloader_init_status_) { // wait odps_downloader to finish initialization
       odps_downloader->tunnel_ready_cond_.lock();
       if (0 == odps_downloader->downloader_init_status_) {
         odps_downloader->tunnel_ready_cond_.wait_us(1 * 1000 * 1000); // wait 1s every loop
       }
       odps_downloader->tunnel_ready_cond_.unlock();
-      if (0 == wait_times % 100) {
-        LOG_TRACE("waiting odps_downloader to initialize", K(wait_times), K(part_id), KP(odps_downloader), K(ret));
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("failed to check status", K(part_id));
+      } else if (0 == ++wait_times % 10) { // print every 10s
+        LOG_INFO("waiting odps_downloader to initialize", K(wait_times), K(part_id), KP(odps_downloader));
       }
-      int64_t time_now_ts = ObTimeUtility::current_time();
-      if (timeout_ts < time_now_ts) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("waiting downloader initializing timeout", K(ret), K(part_id), K(time_now_ts), K(timeout_ts));
-        break;
-      }
-      ++wait_times;
     }
     if (OB_SUCC(ret) && odps_downloader->downloader_init_status_ < 0) { // odps_downloader failed to initialize
       ret = OB_ERR_UNEXPECTED;
