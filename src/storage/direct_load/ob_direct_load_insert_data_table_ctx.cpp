@@ -166,6 +166,7 @@ int ObDirectLoadInsertDataTabletContext::create_tablet_direct_load()
     direct_load_param.common_param_.ls_id_ = ls_id_;
     direct_load_param.common_param_.tablet_id_ = tablet_id_;
     direct_load_param.common_param_.is_no_logging_ = param_->is_no_logging_;
+    direct_load_param.common_param_.is_rescan_data_compl_dag_ = false; // unuse
     direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
     direct_load_param.runtime_only_param_.task_id_ = param_->ddl_task_id_;
     direct_load_param.runtime_only_param_.table_id_ = param_->table_id_;

@@ -369,7 +369,6 @@ public:
       const int64_t execution_id,
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
-
   virtual int update_max_lob_id(const int64_t lob_id) { UNUSED(lob_id); return common::OB_SUCCESS; }
   virtual int set_total_slice_cnt(const int64_t slice_cnt) { UNUSED(slice_cnt); return OB_NOT_SUPPORTED;}
 
@@ -429,7 +428,8 @@ public:
 
   bool get_is_no_logging() {return is_no_logging_;}
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
-               K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group),K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs),
+               K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group), K_(is_rescan_data_compl_dag), K_(sqc_build_ctx),
+               KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs),
                K_(task_cnt), K_(cg_cnt), K_(micro_index_clustered), K_(tablet_transfer_seq), K_(is_no_logging));
 
 protected:
@@ -471,6 +471,8 @@ protected:
   bool need_process_cs_replica_;
   // column store table, or need process cs replica
   bool need_fill_column_group_;
+  // only use for data complement dag rescan path
+  bool is_rescan_data_compl_dag_;
   // sqc_build_ctx_ is just used for the observer node who receives the requests from the SQL Layer
   // to write the start log and the data redo log. And other observer nodes can not use it.
   ObTabletDirectLoadBuildCtx sqc_build_ctx_;

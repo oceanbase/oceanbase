@@ -1363,6 +1363,7 @@ public:
   }
   static int get_global_index_table_ids(const schema::ObTableSchema &table_schema, ObIArray<uint64_t> &global_index_table_ids, share::schema::ObSchemaGetterGuard &schema_guard);
   static bool use_idempotent_mode(const int64_t data_format_version);
+  static bool need_fill_column_group(const bool is_row_store, const bool need_process_cs_replica, const int64_t data_format_version);
   static bool need_rescan_column_store(const int64_t data_format_version); // for compat old logic for fill column store
   static int init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq);
   static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);

@@ -162,7 +162,7 @@ public:
   int64_t total_slice_cnt_;
   int64_t slice_idx_;
   int64_t merge_slice_idx_;
-DISALLOW_COPY_AND_ASSIGN(ObDirectLoadSliceInfo);
+  DISALLOW_COPY_AND_ASSIGN(ObDirectLoadSliceInfo);
 };
 
 struct ObTableSchemaItem final
@@ -248,14 +248,15 @@ struct ObDirectInsertCommonParam final
 {
 public:
   ObDirectInsertCommonParam()
-    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0), replay_normal_in_cs_replica_(false), is_no_logging_(false)
+    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0), replay_normal_in_cs_replica_(false), is_no_logging_(false),
+    is_rescan_data_compl_dag_(false)
 
   {}
   ~ObDirectInsertCommonParam() = default;
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid()
       && data_format_version_ >= 0 && read_snapshot_ >= 0 && DIRECT_LOAD_INVALID <= direct_load_type_ && direct_load_type_ <= DIRECT_LOAD_MAX;
   }
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot), K_(replay_normal_in_cs_replica), K_(is_no_logging));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot), K_(replay_normal_in_cs_replica), K_(is_no_logging), K_(is_rescan_data_compl_dag));
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -266,6 +267,7 @@ public:
   int64_t read_snapshot_;
   bool replay_normal_in_cs_replica_; // when ddl and add cs replica are concurrent, leader may write normal clog
   bool is_no_logging_;
+  bool is_rescan_data_compl_dag_; // use for data complement dag rescan path
 };
 
 // only used in runtime execution

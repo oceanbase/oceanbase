@@ -17131,17 +17131,20 @@ int ObDDLService::recover_restore_table_ddl_task(
         LOG_WARN("get min data version failed", K(ret), K(dst_tenant_id));
       } else {
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-        bool is_dest_table_column_store = false;
+        bool is_src_table_column_store = false;
         ObString index_name("");
         if (OB_FAIL(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
           LOG_WARN("start transaction failed", K(ret), K(dst_tenant_id), K(refreshed_dst_tenant_version));
         } else if (OB_FAIL(dst_table_schema.assign(arg.target_schema_))) {
           LOG_WARN("assign failed", K(ret), K(session_id), K(arg));
-        } else if (OB_FAIL(dst_table_schema.get_is_column_store(is_dest_table_column_store))) {
+        } else if (OB_FAIL(src_table_schema->get_is_column_store(is_src_table_column_store))) {
           LOG_WARN("judge if dest table is column store failed", K(ret), K(arg));
-        } else if (is_dest_table_column_store) {
+        } else if (GCTX.is_shared_storage_mode() && is_src_table_column_store) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported to retore table with column store", K(ret), K(arg));
+          LOG_WARN("shared storage mode not support retore table with column store", K(ret), K(arg));
+        } else if (is_src_table_column_store && tenant_data_version < DATA_VERSION_4_3_5_2) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("recover table with column store not support in current version", K(ret), K(is_src_table_column_store), K(tenant_data_version));
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator,
           dst_tenant_trans, allocator, tenant_data_version, index_name, true /*ignore_cs_replica*/))) {

@@ -40,6 +40,7 @@ using namespace blocksstable;
 
 namespace storage
 {
+
 void add_ddl_event(const ObComplementDataParam *param, const ObString &stmt)
 {
   if (OB_NOT_NULL(param)) {
@@ -74,6 +75,7 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
   const int64_t dest_schema_version = arg.dest_schema_version_;
   ObSchemaGetterGuard src_tenant_schema_guard;
   ObSchemaGetterGuard dst_tenant_schema_guard;
+  bool is_dest_schema_row_store = false;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObComplementDataParam has been inited before", K(ret));
@@ -123,9 +125,17 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
         && OB_UNLIKELY(dest_table_schema->get_association_table_id() != arg.source_table_id_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret), K(arg), K(dest_table_schema->get_association_table_id()));
+      } else if (OB_FAIL(dest_table_schema->get_is_row_store(is_dest_schema_row_store))) {
+        LOG_WARN("judge if orig table is column store failed", K(ret), K(arg));
+      } else if (OB_FAIL(dest_table_schema->get_store_column_group_count(dest_schema_cg_cnt_))) {
+        LOG_WARN("fail to get store column group count", K(ret), K(arg));
       } else {
+        /* current impl cs replica is invisible for complement data dag */
+        const bool need_process_cs_replica = false;
         snapshot_version_ = arg.snapshot_version_;
         orig_schema_tablet_size_ = orig_table_schema->get_tablet_size();
+        need_rescan_fill_cg_ = ObDDLUtil::need_fill_column_group(is_dest_schema_row_store,
+          need_process_cs_replica, arg.data_format_version_);
       }
     }
   }
@@ -200,7 +210,9 @@ int ObComplementDataParam::prepare_task_ranges()
                                                 orig_ls_id_,
                                                 orig_tablet_id_,
                                                 orig_schema_tablet_size_,
-                                                user_parallelism_))) {
+                                                user_parallelism_,
+                                                dest_schema_cg_cnt_,
+                                                need_rescan_fill_cg_))) {
       LOG_WARN("fail to init task ranges", K(ret), KPC(this));
     }
   }
@@ -347,16 +359,19 @@ int ObComplementDataParam::split_task_ranges_remote(
   const share::ObLSID &src_ls_id,
   const common::ObTabletID &src_tablet_id,
   const int64_t tablet_size,
-  const int64_t hint_parallelism)
+  const int64_t hint_parallelism,
+  const int64_t dest_schema_cg_cnt,
+  const bool need_rescan_fill_cg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(common::OB_INVALID_TENANT_ID == src_tenant_id
-    ||!src_ls_id.is_valid() || !src_tablet_id.is_valid() || tablet_size <= 0)) {
+    ||!src_ls_id.is_valid() || !src_tablet_id.is_valid() || tablet_size <= 0 || dest_schema_cg_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(src_tenant_id), K(ls_id), K(src_tablet_id), K(tablet_size));
+    LOG_WARN("invalid arguments", K(ret), K(src_tenant_id), K(src_ls_id), K(src_tablet_id), K(tablet_size),
+      K(dest_schema_cg_cnt));
   } else {
     common::ObAddr src_leader_addr;
     share::ObLocationService *location_service = nullptr;
@@ -367,7 +382,16 @@ int ObComplementDataParam::split_task_ranges_remote(
     arg.tablet_id_ = src_tablet_id;
     arg.user_parallelism_ = MIN(MIN(MAX(hint_parallelism, 1), MAX_RPC_STREAM_WAIT_THREAD_COUNT),
       ObMacroDataSeq::MAX_PARALLEL_IDX + 1);
-    arg.schema_tablet_size_ = RECOVER_TABLE_PARALLEL_MIN_TASK_SIZE; /*2M*/
+    /* cs replica current impl is invisible for complement data dag, cs replica will reply
+     * ddl row store clog. Currently, only column store table need fill column cgroup.
+     * To avoid the issue of column store write space enlargement:
+     * Firstly, we set the parallel subtask size according to the following rules:
+     *  1.row store table min task is 2MB
+     *  2.column store table min task is 4MB * table_store_cg_cnt
+     * Secondly, we aggregated 1000000 row slice write in calc_range task. */
+     const bool is_row_store =  !need_rescan_fill_cg_;
+     arg.schema_tablet_size_ = is_row_store ? ROW_TABLE_PARALLEL_MIN_TASK_SIZE/*2M*/ :
+        dest_schema_cg_cnt * COLUMN_TABLE_EACH_CG_PARALLEL_MIN_TASK_SIZE;/*cg cnt * 4M*/
     arg.ddl_type_ = ObDDLType::DDL_TABLE_RESTORE;
     const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
     const int64_t retry_interval_us = 200 * 1000; // 200ms
@@ -448,6 +472,7 @@ int ObComplementDataContext::init(
     direct_load_param.common_param_.ls_id_ = param.dest_ls_id_;
     direct_load_param.common_param_.tablet_id_ = param.dest_tablet_id_;
     direct_load_param.common_param_.is_no_logging_ = param.is_no_logging_;
+    direct_load_param.common_param_.is_rescan_data_compl_dag_ = param.need_rescan_fill_cg_;
     direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
     direct_load_param.runtime_only_param_.task_id_ = param.task_id_;
     direct_load_param.runtime_only_param_.table_id_ = param.dest_table_id_;
@@ -625,6 +650,20 @@ int ObComplementDataDag::calc_total_row_count()
   return ret;
 }
 
+/*
+  1.normal data complemet dag:
+                WriteTask
+              /           \
+   PrepareTask- WriteTask - MergeTask
+              \           /
+                WriteTask
+  2.data complement dag need rescan fill cg:
+                WriteTask                   RescanWriteTask
+              /           \               /                 \
+   PrepareTask- WriteTask - CalcRangeTask - RescanWriteTask - MergeTask
+              \           /               \                 /
+               WriteTask                   RescanWriteTask
+*/
 int ObComplementDataDag::create_first_task()
 {
   int ret = OB_SUCCESS;
@@ -634,6 +673,13 @@ int ObComplementDataDag::create_first_task()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (!param_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", K(ret), K(param_));
+  } else if (param_.need_rescan_fill_cg_) {
+    if (OB_FAIL(create_first_task_for_fill_cg())) {
+      LOG_WARN("create first task for column dag failed", K(ret), K(param_));
+    }
   } else if (OB_FAIL(alloc_task(prepare_task))) {
     LOG_WARN("allocate task failed", K(ret));
   } else if (OB_ISNULL(prepare_task)) {
@@ -662,6 +708,77 @@ int ObComplementDataDag::create_first_task()
   } else if (OB_FAIL(merge_task->init(param_, context_))) {
     LOG_WARN("init merge task failed", K(ret));
   } else if (OB_FAIL(write_task->add_child(*merge_task))) {
+    LOG_WARN("add child task failed", K(ret));
+  } else if (OB_FAIL(add_task(*merge_task))) {
+    LOG_WARN("add task failed");
+  }
+  return ret;
+}
+
+int ObComplementDataDag::create_first_task_for_fill_cg()
+{
+  int ret = OB_SUCCESS;
+  ObComplementPrepareTask *prepare_task = nullptr;
+  ObComplementWriteTask *write_task = nullptr;
+  ObComplementCalcRangeTask *calc_range_task = nullptr;
+  ObComplementRescanWriteTask *rescan_write_task = nullptr;
+  ObComplementMergeTask *merge_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!param_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", K(ret), K(param_));
+  } else if (OB_FAIL(alloc_task(prepare_task))) {
+    LOG_WARN("allocate task failed", K(ret));
+  } else if (OB_ISNULL(prepare_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(prepare_task->init(param_, context_))) {
+    LOG_WARN("init prepare task failed", K(ret));
+  } else if (OB_FAIL(add_task(*prepare_task))) {
+    LOG_WARN("add task failed", K(ret));
+  } else if (OB_FAIL(alloc_task(write_task))) {
+    LOG_WARN("alloc task failed", K(ret));
+  } else if (OB_ISNULL(write_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(write_task->init(0, param_, context_))) {
+    LOG_WARN("init write task failed", K(ret));
+  } else if (OB_FAIL(prepare_task->add_child(*write_task))) {
+    LOG_WARN("add child task failed", K(ret));
+  } else if (OB_FAIL(add_task(*write_task))) {
+    LOG_WARN("add task failed", K(ret));
+  } else if (OB_FAIL(alloc_task(calc_range_task))) {
+    LOG_WARN("alloc task failed", K(ret));
+  } else if (OB_ISNULL(calc_range_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(calc_range_task->init(param_, context_))) {
+    LOG_WARN("init merge task failed", K(ret));
+  } else if (OB_FAIL(write_task->add_child(*calc_range_task))) {
+    LOG_WARN("add child task failed", K(ret));
+  } else if (OB_FAIL(add_task(*calc_range_task))) {
+    LOG_WARN("add task failed");
+  } else if (OB_FAIL(alloc_task(rescan_write_task))) {
+    LOG_WARN("alloc task failed", K(ret));
+  } else if (OB_ISNULL(rescan_write_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(rescan_write_task->init(0, param_, context_))) {
+    LOG_WARN("init merge task failed", K(ret));
+  } else if (OB_FAIL(add_task(*rescan_write_task))) {
+    LOG_WARN("add task failed");
+  } else if (OB_FAIL(calc_range_task->add_child(*rescan_write_task))) {
+    LOG_WARN("add child task failed", K(ret));
+  } else if (OB_FAIL(alloc_task(merge_task))) {
+    LOG_WARN("alloc task failed", K(ret));
+  } else if (OB_ISNULL(merge_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(merge_task->init(param_, context_))) {
+    LOG_WARN("init merge task failed", K(ret));
+  } else if (OB_FAIL(rescan_write_task->add_child(*merge_task))) {
     LOG_WARN("add child task failed", K(ret));
   } else if (OB_FAIL(add_task(*merge_task))) {
     LOG_WARN("add task failed");
@@ -1348,6 +1465,8 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       LOG_WARN("open slice failed", K(ret), K(macro_start_seq), K(slice_info));
     } else if (OB_FAIL(context_->ddl_agent_.fill_sstable_slice(slice_info, &row_iter, affected_rows, &insert_monitor))) {
       LOG_WARN("fill sstable slice failed", K(ret), K(slice_info));
+    } else if (OB_FALSE_IT(slice_info.is_task_finish_ =
+      ObDDLUtil::use_idempotent_mode(param_->data_format_version_) ? false : true)) { /* sn set write task finish */
     } else if (OB_FAIL(context_->ddl_agent_.close_sstable_slice(slice_info, &insert_monitor, unused_seq))) {
       LOG_WARN("close sstable slice failed", K(ret));
     } else { /* do nothing.*/ }
@@ -1519,6 +1638,163 @@ int ObComplementMergeTask::process()
   return ret;
 }
 
+
+ObComplementCalcRangeTask::ObComplementCalcRangeTask()
+  : ObITask(TASK_TYPE_COMPLEMENT_CALC_RANGE), is_inited_(false), param_(nullptr), context_(nullptr)
+{
+}
+
+ObComplementCalcRangeTask::~ObComplementCalcRangeTask()
+{
+}
+
+int ObComplementCalcRangeTask::init(ObComplementDataParam &param, ObComplementDataContext &context)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObComplementCalcRangeTask has already been inited", K(ret));
+  } else if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(param), K(context));
+  } else {
+    param_ = &param;
+    context_ = &context;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObComplementCalcRangeTask::process()
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  int tmp_ret = OB_SUCCESS;
+  ObIDag *tmp_dag = get_dag();
+  ObComplementDataDag *dag = nullptr;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObComplementCalcRangeTask has not been inited before", K(ret));
+  } else if (OB_ISNULL(tmp_dag) || ObDagType::DAG_TYPE_DDL != tmp_dag->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
+  } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
+    LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
+  } else if (context_->is_major_sstable_exist_) {
+  } else if (!param_->need_rescan_fill_cg_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param", K(ret), KPC_(param));
+  } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
+    LOG_WARN("switch to tenant failed", K(ret), KPC_(param));
+  } else if (OB_FAIL(context_->ddl_agent_.calc_range(context_->context_id_, context_->concurrent_cnt_))) {
+    LOG_WARN("calc_range failed", K(ret));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {
+    context_->complement_data_ret_ = ret;
+    ret = OB_SUCCESS;
+  }
+
+  add_ddl_event(param_, "complement calc range task");
+  return ret;
+}
+
+ObComplementRescanWriteTask::ObComplementRescanWriteTask()
+  : ObITask(TASK_TYPE_COMPLEMENT_RESCAN_WRITE), is_inited_(false), task_id_(0), param_(nullptr), context_(nullptr)
+{
+}
+
+ObComplementRescanWriteTask::~ObComplementRescanWriteTask()
+{
+}
+
+int ObComplementRescanWriteTask::init(const int64_t task_id, ObComplementDataParam &param, ObComplementDataContext &context)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObComplementRescanWriteTask has already been inited", K(ret));
+  } else if (task_id < 0 || !param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(task_id), K(param), K(context));
+  } else {
+    param_ = &param;
+    context_ = &context;
+    is_inited_ = true;
+    task_id_ = task_id;
+  }
+  return ret;
+}
+
+int ObComplementRescanWriteTask::process()
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObIDag *tmp_dag = get_dag();
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObComplementRescanWriteTask has not been inited before", K(ret));
+  } else if (OB_ISNULL(tmp_dag) || ObDagType::DAG_TYPE_DDL != tmp_dag->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
+  } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
+    LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
+  } else if (context_->is_major_sstable_exist_) {
+  } else if (!param_->need_rescan_fill_cg_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param", K(ret),  KPC_(param));
+  } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
+    LOG_WARN("switch to tenant failed", K(ret), KPC_(param));
+  } else if (OB_FAIL(context_->ddl_agent_.fill_column_group(param_->concurrent_cnt_, task_id_))) {
+    LOG_WARN("fill_column_group failed", K(ret), KPC_(param), K_(task_id));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {
+    context_->complement_data_ret_ = ret;
+    ret = OB_SUCCESS;
+  }
+
+  add_ddl_event(param_, "complement rescan write task");
+  return ret;
+}
+
+int ObComplementRescanWriteTask::generate_next_task(share::ObITask *&next_task)
+{
+  int ret = OB_SUCCESS;
+  ObIDag *tmp_dag = get_dag();
+  ObComplementDataDag *dag = nullptr;
+  ObComplementRescanWriteTask *rescan_write_task = nullptr;
+  const int64_t next_task_id = task_id_ + 1;
+  next_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObComplementRescanWriteTask has not been inited", K(ret));
+  } else if (next_task_id >= param_->concurrent_cnt_) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(tmp_dag)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, dag must not be NULL", K(ret));
+  } else if (OB_UNLIKELY(ObDagType::DAG_TYPE_DDL != tmp_dag->get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, dag type is invalid", K(ret), "dag type", dag->get_type());
+  } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
+  } else if (OB_FAIL(dag->alloc_task(rescan_write_task))) {
+    LOG_WARN("fail to alloc task", K(ret));
+  } else if (OB_FAIL(rescan_write_task->init(next_task_id, *param_, *context_))) {
+    LOG_WARN("fail to init complement rescan write task", K(ret));
+  } else {
+    next_task = rescan_write_task;
+    LOG_INFO("generate next complement rescan write task", K(ret), K(param_->dest_table_id_));
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {
+    if (OB_ITER_END != ret) {
+      context_->complement_data_ret_ = ret;
+    }
+  }
+  return ret;
+}
 
 /**
  * -----------------------------------ObLocalScan-----------------------------------------

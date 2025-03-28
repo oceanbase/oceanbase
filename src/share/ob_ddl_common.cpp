@@ -3472,6 +3472,11 @@ bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
   return (GCTX.is_shared_storage_mode() && data_format_version >= DATA_VERSION_4_3_3_0);
 }
 
+bool ObDDLUtil::need_fill_column_group(const bool is_row_store, const bool need_process_cs_replica, const int64_t data_format_version)
+{
+  return (!is_row_store || need_process_cs_replica) && ObDDLUtil::need_rescan_column_store(data_format_version);
+}
+
 bool ObDDLUtil::need_rescan_column_store(const int64_t data_format_version)
 {
   return true; // force rescan now

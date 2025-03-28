@@ -1359,6 +1359,7 @@ int ObTabletDirectLoadMgr::update(
       ls_id_ = build_param.common_param_.ls_id_;
       tablet_id_ = build_param.common_param_.tablet_id_;
       direct_load_type_ = build_param.common_param_.direct_load_type_;
+      is_rescan_data_compl_dag_ = build_param.common_param_.is_rescan_data_compl_dag_;
       data_format_version_ = build_param.common_param_.data_format_version_;
       micro_index_clustered_ = tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_;
       tablet_transfer_seq_ = tablet_handle.get_obj()->get_transfer_seq();
@@ -2052,7 +2053,8 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t context_id, const int64_t th
       }
     }
   }
-  if (OB_SUCC(ret) && is_data_direct_load(direct_load_type_)) {
+
+  if (OB_SUCC(ret) && (is_data_direct_load(direct_load_type_) || ((is_ddl_direct_load(direct_load_type_) && is_rescan_data_compl_dag_)))) {
     if (OB_FAIL(calc_cg_range(sorted_slices, thread_cnt))) {
       LOG_WARN("fail to calc cg range", K(ret), K(sorted_slices), K(thread_cnt));
     }
@@ -2217,6 +2219,9 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
             LOG_WARN("close sstable slice failed", K(ret), K(sqc_build_ctx_.build_param_));
           }
         }
+      } else if (need_fill_column_group_ && is_rescan_data_compl_dag_) {
+        LOG_INFO("data complement dag rescan path which need skip calc range and fill column group",
+            K(tablet_id_), K(execution_id), K(slice_info));
       } else {
         if (!already_commited) {
           if (task_finish_count < sqc_build_ctx_.task_total_cnt_) {
@@ -2250,7 +2255,8 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       }
     }
     if (OB_NOT_NULL(slice_writer)) {
-      if (OB_SUCC(ret) && is_data_direct_load(direct_load_type_) && slice_writer->need_column_store()) {
+      if (OB_SUCC(ret) && ((is_data_direct_load(direct_load_type_) && slice_writer->need_column_store())
+        || (is_ddl_direct_load(direct_load_type_) && is_rescan_data_compl_dag_))) {
         //ignore, free after rescan
       } else {
         // for ddl, delete slice_writer regardless of success or failure
@@ -2398,9 +2404,9 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
         } else {
           for (int64_t i = start_idx; OB_SUCC(ret) && i < last_idx; ++i) {
             ObDirectLoadSliceWriter *slice_writer = sqc_build_ctx_.sorted_slice_writers_.at(i);
-            if (OB_ISNULL(slice_writer) || !slice_writer->need_column_store()) {
+            if (OB_ISNULL(slice_writer)) { /* complement dag path may not exec prepare_slice_store ignore check need_column_store */
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("wrong slice writer",  K(ret), KPC(slice_writer));
+              LOG_WARN("wrong slice writer",  K(ret));
             } else if (OB_FAIL(slice_writer->fill_aggregated_column_group(cg_idx, cur_writer))) {
               LOG_WARN("slice writer rescan failed", K(ret), K(cg_idx), KPC(cur_writer));
             } else if (cg_idx == cg_schemas.count() - 1) {
@@ -2551,7 +2557,7 @@ int ObTabletDirectLoadMgr::init_column_store_params(
     LOG_WARN("failed to check ls replica set", K(ret), K(tablet), K(storage_schema), K(new_direct_load_type));
   } else {
     need_process_cs_replica_ = need_process && is_ddl_direct_load(new_direct_load_type);
-    need_fill_column_group_ = (!storage_schema.is_row_store() || need_process_cs_replica_) && ObDDLUtil::need_rescan_column_store(tenant_data_version);
+    need_fill_column_group_ = ObDDLUtil::need_fill_column_group(storage_schema.is_row_store(), need_process_cs_replica_, tenant_data_version);
     LOG_INFO("init column store params", K(ret), K(tablet), K(storage_schema), K(new_direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group));
   }
   return ret;
