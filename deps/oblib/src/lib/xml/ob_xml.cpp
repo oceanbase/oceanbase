@@ -81,7 +81,7 @@ int ObXml::parse_str_to_xml(const ObString &input, xmlDocPtr &xml_ptr)
     COMMON_LOG(WARN, "xml string is empty", K(input), K(ret));
   } else {
     xml_ptr = xmlReadMemory(input.ptr(), input.length(), NULL, "utf-8", XML_PARSE_PEDANTIC);
-    xmlErrorPtr xml_err = xmlGetLastError();
+    const xmlError *xml_err = xmlGetLastError();
     if (OB_NOT_NULL(xml_err)) {
       ret = OB_ERR_PARSER_SYNTAX;
       COMMON_LOG(WARN, "parse xml failed", KCSTRING(xml_err->message), K(input), K(ret));
@@ -107,7 +107,7 @@ int ObXml::xslt_apply_style_sheet(const xmlDocPtr input_xml_ptr,
   }
   if (OB_SUCC(ret)) {
     output_xml_ptr = xsltApplyStylesheet(xslt_ptr, input_xml_ptr, NULL);
-    xmlErrorPtr xml_err = xmlGetLastError();
+    const xmlError* xml_err = xmlGetLastError();
     if (OB_NOT_NULL(xml_err)) {
       ret = OB_ERR_PARSER_SYNTAX;
       COMMON_LOG(WARN, "xsltApplyStylesheet failed", KCSTRING(xml_err->message), K(ret));

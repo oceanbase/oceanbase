@@ -336,7 +336,7 @@ void ObLibXml2SaxHandler::entity_reference(void *ctx, const xmlChar *name)
   }
 }
 
-void ObLibXml2SaxHandler::structured_error(void *ctx, xmlErrorPtr error)
+void ObLibXml2SaxHandler::structured_error(void *ctx, const xmlError *error)
 {
   INIT_SUCC(ret);
   ObLibXml2SaxParser* parser =  nullptr;

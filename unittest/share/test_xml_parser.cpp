@@ -17,6 +17,7 @@
 #define private public
 #include "test_xml_utils.h"
 #include "libxml2/libxml/xmlmemory.h"
+#include "libxml2/libxml/parser.h"
 #undef private
 
 namespace oceanbase {
