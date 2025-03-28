@@ -6371,6 +6371,8 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
         if (ob_is_enumset_tc(data_type)) {
           if (OB_FAIL(cast_enum_or_set_default_value(column, cast_ctx, default_value))) {
             LOG_WARN("fail to cast enum or set default value", K(default_value), K(column), K(ret));
+          } else {
+            dest_obj = default_value;
           }
         } else {
           if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
