@@ -211,9 +211,8 @@ public:
   inline bool is_sorted() const { return is_sorted_; }
   inline void set_row_conflict_error(const int64_t idx, int error_code)
   {
-    if (OB_ERR_PRIMARY_KEY_DUPLICATE == error_code
-        && need_find_all_duplicate_key_) {
-      if (!has_set_error()) { // only record the error for the first time
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == error_code) {
+      if (!has_set_error()) { // only record the error for the first time when need_find_all_duplicate_key_
         set_conflict_rowkey(idx);
         set_error_code(error_code);
       }

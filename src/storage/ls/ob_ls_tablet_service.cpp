@@ -5844,7 +5844,7 @@ int ObLSTabletService::get_conflict_row(
     if (OB_FAIL(init_single_row_getter(row_getter, store_ctx, dml_param, out_col_ids, data_table, true/*skip_read_lob*/))) {
       LOG_WARN("failed to init single row getter", K(ret), K(out_col_ids));
     } else if (OB_FAIL(row_getter.open(datum_rowkey, false/*use_fuse_row_cache*/))) {
-      LOG_WARN("failed to oenp storage row", K(ret), K(datum_rowkey));
+      LOG_WARN("failed to open storage row", K(ret), K(datum_rowkey));
     } else if (OB_FAIL(row_getter.get_next_row(out_row))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get single storage row", K(ret));
@@ -5856,7 +5856,7 @@ int ObLSTabletService::get_conflict_row(
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_TABLET_IS_SPLIT_SRC != ret) {
     if (nullptr != dup_row_iter) {
       ObQueryIteratorFactory::free_insert_dup_iter(dup_row_iter);
       dup_row_iter = nullptr;
