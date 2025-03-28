@@ -363,48 +363,49 @@ int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
   int64_t timeout = GCONF._ob_ddl_timeout;
   uint64_t resource_pool_id = job.get_resource_pool_id();
   const int64_t job_id = job.get_job_id();
-
-  if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_ERROR)) {
-    ret = ERRSIM_CLONE_RESOURCE_POOL_ERROR;
-    LOG_WARN("mock clone resource pool failed", KR(ret), K(job));
-  } else if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_DO_NOTHING_ERROR)) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_DO_NOTHING_ERROR)) {
     // do nothing
     LOG_INFO("errsim here, do nothing, let clone job hang");
-  } else if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", KR(ret));
-  } else if (has_set_stop()) {
-    ret = OB_CANCELED;
-    LOG_WARN("clone scheduler stopped", KR(ret));
-  } else if (OB_ISNULL(GCTX.rs_mgr_) || OB_ISNULL(rpc_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(job), KP(rpc_proxy_));
-  } else if (OB_INVALID_ID == resource_pool_id) {
-    ObMaxIdFetcher id_fetcher(*sql_proxy_);
-    if (OB_FAIL(id_fetcher.fetch_new_max_id(OB_SYS_TENANT_ID,
-                                            ObMaxIdType::OB_MAX_USED_RESOURCE_POOL_ID_TYPE,
-                                            resource_pool_id))) {
-      LOG_WARN("fetch resource pool id failed", KR(ret), K(job));
+  } else {
+    if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_ERROR)) {
+      ret = ERRSIM_CLONE_RESOURCE_POOL_ERROR;
+      LOG_WARN("mock clone resource pool failed", KR(ret), K(job));
+    } else if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not inited", KR(ret));
+    } else if (has_set_stop()) {
+      ret = OB_CANCELED;
+      LOG_WARN("clone scheduler stopped", KR(ret));
+    } else if (OB_ISNULL(GCTX.rs_mgr_) || OB_ISNULL(rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(job), KP(rpc_proxy_));
     } else if (OB_INVALID_ID == resource_pool_id) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid resource pool id", KR(ret), K(job));
-    } else if (OB_FAIL(ObTenantCloneUtil::update_resource_pool_id_of_clone_job(*sql_proxy_,
-                                                                               job_id,
-                                                                               resource_pool_id))) {
-      LOG_WARN("fail to update resource pool id of clone job", KR(ret), K(job), K(arg));
+      ObMaxIdFetcher id_fetcher(*sql_proxy_);
+      if (OB_FAIL(id_fetcher.fetch_new_max_id(OB_SYS_TENANT_ID,
+                                              ObMaxIdType::OB_MAX_USED_RESOURCE_POOL_ID_TYPE,
+                                              resource_pool_id))) {
+        LOG_WARN("fetch resource pool id failed", KR(ret), K(job));
+      } else if (OB_INVALID_ID == resource_pool_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid resource pool id", KR(ret), K(job));
+      } else if (OB_FAIL(ObTenantCloneUtil::update_resource_pool_id_of_clone_job(*sql_proxy_,
+                                                                                 job_id,
+                                                                                 resource_pool_id))) {
+        LOG_WARN("fail to update resource pool id of clone job", KR(ret), K(job), K(arg));
+      }
     }
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(fill_clone_resource_pool_arg_(job, resource_pool_id, arg))) {
-    LOG_WARN("fail to fill clone resource pool arg", KR(ret), K(job), K(arg));
-  } else if (OB_FAIL(rpc_proxy_->to_rs(*GCTX.rs_mgr_).timeout(timeout).clone_resource_pool(arg))) {
-    LOG_WARN("fail to clone resource pool", KR(ret), K(arg), K(timeout));
-  }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fill_clone_resource_pool_arg_(job, resource_pool_id, arg))) {
+      LOG_WARN("fail to fill clone resource pool arg", KR(ret), K(job), K(arg));
+    } else if (OB_FAIL(rpc_proxy_->to_rs(*GCTX.rs_mgr_).timeout(timeout).clone_resource_pool(arg))) {
+      LOG_WARN("fail to clone resource pool", KR(ret), K(arg), K(timeout));
+    }
 
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(try_update_job_status_(ret, job))) {
-    LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), K(job));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_update_job_status_(ret, job))) {
+      LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), K(job));
+    }
   }
   LOG_INFO("[RESTORE] clone create resource pool", KR(ret), K(arg), K(job));
   return ret;
