@@ -13551,14 +13551,15 @@ int ObPLResolver::resolve_sf_clause(
   CK (OB_NOT_NULL(node));
   CK (OB_NOT_NULL(routine_info));
   CK (T_SP_CLAUSE_LIST == node->type_);
+  bool has_invoker_clause = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
     const ObStmtNodeTree *child = node->children_[i];
-    bool has_invoker_clause = false;
     if (OB_NOT_NULL(child)) {
       if (T_SP_DETERMINISTIC == child->type_) {
         if (routine_info->is_deterministic()) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
-          LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+          LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("DETERMINISTIC")), "DETERMINISTIC");
+          LOG_WARN("PLS-00371: at most one declaration for 'DETERMINISTIC' is permitted",
                    K(ret), K(child->type_));
         } else {
           routine_info->set_deterministic();
@@ -13566,7 +13567,8 @@ int ObPLResolver::resolve_sf_clause(
       } else if (T_SP_PARALLEL_ENABLE == child->type_) {
         if (routine_info->is_parallel_enable()) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
-          LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+          LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("PARALLEL_ENABLE")), "PARALLEL_ENABLE");
+          LOG_WARN("PLS-00371: at most one declaration for 'PARALLEL_ENABLE' is permitted",
                    K(ret), K(child->type_));
         } else if (child->num_child_ > 0) {
           ret = OB_NOT_SUPPORTED;
@@ -13582,7 +13584,12 @@ int ObPLResolver::resolve_sf_clause(
       } else if (T_SP_INVOKE == child->type_) {
         if (has_invoker_clause) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
-          LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+          if (lib::is_oracle_mode()) {
+            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("AUTHID")), "AUTHID");
+          } else {
+            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("SQL SECURITY")), "SQL SECURITY");
+          }
+          LOG_WARN("PLS-00371: at most one declaration for 'AUTHID' is permitted",
                    K(ret), K(child->type_));
         } else if (ObProcType::STANDALONE_FUNCTION != routine_type
                    && ObProcType::STANDALONE_PROCEDURE != routine_type) {
@@ -13602,7 +13609,8 @@ int ObPLResolver::resolve_sf_clause(
          * running, and RELIES_ON clause does nothing. */
         if (routine_info->is_result_cache()) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
-          LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+          LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("RESULT_CACHE")), "RESULT_CACHE");
+          LOG_WARN("PLS-00371: at most one declaration for 'RESULT_CACHE' is permitted",
                    K(ret), K(child->type_));
         } else if (ObProcType::NESTED_FUNCTION == routine_type
                    || ObProcType::NESTED_PROCEDURE == routine_type) {
@@ -13616,7 +13624,8 @@ int ObPLResolver::resolve_sf_clause(
       } else if (T_SP_ACCESSIBLE_BY == child->type_) {
         if (routine_info->has_accessible_by_clause()) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
-          LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+          LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("ACCESSIBLE BY")), "ACCESSIBLE BY");
+          LOG_WARN("PLS-00371: at most one declaration for 'ACCESSIBLE BY' is permitted",
                    K(ret), K(child->type_));
         } else if (ObProcType::NESTED_FUNCTION == routine_type
                    || ObProcType::NESTED_PROCEDURE == routine_type) {
