@@ -2850,6 +2850,7 @@ int ObPLBlockNS::resolve_label_symbol(const ObString &name,
       && ObPLBlockNS::BLOCK_ROUTINE == parent_ns->get_block_type()) {
     ret = OB_ERR_SP_UNDECLARED_VAR;
     LOG_WARN("failed to resolve label symbol", K(ret), K(name), K(type));
+    LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, name.length(), name.ptr());
   }
   return ret;
 }
