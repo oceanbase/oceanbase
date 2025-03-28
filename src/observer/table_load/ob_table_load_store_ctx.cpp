@@ -95,7 +95,7 @@ int ObTableLoadStoreCtx::init(
     insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
     insert_table_param.session_cnt_ = ctx_->param_.session_count_;
     insert_table_param.rowkey_column_count_ = (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
-    insert_table_param.column_count_ = ctx_->schema_.store_column_count_;
+    insert_table_param.column_count_ = ctx_->param_.column_count_;
     insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
     insert_table_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
     insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
