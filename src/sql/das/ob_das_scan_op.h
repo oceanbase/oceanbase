@@ -22,6 +22,7 @@
 #include "sql/rewrite/ob_query_range_define.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_part_info.h"
+#include "share/external_table/ob_external_object_ctx.h"
 
 namespace oceanbase
 {
@@ -103,6 +104,7 @@ public:
       external_files_(alloc),
       external_file_format_str_(alloc),
       partition_infos_(alloc),
+      external_object_ctx_(alloc),
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
       rowkey_exprs_(alloc),
@@ -187,6 +189,7 @@ public:
   ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
   ObExternalFileFormat::StringData external_file_format_str_;
   share::ObExternalTablePartInfoArray partition_infos_; // FARM COMPAT WHITELIST
+  share::ObExternalObjectCtx external_object_ctx_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup
