@@ -32,7 +32,9 @@ public:
       vec_index_param_(),
       dim_(0),
       access_pk_(false),
-      can_use_vec_pri_opt_(false) {}
+      can_use_vec_pri_opt_(false),
+      spiv_scan_docid_col_(nullptr),
+      spiv_scan_value_col_(nullptr) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_; }
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_; }
@@ -90,6 +92,8 @@ public:
   bool access_pk_;
   bool can_use_vec_pri_opt_;
   int64_t extra_column_count_; // for hnsw
+  ObExpr *spiv_scan_docid_col_;
+  ObExpr *spiv_scan_value_col_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef
