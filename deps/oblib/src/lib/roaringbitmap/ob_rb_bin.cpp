@@ -224,7 +224,7 @@ int ObRoaringBin::contains(uint32_t value, bool &is_contains)
     ret = OB_NOT_INIT;
     LOG_WARN("ObRoaringBin is not inited", K(ret));
   } else if (OB_FALSE_IT(idx = this->key_advance_until(-1, key))){
-  } else if (key == this->get_key_at_index(idx)) {
+  } else if (idx < size_ && key == this->get_key_at_index(idx)) {
     uint8_t container_type = 0;
     roaring::api::container_s *container = nullptr;
     if (OB_FAIL(this->get_container_at_index(idx, container_type, container))) {
@@ -640,17 +640,17 @@ int32_t ObRoaringBin::key_advance_until(int32_t idx, uint16_t min)
 {
   int32_t res_idx = 0;
   int32_t lower = idx + 1;
-  if ((lower >= size_) || (this->get_card_at_index(lower) >= min)) {
+  if ((lower >= size_) || (this->get_key_at_index(lower) >= min)) {
     res_idx = lower;
   } else {
     int32_t spansize = 1;
-    while ((lower + spansize < size_) && (this->get_card_at_index(lower + spansize) < min)) {
+    while ((lower + spansize < size_) && (this->get_key_at_index(lower + spansize) < min)) {
       spansize *= 2;
     }
     int32_t upper = (lower + spansize < size_) ? lower + spansize : size_ - 1;
-    if (this->get_card_at_index(upper) == min) {
+    if (this->get_key_at_index(upper) == min) {
       res_idx = upper;
-    } else if (this->get_card_at_index(upper) < min) {
+    } else if (this->get_key_at_index(upper) < min) {
       // means keyscards_ has no item >= min
       res_idx = size_;
     } else {
@@ -658,9 +658,9 @@ int32_t ObRoaringBin::key_advance_until(int32_t idx, uint16_t min)
       int32_t mid = 0;
       while (lower + 1 != upper) {
         mid = (lower + upper) / 2;
-        if (this->get_card_at_index(mid) == min) {
+        if (this->get_key_at_index(mid) == min) {
           return mid;
-        } else if (this->get_card_at_index(mid) < min) {
+        } else if (this->get_key_at_index(mid) < min) {
           lower = mid;
         } else {
           upper = mid;
