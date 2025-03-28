@@ -168,8 +168,8 @@ int ObPlanCacheObject::check_pre_calc_cons(const bool is_ignore_stmt,
     is_match = false;
     ret = OB_SUCCESS;
   } else {
-    ObObjParam obj_param;
     for (int64_t i = 0; OB_SUCC(ret) && is_match && i < datum_params.count(); ++i) {
+      ObObjParam obj_param;
       if (OB_FAIL(datum_params.at(i).to_objparam(obj_param, &exec_ctx.get_allocator()))) {
         LOG_WARN("failed to obj param", K(ret));
       } else if (OB_FAIL(pre_calc_con.check_is_match(obj_param, is_match))) {

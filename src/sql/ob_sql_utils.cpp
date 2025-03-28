@@ -4489,10 +4489,10 @@ int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &i
       is_match = !obj_param.is_null();
       break;
     case PRE_CALC_RESULT_TRUE:
-      is_match = obj_param.get_bool();
+      is_match = obj_param.get_bool() && !obj_param.is_null();
       break;
     case PRE_CALC_RESULT_FALSE:
-      is_match = !obj_param.get_bool();
+      is_match = !obj_param.get_bool() && !obj_param.is_null();
       break;
     case PRE_CALC_PRECISE:
     case PRE_CALC_NOT_PRECISE: {
