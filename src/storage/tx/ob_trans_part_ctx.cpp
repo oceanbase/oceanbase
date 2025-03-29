@@ -1992,6 +1992,9 @@ int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t 
   }
   if (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret) {
     ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG);
+    if (ret == OB_TRANS_KILLED) {
+      ret = OB_TRANS_HAS_DECIDED;
+    }
   }
   ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
   return ret;
@@ -4079,7 +4082,7 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
     TRANS_LOG(WARN, "fail to merge intermediate participants", K(ret), KPC(this));
   } else if ((!is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_ABORT_LOG)
               && !is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_CLEAR_LOG))
-             && (need_force_abort_() || is_force_abort_logging_()
+             && (is_force_abort_logging_()
                  || get_downstream_state() == ObTxState::ABORT)) {
     ret = OB_TRANS_KILLED;
     TRANS_LOG(WARN, "tx has been aborting, can not submit other log", K(ret), KPC(this));
@@ -7048,7 +7051,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
   share::SCN mds_base_scn;
   ObTxLogCb *log_cb = nullptr;
   void *tmp_buf = nullptr;
-  if (need_force_abort_() || is_force_abort_logging_()
+  if (is_force_abort_logging_()
       || get_downstream_state() == ObTxState::ABORT) {
     ret = OB_TRANS_KILLED;
     TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
