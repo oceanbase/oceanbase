@@ -815,7 +815,7 @@ int ObMultiTenant::create_tenant_without_unit(const uint64_t tenant_id,
   if (OB_SERVER_TENANT_ID == tenant_id) {
     mem_limit = INT64_MAX;
   } else {
-    static const int64_t VIRTUAL_TENANT_MEMORY_LIMTI = 1L << 30;
+    static const int64_t VIRTUAL_TENANT_MEMORY_LIMTI = GCONF._dtl_tenant_mem_limit;
     mem_limit = VIRTUAL_TENANT_MEMORY_LIMTI;
   }
   if (OB_FAIL(construct_meta_for_virtual_tenant(tenant_id, min_cpu, max_cpu, mem_limit, meta))) {
