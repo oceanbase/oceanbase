@@ -1069,6 +1069,26 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
         }
       }
     }
+    // index back full hint
+    if (OB_SUCC(ret)) {
+      ObTableInHint table_in_hint(table_item.qb_name_,
+                                  table_item.database_name_,
+                                  table_item.get_object_name());
+      ObIndexHint *index_hint = NULL;
+      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_FULL_HINT, index_hint))) {
+        LOG_WARN("failed to create hint", K(ret));
+      } else if (OB_FAIL(index_hint->get_table().assign(table_in_hint))) {
+        LOG_WARN("assign table in hint failed", K(ret));
+      } else {
+        index_hint->set_qb_name(parent_qb_name);
+        index_hint->set_trans_added(true);
+        if (OB_FAIL(select_stmt.get_stmt_hint().merge_hint(*index_hint,
+                                                           HINT_DOMINATED_EQUAL,
+                                                           conflict_hints))) {
+          LOG_WARN("merge index hint failed", K(ret));
+        }
+      }
+    }
     if (OB_SUCC(ret)) {
       // ObTransHint *trans_hint = NULL;
       ObViewMergeHint *no_merge_hint = NULL;

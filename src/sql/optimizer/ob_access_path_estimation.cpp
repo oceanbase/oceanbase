@@ -1260,9 +1260,15 @@ int ObAccessPathEstimation::fill_cost_table_scan_info(ObCostTableScanInfo &est_c
 
   // we have exact query ranges on a unique index,
   // each range is expected to have at most one row
-  if (est_cost_info.is_unique_) {
-    logical_row_count  = est_cost_info.ranges_.count();
-    physical_row_count = est_cost_info.ranges_.count();
+  if (est_cost_info.unique_range_rowcnt_ > 0) {
+    if (est_cost_info.is_unique_) {
+      logical_row_count  = est_cost_info.unique_range_rowcnt_;
+      physical_row_count = est_cost_info.unique_range_rowcnt_;
+    } else {
+      // normal index which contains a unique index
+      logical_row_count  = MIN(est_cost_info.unique_range_rowcnt_, logical_row_count);
+      physical_row_count = MIN(est_cost_info.unique_range_rowcnt_, physical_row_count);
+    }
   }
 
   // block sampling

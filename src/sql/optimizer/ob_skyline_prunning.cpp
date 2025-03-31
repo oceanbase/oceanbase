@@ -349,6 +349,27 @@ int ObQueryRangeDim::add_rowkey_ids(const common::ObIArray<uint64_t> &rowkey_ids
   return ret;
 }
 
+int ObUniqueRangeDim::compare(const ObSkylineDim &other, CompareStat &status) const
+{
+  int ret = OB_SUCCESS;
+  status = EQUAL;
+  if (other.get_dim_type() != get_dim_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dimension type is different",
+             "dim_type", get_dim_type(), "other.dim_type", other.get_dim_type());
+  } else {
+    const ObUniqueRangeDim &tmp = static_cast<const ObUniqueRangeDim &>(other);
+    if (range_cnt_ > tmp.range_cnt_) {
+      status = RIGHT_DOMINATED;
+    } else if (range_cnt_ < tmp.range_cnt_) {
+      status = LEFT_DOMINATED;
+    } else {
+      status = EQUAL;
+    }
+  }
+  return ret;
+}
+
 int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) const
 {
   int ret = OB_SUCCESS;
@@ -361,7 +382,9 @@ int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) c
     const ObShardingInfoDim &tmp = static_cast<const ObShardingInfoDim &>(other);
     DominateRelation strong_relation = DominateRelation::OBJ_UNCOMPARABLE;
     EqualSets dummy;
-    if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(sharding_info_,
+    if (is_single_get_ && tmp.is_single_get_) {
+      status = ObSkylineDim::EQUAL;
+    } else if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(sharding_info_,
                                               tmp.sharding_info_,
                                               dummy,
                                               strong_relation))) {
@@ -424,7 +447,7 @@ int ObIndexSkylineDim::compare(const ObIndexSkylineDim &other, ObSkylineDim::Com
       }
       LOG_TRACE("skyline compare dim", K(i), K(tmp_status), K(compare_result), KPC(left_dim), KPC(right_dim));
       OPT_TRACE("compare dim", static_cast<int64_t>(i), "result:", static_cast<int64_t>(tmp_status));
-      OPT_TRACE("left dim:", *left_dim);
+      OPT_TRACE("left dim: ", *left_dim);
       OPT_TRACE("right dim:", *right_dim);
     }
   }
@@ -434,6 +457,15 @@ int ObIndexSkylineDim::compare(const ObIndexSkylineDim &other, ObSkylineDim::Com
         status = ObSkylineDim::EQUAL;
       } else {
         status = compare_result > 0 ? ObSkylineDim::LEFT_DOMINATED : ObSkylineDim::RIGHT_DOMINATED;
+      }
+    }
+    if (ObSkylineDim::EQUAL == status) {
+      if (is_get_ && !other.is_get_) {
+        status = ObSkylineDim::LEFT_DOMINATED;
+        OPT_TRACE("all dims are equal, while the left is table get");
+      } else if (!is_get_ && other.is_get_) {
+        status = ObSkylineDim::RIGHT_DOMINATED;
+        OPT_TRACE("all dims are equal, while the right is table get");
       }
     }
   }
@@ -551,7 +583,28 @@ int ObIndexSkylineDim::add_query_range_dim(const ObIArray<uint64_t> &prefix_rang
   return ret;
 }
 
+int ObIndexSkylineDim::add_unique_range_dim(int64_t range_cnt, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObUniqueRangeDim *dim = NULL;
+  if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim))) {
+    LOG_WARN("failed to create key prefix dimension", K(ret));
+  } else if (OB_ISNULL(dim)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to create dimension", K(ret));
+  } else {
+    dim->set_range_count(range_cnt);
+    if (OB_FAIL(add_skyline_dim(*dim))) {
+      LOG_WARN("failed to add_skylined_dim", K(ret));
+    } else {
+      LOG_TRACE("add query range dim success", K(ret), K(*dim));
+    }
+  }
+  return ret;
+}
+
 int ObIndexSkylineDim::add_sharding_info_dim(ObShardingInfo *sharding_info,
+                                             bool is_get,
                                              ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -563,6 +616,7 @@ int ObIndexSkylineDim::add_sharding_info_dim(ObShardingInfo *sharding_info,
     LOG_WARN("failed to create dimension", K(ret));
   } else {
     dim->set_sharding_info(sharding_info);
+    dim->set_is_single_get(is_get);
     if (OB_FAIL(add_skyline_dim(*dim))) {
       LOG_WARN("failed to add_skylined_dim", K(ret));
     } else {
