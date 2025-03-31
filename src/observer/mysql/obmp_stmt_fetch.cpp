@@ -790,7 +790,11 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   common::ObNewRow row;
+  ObCharsetType charset_type = CHARSET_INVALID;
+  ObCharsetType ncharset_type = CHARSET_INVALID;
   ObPieceCache *piece_cache = session.get_piece_cache(true);
+  ObArenaAllocator arena_allocator;
+
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece cache is null.", K(ret), K(stmt_id));
@@ -809,26 +813,40 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
     LOG_WARN("column_map is null.", K(stmt_id), K(ret));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
+    LOG_WARN("fail to get result charset", K(ret));
+  } else if (OB_FAIL(session.get_ncharacter_set_connection(ncharset_type))) {
+    LOG_WARN("fail to get result charset", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < row.get_count(); ++i) {
     ObObj &value = row.get_cell(i);
     if (OB_SUCC(ret) && NULL != column_map && ObSMUtils::update_from_bitmap(column_map, i)) {
       bool is_long_data = false;
       ObString str;
       ObPiece *piece = NULL;
+      ObCharsetType target_charset_type = charset_type;
+
       if (OB_FAIL(piece_cache->get_piece(stmt_id, i, piece))) {
-        LOG_WARN("get piece fail", K(stmt_id), K(i), K(ret) );
+        LOG_WARN("get piece fail", K(stmt_id), K(i), K(ret));
       } else if (first_time) {
         if (NULL != piece) {
-          if (OB_FAIL(piece_cache->remove_piece(piece_cache->get_piece_key(stmt_id, i),
-                                                session))) {
+          if (OB_FAIL(piece_cache->remove_piece(piece_cache->get_piece_key(stmt_id, i), session))) {
             LOG_WARN("remove old piece fail.", K(ret), K(stmt_id), K(i));
           }
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(piece_cache->make_piece(stmt_id, i, piece, session))) {
           LOG_WARN("make piece fail.", K(ret), K(stmt_id), K(i));
-        } 
+        }
       }
+      if (lib::is_oracle_mode()
+          && (value.is_nchar() || value.is_nvarchar2())
+          && ncharset_type != CHARSET_INVALID && ncharset_type != CHARSET_BINARY) {
+        target_charset_type = ncharset_type;
+      }
+
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (NULL == piece) {
@@ -841,14 +859,27 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
         } else if (OB_FAIL(iter.get_full_data(str))) {
           LOG_WARN("Lob: get full data failed ", K(ret), K(value));
         }
-      } else if (ob_is_string_type(value.get_type()) || ob_is_raw(value.get_type())) {
+      } else if (ob_is_string_type(value.get_type())) {
+        if (CS_TYPE_INVALID != value.get_collation_type()
+            && OB_FAIL(value.convert_string_value_charset(target_charset_type, arena_allocator))) {
+          LOG_WARN("convert string value charset failed", K(ret), K(value));
+        } else if (OB_FAIL(value.get_string(str))) {
+          LOG_WARN("get string failed", K(ret), K(value));
+        }
+      } else if (ob_is_raw(value.get_type())) {
         str = value.get_string();
       } else if (ob_is_rowid_tc(value.get_type())) {
         str = value.get_string_ptr();
         str.set_length(value.get_string_len());
       } else if (ob_is_lob_locator(value.get_type())) {
-        str.assign(const_cast<char*>(value.get_lob_locator()->get_payload_ptr()),
-                    static_cast<int64_t>(value.get_lob_locator()->get_payload_length()));
+        if (value.is_clob_locator()
+            && OB_FAIL(ObQueryDriver::convert_lob_value_charset(
+                value, target_charset_type, arena_allocator))) {
+          LOG_WARN("convert lob value charset failed", K(ret));
+        } else if (FALSE_IT(str.assign(
+                       const_cast<char *>(value.get_lob_locator()->get_payload_ptr()),
+                       static_cast<int64_t>(value.get_lob_locator()->get_payload_length())))) {
+        }
       } else if (ob_is_null(value.get_type())) {
         str.assign(NULL, 0);
       } else if (ob_is_extend(value.get_type())) {
