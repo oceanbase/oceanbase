@@ -15121,7 +15121,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   in_tenant_space = True))
 
 def_table_schema(
-  owner = 'linzhigang.lzg',
+  owner = 'dingjincheng.djc',
   table_name     = '__all_virtual_sys_variable_default_value',
   table_id       = '12450',
   table_type = 'VIRTUAL_TABLE',
@@ -36478,7 +36478,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linzhigang.lzg',
+  owner           = 'dingjincheng.djc',
   table_name      = 'DBA_OB_SYS_VARIABLES',
   table_id        = '21500',
   table_type      = 'SYSTEM_VIEW',
@@ -70367,7 +70367,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 def_table_schema(
-  owner           = 'linzhigang.lzg',
+  owner           = 'dingjincheng.djc',
   table_name      = 'DBA_OB_SYS_VARIABLES',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
