@@ -5679,21 +5679,43 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
     LOG_WARN("invalid argument", KR(ret), K(member_list_cnt), K(curr_paxos_replica_number),
              K(locality_paxos_replica_number));
   } else if (MEMBER_CHANGE_ADD == member_change_type) {
-    // 1. ADD MEMBER_LIST operation
-    //    When current paxos_replica_number >= locality paxos_replica_number
-    //         we do not change paxos_replica_number and ensure that paxos_replica_number no less than new member_list count
-    //    When current paxos_replica_number < locality paxos_replica_number
-    //         we try to increase paxos_replica_number towards locality and ensure that majority is satisfied
     const int64_t member_list_cnt_after = member_list_cnt + 1;
-    if (curr_paxos_replica_number >= locality_paxos_replica_number) {
-      if (curr_paxos_replica_number >= member_list_cnt_after) {
+    if (curr_paxos_replica_number == locality_paxos_replica_number) {
+      if (locality_paxos_replica_number >= member_list_cnt_after) {
+        // For example: locality is F@z1,F@z2,F@z3, suppose a member is permanently offline, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 2, member_list_cnt_after = 3, locality_paxos_replica_number = 3.
+        // set new paxos_replica_number = 3(do not change curr_paxos_replica_number).
         new_paxos_replica_number = curr_paxos_replica_number;
         found = true;
+      } else if (locality_paxos_replica_number + 1 == member_list_cnt_after) {
+        // For example: locality is F@z1,F@z2,F@z3, current replica distribution is F@z2, F@z3, F@z4, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 3, member_list_cnt_after = 4. locality_paxos_replica_number = 3.
+        // set new paxos_replica_number = 4(curr_paxos_replica_number + 1).
+        // in this scenario, replica in F@z1 is added first and then replica in F@z4 is deleted.
+        new_paxos_replica_number = curr_paxos_replica_number + 1;
+        found = true;
+      } else {
+        // No need process this scenario.
+        // For example: locality is F@z1,F@z2, current replica distribution is F@z2, F@z3, F@z4, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 3, member_list_cnt_after = 4. locality_paxos_replica_number = 2.
+        // in this scenario, first we remove replica in F@z3 or F@z4(for example z3), then add replica in F@z1, finally remove replica in F@z4.
       }
-    } else {
+    } else if (curr_paxos_replica_number > locality_paxos_replica_number) {
+      if (curr_paxos_replica_number >= member_list_cnt_after) {
+        // For example: locality is F@z1,F@z2, current replica distribution is F@z2, F@z3, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 2, member_list_cnt_after = 3. locality_paxos_replica_number = 2.
+        // set new paxos_replica_number = 3(do not change curr_paxos_replica_number).
+        new_paxos_replica_number = curr_paxos_replica_number;
+        found = true;
+      } else {
+        // new member cnt greater than paxos_replica_number, not good
+      }
+    } else { // curr_paxos_replica_number < locality_paxos_replica_number
       if (majority(curr_paxos_replica_number + 1) <= member_list_cnt_after) {
         new_paxos_replica_number = curr_paxos_replica_number + 1;
         found = true;
+      } else {
+        // majority not satisfied
       }
     }
   } else if (MEMBER_CHANGE_NOP == member_change_type) {
