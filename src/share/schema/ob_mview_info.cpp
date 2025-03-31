@@ -145,9 +145,6 @@ int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSpl
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id_));
-  } else if (data_version < DATA_VERSION_4_3_5_1 && OB_UNLIKELY(refresh_dop_ != 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected refresh dop", KR(ret), KDV(data_version), K(refresh_dop_));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
       OB_FAIL(dml.add_pk_column("mview_id", mview_id_)) ||
       OB_FAIL(dml.add_column("build_mode", build_mode_)) ||
@@ -215,9 +212,6 @@ int ObMViewInfo::gen_update_mview_attribute_dml(const uint64_t exec_tenant_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, data_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
-  } else if (data_version < DATA_VERSION_4_3_5_1 && OB_UNLIKELY(refresh_dop_ != 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected refresh dop", KR(ret), KDV(data_version), K(refresh_dop_));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
              OB_FAIL(dml.add_pk_column("mview_id", mview_id_)) ||
              OB_FAIL(dml.add_column("build_mode", build_mode_)) ||
