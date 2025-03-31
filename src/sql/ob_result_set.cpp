@@ -101,10 +101,17 @@ OB_INLINE int ObResultSet::open_plan()
                  "start_time", my_session_.get_query_start_time());
       } else if (stmt::T_PREPARE != stmt_type_) {
         int64_t retry = 0;
-        if (OB_SUCC(ret)) {
-          do {
-            ret = do_open_plan(get_exec_context());
-          } while (transaction_set_violation_and_retry(ret, retry));
+        if (OB_UNLIKELY(my_session_.is_zombie())) {
+          //session has been killed some moment ago
+          ret = OB_ERR_SESSION_INTERRUPTED;
+          LOG_WARN("session has been killed", K(ret), K(my_session_.get_session_state()),
+                  K(my_session_.get_sessid()), "proxy_sessid", my_session_.get_proxy_sessid());
+        } else {
+          if (OB_SUCC(ret)) {
+            do {
+              ret = do_open_plan(get_exec_context());
+            } while (transaction_set_violation_and_retry(ret, retry));
+          }
         }
       }
     }
