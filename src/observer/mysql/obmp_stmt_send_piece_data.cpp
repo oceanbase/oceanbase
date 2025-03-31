@@ -855,7 +855,7 @@ int ObPieceCache::merge_piece_buffer(ObPiece *piece,
         const ObString buffer = *(piece_buffer->get_piece_buffer());
         // reduce alloc/free/memcpy for large buffers
         OZ (pre_extend_str(piece, str, buffer_array, buffer.length(), array_size, enable_pre_extern));
-        OX (str.append(buffer));
+        OZ (str.append(buffer));
         OX (len += buffer.length());
       }
     } while (ObLastPiece != buffer_array->at(index).get_piece_mode()
