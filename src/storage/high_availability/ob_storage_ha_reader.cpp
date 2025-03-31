@@ -4585,6 +4585,10 @@ int ObRebuildTabletSSTableProducer::init(
     LOG_WARN("failed to get copy sstable count", K(ret), K(tablet_sstable_info));
   } else {
     status_ = ObCopyTabletStatus::TABLET_EXIST;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
     ls_id_ = ls->get_ls_id();
     tablet_sstable_info_ = tablet_sstable_info;
     sstable_index_ = 0;

@@ -637,12 +637,18 @@ int ObTabletGCHandler::freeze_unpersist_tablet_ids(const common::ObTabletIDArray
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_GC_WAIT_FLUSH_RETRY_TIMES);
 int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
                                                          const SCN &decided_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::fast_current_time();
   int64_t retry_times = FLUSH_CHECK_MAX_TIMES;
+
+#ifdef ERRSIM
+  retry_times = EN_GC_WAIT_FLUSH_RETRY_TIMES ? 10 : FLUSH_CHECK_MAX_TIMES;
+#endif
+
   int64_t i = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

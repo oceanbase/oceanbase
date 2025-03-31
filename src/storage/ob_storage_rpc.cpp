@@ -3977,6 +3977,7 @@ int ObFetchMicroBlockKeysP::set_header_attr_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_MICRO_KEY_SET_RECONNECT);
 int ObFetchMicroBlockKeysP::process()
 {
   int ret = OB_SUCCESS;
@@ -3989,9 +3990,6 @@ int ObFetchMicroBlockKeysP::process()
       ObCopyMicroBlockKeySet key_set;
       ObCopyMicroBlockKeySetRpcHeader rpc_header;
       int64_t max_key_set_size = WARMUP_MAX_KEY_SET_SIZE_IN_RPC; // 4M;
-#ifdef ERRSIM
-      max_key_set_size = GCONF.errsim_max_key_set_size; // test multi rpc get key set
-#endif
       const int64_t start_ts = ObTimeUtil::current_time();
       int64_t end_blk_idx = 0;
       int64_t key_set_count = 0;
@@ -4022,7 +4020,15 @@ int ObFetchMicroBlockKeysP::process()
             // dest will judge ObMigrateWarmupKeySet serialize size,
             if (OB_FAIL(result_.key_set_array_.key_sets_.push_back(key_set))) {
               STORAGE_LOG(WARN, "fail to fill key set", K(ret), K(key_set));
-            } else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
+            }
+#ifdef ERRSIM
+            else if (EN_MICRO_KEY_SET_RECONNECT && key_set_count > 0) {
+              result_.key_set_array_.key_sets_.pop_back();
+              connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
+              break;
+            }
+#endif
+            else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
               result_.key_set_array_.key_sets_.pop_back();
               connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
               break;
@@ -4042,7 +4048,8 @@ int ObFetchMicroBlockKeysP::process()
           result_.header_ = rpc_header;
         }
       }
-      LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts, K(key_count));
+      LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+          K(key_count), K(arg_), K(rpc_header));
     }
   }
   return ret;
