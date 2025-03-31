@@ -268,6 +268,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
           }
           if (!find_flag) {
             ret =  OB_ERR_SP_LILABEL_MISMATCH;
+            LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, end_label.length(), end_label.ptr());
             LOG_WARN("begin label is not match with end label", K(label), K(end_label), K(ret));
           }
         } else { // Oracle的EndLabel行为, 仅对Procedure和Function结尾的EndLabel做匹配检查
@@ -6892,7 +6893,7 @@ int ObPLResolver::resolve_resignal(
   if (OB_FAIL(ret)) {
   } else if (!current_block_->in_handler()) {
     if (lib::is_oracle_mode()) {
-      ret = OB_ERR_SP_COND_MISMATCH;
+      ret = OB_ERR_RAISE_NOT_IN_HANDLER;
       LOG_WARN("PLS-00367: a RAISE statement with no exception name must be inside an exception handler", K(ret));
     } else if(OB_NOT_NULL(parse_tree->children_[0]) && OB_FAIL(resolve_signal(parse_tree, stmt, func))) {
       LOG_WARN("resolve resignal fail", K(ret));
