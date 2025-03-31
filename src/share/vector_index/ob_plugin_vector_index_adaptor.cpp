@@ -1283,6 +1283,8 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       LOG_WARN("failed to init incr data mem ctx.", K(ret));
     } else if (OB_ISNULL(vid_array) || OB_ISNULL(vec_array)) {
       // do nothing :maybe null data
+    } else if (OB_FAIL(check_vsag_mem_used())) {
+      LOG_WARN("check vsag mem used failed.", K(ret));
     } else {
       ObVectorIndexAlgorithmType build_type = VIAT_HNSW;
       int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param->m_) : param->m_;
