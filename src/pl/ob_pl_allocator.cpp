@@ -32,7 +32,7 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
 
-  static const int BLOCK_SIZE = 2*1024;
+  static const int BLOCK_SIZE = 2*1024 - 256;
 
   CK (OB_NOT_NULL(parent_allocator_));
   if (OB_SUCC(ret)) {

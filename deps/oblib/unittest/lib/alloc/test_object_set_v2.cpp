@@ -13,18 +13,20 @@
 #define private public
 #define protected public
 #include "lib/alloc/object_mgr.h"
+#include "lib/alloc/ob_malloc_allocator.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace std;
 
-ObjectMgrV2 object_mgr(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC);
 class TestObjectSet : public ::testing::Test, public ObjectSetV2
 {
 public:
   TestObjectSet()
   {
-    ObjectSetV2::set_block_mgr(&object_mgr);
+    ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->
+        get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC);
+    ObjectSetV2::set_block_mgr(&ta->get_block_mgr());
   }
 };
 
@@ -34,26 +36,27 @@ TEST_F(TestObjectSet, basic)
   ObMemAttr attr(OB_SERVER_TENANT_ID, "test", ObCtxIds::GLIBC);
   // check the status of block is FULL->PARTITIAL->FULL->PARTITIAL->EMPTY
   // check the order of alloc_object is local->avail->new_block
-  const int max_cnt = 4;
+  const int max_cnt = 16;
   AObject *objs[max_cnt + 1];
   memset(objs, 0, sizeof(objs));
   objs[0] = alloc_object(size, attr);
   ABlock *block = objs[0]->block();
   const int sc_idx = block->sc_idx_;
+  ABlock *&avail_blist = scs[sc_idx].avail_blist_;
   ASSERT_EQ(max_cnt, block->max_cnt_);
   ASSERT_TRUE(ABlock::FULL == block->status_);
-  ASSERT_EQ(NULL, scs[sc_idx].avail_);
+  ASSERT_EQ(NULL, avail_blist);
   free_object(objs[0], block);
   ASSERT_TRUE(ABlock::PARTITIAL == block->status_);
-  ASSERT_EQ(block, scs[sc_idx].avail_);
+  ASSERT_EQ(block, avail_blist);
   for (int i = 0; i < max_cnt; ++i) {
     AObject *local = scs[sc_idx].local_free_;
-    ABlock *avail = scs[sc_idx].avail_;
+    ABlock *avail = avail_blist;
     objs[i] = alloc_object(size, attr);
     if (NULL != local) {
       ASSERT_EQ(local, objs[i]);
     } else if (NULL != avail) {
-      ASSERT_EQ(NULL, scs[sc_idx].avail_);
+      ASSERT_EQ(NULL, avail_blist);
       ASSERT_EQ(avail, objs[i]->block());
     }
     ASSERT_EQ(block, objs[i]->block());

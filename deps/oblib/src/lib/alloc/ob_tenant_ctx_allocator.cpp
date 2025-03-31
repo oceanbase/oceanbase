@@ -415,21 +415,13 @@ void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
   }
 }
 
-void ObTenantCtxAllocator::on_free(AObject &obj)
+void ObTenantCtxAllocator::on_free(AObject& obj, ABlock& block)
 {
-
-  abort_unless(obj.is_valid());
-  abort_unless(obj.in_use_);
-
-  ABlock *block = obj.block();
-  abort_unless(block->is_valid());
-  abort_unless(block->in_use_);
-  abort_unless(NULL != block->obj_set_);
-
   SANITY_POISON(obj.data_, obj.alloc_bytes_);
   get_mem_leak_checker().on_free(obj);
 
-  IBlockMgr *blk_mgr = ((ObjectSet*)block->obj_set_)->get_block_mgr();
+  IBlockMgr *blk_mgr = OB_LIKELY(block.is_malloc_v2_) ? block.obj_set_v2_->get_block_mgr() :
+      block.obj_set_->get_block_mgr();
   abort_unless(NULL != blk_mgr);
 
   int64_t tenant_id = blk_mgr->get_tenant_id();
@@ -452,8 +444,15 @@ void ObTenantCtxAllocator::common_free(void *ptr)
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    on_free(*obj);
-    ObjectSet *os = (ObjectSet*)obj->block()->obj_set_;
-    os->free_object(obj);
+    abort_unless(obj->is_valid());
+    abort_unless(obj->in_use_);
+    ABlock *block = obj->block();
+    abort_unless(block->is_valid());
+    abort_unless(block->in_use_);
+    on_free(*obj, *block);
+    abort_unless(NULL != block->obj_set_);
+    OB_LIKELY(block->is_malloc_v2_) ? block->obj_set_v2_->free_object(obj, block) :
+        block->obj_set_->free_object(obj);
+
   }
 }

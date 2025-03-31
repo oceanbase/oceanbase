@@ -61,6 +61,7 @@ static ssize_t get_page_size()
 
 class BlockSet;
 class ObjectSet;
+class ObjectSetV2;
 
 enum ObAllocPrio
 {
@@ -152,14 +153,15 @@ struct ObMemAttr
         use_500_(false),
         expect_500_(true),
         ignore_version_(ObMemVersionNode::tl_ignore_node),
-        alloc_extra_info_(false)
+        alloc_extra_info_(false),
+        use_malloc_v2_(false)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
   bool expect_500() const { return expect_500_; }
   bool ignore_version() const { return ignore_version_; }
 public:
-  union {
+  union { //FARM COMPAT WHITELIST
     char padding__[4];
     struct {
       struct {
@@ -167,6 +169,7 @@ public:
         uint8_t expect_500_ : 1;
         uint8_t ignore_version_ : 1;
         uint8_t alloc_extra_info_ : 1;
+        uint8_t use_malloc_v2_ : 1;
       };
     };
   };
@@ -323,7 +326,10 @@ struct ABlock {
 
   uint64_t alloc_bytes_;
   uint32_t ablock_size_;
-  void *obj_set_;
+  union {
+    ObjectSet *obj_set_;
+    ObjectSetV2 *obj_set_v2_;
+  };
   union {
     struct {
       int32_t sc_idx_;
@@ -695,15 +701,23 @@ private:
 class ObMallocHookAttrGuard
 {
 public:
-  ObMallocHookAttrGuard(const ObMemAttr& attr);
+  ObMallocHookAttrGuard(const ObMemAttr& attr, const bool use_500 = true);
   ~ObMallocHookAttrGuard();
-  static ObMemAttr get_tl_mem_attr()
+  static ObMemAttr &get_tl_mem_attr()
   {
+    static thread_local ObMemAttr tl_mem_attr(OB_SERVER_TENANT_ID,
+                                              "glibc_malloc",
+                                              ObCtxIds::GLIBC);
     return tl_mem_attr;
   }
+  static bool &get_tl_use_500()
+  {
+    static __thread bool tl_use_500 = true;
+    return tl_use_500;
+  }
 private:
-  static thread_local ObMemAttr tl_mem_attr;
   ObMemAttr old_attr_;
+  bool old_use_500_;
 };
 
 class ObLightBacktraceGuard

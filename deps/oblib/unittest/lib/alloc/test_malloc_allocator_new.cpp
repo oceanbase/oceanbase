@@ -245,6 +245,7 @@ int main(int argc, char *argv[])
   signal(49, SIG_IGN);
   OB_LOGGER.set_file_name("t.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  set_memory_limit(64LL<<30);
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

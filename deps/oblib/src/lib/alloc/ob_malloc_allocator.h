@@ -270,22 +270,9 @@ public:
 
 extern int64_t mtl_id();
 
-class ObMallocHook
-{
-public:
-  static ObMallocHook &get_instance();
-  void *alloc(const int64_t size);
-  void free(void *ptr);
-private:
-  ObMallocHook();
-private:
-  char label_[AOBJECT_LABEL_SIZE + 1];
-  ObMemAttr attr_;
-  ObjectMgrV2 mgr_;
-};
-
 } // end of namespace lib
 } // end of namespace oceanbase
 
 extern void enable_malloc_v2(bool enable);
+extern bool is_malloc_v2_enabled();
 #endif /* _OB_MALLOC_ALLOCATOR_H_ */

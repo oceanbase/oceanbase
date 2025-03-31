@@ -24,7 +24,6 @@ using namespace oceanbase::lib;
 static bool g_malloc_hook_inited = false;
 typedef void* (*MemsetPtr)(void*, int, size_t);
 MemsetPtr memset_ptr = nullptr;
-ObMallocHook &global_malloc_hook = ObMallocHook::get_instance();
 void init_malloc_hook()
 {
   g_malloc_hook_inited = true;
@@ -62,7 +61,14 @@ void *ob_malloc_retry(size_t size)
 {
   void *ptr = nullptr;
   do {
-    ptr = global_malloc_hook.alloc(size);
+    ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
+    bool use_500 = ObMallocHookAttrGuard::get_tl_use_500();
+    SET_USE_500(attr);
+    if (use_500 && is_malloc_v2_enabled()) {
+      attr.tenant_id_ = OB_SERVER_TENANT_ID;
+    }
+    attr.ctx_id_ = ObCtxIds::GLIBC;
+    ptr = ob_malloc(size, attr);
     if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms
     }
@@ -132,7 +138,7 @@ free(void *ptr)
     } else {
       bool in_hook_bak = in_hook();
       in_hook()= true;
-      global_malloc_hook.free(orig_ptr);
+      ob_free(orig_ptr);
       in_hook()= in_hook_bak;
     }
   }

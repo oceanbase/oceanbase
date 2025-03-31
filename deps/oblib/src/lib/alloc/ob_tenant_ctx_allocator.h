@@ -342,6 +342,7 @@ public:
     }
     return has_unfree;
   }
+  void do_cleanup() { obj_mgr_.do_cleanup(); }
   void update_wash_stat(int64_t related_chunks, int64_t blocks, int64_t size);
   void reset_req_chunk_mgr() { req_chunk_mgr_.reclaim_chunks(); }
   void set_req_chunkmgr_parallel(int32_t parallel) { req_chunk_mgr_.set_parallel(parallel); }
@@ -381,7 +382,13 @@ public:
       ObMemAttr inner_attr = attr;
       if (NULL != ptr) {
         obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-        on_free(*obj);
+        abort_unless(obj->is_valid());
+        abort_unless(obj->in_use_);
+        ABlock *block = obj->block();
+        abort_unless(block->is_valid());
+        abort_unless(block->in_use_);
+        on_free(*obj, *block);
+        inner_attr.use_malloc_v2_ = block->is_malloc_v2_;
       }
       ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
           && ObCtxIds::GLIBC != attr.ctx_id_);
@@ -421,7 +428,7 @@ public:
   static void common_free(void *ptr);
 private:
   static void on_alloc(AObject& obj, const ObMemAttr& attr);
-  static void on_free(AObject& obj);
+  static void on_free(AObject& obj, ABlock& block);
 
 private:
   ObTenantResourceMgrHandle resource_handle_;

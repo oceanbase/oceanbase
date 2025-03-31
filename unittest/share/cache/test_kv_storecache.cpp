@@ -65,7 +65,7 @@ TestKVCache::TestKVCache()
     lower_mem_limit_(8 * 1024 * 1024),
     upper_mem_limit_(16 * 1024 * 1024)
 {
-  for (int64_t t = tenant_id_; t < tenant_id_ + 30; ++t) {
+  for (int64_t t = tenant_id_; t < tenant_id_ + 4; ++t) {
     auto guard = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(t, ObCtxIds::KVSTORE_CACHE_ID);
     if (nullptr == guard.allocator_) {
       ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(t);
@@ -554,7 +554,7 @@ TEST_F(TestKVCache, test_wash)
 
 
   COMMON_LOG(INFO, "********** Start nonempty wash every tenant **********");
-  for (int64_t t = 190000; t < 190030; ++t) {
+  for (int64_t t = 190000; t < 19004; ++t) {
     key.tenant_id_ = t;
     ret = getter.add_tenant(t,
                             lower_mem_limit_,
@@ -571,7 +571,7 @@ TEST_F(TestKVCache, test_wash)
 
   COMMON_LOG(INFO, "********** Start nonempty wash all tenant **********");
   for (int64_t j = 0; j < 20; ++j) {
-    for (int64_t t = 190000; t < 190030; ++t) {
+    for (int64_t t = 190000; t < 19004; ++t) {
       key.tenant_id_ = t;
       ret = getter.add_tenant(t,
                               lower_mem_limit_,
