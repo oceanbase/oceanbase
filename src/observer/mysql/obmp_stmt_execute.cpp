@@ -338,6 +338,7 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
         params_->at(i).set_precision(default_acc.get_precision());
       }
     }
+    params_->at(i).set_param_meta();
   }
   return ret;
 }
