@@ -629,10 +629,11 @@ int ObRestoreUtil::get_restore_source(
       backup_set_list, restore_start_scn, restore_scn, backup_piece_list, log_path_list))) {
     LOG_WARN("fail to get restore log piece array", K(ret), K(backup_set_list), K(restore_start_scn), K(restore_scn));
   } else if (backup_set_list.empty() || backup_piece_list.empty() || log_path_list.empty()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no backup set path or log piece can be used to restore", K(ret),
         K(tenant_path_array), K(backup_set_list), K(backup_piece_list), K(log_path_list), K(restore_start_scn),
         K(restore_scn));
+    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "no backup set path or log piece can be used to restore");
   }
   return ret;
 }
