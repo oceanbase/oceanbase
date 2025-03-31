@@ -1073,6 +1073,7 @@ private:
   int set_partition_info_for_odps(ObTableSchema &table_schema,
                                   const common::ObIArray<ObString> &part_col_names);
 #endif
+  int set_upper_column_name(ObColumnSchemaV2 &column_schema);
   int build_column_schemas(ObTableSchema& table_schema,
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,

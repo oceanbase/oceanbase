@@ -112,7 +112,8 @@ struct ObCSVGeneralFormat {
     is_optional_(false),
     file_extension_(DEFAULT_FILE_EXTENSION),
     parse_header_(false),
-    binary_format_(ObCSVBinaryFormat::DEFAULT)
+    binary_format_(ObCSVBinaryFormat::DEFAULT),
+    ignore_last_empty_col_(true)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -129,7 +130,8 @@ struct ObCSVGeneralFormat {
     "IS_OPTIONAL",
     "FILE_EXTENSION",
     "PARSE_HEADER",
-    "BINARY_FORMAT"
+    "BINARY_FORMAT",
+    "IGNORE_LAST_EMPTY_COLUMN"
   };
 
   // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
@@ -149,6 +151,7 @@ struct ObCSVGeneralFormat {
     FILE_EXTENSION,
     PARSE_HEADER,
     BINARY_FORMAT,
+    IGNORE_LAST_EMPTY_COLUMN,
     // put new options here, before MAX_OPTIONS
     // ....
     MAX_OPTIONS
@@ -191,6 +194,7 @@ struct ObCSVGeneralFormat {
   common::ObString file_extension_;
   bool parse_header_;
   ObCSVBinaryFormat binary_format_;
+  bool ignore_last_empty_col_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -670,9 +674,11 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
             field_end = escape_buf_pos;
           }
         }
-
-        if (is_field_term || ori_field_end > ori_field_begin
-            || (field_idx < format_.file_column_nums_ && !format_.skip_blank_lines_)) {
+        if (is_field_term || ori_field_end > ori_field_begin ||
+            (field_idx < format_.file_column_nums_
+            && !format_.skip_blank_lines_
+            && !format_.ignore_last_empty_col_)
+        ) {
           if (field_idx++ < format_.file_column_nums_) {
             gen_new_field(is_enclosed, ori_field_begin, ori_field_end, field_begin, field_end, field_idx);
           }

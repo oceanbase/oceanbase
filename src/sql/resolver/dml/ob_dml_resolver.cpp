@@ -4104,28 +4104,32 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
           case orc::TypeKind::BOOLEAN:
           case orc::TypeKind::BYTE:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
             } else {
               column_schema.set_data_type(ObTinyIntType);
             }
             break;
           case orc::TypeKind::SHORT:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
             } else {
               column_schema.set_data_type(ObSmallIntType);
             }
             break;
           case orc::TypeKind::INT:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
             } else {
               column_schema.set_data_type(ObInt32Type);
             }
             break;
           case orc::TypeKind::LONG:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
             } else {
               column_schema.set_data_type(ObIntType);
             }
@@ -4205,6 +4209,8 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
           LOG_WARN("fail to mock gen column def", K(ret));
         } else if (OB_FAIL(set_basic_column_properties(column_schema, mock_gen_column_str))) {
           LOG_WARN("fail to set properties for column", K(ret));
+        } else if (lib::is_oracle_mode() && OB_FAIL(set_upper_column_name(column_schema))) {
+          LOG_WARN("fail to set upper column name in oracle mode", K(ret));
         } else if (OB_FAIL(table_schema.add_column(column_schema))) {
           LOG_WARN("failed to add column", K(ret), K(column_schema));
         }
@@ -4306,6 +4312,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
                 int type_len = column->type_length() <= 0 ?
                                 ob_max_varchar_len : column->type_length();
                 column_schema.set_data_length(type_len);
+                column_schema.set_length_semantics(LS_CHAR);
                 break;
               }
               case parquet::Type::INT96: // 通常用于timestamp
@@ -4322,7 +4329,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
           if (OB_SUCC(ret)) {
             switch(logical_type->type()) {
               case parquet::LogicalType::Type::DATE:
-                column_schema.set_data_type(ObDateType);
+                column_schema.set_data_type(lib::is_oracle_mode() ? ObDateTimeType : ObDateType);
                 break;
               case parquet::LogicalType::Type::DECIMAL:
                 column_schema.set_data_type(ObDecimalIntType);
@@ -4337,6 +4344,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
                 int type_len = column->type_length() <= 0 ?
                                 ob_max_varchar_len : column->type_length();
                 column_schema.set_data_length(type_len);
+                column_schema.set_length_semantics(LS_CHAR);
                 break;
               }
               case parquet::LogicalType::Type::TIME:
@@ -4369,13 +4377,32 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
               LOG_WARN("fail to mock gen column def", K(ret));
             } else if (OB_FAIL(set_basic_column_properties(column_schema, mock_gen_column_str))) {
               LOG_WARN("fail to set properties for column", K(ret));
+            } else if (lib::is_oracle_mode() && OB_FAIL(set_upper_column_name(column_schema))) {
+              LOG_WARN("fail to set upper column name in oracle mode", K(ret));
             } else if (OB_FAIL(table_schema.add_column(column_schema))) {
               LOG_WARN("failed to add column", K(ret), K(column_schema));
             }
           }
         }
       }
+    }
+  }
+  return ret;
+}
 
+int ObDMLResolver::set_upper_column_name(ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObString upper_field_name;
+
+  if (lib::is_oracle_mode()) {
+    if (OB_FAIL(ob_simple_low_to_up(allocator,
+                                    column_schema.get_column_name_str(),
+                                    upper_field_name))) {
+      LOG_WARN("string low to up failed", K(ret), K(column_schema.get_column_name_str()));
+    } else if (OB_FAIL(column_schema.set_column_name(upper_field_name))) {
+      LOG_WARN("failed to set column name", K(ret), K(upper_field_name));
     }
   }
   return ret;
@@ -4486,6 +4513,7 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
     ObArrayWrap<char> buf;
     int64_t read_size = 0;
     int64_t nrows = 2;
+    bool is_one_line = false;
 
     do {
       if (OB_FAIL(buf.allocate_array(allocator, cur_buf_size))) {
@@ -4506,8 +4534,8 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
             LOG_WARN("fail to scan buf", K(ret));
           } else if (nrows <= 1) {
             if (read_size < cur_buf_size) {
-              // 文件已读完但没有解析出完整的行
-              ret = OB_ERR_SOURCE_EMPTY;
+              // 文件只有一行
+              is_one_line = true;
             } else if (cur_buf_size >= MAX_BUF_SIZE) {
               // 达到最大buffer限制仍未解析出完整行
               ret = OB_SIZE_OVERFLOW;
@@ -4524,7 +4552,7 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
           }
         }
       }
-    } while (OB_SUCC(ret) && nrows <= 1);
+    } while (OB_SUCC(ret) && nrows <= 1 && !is_one_line);
   }
 
   // set column schema
@@ -4555,6 +4583,8 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
         LOG_WARN("failed to assign fmt", K(ret));
       } else if (OB_FAIL(set_basic_column_properties(column_schema, temp_str.string()))) {
         LOG_WARN("fail to set properties for column", K(ret));
+      } else if (lib::is_oracle_mode() && OB_FAIL(set_upper_column_name(column_schema))) {
+        LOG_WARN("fail to set upper column name in oracle mode", K(ret));
       } else if (OB_FAIL(table_schema.add_column(column_schema))) {
         LOG_WARN("failed to add column", K(ret), K(column_schema));
       }
@@ -4584,23 +4614,7 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObSEArray<ObODPSTableRowI
       // 设置基本属性
       column_schema.set_table_id(table_schema.get_table_id());
       column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
-      ObString upper_field_name;
-      if (lib::is_oracle_mode()) {
-        if (OB_FAIL(ob_simple_low_to_up(*allocator_, field_name, upper_field_name))) {
-          LOG_WARN("string low to up failed", K(ret), K(field_name));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (upper_field_name.empty()) {
-          if (OB_FAIL(column_schema.set_column_name(field_name))) {
-            LOG_WARN("failed to set column name", K(ret), K(field_name));
-          }
-        } else {
-          if (OB_FAIL(column_schema.set_column_name(upper_field_name))) {
-            LOG_WARN("failed to set column name", K(ret), K(field_name));
-          }
-        }
-      }
+      column_schema.set_column_name(field_name);
 
       if (OB_SUCC(ret)) {
         apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info = odps_column.type_info_;
@@ -4613,28 +4627,32 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObSEArray<ObODPSTableRowI
           case apsara::odps::sdk::ODPS_TINYINT:
           case apsara::odps::sdk::ODPS_BOOLEAN:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
             } else {
               column_schema.set_data_type(ObTinyIntType);
             }
             break;
           case apsara::odps::sdk::ODPS_SMALLINT:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
             } else {
               column_schema.set_data_type(ObSmallIntType);
             }
             break;
           case apsara::odps::sdk::ODPS_INTEGER:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
             } else {
               column_schema.set_data_type(ObInt32Type);
             }
             break;
           case apsara::odps::sdk::ODPS_BIGINT:
             if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObNumberType);
+              column_schema.set_data_type(ObDecimalIntType);
+              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
             } else {
               column_schema.set_data_type(ObIntType);
             }
@@ -4662,21 +4680,27 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObSEArray<ObODPSTableRowI
           }
           case apsara::odps::sdk::ODPS_CHAR:
           {
+            int64_t char_len = odps_type_length;
+            if (odps_type_length <= 0) {
+              char_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_CHAR_LENGTH;
+            }
             column_schema.set_data_type(ObCharType);
-            column_schema.set_data_length(odps_type_length);
+            column_schema.set_data_length(char_len);
+            column_schema.set_length_semantics(LS_CHAR);
             break;
           }
           case apsara::odps::sdk::ODPS_VARCHAR:
-          {
-            column_schema.set_data_type(ObVarcharType);
-            column_schema.set_data_length(odps_type_length);
-            break;
-          }
           case apsara::odps::sdk::ODPS_STRING:
           case apsara::odps::sdk::ODPS_BINARY:
           {
+            int64_t varchar_len = odps_type_length;
+            if (odps_type_length <= 0) {
+              varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                    OB_MAX_MYSQL_VARCHAR_LENGTH;
+            }
             column_schema.set_data_type(ObVarcharType);
-            column_schema.set_data_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+            column_schema.set_data_length(varchar_len);
+            column_schema.set_length_semantics(LS_CHAR);
             break;
           }
           case apsara::odps::sdk::ODPS_TIMESTAMP:
@@ -4755,18 +4779,11 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObSEArray<ObODPSTableRowI
         if (OB_SUCC(ret)) {
           if (OB_FAIL(set_basic_column_properties(column_schema, mock_gen_column_str))) {
             LOG_WARN("fail to set properties for column", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          // 添加到table schema
-          if (OB_FAIL(table_schema.add_column(column_schema))) {
+          } else if (lib::is_oracle_mode() && OB_FAIL(set_upper_column_name(column_schema))) {
+            LOG_WARN("fail to set upper column name in oracle mode", K(ret));
+          } else if (OB_FAIL(table_schema.add_column(column_schema))) {
             LOG_WARN("failed to add column", K(ret), K(column_schema));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (is_part_col && OB_FAIL(table_schema.add_partition_key(column_schema.get_column_name()))) {
+          } else if (is_part_col && OB_FAIL(table_schema.add_partition_key(column_schema.get_column_name()))) {
             LOG_WARN("failed to add partition key", K(ret), K(column_schema.get_column_name()));
           }
         }
@@ -5135,7 +5152,8 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
           }
         } catch(const std::exception& e) {
           if (OB_SUCC(ret)) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_ORC_READ_ERROR;
+            LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());
             LOG_WARN("unexpected error", K(ret), "Info", e.what());
           }
         } catch(...) {

@@ -9921,6 +9921,15 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_IGNORE_LAST_EMPTY_COLUMN: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.2, ignore_last_empty_column");
+        } else {
+          format.csv_format_.ignore_last_empty_col_ = node->children_[0]->value_;
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));

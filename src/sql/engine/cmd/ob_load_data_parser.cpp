@@ -524,11 +524,18 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, 
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1) {
     J_COMMA();
     databuff_printf(buf, buf_len, pos, R"("%s":%s)",
-                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARSE_HEADER)], STR_BOOL(parse_header_));
+                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARSE_HEADER)],
+                    STR_BOOL(parse_header_));
     J_COMMA();
     databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
                     OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::BINARY_FORMAT)],
                     binary_format_to_string(binary_format_));
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2) {
+    J_COMMA();
+    databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::IGNORE_LAST_EMPTY_COLUMN)],
+                    STR_BOOL(ignore_last_empty_col_));
   }
   return pos;
 }
@@ -662,6 +669,14 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     } else {
       node = node->get_next();
     }
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::IGNORE_LAST_EMPTY_COLUMN)])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      ignore_last_empty_col_ = true;
+    } else {
+      ignore_last_empty_col_ = false;
+    }
+    node = node->get_next();
   }
   return ret;
 }

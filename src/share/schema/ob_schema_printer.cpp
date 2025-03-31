@@ -6012,6 +6012,9 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  BINARY_FORMAT = %.*s,",
                                          static_cast<int>(STRLEN(binary_format)), binary_format))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print binary format", K(ret));
+      } else if (OB_FAIL(csv.ignore_last_empty_col_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  IGNORE_LAST_EMPTY_COLUMN = TRUE,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print IGNORE_LAST_EMPTY_COLUMN", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       const ObODPSGeneralFormat &odps = format.odps_format_;
