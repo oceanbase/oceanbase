@@ -17,7 +17,7 @@ if sys.version_info.major == 3:
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
-  old_version = '4.2.1.10'
+  old_version = '4.2.1.11'
 
 class PasswordMaskingFormatter(logging.Formatter):
   def format(self, record):
