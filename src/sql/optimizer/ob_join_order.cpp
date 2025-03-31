@@ -9578,7 +9578,8 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
       right_rows /= in_parallel;
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, 1);
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_
-	       || DistAlgo::DIST_RANDOM_ALL == join_dist_algo_) {
+	       || DistAlgo::DIST_RANDOM_ALL == join_dist_algo_
+         || DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
       if (right_path_->is_access_path() &&
           static_cast<const AccessPath*>(right_path_)->can_das_dynamic_part_pruning()) {
