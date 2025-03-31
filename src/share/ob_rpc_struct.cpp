@@ -4067,7 +4067,8 @@ OB_SERIALIZE_MEMBER(
     snapshot_version_,
     source_table_id_,
     task_id_,
-    calc_items_);
+    calc_items_,
+    user_parallelism_);
 
 bool ObCalcColumnChecksumRequestArg::is_valid() const
 {
@@ -4090,6 +4091,7 @@ void ObCalcColumnChecksumRequestArg::reset()
   source_table_id_ = OB_INVALID_ID;
   execution_id_ = -1;
   task_id_ = 0;
+  user_parallelism_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestRes, ret_codes_);

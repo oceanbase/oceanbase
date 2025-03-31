@@ -4674,7 +4674,7 @@ public:
   void reset();
   int assign(const ObCalcColumnChecksumRequestArg &other);
   TO_STRING_KV(K_(tenant_id), K_(target_table_id), K_(schema_version), K_(execution_id),
-      K_(snapshot_version), K_(source_table_id), K_(task_id), K_(calc_items));
+      K_(snapshot_version), K_(source_table_id), K_(task_id), K_(calc_items), K_(user_parallelism));
   struct SingleItem final
   {
     OB_UNIS_VERSION(1);
@@ -4698,6 +4698,7 @@ public:
   int64_t source_table_id_;
   int64_t task_id_;
   common::ObSEArray<SingleItem, 10> calc_items_;
+  int64_t user_parallelism_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCalcColumnChecksumRequestArg);
 };
