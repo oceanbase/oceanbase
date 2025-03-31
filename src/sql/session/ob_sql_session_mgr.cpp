@@ -768,9 +768,9 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   int ret = OB_SUCCESS;
   // NOTE: 下面两个guard的顺序不可更换，否则有机会形成死锁
   ObSQLSessionInfo::LockGuard query_lock_guard(session.get_query_lock());
+  (void) TriggerHandle::calc_system_trigger_logoff(session);
   ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock());
   bool need_disconnect = false;
-  (void) TriggerHandle::calc_system_trigger_logoff(session);
   session.set_query_start_time(ObTimeUtility::current_time());
   // 调用这个函数之前会在ObSMHandler::on_disconnect中调session.set_session_state(SESSION_KILLED)，
   if (session.is_in_transaction()) {
