@@ -76,7 +76,7 @@ public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
   void reset();
-  int init(uint64_t tenant_id, uint64_t table_id);
+  int init(uint64_t tenant_id, uint64_t table_id, const int64_t schema_version);
   bool is_valid() const { return is_inited_; }
   TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
                K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count),

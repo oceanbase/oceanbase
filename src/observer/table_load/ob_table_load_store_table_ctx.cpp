@@ -66,7 +66,7 @@ int ObTableLoadStoreTableCtx::inner_init(const uint64_t table_id)
   if (OB_ISNULL(schema_ = OB_NEWx(ObTableLoadSchema, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadSchema", KR(ret));
-  } else if (OB_FAIL(schema_->init(store_ctx_->ctx_->param_.tenant_id_, table_id_))) {
+  } else if (OB_FAIL(schema_->init(store_ctx_->ctx_->param_.tenant_id_, table_id_, store_ctx_->ctx_->ddl_param_.schema_version_))) {
     LOG_WARN("fail to init schema", KR(ret));
   }
   return ret;

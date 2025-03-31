@@ -71,9 +71,9 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(column_ids), KPC(exec_ctx));
   } else {
-    if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
+    if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_, ctx_->ddl_param_.schema_version_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
-               K(ctx_->ddl_param_.dest_table_id_));
+               K(ctx_->ddl_param_.dest_table_id_), K(ctx_->ddl_param_.schema_version_));
     }
     // init column idxs
     else if (OB_FAIL(init_column_idxs(column_ids))) {

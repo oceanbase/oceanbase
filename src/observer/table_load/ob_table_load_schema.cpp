@@ -479,7 +479,7 @@ void ObTableLoadSchema::reset()
   is_inited_ = false;
 }
 
-int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id)
+int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -488,8 +488,10 @@ int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id)
   } else {
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-      LOG_WARN("fail to get database and table schema", KR(ret), K(tenant_id));
+    if (OB_FAIL(get_schema_guard(tenant_id, schema_guard, schema_version))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id), K(schema_version));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     } else if (OB_FAIL(init_table_schema(table_schema))) {
       LOG_WARN("fail to init table schema", KR(ret));
     } else {
