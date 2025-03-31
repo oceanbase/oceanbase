@@ -327,7 +327,12 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
     CK (coll->get_count() > pos);
     CK (1 == coll->get_column_count());
     CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
-    OX (params_->at(i) = *(data + pos));
+    if (stmt::T_ANONYMOUS_BLOCK == stmt_type_) {
+      // for anonymous block, no need to convert int type to number
+      OX (params_->at(i) = *(data + pos));
+    } else {
+      OZ (param_assign_after_convert_int2number(params_->at(i), *(data + pos)));
+    }
     if (data[pos].is_numeric_type()) {
       ObAccuracy default_acc =
         ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][data[pos].get_type()];
@@ -339,6 +344,51 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
       }
     }
     params_->at(i).set_param_meta();
+  }
+  return ret;
+}
+
+// Convert int to number before passing params to Oracle SQL, because Oracle SQL does not support
+// int type. The reason for doing the conversion here is that `parse_integer_value()` cannot
+// distinguish whether the current anonymous array is of arraybinding structure when deserializing
+// an integer in the anonymous array.
+int ObMPStmtExecute::param_assign_after_convert_int2number(ObObj& dst, const ObObj& src)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
+  number::ObNumber ob_num;
+  switch (src.get_type()) {
+    // do the cast which we should have done in parse_integer_value()
+    // EMySQLFieldType::MYSQL_TYPE_SHORT
+    case ObSmallIntType:
+      OZ (ob_num.from(static_cast<int64_t>(src.get_smallint()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    case ObUSmallIntType:
+      OZ (ob_num.from(static_cast<uint64_t>(src.get_usmallint()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    // EMySQLFieldType::MYSQL_TYPE_LONG
+    case ObInt32Type:
+      OZ (ob_num.from(static_cast<int64_t>(src.get_int32()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    case ObUInt32Type:
+      OZ (ob_num.from(static_cast<uint64_t>(src.get_uint32()), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    // EMySQLFieldType::MYSQL_TYPE_LONGLONG
+    case ObIntType:
+      OZ (ob_num.from(src.get_int(), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    case ObUInt64Type:
+      OZ (ob_num.from(src.get_uint64(), alloc), src);
+      OX (dst.set_number(ob_num));
+      break;
+    default:
+      OX (dst = src);
+      break;
   }
   return ret;
 }
