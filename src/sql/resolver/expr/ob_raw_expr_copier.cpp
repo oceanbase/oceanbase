@@ -329,7 +329,11 @@ int ObRawExprCopier::add_skipped_expr(const ObRawExpr *target, bool include_chil
 {
   int ret = OB_SUCCESS;
   if (include_child) {
-    ret = add_expr(target, target);
+    if (is_existed(target)) {
+      // do nothing
+    } else {
+      ret = add_expr(target, target);
+    }
   } else {
     ret = uncopy_expr_nodes_.push_back(target);
   }
