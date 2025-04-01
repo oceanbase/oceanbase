@@ -242,26 +242,27 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
         session->set_query_start_time(old_query_start_time);
       }
       spi_result.end_nested_stmt_if_need(&pl_exec_ctx, ret);
-    }
-  }
 
-  if (OB_FAIL(ret)) {
-    LOG_WARN("get result obj failed", K(ret));
-  } else {
-    if (!info->result_type_.is_ext()
-        && (info->result_type_.get_obj_meta() != result.get_meta())) {
-      ObObj conv_res;
-      OZ (sql::ObSPIService::spi_convert(*session,
-                                         alloc,
-                                         result,
-                                         info->result_type_,
-                                         conv_res,
-                                         info->is_ignore_fail_,
-                                         &info->type_info_));
       if (OB_FAIL(ret)) {
-        LOG_WARN("convert type error", K(ret));
-      } else {
-        result = conv_res;
+        LOG_WARN("get result obj failed", K(ret));
+      } else if (!info->result_type_.is_ext()) {
+        const ColumnsFieldIArray *fields = nullptr;
+        CK (OB_NOT_NULL(spi_result.get_result_set()));
+        CK (OB_NOT_NULL(fields = spi_result.get_result_set()->get_field_columns()));
+        CK (fields->count() > 0);
+        if (OB_FAIL(ret)) {
+        } else if (info->result_type_.get_obj_meta() != result.get_meta()
+                   || info->result_type_.get_accuracy() != fields->at(0).accuracy_) {
+          ObObj conv_res;
+          OZ (sql::ObSPIService::spi_convert(*session,
+                                             alloc,
+                                             result,
+                                             info->result_type_,
+                                             conv_res,
+                                             info->is_ignore_fail_,
+                                             &info->type_info_));
+          OX (result = conv_res);
+        }
       }
     }
   }
