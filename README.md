@@ -32,9 +32,27 @@
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
         <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
     </a>
+    <a href="https://www.youtube.com/@OceanBaseDB">
+        <img alt="Static Badge" src="https://img.shields.io/badge/YouTube-red?logo=youtube">
+    </a>
+    <a href="https://www.linkedin.com/company/oceanbase" target="_blank">
+        <img src="https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff" alt="follow on LinkedIn">
+    </a>
+    <a href="https://en.oceanbase.com/">
+        <img alt="Static Badge" src="https://img.shields.io/badge/OceanBase-Official%20Website-blue">
+    </a>
+    <a href="https://oceanbase.github.io/docs/blogs/users/1st-financial">
+        <img alt="Static Badge" src="https://img.shields.io/badge/OceanBase-Official%20Blog-blue">
+    </a>
+    <a href="https://x.com/OceanBaseDB">
+        <img alt="Static Badge" src="https://img.shields.io/badge/Follow-%40OceanBaseDB-white?logo=x&labelColor=black">
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/graphs/commit-activity" target="_blank">
+        <img alt="Static Badge" src="https://img.shields.io/badge/commit%20activity%201020%2Fmonth-yellow">
+    </a>
 </p>
 
-English | [中文版](README_CN.md)
+English | [中文版](README_CN.md) | [日本語版](README_JA.md)
 
 **OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. The OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. The OceanBase Database is not dependent on specific hardware architectures.
 

@@ -31,9 +31,27 @@
     <a href="images/dingtalk.png">
         <img alt="DingTalk" src="https://img.shields.io/badge/Dingtalk-Dingtalk-brightgreen?logo=Dingtalk" />
     </a>
+        <a href="https://www.youtube.com/@OceanBaseDB">
+        <img alt="Static Badge" src="https://img.shields.io/badge/YouTube-red?logo=youtube">
+    </a>
+    <a href="https://www.linkedin.com/company/oceanbase" target="_blank">
+        <img src="https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff" alt="follow on LinkedIn">
+    </a>
+    <a href="https://en.oceanbase.com/">
+        <img alt="Static Badge" src="https://img.shields.io/badge/OceanBase-Official%20Website-blue">
+    </a>
+    <a href="https://oceanbase.github.io/docs/blogs/users/1st-financial">
+        <img alt="Static Badge" src="https://img.shields.io/badge/OceanBase-Official%20Blog-blue">
+    </a>
+    <a href="https://x.com/OceanBaseDB">
+        <img alt="Static Badge" src="https://img.shields.io/badge/Follow-%40OceanBaseDB-white?logo=x&labelColor=black">
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/graphs/commit-activity" target="_blank">
+        <img alt="Static Badge" src="https://img.shields.io/badge/commit%20activity%201020%2Fmonth-yellow">
+    </a>
 </p>
 
-[English](README.md) | 中文版
+[English](README.md) | 中文版 | [日本語版](README_JA.md)
 
 **OceanBase Database** 是一个分布式关系型数据库。完全由蚂蚁集团自主研发。 OceanBase 基于 [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) 协议以及分布式架构，实现了高可用和线性扩展。OceanBase 数据库运行在常见的服务器集群上，不依赖特殊的硬件架构。
 
