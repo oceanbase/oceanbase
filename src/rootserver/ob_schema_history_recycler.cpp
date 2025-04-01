@@ -493,12 +493,18 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
         int64_t expire_schema_version = OB_INVALID_VERSION;
         ObRefreshSchemaStatus schema_status;
         schema_status.tenant_id_ = tenant_id;  // use strong read
-        if (FAILEDx(schema_service_->get_schema_version_by_timestamp(
+        if (OB_FAIL(schema_service_->get_schema_version_by_timestamp(
                     schema_status, tenant_id, expire_time, expire_schema_version))) {
           LOG_WARN("fail to get schema version by timestamp",
                    KR(ret), K(schema_status), K(tenant_id), K(expire_time));
-        } else if (OB_FAIL(fill_recycle_schema_versions(
-                   tenant_id, expire_schema_version, recycle_schema_versions))) {
+        }
+
+        // if get_schema_version_by_timestamp failed, do not recycle this tenant's schema history in this round
+        expire_schema_version = OB_SUCC(ret) ? expire_schema_version : OB_INVALID_VERSION;
+
+        // overwrite ret, so other tenants could recycle normally
+        if (OB_FAIL(fill_recycle_schema_versions(
+                  tenant_id, expire_schema_version, recycle_schema_versions))) {
           LOG_WARN("fail to fill recycle schema versions",
                    KR(ret), K(tenant_id), K(expire_schema_version));
         }
@@ -522,6 +528,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
           ObGlobalMergeInfo global_info;
           ObArray<ObSimpleFrozenStatus> frozen_status_arr;
           TenantIdAndSchemaVersion schema_version;
+          int64_t specific_schema_version = OB_INVALID_VERSION;
 
           if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*sql_proxy_, tenant_id, global_info))) {
             LOG_WARN("fail to get global merge info", KR(ret), K(tenant_id));
@@ -532,8 +539,13 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
               frozen_status_arr))) {
             LOG_WARN("fail to get all freeze info", KR(ret), K(global_info));
           } else if (frozen_status_arr.count() < reserved_num + 1) {
-            ret = OB_EAGAIN;
-            LOG_WARN("not exist enough frozen_scn to reserve", KR(ret), K(reserved_num), K(frozen_status_arr));
+            // skip, so other tenant could recycle normally
+            LOG_INFO("[SCHEMA_RECYCLE] not exist enough frozen_scn to reserve", KR(ret), K(tenant_id), K(reserved_num), K(frozen_status_arr));
+            specific_schema_version = OB_INVALID_VERSION;
+            // fill OB_INVALID_VERSION, do not recycle this tenant's schema history in this round
+            if (OB_FAIL(fill_recycle_schema_versions(tenant_id, specific_schema_version, recycle_schema_versions))) {
+              LOG_WARN("fail to fill recycle schema versions", KR(ret), K(tenant_id), K(specific_schema_version));
+            }
           } else if (FALSE_IT(spec_frozen_scn = frozen_status_arr.at(reserved_num).frozen_scn_)) {
           } else if (OB_FAIL(freeze_info_proxy.get_freeze_schema_info(*sql_proxy_, tenant_id,
                      spec_frozen_scn, schema_version))) {
@@ -542,7 +554,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("schema version is invalid", KR(ret), K(tenant_id), K(spec_frozen_scn));
           } else {
-            int64_t specific_schema_version = schema_version.schema_version_;
+            specific_schema_version = schema_version.schema_version_;
             if (OB_FAIL(fill_recycle_schema_versions(
                 tenant_id, specific_schema_version, recycle_schema_versions))) {
               LOG_WARN("fail to fill recycle schema versions",
