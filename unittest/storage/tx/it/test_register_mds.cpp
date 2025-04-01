@@ -143,7 +143,7 @@ public:
   {                                                                                                \
     ObLSTxCtxMgr *ls_tx_ctx_mgr1 = nullptr;                                                        \
     ASSERT_EQ(OB_SUCCESS, node->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(node->ls_id_, ls_tx_ctx_mgr1)); \
-    ls_tx_ctx_mgr1->get_retain_ctx_mgr().try_gc_retain_ctx(&node->mock_ls_);                       \
+    ls_tx_ctx_mgr1->get_retain_ctx_mgr().try_gc_retain_ctx(&node->fake_ls_);                       \
     ASSERT_EQ(OB_SUCCESS, node->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr1));            \
   }
 

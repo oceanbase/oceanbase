@@ -1637,7 +1637,7 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   } else if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0 && !for_transfer) {
-      int tx_state = ObTxData::RUNNING;
+      int64_t tx_state = ObTxData::RUNNING;
       share::SCN commit_version;
       if (OB_FAIL(get_tx_state_from_tx_table_(ls, tx_id, tx_state, commit_version))) {
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
