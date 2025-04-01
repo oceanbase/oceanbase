@@ -926,11 +926,21 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       // memory of ref cursor on session, do not copy it.
       if (tmp_result.is_pl_extend()
           && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+        int tmp_ret = OB_SUCCESS;
+        CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
         OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
-        OZ (pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session()));
-        if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+        if (OB_SUCC(ret)) {
           ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
           OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
+          if (OB_FAIL(ret)) {
+            if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+              LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
+            }
+          }
+        }
+        if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+          LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
       } else {
         result = tmp_result;
