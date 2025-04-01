@@ -2942,7 +2942,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     }
     resolver_ctx.is_returning_ = parse_result.is_returning_;
     plan_ctx = result.get_exec_context().get_physical_plan_ctx();
-    if (OB_ISNULL(plan_ctx) || OB_ISNULL(result.get_exec_context().get_stmt_factory())) {
+    if (OB_ISNULL(plan_ctx) || OB_ISNULL(result.get_exec_context().get_stmt_factory())
+        || OB_ISNULL(result.get_exec_context().get_expr_factory())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Plan ctx should not be NULL", K(ret), KP(plan_ctx));
     } else if (OB_ISNULL(resolver_ctx.query_ctx_ =
