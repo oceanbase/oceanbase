@@ -245,10 +245,11 @@ public:
     } else {
       uint64_t group_id = 0;
       ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
-      if (OB_SUCCESS == ret_ && group_id != thread_group_id_) {
+      // if (OB_SUCCESS == ret_ && group_id != thread_group_id_) {
+      /* need to move to background even if group_id not changed */
         group_changed_ = true;
         ret_ = SET_GROUP_ID(group_id, true /* is_background */);
-      }
+      // }
     }
   }
   ~ConsumerGroupFuncGuard()
