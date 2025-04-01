@@ -912,11 +912,26 @@ void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
     ObTxDesc *tx = NULL;
     if (OB_SUCC(tx_desc_mgr_.get(tx_id, tx))) {
       ObSpinLockGuard guard(tx->lock_);
+      bool clean_stack = false;
       ARRAY_FOREACH_N(tx->savepoints_, i, cnt) {
         ObTxSavePoint &it = tx->savepoints_[cnt - 1 - i];
         if (it.is_snapshot() && it.snapshot_ == &snapshot) {
           it.release();
+          if (i == 0) {
+            // this is the last one in savepoints_ array, try to clean
+            clean_stack = true;
+          }
           break;
+        }
+      }
+      if (clean_stack) {
+        int cnt = 0;
+        while((cnt = tx->savepoints_.count()) > 0) {
+          if (tx->savepoints_[cnt-1].is_valid()) {
+            break;
+          } else {
+            tx->savepoints_.pop_back();
+          }
         }
       }
       ObTransTraceLog &tlog = tx->get_tlog();
@@ -1416,6 +1431,10 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
       if (it.scn_ > sp_scn && it.session_id_ == session_id) {
         it.rollback();
       }
+      const bool is_stack_top = tx.savepoints_.count() == (cnt - i);
+      if (is_stack_top && !it.is_valid()) {
+        tx.savepoints_.pop_back();
+      }
     }
   }
   int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
@@ -1457,6 +1476,10 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
         ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
         if (it.is_savepoint() && it.scn_ >= sp_id) {
           it.release();
+        }
+        const bool is_stack_top = tx.savepoints_.count() == (cnt - i);
+        if (is_stack_top && !it.is_valid()) {
+          tx.savepoints_.pop_back();
         }
       }
       TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(session_id), K(tx));
