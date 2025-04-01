@@ -231,7 +231,7 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
         hinted_channel = OB_INVALID_INDEX_INT64;
         if (OB_SUCC(chans_[next_idx_]->process1(&process_func_, 0, last_row_in_buffer))) {
           hinted_channel = next_idx_;
-        } else if (OB_EAGAIN == ret) {
+        } else if (OB_DTL_WAIT_EAGAIN == ret) {
           ret = process_channel(hinted_channel);
         }
       } else {
@@ -240,7 +240,7 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
     }
     if (OB_SUCC(ret)) {
       // succ process one channel
-    } else if (OB_EAGAIN == ret) {
+    } else if (OB_DTL_WAIT_EAGAIN == ret) {
       begin_wait_time_counting();
       // 通过TPCH 100G Q1测试发现，轮询时间间隔会导致性能有差异，轮询时间间隔较短
       // 会占用大量CPU，导致CPU利用率不高，从而影响性能
@@ -355,11 +355,11 @@ int ObDtlChannelLoop::process_one_if(ObIDltChannelLoopPred *pred, int64_t &ret_c
 
 int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth_channel)
 {
-  int ret = OB_EAGAIN;
+  int ret = OB_DTL_WAIT_EAGAIN;
   ObDtlChannel *chan = nullptr;
   bool last_row_in_buffer = false;
   int64_t chan_cnt = chans_.count();
-  for (int64_t i = 0; i != chan_cnt && ret == OB_EAGAIN; ++i) {
+  for (int64_t i = 0; i != chan_cnt && ret == OB_DTL_WAIT_EAGAIN; ++i) {
     if (next_idx_ >= chan_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect next idx", K(next_idx_), K(chan_cnt), K(ret));
@@ -406,10 +406,10 @@ int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth
 
 int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
 {
-  int ret = OB_EAGAIN;
+  int ret = OB_DTL_WAIT_EAGAIN;
   int64_t n_times = 0;
   bool last_row_in_buffer = false;
-  if (ret == OB_EAGAIN && (OB_ISNULL(proxy_first_buffer_cache_) ||
+  if (ret == OB_DTL_WAIT_EAGAIN && (OB_ISNULL(proxy_first_buffer_cache_) ||
       use_interm_result_ ||
       (0 < proxy_first_buffer_cache_->get_first_buffer_cnt() &&
       n_first_no_data_ < chans_.count()))) {
@@ -417,11 +417,11 @@ int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
     ret = process_channels(nullptr, nth_channel);
   }
   ObDtlChannel *ch = sentinel_node_.next_link_;
-  while (OB_EAGAIN == ret && ch != &sentinel_node_) {
+  while (OB_DTL_WAIT_EAGAIN == ret && ch != &sentinel_node_) {
     if (OB_SUCC(ch->process1(&process_func_, 0, last_row_in_buffer))) {
       nth_channel = ch->get_loop_index();
       break;
-    } else if (OB_EAGAIN == ret) {
+    } else if (OB_DTL_WAIT_EAGAIN == ret) {
       remove_data_list(ch);
     }
     if (n_times > 100) {

@@ -1849,6 +1849,7 @@ constexpr int OB_UTL_SMTP_TRANSIENT_ERROR = -9795;
 constexpr int OB_UTL_SMTP_PERMANENT_ERROR = -9796;
 constexpr int OB_UTL_SMTP_UNSUPPORTED_SCHEME = -9797;
 constexpr int OB_UTL_SMTP_NO_SUPPORTED_SCHEME = -9798;
+constexpr int OB_DTL_WAIT_EAGAIN = -9799;
 constexpr int OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE = -9800;
 constexpr int OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST = -9801;
 constexpr int OB_ERR_CANNOT_DEFINE_TRIGGER = -9802;
@@ -4132,6 +4133,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UTL_SMTP_PERMANENT_ERROR__USER_ERROR_MSG "SMTP permanent error: %.*s"
 #define OB_UTL_SMTP_UNSUPPORTED_SCHEME__USER_ERROR_MSG "Authentication scheme '%.*s' not supported"
 #define OB_UTL_SMTP_NO_SUPPORTED_SCHEME__USER_ERROR_MSG "No supported authentication scheme found"
+#define OB_DTL_WAIT_EAGAIN__USER_ERROR_MSG "Px wait for dtl message again"
 #define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__USER_ERROR_MSG "To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object will be evicted by any schema change which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning. Problem object name: '%.*s'"
 #define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__USER_ERROR_MSG "element at index [%ld] does not exist"
 #define OB_ERR_CANNOT_DEFINE_TRIGGER__USER_ERROR_MSG "system triggers cannot be defined on the schema of SYS user"
@@ -6415,6 +6417,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UTL_SMTP_PERMANENT_ERROR__ORA_USER_ERROR_MSG "ORA-29279: SMTP permanent error: %.*s"
 #define OB_UTL_SMTP_UNSUPPORTED_SCHEME__ORA_USER_ERROR_MSG "ORA-24249: Authentication scheme '%.*s' not supported"
 #define OB_UTL_SMTP_NO_SUPPORTED_SCHEME__ORA_USER_ERROR_MSG "ORA-24250: No supported authentication scheme found"
+#define OB_DTL_WAIT_EAGAIN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9799, Px wait for dtl message again"
 #define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9800, To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object will be evicted by any schema change which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning. Problem object name: '%.*s'"
 #define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-22160: element at index [%ld] does not exist"
 #define OB_ERR_CANNOT_DEFINE_TRIGGER__ORA_USER_ERROR_MSG "ORA-30510: system triggers cannot be defined on the schema of SYS user"
@@ -6469,7 +6472,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2279];
+extern int g_all_ob_errnos[2280];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
