@@ -661,6 +661,8 @@ int ObInitialRebuildTabletTask::process()
     LOG_WARN("initial rebuild tablet task do not init", K(ret));
   } else if (OB_FAIL(check_tablet_status_())) {
     LOG_WARN("failed to check tablet status", K(ret));
+  } else if (tablet_id_array_.empty()) {
+    //do nothing
   } else if (OB_FAIL(build_tablet_group_ctx_())) {
     LOG_WARN("failed to build tablet group ctx", K(ret));
   } else if (OB_FAIL(generate_rebuild_tablet_dags_())) {
@@ -761,9 +763,7 @@ int ObInitialRebuildTabletTask::build_tablet_group_ctx_()
     LOG_WARN("initial rebuild tablet task do not init", K(ret));
   } else {
     ctx_->tablet_group_ctx_.reuse();
-    if (tablet_id_array_.empty()) {
-      //do nothing
-    } else if (OB_FAIL(ctx_->tablet_group_ctx_.init(tablet_id_array_))) {
+    if (OB_FAIL(ctx_->tablet_group_ctx_.init(tablet_id_array_))) {
       LOG_WARN("failed to init tablet group ctx", K(ret), KPC(ctx_), K(tablet_id_array_));
     }
   }
