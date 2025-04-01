@@ -3171,7 +3171,7 @@ int ObTransService::handle_sub_prepare_request(const ObTxSubPrepareMsg &msg,
     CONVERT_PARTS_TO_COMMIT_PARTS(msg.parts_, commit_parts);
     if (FAILEDx(sub_prepare_local_ls_(msg.tx_id_,
                                       msg.receiver_,
-                                      msg.commit_parts_,
+                                      commit_parts,
                                       msg.expire_ts_,
                                       msg.app_trace_info_,
                                       msg.request_id_,
