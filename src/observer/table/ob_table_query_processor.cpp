@@ -108,6 +108,12 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
   } else {
     tb_ctx_.set_init_flag(true);
     tb_ctx_.set_expr_info(expr_frame_info);
+    // init expr op for scan with substring index
+    if (OB_ISNULL(tb_ctx_.get_exec_ctx().get_expr_op_ctx_store())
+        && OB_NOT_NULL(tb_ctx_.get_expr_frame_info())
+        && OB_FAIL(tb_ctx_.get_exec_ctx().init_expr_op(tb_ctx_.get_expr_frame_info()->need_ctx_cnt_))) {
+      LOG_WARN("fail to initialize expression operation", K(ret), K(tb_ctx_));
+    }
   }
 
   return ret;

@@ -795,6 +795,10 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
       // do nothing
     } else if (!is_found) {
       // ignore this table
+    } else if (OB_ISNULL(tb_ctx.get_exec_ctx().get_expr_op_ctx_store())
+               && OB_NOT_NULL(tb_ctx.get_expr_frame_info())
+               && OB_FAIL(tb_ctx.get_exec_ctx().init_expr_op(tb_ctx.get_expr_frame_info()->need_ctx_cnt_))) { // init expr op for scan with substring index
+      LOG_WARN("fail to initialize expression operation", K(ret), K(tb_ctx));
     } else if (OB_FAIL(tb_ctx.init_trans(txn_desc, tx_snapshot))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
     } else if (OB_FAIL(table_info->table_cache_guard_.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx, spec))) {
