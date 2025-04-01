@@ -1534,7 +1534,8 @@ public:
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
                                  ObIArray<ObSelectStmt*> &child_stmts,
-                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL);
+                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL,
+                                 const ObIArray<ObSelectStmt*> *ignore_stmts = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
 

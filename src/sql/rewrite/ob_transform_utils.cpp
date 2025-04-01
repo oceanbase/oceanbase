@@ -10987,7 +10987,8 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
 
 int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
                                           ObIArray<ObSelectStmt*> &child_stmts,
-                                          hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map)
+                                          hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map,
+                                          const ObIArray<ObSelectStmt*> *ignore_stmts  /* default null */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 8> temp_stmts;
@@ -11013,8 +11014,17 @@ int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(append(child_stmts, temp_stmts))) {
-      LOG_WARN("failed to append temp stmts", K(ret));
+    if (NULL == ignore_stmts) {
+      if (OB_FAIL(append(child_stmts, temp_stmts))) {
+        LOG_WARN("failed to append temp stmts", K(ret));
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret)&& i < temp_stmts.count(); ++i) {
+        if (!ObOptimizerUtil::find_item(*ignore_stmts, temp_stmts.at(i))
+            && OB_FAIL(child_stmts.push_back(temp_stmts.at(i)))) {
+          LOG_WARN("failed to push back stmt", K(ret));
+        }
+      }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret)&& i < temp_stmts.count(); ++i) {
@@ -11030,9 +11040,11 @@ int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
     if (OB_ISNULL(temp_stmts.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("temp stmt is null", K(ret));
+    } else if (NULL != ignore_stmts && ObOptimizerUtil::find_item(*ignore_stmts, temp_stmts.at(i))) {
+      /* do nothing */
     } else if (parent_map != NULL && OB_FAIL(parent_map->set_refactored(key, parent_stmt))) {
       LOG_WARN("failed to add parent child relation", K(ret));
-    } else if (OB_FAIL(SMART_CALL(get_all_child_stmts(temp_stmts.at(i), child_stmts, parent_map)))) {
+    } else if (OB_FAIL(SMART_CALL(get_all_child_stmts(temp_stmts.at(i), child_stmts, parent_map, ignore_stmts)))) {
       LOG_WARN("failed to get all child stmts", K(ret));
     }
   }

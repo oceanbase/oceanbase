@@ -157,7 +157,8 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     OPT_TRACE("stmt has for update, can not extract CTE");
   } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
     LOG_WARN("failed to init stmt map", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map))) {
+  } else if (!ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, stmt) &&
+             OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map, &ctx_->temp_table_ignore_stmts_))) {
     LOG_WARN("failed to get all child stmts", K(ret));
   } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_5) {
     if (OB_FAIL(get_all_view_stmts(stmt, view_stmts))) {
