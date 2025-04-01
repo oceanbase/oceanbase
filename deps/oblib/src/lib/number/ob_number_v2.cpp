@@ -805,6 +805,12 @@ int ObNumber::from_v3_(const char *str, const int64_t length, IAllocator &alloca
         if (OB_DECIMAL_PRECISION_OVERFLOW == ret) {
           set_zero();
           ret = OB_SUCCESS;
+        } else if (OB_INTEGER_PRECISION_OVERFLOW == ret && is_mysql_mode()) {
+          ret = OB_SUCCESS;
+          d_.exp_ = ((d_.sign_ == ObNumber::POSITIVE) ? MAX_INTEGER_EXP : -MAX_INTEGER_EXP) + EXP_ZERO;
+          for (int i = 0; i < d.len_; i++) {
+            digits_[i] = BASE - 1;
+          }
         }
       }
     }
