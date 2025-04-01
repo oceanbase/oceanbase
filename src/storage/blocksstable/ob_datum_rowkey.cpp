@@ -320,6 +320,8 @@ int ObDatumRowkey::to_store_rowkey(const common::ObIArray<share::schema::ObColDe
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_cnt_; i++) {
       if (OB_FAIL(datums_[i].to_obj_enhance(objs[i], col_descs.at(i).col_type_))) {
         STORAGE_LOG(WARN, "Failed to transfer datum to obj", K(ret), K(i), K(datums_[i]));
+      } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+        objs[i].set_has_lob_header();
       }
     }
     if (OB_SUCC(ret)) {
@@ -603,7 +605,7 @@ int ObDatumRowkeyHelper::convert_store_rowkey(const ObDatumRowkey &datum_rowkey,
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_rowkey.get_datum_cnt(); i++) {
       if (OB_FAIL(datum_rowkey.datums_[i].to_obj_enhance(objs[i], col_descs.at(i).col_type_))) {
         STORAGE_LOG(WARN, "Failed to transfer datum to obj", K(ret), K(i), K(datum_rowkey));
-      } else if (datum_rowkey.datums_[i].has_lob_header()) {
+      } else if (col_descs.at(i).col_type_.is_lob_storage()) {
         objs[i].set_has_lob_header();
       }
     }
