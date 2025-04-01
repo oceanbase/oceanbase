@@ -357,10 +357,10 @@ int ObSubSchemaCtx::init()
 
 void ObSubSchemaCtx::reset() {
   // content in subschema value is alloc from plan object allocator? need a new allocator?
+  subschema_array_.destroy();
+  subschema_reverse_map_.destroy();
+  enum_set_meta_reverse_map_.destroy();
   if (is_inited_) {
-    subschema_array_.destroy();
-    subschema_reverse_map_.destroy();
-    enum_set_meta_reverse_map_.destroy();
     is_inited_ = false;
     used_subschema_id_ = MAX_NON_RESERVED_SUBSCHEMA_ID;
     reserved_ = 0;
