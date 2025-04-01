@@ -157,6 +157,7 @@ public:
   uint64_t plan_hash_;
   int64_t thread_id_;
   int64_t stmt_type_;
+  int64_t tx_id_;
   int64_t tablet_id_;
   int64_t blocking_session_id_;
   int64_t proxy_sid_;

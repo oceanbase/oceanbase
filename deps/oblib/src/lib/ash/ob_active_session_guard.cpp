@@ -438,24 +438,42 @@ ObBackgroundSessionIdGenerator &ObBackgroundSessionIdGenerator::get_instance() {
   return the_one;
 }
 // |<---------------------------------64bit---------------------------->|
-// 0b                        32b                                      64b
+// 0b                                                        59b       64b
 // +---------------------------+----------------------------------------+
-// |         Local Seq         |                Zero                    |
+// |                         Local Seq                          |1|2|3|4|
 // +---------------------------+----------------------------------------+
 //
-//Local Seq: 一个server可用连接数，目前单台server最多有INT32_MAX个连接;
-//Zero     : 置零，保留字段，用于和sql_session做区分
-uint64_t ObBackgroundSessionIdGenerator::get_next_sess_id() {
-  uint64_t sessid = static_cast<uint32_t>(ATOMIC_AAF(&local_seq_, 1));
-  sessid |= ((uint64_t)1 << 63);
+// Local Seq: 从0递增的int64原子变量
+// 1: rpc请求置为1
+// 2: 后台会话置为1
+// 3: inner sql置为1
+// 4: reserved
+// Roughly speaking, over 500k ids would be consumed over 1 minutes.
+uint64_t ObBackgroundSessionIdGenerator::get_next_rpc_session_id() {
+  uint64_t sessid = static_cast<uint64_t>(ATOMIC_AAF(&local_seq_, 1));
+  sessid &= 0xFFFFFFFFFFFFFFF;
+  sessid |= ((uint64_t)1 << 60);
+  LOG_DEBUG("succ to generate rpc session id", K_(local_seq), K(sessid));
+
+  return sessid;
+}
+
+uint64_t ObBackgroundSessionIdGenerator::get_next_background_session_id() {
+  uint64_t sessid = static_cast<uint64_t>(ATOMIC_AAF(&local_seq_, 1));
+  sessid &= 0xFFFFFFFFFFFFFFF;
+  sessid |= ((uint64_t)1 << 61);
   LOG_DEBUG("succ to generate background session id", K_(local_seq), K(sessid));
 
   return sessid;
 }
 
-bool ObBackgroundSessionIdGenerator::is_background_session_id(uint64_t session_id)
-{
-  return session_id & 0xFFFFF;
+uint64_t ObBackgroundSessionIdGenerator::get_next_inner_sql_session_id() {
+  uint64_t sessid = static_cast<uint64_t>(ATOMIC_AAF(&local_seq_, 1));
+  sessid &= 0xFFFFFFFFFFFFFFF;
+  sessid |= ((uint64_t)1 << 62);
+  LOG_DEBUG("succ to generate inner sql session id", K_(local_seq), K(sessid));
+
+  return sessid;
 }
 
 ObASHTabletIdSetterGuard::ObASHTabletIdSetterGuard(const int64_t tablet_id) {
