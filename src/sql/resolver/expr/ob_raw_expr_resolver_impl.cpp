@@ -7420,7 +7420,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
       LOG_WARN("Malloc function name failed", K(ret));
     }
   }
-  if (OB_SUCC(ret) && ObString::make_string("cast") == func_name) {
+  if (OB_SUCC(ret) && (ObString::make_string("cast") == func_name)) {
     if (OB_ISNULL(node->children_) || OB_ISNULL(node->children_[1])
     || OB_ISNULL(node->children_[1]->children_)
     || OB_ISNULL(node->children_[1]->children_[1])
@@ -7434,6 +7434,16 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
     }
     if (OB_SUCC(ret)) {
       func_expr->set_extra(CM_EXPLICIT_CAST);
+      if (1 == node->value_) {
+        if (ctx_.session_info_->is_inner()
+            || ctx_.is_in_system_view_
+            || ctx_.is_from_show_resolver_) {
+          func_expr->set_extra(CM_ORA_SYS_VIEW_CAST);
+        } else {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_WARN("cast ignore only allowed in inner path", K(ret));
+        }
+      }
     }
   }
   // 在递归解析参数列表之前, 先检查下当前函数是否存在, 这是因为如果该函数报错OB_ERR_FUNCTION_UNKNOWN, 外部会继续尝试是否是UDF

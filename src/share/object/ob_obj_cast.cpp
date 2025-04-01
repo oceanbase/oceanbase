@@ -6313,6 +6313,19 @@ static int string_number(const ObObjType expect_type, ObObjCastParams &params,
         if (OB_SUCCESS != (tmp_ret = value.from(*bound_num, *params.allocator_v2_))) {
           LOG_WARN("copy min number failed", K(ret), K(tmp_ret), KPC(bound_num));
         }
+      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+        if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
+          ObString decimal_type_str("decimal");
+          ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+                                                     ret, decimal_type_str, in.get_string(),
+                                                     params.cast_mode_);
+        } else {
+          ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+          ObString decimal_type_str("DECIMAL");
+          ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+                                                     ret, decimal_type_str, in.get_string(),
+                                                     params.cast_mode_);
+        }
       }
     }
     if (CAST_FAIL(ret)) {
@@ -12339,6 +12352,19 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
         MEMCPY(decint, limit_decint, int_bytes);
+      }
+    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+      if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
+        ObString decimal_type_str("decimal");
+        ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+                                                    ret, decimal_type_str, in.get_string(),
+                                                    params.cast_mode_);
+      } else {
+        ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+        ObString decimal_type_str("DECIMAL");
+        ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+                                                    ret, decimal_type_str, in.get_string(),
+                                                    params.cast_mode_);
       }
     }
   }

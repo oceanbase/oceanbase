@@ -138,6 +138,8 @@ SELECT (SELECT 1.5,2,'a') = ROW(1.5,'2','a');
 SELECT (SELECT 1.5,'c','a') = ROW(1.5,2,'a');
 (SELECT 1.5,'c','a') = ROW(1.5,2,'a')
 0
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'c'
 select (select 3, 2, 1)>row(1, 2, 1);
 (select 3, 2, 1)>row(1, 2, 1)
 1

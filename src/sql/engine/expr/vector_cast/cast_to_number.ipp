@@ -80,7 +80,8 @@ struct ToNumberCastImpl
             number::ObNumber nmb;
             ObNumStackOnceAlloc tmp_alloc;
             ObString in_str(in_len, arg_vec_->get_payload(idx));
-            if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(expr, in_str, tmp_alloc, nmb))) {
+            if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                ctx_.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
               SQL_LOG(WARN, "common_string_number_wrap failed", K(ret), K(in_str), K(tmp_alloc), K(nmb));
             } else {
               res_vec_->set_number(idx, nmb);

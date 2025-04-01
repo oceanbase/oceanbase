@@ -296,7 +296,8 @@ public:
   static int log_user_error_inner(int ret,
                                   int64_t row_num,
                                   common::ObString &column_name,
-                                  ObExecContext &ctx);
+                                  ObExecContext &ctx,
+                                  const ObObjType column_type);
   static int get_root_exec_ctx_for_fk_cascading(ObExecContext *ctx, ObExecContext* &needed_ctx);
 
 private:

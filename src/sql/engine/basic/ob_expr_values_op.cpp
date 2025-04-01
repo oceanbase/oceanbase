@@ -586,7 +586,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
                                               real_src_expr, cm_, datum))) {
               LOG_WARN("fail to do to_type", K(ret), K(*dst_expr), K(real_src_expr));
               ObString column_name = MY_SPEC.column_names_.at(col_idx);
-              ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
+              ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_,
+                                                       dst_expr->datum_meta_.type_);
             }
           }
         } else if (!dst_expr->obj_meta_.is_lob_storage()) {
@@ -602,14 +603,16 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
               ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
               LOG_USER_WARN(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
             }
-            ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
+            ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_,
+                                                     dst_expr->datum_meta_.type_);
           }
         } else { // dst type is lob
           if (OB_FAIL(eval_values_op_dynamic_cast_to_lob(real_src_expr, src_obj_meta, dst_expr))) {
             LOG_WARN("fail to dynamic cast to lob types", K(dst_expr->datum_meta_),
                                                           K(real_src_expr), K(cm_), K(ret));
             ObString column_name = MY_SPEC.column_names_.at(col_idx);
-            ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
+            ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_,
+                                                     dst_expr->datum_meta_.type_);
           } else {
             dst_expr->set_evaluated_projected(eval_ctx_);
           }

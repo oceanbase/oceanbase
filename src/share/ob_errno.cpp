@@ -2694,12 +2694,12 @@ static const _error _error_OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD = {
       .mysql_errno           = ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
       .sqlstate              = "HY000",
       .str_error             = "Incorrect integer value",
-      .str_user_error        = "Incorrect integer value for column '%.*s' at row %ld",
+      .str_user_error        = "Incorrect %.*s value for column '%.*s' at row %ld",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4226, Incorrect integer value",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4226, Incorrect integer value for column '%.*s' at row %ld",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4226, Incorrect %.*s value for column '%.*s' at row %ld",
       .ob_str_error          = "OBE-00600: internal error code, arguments: -4226, Incorrect integer value",
-      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4226, Incorrect integer value for column '%.*s' at row %ld"
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4226, Incorrect %.*s value for column '%.*s' at row %ld"
 };
 static const _error _error_OB_ERR_NO_DEFAULT_FOR_FIELD = {
       .error_name            = "OB_ERR_NO_DEFAULT_FOR_FIELD",

@@ -502,8 +502,9 @@ static int decimalint_fast_cast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
       scale_down_with_types<in_type, out_type>(child_res->get_decimal_int(), in_scale - out_scale,
                                                res_val, truncated);
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
-      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) & truncated) {
-        log_user_warning_truncated(ctx.exec_ctx_.get_user_logging_ctx());
+      if (truncated) {
+        ObDataTypeCastUtil::log_user_error_warning(ctx.exec_ctx_.get_user_logging_ctx(),
+          OB_ERR_DATA_TRUNCATED, ObString("") /*type_str*/, ObString("") /*input*/, expr.extra_);
       }
     }
   }

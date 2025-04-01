@@ -446,4 +446,6 @@ SELECT CASE 'A' WHEN 0 THEN 0 ELSE 1 END VAL;
 +-----+
 |   0 |
 +-----+
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
 

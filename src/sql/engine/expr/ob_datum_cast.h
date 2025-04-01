@@ -40,6 +40,7 @@ public:
                                           ObDecimalIntBuilder &res_val);
   static int common_string_number_wrap(const ObExpr &expr,
                                       const ObString &in_str,
+                                      const ObUserLoggingCtx *user_logging_ctx,
                                       ObIAllocator &alloc,
                                       number::ObNumber &nmb);
   static int common_uint_int_wrap(const ObExpr &expr, const ObObjType &out_type, uint64_t in_val,
@@ -69,6 +70,11 @@ public:
                                              int32_t &int_bytes,
                                              int16_t &scale,
                                              int16_t &precision);
+  static void log_user_error_warning(const ObUserLoggingCtx *user_logging_ctx,
+                                     const int64_t ret,
+                                     const ObString &type_str,
+                                     const ObString &input,
+                                     const ObCastMode cast_mode);
 };
 
 class ObOdpsDataTypeCastUtil : public ObDataTypeCastUtil
@@ -486,8 +492,6 @@ inline bool decimal_int_truncated_check(const ObDecimalInt *decint, const int32_
   return bret;
 #undef TRUNC_CHECK
 }
-
-void log_user_warning_truncated(const ObUserLoggingCtx *user_logging_ctx);
 
 // copied from ob_obj_cast.cpp，函数逻辑没有修改，只是将输入参数从ObObj变为ObDatum
 class ObDatumHexUtils

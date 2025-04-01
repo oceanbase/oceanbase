@@ -434,6 +434,7 @@
 #include "ob_expr_vec_ivf_pq_center_id.h"
 #include "ob_expr_vec_ivf_pq_center_ids.h"
 #include "ob_expr_vec_ivf_pq_center_vector.h"
+#include "ob_expr_inner_info_cols_printer.h"
 
 namespace oceanbase
 {
@@ -1364,14 +1365,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayReplace::eval_array_replace,                    /* 826 */
   NULL, // ObExprArrayPopfront::eval_array_popfront,                  /* 827 */
   NULL, // ObExprCurrentCatalog::eval_current_catalog,                /* 828 */
-  NULL, // ObExprInnerInfoColsColumnDefPrinter::eval_column_def,      /* 829 */
-  NULL, // ObExprInnerInfoColsCharLenPrinter::eval_column_char_len,   /* 830 */
-  NULL, // ObExprInnerInfoColsCharNamePrinter::eval_column_char_name, /* 831 */
-  NULL, // ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name, /* 832 */
-  NULL, // ObExprInnerInfoColsPrivPrinter::eval_column_priv,          /* 833 */
-  NULL, // ObExprInnerInfoColsExtraPrinter::eval_column_extra,        /* 834 */
-  NULL, // ObExprInnerInfoColsDataTypePrinter::eval_column_data_type, /* 835 */
-  NULL, // ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type, /* 836 */
+  ObExprInnerInfoColsColumnDefPrinter::eval_column_def,               /* 829 */
+  ObExprInnerInfoColsCharLenPrinter::eval_column_char_len,            /* 830 */
+  ObExprInnerInfoColsCharNamePrinter::eval_column_char_name,          /* 831 */
+  ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name,     /* 832 */
+  ObExprInnerInfoColsPrivPrinter::eval_column_priv,                   /* 833 */
+  ObExprInnerInfoColsExtraPrinter::eval_column_extra,                 /* 834 */
+  ObExprInnerInfoColsDataTypePrinter::eval_column_data_type,          /* 835 */
+  ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type,      /* 836 */
   NULL, // ObExprRbOrCardinalityAggregate::eval_rb_or_cardinality_aggregate, /* 837 */
   NULL, // ObExprRbAndCardinalityAggregate::eval_rb_and_cardinality_aggregate, /* 838 */
   NULL, // ObExprRbToArray::eval_rb_to_array, /* 839 */

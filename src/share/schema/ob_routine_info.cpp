@@ -85,7 +85,7 @@ int ObRoutineParam::deserialize_extended_type_info(const char *buf,
                                                       int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_))) {
+  if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, get_allocator()))) {
     LOG_WARN("fail to deserialize extended type info", K(ret));
   }
   return ret;
@@ -226,7 +226,7 @@ OB_DEF_DESERIALIZE(ObRoutineParam)
               type_owner_,
               type_name_,
               type_subname_);
-  if (OB_SUCC(ret) && OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_))) {
+  if (OB_SUCC(ret) && OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, get_allocator()))) {
     LOG_WARN("deserialize_string_array failed", K(ret));
   }
   return ret;

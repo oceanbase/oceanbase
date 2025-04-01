@@ -1390,7 +1390,8 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObString in_str(len, v);
                       number::ObNumber nmb;
                       ObNumStackOnceAlloc tmp_alloc;
-                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str, tmp_alloc, nmb))) {
+                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                          ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
                         LOG_WARN("cast string to number failed", K(ret), K(row_idx), K(column_idx));
                       } else {
                         datums[row_idx].set_number(nmb);
@@ -2101,7 +2102,8 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObString in_str(len, v);
                   number::ObNumber nmb;
                   ObNumStackOnceAlloc tmp_alloc;
-                  if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str, tmp_alloc, nmb))) {
+                  if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                      ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
                     LOG_WARN("cast string to number failed", K(ret), K(column_idx));
                   } else {
                     datum.set_number(nmb);

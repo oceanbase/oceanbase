@@ -1325,6 +1325,10 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 5	B	5.0000000000	NULL	NULL	NULL	NULL
 6	6666	5.5000000000	NULL	NULL	NULL	NULL
 6	AB	6.0000000000	NULL	NULL	NULL	NULL
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 
 explain select /*+use_hash(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
@@ -1370,6 +1374,10 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 5	B	5.0000000000	NULL	NULL	NULL	NULL
 6	6666	5.5000000000	NULL	NULL	NULL	NULL
 6	AB	6.0000000000	NULL	NULL	NULL	NULL
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 
 explain select /*+use_nl(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
@@ -1415,6 +1423,10 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 5	B	5.0000000000	NULL	NULL	NULL	NULL
 6	6666	5.5000000000	NULL	NULL	NULL	NULL
 6	AB	6.0000000000	NULL	NULL	NULL	NULL
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 ************ 测试right join
 
 explain select /*+use_merge(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
@@ -1455,6 +1467,10 @@ NULL	NULL	NULL	65	444	5.550	1.0000000000
 NULL	NULL	NULL	66	2	B	2.0000000000
 NULL	NULL	NULL	66	3.0	555	3.0000100000
 NULL	NULL	NULL	67	A	1	1.0000000000
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 
 explain select /*+use_hash(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
@@ -1487,6 +1503,10 @@ NULL	NULL	NULL	65	444	5.550	1.0000000000
 NULL	NULL	NULL	66	2	B	2.0000000000
 NULL	NULL	NULL	66	3.0	555	3.0000100000
 NULL	NULL	NULL	67	A	1	1.0000000000
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 
 explain select /*+use_nl(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
@@ -1521,6 +1541,8 @@ NULL	NULL	NULL	65	444	5.550	1.0000000000
 NULL	NULL	NULL	66	2	B	2.0000000000
 NULL	NULL	NULL	66	3.0	555	3.0000100000
 NULL	NULL	NULL	67	A	1	1.0000000000
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
 explain select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
 Query Plan
 ==========================================================
@@ -1612,6 +1634,10 @@ a	b	c	a	b	c	d
 5	B	5.0000000000	NULL	NULL	NULL	NULL
 6	6666	5.5000000000	NULL	NULL	NULL	NULL
 6	AB	6.0000000000	NULL	NULL	NULL	NULL
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 
 explain select /*+use_hash(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
@@ -1652,6 +1678,10 @@ a	b	c	a	b	c	d
 5	B	5.0000000000	NULL	NULL	NULL	NULL
 6	6666	5.5000000000	NULL	NULL	NULL	NULL
 6	AB	6.0000000000	NULL	NULL	NULL	NULL
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
+Warning	1292	Truncated incorrect DECIMAL value: 'AB'
 
 explain select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
@@ -1694,6 +1724,8 @@ a	b	c	a	b	c	d
 5	B	5.0000000000	NULL	NULL	NULL	NULL
 6	6666	5.5000000000	NULL	NULL	NULL	NULL
 6	AB	6.0000000000	NULL	NULL	NULL	NULL
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'B'
 ********** join condition 必须和 ordering 排序一致
 explain select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
 Query Plan

@@ -74,7 +74,8 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
     uint64_t col_idx = column_infos.at(i).projector_index_;
     if (OB_FAIL(row.at(col_idx)->eval(eval_ctx, datum))) {
       common::ObString column_name = column_infos.at(i).column_name_;
-      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
+      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx(),
+                                               row.at(col_idx)->datum_meta_.type_);
     } else if (OB_ISNULL(datum)) {
       // impossible
     } else if (OB_FAIL(check_column_null(dml_op.get_eval_ctx(),
@@ -187,7 +188,8 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
     ObExpr *expr = dml_row.at(column_info.projector_index_);
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
-      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
+      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx(),
+                                               expr->datum_meta_.type_);
     } else if (OB_ISNULL(datum)) {
       // impossible
     } else if (OB_FAIL(check_geometry_type(dml_op.get_eval_ctx(),
@@ -813,7 +815,7 @@ int ObDMLService::check_column_type_batch(
         }
       }
       if (OB_FAIL(ret)) {
-        ret = log_user_error_inner(ret, row_num, column_name, exec_ctx);
+        ret = log_user_error_inner(ret, row_num, column_name, exec_ctx, expr->datum_meta_.type_);
       } else if (!ins_ctdef.has_instead_of_trigger_) {
         if (OB_UNLIKELY(expr->obj_meta_.is_geometry())
             && OB_FAIL(check_geometry_column_batch(ins_ctdef, dml_op, column_info))) {
@@ -900,7 +902,8 @@ int ObDMLService::check_column_null_batch(
           } else {
             if (OB_FAIL(expr->eval(eval_ctx, expr_datum))) {
               common::ObString column_name = column_info.column_name_;
-              ret = ObDMLService::log_user_error_inner(ret, 0/*row_num*/, column_name, dml_op.get_exec_ctx());
+              ret = ObDMLService::log_user_error_inner(ret, 0/*row_num*/, column_name, dml_op.get_exec_ctx(),
+                                                       expr->datum_meta_.type_);
             } else if (OB_ISNULL(expr_datum)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null expr datum", KR(ret), KP(expr_datum));
@@ -2914,7 +2917,8 @@ int ObDMLService::log_user_error_inner(
     int ret,
     int64_t row_num,
     common::ObString &column_name,
-    ObExecContext &ctx)
+    ObExecContext &ctx,
+    const ObObjType column_type)
 {
   if (OB_DATA_OUT_OF_RANGE == ret) {
     ObSQLUtils::copy_and_convert_string_charset(
@@ -2956,8 +2960,14 @@ int ObDMLService::log_user_error_inner(
         column_name,
         CS_TYPE_UTF8MB4_BIN,
         ctx.get_my_session()->get_local_collation_connection());
+    ObString decimal_type_str("decimal");
+    ObString default_type_str("integer");
+    ObString &type_str = ob_is_number_or_decimal_int_tc(column_type) ?
+      decimal_type_str : default_type_str;
     LOG_USER_ERROR(
         OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+        type_str.length(),
+        type_str.ptr(),
         column_name.length(),
         column_name.ptr(),
         row_num);

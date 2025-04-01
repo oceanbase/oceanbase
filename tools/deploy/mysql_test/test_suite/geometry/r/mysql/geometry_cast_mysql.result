@@ -1317,7 +1317,7 @@ ERROR 22003: Out of range value for column 'c3' at row 1
 insert into t(c4) value (point(0,0));
 ERROR 22003: Out of range value for column 'c4' at row 1
 insert into t(c5) value (point(0,0));
-ERROR HY000: Incorrect integer value for column 'c5' at row 1
+ERROR HY000: Incorrect decimal value for column 'c5' at row 1
 insert into t(c6) value (point(0,0));
 ERROR 22007: Incorrect datetime value for column 'c6' at row 1
 insert into t(c7) value (point(0,0));

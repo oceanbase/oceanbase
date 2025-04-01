@@ -1295,6 +1295,7 @@ static OB_INLINE int common_string_year(const ObExpr &expr,
 
 static OB_INLINE int common_string_number(const ObExpr &expr,
                                           const ObString &in_str,
+                                          const ObUserLoggingCtx *user_logging_ctx,
                                           ObIAllocator &alloc,
                                           number::ObNumber &nmb)
 {
@@ -1339,6 +1340,17 @@ static OB_INLINE int common_string_number(const ObExpr &expr,
       } else if (OB_SUCCESS != (tmp_ret = nmb.from(*bound_num, alloc))) {
         LOG_WARN("copy min number failed", K(ret), K(tmp_ret), KPC(bound_num));
       }
+    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+      if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
+        ObString decimal_type_str("decimal");
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx, ret, decimal_type_str, in_str,
+                                                   expr.extra_);
+      } else {
+        ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+        ObString decimal_type_str("DECIMAL");
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx, ret, decimal_type_str, in_str,
+                                                   expr.extra_);
+      }
     }
   }
 
@@ -1351,11 +1363,12 @@ static OB_INLINE int common_string_number(const ObExpr &expr,
 }
 
 int ObDataTypeCastUtil::common_string_number_wrap(const ObExpr &expr,
-                                                      const ObString &in_str,
-                                                      ObIAllocator &alloc,
-                                                      number::ObNumber &nmb)
+                                                  const ObString &in_str,
+                                                  const ObUserLoggingCtx *user_logging_ctx,
+                                                  ObIAllocator &alloc,
+                                                  number::ObNumber &nmb)
 {
-  return common_string_number(expr, in_str, alloc, nmb);
+  return common_string_number(expr, in_str, user_logging_ctx, alloc, nmb);
 }
 
 static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
@@ -1436,6 +1449,17 @@ static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
           LOG_WARN("failed to allocate memory", K(ret));
         } else {
           MEMCPY(decint, limit_decint, int_bytes);
+        }
+      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+        if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
+          ObString decimal_type_str("decimal");
+          ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx, ret, decimal_type_str,
+                                                     in_str, expr.extra_);
+        } else {
+          ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+          ObString decimal_type_str("DECIMAL");
+          ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx, ret, decimal_type_str,
+                                                     in_str, expr.extra_);
         }
       }
     }
@@ -2790,9 +2814,11 @@ int ObDatumCast::common_scale_decimalint(const ObDecimalInt *decint, const int32
       // do nothing
     }
     if (OB_SUCC(ret)) {
-      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && in_scale > out_scale &&
+      if (in_scale > out_scale &&
             decimal_int_truncated_check(decint, int_bytes, in_scale - out_scale)) {
-        log_user_warning_truncated(user_logging_ctx);
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx, OB_ERR_DATA_TRUNCATED,
+                                                   ObString("") /*type_str*/,
+                                                   ObString("") /*input*/, cast_mode);
       }
     }
   } else {
@@ -2896,13 +2922,35 @@ int check_decimalint_accuracy(const ObCastMode cast_mode,
   return ret;
 }
 
-void log_user_warning_truncated(const ObUserLoggingCtx *user_logging_ctx)
+void ObDataTypeCastUtil::log_user_error_warning(const ObUserLoggingCtx *user_logging_ctx,
+                                                const int64_t ret,
+                                                const ObString &type_str,
+                                                const ObString &input,
+                                                const ObCastMode cast_mode)
 {
-  if (OB_ISNULL(user_logging_ctx) || user_logging_ctx->skip_logging()) {
+  if (!lib::is_mysql_mode()) {
+    // user logging warning only in mysql mode
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    if (OB_ISNULL(user_logging_ctx) || user_logging_ctx->skip_logging()) {
+    } else if (OB_ERR_DATA_TRUNCATED == ret) {
+      const ObString *column_name = user_logging_ctx->get_column_name();
+      LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_name->length(), column_name->ptr(),
+                    user_logging_ctx->get_row_num());
+    } else if (OB_INVALID_NUMERIC == ret && CM_IS_WARN_ON_FAIL(cast_mode)) {
+      const ObString *column_name = user_logging_ctx->get_column_name();
+      LOG_USER_WARN(OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD, type_str.length(), type_str.ptr(),
+        column_name->length(), column_name->ptr(), user_logging_ctx->get_row_num());
+    }
   } else {
-    const ObString *column_name = user_logging_ctx->get_column_name();
-    LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_name->length(), column_name->ptr(),
-                  user_logging_ctx->get_row_num());
+    if (OB_ERR_TRUNCATED_WRONG_VALUE == ret) {
+      if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+        LOG_USER_WARN(OB_ERR_TRUNCATED_WRONG_VALUE, type_str.length(),
+              type_str.ptr(), input.length(), input.ptr());
+      } else {
+        LOG_USER_ERROR(OB_ERR_TRUNCATED_WRONG_VALUE, type_str.length(),
+              type_str.ptr(), input.length(), input.ptr());
+      }
+    }
   }
 }
 
@@ -4266,7 +4314,8 @@ CAST_FUNC_NAME(string, number)
   {
     number::ObNumber nmb;
     ObNumStackOnceAlloc tmp_alloc;
-    OZ(common_string_number(expr, ObString(child_res->len_, child_res->ptr_), tmp_alloc, nmb));
+    OZ(common_string_number(expr, ObString(child_res->len_, child_res->ptr_),
+                            ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb));
     OX(res_datum.set_number(nmb));
   }
   return ret;
@@ -4654,7 +4703,7 @@ CAST_FUNC_NAME(text, number)
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     OZ(get_text_full_data(expr, ctx, &temp_allocator, child_res, in_str));
-    OZ(common_string_number(expr, in_str, tmp_alloc, nmb));
+    OZ(common_string_number(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb));
     OX(res_datum.set_number(nmb));
   }
   return ret;
@@ -9690,7 +9739,7 @@ CAST_FUNC_NAME(lob, number)
     ObString in_str(lob_locator.get_payload_length(), lob_locator.get_payload_ptr());
     number::ObNumber nmb;
     ObNumStackOnceAlloc tmp_alloc;
-    OZ(common_string_number(expr, in_str, tmp_alloc, nmb));
+    OZ(common_string_number(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb));
     OX(res_datum.set_number(nmb));
   }
   return ret;
@@ -9915,7 +9964,8 @@ CAST_FUNC_NAME(lob, decimalint)
     ObScale out_scale = expr.datum_meta_.scale_;
     ObDecimalInt *decint = nullptr;
     int32_t int_bytes = 0;
-    if (OB_FAIL(common_string_number(expr, in_str, tmp_nmb_alloc, nmb))) {
+    if (OB_FAIL(common_string_number(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(),
+                                     tmp_nmb_alloc, nmb))) {
       LOG_WARN("cast to number failed", K(ret));
     } else if (OB_FAIL(wide::from_number(nmb, tmp_dec_alloc, out_scale, decint, int_bytes))) {
       LOG_WARN("from number failed", K(ret));
@@ -10743,7 +10793,8 @@ CAST_FUNC_NAME(geometry, number)
                   expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str,
                   &ctx.exec_ctx_))) {
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
-      } else if (OB_FAIL(common_string_number(expr, in_str, tmp_alloc, nmb))) {
+      } else if (OB_FAIL(common_string_number(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(),
+                                              tmp_alloc, nmb))) {
         LOG_WARN("fail to cast string to number", K(ret));
         ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD; // adapt mysql
       } else {

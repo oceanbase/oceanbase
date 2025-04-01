@@ -6,8 +6,8 @@ desc information_schema.columns;
 | Field                    | Type                | Null | Key | Default | Extra |
 +--------------------------+---------------------+------+-----+---------+-------+
 | TABLE_CATALOG            | varchar(4096)       | NO   |     |         |       |
-| TABLE_SCHEMA             | varchar(128)        | NO   |     | NULL    |       |
-| TABLE_NAME               | varchar(256)        | NO   |     | NULL    |       |
+| TABLE_SCHEMA             | varchar(128)        | NO   |     |         |       |
+| TABLE_NAME               | varchar(256)        | NO   |     |         |       |
 | COLUMN_NAME              | varchar(128)        | NO   |     |         |       |
 | ORDINAL_POSITION         | bigint(20) unsigned | NO   |     |         |       |
 | COLUMN_DEFAULT           | longtext            | YES  |     | NULL    |       |
@@ -26,7 +26,7 @@ desc information_schema.columns;
 | PRIVILEGES               | varchar(200)        | NO   |     |         |       |
 | COLUMN_COMMENT           | longtext            | NO   |     |         |       |
 | GENERATION_EXPRESSION    | longtext            | NO   |     |         |       |
-| SRS_ID                   | int(10) unsigned    | YES  |     | NULL    |       |
+| SRS_ID                   | bigint(20) unsigned | YES  |     | NULL    |       |
 +--------------------------+---------------------+------+-----+---------+-------+
 desc information_schema.tables;
 +------------------------+---------------------+------+-----+---------+-------+

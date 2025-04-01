@@ -17561,7 +17561,8 @@ int ObJoinOrder::check_inner_path_valid(const ObIArray<ObRawExpr *> &join_condit
   } else if (!force_inner_nl && (is_virtual_table(table_item->ref_id_) &&
               !is_oracle_mapping_real_virtual_table(table_item->ref_id_) &&
               table_item->ref_id_ != OB_ALL_VIRTUAL_SQL_AUDIT_TID &&
-              table_item->ref_id_ != OB_ALL_VIRTUAL_PLAN_CACHE_PLAN_EXPLAIN_TID)) {
+              table_item->ref_id_ != OB_ALL_VIRTUAL_PLAN_CACHE_PLAN_EXPLAIN_TID &&
+              table_item->ref_id_ != OB_ALL_VIRTUAL_INFORMATION_COLUMNS_TID)) {
     /* __all_virtual_sql_audit and GV$OB_PLAN_CACHE_PLAN_EXPLAIN can do table get*/
     LOG_TRACE("OPT:skip adding inner access path due to virtual table",
                 K(table_id), K(table_item->ref_id_),

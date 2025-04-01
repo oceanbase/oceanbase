@@ -865,6 +865,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_length.cpp
   engine/expr/ob_expr_array_position.cpp
   engine/expr/ob_expr_array_slice.cpp
+  engine/expr/ob_expr_inner_info_cols_printer.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE
