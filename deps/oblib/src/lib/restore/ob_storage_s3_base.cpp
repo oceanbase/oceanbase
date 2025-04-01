@@ -1131,7 +1131,7 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
 
 /*--------------------------------ObStorageS3Base--------------------------------*/
 ObStorageS3Base::ObStorageS3Base()
-    : allocator_(OB_STORAGE_S3_ALLOCATOR),
+    : allocator_(OB_STORAGE_S3_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id()),
       s3_client_(NULL),
       bucket_(),
       object_(),
@@ -1510,17 +1510,12 @@ int ObStorageS3Reader::pread_(char *buf,
         OB_LOG(WARN, "failed to read object from s3",
             K(ret), K_(bucket), K_(object), K(range_read));
       } else if (FALSE_IT(read_size = outcome.GetResult().GetContentLength())) {
-      } else if (OB_UNLIKELY(read_size > get_data_size)) {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "returned data size is larger than expected",
-            K(ret), K_(has_meta), K_(file_length),
-            K(read_size), K(get_data_size), K(buf_size), K(offset), K_(bucket), K_(object));
+      } else if (OB_UNLIKELY(has_meta_ && read_size != get_data_size)) {
+        ret = OB_OBJECT_STORAGE_IO_ERROR;
+        OB_LOG(WARN, "returned data size is not equal to expected", K(ret),
+            K_(bucket), K_(object), K(offset), K(buf_size), K_(has_meta), K_(file_length));
+        log_s3_status(outcome, ret);
       } else {
-        if (OB_UNLIKELY(read_size < get_data_size)) {
-          OB_LOG(WARN, "returned data size is less than expected", K(ret),
-              K_(bucket), K_(object), K(offset), K(buf_size), K_(has_meta), K_(file_length));
-        }
-
         outcome.GetResult().GetBody().read(buf, read_size);
 
         // read size <= get_data_size <= buf_size
@@ -1721,7 +1716,7 @@ int ObStorageS3Util::batch_del_files_(
   int ret = OB_SUCCESS;
   ObStorageS3Base s3_base;
   const int64_t n_files_to_delete = files_to_delete.size();
-  ObArenaAllocator allocator(OB_STORAGE_S3_ALLOCATOR);
+  ObArenaAllocator allocator(OB_STORAGE_S3_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {

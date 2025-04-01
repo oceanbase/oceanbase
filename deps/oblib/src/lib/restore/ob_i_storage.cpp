@@ -407,7 +407,7 @@ int ObAppendableFragmentMeta::parse_from(ObString &fragment_name)
   } else if (0 == fragment_name.compare(OB_S3_APPENDABLE_SEAL_META)) {
     type_ = ObAppendableFragmentType::APPENDABLE_FRAGMENT_SEAL_META;
   } else {
-    ObArenaAllocator allocator(ObModIds::BACKUP);
+    ObArenaAllocator allocator(APPENDABLE_OBJECT_ALLOCATOR);
     ObString start_part = fragment_name.split_on('-');
     ObString start_string;
     ObString end_string;

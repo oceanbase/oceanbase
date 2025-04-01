@@ -923,8 +923,7 @@ void ObStorageOssBase::print_oss_info(
 }
 
 ObStorageOssMultiPartWriter::ObStorageOssMultiPartWriter()
-  : mod_(ObModIds::BACKUP),
-    allocator_(ModuleArena::DEFAULT_PAGE_SIZE, mod_),
+  : allocator_(ModuleArena::DEFAULT_PAGE_SIZE),
     base_buf_(NULL),
     base_buf_pos_(0),
     bucket_(),
@@ -935,6 +934,8 @@ ObStorageOssMultiPartWriter::ObStorageOssMultiPartWriter()
 {
   upload_id_.len = -1;
   upload_id_.data = NULL;
+  allocator_.set_label(OB_STORAGE_OSS_ALLOCATOR);
+  allocator_.set_tenant_id(ObObjectStorageTenantGuard::get_tenant_id());
 }
 
 ObStorageOssMultiPartWriter::~ObStorageOssMultiPartWriter()
@@ -1253,7 +1254,6 @@ int ObStorageOssMultiPartWriter::close()
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  mod_.reset();
   base_buf_pos_ = 0;
   partnum_ = 0;
   base_buf_ = nullptr;
@@ -1304,7 +1304,7 @@ ObStorageParallelOssMultiPartWriter::ObStorageParallelOssMultiPartWriter()
   : is_opened_(false),
     bucket_(),
     object_(),
-    allocator_(OB_STORAGE_OSS_ALLOCATOR)
+    allocator_(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id())
 {
   upload_id_.len = -1;
   upload_id_.data = nullptr;
@@ -1547,7 +1547,7 @@ ObStorageOssReader::ObStorageOssReader():
     file_length_(-1),
     is_opened_(false),
     has_meta_(false),
-    allocator_(OB_STORAGE_OSS_ALLOCATOR)
+    allocator_(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id())
 {
 }
 
@@ -1724,6 +1724,13 @@ int ObStorageOssReader::pread(
                 break;
               }
             } // end aos_list_for_each_entry
+
+            if (OB_FAIL(ret)) {
+            } else if (OB_UNLIKELY(has_meta_ && get_data_size != read_size)) {
+              ret = OB_OBJECT_STORAGE_IO_ERROR;
+              OB_LOG(WARN, "real read size not equal to expected read size", K(ret), K(get_data_size), K(read_size), K(offset), K(file_length_));
+              print_oss_info(resp_headers, aos_ret, ret);
+            }
           }
         }
       }
@@ -1820,7 +1827,7 @@ int ObStorageOssUtil::head_object_meta(const common::ObString &uri, ObStorageObj
   ObExternalIOCounterGuard io_guard;
   ObString bucket_ob_string;
   ObString object_ob_string;
-  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   char *remote_md5 = NULL;
   ObStorageOssBase oss_base;
 
@@ -1873,7 +1880,7 @@ int ObStorageOssUtil::is_tagging(
   int ret = OB_SUCCESS;
   const int64_t OB_MAX_TAGGING_STR_LENGTH = 16;
   ObExternalIOCounterGuard io_guard;
-  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
@@ -2001,7 +2008,7 @@ int ObStorageOssUtil::del_file(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
@@ -2036,7 +2043,7 @@ int ObStorageOssUtil::batch_del_files(
     ObIArray<int64_t> &failed_files_idx)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
@@ -2191,7 +2198,7 @@ int ObStorageOssUtil::list_files(
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  common::ObArenaAllocator tmp_allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
@@ -2205,7 +2212,7 @@ int ObStorageOssUtil::list_files(
     OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
   } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri), KPC_(storage_info));
-  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
+  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
   } else if (FALSE_IT(full_dir_path = object_str.ptr())) {
   } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
@@ -2275,7 +2282,7 @@ int ObStorageOssUtil::list_files(
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  common::ObArenaAllocator tmp_allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
@@ -2290,7 +2297,7 @@ int ObStorageOssUtil::list_files(
     OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
   } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri), KPC_(storage_info));
-  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
+  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
   } else if (FALSE_IT(full_dir_path = object_str.ptr())) {
   } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
@@ -2384,7 +2391,7 @@ int ObStorageOssUtil::list_directories(
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  common::ObArenaAllocator tmp_allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
@@ -2398,7 +2405,7 @@ int ObStorageOssUtil::list_directories(
     OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
   } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri));
-  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
+  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
   } else if (FALSE_IT(full_dir_path = object_str.ptr())) {
   } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
@@ -2476,7 +2483,7 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
   ObString bucket_str;
   ObString object_str;
   ObStorageOssBase oss_base;
-  ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
+  common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
@@ -2571,7 +2578,7 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
 ObStorageOssAppendWriter::ObStorageOssAppendWriter()
   : is_opened_(false),
     file_length_(-1),
-    allocator_(OB_STORAGE_OSS_ALLOCATOR),
+    allocator_(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id()),
     bucket_(),
     object_()
 {
@@ -2778,7 +2785,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
 ObStorageOssWriter::ObStorageOssWriter()
   : is_opened_(false),
     file_length_(-1),
-    allocator_(OB_STORAGE_OSS_ALLOCATOR),
+    allocator_(OB_STORAGE_OSS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id()),
     bucket_(),
     object_()
 {

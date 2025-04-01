@@ -400,7 +400,7 @@ int ObStorageCosUtil::list_files(
   int ret = OB_SUCCESS;
   ObStorageCosBase cos_base;
   ObExternalIOCounterGuard io_guard;
-  ObArenaAllocator allocator(ObModIds::BACKUP);
+  ObArenaAllocator allocator(OB_STORAGE_COS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
 
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_OBJECT_STORAGE_IO_ERROR;
@@ -436,7 +436,7 @@ int ObStorageCosUtil::list_files(
   int ret = OB_SUCCESS;
   ObStorageCosBase cos_base;
   ObExternalIOCounterGuard io_guard;
-  ObArenaAllocator allocator(ObModIds::BACKUP);
+  ObArenaAllocator allocator(OB_STORAGE_COS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   ObStorageListObjectsCtx &list_ctx = static_cast<ObStorageListObjectsCtx &>(ctx_base);
 
   if (OB_UNLIKELY(!is_opened_)) {
@@ -474,7 +474,7 @@ int ObStorageCosUtil::list_directories(
   int ret = OB_SUCCESS;
   ObStorageCosBase cos_base;
   ObExternalIOCounterGuard io_guard;
-  ObArenaAllocator allocator(ObModIds::BACKUP);
+  ObArenaAllocator allocator(OB_STORAGE_COS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
 
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_OBJECT_STORAGE_IO_ERROR;
@@ -663,7 +663,7 @@ int ObStorageCosBase::delete_objects(
     ObIArray<int64_t> &failed_files_idx)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(OB_STORAGE_COS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id());
   qcloud_cos::CosStringBuffer *objects_to_delete_list = nullptr;
   const char **succeed_deleted_objects_list = nullptr;
   int64_t *succeed_deleted_object_len_list = nullptr;
@@ -961,9 +961,9 @@ int ObStorageCosReader::pread(
           handle_.get_object_name().ptr(), handle_.get_object_name().length());
 
       if (OB_FAIL(qcloud_cos::ObCosWrapper::pread(tmp_cos_handle, bucket_name,
-          object_name, offset, buf, get_data_size, is_range_read, read_size))) {
+          object_name, offset, buf, get_data_size, is_range_read, has_meta_, read_size))) {
         OB_LOG(WARN, "fail to read object from cos", K(ret), K(is_range_read),
-            KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta));
+            KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta), K(file_length_));
       }
     }
     if (OB_NOT_NULL(tmp_cos_handle)) {
@@ -1188,15 +1188,17 @@ int ObStorageCosAppendWriter::do_write(
 /*------------------------------ObStorageCosMultiPartWriter---------------------------*/
 ObStorageCosMultiPartWriter::ObStorageCosMultiPartWriter()
   : ObStorageCosBase(),
-    mod_(ObModIds::BACKUP),
-    allocator_(ModuleArena::DEFAULT_PAGE_SIZE, mod_),
+    allocator_(ModuleArena::DEFAULT_PAGE_SIZE),
     base_buf_(NULL),
     base_buf_pos_(0),
     upload_id_(NULL),
     partnum_(0),
     file_length_(-1),
     complete_part_list_(nullptr)
-{}
+{
+  allocator_.set_label(OB_STORAGE_COS_ALLOCATOR);
+  allocator_.set_tenant_id(ObObjectStorageTenantGuard::get_tenant_id());
+}
 
 ObStorageCosMultiPartWriter::~ObStorageCosMultiPartWriter()
 {

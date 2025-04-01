@@ -216,7 +216,6 @@ private:
   int upload_data(const char *buf, const int64_t size, char *&upload_buf, int64_t &upload_size);
 
 private:
-  common::ModulePageAllocator mod_;
   common::ModuleArena allocator_;
   char *base_buf_;
   int64_t base_buf_pos_;
