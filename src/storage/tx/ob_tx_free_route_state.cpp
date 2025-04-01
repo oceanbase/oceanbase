@@ -40,22 +40,30 @@ namespace transaction {
   FLAG save_flags = flags_;                     \
   int save_abort_cause = abort_cause_;          \
   State save_state = state_;                    \
-  uint64_t save_op_sn = op_sn_;
+
 
 // for txn start node, if current abort_cause was set, use current
-// keep the state and op_sn will not go backwards
+// keep the state will not go backwards
 #define POST_DYNAMIC_DECODE                             \
   flags_ = save_flags.update_with(flags_);              \
   abort_cause_ = save_abort_cause ?: abort_cause_;      \
   if (save_state > state_) {                            \
     state_ = save_state;                                \
   }                                                     \
-  if (save_op_sn > op_sn_) {                            \
-    op_sn_ = save_op_sn;                                \
-  }
 
-#define PRE_EXTRA_DECODE
-#define POST_EXTRA_DECODE                                               \
+
+// because the extra state can lag behind dynamic,
+// dynamic update could have push op_sn_ to a higher value
+// direct update may let it go backward
+#define PRE_EXTRA_DECODE                        \
+  uint64_t save_op_sn = op_sn_;                 \
+
+
+#define POST_EXTRA_DECODE                       \
+  if (save_op_sn > op_sn_) {                    \
+    op_sn_ = save_op_sn;                        \
+  }                                             \
+
 
 template<class T>
 struct SIZE_OF_ { static int64_t get_size(T &x) { return sizeof(x); } };
@@ -167,7 +175,9 @@ TXN_FREE_ROUTE_MEMBERS(extra, PRE_ENCODE_EXTRA_FOR_VERIFY, PRE_EXTRA_DECODE, POS
                        snapshot_version_,
                        snapshot_scn_,
                        seq_base_,
-                       tx_consistency_type_);
+                       tx_consistency_type_,
+                       op_sn_      // dup with dynamic, inc by create/rollback savepoint
+                       );
 
 #undef TXN_FREE_ROUTE_MEMBERS
 int64_t ObTxDesc::estimate_state_size()
