@@ -6620,7 +6620,8 @@ int ObTablet::get_tablet_report_info(
       const common::ObAddr &addr,
       ObTabletReplica &tablet_replica,
       share::ObTabletReplicaChecksumItem &tablet_checksum,
-      const bool need_checksums) const
+      const bool need_checksums,
+      const bool is_cs_replica) const
 {
   int ret = OB_SUCCESS;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
@@ -6652,7 +6653,7 @@ int ObTablet::get_tablet_report_info(
     }
 #endif
   } else if (OB_FAIL(get_tablet_report_info_by_sstable(
-                 addr, *table_store, tablet_replica, tablet_checksum, need_checksums))) {
+                 addr, *table_store, tablet_replica, tablet_checksum, need_checksums, is_cs_replica))) {
     LOG_WARN("failed to get tablet report info by sstable", KR(ret));
   }
   return ret;
@@ -6707,7 +6708,8 @@ int ObTablet::get_tablet_report_info_by_sstable(
     const ObTabletTableStore &table_store,
     ObTabletReplica &tablet_replica,
     ObTabletReplicaChecksumItem &tablet_checksum,
-    const bool need_checksums) const
+    const bool need_checksums,
+    const bool is_cs_replica) const
 {
   int ret = OB_SUCCESS;
   ObSSTable *main_major = main_major = static_cast<ObSSTable *>(table_store.get_major_sstables().get_boundary_table(true));
@@ -6775,7 +6777,7 @@ int ObTablet::get_tablet_report_info_by_sstable(
     tablet_checksum.server_ = addr;
     tablet_checksum.row_count_ = get_tablet_meta().report_status_.row_count_;
     tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_;
-    tablet_checksum.data_checksum_type_ = is_cs_replica_compat() ? ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE : ObDataChecksumType::DATA_CHECKSUM_NORMAL;
+    tablet_checksum.data_checksum_type_ = is_cs_replica ? ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE : ObDataChecksumType::DATA_CHECKSUM_NORMAL;
 #ifdef ERRSIM
     const ObTabletID errsim_tablet_id(-EN_COMPACTION_DATA_CHECKSUM_ERROR);
     if (get_tablet_id() == errsim_tablet_id) {

@@ -3173,9 +3173,9 @@ int ObService::inner_fill_tablet_info_(
     ret = OB_EAGAIN;
     LOG_WARN("need wait report for cs replica", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet->get_tablet_report_info(
-     gctx_.self_addr(), tablet_replica, tablet_checksum, need_checksum))) {
+     gctx_.self_addr(), tablet_replica, tablet_checksum, need_checksum, ls->is_cs_replica()))) {
     LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id),
-      "ls_id", ls->get_ls_id(), K(tablet_id));
+      "ls_id", ls->get_ls_id(), "is_cs_replica", ls->is_cs_replica(), K(tablet_id));
   }
   return ret;
 }
