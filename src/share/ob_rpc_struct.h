@@ -7963,21 +7963,21 @@ public:
 
   TO_STRING_KV(K_(exec_tenant_id), K_(op_type), K_(stmt_str), K_(tenant_name), K_(is_verify));
 
-  const char *get_alter_type_str() const
+  static const char *get_alter_type_str(const OpType op_type)
   {
-    const char *cstr = "invalid";
-    switch (op_type_) {
+    const char *cstr = "INVALID";
+    switch (op_type) {
       case SWITCH_TO_STANDBY:
-        cstr = "switchover to physical standby";
+        cstr = "SWITCHOVER TO STANDBY";
         break;
       case SWITCH_TO_PRIMARY:
-        cstr = "switchover to primary";
+        cstr = "SWITCHOVER TO PRIMARY";
         break;
       case FAILOVER_TO_PRIMARY:
-        cstr = "failover to primary";
+        cstr = "FAILOVER TO PRIMARY";
         break;
       default :
-        cstr = "invalid";
+        cstr = "INVALID";
         break;
     }
     return cstr;
