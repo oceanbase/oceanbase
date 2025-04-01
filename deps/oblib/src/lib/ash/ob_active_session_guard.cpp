@@ -18,10 +18,8 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "lib/time/ob_tsc_timestamp.h"
 #include "lib/stat/ob_diagnostic_info_util.h"
-#include "sql/ob_sql_context.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 
 using namespace oceanbase::common;

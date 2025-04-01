@@ -17,7 +17,6 @@
 #include "lib/ob_define.h"
 #include "lib/worker.h"
 #include "common/ob_common_utility.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "lib/charset/str_uca_type.h"
 
 namespace oceanbase
