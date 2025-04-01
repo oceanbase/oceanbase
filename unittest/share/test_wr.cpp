@@ -11,12 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#define private public
-#define protected public
-#include "share/wr/ob_wr_collector.h"
+
 #include "observer/mysql/ob_query_retry_ctrl.h"
-#undef private
-#undef public
+#include "share/wr/ob_wr_collector.h"
 #include <gtest/gtest.h>
 
 namespace oceanbase

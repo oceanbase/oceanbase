@@ -132,7 +132,16 @@ bool ObActiveSessHistTask::process_running_di(const SessionID &session_id, ObDia
     di->get_ash_stat().sample_time_ = sample_time_;
     ObActiveSessionStat::calc_db_time(di, sample_time_, tsc_sample_time_);
     ObActiveSessionStat::calc_retry_wait_event(di->get_ash_stat(), sample_time_);
+    ObActiveSessionStat::cal_delta_io_data(di);
     ObActiveSessHistList::get_instance().add(di->get_ash_stat());
+  } else {
+    // inactive session
+// #ifdef ENABLE_DEBUG_LOG
+//     if (di->get_ash_stat().is_in_row_lock_wait()) {
+//       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "inactive session enter row lock conflict stat", KPC(di));
+//     }
+// #endif
   }
+
   return true;
 }

@@ -189,6 +189,8 @@ public:
   bool is_use_px() const { return use_px_; }
   void set_px_dop(int64_t px_dop) { px_dop_ = px_dop; }
   int64_t get_px_dop() const { return px_dop_; }
+  inline void set_px_parallel_rule(PXParallelRule parallel_rule) { px_parallel_rule_ = parallel_rule; }
+  inline PXParallelRule get_px_parallel_rule() const { return px_parallel_rule_; }
   void set_expected_worker_count(int64_t c) { stat_.expected_worker_count_ = c; }
   int64_t get_expected_worker_count() const { return stat_.expected_worker_count_; }
   void set_minimal_worker_count(int64_t c) { stat_.minimal_worker_count_ = c; }

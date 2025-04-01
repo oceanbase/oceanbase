@@ -2333,6 +2333,19 @@ int ObPL::execute(ObExecContext &ctx,
         routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj());
       }
       CK (OB_NOT_NULL(routine));
+      if (OB_SUCC(ret) && routine->get_package_id() != OB_INVALID_ID) { // update package_id
+        uint64_t pack_id = routine->get_package_id();
+        if (ObTriggerInfo::is_trigger_package_id(pack_id)) {
+          pack_id = ObTriggerInfo::get_package_trigger_id(pack_id);
+        } else if (ObUDTObjectType::is_object_id(pack_id)) {
+          pack_id = ObUDTObjectType::clear_object_id_mask(pack_id);
+        }
+        if (guard.is_set_entry_info()) {
+          GET_DIAGNOSTIC_INFO->get_ash_stat().plsql_entry_object_id_ = OB_INVALID_ID != routine->get_package_id() ? pack_id : routine->get_routine_id();
+        } else {
+          GET_DIAGNOSTIC_INFO->get_ash_stat().plsql_object_id_ = OB_INVALID_ID != routine->get_package_id() ? pack_id : routine->get_routine_id();
+        }
+      }
       CK (OB_NOT_NULL(ctx.get_my_session()));
       OZ (ObPLContext::check_routine_legal(*routine, in_function,
                                           ctx.get_my_session()->is_for_trigger_package()));
@@ -5312,7 +5325,14 @@ ObPLASHGuard::ObPLASHGuard(int64_t package_id, int64_t routine_id)
     di->get_ash_stat().in_plsql_execution_ = 1;
     pl_ash_status_ = INVALID_ASH_STATUS;
 
-    if (di->get_ash_stat().plsql_entry_object_id_ == OB_INVALID_ID) {
+  if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+    package_id = ObTriggerInfo::get_package_trigger_id(package_id);
+  } else if (ObUDTObjectType::is_object_id(package_id)) {
+    package_id = ObUDTObjectType::clear_object_id_mask(package_id);
+  }
+
+    if (di->get_ash_stat().plsql_entry_object_id_ == OB_INVALID_ID ||
+      di->get_ash_stat().plsql_entry_object_id_ == ObPLResolver::ANONYMOUS_VIRTUAL_OBJECT_ID) {
       set_entry_info_ = true;
       di->get_ash_stat().plsql_entry_object_id_ =
           OB_INVALID_ID == package_id ? routine_id : package_id;
@@ -5370,6 +5390,9 @@ ObPLASHGuard::ObPLASHGuard(int64_t package_id, int64_t routine_id, const ObStrin
         MEMCPY(di->get_ash_stat().plsql_subprogram_name_, routine_name.ptr(), size);
         di->get_ash_stat().plsql_subprogram_name_[size] = '\0';
       }
+    } else { // curr routine is not package sub routine
+      di->get_ash_stat().plsql_subprogram_name_[0] = '\0';
+      set_current_name_ = false;
     }
   }
 }

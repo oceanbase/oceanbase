@@ -30,6 +30,7 @@
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -359,7 +360,7 @@ public:
       last_query_retry_err_(common::OB_SUCCESS),
       retry_cnt_(0),
       query_switch_leader_retry_timeout_ts_(0),
-      query_retry_ash_diag_info_()
+      query_retry_ash_info_()
   {
   }
   virtual ~ObQueryRetryInfo() {}
@@ -404,9 +405,7 @@ public:
   int get_last_query_retry_err() const { return last_query_retry_err_; }
   void inc_retry_cnt() { retry_cnt_++; }
   int64_t get_retry_cnt() const { return retry_cnt_; }
-
-  ObQueryRetryAshInfo* get_query_retry_ash_diag_info_ptr() { return &query_retry_ash_diag_info_; }
-  const ObQueryRetryAshInfo& get_retry_ash_diag_info() const { return query_retry_ash_diag_info_; }
+  ObQueryRetryAshInfo& get_retry_ash_info() { return query_retry_ash_info_; }
 
   TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(last_query_retry_err));
 
@@ -424,7 +423,7 @@ private:
   int64_t retry_cnt_;
   // for fast fail,
   int64_t query_switch_leader_retry_timeout_ts_;
-  ObQueryRetryAshInfo query_retry_ash_diag_info_;
+  ObQueryRetryAshInfo query_retry_ash_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
 };

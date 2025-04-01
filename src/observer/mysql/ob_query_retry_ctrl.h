@@ -271,6 +271,7 @@ public:
   static void start_gts_not_ready_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
   static void start_replica_not_readable_retry_wait_event(sql::ObSQLSessionInfo &session);
   static void start_other_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
+  static void start_log_cb_not_ready_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
 public:
   // schema类型的错误最多在本线程重试5次。
   // 5是拍脑袋决定的，之后还要看统计数据的反馈再修改。TODO qianfu.zpf

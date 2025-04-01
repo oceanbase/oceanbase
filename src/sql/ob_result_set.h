@@ -41,6 +41,7 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "observer/ob_inner_sql_rpc_proxy.h"
 #include "observer/ob_req_time_service.h"
+#include "sql/resolver/tcl/ob_end_trans_stmt.h"
 
 namespace oceanbase
 {
@@ -339,6 +340,27 @@ public:
   static int implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_info,
                                                 ObExecContext &exec_ctx,
                                                 const int cmd_type);
+  inline bool is_commit_cmd() const {
+    bool is_commit = false;
+    if (stmt::T_END_TRANS == get_stmt_type() && OB_NOT_NULL(get_cmd())) {
+      const ObEndTransStmt* end_trans_stmt = static_cast<const ObEndTransStmt*>(get_cmd());
+      if (OB_NOT_NULL(end_trans_stmt)) {
+        is_commit = !end_trans_stmt->get_is_rollback();
+      }
+    }
+    return is_commit;
+  }
+
+  inline bool is_rollback_cmd() const {
+    bool is_rollback = false;
+    if (stmt::T_END_TRANS == get_stmt_type() && OB_NOT_NULL(get_cmd())) {
+      const ObEndTransStmt* end_trans_stmt = static_cast<const ObEndTransStmt*>(get_cmd());
+      if (OB_NOT_NULL(end_trans_stmt)) {
+        is_rollback = end_trans_stmt->get_is_rollback();
+      }
+    }
+    return is_rollback;
+  }
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;

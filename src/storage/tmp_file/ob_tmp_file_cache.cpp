@@ -752,7 +752,9 @@ ObTmpPageCache::ObTmpCachedReadPageIOCallback::~ObTmpCachedReadPageIOCallback()
 int ObTmpPageCache::ObTmpCachedReadPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpCachedReadPageIOCallback");
   ObTimeGuard time_guard("TmpCachedReadPage_Callback_Process", 100000); //100ms
+
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callback allocator", KR(ret), KP(cache_), KP(allocator_));
@@ -797,6 +799,7 @@ ObTmpPageCache::ObTmpAggregatePageIOCallback::~ObTmpAggregatePageIOCallback()
 int ObTmpPageCache::ObTmpAggregatePageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpAggregatePageIOCallback");
   ObTimeGuard time_guard("TmpPrefetchPage_Callback_Process", 100000); //100ms
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -828,6 +831,7 @@ int ObTmpPageCache::ObTmpAggregatePageIOCallback::inner_process(const char *data
 int ObTmpPageCache::ObTmpDirectReadPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpDirectReadPageIOCallback");
   ObTimeGuard time_guard("ObTmpDirectReadPageIOCallback", 100000); //100ms
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;

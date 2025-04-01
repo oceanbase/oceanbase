@@ -198,6 +198,7 @@ int ObRemoteFetchWorker::get_thread_count(int64_t &thread_count) const
 void ObRemoteFetchWorker::run1()
 {
   LOG_INFO("ObRemoteFetchWorker thread start");
+  ObDIActionGuard ag("LogService", "LogRestoreService", "RemoteLogFetcher");
   lib::set_thread_name("RFLWorker");
   ObCurTraceId::init(GCONF.self_addr_);
 

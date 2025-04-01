@@ -1118,6 +1118,7 @@ void ObIOSender::run1()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else {
+    ObDIActionGuard ag("IOManager", "IOSchedule", nullptr);
     set_thread_name("IO_SCHEDULE", thread_id);
     LOG_INFO("io schedule thread started", K(thread_id));
     while (!has_set_stop() && !stop_submit_) {
@@ -1541,6 +1542,9 @@ void ObIOSender::pop_and_submit()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("request is null", K(ret));
   } else {
+    char device_name[ASH_ACTION_STR_LEN];
+    (void)req->fd_.device_handle_->get_device_name(device_name, ASH_ACTION_STR_LEN);
+    ObDIActionGuard ag(device_name);
     RequestHolder req_holder(req);
     bool is_retry = false;
     ObTraceIDGuard trace_guard(req->trace_id_);
@@ -2064,6 +2068,10 @@ void ObAsyncIOChannel::run1()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else {
+    char device_name[32] = "";
+    (void)device_handle_->get_device_name(device_name, sizeof(device_name));
+    ObDIActionGuard program("IOManager", nullptr, nullptr);
+    ObDIActionGuard module(ObDIActionGuard::NS_MODULE, "AsyncIO_Device:%s", device_name);
     set_thread_name("IO_GETEVENT", thread_id);
     LOG_INFO("io get_events thread started", K(thread_id), K(tg_id_));
     while (!has_set_stop()) {
@@ -2182,6 +2190,7 @@ void ObAsyncIOChannel::get_events()
         const int system_errno = io_events_->get_ith_ret_code(i);
         const int complete_size = io_events_->get_ith_ret_bytes(i);
         if (OB_LIKELY(0 == system_errno)) { // io succ
+          ObDIActionGuard("IO success");
           if (complete_size == io_size) { // full complete
             LOG_DEBUG("Success to get io event", K(*req), K(complete_size));
             if (OB_FAIL(on_full_return(*req, io_size))) {
@@ -2211,6 +2220,7 @@ void ObAsyncIOChannel::get_events()
             }
           }
         } else { // io failed
+          ObDIActionGuard("IO failed");
           LOG_ERROR("io request failed", K(system_errno), K(complete_size), K(*req));
           if (-EAGAIN == system_errno) { //retry
             if (OB_FAIL(on_full_retry(*req))) {
@@ -2440,6 +2450,10 @@ void ObSyncIOChannel::handle(void *task)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task is NULL", K(ret));
   } else {
+    char device_name[32] = "";
+    (void)device_handle_->get_device_name(device_name, sizeof(device_name));
+    ObDIActionGuard program("IOManager", nullptr, nullptr);
+    ObDIActionGuard module(ObDIActionGuard::NS_MODULE, "SyncIO_Device:%s", device_name);
     ObIORequest *req = static_cast<ObIORequest *>(task);
     RequestHolder holder(req);
     ObTraceIdGuard trace_id_guard(req->trace_id_);
@@ -3022,6 +3036,7 @@ int ObIORunner::handle(ObIORequest *req)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(req));
   } else {
+    ObDIActionGuard ag("IOManager", "DiskCB", "handle io callback");
     const int64_t begin_time = ObTimeUtility::fast_current_time();
     req->dec_ref("cb_dec"); // ref for callback queue
     if (OB_NOT_NULL(req->io_result_)) {

@@ -481,6 +481,7 @@ void ObRebuildService::run1()
 int ObRebuildService::build_rebuild_ctx_map_()
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("prepare rebuild ctx");
   common::ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLSIterator *ls_iter = nullptr;
 
@@ -552,6 +553,7 @@ int ObRebuildService::scheduler_rebuild_mgr_()
       ObLSHandle ls_handle;
       ObLS *ls = nullptr;
       ObLSRebuildInfo rebuild_info;
+      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "rebuild LSID:%ld", rebuild_ctx.ls_id_.id());
       if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -675,6 +677,7 @@ int ObRebuildService::get_ls_rebuild_ctx_array_(
 int ObRebuildService::build_ls_rebuild_info_()
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("prepare ls rebuild info");
   ObArray<ObLSRebuildCtx> rebuild_ctx_array;
   if (!is_inited_) {
     ret = OB_NOT_INIT;

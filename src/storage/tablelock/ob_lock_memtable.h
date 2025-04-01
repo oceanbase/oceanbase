@@ -91,6 +91,7 @@ public:
   // after submit_log, until the callback on_success or on_failure
   virtual int on_success() override;
   virtual int on_failure() override;
+  const char *get_cb_name() const override { return "LockTableSplitLogCb"; }
   TO_STRING_KV(K(is_inited_),
                K(memtable_),
                K(ls_id_),

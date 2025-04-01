@@ -5567,6 +5567,19 @@ other_xml	varchar(4000)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sql_plan;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_wr_res_mgr_sysstat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+group_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+stat_id	bigint(20)	NO	PRI	NULL	
+value	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_res_mgr_sysstat;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_function_io_stat;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO	PRI	NULL	
@@ -5634,6 +5647,20 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_temp_file runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_wr_sql_plan_aux_key2snapshot;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+sql_id	varchar(32)	NO	PRI	NULL	
+plan_hash	bigint(20) unsigned	NO	PRI	NULL	
+id	bigint(20) unsigned	NO	PRI	0	
+plan_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sql_plan_aux_key2snapshot;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_cs_replica_tablet_stats;

@@ -205,6 +205,7 @@ int ObArchiveService::iterate_ls(const std::function<int (const ObLSArchiveTask 
 void ObArchiveService::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveService thread start", K_(tenant_id));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveScheduler");
   lib::set_thread_name("ArcSrv");
   ObCurTraceId::init(GCONF.self_addr_);
 

@@ -314,8 +314,9 @@ int ObAccessService::table_scan(
   DISABLE_SQL_MEMLEAK_GUARD;
   const share::ObLSID &ls_id = vparam.ls_id_;
   const common::ObTabletID &data_tablet_id = vparam.tablet_id_;
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = data_tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(data_tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, data_tablet_id.id());
   ObTableScanIterator *iter = nullptr;
   ObTabletHandle tablet_handle;
   ObLS *ls = nullptr;
@@ -376,6 +377,8 @@ int ObAccessService::table_rescan(
     ObNewRowIterator *result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(vparam.tablet_id_.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, vparam.tablet_id_.id());
   int ret = OB_SUCCESS;
   ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
   ObTabletHandle tablet_handle;
@@ -396,7 +399,6 @@ int ObAccessService::table_rescan(
     ObTableScanIterator *iter =  static_cast<ObTableScanIterator*>(result);
     const share::ObLSID &ls_id = vparam.ls_id_;
     const common::ObTabletID &data_tablet_id = vparam.tablet_id_;
-    GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = data_tablet_id.id();
     ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
     ObLS *ls = nullptr;
     ObLSTabletService *tablet_service = nullptr;
@@ -821,8 +823,9 @@ int ObAccessService::delete_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   ObLS *ls = nullptr;
@@ -877,8 +880,9 @@ int ObAccessService::put_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
@@ -932,8 +936,9 @@ int ObAccessService::insert_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   ObLS *ls = nullptr;
@@ -990,8 +995,9 @@ int ObAccessService::insert_rows_with_fetch_dup(const share::ObLSID &ls_id,
                                                 blocksstable::ObDatumRowIterator *&duplicated_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   ObLS *ls = nullptr;
@@ -1059,8 +1065,9 @@ int ObAccessService::update_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   ObLS *ls = nullptr;
@@ -1117,8 +1124,9 @@ int ObAccessService::lock_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   ObLS *ls = nullptr;
@@ -1174,8 +1182,9 @@ int ObAccessService::lock_row(
     const ObLockFlag lock_flag)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = tablet_id.id();
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, tablet_id.id());
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;

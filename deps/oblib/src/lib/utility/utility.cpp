@@ -2004,6 +2004,34 @@ bool glibc_prereq(int major, int minor)
   return (cur_major > major) || (cur_major == major && cur_minor >= minor);
 }
 
+const char *extract_demangled_class_name(const char *full_class_name, const char *prefix, char *buffer, int64_t &len)
+{
+  int ti_status = 0;
+  char *tmp_name = abi::__cxa_demangle(full_class_name, nullptr, nullptr, &ti_status);
+  const char *demangled_name = ti_status != 0 ? full_class_name : tmp_name;
+  const char *sub_name = nullptr;
+  if (prefix != nullptr) {
+    sub_name = strstr(demangled_name, prefix);
+  }
+  if (nullptr == sub_name) {
+    sub_name = demangled_name;
+  }
+  if (sub_name != nullptr && buffer != nullptr) {
+    STRNCPY(buffer, sub_name, len);
+    len = std::min(static_cast<int64_t>(strlen(sub_name)), len);
+    sub_name = buffer;
+  } else {
+    sub_name = nullptr;
+    len = 0;
+  }
+  if (tmp_name != nullptr) {
+    //tmp_name malloc by abi::__cxa_demangle,
+    //truncate class name to buffer len and free the tmp name
+    free(tmp_name);
+  }
+  return sub_name;
+}
+
 const char *get_transparent_hugepage_status()
 {
   char buf[32];

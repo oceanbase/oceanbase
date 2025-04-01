@@ -235,6 +235,7 @@ private:
     virtual ~ObStorageMetaIOCallback();
     virtual int do_process(const char *data_buffer, const int64_t size) override;
     virtual int64_t size() const override;
+    const char *get_cb_name() const override { return "StorageMetaIOCB"; }
     bool is_valid() const;
 
     INHERIT_TO_STRING_KV("ObSharedObjectIOCallback", ObSharedObjectIOCallback,

@@ -318,6 +318,7 @@ public:
   int64_t get_init_timestamp() const { return init_timestamp_; }
   int switch_tenant(const uint64_t tenant_id);
   bool is_local_execute(const int64_t cluster_id, const uint64_t tenant_id);
+  ObDiagnosticInfo *get_diagnostic_info() { return diagnostic_info_; }
 public:
   static const int64_t LOCK_RETRY_TIME = 1L * 1000 * 1000;
   static const int64_t TOO_MANY_REF_ALERT = 1024;
@@ -443,7 +444,7 @@ private:
 class ObInnerSqlWaitGuard
 {
 public:
-  explicit ObInnerSqlWaitGuard(const bool is_inner_session, common::ObDiagnosticInfo *di);
+  explicit ObInnerSqlWaitGuard(const bool is_inner_session, common::ObDiagnosticInfo *di, sql::ObSQLSessionInfo *inner_session);
   ~ObInnerSqlWaitGuard();
 private:
   bool is_inner_session_;
@@ -453,6 +454,7 @@ private:
   bool need_record_;
   bool has_finish_switch_di_;
   int64_t prev_block_sessid_;
+  ObQueryRetryAshInfo *prev_info_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

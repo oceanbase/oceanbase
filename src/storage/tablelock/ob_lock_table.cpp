@@ -780,6 +780,7 @@ int ObLockTable::check_and_clear_obj_lock(const bool force_compact)
   int ret = OB_SUCCESS;
   ObTableHandleV2 handle;
   ObLockMemtable *lock_memtable = nullptr;
+  common::ObDIActionGuard ag("TableLockService", "OBJLockGC", "SwitchLeader");
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockTable is not inited", K(ret));

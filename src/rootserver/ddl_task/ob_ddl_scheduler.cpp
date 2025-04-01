@@ -897,6 +897,7 @@ void ObDDLScheduler::run1()
     int ret = OB_SUCCESS;
     ObDDLTask *task = nullptr;
     ObDDLTask *first_retry_task = nullptr;
+    ObDIActionGuard ag("DDLService", "DDLTaskScheduler", "detect task");
     lib::set_thread_name("DDLTaskExecutor");
     THIS_WORKER.set_worker_level(1);
     THIS_WORKER.set_curr_request_level(1);
@@ -932,6 +933,7 @@ void ObDDLScheduler::run1()
         }
         do_idle = true;
       } else {
+        ObDIActionGuard ag(get_ddl_type(task->get_task_type()));
         ObCurTraceId::set(task->get_trace_id());
         int task_ret = task->process();
         task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt() + thread_cnt);

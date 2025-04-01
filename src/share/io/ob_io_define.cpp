@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX COMMON
+ #define USING_LOG_PREFIX COMMON
 
 #include "ob_io_define.h"
 #include "storage/backup/ob_backup_factory.h"
@@ -1869,6 +1869,12 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
       }
     }
   }
+  ObLocalDiagnosticInfo::set_io_time(
+    get_io_interval(result_->time_log_.dequeue_ts_, result_->time_log_.enqueue_ts_),
+    get_io_interval(result_->time_log_.return_ts_, result_->time_log_.submit_ts_),
+    get_io_interval(static_cast<int64_t>(result_->time_log_.callback_finish_ts_), static_cast<int64_t>(result_->time_log_.callback_enqueue_ts_))
+  );
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ATOMIC_LOAD(&result_->ret_code_.io_ret_))) {
       LOG_WARN("IO error, ", K(ret), K(*result_));

@@ -644,11 +644,6 @@ protected:
       total_time_ += (rdtsc() - cpu_begin_time_);
     }
   }
-  inline void begin_ash_line_id_reg()
-  {
-    // begin with current operator
-    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
-  }
   inline void end_ash_line_id_reg(int ret)
   {
     ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();

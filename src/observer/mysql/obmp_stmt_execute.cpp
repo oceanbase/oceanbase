@@ -1422,7 +1422,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
       if (enable_perf_event) {
         audit_record.exec_record_.record_end();
-        record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret);
+        record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret, result);
         audit_record.stmt_type_ = result.get_stmt_type();
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
@@ -3264,7 +3264,8 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
 
 void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time,
                                   const sql::ObSQLSessionInfo& session,
-                                  const int64_t ret) const
+                                  const int64_t ret,
+                                  const ObMySQLResultSet &result) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
@@ -3286,6 +3287,26 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
         ADD_STMT_STAT(REPLACE);
         ADD_STMT_STAT(UPDATE);
         ADD_STMT_STAT(DELETE);
+        case stmt::T_END_TRANS:
+        if (result.is_commit_cmd()) {
+          EVENT_ADD(SQL_COMMIT_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_COMMIT_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        } else if (result.is_rollback_cmd()) {
+          EVENT_ADD(SQL_ROLLBACK_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_ROLLBACK_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        }
+        break;
+
         default: {
           EVENT_ADD(SQL_OTHER_TIME, time_cost);
           if (!session.get_is_in_retry()) {

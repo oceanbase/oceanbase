@@ -149,6 +149,7 @@ void ObDynamicThreadPool::run1()
 {
   int tmp_ret = OB_SUCCESS;
   const uint64_t idx = get_thread_idx();
+  ObDIActionGuard ag("DynamicThreadPool", thread_name_, "detect task");
   if (OB_NOT_NULL(thread_name_)) {
     lib::set_thread_name(thread_name_, idx);
   }
@@ -339,8 +340,11 @@ void *ObDynamicThreadPool::task_thread_func(void *data)
           } else {
             COMMON_LOG_RET(WARN, tmp_ret, "failed to pop task", K(tmp_ret));
           }
-        } else if (OB_SUCCESS != (tmp_ret = task->process(thread_info->is_stop_))) {
-          COMMON_LOG_RET(WARN, tmp_ret, "failed to process task", K(tmp_ret), K(*thread_info));
+        } else {
+          common::ObDIActionGuard ag(typeid(*task));
+          if (OB_SUCCESS != (tmp_ret = task->process(thread_info->is_stop_))) {
+            COMMON_LOG_RET(WARN, tmp_ret, "failed to process task", K(tmp_ret), K(*thread_info));
+          }
         }
       }
     }
@@ -568,6 +572,7 @@ ObSimpleThreadPoolDynamicMgr::~ObSimpleThreadPoolDynamicMgr()
 
 void ObSimpleThreadPoolDynamicMgr::run1()
 {
+  ObDIActionGuard ag("DynamicThreadPool", "DynamicMgrCheck", "detect task");
   lib::set_thread_name("qth_mgr");
   int64_t last_access_ts = 0;
   int64_t last_idle_ts = 0;
@@ -580,6 +585,7 @@ void ObSimpleThreadPoolDynamicMgr::run1()
       for (int i = 0; i < simple_thread_pool_list_.count(); i++) {
         ObSimpleThreadPoolStat &pool_stat = simple_thread_pool_list_.at(i);
         ObSimpleDynamicThreadPool *pool = pool_stat.pool_;
+        ObDIActionGuard ag1(pool->name_);
         int64_t current_time = ObTimeUtility::current_time();
         if (OB_LIKELY(pool_stat.is_valid())) {
           int64_t interval = current_time - pool_stat.last_check_time_;

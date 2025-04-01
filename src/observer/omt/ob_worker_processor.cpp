@@ -15,6 +15,7 @@
 #include "ob_worker_processor.h"
 #include "lib/profile/ob_perf_event.h"  // SET_PERF_EVENT
 #include "lib/oblog/ob_warning_buffer.h"
+#include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/frame/ob_req_processor.h"
 #include "observer/omt/ob_th_worker.h"
@@ -101,6 +102,11 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
                OB_ID(receive_ts), req.get_receive_timestamp(),
                OB_ID(enqueue_ts), req.get_enqueue_timestamp());
   ObRequest::Type req_type = req.get_type(); // bugfix note: must be obtained in advance
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr && !di->get_ash_stat().has_user_module_) {
+    //di->get_ash_stat().has_user_module_ == true means these module and action specified by user, we can't rewrite it
+    ObLocalDiagnosticInfo::set_service_module(THIS_THWORKER.get_module_name());
+  }
   if (ObRequest::OB_RPC == req_type) {
     // internal RPC request
     const obrpc::ObRpcPacket &packet
@@ -123,7 +129,12 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
   } else if (ObRequest::OB_MYSQL == req_type) {
     NG_TRACE_EXT(start_sql, OB_ID(addr), SQL_REQ_OP.get_peer(&req));
     // mysql command request
+      const obmysql::ObMySQLRawPacket &pkt
+          = static_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
+    if (OB_NOT_NULL(di) && !di->get_ash_stat().has_user_action_) {
+      ObLocalDiagnosticInfo::get()->get_ash_stat().mysql_cmd_ = static_cast<int64_t>(pkt.get_cmd());
+    }
   }
   // record trace id
   ObTraceIdAdaptor trace_id_adaptor;

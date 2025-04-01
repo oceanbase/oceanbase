@@ -57,6 +57,7 @@ ObDiagnosticInfoCollector::ObDiagnosticInfoCollector()
       slot_mask_(0),
       slot_count_(0),
       is_inited_(false),
+      using_cache_(false),
       di_info_bundle_(nullptr)
 {}
 

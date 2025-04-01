@@ -1183,7 +1183,7 @@ int ObTTLUtil::dispatch_one_tenant_ttl(obrpc::ObTTLRequestArg::TTLRequestType ty
             if (timeout_remain_us - idle_time_us > RESERVED_TIME_US) {
               LOG_WARN("leader may switch or ddl confilict, will retry", KR(ret), K(tenant_id), K(ttl_info),
                 "ori_leader", leader, K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
-              USLEEP(static_cast<int>(idle_time_us));
+              ob_throttle_usleep((const useconds_t)idle_time_us, ret, (int64_t)tenant_id);
               ret = OB_SUCCESS;
             } else {
               LOG_WARN("leader may switch or ddl confilict, will not retry cuz timeout_remain is "

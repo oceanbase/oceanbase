@@ -449,19 +449,19 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case DELTA_READ_IO_REQUESTS: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_read_.count_);
         break;
       }
       case DELTA_READ_IO_BYTES: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_read_.size_);
         break;
       }
       case DELTA_WRITE_IO_REQUESTS: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_write_.count_);
         break;
       }
       case DELTA_WRITE_IO_BYTES: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_write_.size_);
         break;
       }
       default: {

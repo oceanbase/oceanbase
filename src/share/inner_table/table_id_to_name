@@ -374,8 +374,10 @@
 # 523: __all_pkg_type_attr
 # 524: __all_pkg_coll_type
 # 525: __wr_sql_plan
+# 526: __wr_res_mgr_sysstat
 # 527: __all_kv_redis_table
 # 528: __all_ncomp_dll_v2
+# 530: __wr_sql_plan_aux_key2snapshot
 # 531: __ft_dict_ik_utf8
 # 532: __ft_stopword_ik_utf8
 # 533: __ft_quantifier_ik_utf8
@@ -1194,12 +1196,16 @@
 # 12500: __all_virtual_kv_client_info
 # 12501: __all_virtual_wr_sql_plan
 # 12501: __wr_sql_plan  # BASE_TABLE_NAME
+# 12502: __all_virtual_wr_res_mgr_sysstat
+# 12502: __wr_res_mgr_sysstat  # BASE_TABLE_NAME
 # 12503: __all_virtual_kv_redis_table
 # 12503: __all_kv_redis_table  # BASE_TABLE_NAME
 # 12504: __all_virtual_function_io_stat
 # 12505: __all_virtual_temp_file
 # 12506: __all_virtual_ncomp_dll_v2
 # 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
+# 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
+# 12511: __wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME
 # 12513: __all_virtual_cs_replica_tablet_stats
 # 12514: __all_virtual_ddl_diagnose_info
 # 12515: __all_virtual_plugin_info
@@ -1867,6 +1873,9 @@
 # 15481: __all_virtual_wr_sql_plan  # BASE_TABLE_NAME1
 # 15482: ALL_VIRTUAL_RES_MGR_SYSSTAT
 # 15482: __all_virtual_res_mgr_sysstat  # BASE_TABLE_NAME
+# 15483: ALL_VIRTUAL_WR_RES_MGR_SYSSTAT
+# 15483: __wr_res_mgr_sysstat  # BASE_TABLE_NAME
+# 15483: __all_virtual_wr_res_mgr_sysstat  # BASE_TABLE_NAME1
 # 15484: ALL_VIRTUAL_FUNCTION_IO_STAT
 # 15484: __all_virtual_function_io_stat  # BASE_TABLE_NAME
 # 15485: ALL_VIRTUAL_TEMP_FILE
@@ -1875,6 +1884,9 @@
 # 15486: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 15489: ALL_VIRTUAL_TABLET_POINTER_STATUS
 # 15489: __all_virtual_tablet_pointer_status  # BASE_TABLE_NAME
+# 15492: ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT
+# 15492: __wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME
+# 15492: __all_virtual_wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME1
 # 15493: ALL_VIRTUAL_CS_REPLICA_TABLET_STATS
 # 15493: __all_virtual_cs_replica_tablet_stats  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
@@ -2389,6 +2401,8 @@
 # 21611: V$OB_RES_MGR_SYSSTAT
 # 21612: DBA_WR_SQL_PLAN
 # 21613: CDB_WR_SQL_PLAN
+# 21614: DBA_WR_RES_MGR_SYSSTAT
+# 21615: CDB_WR_RES_MGR_SYSSTAT
 # 21616: DBA_OB_SPM_EVO_RESULT
 # 21617: CDB_OB_SPM_EVO_RESULT
 # 21618: DBA_OB_KV_REDIS_TABLE
@@ -2910,6 +2924,7 @@
 # 28257: GV$OB_RES_MGR_SYSSTAT
 # 28258: V$OB_RES_MGR_SYSSTAT
 # 28259: DBA_WR_SQL_PLAN
+# 28260: DBA_WR_RES_MGR_SYSSTAT
 # 28261: DBA_OB_SPM_EVO_RESULT
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT

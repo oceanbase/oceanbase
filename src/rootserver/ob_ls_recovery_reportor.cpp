@@ -112,6 +112,7 @@ void ObLSRecoveryReportor::run2()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else {
+    ObDIActionGuard ag("LSRecoveryService", "LSRecoveryReportor", "detect task");
     ObThreadCondGuard guard(get_cond());
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     bool meta_tenant_schema_normal = false;
@@ -130,6 +131,7 @@ void ObLSRecoveryReportor::run2()
         }
       }
       if (meta_tenant_schema_normal) {
+        ObDIActionGuard ag1("LS Stat");
         if (OB_SUCCESS != (tmp_ret = update_ls_recovery_stat_())) {
           ret = OB_SUCC(ret) ? tmp_ret : ret;
           LOG_WARN("failed to update ls recovery stat", KR(ret), KR(tmp_ret));
@@ -140,6 +142,7 @@ void ObLSRecoveryReportor::run2()
       }
 
       //更新受控回放位点到replayservice
+      ObDIActionGuard ag1("Replayable Point");
       if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
         LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
       }

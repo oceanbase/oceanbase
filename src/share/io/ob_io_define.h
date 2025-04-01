@@ -250,6 +250,7 @@ public:
   {
     return type_;
   }
+  virtual const char *get_cb_name() const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 
 protected:

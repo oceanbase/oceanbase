@@ -114,6 +114,7 @@ public:
   ObTxCbArgArray &get_cb_arg_array() { return cb_arg_array_; }
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
   bool is_valid() const;
+  const char *get_cb_name() const override { return "TxLogCb"; }
 public:
   int on_success();
   int on_failure();

@@ -69,6 +69,7 @@ public:
   int64_t get_append_start_ts() const { return append_start_ts_; }
   int64_t get_append_finish_ts() const { return append_finish_ts_; }
   int64_t get_cb_first_handle_ts() const { return cb_first_handle_ts_; }
+  virtual const char *get_cb_name() const = 0;
 public:
   int64_t append_start_ts_; //提交到palf的起始时刻
   int64_t append_finish_ts_; //palf提交完成时刻,即提交到apply service起始时刻

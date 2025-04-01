@@ -2194,6 +2194,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
       di->get_ash_stat().plan_hash_ = plan_hash_;
       MEMMOVE(di->get_ash_stat().sql_id_, sql_id_,
           min(sizeof(di->get_ash_stat().sql_id_), sizeof(sql_id_)));
+      di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(), di->get_ash_stat().session_id_, sql_id_, plan_id_, plan_hash_);
     }
   }
   return ret;
@@ -2208,8 +2209,10 @@ void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
       min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
   ash_stat.tenant_id_ = tenant_id_;
   ash_stat.user_id_ = get_user_id();
+  ash_stat.trace_id_ = get_current_trace_id();
   ash_stat.tid_ = GETTID();
   ash_stat.group_id_ = THIS_WORKER.get_group_id();
+  ash_stat.fixup_last_stat(*ObCurTraceId::get_trace_id(), ash_stat.session_id_, sql_id_, plan_id_, plan_hash_);
 }
 
 void ObBasicSessionInfo::set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
@@ -2238,6 +2241,7 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
     if (OB_NOT_NULL(di)) {
       MEMMOVE(di->get_ash_stat().sql_id_, sql_id_,
           min(sizeof(di->get_ash_stat().sql_id_), sizeof(sql_id_)));
+      di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(), di->get_ash_stat().session_id_, sql_id_, 0, 0);
     }
   }
 }
@@ -6530,9 +6534,11 @@ int ObBasicSessionInfo::set_session_active()
   if (OB_FAIL(set_session_state_(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
+    thread_data_.is_request_end_ = false;
     ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
     if (OB_NOT_NULL(di)) {
       set_ash_stat_value(di->get_ash_stat());
+      ObQueryRetryAshGuard::setup_info(get_retry_info_for_update().get_retry_ash_info());
     }
   }
   return ret;
@@ -6545,9 +6551,10 @@ void ObBasicSessionInfo::set_session_sleep()
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;
   thread_id_ = 0;
   ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-  if (retry_info_.get_retry_cnt() > 0 && OB_NOT_NULL(di)) {
+  if (OB_NOT_NULL(di)) {
     di->get_ash_stat().end_retry_wait_event();
     di->get_ash_stat().block_sessid_ = 0;
+    ObQueryRetryAshGuard::reset_info();
   }
 }
 

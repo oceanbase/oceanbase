@@ -441,6 +441,7 @@ public:                                                                 \
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override; \
   int compare_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
+  int display_diagnosis_sess_info(ObSQLSessionInfo &sess, const int16_t type, int64_t index); \
 };
 DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
 DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);

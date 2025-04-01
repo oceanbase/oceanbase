@@ -148,6 +148,7 @@ void ObLogRestoreService::signal()
 void ObLogRestoreService::run1()
 {
   LOG_INFO("ObLogRestoreService thread run", "tenant_id", MTL_ID());
+  ObDIActionGuard ag("LogService", "LogRestoreService", "loop task");
   lib::set_thread_name("LogRessvr");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -180,6 +181,8 @@ void ObLogRestoreService::do_thread_task_()
     if (OB_FAIL(update_upstream_(source, source_exist))) {
       LOG_WARN("update_upstream_ failed");
     } else if (source_exist) {
+      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
+
       // log restore source exist, do schedule
       // source_exist means tenant_role is standby or restore and log_restore_source exists
       schedule_fetch_log_(source);
@@ -188,7 +191,10 @@ void ObLogRestoreService::do_thread_task_()
       clean_resource_();
     }
 
-    schedule_resource_(source.type_);
+    {
+      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
+      schedule_resource_(source.type_);
+    }
     report_error_();
     update_restore_upper_limit_();
     refresh_error_context_();

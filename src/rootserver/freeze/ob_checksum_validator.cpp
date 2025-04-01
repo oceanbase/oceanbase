@@ -486,7 +486,7 @@ int ObChecksumValidator::batch_write_tablet_ckm()
       } else {
         ++fail_count;
         LOG_WARN("fail to write tablet checksum items", KR(ret), K_(tenant_id), K(fail_count), K(sleep_time_us));
-        USLEEP(sleep_time_us);
+        ob_throttle_usleep(sleep_time_us, ret, compaction_scn_.get_val_for_tx());
         sleep_time_us *= 2;
         ret = OB_SUCCESS;
       }

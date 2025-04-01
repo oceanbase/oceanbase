@@ -270,6 +270,8 @@ public:
     }
     inline bool is_succeed() const { return CbState::STATE_SUCCESS == ATOMIC_LOAD(&state_); }
     inline bool is_failed() const { return CbState::STATE_FAILED == ATOMIC_LOAD(&state_); }
+    const char *get_cb_name() const override { return "GCLSLogCb"; }
+
     TO_STRING_KV(K(state_), K(scn_), KP(handler_));
   public:
     CbState state_;

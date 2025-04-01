@@ -534,7 +534,7 @@ bool ObRemoteBaseExecuteP<T>::query_can_retry_in_remote(int &last_err,
           LOG_INFO("query retry in remote", K(retry_times), K(last_err));
           ++retry_times;
           int64_t base_sleep_us = 1000;
-          ob_usleep(base_sleep_us * retry_times);
+          ob_throttle_usleep(base_sleep_us * retry_times, err);
         }
       }
     }

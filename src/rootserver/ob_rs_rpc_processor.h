@@ -114,6 +114,7 @@ protected:
   int process_(const obrpc::ObRpcPacketCode pcode) __attribute__((noinline))
   {
     int ret = common::OB_SUCCESS;
+    ObDIActionGuard action_guard(obrpc::ObRpcPacketSet::instance().name_of_pcode(pcode));
     if (OB_LIKELY(THE_RS_TRACE != nullptr)) {
       THE_RS_TRACE->reset();
     }

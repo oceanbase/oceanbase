@@ -88,6 +88,7 @@ public:
       return OB_SUCCESS;
     }
     virtual ObIAllocator *get_allocator() override { return allocator_; }
+    const char *get_cb_name() const override { return "TestIOCallback"; }
     TO_STRING_KV(KP(number_), KP(allocator_), KP(help_buf_));
 
   public:

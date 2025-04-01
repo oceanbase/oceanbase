@@ -40,7 +40,7 @@ inline int ObInnerSQLResult::check_extend_value(const common::ObObj &obj)
   return ret;
 }
 
-ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_session)
+ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_session, ObDiagnosticInfo *di)
     : column_map_created_(false), column_indexed_(false), column_map_(),
       mem_context_(nullptr),
       mem_context_destroy_guard_(mem_context_),
@@ -55,7 +55,8 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_sess
       is_read_(true),
       has_tenant_resource_(true),
       tenant_(nullptr),
-      is_inner_session_(is_inner_session)
+      is_inner_session_(is_inner_session),
+      inner_sql_di_(di)
 
 {
   sql_ctx_.exec_type_ = InnerSql;
@@ -126,6 +127,8 @@ int ObInnerSQLResult::open()
   int ret = OB_SUCCESS;
   execute_start_ts_ = ObTimeUtility::current_time();
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+  ObInnerSqlWaitGuard guard(is_inner_session(), inner_sql_di_, &session_);
+
   if (has_tenant_resource()) {
     result_set().get_exec_context().set_plan_start_time(execute_start_ts_);
   }
@@ -206,6 +209,8 @@ int ObInnerSQLResult::inner_close()
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
 
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+  ObInnerSqlWaitGuard guard(is_inner_session(), inner_sql_di_, &session_);
+
   if (has_tenant_resource() && OB_FAIL(tenant_guard.switch_to(tenant_))) {
     LOG_WARN("switch tenant failed", K(ret), K(session_.get_effective_tenant_id()));
   } else {
@@ -228,6 +233,7 @@ int ObInnerSQLResult::next()
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+  ObInnerSqlWaitGuard guard(is_inner_session(), inner_sql_di_, &session_);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
   if (!opened_) {
     ret = OB_NOT_INIT;

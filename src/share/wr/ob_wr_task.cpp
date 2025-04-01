@@ -16,6 +16,7 @@
 #include "share/wr/ob_wr_task.h"
 #include "share/wr/ob_wr_stat_guard.h"
 #include "share/location_cache/ob_location_service.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "ob_wr_collector.h"
 
 using namespace oceanbase::common::sqlclient;

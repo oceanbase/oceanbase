@@ -641,7 +641,8 @@ ObWaitEventGuard::ObWaitEventGuard(const int64_t event_no, const uint64_t timeou
     : event_no_(0), di_(nullptr), is_atomic_(is_atomic)
 {
   di_ = ObLocalDiagnosticInfo::get();
-  if (OB_NOT_NULL(di_) && di_->get_ash_stat().is_active_session_ && oceanbase::lib::is_diagnose_info_enabled()) {
+  if (OB_NOT_NULL(di_) && di_->get_ash_stat().is_active_session_ &&
+      oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     event_no_ = event_no;
     di_->begin_wait_event(event_no, timeout_ms, p1, p2, p3);
@@ -663,13 +664,23 @@ ObWaitEventGuard::~ObWaitEventGuard()
   }
 }
 
-ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait)
-  : prev_wait_(NULL), di_(nullptr)
+ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait) : max_wait_(max_wait)
 {
+  di_ = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di_) && OB_NOT_NULL(max_wait)) {
+    need_record_ = true;
+    di_->reset_max_wait();
+  } else {
+    need_record_ = false;
+  }
 }
 
 ObMaxWaitGuard::~ObMaxWaitGuard()
 {
+  if (need_record_) {
+    OB_ASSERT(di_ == ObLocalDiagnosticInfo::get());
+    max_wait_->assign(di_->get_max_wait());
+  }
 }
 
 ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait)

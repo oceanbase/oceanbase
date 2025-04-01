@@ -461,6 +461,7 @@ public:
 
   static int store_string_kv(char *buf, int64_t len, const ObStringKV &str, int64_t &pos);
   static uint64_t get_kv_encode_len(const ObStringKV &string_kv);
+  static const char *get_mysql_cmd_name(const ObMySQLCmd &cmd);
   inline static ObStringKV get_separator_kv(); // separator for system variables and user variables
 
   inline void set_seq(uint8_t seq);

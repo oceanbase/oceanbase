@@ -99,6 +99,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     use_temp_table_(false),
     has_link_table_(false),
     has_link_sfd_(false),
+    has_link_udf_(false),
     need_serial_exec_(false),
     temp_sql_can_prepare_(false),
     is_need_trans_(false),

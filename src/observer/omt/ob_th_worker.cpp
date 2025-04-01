@@ -98,6 +98,7 @@ ObThWorker::ObThWorker()
       last_wakeup_ts_(0), blocking_ts_(nullptr),
       idle_us_(0)
 {
+  module_name_[0] = '\0';
 }
 
 ObThWorker::~ObThWorker()
@@ -325,6 +326,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
     if (this->get_worker_level() == INT32_MAX) {
       this->set_worker_level(0);
     }
+    snprintf(module_name_, MAX_MODULE_NAME_LEN, "ReqWorker(Level:%d)", get_worker_level());
     while (!has_set_stop()) {
       worker_level = get_worker_level();
       if (OB_NOT_NULL(tenant_)) {
@@ -379,8 +381,9 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             if (OB_SUCC(ret)) {
               if (OB_NOT_NULL(req)) {
                 ObEnableDiagnoseGuard enable_guard;
-                ObDiagnosticInfo *di = req->get_type() == ObRequest::OB_MYSQL
-                        ? reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+                ObDiagnosticInfo *di =
+                    req->get_type() == ObRequest::OB_MYSQL
+                        ? reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
                         : req->get_diagnostic_info();
                 ObDiagnosticInfoSwitchGuard guard(di);
                 if (di) {
@@ -389,7 +392,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
 #ifdef ENABLE_DEBUG_LOG
                 if (OB_ISNULL(di)) {
                   if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-                    LOG_INFO("empty diagnostic info, disable it", KPC(req));
+                    LOG_TRACE("empty diagnostic info, disable it", KPC(req));
                   }
                 }
 #endif

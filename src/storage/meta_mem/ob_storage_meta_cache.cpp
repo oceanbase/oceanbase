@@ -493,6 +493,7 @@ int ObStorageMetaCache::ObStorageMetaIOCallback::do_process(const char *buf, con
   // TODO: callback need to deal with block-crossed shared blocks,
   // in which scene we only store the first blocks' addr
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObStorageMetaIOCallback");
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid storage meta cache callback", K(ret), K_(handle));

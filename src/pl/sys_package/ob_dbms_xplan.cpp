@@ -226,11 +226,21 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
   int64_t tenant_id = 0;
   int64_t svr_port = 0;
   number::ObNumber num_val;
+  ObString plan_name;
+  ObString sql_handle;
+  uint64_t plan_hash = 0;
   ObSQLSessionInfo *session = ctx.get_my_session();
   int idx = 0;
-  if (5 != params.count()) {
+  bool use_old_params = false;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_4_3_5_1 >= data_version) {
+    use_old_params = true;
+  }
+  if (!(7 == params.count() || (use_old_params && 5 == params.count()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect four params", K(ret));
+    LOG_WARN("params num not match", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session", K(ret));
@@ -250,8 +260,29 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     LOG_WARN("failed to get number value", K(ret));
   } else if (OB_FAIL(num_val.cast_to_int64(tenant_id))) {
     LOG_WARN("failed to cast int", K(ret));
+  } else if (!use_old_params && OB_FAIL(params.at(idx++).get_varchar(sql_handle))) {
+    LOG_WARN("failed to get sql string", K(ret));
+  } else if (!use_old_params && OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
+    LOG_WARN("failed to get plan name", K(ret));
+  } else if (!use_old_params && !plan_name.empty() && OB_FAIL(num_val.from(plan_name.ptr(),
+                                                        plan_name.length(),
+                                                        ctx.get_allocator()))) {
+      ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+      LOG_WARN("failed to get plan hash");
+      ObString msg = "plan_name";
+      LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
+  } else if (!use_old_params && !plan_name.empty() && !num_val.is_valid_uint64(plan_hash)) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("failed to get uint64 value", K(ret));
+    ObString msg = "plan_name";
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
+  } else if (plan_name.empty() ^ sql_handle.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get plan hash or sql id");
+    ObString msg = "miss plan_name or sql_handle";
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, msg.ptr());
   } else {
-    if (0 == plan_id) {
+    if (0 == plan_id && plan_name.empty() && sql_handle.empty()) {
       plan_id = session->get_last_plan_id();
     }
     if (0 == tenant_id) {
@@ -271,6 +302,8 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
                                            svr_ip,
                                            svr_port,
                                            plan_id,
+                                           sql_handle,
+                                           plan_hash,
                                            plan_infos))) {
       LOG_WARN("failed to get plan info", K(ret));
     } else if (OB_FAIL(get_plan_format(format, type, option))) {
@@ -692,10 +725,19 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
                                       const ObString &svr_ip,
                                       int64_t svr_port,
                                       uint64_t plan_id,
+                                      const ObString &sql_handle,
+                                      uint64_t plan_hash,
                                       ObIArray<ObSqlPlanItem*> &plan_infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  bool use_wr = true;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_4_3_5_1 >= data_version) {
+    use_wr=false;
+  }
   if (OB_FAIL(sql.assign_fmt("SELECT \
                     OPERATOR,\
                     OPTIONS,\
@@ -739,17 +781,117 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
                   FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN\
                   WHERE TENANT_ID=%ld\
                   AND SVR_IP='%.*s'\
-                  AND SVR_PORT=%ld\
-                  AND PLAN_ID=%lu\
-                  ORDER BY ID",
+                  AND SVR_PORT=%ld ",
                   tenant_id,
                   svr_ip.length(),
                   svr_ip.ptr(),
-                  svr_port,
-                  plan_id))) {
+                  svr_port))) {
     LOG_WARN("failed to assign string", K(ret));
+  } else if (plan_id != 0 && OB_FAIL(sql.append_fmt("AND PLAN_ID=%lu ", plan_id))) {
+    LOG_WARN("failed to append string", K(ret));
+  } else if (plan_hash != 0 && OB_FAIL(sql.append_fmt("AND PLAN_HASH=%lu ", plan_hash))) {
+    LOG_WARN("failed to append string", K(ret));
+  } else if (!sql_handle.empty() &&
+             OB_FAIL(sql.append_fmt("AND SQL_ID='%.*s' ",
+                                    sql_handle.length(),
+                                    sql_handle.ptr()))) {
+    LOG_WARN("failed to assign string", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("ORDER BY ID "))) {
+    LOG_WARN("failed to append string", K(ret));
   } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos))) {
     LOG_WARN("failed to get plan info", K(ret));
+  } else if (use_wr && plan_infos.count() == 0) {
+    sql.reuse();
+    char plan_id_char[40] = " ";
+    if (plan_id != 0) {
+      sprintf(plan_id_char, "AND PLAN_ID=%lu ", plan_id);
+    }
+    if (OB_FAIL(sql.assign_fmt(
+        "WITH plan_index AS ( \
+            SELECT * FROM \
+              (SELECT \
+                tenant_id, \
+                svr_ip, \
+                svr_port, \
+                sql_id,  \
+                plan_hash, \
+                id, \
+                plan_id, \
+                snap_id, \
+                cluster_id, \
+                DENSE_RANK() OVER(ORDER BY SNAP_ID DESC) AS RANK \
+              FROM OCEANBASE.__ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT \
+              WHERE TENANT_ID=%ld \
+              AND SVR_IP='%.*s' \
+              AND SVR_PORT=%ld \
+              AND PLAN_HASH=%lu \
+              AND SQL_ID='%.*s' \
+              %s )\
+            WHERE RANK=1 ) ",
+            tenant_id,
+            svr_ip.length(),
+            svr_ip.ptr(),
+            svr_port,
+            plan_hash,
+            sql_handle.length(),
+            sql_handle.ptr(),
+            plan_id_char))) {
+        LOG_WARN("failed to assign string", K(ret));
+    } else if OB_FAIL(sql.append_fmt("SELECT \
+                      /*+ USE_NL(plan_index, sp) LEADING (plan_index, sp)*/ \
+                      sp.OPERATOR, \
+                      sp.OPTIONS, \
+                      sp.OBJECT_NODE, \
+                      sp.OBJECT_ID, \
+                      sp.OBJECT_OWNER, \
+                      sp.OBJECT_NAME, \
+                      sp.OBJECT_ALIAS, \
+                      sp.OBJECT_TYPE, \
+                      sp.OPTIMIZER, \
+                      sp.ID, \
+                      sp.PARENT_ID, \
+                      sp.DEPTH, \
+                      sp.POSITION, \
+                      0 AS SEARCH_COLUMNS, \
+                      sp.IS_LAST_CHILD, \
+                      sp.COST, \
+                      sp.REAL_COST, \
+                      sp.CARDINALITY, \
+                      sp.REAL_CARDINALITY, \
+                      sp.BYTES, \
+                      sp.ROWSET, \
+                      sp.OTHER_TAG, \
+                      sp.PARTITION_START, \
+                      NULL AS PARTITION_STOP, \
+                      0 AS PARTITION_ID, \
+                      sp.OTHER, \
+                      NULL AS DISTRIBUTION, \
+                      sp.CPU_COST, \
+                      sp.IO_COST, \
+                      0 AS TEMP_SPACE, \
+                      sp.ACCESS_PREDICATES, \
+                      sp.FILTER_PREDICATES, \
+                      sp.STARTUP_PREDICATES, \
+                      sp.PROJECTION, \
+                      sp.SPECIAL_PREDICATES, \
+                      0 AS TIME, \
+                      sp.QBLOCK_NAME, \
+                      sp.REMARKS, \
+                      sp.OTHER_XML \
+                    FROM plan_index \
+                    JOIN OCEANBASE.__ALL_VIRTUAL_WR_SQL_PLAN sp \
+                    ON sp.TENANT_ID=plan_index.TENANT_ID \
+                    AND sp.CLUSTER_ID = plan_index.CLUSTER_ID \
+                    AND sp.SNAP_ID=plan_index.SNAP_ID \
+                    AND sp.SVR_IP=plan_index.SVR_IP \
+                    AND sp.SVR_PORT=plan_index.SVR_PORT \
+                    AND sp.PLAN_HASH=plan_index.PLAN_HASH \
+                    AND sp.SQL_ID=plan_index.SQL_ID \
+                    ORDER BY ID")) {
+      LOG_WARN("failed to assign string", K(ret));
+    } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos, use_wr))) {
+      LOG_WARN("failed to get plan info", K(ret));
+    }
   }
   return ret;
 }
@@ -764,6 +906,13 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  bool use_wr = true;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_4_3_5_1 >= data_version) {
+    use_wr=false;
+  }
   if (OB_FAIL(sql.assign_fmt("SELECT \
                     OPERATOR,\
                     OPTIONS,\
@@ -821,6 +970,92 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
     LOG_WARN("failed to assign string", K(ret));
   } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos))) {
     LOG_WARN("failed to get plan info", K(ret));
+  } else if (use_wr && plan_infos.count() == 0) {
+    sql.reuse();
+    if (OB_FAIL(sql.assign_fmt(
+      "WITH plan_index AS ( \
+          SELECT * FROM \
+            (SELECT \
+              tenant_id, \
+              svr_ip, \
+              svr_port, \
+              sql_id, \
+              plan_hash, \
+              id, \
+              plan_id, \
+              snap_id, \
+              cluster_id, \
+              DENSE_RANK() OVER(ORDER BY SNAP_ID DESC) AS RANK \
+            FROM OCEANBASE.__ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT \
+            WHERE TENANT_ID=%ld \
+            AND SVR_IP='%.*s' \
+            AND SVR_PORT=%ld \
+            AND PLAN_HASH=%lu \
+            AND SQL_ID='%.*s' ) \
+          WHERE RANK=1 ) ",
+          tenant_id,
+          svr_ip.length(),
+          svr_ip.ptr(),
+          svr_port,
+          plan_hash,
+          sql_handle.length(),
+          sql_handle.ptr()))) {
+      LOG_WARN("failed to assign string", K(ret));
+    } else if OB_FAIL(sql.append_fmt("SELECT \
+                      /*+ USE_NL(plan_index, sp) LEADING (plan_index, sp)*/ \
+                      sp.OPERATOR, \
+                      sp.OPTIONS, \
+                      sp.OBJECT_NODE, \
+                      sp.OBJECT_ID, \
+                      sp.OBJECT_OWNER, \
+                      sp.OBJECT_NAME, \
+                      sp.OBJECT_ALIAS, \
+                      sp.OBJECT_TYPE, \
+                      sp.OPTIMIZER, \
+                      sp.ID, \
+                      sp.PARENT_ID, \
+                      sp.DEPTH, \
+                      sp.POSITION, \
+                      0 AS SEARCH_COLUMNS, \
+                      sp.IS_LAST_CHILD, \
+                      sp.COST, \
+                      sp.REAL_COST, \
+                      sp.CARDINALITY, \
+                      sp.REAL_CARDINALITY, \
+                      sp.BYTES, \
+                      sp.ROWSET, \
+                      sp.OTHER_TAG, \
+                      sp.PARTITION_START, \
+                      NULL AS PARTITION_STOP, \
+                      0 AS PARTITION_ID, \
+                      sp.OTHER, \
+                      NULL AS DISTRIBUTION, \
+                      sp.CPU_COST, \
+                      sp.IO_COST, \
+                      0 AS TEMP_SPACE, \
+                      sp.ACCESS_PREDICATES, \
+                      sp.FILTER_PREDICATES, \
+                      sp.STARTUP_PREDICATES, \
+                      sp.PROJECTION, \
+                      sp.SPECIAL_PREDICATES, \
+                      0 AS TIME, \
+                      sp.QBLOCK_NAME, \
+                      sp.REMARKS, \
+                      sp.OTHER_XML \
+                    FROM plan_index \
+                    JOIN OCEANBASE.__ALL_VIRTUAL_WR_SQL_PLAN sp \
+                    ON sp.TENANT_ID=plan_index.TENANT_ID \
+                    AND sp.CLUSTER_ID = plan_index.CLUSTER_ID \
+                    AND sp.SNAP_ID=plan_index.SNAP_ID \
+                    AND sp.SVR_IP=plan_index.SVR_IP \
+                    AND sp.SVR_PORT=plan_index.SVR_PORT \
+                    AND sp.PLAN_HASH=plan_index.PLAN_HASH \
+                    AND sp.SQL_ID=plan_index.SQL_ID \
+                    ORDER BY ID")) {
+      LOG_WARN("failed to assign string", K(ret));
+    } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos, use_wr))) {
+      LOG_WARN("failed to get plan info", K(ret));
+    }
   }
   return ret;
 }
@@ -1127,7 +1362,8 @@ int ObDbmsXplan::get_plan_info_by_session_id(sql::ObExecContext &ctx,
 
 int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
                                     const ObSqlString& sql,
-                                    ObIArray<ObSqlPlanItem*> &plan_infos)
+                                    ObIArray<ObSqlPlanItem*> &plan_infos,
+                                    const bool is_from_wr)
 {
   int ret = OB_SUCCESS;
   common::ObISQLClient *sql_proxy = GCTX.sql_proxy_;
@@ -1157,7 +1393,7 @@ int ObDbmsXplan::inner_get_plan_info(sql::ObExecContext &ctx,
           LOG_WARN("failed to allocate memory", K(ret));
         } else {
           plan_info = new(buf)ObSqlPlanItem();
-          if (OB_FAIL(read_plan_info_from_result(ctx, *mysql_result, *plan_info))) {
+          if (OB_FAIL(read_plan_info_from_result(ctx, *mysql_result, *plan_info, is_from_wr))) {
             LOG_WARN("failed to read plan info", K(ret));
           } else if (OB_FAIL(plan_infos.push_back(plan_info))) {
             LOG_WARN("failed to push back info", K(ret));
@@ -1227,10 +1463,12 @@ int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx
 
 int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
                                             sqlclient::ObMySQLResult& mysql_result,
-                                            ObSqlPlanItem &plan_info)
+                                            ObSqlPlanItem &plan_info,
+                                            bool is_from_wr)
 {
   int ret = OB_SUCCESS;
   int64_t int_value;
+  uint64_t uint_value;
   ObString varchar_val;
   number::ObNumber num_val;
 
@@ -1272,6 +1510,20 @@ int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
     }                                                                                   \
   } while(0);
 
+  #define GET_UINT_VALUE(IDX, value)                                                    \
+  do {                                                                                  \
+    if (OB_FAIL(ret)) {                                                                 \
+    } else if (OB_FAIL(mysql_result.get_uint(IDX, uint_value))) {                       \
+      if (OB_ERR_NULL_VALUE == ret ||                                                   \
+          OB_ERR_MIN_VALUE == ret ||                                                    \
+          OB_ERR_MAX_VALUE == ret) {                                                    \
+        plan_info.value = 0;                                                            \
+        ret = OB_SUCCESS;                                                               \
+      }                                                                                 \
+    } else {                                                                            \
+      plan_info.value = uint_value;                                                     \
+    }                                                                                   \
+  } while(0);
   #define GET_VARCHAR_VALUE(IDX, value)                                                 \
   do {                                                                                  \
     if (OB_FAIL(ret)) {                                                                 \
@@ -1308,7 +1560,11 @@ int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
   GET_VARCHAR_VALUE(OBJECT_ALIAS, object_alias_);
   GET_VARCHAR_VALUE(OBJECT_TYPE, object_type_);
   GET_VARCHAR_VALUE(OPTIMIZER, optimizer_);
-  GET_INT_VALUE(ID, id_);
+  if (!is_from_wr) {
+    GET_INT_VALUE(ID, id_);
+  } else {
+    GET_UINT_VALUE(ID, id_);
+  }
   GET_INT_VALUE(PARENT_ID, parent_id_);
   GET_INT_VALUE(DEPTH, depth_);
   GET_INT_VALUE(POSITION, position_);

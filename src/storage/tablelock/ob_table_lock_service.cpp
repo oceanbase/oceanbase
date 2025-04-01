@@ -245,6 +245,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::start()
   } else if (OB_FAIL(timer_.schedule_task_repeat(
                  timer_handle_, GARBAGE_COLLECT_EXEC_INTERVAL,
                  [this]() mutable {
+                   common::ObDIActionGuard ag("TableLockService", "OBJLockGC", "GCTimer");
                    int ret = OB_SUCCESS;
                    if (OB_FAIL(garbage_collect_for_all_ls_())) {
                      check_and_report_timeout_();

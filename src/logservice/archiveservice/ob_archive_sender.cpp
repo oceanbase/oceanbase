@@ -205,6 +205,7 @@ int ObArchiveSender::submit_send_task_(ObArchiveSendTask *task)
 void ObArchiveSender::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveSender thread start", K_(tenant_id));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveSender");
   lib::set_thread_name("ArcSender");
   ObCurTraceId::init(GCONF.self_addr_);
 

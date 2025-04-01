@@ -272,13 +272,11 @@ class ObMaxWaitGuard
 public:
   explicit ObMaxWaitGuard(ObWaitEventDesc *max_wait);
   ~ObMaxWaitGuard();
-  TO_STRING_KV(K_(prev_wait), K_(di), K_(need_record), K_(max_wait));
+  TO_STRING_KV(K_(need_record), K_(max_wait));
 private:
-  ObWaitEventDesc *prev_wait_;
-  ObDiagnoseSessionInfo *di_;
-  //Do you need statistics
   bool need_record_;
   ObWaitEventDesc *max_wait_;
+  ObDiagnosticInfo *di_;
 };
 
 class ObTotalWaitGuard

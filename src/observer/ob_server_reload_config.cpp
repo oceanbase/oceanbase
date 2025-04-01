@@ -27,6 +27,7 @@
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -125,6 +126,8 @@ int ObServerReloadConfig::operator()()
     if (OB_TMP_FAIL(ObActiveSessHistList::get_instance().resize_ash_size())) {
       LOG_WARN("failed to change ash size", K(tmp_ret));
     }
+    ObDiagnosticInfoContainer::get_di_experimental_feature_flag().set_flags(
+        GCONF._enable_di_experimental_feature_flags);
   }
   {
 #ifdef OB_BUILD_SHARED_STORAGE

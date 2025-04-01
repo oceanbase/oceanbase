@@ -244,11 +244,11 @@ int ObSMHandler::on_close(easy_connection_t *c)
       } else {/*do nothing*/}
     }
 
-    if (OB_NOT_NULL(conn) && OB_NOT_NULL(conn->di_)) {
-      common::ObLocalDiagnosticInfo::dec_ref(conn->di_);
-      common::ObLocalDiagnosticInfo::return_diagnostic_info(conn->di_);
-      conn->di_ = nullptr;
+    if (OB_NOT_NULL(conn) && OB_NOT_NULL(conn->get_diagnostic_info())) {
+      ObDiagnosticInfo *di = conn->get_diagnostic_info();
+      conn->reset_diagnostic_info();
     }
+
     //unlock tenant
     if (OB_LIKELY(NULL != conn->tenant_ && conn->is_tenant_locked_)) {
       conn->tenant_->unlock(*conn->handle_);

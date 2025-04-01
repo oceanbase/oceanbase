@@ -356,6 +356,8 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
 int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->index_id_ : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->index_id_ : 0);
   int ret = OB_SUCCESS;
   ObNewRow *cur_row = NULL;
   row_calc_buf_.reuse();
@@ -475,6 +477,8 @@ int ObVirtualTableIterator::get_next_rows(int64_t &count, int64_t capacity)
 int ObVirtualTableIterator::get_next_row()
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->index_id_ : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->index_id_ : 0);
   int ret = OB_SUCCESS;
   ObNewRow *row = NULL;
   if (OB_ISNULL(scan_param_)

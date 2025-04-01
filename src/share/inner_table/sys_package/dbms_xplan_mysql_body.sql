@@ -29,9 +29,11 @@ CREATE OR REPLACE PACKAGE BODY dbms_xplan
 
     function display_cursor(plan_id      DECIMAL default 0,
                             format		 VARCHAR(32) default 'TYPICAL',
-                            svr_ip       VARCHAR(64) default null,
-                            svr_port     DECIMAL default 0,
-                            tenant_id	 DECIMAL default 0
+                            svr_ip       VARCHAR(64) default null,      -- default value: server connected by client
+                            svr_port     DECIMAL default 0,             -- default value: server connected by client
+                            tenant_id	 DECIMAL default 0,             -- default value: current tenant
+                            sql_handle   VARCHAR(32) default null,
+                            plan_name    VARCHAR(32) default null
                         )
     return text;
     PRAGMA INTERFACE(C, DISPLAY_CURSOR);

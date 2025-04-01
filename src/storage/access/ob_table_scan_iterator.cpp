@@ -664,6 +664,8 @@ int ObTableScanIterator::get_next_row(ObNewRow *&row)
 int ObTableScanIterator::get_next_row(blocksstable::ObDatumRow *&row)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
   int ret = OB_SUCCESS;
   ACTIVE_GLOBAL_ITERATOR_GUARD(ret, cached_iter_node_);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -696,6 +698,8 @@ int ObTableScanIterator::get_next_row(blocksstable::ObDatumRow *&row)
 int ObTableScanIterator::get_next_rows(int64_t &count, int64_t capacity)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
   int ret = OB_SUCCESS;
   ACTIVE_GLOBAL_ITERATOR_GUARD(ret, cached_iter_node_);
   if (IS_NOT_INIT) {

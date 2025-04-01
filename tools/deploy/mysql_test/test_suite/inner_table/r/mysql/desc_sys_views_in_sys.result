@@ -5024,6 +5024,10 @@ TX_ID	bigint(20)	NO
 BLOCKING_SESSION_ID	bigint(20)	NO			
 TABLET_ID	bigint(20)	NO			
 PROXY_SID	bigint(20)	NO			
+DELTA_READ_IO_REQUESTS	bigint(20)	NO			
+DELTA_READ_IO_BYTES	bigint(20)	NO			
+DELTA_WRITE_IO_REQUESTS	bigint(20)	NO			
+DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
@@ -5095,6 +5099,10 @@ TX_ID	bigint(20)	NO
 BLOCKING_SESSION_ID	bigint(20)	NO			
 TABLET_ID	bigint(20)	NO			
 PROXY_SID	bigint(20)	NO			
+DELTA_READ_IO_REQUESTS	bigint(20)	NO			
+DELTA_READ_IO_BYTES	bigint(20)	NO			
+DELTA_WRITE_IO_REQUESTS	bigint(20)	NO			
+DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
@@ -9195,6 +9203,10 @@ TX_ID	bigint(20)	YES		NULL
 BLOCKING_SESSION_ID	bigint(20)	YES		NULL	
 TABLET_ID	bigint(20)	YES		NULL	
 PROXY_SID	bigint(20)	YES		NULL	
+DELTA_READ_IO_REQUESTS	bigint(20)	NO			
+DELTA_READ_IO_BYTES	bigint(20)	NO			
+DELTA_WRITE_IO_REQUESTS	bigint(20)	NO			
+DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
@@ -9266,6 +9278,10 @@ TX_ID	bigint(20)	NO
 BLOCKING_SESSION_ID	bigint(20)	NO			
 TABLET_ID	bigint(20)	NO			
 PROXY_SID	bigint(20)	NO			
+DELTA_READ_IO_REQUESTS	bigint(20)	NO			
+DELTA_READ_IO_BYTES	bigint(20)	NO			
+DELTA_WRITE_IO_REQUESTS	bigint(20)	NO			
+DELTA_WRITE_IO_BYTES	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
@@ -10942,6 +10958,32 @@ QBLOCK_NAME	varchar(128)	NO		NULL
 REMARKS	varchar(4000)	NO		NULL	
 OTHER_XML	varchar(4000)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_WR_SQL_PLAN limit 1);
+cnt
+1
+desc oceanbase.DBA_WR_RES_MGR_SYSSTAT;
+Field	Type	Null	Key	Default	Extra
+CLUSTER_ID	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+GROUP_ID	bigint(20)	NO		NULL	
+SNAP_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+STAT_ID	bigint(20)	NO		NULL	
+VALUE	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_RES_MGR_SYSSTAT limit 1);
+cnt
+1
+desc oceanbase.CDB_WR_RES_MGR_SYSSTAT;
+Field	Type	Null	Key	Default	Extra
+CLUSTER_ID	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+GROUP_ID	bigint(20)	NO		NULL	
+SNAP_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+STAT_ID	bigint(20)	NO		NULL	
+VALUE	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_WR_RES_MGR_SYSSTAT limit 1);
 cnt
 1
 desc oceanbase.DBA_OB_SPM_EVO_RESULT;

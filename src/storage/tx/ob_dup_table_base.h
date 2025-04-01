@@ -1021,6 +1021,7 @@ public:
   int replay_succ();
 
   void print_statistics_log();
+  const char *get_cb_name() const override { return "DupTableLogOperator"; }
 
 public:
   void set_logging_scn(const share::SCN &scn);

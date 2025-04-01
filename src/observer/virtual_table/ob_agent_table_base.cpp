@@ -241,6 +241,7 @@ int ObAgentTableBase::construct_columns(
       query_timeout = query_timeout * 10;
       rest_time = rest_time / 10;
     }
+    query_timeout = MIN(query_timeout, OB_MAX_USER_SPECIFIED_TIMEOUT);
     if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", KR(ret), K(buf_len));

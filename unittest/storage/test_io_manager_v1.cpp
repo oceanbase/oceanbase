@@ -154,6 +154,7 @@ public:
   virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual ObIAllocator *get_allocator() override { return allocator_; }
+  const char *get_cb_name() const override { return "TestIOCallback"; }
   TO_STRING_KV(KP(number_), KP(allocator_), KP(help_buf_));
 
 public:

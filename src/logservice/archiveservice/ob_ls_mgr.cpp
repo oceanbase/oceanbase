@@ -350,6 +350,7 @@ int ObArchiveLSMgr::authorize_ls_archive_task(const ObLSID &id,
 void ObArchiveLSMgr::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveLSMgr thread start");
+  ObDIActionGuard g("LogService", "LogArchiveService", "LSArchiveMgr");
   lib::set_thread_name("LSArchiveMgr");
   ObCurTraceId::init(GCONF.self_addr_);
 

@@ -121,6 +121,7 @@ void ObArchiveSequencer::signal()
 void ObArchiveSequencer::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveSequencer thread start");
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveSequencer");
   lib::set_thread_name("ArcSeq");
   const int64_t THREAD_RUN_INTERVAL = 100 * 1000L;
 

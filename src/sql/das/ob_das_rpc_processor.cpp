@@ -58,6 +58,11 @@ int ObDASBaseAccessP<pcode>::before_process()
     di->get_ash_stat().plan_hash_ = das_remote_info_.plan_hash_;
     MEMCPY(di->get_ash_stat().sql_id_, das_remote_info_.sql_id_,
         min(sizeof(di->get_ash_stat().sql_id_), sizeof(das_remote_info_.sql_id_)));
+    di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(),
+                                       di->get_ash_stat().session_id_,
+                                       das_remote_info_.sql_id_,
+                                       das_remote_info_.plan_id_,
+                                       das_remote_info_.plan_hash_);
   }
 
   {

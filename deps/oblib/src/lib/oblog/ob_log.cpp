@@ -22,6 +22,7 @@
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "common/ob_smart_var.h"
 #include "lib/oblog/ob_log_compressor.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::lib;
 
@@ -1686,6 +1687,8 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
           (void)ATOMIC_AAF(&log_file_[i].write_size_, size);
           (void)ATOMIC_AAF(&log_file_[i].file_size_, size);
           (void)ATOMIC_AAF(&log_file_[i].write_count_, iovcnt[i]);
+          EVENT_ADD(ObStatEventIds::IO_WRITE_COUNT, iovcnt[i]);
+          EVENT_ADD(ObStatEventIds::IO_WRITE_BYTES, size);
         }
         if (wf_iovcnt[i] > 0 && log_file_[i].wf_fd_ > 0) {
           (void)::writev(log_file_[i].wf_fd_, wf_vec[i], wf_iovcnt[i]);

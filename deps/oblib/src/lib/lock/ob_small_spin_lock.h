@@ -15,6 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/atomic/ob_atomic.h"
+#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase
 {
@@ -112,16 +113,38 @@ public:
 
   // Lock.
   // Keep spinning till success.
-  void lock()
+  void lock(const int64_t event_no = 0)
   {
+    bool locked = false;
     int64_t cnt = 0;
-    while (false == try_lock()) {
-      // Sleep when it exceeds spin limit.
-      if (MaxSpin <= (cnt++)) {
-        cnt = 0;
-        ::usleep(USleep);
+    //try spin lock with MaxSpin round, and don't register wait event
+    for (; !locked && cnt <= MaxSpin; ++cnt) {
+      locked = try_lock();
+      if (!locked) {
+        PAUSE();
       }
-      PAUSE();
+    }
+    if (!locked) {
+      if (event_no > 0) {
+        ObWaitEventGuard wait_guard(event_no, 0, MaxSpin, 0, 0);
+        while (false == try_lock()) {
+          // Sleep when it exceeds spin limit.
+          if (MaxSpin <= (cnt++)) {
+            cnt = 0;
+            ::usleep(USleep);
+          }
+          PAUSE();
+        }
+      } else {
+        while (false == try_lock()) {
+          // Sleep when it exceeds spin limit.
+          if (MaxSpin <= (cnt++)) {
+            cnt = 0;
+            ::usleep(USleep);
+          }
+          PAUSE();
+        }
+      }
     }
   }
 
@@ -162,7 +185,7 @@ template<typename LockType>
 class ObSmallSpinLockGuard
 {
 public:
-  explicit ObSmallSpinLockGuard(LockType &lock) : lock_(&lock) { lock_->lock(); }
+  explicit ObSmallSpinLockGuard(LockType &lock, const int64_t event_no = 0) : lock_(&lock) { lock_->lock(event_no); }
   ~ObSmallSpinLockGuard() { lock_->unlock(); }
 private:
   LockType *lock_;

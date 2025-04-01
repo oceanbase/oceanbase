@@ -473,6 +473,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
         CLOG_LOG(ERROR, "cb is NULL", KPC(cb_queue), KPC(this), K(ret));
       } else if ((lsn = cb->__get_lsn()).val_ < ATOMIC_LOAD(&palf_committed_end_lsn_.val_)) {
         // 小于确认日志位点的cb可以回调on_success
+        ObDIActionGuard(cb->get_cb_name());
         if (OB_FAIL(cb_queue->pop())) {
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
         } else {
@@ -1298,7 +1299,7 @@ int ObLogApplyService::push_task(ObApplyServiceTask *task)
   } else {
     while (OB_FAIL(TG_PUSH_TASK(tg_id_, task)) && OB_EAGAIN == ret) {
       //预期不会失败
-      ob_usleep(1000); //1ms
+      ob_throttle_usleep(1000, ret); //1ms
       CLOG_LOG(ERROR, "failed to push", K(ret));
     }
   }
@@ -1336,6 +1337,7 @@ void ObLogApplyService::revert_apply_status(ObApplyStatus *apply_status)
 void ObLogApplyService::handle(void *task)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("LogService", "LogApplyService", "ApplyTask");
   ObApplyServiceTask *task_to_handle = static_cast<ObApplyServiceTask *>(task);
   ObApplyStatus *apply_status = NULL;
   bool need_push_back = false;

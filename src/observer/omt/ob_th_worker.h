@@ -101,6 +101,7 @@ public:
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
   OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
+  OB_INLINE const char *get_module_name() const { return module_name_; }
 
   static thread_local uint64_t serving_tenant_id_;
 private:
@@ -133,6 +134,8 @@ private:
   int64_t last_wakeup_ts_;
   int64_t* blocking_ts_;
   int64_t idle_us_;
+  static const int64_t MAX_MODULE_NAME_LEN = 23; //no more than 3 int64_t
+  char module_name_[MAX_MODULE_NAME_LEN];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker

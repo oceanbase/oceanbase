@@ -1815,6 +1815,7 @@ void ObTenantDagWorker::run1()
       }
 
       if (OB_SUCC(ret)) {
+        ObDIActionGuard di_action_guard("DAG", dag->get_dag_module_str(dag->get_type()), dag->get_dag_type_str(dag->get_type()));
         CONSUMER_GROUP_ID_GUARD(dag->get_consumer_group_id());
         ObDagId dag_id = dag->get_dag_id();
         if (task_->get_sub_task_id() > 0) {

@@ -90,6 +90,7 @@ public:
   TO_STRING_KV(K_(is_callback_invoked), K_(is_success), KP_(log_buffer));
   OB_INLINE bool is_invoked() const { return ATOMIC_LOAD(&is_callback_invoked_); }
   OB_INLINE bool is_success() const { return ATOMIC_LOAD(&is_success_); }
+  const char *get_cb_name() const override { return "VectorIndexSyncLogCb"; }
 
 public:
   static const uint32 VECTOR_INDEX_SYNC_LOG_MAX_LENGTH = 16 * 1024; // Max 16KB each log

@@ -238,6 +238,7 @@ void ObDDLTaskExecutor::run1()
   int64_t executed_task_count = 0;
   ObIDDLTask *task = NULL;
   ObIDDLTask *first_retry_task = NULL;
+  ObDIActionGuard ag("DDLService", "DDLTaskExecutor", "detect task");
   lib::set_thread_name("DDLTaskExecutor");
   while (!has_set_stop()) {
     while (!has_set_stop() && executed_task_count < BATCH_EXECUTE_COUNT) {
@@ -258,6 +259,7 @@ void ObDDLTaskExecutor::run1()
         }
         break;
       } else {
+        ObDIActionGuard(ObDIActionGuard::NS_ACTION, "TaskType:%d", task->get_type());
         task->process();
         ++executed_task_count;
         if (task->need_retry()) {

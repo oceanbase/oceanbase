@@ -40,6 +40,7 @@ void ObDesExecContext::cleanup_session()
 {
   if (NULL != my_session_) {
     if (ObSQLSessionInfo::INVALID_SESSID == free_session_ctx_.sessid_) {
+      my_session_->set_session_sleep();
       my_session_->~ObSQLSessionInfo();
       my_session_ = NULL;
     } else if (NULL != GCTX.session_mgr_) {
@@ -50,6 +51,7 @@ void ObDesExecContext::cleanup_session()
       GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
     }
   }
+  OB_ASSERT(ObQueryRetryAshGuard::get_info_ptr() == nullptr);
 }
 
 void ObDesExecContext::show_session()

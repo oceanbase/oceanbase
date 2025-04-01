@@ -259,10 +259,10 @@ void ObPxPool::run(int64_t idx)
 void ObPxPool::run1()
 {
   int ret = OB_SUCCESS;
-  set_px_thread_name();
   ObTLTaGuard ta_guard(tenant_id_);
   common::ObBackGroundSessionGuard backgroud_session_guard(tenant_id_, group_id_);
-  ObLocalDiagnosticInfo::set_thread_name(ob_get_tenant_id(), "PxWorker");
+  ObDIActionGuard action_guard("PxPool", "PxWorker", "");
+  set_px_thread_name();
   auto *pm = common::ObPageManager::thread_local_instance();
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::DEFAULT_CTX_ID);

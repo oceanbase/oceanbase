@@ -72,6 +72,11 @@ int64_t __attribute__((used)) lib_mtl_cpu_count()
   return share::ObTenantEnv::get_tenant()->unit_max_cpu();
 }
 
+bool __attribute__((used)) lib_enable_diagnostic_info_cache()
+{
+  return GCONF._enable_diagnostic_info_cache;
+}
+
 }
 namespace share
 {

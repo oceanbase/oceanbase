@@ -2621,6 +2621,7 @@ void ObMultiTenant::run1()
 
 
     if (REACH_TIME_INTERVAL(10000000L)) {  // every 10s
+      ObDIActionGuard ag("dump tenant info");
       SpinRLockGuard guard(lock_);
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (!OB_ISNULL(*it)) {

@@ -3418,6 +3418,7 @@ int ObSQLSessionInfo::set_module_name(const common::ObString &mod) {
   if (OB_NOT_NULL(di)) {
     MEMCPY(di->get_ash_stat().module_, mod.ptr(),
         min(static_cast<int64_t>(sizeof(di->get_ash_stat().module_)), size));
+    di->get_ash_stat().has_user_module_ = true;
   }
   return ret;
 }
@@ -3432,6 +3433,7 @@ int ObSQLSessionInfo::set_action_name(const common::ObString &act) {
   if (OB_NOT_NULL(di)) {
     MEMCPY(di->get_ash_stat().action_, act.ptr(),
         min(static_cast<int64_t>(sizeof(di->get_ash_stat().action_)), size));
+    di->get_ash_stat().has_user_action_ = true;
   }
   return ret;
 }
@@ -4773,6 +4775,10 @@ int CLS::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
 {                                                                       \
   ObSqlTransControl::display_txn_##func##_state(sess, current_sess_buf, current_sess_length, last_sess_buf, last_sess_length); \
   return OB_SUCCESS;                                                    \
+}                                                                       \
+int CLS::display_diagnosis_sess_info(ObSQLSessionInfo &sess, const int16_t type, int64_t index) \
+{                                                                       \
+  return OB_SUCCESS;                                                    \
 }
 
 SESS_ENCODER_DELEGATE_TO_TXN(ObTxnStaticInfoEncoder, static)
@@ -4892,6 +4898,20 @@ int ObSQLSessionInfo::get_dblink_sequence_schema(int64_t sequence_id, const ObSe
   return ret;
 }
 
+int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
+    LOG_WARN("failed to assign executing sql stat record");
+  } else {
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+    }
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::set_service_name(const ObString& service_name)
 {
   int ret = OB_SUCCESS;
@@ -4947,20 +4967,6 @@ int ObSQLSessionInfo::set_audit_filter_name(const common::ObString &filter_name)
     audit_filter_name_.reset();
   } else if (OB_FAIL(sess_level_name_pool_.write_string(filter_name, &audit_filter_name_))) {
     LOG_WARN("failed to write filter_name to string_buf_", K(ret));
-  }
-  return ret;
-}
-
-int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
-    LOG_WARN("failed to assign executing sql stat record");
-  } else {
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
-    }
   }
   return ret;
 }

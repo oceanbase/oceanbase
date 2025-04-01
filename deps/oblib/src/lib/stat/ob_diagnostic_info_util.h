@@ -16,6 +16,7 @@
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_di_cache.h"
+#include "share/ash/ob_active_sess_hist_list.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,8 @@ extern ObDiagnosticInfoContainer *get_di_container();
 extern uint64_t lib_get_cpu_khz();
 extern void lib_mtl_switch(int64_t tenant_id, std::function<void(int)> fn);
 extern int64_t lib_mtl_cpu_count();
+extern bool lib_enable_diagnostic_info_cache();
+extern share::ObActiveSessHistList* lib_get_ash_list_instance();
 
 #define LIB_MTL_ID() get_mtl_id()
 

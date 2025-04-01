@@ -438,8 +438,6 @@ int LogBlockHandler::inner_write_impl_(const ObIOFd &io_fd, const char *buf, con
   int64_t start_ts = ObTimeUtility::fast_current_time();
   int64_t write_size = 0;
   int64_t time_interval = OB_INVALID_TIMESTAMP;
-  ObWaitEventGuard wait_event(ObWaitEventIds::PALF_WRITE,
-    PALF_IO_WAIT_EVENT_TIMEOUT_MS, io_fd.second_id_, offset, count);
   do {
     if (OB_FAIL(io_adapter_->pwrite(io_fd, buf, count, offset, write_size))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {

@@ -1205,6 +1205,7 @@ int ObMPPacketSender::update_transmission_checksum_flag(const ObSQLSessionInfo &
 void ObMPPacketSender::finish_sql_request()
 {
   if (conn_valid_ && !req_has_wokenup_) {
+    req_->reset_diagnostic_info();
     (void)release_read_handle();
     SQL_REQ_OP.finish_sql_request(req_);
     req_has_wokenup_ = true;

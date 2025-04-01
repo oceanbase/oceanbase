@@ -25,6 +25,7 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/ob_lock_wait_node.h"
 #include "rpc/ob_reusable_mem.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -82,7 +83,7 @@ public:
         trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0), diagnostic_info_ptr_(nullptr)
   {
   }
-  virtual ~ObRequest() {}
+  virtual ~ObRequest() { reset_diagnostic_info(); }  // not guaranteed to call
 
   int get_nio_protocol() const { return nio_protocol_; }
   void set_server_handle_context(void* ctx) { handle_ctx_ = ctx; }
@@ -149,11 +150,31 @@ public:
   };
   void set_diagnostic_info(common::ObDiagnosticInfo *ptr)
   {
-    diagnostic_info_ptr_ = ptr;
+    if (OB_NOT_NULL(ptr) && OB_ISNULL(diagnostic_info_ptr_)) {
+#ifdef ENABLE_DEBUG_LOG
+      const bool disable_defensive_check = false;
+#else
+      const bool disable_defensive_check = true;
+#endif
+      if (disable_defensive_check || ptr->set_mysql_ref()) {
+        common::ObLocalDiagnosticInfo::inc_ref(ptr);
+        diagnostic_info_ptr_ = ptr;
+      }
+    }
   };
   void reset_diagnostic_info()
   {
-    diagnostic_info_ptr_ = nullptr;
+    if (OB_NOT_NULL(diagnostic_info_ptr_)) {
+#ifdef ENABLE_DEBUG_LOG
+      const bool disable_defensive_check = false;
+#else
+      const bool disable_defensive_check = true;
+#endif
+      if (disable_defensive_check || diagnostic_info_ptr_->reset_mysql_ref()) {
+        common::ObLocalDiagnosticInfo::dec_ref(diagnostic_info_ptr_);
+        diagnostic_info_ptr_ = nullptr;
+      }
+    }
   };
   VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "sql_req_level", sql_req_level_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
 
@@ -186,8 +207,8 @@ protected:
   bool discard_flag_;
   bool large_retry_flag_;
   int32_t retry_times_;
-  common::ObDiagnosticInfo *diagnostic_info_ptr_;
 private:
+  common::ObDiagnosticInfo *diagnostic_info_ptr_;
   DISALLOW_COPY_AND_ASSIGN(ObRequest);
 }; // end of class ObRequest
 

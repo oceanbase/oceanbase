@@ -600,6 +600,7 @@ int ObAsyncSingleMicroBlockIOCallback::process(
     const bool use_tl_reader)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("SingleMicroBlockIOCallback");
   ObTimeGuard time_guard("AsyncSingle_Callback_Process", 100000); //100ms
   if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -673,6 +674,7 @@ int ObMultiDataBlockIOCallback::process(
     const bool use_tl_reader)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("MultiDataBlockIOCallback");
   ObTimeGuard time_guard("MultiData_Callback_Process", 100000); //100ms
   if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;

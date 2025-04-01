@@ -243,6 +243,7 @@ public:
     virtual ~ObITmpPageIOCallback();
     virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
     const char *get_data() override { return data_buf_; }
+
   protected:
     friend class ObTmpPageCache;
     virtual int process_page(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value);
@@ -261,6 +262,7 @@ public:
     ~ObTmpCachedReadPageIOCallback();
     int64_t size() const override { return sizeof(*this); }
     int inner_process(const char *data_buffer, const int64_t size) override;
+    const char *get_cb_name() const override { return "ObTmpCachedReadPageIOCallback"; }
     TO_STRING_KV("callback_type:", "ObTmpCachedReadPageIOCallback", KP(data_buf_));
     DISALLOW_COPY_AND_ASSIGN(ObTmpCachedReadPageIOCallback);
   private:
@@ -275,6 +277,7 @@ public:
     ~ObTmpAggregatePageIOCallback();
     int64_t size() const override { return sizeof(*this); }
     int inner_process(const char *data_buffer, const int64_t size) override;
+    const char *get_cb_name() const override { return "ObTmpAggregatePageIOCallback"; }
     TO_STRING_KV("callback_type:", "ObTmpAggregatePageIOCallback", KP(data_buf_));
     DISALLOW_COPY_AND_ASSIGN(ObTmpAggregatePageIOCallback);
   private:
@@ -290,6 +293,7 @@ public:
     ~ObTmpDirectReadPageIOCallback() {}
     int64_t size() const override { return sizeof(*this); }
     int inner_process(const char *data_buffer, const int64_t size) override;
+    const char *get_cb_name() const override { return "ObTmpDirectReadPageIOCallback"; }
     TO_STRING_KV("callback_type:", "ObTmpDirectReadPageIOCallback", KP(data_buf_));
     DISALLOW_COPY_AND_ASSIGN(ObTmpDirectReadPageIOCallback);
   };

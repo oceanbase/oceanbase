@@ -1323,6 +1323,8 @@ private:
   bool set_entry_name_;
   bool set_current_name_;
   ObPLASHStatus pl_ash_status_;
+public:
+  inline bool is_set_entry_info() const {return set_entry_info_;}
 };
 }
 }
