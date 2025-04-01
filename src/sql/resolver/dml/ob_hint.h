@@ -146,7 +146,7 @@ private:
 public:
   union {
     struct {
-      uint64_t has_direct_ : 1;
+      uint64_t has_direct_ : 1; // FARM COMPAT WHITELIST
       uint64_t need_sort_ : 1;
       uint64_t has_no_direct_ : 1;
       uint64_t reserved_ : 61;
