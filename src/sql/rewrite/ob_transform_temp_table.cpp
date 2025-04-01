@@ -3127,8 +3127,8 @@ int ObTransformTempTable::collect_semi_join_stmt_ids(const ObDMLStmt &parent_stm
 {
   int ret = OB_SUCCESS;
   // collect stmt id if generated table is on left side of semi join
-  bool found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !found && i < parent_stmt.get_semi_infos().count(); ++i) {
+  bool done_collect = !parent_stmt.is_select_stmt();  // ignore non-select stmt
+  for (int64_t i = 0; OB_SUCC(ret) && !done_collect && i < parent_stmt.get_semi_infos().count(); ++i) {
     SemiInfo *semi_info = parent_stmt.get_semi_infos().at(i);
     if (OB_ISNULL(semi_info)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3140,11 +3140,11 @@ int ObTransformTempTable::collect_semi_join_stmt_ids(const ObDMLStmt &parent_stm
     } else if (OB_FAIL(add_var_to_array_no_dup(semi_join_stmt_ids, parent_stmt.stmt_id_))) {
       LOG_WARN("failed to add var to array no dup", K(ret));
     } else {
-      found = true;
+      done_collect = true;
     }
   }
   // collect stmt id from any/all/exists subquery (candidate semi join)
-  for (int64_t i = 0; OB_SUCC(ret) && !found && i < parent_stmt.get_condition_size(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && !done_collect && i < parent_stmt.get_condition_size(); i++) {
     ObRawExpr *cond = const_cast<ObRawExpr*>(parent_stmt.get_condition_expr(i));
     ObQueryRefRawExpr *query_ref = NULL;
     ObSEArray<ObColumnRefRawExpr*, 2> candi_cols;
@@ -3160,9 +3160,9 @@ int ObTransformTempTable::collect_semi_join_stmt_ids(const ObDMLStmt &parent_stm
       } else if (OB_FAIL(extract_pushdown_cols(*query_ref, cur_table_id, candi_cols))) {
         LOG_WARN("failed to extract pushdown cols", K(ret));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && !found && j < candi_cols.count(); ++j) {
+        for (int64_t j = 0; OB_SUCC(ret) && !done_collect && j < candi_cols.count(); ++j) {
           if (ObOptimizerUtil::find_item(mapped_col_exprs, candi_cols.at(j))) {
-            found = true;
+            done_collect = true;
             if (OB_FAIL(add_var_to_array_no_dup(semi_join_stmt_ids, parent_stmt.stmt_id_))) {
               LOG_WARN("failed to add var to array no dup", K(ret));
             }
@@ -3186,9 +3186,9 @@ int ObTransformTempTable::collect_semi_join_stmt_ids(const ObDMLStmt &parent_stm
       } else if (OB_FAIL(extract_pushdown_cols(*query_ref, cur_table_id, candi_cols))) {
         LOG_WARN("failed to extract pushdown cols", K(ret));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && !found && j < candi_cols.count(); ++j) {
+        for (int64_t j = 0; OB_SUCC(ret) && !done_collect && j < candi_cols.count(); ++j) {
           if (ObOptimizerUtil::find_item(mapped_col_exprs, candi_cols.at(j))) {
-            found = true;
+            done_collect = true;
             if (OB_FAIL(add_var_to_array_no_dup(semi_join_stmt_ids, parent_stmt.stmt_id_))) {
               LOG_WARN("failed to add var to array no dup", K(ret));
             }
