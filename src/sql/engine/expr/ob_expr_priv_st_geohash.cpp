@@ -327,7 +327,15 @@ int ObExprPrivSTGeoHash::eval_priv_st_geohash(const ObExpr &expr, ObEvalCtx &ctx
   } else if (OB_FAIL(calc_geohash(gbox, precision, geohash_buf))) {
     LOG_WARN("fail to calculate geohash", K(ret));
   } else {
-    res.set_string(geohash_buf.ptr(), geohash_buf.length());
+    ObExprStrResAlloc res_alloc(expr, ctx);
+    char *res_buf = (char *)res_alloc.alloc(geohash_buf.length());
+    if (OB_ISNULL(res_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("result buffer allocation failed", K(ret), K(geohash_buf.length()));
+    } else {
+      MEMCPY(res_buf, geohash_buf.ptr(), geohash_buf.length());
+      res.set_string(res_buf, geohash_buf.length());
+    }
   }
 
   return ret;
