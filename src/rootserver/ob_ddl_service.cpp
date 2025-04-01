@@ -2851,6 +2851,11 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
   ObTableSchema::const_column_iterator tmp_begin = new_table_schema.column_begin();
   ObTableSchema::const_column_iterator tmp_end = new_table_schema.column_end();
   ObColumnSchemaV2 *del_hidden_pk_column = nullptr;
+  if (pk_column_names.count() > common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+    ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+    LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    LOG_WARN("too many rowkey columns", K(ret), K(pk_column_names.count()));
+  }
   for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
     ObColumnSchemaV2 *col = (*tmp_begin);
     if (OB_ISNULL(col)) {
