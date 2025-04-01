@@ -182,6 +182,9 @@ struct ObTXTransferUtils
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &table_handle);
   static int set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet);
+  static int traverse_trans_to_submit_redo_log_with_retry(
+    storage::ObLS &ls,
+    const int64_t timeout);
 
 private:
   static int get_tablet_status_(

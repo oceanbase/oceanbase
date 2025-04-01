@@ -3224,7 +3224,6 @@ int ObStorageSubmitTxLogP::process()
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
     ObLS *ls = NULL;
-    transaction::ObTransID failed_tx_id;
     SCN scn;
     if (!arg_.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
@@ -3234,8 +3233,8 @@ int ObStorageSubmitTxLogP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is NULL", KR(ret), K(ls_handle));
-    } else if (OB_FAIL(ls->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
-      LOG_WARN("failed to submit tx log", K(ret), KPC(ls), K(failed_tx_id));
+    } else if (OB_FAIL(ObTXTransferUtils::traverse_trans_to_submit_redo_log_with_retry(*ls, 100_ms))) {
+      LOG_WARN("failed to submit tx log", K(ret), KPC(ls));
     } else if (OB_FAIL(ls->get_log_handler()->get_max_scn(scn))) {
       LOG_WARN("log_handler get_max_scn failed", K(ret), K(ls_id));
     } else {

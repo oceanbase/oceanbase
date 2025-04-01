@@ -581,6 +581,25 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
   return ret;
 }
 
+int ObTXTransferUtils::traverse_trans_to_submit_redo_log_with_retry(
+  storage::ObLS &ls,
+  const int64_t timeout)
+{
+  int ret = OB_TX_NOLOGCB;
+  ObTransID failed_tx_id;
+  int64_t start_time = ObTimeUtil::current_time();
+
+  while (OB_TX_NOLOGCB == ret
+         && ObTimeUtil::current_time() - start_time < timeout) {
+    ret = ls.get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id);
+    if (OB_TX_NOLOGCB == ret) {
+      usleep(10_ms);
+    }
+  }
+
+  return ret;
+}
+
 int ObTXTransferUtils::create_empty_minor_sstable(
     const common::ObTabletID &tablet_id,
     const SCN start_scn,
