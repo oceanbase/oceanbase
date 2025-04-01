@@ -227,6 +227,8 @@ int ObExprNLSSort::eval_nlssort(const ObExpr &expr,
                                                                 input_str,
                                                                 OB_MAX_ORACLE_VARCHAR_LENGTH))) {
           LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+        } else if (input_str.empty()) {
+          expr_datum.set_null();
         } else {
           ret = eval_nlssort_inner(expr, ctx, expr_datum, coll_type, arg0_coll_type, arg0_obj_type, input_str);
         }
