@@ -50,6 +50,11 @@ int ObMPStmtPrexecute::before_process()
 
   if (OB_FAIL(ObMPBase::before_process())) {
     LOG_WARN("fail to call before process", K(ret));
+  } else if (!GCONF._ob_enable_prepared_statement) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "The disabled '_ob_enable_prepared_statement' parameter prevents the use of "
+                   "prepared statements");
   } else if ((OB_ISNULL(req_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("request should not be null", K(ret));
