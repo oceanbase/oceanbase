@@ -142,7 +142,9 @@ int ObIStorageClogRecorder::try_update_with_lock(
   while ((OB_SUCC(ret) || OB_BLOCK_FROZEN == ret)
       && update_version > ATOMIC_LOAD(&max_saved_version_)) {
     logcb_ptr_->set_update_version(update_version);
-    if (OB_FAIL(submit_log(update_version, clog_buf, clog_len))) {
+    if (OB_FAIL(reset_for_retry_in_lock())) {
+      LOG_WARN("fail to reset for retry", K(ret), K(update_version), K_(max_saved_version));
+    } else if (OB_FAIL(submit_log(update_version, clog_buf, clog_len))) {
       if (OB_BLOCK_FROZEN != ret) {
         LOG_WARN("fail to submit log", K(ret), K(update_version), K(max_saved_version_));
       } else if (ObTimeUtility::fast_current_time() >= expire_ts) {
