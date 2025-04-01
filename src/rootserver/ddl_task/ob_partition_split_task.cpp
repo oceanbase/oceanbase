@@ -2505,13 +2505,12 @@ int ObPartitionSplitTask::prepare_tablet_split_ranges(
           }
         }
       }
-      if (OB_FAIL(ret)) {
-        data_tablet_parallel_rowkey_list_.reset(); // reset.
-        index_tablet_parallel_rowkey_list_.reset(); // reset.
-      } else if (OB_FAIL(update_task_message())) {
-        LOG_WARN("update parallel split info failed", K(ret));
-      }
-      LOG_INFO("split datum rowkey", K(ret), K(arg), K(result));
+    }
+    if (OB_FAIL(ret)) {
+      data_tablet_parallel_rowkey_list_.reset(); // reset.
+      index_tablet_parallel_rowkey_list_.reset(); // reset.
+    } else if (OB_FAIL(update_task_message())) {
+      LOG_WARN("update parallel split info failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
