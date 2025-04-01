@@ -125,13 +125,16 @@ int ObAlterLSResolver::resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLS
   uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
   uint64_t ug_id = OB_INVALID_ID;
   ObZone primary_zone;
+  const int64_t cluster_version = GET_MIN_CLUSTER_VERSION();
   if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
+  } else if (!(cluster_version >= CLUSTER_VERSION_4_2_5_1
+      || (cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_11 && cluster_version < CLUSTER_VERSION_4_2_5_0))) {
+    LOG_WARN("CLUSTER_VERSION should be in [4.2.1.11, 4.2.5.0) or [4.2.5.1, infinity)", KR(ret));
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("CLUSTER_VERSION < 4.2.5.1", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "CLUSTER_VERSION < 4.2.5.1, MODIFY LS is");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        "CLUSTER_VERSION is not in [4.2.1.11, 4.2.5.0) or [4.2.5.1, infinity), MODIFY LS is");
   } else {
     if (4 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_[1])
         || OB_ISNULL(parse_tree.children_[2]) || OB_ISNULL(parse_tree.children_[0])) {
