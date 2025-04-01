@@ -9735,6 +9735,20 @@ int ObRootService::broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg)
     } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
       LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
     }
+    // if switchover to primary tenant, we should clear ddl epoch in RS
+    // if not clear ddl epoch in RS, we could loss some DDL changes under
+    // previous primary_tenant in another cluster
+    if (OB_FAIL(ret)) {
+    } else if (arg.need_clear_ddl_epoch()) {
+      // only switchover need clear ddl epoch by broadcast schema
+      // tenant id should be valid under this case
+      if (OB_UNLIKELY(!is_valid_tenant_id(arg.tenant_id_))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tenant id should be valid if need_clear_ddl_epoch", KR(ret), K(arg));
+      } else {
+        schema_service_->get_ddl_epoch_mgr().remove_ddl_epoch(arg.tenant_id_);
+      }
+    }
   }
   LOG_INFO("end broadcast_schema request", K(ret), K(arg));
   return ret;

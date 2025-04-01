@@ -8328,12 +8328,15 @@ struct ObBroadcastSchemaArg
 public:
   ObBroadcastSchemaArg()
     : tenant_id_(common::OB_INVALID_TENANT_ID),
-      schema_version_(common::OB_INVALID_VERSION) {}
+      schema_version_(common::OB_INVALID_VERSION),
+      need_clear_ddl_epoch_(false) {}
   void reset();
+  bool need_clear_ddl_epoch() const { return need_clear_ddl_epoch_; }
 public:
   uint64_t tenant_id_;
   int64_t schema_version_;
-  TO_STRING_KV(K_(tenant_id), K_(schema_version));
+  bool need_clear_ddl_epoch_;
+  TO_STRING_KV(K_(tenant_id), K_(schema_version), K_(need_clear_ddl_epoch));
 };
 
 struct ObGetRecycleSchemaVersionsArg
