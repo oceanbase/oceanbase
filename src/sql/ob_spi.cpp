@@ -3110,8 +3110,8 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
       }
     } else {
       if (obj.is_null()) {
-        //OZ (spi_cursor_alloc(*ctx->allocator_, obj));
-        OZ (spi_cursor_alloc(ctx->exec_ctx_->get_allocator(), obj));
+        OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
+        //OZ (spi_cursor_alloc(ctx->exec_ctx_->get_allocator(), obj));
       }
     }
   }
