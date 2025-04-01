@@ -574,10 +574,7 @@ public:
   int64_t get_thread_count() const;
   int64_t get_queue_depth() const;
   int get_queue_count(ObIArray<int64_t> &queue_count_array);
-
-  const ObArray<ObIORunner *> &get_runners() { return runners_; };
-
-  TO_STRING_KV(K(is_inited_), K(config_thread_count_), K(queue_depth_), K(runners_), KPC(io_allocator_));
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   int64_t get_callback_queue_idx(const ObIOCallbackType cb_type) const;
 private:

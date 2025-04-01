@@ -2732,18 +2732,8 @@ int ObTenantIOManager::print_io_status()
 
     // print callback status
     {
-      const ObArray<ObIORunner *> &runners = callback_mgr_.get_runners();
-      char io_callback_status[512] = { 0 };
-      int64_t pos = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < runners.count(); i++) {
-        if (OB_FAIL(databuff_printf(io_callback_status, sizeof(io_callback_status), pos,
-                                    "runner %ld: thread_id=%ld, queue_count=%ld, ",
-                                    i, runners[i]->get_tid(), runners[i]->get_queue_count()))) {
-          LOG_WARN("fail to construct callback status", KR(ret),
-              K_(tenant_id), K(i), K(pos), K(runners), K(io_callback_status));
-        }
-      }
-      LOG_INFO("[IO STATUS CALLBACK]", K_(tenant_id), K(runners), KCSTRING(io_callback_status));
+      (void)callback_mgr_.to_string(io_status, sizeof(io_status));
+      LOG_INFO("[IO STATUS CALLBACK]", K_(tenant_id), KCSTRING(io_status));
     }
   }
   return ret;

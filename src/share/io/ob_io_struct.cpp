@@ -3338,6 +3338,29 @@ int ObIOCallbackManager::get_queue_count(ObIArray<int64_t> &queue_count_array)
   return ret;
 }
 
+int64_t ObIOCallbackManager::to_string(char *buf, const int64_t len) const
+{
+  int ret = OB_SUCCESS;
+  DRWLock::RDLockGuard guard(lock_);
+  int64_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < runners_.count(); i++) {
+    if (i > 0) {
+      if (OB_FAIL(databuff_printf(buf, len, pos, " | "))) {
+        // do nothing
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(databuff_printf(buf, len, pos,
+                                  "runner[%ld]: tid=%ld, queue_count=%ld",
+                                  i, runners_[i]->get_tid(), runners_[i]->get_queue_count()))) {
+        // do nothing
+      }
+    }
+  }
+  UNUSED(ret);
+  return pos;
+}
+
 const char *oceanbase::common::device_health_status_to_str(const ObDeviceHealthStatus dhs)
 {
   const char *hstr = "UNKNOWN";
