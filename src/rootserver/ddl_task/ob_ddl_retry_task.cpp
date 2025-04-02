@@ -709,12 +709,14 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
   int64_t execution_id = -1; /*unused*/
   int64_t ret_code = 0;
   const int64_t new_task_status = ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
+  int64_t unused_snapshot_ver = OB_INVALID_VERSION;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, RETRY_TASK_UPDATE_BY_CHILD_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id, ret_code))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status,
+      execution_id, ret_code, unused_snapshot_ver))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_UNLIKELY(ObDDLTaskStatus::DROP_SCHEMA != curr_task_status)) {
     ret = OB_STATE_NOT_MATCH;
