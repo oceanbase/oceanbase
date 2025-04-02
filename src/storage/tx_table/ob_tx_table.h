@@ -43,6 +43,20 @@ class ObTxTableGuard;
 
 class ObTxTable
 {
+  struct RecycleRecord
+  {
+    share::SCN last_recycle_scn_;
+    int64_t last_recycle_ts_;
+
+    RecycleRecord() { reset(); }
+
+    void reset() {
+      last_recycle_scn_.set_min();
+      last_recycle_ts_ = 0;
+    }
+
+    TO_STRING_KV(K(last_recycle_scn_), K(last_recycle_ts_));
+  };
   struct RecycleSCNCache
   {
     share::SCN val_;
@@ -89,7 +103,8 @@ public:
   static int64_t UPDATE_MIN_START_SCN_INTERVAL;
   static const int64_t INVALID_READ_EPOCH = -1;
   static const int64_t CHECK_AND_ONLINE_PRINT_INVERVAL_US = 5 * 1000 * 1000; // 5 seconds
-  static const int64_t DEFAULT_TX_RESULT_RETENTION_S = 300L;
+  static const int64_t DEFAULT_TX_RESULT_RETENTION_S = 600L;
+  static const int64_t MIN_INTERVAL_OF_TX_DATA_RECYCLE_US = 600_s;
 
   enum TxTableState : int64_t
   {
@@ -111,7 +126,7 @@ public:
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
-        recycle_scn_cache_(),
+        recycle_record_(),
         ctx_min_start_scn_info_() {}
 
   ObTxTable(ObTxDataTable &tx_data_table)
@@ -125,7 +140,7 @@ public:
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
-        recycle_scn_cache_(),
+        recycle_record_(),
         ctx_min_start_scn_info_() {}
   ~ObTxTable() {}
 
@@ -303,6 +318,21 @@ public:
    */
   void update_min_start_scn_info(const share::SCN &max_decided_scn);
 
+  /**
+   * @brief call this function to record some info to avoid frequently recycle tx data
+   *
+   * @param recycle_scn used to recycle tx data
+   */
+  void recycle_tx_data_finish(const share::SCN recycle_scn);
+
+  /**
+   * @brief The tx data table may receive freeze request but don't really do freeze because of MIN_FREEZE_TX_DATA_INTERVAL. So TenantFreezer will check if there are some freeze requests which are not executed and retry freeze after a while.
+   *
+   * @return true do freeze again
+   * @return false do not need freeze
+   */
+  bool tx_table_need_re_freeze() { return tx_data_table_.need_re_freeze(); }
+
   int generate_virtual_tx_data_row(const transaction::ObTransID tx_id, observer::VirtualTxDataRow &row_data);
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
 
@@ -362,6 +392,7 @@ private:
   int check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int put_tx_data_into_kv_cache_(const ObTxData &tx_data);
+  int get_recycle_scn_(const int64_t tx_result_retention_s, share::SCN &real_recycle_scn);
   void check_state_and_epoch_(const transaction::ObTransID tx_id,
                               const int64_t read_epoch,
                               const bool need_log_error,
@@ -384,7 +415,7 @@ private:
   int64_t mini_cache_hit_cnt_;
   int64_t kv_cache_hit_cnt_;
   int64_t read_tx_data_table_cnt_;
-  RecycleSCNCache recycle_scn_cache_;
+  RecycleRecord recycle_record_;
   CtxMinStartScnInfo ctx_min_start_scn_info_;
 };
 }  // namespace storage

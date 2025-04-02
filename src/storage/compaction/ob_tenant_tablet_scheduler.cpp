@@ -1499,6 +1499,15 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
                need_fast_freeze_tablets.count(),
                "cost time(ns)",
                common::ObTimeUtility::current_time() - start_time_us);
+
+      // Trigger TxData freeze after fast freeze
+      ObTxTableGuard tx_table_guard;
+      LOG_INFO("Trigger tx data freeze by fast freeze", K(ls_id), K(tablet_id));
+      if (OB_TMP_FAIL(ls.get_tx_table()->get_tx_table_guard(tx_table_guard))) {
+        LOG_WARN("get tx table guard failed", KR(tmp_ret), K(tx_table_guard));
+      } else {
+        (void)tx_table_guard.self_freeze_task();
+      }
     }
   } // else
   return ret;

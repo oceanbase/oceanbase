@@ -967,6 +967,7 @@ public:
   DELEGATE_WITH_RET(tx_table_, get_uncommitted_tx_min_start_scn, int);
   DELEGATE_WITH_RET(tx_table_, update_min_start_scn_info, void);
   DELEGATE_WITH_RET(tx_table_, dump_single_tx_data_2_text, int);
+  DELEGATE_WITH_RET(tx_table_, tx_table_need_re_freeze, bool);
 
   // ObCheckpointExecutor interface:
   DELEGATE_WITH_RET(checkpoint_executor_, get_checkpoint_info, int);

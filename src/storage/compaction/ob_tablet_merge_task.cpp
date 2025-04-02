@@ -701,6 +701,7 @@ int ObTabletMergeExecuteDag::prepare_init(
       result_.simplify_handle(); // clear tables handle, get sstable when execute after get tablet_handle
       is_inited_ = true;
     }
+
   }
   return ret;
 }
@@ -1041,6 +1042,7 @@ int ObTabletMergeFinishTask::process()
   } else if (OB_FAIL(ctx_ptr->update_tablet_after_merge())) {
     LOG_WARN("failed to update tablet after merge", KR(ret), KPC(ctx_ptr));
   }
+
   if (OB_FAIL(ret)) {
     FLOG_WARN("sstable merge failed", K(ret), KPC(ctx_ptr), "task", *(static_cast<ObITask *>(this)));
   } else {
@@ -1051,14 +1053,46 @@ int ObTabletMergeFinishTask::process()
         "time_guard", ctx_ptr->info_collector_.time_guard_);
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (is_mini_merge(ctx_ptr->static_param_.get_merge_type())
-      && OB_TMP_FAIL(report_checkpoint_diagnose_info(*ctx_ptr))) {
-    LOG_WARN("failed to report_checkpoint_diagnose_info", K(tmp_ret), KPC(ctx_ptr));
+  if (OB_SUCC(ret)) {
+    (void)report_checkpoint_info(*ctx_ptr);
+    (void)record_tx_data_info(*ctx_ptr);
   }
 
   return ret;
 }
+
+void ObTabletMergeFinishTask::report_checkpoint_info(ObTabletMergeCtx &ctx)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (is_mini_merge(ctx.get_merge_type())) {
+    if (OB_TMP_FAIL(report_checkpoint_diagnose_info(ctx))) {
+      STORAGE_LOG_RET(WARN, 0, "failed to report_checkpoint_diagnose_info", K(tmp_ret), K(ctx));
+    }
+  }
+}
+
+void ObTabletMergeFinishTask::record_tx_data_info(ObTabletMergeCtx &ctx)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (is_minor_merge(ctx.get_merge_type()) && LS_TX_DATA_TABLET == ctx.get_tablet_id()) {
+    if (OB_NOT_NULL(ctx.info_collector_.compaction_filter_)) {
+      const SCN recycle_scn =
+          (static_cast<ObTransStatusFilter *>(ctx.info_collector_.compaction_filter_))->get_recycle_scn();
+      (void)ctx.get_ls()->get_tx_table()->recycle_tx_data_finish(recycle_scn);
+    }
+
+    const int64_t tx_data_sstable_row_count = ctx.get_merge_history().block_info_.total_row_count_;
+    if (tx_data_sstable_row_count > 100000LL * 60LL * 60LL) {
+      STORAGE_LOG_RET(
+          ERROR,
+          OB_SIZE_OVERFLOW,
+          "TxData SSTable is too large. Please check recycle_scn in 'success to init compaction filter' log",
+          K(tx_data_sstable_row_count),
+          K(ctx));
+    }
+  }
+}
+
 /*
  *  ----------------------------------------------ObTabletMergeTask--------------------------------------------------
  */

@@ -40,8 +40,8 @@ public:
   static const int64_t ALLOC_TX_DATA_MAX_CONCURRENCY = 32;
   static const uint32_t THROTTLE_TX_DATA_INTERVAL = 20 * 1000; // 20ms
 
-  // The tx data memtable will trigger a freeze if its memory use is more than 2%
-  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 2;
+  // The tx data memtable will trigger a freeze if its memory use is more than 5%
+  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 5;
 
 public:
   DEFINE_CUSTOM_FUNC_FOR_THROTTLE(TxData);

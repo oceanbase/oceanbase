@@ -156,6 +156,9 @@ public:
   int init();
   int report_checkpoint_diagnose_info(ObTabletMergeCtx &ctx);
   virtual int process() override;
+
+  void report_checkpoint_info(ObTabletMergeCtx &ctx);
+  void record_tx_data_info(ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;
   ObTabletMergeDag *merge_dag_;
