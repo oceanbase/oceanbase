@@ -137,6 +137,7 @@ int ObDASParallelHandler::run()
   common::ObSEArray<ObIDASTaskOp*, 4> src_task_list;
   lib::MemoryContext mem_context = nullptr;
   common::ObCurTraceId::set(task->get_trace_id());
+  THIS_WORKER.set_timeout_ts(task->get_timeout_ts());
   CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, MTL_ID()) {
     int interrupted_code = task->get_das_ref_count_ctx().get_interrupted_err_code();
     if (interrupted_code != OB_SUCCESS) {
@@ -200,7 +201,8 @@ int ObDASParallelHandler::run()
   ret = OB_SUCCESS;
   return ret;
 }
-int ObDASParallelTask::init(ObDasAggregatedTask *agg_task, int32_t group_id)
+
+int ObDASParallelTask::init(ObDasAggregatedTask *agg_task, int64_t timeout_ts, int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (NULL == agg_task) {
@@ -211,6 +213,7 @@ int ObDASParallelTask::init(ObDasAggregatedTask *agg_task, int32_t group_id)
   } else {
     set_group_id(group_id);
     agg_task_ = agg_task;
+    timeout_ts_ = timeout_ts;
     trace_id_.set(*ObCurTraceId::get_trace_id());
     set_type(ObRequest::OB_DAS_PARALLEL_TASK);
   }
