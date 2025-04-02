@@ -50,7 +50,7 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
     sql::ObPxMultiPartSSTableInsertOp *op,
     const common::ObTabletID &tablet_id,
     const bool is_slice_empty,
-    const bool is_index_table,
+    const bool need_check_outrow_lob,
     const int64_t rowkey_cnt,
     const int64_t lob_inrow_threshold,
     const int64_t snapshot_version,
@@ -73,8 +73,7 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
     is_slice_empty_(is_slice_empty),
     is_next_row_cached_(true),
     need_idempotent_autoinc_val_(need_idempotent_autoinc_val),
-    is_index_table_(is_index_table),
-    index_has_lob_(true)
+    need_check_outrow_lob_(need_check_outrow_lob)
 {
 }
 
@@ -144,7 +143,7 @@ int ObDDLSliceRowIterator::get_next_row(
               LOG_WARN("expr is NULL", K(ret), K(i));
             } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
               LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
-            } else if (is_index_table_ && index_has_lob_) {
+            } else if (need_check_outrow_lob_) {
               if (e->obj_meta_.is_lob_storage()) {
                 has_lob = true;
                 if (!datum->is_null() && !datum->is_nop()) {
@@ -168,12 +167,14 @@ int ObDDLSliceRowIterator::get_next_row(
             }
           }
           if (OB_SUCC(ret)) {
-            index_has_lob_ = has_lob;
+            if (need_check_outrow_lob_ && !has_lob) {
+              need_check_outrow_lob_ = false;
+            }
             // add extra rowkey
             current_row_.storage_datums_[rowkey_col_cnt_].set_int(-snapshot_version_);
             current_row_.storage_datums_[rowkey_col_cnt_ + 1].set_int(0);
             LOG_DEBUG("ddl row iter get next row", K(row_tablet_id), K(tablet_id_), K(row_tablet_slice_param),
-              K(ddl_slice_param_), K(current_row_), K(has_lob), K_(index_has_lob));
+              K(ddl_slice_param_), K(current_row_), K(has_lob));
           }
         }
       }
@@ -3510,6 +3511,7 @@ int ObDirectLoadSliceWriter::inner_fill_ivf_vector_index_data(
     LOG_INFO("[vec index debug] maybe no data for this tablet", K(tablet_direct_load_mgr_->get_tablet_id()));
   } else if (OB_FAIL(vec_idx_slice_store.build_clusters())) {
     LOG_WARN("fail to build clusters", K(ret));
+  } else if (FALSE_IT(vec_idx_slice_store.set_lob_inrow_threshold(lob_inrow_threshold))) {
   } else if (OB_FAIL(inner_fill_vector_index_data(macro_block_slice_store, &vec_idx_slice_store, snapshot_version, storage_schema, start_scn, VIAT_MAX/*index_type*/, insert_monitor))) {
     LOG_WARN("fail to inner fill vector index data", K(ret));
   } else {
@@ -4437,6 +4439,10 @@ int ObIvfCenterSliceStore::get_next_vector_data_row(
         ObCenterId center_id(tablet_id_.id(), cur_row_pos_ + 1);
         if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(center_id, cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(center_id), K(cid_str));
+        } else if (vec_res.length() > lob_inrow_threshold_ || cid_str.length() > lob_inrow_threshold_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected outrow datum in ivf vector index",
+                    K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
           for (int64_t idx = rowkey_cnt + extra_rowkey_cnt; idx < request_cnt; ++idx) {
             if (idx != center_id_col_idx_ && idx != center_vector_col_idx_) {
@@ -4640,6 +4646,10 @@ int ObIvfSq8MetaSliceStore::get_next_vector_data_row(
         ObCenterId center_id(tablet_id_.id(), cur_row_pos_ + 1);
         if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(center_id, cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(center_id), K(cid_str));
+        } else if (vec_res.length() > lob_inrow_threshold_ || cid_str.length() > lob_inrow_threshold_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected outrow datum in ivf vector index",
+                    K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
           for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
             if (meta_vector_col_idx_ == i) {
@@ -4849,6 +4859,10 @@ int ObIvfPqSliceStore::get_next_vector_data_row(
         ObPqCenterId pq_center_id(tablet_id_.id(), cur_row_pos_ / center_count_per_kmeans + 1, cur_row_pos_ % center_count_per_kmeans + 1);
         if (OB_FAIL(ObVectorClusterHelper::set_pq_center_id_to_string(pq_center_id, pq_cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(pq_center_id), K(pq_cid_str));
+        } else if (vec_res.length() > lob_inrow_threshold_ || pq_cid_str.length() > lob_inrow_threshold_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected outrow datum in ivf vector index",
+                    K(ret), K(vec_res.length()), K(pq_cid_str.length()), K(lob_inrow_threshold_));
         } else {
           for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
             if (pq_center_vector_col_idx_ == i) {

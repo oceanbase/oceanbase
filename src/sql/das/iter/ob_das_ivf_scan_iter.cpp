@@ -1467,10 +1467,10 @@ int ObDASIvfPQScanIter::get_pq_cid_vec_by_pq_cid(const ObString &pq_cid, float *
           }
         } else if (FALSE_IT(++row_cnt)) {
         } else if (OB_FALSE_IT(vec = pq_center_vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_).get_string())) {
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                        &mem_context_->get_arena_allocator(),
-                        ObLongTextType,
-                        CS_TYPE_BINARY,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+                        mem_context_->get_arena_allocator(),
+                        pq_center_vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_),
+                        pq_cid_vec_ctdef->result_output_.at(PQ_CENTROID_VEC_IDX)->datum_meta_,
                         has_lob_header,
                         vec))) {
           LOG_WARN("failed to get real data.", K(ret));
@@ -2097,30 +2097,18 @@ int ObDASIvfSQ8ScanIter::get_real_search_vec_u8(bool is_vectorized, ObString &re
           guard.set_batch_idx(i);
           if (i == ObIvfConstant::SQ8_META_MIN_IDX || i == ObIvfConstant::SQ8_META_STEP_IDX) {
             ObString c_vec = meta_vec_datum[i].get_string();
-            if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                    &mem_context_->get_arena_allocator(),
-                    ObLongTextType,
-                    CS_TYPE_BINARY,
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+                    mem_context_->get_arena_allocator(),
+                    meta_vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_),
+                    sq_meta_ctdef->result_output_.at(META_VECTOR_IDX)->datum_meta_,
                     has_lob_header,
                     c_vec))) {
               LOG_WARN("failed to get real data.", K(ret));
             } else if (i == ObIvfConstant::SQ8_META_MIN_IDX) {
               // if not has lob, need deepcopy, because datum_row whill reuse
-              if (!has_lob_header) {
-                if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, min_vec))) {
-                  LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-                }
-              } else {
-                min_vec = c_vec;
-              }
+              min_vec = c_vec;
             } else if (i == ObIvfConstant::SQ8_META_STEP_IDX) {
-              if (!has_lob_header) {
-                if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, step_vec))) {
-                  LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-                }
-              } else {
-                step_vec = c_vec;
-              }
+              step_vec = c_vec;
             }
           }
         }
@@ -2150,30 +2138,17 @@ int ObDASIvfSQ8ScanIter::get_real_search_vec_u8(bool is_vectorized, ObString &re
           LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
         } else if (row_index == ObIvfConstant::SQ8_META_MIN_IDX || row_index == ObIvfConstant::SQ8_META_STEP_IDX) {
           c_vec = datum_row->storage_datums_[1].get_string();
-          if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                  &mem_context_->get_arena_allocator(),
-                  ObLongTextType,
-                  CS_TYPE_BINARY,
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+                  mem_context_->get_arena_allocator(),
+                  datum_row->storage_datums_[1],
+                  sq_meta_ctdef->result_output_.at(1)->datum_meta_,
                   sq_meta_ctdef->result_output_.at(1)->obj_meta_.has_lob_header(),
                   c_vec))) {
             LOG_WARN("failed to get real data.", K(ret));
           } else if (row_index == ObIvfConstant::SQ8_META_MIN_IDX) {
-            // if not has lob, need deepcopy, because datum_row whill reuse
-            if (!sq_meta_ctdef->result_output_.at(1)->obj_meta_.has_lob_header()) {
-              if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, min_vec))) {
-                LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-              }
-            } else {
-              min_vec = c_vec;
-            }
+            min_vec = c_vec;
           } else if (row_index == ObIvfConstant::SQ8_META_STEP_IDX) {
-            if (!sq_meta_ctdef->result_output_.at(1)->obj_meta_.has_lob_header()) {
-              if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, step_vec))) {
-                LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-              }
-            } else {
-              step_vec = c_vec;
-            }
+            step_vec = c_vec;
           }
         }
         row_index++;

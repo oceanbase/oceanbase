@@ -349,7 +349,7 @@ public:
       sql::ObPxMultiPartSSTableInsertOp *op,
       const common::ObTabletID &tablet_id,
       const bool is_slice_empty,
-      const bool is_index_table,
+      const bool need_check_outrow_lob,
       const int64_t rowkey_cnt,
       const int64_t lob_inrow_threshold,
       const int64_t snapshot_version,
@@ -361,7 +361,7 @@ public:
   virtual ~ObDDLSliceRowIterator();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(tablet_id), K_(current_row), K_(is_slice_empty), K_(rowkey_col_cnt), K_(snapshot_version),
-    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table), K_(index_has_lob), K_(lob_inrow_threshold));
+    K_(is_next_row_cached), K_(ddl_slice_param), K_(need_check_outrow_lob), K_(lob_inrow_threshold));
 private:
   sql::ObPxMultiPartSSTableInsertOp *op_;
   common::ObTabletID tablet_id_; // data_tablet_id rather than lob_meta_tablet_id.
@@ -377,8 +377,7 @@ private:
   bool is_slice_empty_; // without data.
   bool is_next_row_cached_;
   bool need_idempotent_autoinc_val_;
-  bool is_index_table_;
-  bool index_has_lob_;
+  bool need_check_outrow_lob_;
 };
 
 // for ddl insert row.
@@ -649,14 +648,17 @@ public:
   ObIvfSliceStore()
     : ObVectorIndexBaseSliceStore(),
       tmp_allocator_("IvfSSTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      helper_guard_()
+      helper_guard_(),
+      context_id_(-1),
+      lob_inrow_threshold_(-1)
   {}
 
   virtual ~ObIvfSliceStore() {}
   virtual void reset();
   virtual int build_clusters() = 0;
   virtual int is_empty(bool &empty) = 0;
-  inline int64_t get_context_id() { return context_id_; }
+  OB_INLINE int64_t get_context_id() { return context_id_; }
+  OB_INLINE void set_lob_inrow_threshold(int64_t lob_inrow_threshold) { lob_inrow_threshold_ = lob_inrow_threshold; }
 
 protected:
   template<typename HelperType>
@@ -666,6 +668,7 @@ protected:
   ObArenaAllocator tmp_allocator_;
   ObIvfBuildHelperGuard helper_guard_;
   int64_t context_id_;
+  int64_t lob_inrow_threshold_;
 };
 
 template<typename HelperType>
