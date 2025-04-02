@@ -1293,7 +1293,6 @@ int ObAutoSplitArgBuilder::build_arg_(const uint64_t tenant_id,
                                       obrpc::ObAlterTableArg &arg)
 {
   int ret = OB_SUCCESS;
-  arg.reset();
   ObTZMapWrap tz_map_wrap;
   share::schema::AlterTableSchema& alter_table_schema = arg.alter_table_schema_;
   if (tenant_id == OB_INVALID_ID) {
@@ -1692,6 +1691,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
   ObArray<ObNewRange> unused_column_ranges;
   common::ObRowkey low_bound_val;
   common::ObRowkey high_bound_val;
+  bool is_oracle_mode = false;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id ||
                   !tablet_id.is_valid())) {
@@ -1723,12 +1723,15 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check if oracle compat mode", K(ret), K(tenant_id), K(table_schema.get_table_id()));
   } else if (OB_FAIL(fill_query_range_bounder(part_meta, unused_column_ranges, column_names.count(), low_bound_val, high_bound_val, range_allocator))) {
     LOG_WARN("fail to fill query range bounder", K(ret));
   } else if (OB_FAIL(query_ranges_(tenant_id, db_name, table_schema.get_table_name_str(), part_meta,
                             column_names, unused_column_ranges,
                             range_num, used_disk_space,
                             table_schema.is_global_index_table(),
+                            is_oracle_mode,
                             low_bound_val, high_bound_val,
                             range_allocator, ranges))) {
     LOG_WARN("fail to acquire ranges for split partition", KR(ret), K(tenant_id), K(db_name),
@@ -1760,6 +1763,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
   const int64_t unused_presetting_column_cnt = 0;
   common::ObRowkey low_bound_val;
   common::ObRowkey high_bound_val;
+  bool is_oracle_mode = false;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1779,6 +1783,8 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(!column_ranges.empty() && column_names.count() != column_ranges.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid array count", KR(ret), K(column_names), K(column_ranges));
+  } else if (OB_FAIL(data_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check if oracle compat mode", K(ret), K(tenant_id), K(data_table_schema.get_table_id()));
   } else if (OB_FAIL(fill_query_range_bounder(unused_part_meta, column_ranges, unused_presetting_column_cnt, low_bound_val, high_bound_val, range_allocator))) {
     LOG_WARN("fail to fill query range bounder", K(ret), K(column_ranges));
   } else if (OB_FAIL(query_ranges_(tenant_id, db_name, data_table_schema.get_table_name_str(),
@@ -1786,6 +1792,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
                                    column_names, column_ranges,
                                    range_num, used_disk_space,
                                    false /*query_index*/,
+                                   is_oracle_mode,
                                    low_bound_val, high_bound_val,
                                    range_allocator, ranges))) {
     LOG_WARN("fail to acquire ranges for split partition", KR(ret), K(tenant_id), K(db_name),
@@ -1898,6 +1905,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
                                   const ObIArray<ObNewRange> &column_ranges,
                                   const int64_t range_num, const int64_t used_disk_space,
                                   const bool query_index,
+                                  const bool is_oracle_mode,
                                   common::ObRowkey &low_bound_val,
                                   common::ObRowkey &high_bound_val,
                                   common::ObArenaAllocator& range_allocator,
@@ -1908,6 +1916,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   if (nullptr != part_meta.part_) {
     part_name = &part_meta.part_->get_part_name();
   }
+  ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
   ObSqlString sql;
   ObSingleConnectionProxy single_conn_proxy;
   static const int64_t MAX_SAMPLE_SCALE = 128L * 1024 * 1024; // at most sample 128MB
@@ -1916,8 +1925,14 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
                       static_cast<double>(MAX_SAMPLE_SCALE) / used_disk_space * 100;
   ranges.reset();
 
-  if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0 /* group_id*/, GCTX.sql_proxy_))) {
+  if (is_oracle_mode) {
+    if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
+      LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+    }
+  } else if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
     LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+  }
+  if (OB_FAIL(ret)) {
   } else if (query_index) {
     ObSqlString set_sql;
     int64_t affected_rows = 0;
@@ -1932,7 +1947,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_sample_sql_(db_name, table_name, part_name,
                                        column_names, column_ranges,
-                                       range_num, sample_pct, sql))) {
+                                       range_num, sample_pct, is_oracle_mode, sql))) {
     LOG_WARN("fail to build sample sql", KR(ret), K(db_name), K(table_name), K(part_name),
                                          K(column_names), K(column_ranges),
                                          K(range_num), K(sample_pct));
@@ -2027,17 +2042,17 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
                                       const ObIArray<ObString> &column_names,
                                       const ObIArray<ObNewRange> &column_ranges,
                                       const int range_num, const double sample_pct,
+                                      const bool is_oracle_mode,
                                       ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
-  const bool is_oracle_mode = false; // inner_sql is mysql mode
   ObArenaAllocator tmp_allocator;
   ObString table_name_quoted;
   ObString db_name_quoted;
   ObSqlString col_alias_str;
   ObSqlString col_name_alias_str;
 
-  if (OB_FAIL(gen_column_alias_(column_names, col_alias_str, col_name_alias_str))) {
+  if (OB_FAIL(gen_column_alias_(column_names, is_oracle_mode, col_alias_str, col_name_alias_str))) {
     LOG_WARN("fail to gen column alias", KR(ret), K(column_names));
   } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, db_name, db_name_quoted))) {
     LOG_WARN("failed to generate new name with escape character", K(ret), K(db_name));
@@ -2203,6 +2218,7 @@ int ObSplitSampler::acquire_partition_key_name_(const share::schema::ObTableSche
 }
 
 int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
+                                      const bool is_oracle_mode,
                                       ObSqlString &col_alias_str,
                                       ObSqlString &col_name_alias_str)
 {
@@ -2228,7 +2244,7 @@ int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
         LOG_WARN("append string failed", KR(ret));
       } else if (OB_FAIL(col_alias_str.append(alias.string()))) {
         LOG_WARN("append string failed", KR(ret));
-      } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, false/*is_oracle_mode*/, column_name, column_name_quoted))) {
+      } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, column_name, column_name_quoted))) {
         LOG_WARN("failed to generate new name with escape character", K(ret), K(column_name));
       } else if (OB_FAIL(col_name_alias_str.append_fmt(
                                               "%.*s AS %.*s",
