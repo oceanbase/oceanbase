@@ -1837,23 +1837,27 @@ struct NullAwareAntiJoinInfo {
 
     int get_valid_index_merge_indexes(const uint64_t table_id,
                                       const uint64_t ref_table_id,
-                                      ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                      ObIArray<uint64_t> &valid_index_ids,
+                                      ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                       bool ignore_hint);
 
     int generate_candi_index_merge_trees(const uint64_t ref_table_id,
                                          ObIArray<ObRawExpr*> &filters,
-                                         ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                         ObIArray<uint64_t> &valid_index_ids,
+                                         ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                          ObIArray<ObIndexMergeNode *> &candi_index_trees);
 
     int generate_candi_index_merge_node(const uint64_t ref_table_id,
                                         ObRawExpr *filter,
-                                        ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                        ObIArray<uint64_t> &valid_index_ids,
+                                        ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                         ObIndexMergeNode *&candi_node,
                                         bool &is_valid_node);
 
     int collect_candicate_indexes(const uint64_t ref_table_id,
                                   ObRawExpr *filter,
-                                  ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                  ObIArray<uint64_t> &valid_index_ids,
+                                  ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                   ObIArray<uint64_t> &candicate_index_tids);
 
     int check_candi_index_trees_match_hint(const uint64_t table_id,

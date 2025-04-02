@@ -3254,7 +3254,8 @@ int ObJoinOrder::get_candi_index_merge_trees(const uint64_t table_id,
                                              bool &is_match_hint)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<std::pair<uint64_t, common::ObArray<uint64_t>>, 2> valid_indexes;
+  ObSEArray<uint64_t, 4> valid_index_ids; // all valid indexes
+  ObSEArray<ObSEArray<uint64_t, 4>, 4> valid_index_cols; // column ids in the valid indexes
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   is_match_hint = false;
   if (OB_ISNULL(get_plan()) || OB_UNLIKELY(!tenant_config.is_valid())) {
@@ -3262,12 +3263,14 @@ int ObJoinOrder::get_candi_index_merge_trees(const uint64_t table_id,
     LOG_WARN("get invalid plan or tenant config", K(ret), K(get_plan()), K(tenant_config.is_valid()));
   } else if (OB_FAIL(get_valid_index_merge_indexes(table_id,
                                                    ref_table_id,
-                                                   valid_indexes,
+                                                   valid_index_ids,
+                                                   valid_index_cols,
                                                    false /* ignore_hint */ ))) {
     LOG_WARN("failed to get valid index merge ids with hint", K(ret));
   } else if (OB_FAIL(generate_candi_index_merge_trees(ref_table_id,
                                                       helper.filters_,
-                                                      valid_indexes,
+                                                      valid_index_ids,
+                                                      valid_index_cols,
                                                       candi_index_trees))) {
     LOG_WARN("failed to generate candi index merge trees", K(ret));
   } else if (!candi_index_trees.empty()
@@ -3282,12 +3285,14 @@ int ObJoinOrder::get_candi_index_merge_trees(const uint64_t table_id,
     OPT_TRACE("can not create index merge paths due to outline or tenant config");
   } else if (OB_FAIL(get_valid_index_merge_indexes(table_id,
                                                    ref_table_id,
-                                                   valid_indexes,
+                                                   valid_index_ids,
+                                                   valid_index_cols,
                                                    true /* ignore_hint */ ))) {
     LOG_WARN("failed to get valid index merge ids", K(ret));
   } else if (OB_FAIL(generate_candi_index_merge_trees(ref_table_id,
                                                       helper.filters_,
-                                                      valid_indexes,
+                                                      valid_index_ids,
+                                                      valid_index_cols,
                                                       candi_index_trees))) {
     LOG_WARN("failed to generate candi index merge trees", K(ret));
   } else if (!candi_index_trees.empty()
@@ -3302,15 +3307,17 @@ int ObJoinOrder::get_candi_index_merge_trees(const uint64_t table_id,
 
 int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
                                                const uint64_t ref_table_id,
-                                               ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                               ObIArray<uint64_t> &valid_index_ids,
+                                               ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                                bool ignore_hint)
 {
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
   ObSEArray<uint64_t, 4> index_ids;
-  ObArray<uint64_t> index_column_ids;
-  valid_indexes.reuse();
+  ObSEArray<uint64_t, 4> index_column_ids;
+  valid_index_ids.reuse();
+  valid_index_cols.reuse();
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3355,26 +3362,30 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
       /* primary table, local normal index and local fts index are available for index merge now */
       if (OB_FAIL(index_schema->get_rowkey_column_ids(index_column_ids))) {
         LOG_WARN("failed to get all column ids", K(ret));
-      } else if (OB_FAIL(valid_indexes.push_back(std::pair<uint64_t, common::ObArray<uint64_t>>(index_id, index_column_ids)))) {
-        LOG_WARN("failed to push back index column ids", K(index_id));
+      } else if (OB_FAIL(valid_index_ids.push_back(index_id))) {
+        LOG_WARN("failed to push back index id", K(ret), K(index_id));
+      } else if (OB_FAIL(valid_index_cols.push_back(index_column_ids))) {
+        LOG_WARN("failed to push back index column ids", K(ret), K(index_id), K(index_column_ids));
       }
     } else if (!ignore_hint) {
       // hint is invalid
-      valid_indexes.reuse();
+      valid_index_ids.reuse();
+      valid_index_cols.reuse();
       break;
     }
   }
-  LOG_TRACE("get all valid indexes for index merge", K(table_id), K(ref_table_id), K(ignore_hint), K(valid_indexes));
+  LOG_TRACE("get all valid indexes for index merge", K(table_id), K(ref_table_id), K(ignore_hint), K(valid_index_ids), K(valid_index_cols));
   return ret;
 }
 
 int ObJoinOrder::generate_candi_index_merge_trees(const uint64_t ref_table_id,
                                                   ObIArray<ObRawExpr*> &filters,
-                                                  ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                                  ObIArray<uint64_t> &valid_index_ids,
+                                                  ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                                   ObIArray<ObIndexMergeNode *> &candi_index_trees)
 {
   int ret = OB_SUCCESS;
-  if (valid_indexes.empty()) {
+  if (valid_index_ids.empty()) {
     // do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
@@ -3388,7 +3399,8 @@ int ObJoinOrder::generate_candi_index_merge_trees(const uint64_t ref_table_id,
         // do nothing, only support UNION MERGE now
       } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
                                                          filter,
-                                                         valid_indexes,
+                                                         valid_index_ids,
+                                                         valid_index_cols,
                                                          candi_node,
                                                          is_valid))) {
         LOG_WARN("failed to generate one index merge tree for filter", K(ret), KPC(filter));
@@ -3406,7 +3418,8 @@ int ObJoinOrder::generate_candi_index_merge_trees(const uint64_t ref_table_id,
 
 int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
                                                  ObRawExpr *filter,
-                                                 ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                                 ObIArray<uint64_t> &valid_index_ids,
+                                                 ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                                  ObIndexMergeNode *&candi_node,
                                                  bool &is_valid_node)
 {
@@ -3432,7 +3445,8 @@ int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(SMART_CALL(generate_candi_index_merge_node(ref_table_id,
                                                                     filter->get_param_expr(i),
-                                                                    valid_indexes,
+                                                                    valid_index_ids,
+                                                                    valid_index_cols,
                                                                     child,
                                                                     is_child_valid)))) {
         LOG_WARN("failed to construct index merge node", K(ret));
@@ -3458,7 +3472,11 @@ int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
                  || filter->has_flag(IS_RANGE_COND)
                  || filter->has_flag(CNT_MATCH_EXPR))) {
       is_valid_node = false;
-    } else if (OB_FAIL(collect_candicate_indexes(ref_table_id, filter, valid_indexes, candicate_index_tids))) {
+    } else if (OB_FAIL(collect_candicate_indexes(ref_table_id,
+                                                 filter,
+                                                 valid_index_ids,
+                                                 valid_index_cols,
+                                                 candicate_index_tids))) {
       LOG_WARN("failed to choose candi index for filter", K(ret), K(filter));
     } else if (candicate_index_tids.empty()) {
       is_valid_node = false;
@@ -3480,13 +3498,14 @@ int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
 
 int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
                                            ObRawExpr *filter,
-                                           ObIArray<std::pair<uint64_t, common::ObArray<uint64_t>>> &valid_indexes,
+                                           ObIArray<uint64_t> &valid_index_ids,
+                                           ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                            ObIArray<uint64_t> &candicate_index_tids)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(filter)) {
+  if (OB_ISNULL(filter) || OB_UNLIKELY(valid_index_ids.count() != valid_index_cols.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(filter));
+    LOG_WARN("get unexpected null", K(ret), K(filter), K(valid_index_ids), K(valid_index_cols));
   } else if (filter->has_flag(CNT_MATCH_EXPR)) {
     /* direct choose corresponding fts index */
     ObMatchFunRawExpr *match_expr = NULL;
@@ -3505,8 +3524,8 @@ int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
       if (OB_FAIL(get_matched_inv_index_tid(match_expr, ref_table_id, inv_index_tid))) {
         LOG_WARN("failed to get matched inv index tid", K(match_expr), K(ref_table_id), K(ret));
       } else {
-        for (int64_t i = 0; i < valid_indexes.count(); ++i) {
-          if (inv_index_tid == valid_indexes.at(i).first) {
+        for (int64_t i = 0; i < valid_index_ids.count(); ++i) {
+          if (inv_index_tid == valid_index_ids.at(i)) {
             is_valid = true;
             break;
           }
@@ -3527,9 +3546,9 @@ int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid filter node for index merge", K(filter), K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < valid_indexes.count(); ++i) {
-        const uint64_t index_id = valid_indexes.at(i).first;
-        const ObIArray<uint64_t> &index_column_ids = valid_indexes.at(i).second;
+      for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
+        const uint64_t index_id = valid_index_ids.at(i);
+        const ObIArray<uint64_t> &index_column_ids = valid_index_cols.at(i);
         if (OB_UNLIKELY(index_column_ids.empty())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid index column ids", K(ret), K(index_id), K(index_column_ids));
