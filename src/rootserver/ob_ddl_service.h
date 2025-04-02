@@ -1832,6 +1832,7 @@ int check_will_be_having_domain_index_operation(
   int refill_column_id_array_for_constraint(
     const obrpc::ObAlterTableArg::AlterConstraintType op_type,
     const share::schema::ObTableSchema &new_table_schema,
+    share::schema::ObSchemaGetterGuard &schema_guard,
     share::schema::AlterTableSchema &alter_table_schema);
   /**
    * Rebuild check constraint expr, if the expr str contains the old column name
