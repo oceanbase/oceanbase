@@ -687,8 +687,10 @@ int ObModifyTenantExecutor::execute(ObExecContext &ctx, ObModifyTenantStmt &stmt
         LOG_WARN("modify_progressive_merge_num_for_tables failed", K(ret));
       }
     } else if (OB_ISNULL(tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, tenant schema must not be NULL", KR(ret));
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_WARN("tenant not exist", K(ret), "tenant_name", modify_tenant_arg.tenant_schema_.get_tenant_name_str());
+      LOG_USER_ERROR(OB_TENANT_NOT_EXIST, modify_tenant_arg.tenant_schema_.get_tenant_name_str().length(),
+                   modify_tenant_arg.tenant_schema_.get_tenant_name_str().ptr());
     } else if (OB_FAIL(modify_progressive_merge_num_for_tenant(ctx, tenant_schema->get_tenant_id(), stmt.get_progressive_merge_num()))) {
       LOG_WARN("fail to modify progressive merge num for tenant", K(ret), "tenant_id", tenant_schema->get_tenant_id());
     }
