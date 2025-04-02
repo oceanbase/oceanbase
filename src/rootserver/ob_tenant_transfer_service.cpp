@@ -85,12 +85,14 @@ void ObTenantTransferService::do_work()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tread_idx", KR(ret), K(thread_idx), K(thread_count), K_(tenant_id));
     } else {
-      int tmp_ret = OB_SUCCESS;
       int64_t idle_time_us = IDLE_TIME_US;
+      ObTransferTaskID last_failed_task_id;
+      int64_t retry_count = 0;
       while (!has_set_stop()) {
         int64_t all_tasks_count = 0;
         int64_t thread_task_count = 0;
         idle_time_us = IDLE_TIME_US;
+        ObTransferTaskID current_failed_task_id;
         ObCurTraceId::init(GCONF.self_addr_);
         ObArray<ObTransferTask::TaskStatus> task_status;
         if (OB_FAIL(check_tenant_schema_is_ready_(tenant_schema_is_ready))) {
@@ -119,6 +121,7 @@ void ObTenantTransferService::do_work()
               ++thread_task_count;
               if (OB_FAIL(process_task_(task_stat))) {
                 LOG_WARN("process task failed", KR(ret), K(task_stat), K(thread_idx));
+                current_failed_task_id = task_stat.get_task_id();
                 ret_fail = ret;
                 ret = OB_SUCCESS;
               }
@@ -128,14 +131,57 @@ void ObTenantTransferService::do_work()
           } // end ARRAY_FOREACH
           ret = OB_SUCC(ret) ? ret_fail : ret;
         }
-        if (OB_FAIL(ret) && OB_NEED_WAIT != ret) {
+
+        if (OB_SUCCESS == ret || OB_NEED_WAIT == ret) {
+          idle_time_us = IDLE_TIME_US;
+        } else if (OB_NEED_RETRY == ret) {
           idle_time_us = BUSY_IDLE_TIME_US;
+        } else {
+          idle_time_us = calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id);
+          if (OB_UNLIKELY(retry_count > MAX_EXPONENTIAL_BACKOFF_COUNTS)) {
+            LOG_ERROR("task retried multiple times, Please check it!", KR(ret), K(retry_count),
+                K(current_failed_task_id), K(last_failed_task_id), K(thread_idx), K(idle_time_us));
+          }
         }
-        TTS_INFO("finish one round", KR(ret), K(all_tasks_count), K(thread_task_count), K(thread_idx));
+        TTS_INFO("finish one round", KR(ret), K(all_tasks_count), K(thread_task_count), K(thread_idx),
+            K(idle_time_us), K(current_failed_task_id), K(last_failed_task_id), K(retry_count));
         idle(idle_time_us);
       }// end while
     }
   }
+}
+
+int64_t ObTenantTransferService::calc_transfer_retry_interval_(
+    const ObTransferTaskID &current_failed_task_id,
+    int64_t &retry_count,
+    ObTransferTaskID &last_failed_task_id)
+{
+  int64_t retry_interval = 0;
+  if (!current_failed_task_id.is_valid() || current_failed_task_id != last_failed_task_id) {
+    last_failed_task_id = current_failed_task_id;
+    retry_count = 0;
+  } else {
+    ++retry_count;
+  }
+
+  // If retry counts exceed the threshold, use _transfer_task_retry_interval as the interval.
+  // Otherwise, the interval is the minimum of the exponential backoff and _transfer_task_retry_interval.
+  if (retry_count >= MAX_EXPONENTIAL_BACKOFF_COUNTS) {
+    retry_interval = get_transfer_config_retry_interval_();
+  } else {
+    retry_interval = min(BUSY_IDLE_TIME_US * (1 << retry_count), get_transfer_config_retry_interval_());
+  }
+  return retry_interval;
+}
+
+int64_t ObTenantTransferService::get_transfer_config_retry_interval_()
+{
+  int64_t retry_time = 60 * 1000 * 1000L; // default 1m
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (tenant_config.is_valid()) {
+    retry_time = tenant_config->_transfer_task_retry_interval;
+  }
+  return retry_time;
 }
 
 int ObTenantTransferService::process_task_(const ObTransferTask::TaskStatus &task_stat)
@@ -266,6 +312,11 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
       transfer_status = ObTransferStatus::COMPLETED;
       transfer_comment = TASK_COMPLETED_AS_NO_VALID_PARTITION;
       result = OB_SUCCESS;
+    } else {
+      // indicate that parts to be transferred by this task are locked or non-existent
+      transfer_status = ObTransferStatus::FAILED;
+      transfer_comment = PART_LIST_LOCK_OR_NOT_EXIST;
+      result = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     }
     if (FAILEDx(ObTransferTaskOperator::finish_task_from_init(
         trans,
@@ -347,13 +398,7 @@ int ObTenantTransferService::check_if_need_wait_due_to_last_failure_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid task", KR(ret), K(task));
   } else {
-    int64_t wait_interval = 60 * 1000 * 1000L; // default 1m
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-      if (tenant_config.is_valid()) {
-        wait_interval = tenant_config->_transfer_task_retry_interval;
-      }
-    } // release guard
+    int wait_interval = get_transfer_config_retry_interval_();
     if (OB_FAIL(ret)) {
     } else if (0 == wait_interval) {
       need_wait = false;
