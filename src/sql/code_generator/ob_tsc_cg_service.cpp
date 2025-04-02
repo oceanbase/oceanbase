@@ -3921,6 +3921,9 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
           LOG_WARN("store result outputs failed", K(ret));
         }
       }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (lookup_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP) {
       ObDASIndexProjLookupCtDef *cache_lookup_ctdef = static_cast<ObDASIndexProjLookupCtDef* >(lookup_ctdef);
       if (OB_ISNULL(cache_lookup_ctdef)) {

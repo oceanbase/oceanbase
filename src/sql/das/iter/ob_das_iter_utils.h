@@ -351,7 +351,7 @@ private:
                                           transaction::ObTxDesc *trans_desc,
                                           transaction::ObTxReadSnapshot *snapshot,
                                           ObDASIter *index_iter,
-                                          const ObTabletID &lookup_tablet_id,
+                                          const ObDASRelatedTabletID &related_tablet_ids,
                                           ObDASCacheLookupIter *&lookup_iter,
                                           const bool lookup_keep_order = true,
                                           const int64_t lookup_batch_size =
