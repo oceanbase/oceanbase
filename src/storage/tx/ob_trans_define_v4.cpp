@@ -1963,7 +1963,7 @@ int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
           }
         }
       }
-      for (; last < cnt; last++) {
+      for (; last < cnt - 1; last++) {
         modified_tables_.pop_back();
       }
     }
