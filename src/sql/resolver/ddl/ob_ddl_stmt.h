@@ -45,6 +45,7 @@ public:
   virtual int get_first_stmt(common::ObString &first_stmt);
   void set_parallelism(const int64_t parallelism) { parallelism_ = parallelism; }
   int64_t &get_parallelism() { return parallelism_; }
+  ObIAllocator &get_allocator() { return allocator_; }
 protected:
   ObArenaAllocator allocator_;
 private:

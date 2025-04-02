@@ -23,6 +23,7 @@ class ObPLCompiler;
 }
 namespace sql
 {
+class ObAlterPackageStmt;
 class ObAlterPackageResolver: public ObDDLResolver
 {
 public:
@@ -35,11 +36,11 @@ private:
   int resolve_alter_clause(const ParseNode &alter_clause,
                            const ObString &db_name,
                            const ObString &package_name,
-                           obrpc::ObAlterPackageArg &pkg_arg);
+                           ObAlterPackageStmt &alter_stmt);
   int resolve_alter_compile_clause(const ParseNode &alter_clause,
                                    const ObString &db_name,
                                    const ObString &package_name,
-                                   obrpc::ObAlterPackageArg &pkg_arg);
+                                   ObAlterPackageStmt &alter_stmt);
   int analyze_package(pl::ObPLCompiler &compiler,
                       const pl::ObPLBlockNS *parent_ns,
                       pl::ObPLPackageAST &package_ast,
@@ -50,7 +51,7 @@ private:
   int compile_package(const ObString& db_name,
                       const ObString &package_name,
                       int16_t compile_flag,
-                      obrpc::ObAlterPackageArg &pkg_arg);
+                      ObAlterPackageStmt &alter_stmt);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterPackageResolver);

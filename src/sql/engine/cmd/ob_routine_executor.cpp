@@ -26,6 +26,7 @@
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_stmt.h"
+#include "pl/ob_pl_compile_utils.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
@@ -36,67 +37,6 @@ namespace oceanbase
 {
 namespace sql
 {
-
-int ObCompileRoutineInf::compile_routine(ObExecContext &ctx,
-                                          uint64_t tenant_id,
-                                          uint64_t database_id,
-                                          ObString &routine_name,
-                                          ObRoutineType routine_type,
-                                          int64_t schema_version)
-{
-  int ret = OB_SUCCESS;
-  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
-  const ObRoutineInfo *routine_info = nullptr;
-  pl::ObPLFunction* routine = nullptr;
-  uint64_t db_id = OB_INVALID_ID;
-  CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
-  OZ (ctx.get_task_exec_ctx().schema_service_->
-    get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
-  if (ROUTINE_PROCEDURE_TYPE == routine_type) {
-    OZ (ctx.get_sql_ctx()->schema_guard_->get_standalone_procedure_info(tenant_id,
-                                                                        database_id,
-                                                                        routine_name,
-                                                                        routine_info));
-  } else {
-    OZ (ctx.get_sql_ctx()->schema_guard_->get_standalone_function_info(tenant_id,
-                                                                      database_id,
-                                                                      routine_name,
-                                                                      routine_info));
-  }
-  OZ (ctx.get_my_session()->get_database_id(db_id));
-  if (OB_SUCC(ret) && OB_NOT_NULL(routine_info) && schema_version == routine_info->get_schema_version()) {
-    pl::ObPLCacheCtx pc_ctx;
-    pc_ctx.session_info_ = ctx.get_my_session();
-    pc_ctx.schema_guard_ = ctx.get_sql_ctx()->schema_guard_;
-
-    pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PRCR;
-    pc_ctx.key_.db_id_ = db_id;
-    pc_ctx.key_.key_id_ = routine_info->get_routine_id();
-    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
-    CK (OB_NOT_NULL(ctx.get_pl_engine()));
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
-      LOG_TRACE("get pl function from ol cache failed", K(ret), K(pc_ctx.key_));
-      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
-    } else {
-      routine = static_cast<pl::ObPLFunction*>(cacheobj_guard.get_cache_obj());
-    }
-    if (OB_SUCC(ret) && OB_ISNULL(routine)) {
-      OZ (ctx.get_pl_engine()->generate_pl_function(ctx, routine_info->get_routine_id(), cacheobj_guard));
-      OX (routine = static_cast<pl::ObPLFunction*>(cacheobj_guard.get_cache_obj()));
-      CK (OB_NOT_NULL(routine));
-      OZ (ctx.get_my_session()->get_database_id(db_id));
-      if (OB_SUCC(ret)
-          && routine->get_can_cached()) {
-        routine->get_stat_for_update().name_ = routine->get_function_name();
-        routine->get_stat_for_update().type_ = pl::ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
-        OZ (ctx.get_pl_engine()->add_pl_lib_cache(routine, pc_ctx));
-      }
-    }
-  }
-
-  return ret;
-}
 
 int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &stmt)
 {
@@ -134,20 +74,21 @@ int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &st
   } else if (with_res && OB_FAIL(common_rpc_proxy->create_routine_with_res(crt_routine_arg, res))) {
     LOG_WARN("rpc proxy create procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
   }
-  if (OB_SUCC(ret) && !has_error && with_res &&
-      tenant_config.is_valid() &&
-      tenant_config->plsql_v2_compatibility) {
+  if (OB_SUCC(ret)
+      && !has_error
+      && with_res
+      && tenant_config.is_valid()
+      && tenant_config->plsql_v2_compatibility) {
     CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
     OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
-    OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
-                        res.store_routine_schema_version_));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("fail to persistent routine", K(ret));
-      ret = OB_SUCCESS;
-      if (NULL != ctx.get_my_session()) {
-        ctx.get_my_session()->reset_warnings_buf();
-      }
-    }
+    OZ (ctx.get_task_exec_ctx().schema_service_->
+      get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+    OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                       tenant_id,
+                                       database_id,
+                                       routine_name,
+                                       pl::ObPLCompilerUtils::get_compile_type(type),
+                                       res.store_routine_schema_version_));
   }
   if(crt_routine_arg.with_if_not_exist_ && ret == OB_ERR_SP_ALREADY_EXISTS) {
     LOG_USER_WARN(OB_ERR_SP_ALREADY_EXISTS, "ROUTINE",  crt_routine_arg.routine_info_.get_routine_name().length(), crt_routine_arg.routine_info_.get_routine_name().ptr());
@@ -486,18 +427,21 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
     } else if (with_res && OB_FAIL(common_rpc_proxy->alter_routine_with_res(alter_routine_arg, res))) {
       LOG_WARN("rpc proxy alter procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
     }
-    if (OB_SUCC(ret) && !has_error && with_res &&
-        tenant_config.is_valid() &&
-        tenant_config->plsql_v2_compatibility) {
+    if (OB_SUCC(ret)
+        && !has_error
+        && with_res
+        && tenant_config.is_valid()
+        && tenant_config->plsql_v2_compatibility) {
       CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
       OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
-      OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
-                          res.store_routine_schema_version_));
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to persistent routine", K(ret));
-        common::ob_reset_tsi_warning_buffer();
-        ret = OB_SUCCESS;
-      }
+      OZ (ctx.get_task_exec_ctx().schema_service_->
+        get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+      OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                         tenant_id,
+                                         database_id,
+                                         routine_name,
+                                         pl::ObPLCompilerUtils::get_compile_type(type),
+                                         res.store_routine_schema_version_));
     }
   } else {
     ObMySQLTransaction trans;
@@ -527,16 +471,20 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
-    if (OB_SUCC(ret) && !has_error && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0) &&
-        tenant_config.is_valid() &&
-        tenant_config->plsql_v2_compatibility) {
-      OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
-                          routine_info->get_schema_version()));
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to persistent routine", K(ret));
-        common::ob_reset_tsi_warning_buffer();
-        ret = OB_SUCCESS;
-      }
+    if (OB_SUCC(ret)
+        && !has_error
+        && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0)
+        && tenant_config.is_valid()
+        && tenant_config->plsql_v2_compatibility) {
+      CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+      OZ (ctx.get_task_exec_ctx().schema_service_->
+        get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+      OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                         tenant_id,
+                                         database_id,
+                                         routine_name,
+                                         pl::ObPLCompilerUtils::get_compile_type(type),
+                                         routine_info->get_schema_version()));
     }
   }
   return ret;

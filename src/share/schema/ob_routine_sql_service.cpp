@@ -463,6 +463,7 @@ int ObRoutineSqlService::gen_package_dml(
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
   }
+  LOG_INFO("debug for xll : gen_package_dml" , K(package_info.get_exec_env()), K(package_info.get_type()));
   return ret;
 }
 

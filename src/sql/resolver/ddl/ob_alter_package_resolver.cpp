@@ -50,14 +50,15 @@ int ObAlterPackageResolver::resolve(const ParseNode &parse_tree)
   OV (OB_NOT_NULL(alter_package_stmt = create_stmt<ObAlterPackageStmt>()), OB_ALLOCATE_MEMORY_FAILED);
   OX (alter_package_stmt->get_alter_package_arg().db_name_ = db_name);
   OX (alter_package_stmt->get_alter_package_arg().package_name_ = package_name);
-  OZ (resolve_alter_clause(*alter_clause, db_name, package_name, alter_package_stmt->get_alter_package_arg()));
+  OZ (resolve_alter_clause(*alter_clause, db_name, package_name, *alter_package_stmt));
+  LOG_INFO("debug for xll : resolve", K(alter_package_stmt->get_alter_package_arg()));
   return ret;
 }
 
 int ObAlterPackageResolver::resolve_alter_clause(const ParseNode &alter_clause,
                                                  const ObString &db_name,
                                                  const ObString &package_name,
-                                                 obrpc::ObAlterPackageArg &pkg_arg)
+                                                 ObAlterPackageStmt &alter_stmt)
 {
   int ret = OB_SUCCESS;
   CK (OB_LIKELY(T_PACKAGE_ALTER_OPTIONS == alter_clause.type_));
@@ -68,7 +69,8 @@ int ObAlterPackageResolver::resolve_alter_clause(const ParseNode &alter_clause,
     LOG_WARN("alter editionable is not supported yet!", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter editionable");
   } else {
-    OZ (resolve_alter_compile_clause(alter_clause, db_name, package_name, pkg_arg));
+    OZ (resolve_alter_compile_clause(alter_clause, db_name, package_name, alter_stmt));
+    LOG_INFO("debug for xll : alter clause", K(alter_stmt.get_alter_package_arg()));
   }
   return ret;
 }
@@ -76,7 +78,7 @@ int ObAlterPackageResolver::resolve_alter_clause(const ParseNode &alter_clause,
 int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_clause,
                                                          const ObString &db_name,
                                                          const ObString &package_name,
-                                                         obrpc::ObAlterPackageArg &pkg_arg)
+                                                         ObAlterPackageStmt &alter_stmt)
 {
   int ret = OB_SUCCESS;
   CK (OB_LIKELY(T_PACKAGE_ALTER_OPTIONS == alter_clause.type_));
@@ -87,7 +89,8 @@ int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_
     LOG_WARN("alter package with reuse_setting not supported yet!", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter package with reuse setting");
   }
-  OZ (compile_package(db_name, package_name, alter_clause.int16_values_[2], pkg_arg));
+  OZ (compile_package(db_name, package_name, alter_clause.int16_values_[2], alter_stmt));
+  LOG_INFO("debug for xll : alter compile clause", K(alter_stmt.get_alter_package_arg()));
   return ret;
 }
 
@@ -139,11 +142,12 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
 int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                             const ObString &package_name,
                                             int16_t compile_flag,
-                                            obrpc::ObAlterPackageArg &pkg_arg)
+                                            ObAlterPackageStmt &alter_stmt)
 {
   int ret = OB_SUCCESS;
   const ObPackageInfo *package_spec_info = nullptr;
   const ObPackageInfo *package_body_info = nullptr;
+  obrpc::ObAlterPackageArg &pkg_arg = alter_stmt.get_alter_package_arg();
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
   share::schema::ObErrorInfo &error_info = pkg_arg.error_info_;
@@ -160,7 +164,8 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
     char buf[OB_MAX_PROC_ENV_LENGTH];
     int64_t pos = 0;
     OZ (ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
-    OZ (ob_write_string(*allocator_, ObString(pos, buf), pkg_arg.exec_env_));
+    OZ (ob_write_string(alter_stmt.get_allocator(), ObString(pos, buf), pkg_arg.exec_env_));
+    LOG_INFO("debug for xll: resolve compile package1", K(pkg_arg));
     OZ (package_guard.init());
     OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                           db_name,
@@ -182,6 +187,8 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                               nullptr));
     OZ (analyze_package(compiler, nullptr, package_spec_ast, db_name, package_spec_info,
                         error_info, has_error));
+
+    LOG_INFO("debug for xll: resolve compile package2", K(pkg_arg));
 
     bool collect_package_body_info = false;
     if (OB_SUCC(ret)) {
@@ -227,6 +234,8 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
       }
     }
 
+    LOG_INFO("debug for xll: resolve compile package3", K(pkg_arg));
+
 #define COLLECT_PACKAGE_INFO(alt_pkg_arg, package_info)                            \
   do {                                                                             \
     OV(OB_NOT_NULL(package_info), OB_INVALID_ARGUMENT);                            \
@@ -249,6 +258,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                 package_body_info->get_schema_version(),
                                 package_body_info->get_tenant_id(),
                                 pkg_arg));
+      LOG_INFO("debug for xll: resolve compile package3.1", K(pkg_arg));
       bool body_has_error = false;
       OZ (package_body_ast.init(db_name,
                                 package_name,
@@ -259,6 +269,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                 &package_spec_ast));
       OZ (analyze_package(compiler, &(package_spec_ast.get_body()->get_namespace()),
                           package_body_ast, db_name, package_body_info, error_info, body_has_error));
+      LOG_INFO("debug for xll: resolve compile package3.2", K(pkg_arg));
       if (OB_SUCC(ret)) {
         ObArray<const ObRoutineInfo *> routine_infos;
         OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
@@ -279,12 +290,14 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
               OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
             }
           }
+          LOG_INFO("debug for xll: resolve compile package3.3", K(pkg_arg.exec_env_), K(pkg_arg));
           OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_,
                                                                     *session_info_,
                                                                     pkg_arg.public_routine_infos_,
                                                                     spec_routine_table,
                                                                     body_routine_table,
                                                                     routine_infos));
+          LOG_INFO("debug for xll: resolve compile package3.3.1", K(pkg_arg));
           if (OB_FAIL(ret)) {
             pkg_arg.public_routine_infos_.reset();
           } else {
@@ -299,6 +312,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
             OZ (pkg_arg.public_routine_infos_.push_back(*routine_infos.at(i)));
           }
         }
+        LOG_INFO("debug for xll: resolve compile package3.4", K(pkg_arg));
         // TODO:actually，“alter package compile” should replace package spec and package body
         // but if we will alter package body, it only send package body info rpc, so we can only collect package body dep
         if (OB_SUCC(ret)) {
@@ -307,11 +321,13 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                                   pkg_arg.dependency_infos_,
                                                   ObObjectType::PACKAGE_BODY,
                                                   0, dep_attr, dep_attr));
+          LOG_INFO("debug for xll: resolve compile package3.5", K(pkg_arg));
           OZ (ob_add_ddl_dependency(package_body_ast.get_dependency_table(), pkg_arg));
         }
       }
       COLLECT_PACKAGE_INFO(pkg_arg, package_body_info);
     }
+    LOG_INFO("debug for xll: resolve compile package4", K(pkg_arg.exec_env_), K(pkg_arg));
 
 #undef COLLECT_PACKAGE_INFO
   }

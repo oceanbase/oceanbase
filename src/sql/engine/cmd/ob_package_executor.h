@@ -38,22 +38,7 @@ class ObCreatePackageStmt;
 class ObAlterPackageStmt;
 class ObDropPackageStmt;
 
-class ObCompilePackageInf
-{
-public:
-  ObCompilePackageInf() {}
-  virtual ~ObCompilePackageInf() {}
-  static int compile_package(sql::ObExecContext &ctx,
-                      uint64_t tenant_id,
-                      const ObString &db_name,
-                      oceanbase::share::schema::ObPackageType type,
-                      const ObString &package_name,
-                      int64_t schema_version);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObCompilePackageInf);
-};
-
-class ObCreatePackageExecutor : ObCompilePackageInf
+class ObCreatePackageExecutor
 {
 public:
   ObCreatePackageExecutor() {}
@@ -63,7 +48,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePackageExecutor);
 };
 
-class ObAlterPackageExecutor : ObCompilePackageInf
+class ObAlterPackageExecutor
 {
 public:
   ObAlterPackageExecutor() {}
