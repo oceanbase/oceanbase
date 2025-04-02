@@ -23,7 +23,7 @@ ObCreateViewHelper::ObCreateViewHelper(
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
     obrpc::ObCreateTableRes &res)
-  : ObDDLHelper(schema_service, tenant_id),
+  : ObDDLHelper(schema_service, tenant_id, "[parallel create view]"),
     arg_(arg),
     res_(res)
 {}
@@ -32,34 +32,6 @@ ObCreateViewHelper::~ObCreateViewHelper()
 {
 }
 
-int ObCreateViewHelper::execute()
-{
-  RS_TRACE(create_view_begin);
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(start_ddl_trans_())) {
-    LOG_WARN("fail to start ddl trans", KR(ret));
-  } else if (OB_FAIL(lock_objects_())) {
-    LOG_WARN("fail to lock objects", KR(ret));
-  } else if (OB_FAIL(generate_schemas_())) {
-    LOG_WARN("fail to generate schemas", KR(ret));
-  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
-    LOG_WARN("fail to gen task id and schema versions", KR(ret));
-  } else if (OB_FAIL(create_schemas_())) {
-    LOG_WARN("fail create schemas", KR(ret));
-  } else if (OB_FAIL(serialize_inc_schema_dict_())) {
-    LOG_WARN("fail to serialize inc schema dict", KR(ret));
-  } else if (OB_FAIL(wait_ddl_trans_())) {
-    LOG_WARN("fail to wait ddl trans", KR(ret));
-  }
-  if (OB_FAIL(end_ddl_trans_(ret))) { // won't overwrite ret
-    LOG_WARN("fail to end ddl trans", KR(ret));
-  }
-  RS_TRACE(create_view_end);
-  FORCE_PRINT_TRACE(THE_RS_TRACE, "[parallel create view]");
-  return ret;
-}
 
 //TODO:(yanmu.ztl) to implement
 int ObCreateViewHelper::lock_objects_()

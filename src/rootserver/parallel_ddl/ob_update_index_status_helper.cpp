@@ -26,7 +26,7 @@ ObUpdateIndexStatusHelper::ObUpdateIndexStatusHelper(
     const uint64_t tenant_id,
     const obrpc::ObUpdateIndexStatusArg &arg,
     obrpc::ObParallelDDLRes &res)
-  : ObDDLHelper(schema_service, tenant_id),
+  : ObDDLHelper(schema_service, tenant_id, "[parallel update index status]"),
     arg_(arg),
     res_(res),
     orig_index_table_schema_(nullptr),
@@ -38,59 +38,6 @@ ObUpdateIndexStatusHelper::ObUpdateIndexStatusHelper(
 
 ObUpdateIndexStatusHelper::~ObUpdateIndexStatusHelper()
 {
-}
-int ObUpdateIndexStatusHelper::execute()
-{
-  int ret = OB_SUCCESS;
-  RS_TRACE(parallel_ddl_begin);
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(start_ddl_trans_())) {
-    LOG_WARN("fail to start ddl trans", KR(ret));
-  } else if (OB_FAIL(lock_objects_())) {
-    LOG_WARN("fail to lock objects", KR(ret));
-  } else if (OB_FAIL(check_and_set_schema_())) {
-    LOG_WARN("fail to check update status", KR(ret));
-  } else if (OB_FAIL(calc_schema_version_cnt_())) {
-    LOG_WARN("fail to calc schema version cnt");
-  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
-    LOG_WARN("fail to gen task id and schema versions");
-  } else if (OB_FAIL(update_status_())) {
-    LOG_WARN("fail to update status", KR(ret));
-  } else if (OB_FAIL(serialize_inc_schema_dict_())) {
-    LOG_WARN("fail to serialize inc schema dict", KR(ret));
-  } else if (OB_FAIL(wait_ddl_trans_())) {
-    LOG_WARN("fail to wait ddl trans", KR(ret));
-  }
-
-  if (OB_FAIL(end_ddl_trans_(ret))) { // won't lose err code
-    //overwrite ret
-    LOG_WARN("fail to end ddl trans", KR(ret));
-  } else {
-    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
-    int64_t last_schema_version = OB_INVALID_VERSION;
-    int64_t end_schema_version = OB_INVALID_VERSION;
-    if (OB_ISNULL(tsi_generator)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tsi schema version generator is null", KR(ret));
-    } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
-      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
-      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("too much schema versions may be allocated", KR(ret), KPC(tsi_generator));
-    } else {
-      res_.schema_version_ = end_schema_version;
-    }
-  }
-  if (!index_table_exist_) {
-    // regard as the index table has been dropped and scheduler will clean up the task record in success state.
-    ret = OB_SUCCESS;
-  }
-  RS_TRACE(parallel_ddl_end);
-  FORCE_PRINT_TRACE(THE_RS_TRACE, "[parallel update index status]");
-  return ret;
 }
 
 int ObUpdateIndexStatusHelper::lock_objects_()
@@ -135,7 +82,7 @@ int ObUpdateIndexStatusHelper::lock_database_by_obj_name_()
   return ret;
 }
 
-int ObUpdateIndexStatusHelper::check_and_set_schema_()
+int ObUpdateIndexStatusHelper::generate_schemas_()
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *orig_data_table_schema = nullptr;
@@ -206,7 +153,7 @@ int ObUpdateIndexStatusHelper::calc_schema_version_cnt_()
   return ret;
 }
 
-int ObUpdateIndexStatusHelper::update_status_()
+int ObUpdateIndexStatusHelper::operate_schemas_()
 {
   int ret = OB_SUCCESS;
   int64_t new_schema_version = OB_INVALID_VERSION;
@@ -258,5 +205,48 @@ int ObUpdateIndexStatusHelper::update_status_()
     }
   }
   RS_TRACE(alter_schemas);
+  return ret;
+}
+
+int ObUpdateIndexStatusHelper::init_()
+{
+  int ret = OB_SUCCESS;
+  parallel_ddl_type_ = "[parallel update index status]";
+  return ret;
+}
+
+int ObUpdateIndexStatusHelper::operation_before_commit_()
+{
+  int ret = OB_SUCCESS;
+  // do nothing
+  return ret;
+}
+
+int ObUpdateIndexStatusHelper::clean_on_fail_commit_()
+{
+  int ret = OB_SUCCESS;
+  // do nothing
+  return ret;
+}
+
+int ObUpdateIndexStatusHelper::construct_and_adjust_result_(int &return_ret)
+{
+  int ret = return_ret;
+  if (FAILEDx(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+    if (OB_ISNULL(tsi_generator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tsi schema version generator is null", KR(ret));
+    } else {
+      tsi_generator->get_current_version(res_.schema_version_);
+    }
+  }
+
+  if (!index_table_exist_) {
+    // regard as the index table has been dropped and scheduler will clean up the task record in success state.
+    ret = OB_SUCCESS;
+  }
   return ret;
 }

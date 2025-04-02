@@ -64,13 +64,17 @@ public:
     obrpc::ObCreateTableRes &res);
   virtual ~ObCreateTableHelper();
 
-  virtual int execute() override;
 private:
-  int init_();
+  virtual int init_() override;
 
-  int lock_objects_();
-  int generate_schemas_();
+  virtual int lock_objects_() override;
+  virtual int generate_schemas_() override;
+  virtual int operate_schemas_() override;
   virtual int calc_schema_version_cnt_() override;
+  virtual int operation_before_commit_() override;
+  virtual int clean_on_fail_commit_() override;
+  virtual int construct_and_adjust_result_(int &return_ret) override;
+
   int create_schemas_();
   int create_tablets_();
   int add_index_name_to_cache_();

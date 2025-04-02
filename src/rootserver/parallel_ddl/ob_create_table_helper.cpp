@@ -59,7 +59,7 @@ ObCreateTableHelper::ObCreateTableHelper(
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
     obrpc::ObCreateTableRes &res)
-  : ObDDLHelper(schema_service, tenant_id),
+  : ObDDLHelper(schema_service, tenant_id, "[parallel create table]"),
     arg_(arg),
     res_(res),
     replace_mock_fk_parent_table_id_(common::OB_INVALID_ID),
@@ -78,6 +78,7 @@ ObCreateTableHelper::~ObCreateTableHelper()
 int ObCreateTableHelper::init_()
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
   const int64_t BUCKET_NUM = 100;
   if (OB_FAIL(new_mock_fk_parent_table_map_.create(BUCKET_NUM, "MockFkPMap", "MockFkPMap"))) {
     LOG_WARN("fail to init mock fk parent table map", KR(ret));
@@ -85,105 +86,6 @@ int ObCreateTableHelper::init_()
   return ret;
 }
 
-int ObCreateTableHelper::execute()
-{
-  RS_TRACE(create_table_begin);
-  int ret = OB_SUCCESS;
-  DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(init_())) {
-    LOG_WARN("fail to init struct", KR(ret));
-  } else if (OB_FAIL(start_ddl_trans_())) {
-    LOG_WARN("fail to start ddl trans", KR(ret));
-  } else if (OB_FAIL(lock_objects_())) {
-    LOG_WARN("fail to lock objects", KR(ret));
-  } else if (OB_FAIL(generate_schemas_())) {
-    LOG_WARN("fail to generate schemas", KR(ret));
-  } else if (OB_FAIL(calc_schema_version_cnt_())) {
-    LOG_WARN("fail to calc schema version cnt", KR(ret));
-  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
-    LOG_WARN("fail to gen task id and schema versions", KR(ret));
-  } else if (OB_FAIL(create_schemas_())) {
-    LOG_WARN("fail create schemas", KR(ret));
-  } else if (OB_FAIL(create_tablets_())) {
-    LOG_WARN("fail create schemas", KR(ret));
-  } else if (OB_FAIL(serialize_inc_schema_dict_())) {
-    LOG_WARN("fail to serialize inc schema dict", KR(ret));
-  } else if (OB_FAIL(wait_ddl_trans_())) {
-    LOG_WARN("fail to wait ddl trans", KR(ret));
-  } else if (OB_FAIL(add_index_name_to_cache_())) {
-    LOG_WARN("fail to add index name to cache", KR(ret));
-  }
-
-  const bool commit = OB_SUCC(ret);
-  if (OB_FAIL(end_ddl_trans_(ret))) { // won't overwrite ret
-    LOG_WARN("fail to end ddl trans", KR(ret));
-    if (commit && has_index_) {
-      // Because index name is added to cache before trans commit,
-      // it will remain garbage in cache when trans commit failed and false alarm will occur.
-      //
-      // To solve this problem:
-      // 1. check_index_name_exist() will double check by inner_sql and erase garbage if index name conflicts.
-      // 2. (Fully unnecessary) clean up index name cache when trans commit failed.
-      int tmp_ret = OB_SUCCESS;
-      if (OB_ISNULL(ddl_service_)) {
-        tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl_service_ is null", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(ddl_service_->get_index_name_checker().reset_cache(tenant_id_))) {
-        LOG_ERROR("fail to reset cache", K(ret), KR(tmp_ret), K_(tenant_id));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
-    int64_t last_schema_version = OB_INVALID_VERSION;
-    int64_t end_schema_version = OB_INVALID_VERSION;
-    if (OB_UNLIKELY(new_tables_.count() <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table cnt is invalid", KR(ret));
-    } else if (OB_ISNULL(tsi_generator)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tsi schema version generator is null", KR(ret));
-    } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
-      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
-      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("too much schema versions may be allocated", KR(ret), KPC(tsi_generator));
-    } else {
-      res_.table_id_ = new_tables_.at(0).get_table_id();
-      res_.schema_version_ = last_schema_version;
-    }
-  }
-
-  if (OB_ERR_TABLE_EXIST == ret) {
-    const ObTableSchema &table = arg_.schema_;
-    //create table xx if not exist (...)
-    if (arg_.if_not_exist_) {
-      res_.do_nothing_ = true;
-      ret = OB_SUCCESS;
-      LOG_INFO("table is exist, no need to create again",
-               "tenant_id", table.get_tenant_id(),
-               "database_id", table.get_database_id(),
-               "table_name", table.get_table_name());
-    } else {
-      LOG_WARN("table is exist, cannot create it twice", KR(ret),
-               "tenant_id", table.get_tenant_id(),
-               "database_id", table.get_database_id(),
-               "table_name", table.get_table_name());
-      LOG_USER_ERROR(OB_ERR_TABLE_EXIST,
-                     table.get_table_name_str().length(),
-                     table.get_table_name_str().ptr());
-    }
-  }
-
-  RS_TRACE(create_table_end);
-  FORCE_PRINT_TRACE(THE_RS_TRACE, "[parallel create table]");
-  return ret;
-}
 
 int ObCreateTableHelper::lock_objects_()
 {
@@ -2359,6 +2261,83 @@ int ObCreateTableHelper::add_index_name_to_cache_()
         }
       }
     } // end for
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::operate_schemas_() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(create_schemas_())) {
+    LOG_WARN("fail create schemas", KR(ret));
+  } else if (OB_FAIL(create_tablets_())) {
+    LOG_WARN("fail create schemas", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::clean_on_fail_commit_()
+{
+  int ret = OB_SUCCESS;
+  if (has_index_) {
+    // Because index name is added to cache before trans commit,
+    // it will remain garbage in cache when trans commit failed and false alarm will occur.
+    //
+    // To solve this problem:
+    // 1. check_index_name_exist() will double check by inner_sql and erase garbage if index name conflicts.
+    // 2. (Fully unnecessary) clean up index name cache when trans commit failed.
+    if (OB_ISNULL(ddl_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl_service_ is null", KR(ret));
+    } else if (OB_FAIL(ddl_service_->get_index_name_checker().reset_cache(tenant_id_))) {
+      LOG_ERROR("fail to reset cache", K(ret), KR(ret), K_(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::operation_before_commit_() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(add_index_name_to_cache_())) {
+    LOG_WARN("fail to add index name to cache", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::construct_and_adjust_result_(int &return_ret) {
+  int ret = return_ret;
+  ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+  if (FAILEDx(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_ISNULL(tsi_generator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tsi generator is null", KR(ret));
+  } else {
+    res_.table_id_ = new_tables_.at(0).get_table_id();
+    tsi_generator->get_current_version(res_.schema_version_);
+  }
+  if (OB_ERR_TABLE_EXIST == ret) {
+    const ObTableSchema &table = arg_.schema_;
+    //create table xx if not exist (...)
+    if (arg_.if_not_exist_) {
+      res_.do_nothing_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("table is exist, no need to create again",
+               "tenant_id", table.get_tenant_id(),
+               "database_id", table.get_database_id(),
+               "table_name", table.get_table_name());
+    } else {
+      LOG_WARN("table is exist, cannot create it twice", KR(ret),
+               "tenant_id", table.get_tenant_id(),
+               "database_id", table.get_database_id(),
+               "table_name", table.get_table_name());
+      LOG_USER_ERROR(OB_ERR_TABLE_EXIST,
+                     table.get_table_name_str().length(),
+                     table.get_table_name_str().ptr());
+    }
   }
   return ret;
 }

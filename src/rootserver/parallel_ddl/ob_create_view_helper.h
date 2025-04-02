@@ -40,11 +40,15 @@ public:
     obrpc::ObCreateTableRes &res);
   virtual ~ObCreateViewHelper();
 
-  virtual int execute() override;
 private:
   int lock_objects_();
   int generate_schemas_();
   virtual int calc_schema_version_cnt_() override;
+  virtual int init_() override { return OB_SUCCESS; }
+  virtual int operate_schemas_() override { return OB_SUCCESS; }
+  virtual int operation_before_commit_() override { return OB_SUCCESS; }
+  virtual int clean_on_fail_commit_() override { return OB_SUCCESS; }
+  virtual int construct_and_adjust_result_(int &return_ret) override { return OB_SUCCESS; }
   int create_schemas_();
 private:
   const obrpc::ObCreateTableArg &arg_;

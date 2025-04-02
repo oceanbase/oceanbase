@@ -35,7 +35,7 @@ ObCreateIndexHelper::ObCreateIndexHelper(
     rootserver::ObDDLService &ddl_service,
     const obrpc::ObCreateIndexArg &arg,
     obrpc::ObAlterTableRes &res)
-  : ObDDLHelper(schema_service, tenant_id),
+  : ObDDLHelper(schema_service, tenant_id, "[parallel create index]"),
     arg_(arg),
     new_arg_(nullptr),
     res_(res),
@@ -54,84 +54,6 @@ ObCreateIndexHelper::~ObCreateIndexHelper()
     new_arg_->~ObCreateIndexArg();
     new_arg_ = nullptr;
   }
-}
-
-int ObCreateIndexHelper::execute()
-{
-  RS_TRACE(parallel_ddl_begin);
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(start_ddl_trans_())) {
-    LOG_WARN("fail to start ddl trans", KR(ret));
-  } else if (OB_FAIL(lock_objects_())) {
-    LOG_WARN("fail to lock objects", KR(ret));
-  } else if (OB_FAIL(check_table_legitimacy_())) {
-    LOG_WARN("fail to check create index", KR(ret));
-  } else if (OB_FAIL(generate_index_schema_())) {
-    LOG_WARN("fail to generate index schema");
-  } else if (OB_FAIL(calc_schema_version_cnt_())) {
-    LOG_WARN("fail to calc schema version cnt", KR(ret));
-  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
-    LOG_WARN("fail to gen task id and schema versions", KR(ret));
-  } else if (OB_FAIL(create_index_())) {
-    LOG_WARN("fail to create index", KR(ret));
-  } else if (OB_FAIL(serialize_inc_schema_dict_())) {
-    LOG_WARN("fail to serialize inc schema dict", KR(ret));
-  } else if (OB_FAIL(wait_ddl_trans_())) {
-    LOG_WARN("fail to wait ddl trans", KR(ret));
-  } else if (OB_FAIL(add_index_name_to_cache_())) {
-    LOG_WARN("fail to add index name to cache", KR(ret));
-  }
-  const bool commit = OB_SUCC(ret);
-  if (OB_FAIL(end_ddl_trans_(ret))) {
-    LOG_WARN("fail to end ddl trans", KR(ret));
-    if (commit) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_ISNULL(ddl_service_)) {
-        tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl_service_ is null", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(ddl_service_->get_index_name_checker().reset_cache(tenant_id_))) {
-        LOG_WARN("fail to reset cache", K(ret), KR(tmp_ret), K_(tenant_id));
-      }
-    }
-  } else {
-    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
-    int64_t last_schema_version = OB_INVALID_VERSION;
-    int64_t end_schema_version = OB_INVALID_VERSION;
-    if (OB_ISNULL(tsi_generator)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tsi generator is null", KR(ret));
-    } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
-      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
-      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("too much schema versions may be allocated", KR(ret), KPC(tsi_generator));
-    } else if (OB_UNLIKELY(index_schemas_.count() != 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index schemas count unexpected", KR(ret), K(index_schemas_.count()));
-    } else {
-      res_.index_table_id_ = index_schemas_.at(0).get_table_id();
-      res_.schema_version_ = last_schema_version;
-      res_.task_id_ = task_record_.task_id_;
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record_))) {
-        LOG_WARN("fail to schedule ddl task", KR(ret), K_(task_record));
-      }
-    }
-  }
-  if (OB_ERR_KEY_NAME_DUPLICATE == ret) {
-    if (true == arg_.if_not_exist_) {
-      ret = OB_SUCCESS;
-      LOG_USER_WARN(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
-    } else {
-      LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
-    }
-  }
-  RS_TRACE(parallel_ddl_end);
-  FORCE_PRINT_TRACE(THE_RS_TRACE, "[parallel create index]");
-  return ret;
 }
 
 // the online ddl lock and table lock will be locked when submit ddl task
@@ -530,7 +452,7 @@ int ObCreateIndexHelper::calc_schema_version_cnt_()
   return ret;
 }
 
-int ObCreateIndexHelper::create_index_()
+int ObCreateIndexHelper::operate_schemas_()
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = nullptr;
@@ -806,6 +728,86 @@ int ObCreateIndexHelper::check_fk_related_table_ddl_(const share::schema::ObTabl
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while foreign key related table is executing long running ddl");
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObCreateIndexHelper::init_()
+{
+  return OB_SUCCESS;
+}
+
+int ObCreateIndexHelper::generate_schemas_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(check_table_legitimacy_())) {
+    LOG_WARN("fail to check table legitimacy", KR(ret));
+  } else if (OB_FAIL(generate_index_schema_())) {
+    LOG_WARN("fail to generate index schema", KR(ret));
+  }
+  return ret;
+}
+
+
+int ObCreateIndexHelper::clean_on_fail_commit_()
+{
+  int ret = OB_SUCCESS;
+  // Because index name is added to cache before trans commit,
+  // it will remain garbage in cache when trans commit failed and false alarm will occur.
+  //
+  // To solve this problem:
+  // 1. check_index_name_exist() will double check by inner_sql and erase garbage if index name conflicts.
+  // 2. (Fully unnecessary) clean up index name cache when trans commit failed.
+  int tmp_ret = OB_SUCCESS;
+  if (OB_ISNULL(ddl_service_)) {
+    tmp_ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ddl_service_ is null", KR(tmp_ret));
+  } else if (OB_TMP_FAIL(ddl_service_->get_index_name_checker().reset_cache(tenant_id_))) {
+    LOG_ERROR("fail to reset cache", K(ret), KR(tmp_ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObCreateIndexHelper::operation_before_commit_() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(add_index_name_to_cache_())) {
+    LOG_WARN("fail to add index name to cache", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateIndexHelper::construct_and_adjust_result_(int &return_ret) {
+  int ret = return_ret;
+  if (FAILEDx(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+    if (OB_ISNULL(tsi_generator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get tsi schema version generator failed", KR(ret));
+    } else if (OB_ISNULL(GCTX.root_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("root_service_ is null", KR(ret));
+    } else {
+      res_.index_table_id_ = index_schemas_.at(0).get_table_id();
+      tsi_generator->get_current_version(res_.schema_version_);
+      res_.task_id_ = task_record_.task_id_;
+      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record_))) {
+        LOG_WARN("fail to schedule ddl task", KR(ret), K_(task_record));
+      }
+    }
+  }
+  if (OB_ERR_KEY_NAME_DUPLICATE == ret) {
+    if (true == arg_.if_not_exist_) {
+      ret = OB_SUCCESS;
+      LOG_USER_WARN(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
+    } else {
+      LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
     }
   }
   return ret;

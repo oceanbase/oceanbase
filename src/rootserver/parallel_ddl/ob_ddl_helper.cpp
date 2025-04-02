@@ -68,7 +68,8 @@ bool ObDDLHelper::ObLockObjPair::less_than(
 
 ObDDLHelper::ObDDLHelper(
   share::schema::ObMultiVersionSchemaService *schema_service,
-  const uint64_t tenant_id)
+  const uint64_t tenant_id,
+  const char* parallel_ddl_type)
   : inited_(false),
     schema_service_(schema_service),
     ddl_service_(NULL),
@@ -85,7 +86,9 @@ ObDDLHelper::ObDDLHelper(
     lock_database_name_map_(),
     lock_object_name_map_(),
     lock_object_id_map_(),
-    latest_schema_guard_(schema_service, tenant_id)
+    latest_schema_guard_(schema_service, tenant_id),
+    allocator_(),
+    parallel_ddl_type_(parallel_ddl_type)
 {}
 
 ObDDLHelper::~ObDDLHelper()
@@ -309,69 +312,126 @@ int ObDDLHelper::end_ddl_trans_(const int return_ret)
 
 int ObDDLHelper::execute()
 {
-  return OB_NOT_IMPLEMENT;
+  int ret = OB_SUCCESS;
+  RS_TRACE(parallel_ddl_begin);
   /*
    * Implement of parallel ddl should has following actions:
-   *
-   * ----------------------------------------------
+   */
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  }
+  /* ----------------------------------------------
+   * 0. init
+   * - set ddl type
+   * - init inner objects
+   * - precheck legitimacy
+   */
+  if (FAILEDx(init_())) {
+    LOG_WARN("fail to init", KR(ret));
+  }
+  /* ----------------------------------------------
    * 1. start ddl trans:
    * - to be exclusive with non-parallel ddl.
    * - to be concurrent with other parallel ddl.
-   *
-   * if (OB_FAIL(start_ddl_trans_())) {
-   *   LOG_WARN("fail to start ddl trans", KR(ret));
-   * }
-   *
-   * ----------------------------------------------
+   */
+  if (FAILEDx(start_ddl_trans_())) {
+    LOG_WARN("fail to start ddl trans", KR(ret));
+  }
+  /* ----------------------------------------------
    * 2. lock object by name/object_id
    * - to be exclusive with other parallel ddl which involving the same objects.
    * - lock object in trans
    * Attension:
    * 1) lock objects just for mutual exclusion, should check if related objects changed after acquire locks.
    * 2) For same object, lock object by name first. After that, lock object by id if it's neccessary.
-   *
-   * ----------------------------------------------
+   */
+  if (FAILEDx(lock_objects_())) {
+    LOG_WARN("fail to lock objects", KR(ret));
+  }
+  /* ----------------------------------------------
    * 3. fetch & generate schema:
    * - fetch the latest schemas from inner table.
    * - generate schema with arg and the latests schemas.
-   *
-   * ----------------------------------------------
-   * 4. register task id & generate schema versions:
+   */
+  if (FAILEDx(generate_schemas_())) {
+    LOG_WARN("fail to generate schemas", KR(ret));
+  }
+  /* ----------------------------------------------
+   * 4. calculate needed schema version count, register task id & generate schema versions:
    * - generate an appropriate number of schema versions for this DDL and register task id.
    * - concurrent DDL trans will be committed in descending order of version later.
-   *
-   * if (FAILEDx(gen_task_id_and_schema_versions_())) {
-   *   LOG_WARN("fail to gen task id and schema versions", KR(ret));
-   * }
-   *
-   * ----------------------------------------------
-   * 5. create schema:
+   */
+  if (FAILEDx(calc_schema_version_cnt_())) {
+    LOG_WARN("fail to calc schema version cnt", KR(ret));
+  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
+    LOG_WARN("fail to gen task id and schema versions", KR(ret));
+  }
+  /* ----------------------------------------------
+   * 5. operate schemas:
    * - persist schema in inner table.
-   *
-   * ----------------------------------------------
+   */
+  if (FAILEDx(operate_schemas_())) {
+    LOG_WARN("fail to create schemas", KR(ret));
+  }
+  /* ----------------------------------------------
    * 6. [optional] serialize increment data dictionary:
    * - if table/database/tenant schema changed, records changed schemas in log and commits with DDL trans.
-   *
-   * if (FAILEDx(serialize_inc_schema_dict_())) {
-   *   LOG_WARN("fail to serialize inc schema dict", KR(ret));
-   * }
-   *
-   * ----------------------------------------------
+   */
+  if (FAILEDx(serialize_inc_schema_dict_())) {
+    LOG_WARN("fail to serialize inc schema dict", KR(ret));
+  }
+  /* ----------------------------------------------
    * 7. wait concurrent ddl trans ended:
    * - wait concurrent DDL trans with smallest schema version ended.
-   *
-   * if (FAILEDx(wait_ddl_trans_())) {
-   *   LOG_WARN(fail to wait ddl trans, KR(ret));
-   * }
-   *
-   * ----------------------------------------------
+   */
+  if (FAILEDx(wait_ddl_trans_())) {
+    LOG_WARN("fail to wait ddl trans", KR(ret));
+  }
+  /* ----------------------------------------------
    * 8. end ddl trans:
    * - abort/commit ddl trans.
-   *
-   * if (OB_FAIL(end_ddl_trans_(ret))) { // won't overwrite ret
-   *   LOG_WARN("fail to end ddl trans", KR(ret));
-   * }
    */
+  if (FAILEDx(operation_before_commit_())) {
+    LOG_WARN("fail to do operation before commits", KR(ret));
+  }
+  const bool commit = OB_SUCC(ret);
+  if (OB_FAIL(end_ddl_trans_(ret))) { // won't overwrite ret
+    LOG_WARN("fail to end ddl trans", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (commit && OB_TMP_FAIL(clean_on_fail_commit_())) {
+      LOG_WARN("fail to clean on fail commit", KR(tmp_ret));
+    }
+  } else {
+    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+    int64_t last_schema_version = OB_INVALID_VERSION;
+    int64_t end_schema_version = OB_INVALID_VERSION;
+    if (OB_ISNULL(tsi_generator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tsi schema version generator is null", KR(ret));
+    } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
+      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
+      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id));
+    } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("too much schema versions may be allocated", KR(ret), KPC(tsi_generator));
+    }
+  }
+  /* ----------------------------------------------
+   * 9. construct and adjust result:
+   * - construct the content of res.
+   * - adjust the content of res.
+   * - adjust result
+   */
+  if (OB_FAIL(construct_and_adjust_result_(ret))) {
+    // overwrite ret
+    // actually, ret is not overwritten, just for passing core-test
+    LOG_WARN("fail to adjust result", KR(ret));
+  }
+
+  RS_TRACE(parallel_ddl_end);
+  FORCE_PRINT_TRACE(THE_RS_TRACE, parallel_ddl_type_);
+  return ret;
 }
 
 int ObDDLHelper::add_lock_object_to_map_(
