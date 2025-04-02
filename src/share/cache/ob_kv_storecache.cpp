@@ -44,10 +44,12 @@ void ObKVCacheHandle::move_from(ObKVCacheHandle &other)
   if (&other != this) {
     int ret = OB_SUCCESS;
     reset();
-    hazptr_holder_.move_from(other.hazptr_holder_);
     if (OB_UNLIKELY(other.is_traced())) {
       storage::ObStorageLeakChecker::get_instance().handle_reset(&other);
+      hazptr_holder_.move_from(other.hazptr_holder_);
       storage::ObStorageLeakChecker::get_instance().handle_hold(this, true);
+    } else {
+      hazptr_holder_.move_from(other.hazptr_holder_);
     }
   }
 }
