@@ -161,7 +161,14 @@ int ObDynamicParamSetter::update_dynamic_param(ObEvalCtx &eval_ctx, ObDatum &dat
       LOG_WARN("convert datum to obj failed", K(ret), "datum",
                DATUM2STR(*dst_, param_datum));
     } else {
-      param_store.at(param_idx_).set_param_meta();
+      // if exec param is decimal int, accuracy must be properly set
+      if (dst_->obj_meta_.is_decimal_int()) {
+        ObAccuracy acc(dst_->datum_meta_.precision_, dst_->datum_meta_.scale_);
+        param_store.at(param_idx_).set_param_meta(dst_->obj_meta_);
+        param_store.at(param_idx_).set_accuracy(acc);
+      } else {
+        param_store.at(param_idx_).set_param_meta();
+      }
     }
   }
 
