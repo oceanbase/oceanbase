@@ -288,7 +288,7 @@ int ObTableGroupChecker::inspect_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
       const uint64_t table_id = table_ids.at(i);
-      const ObTableSchema *table = NULL;
+      const ObSimpleTableSchemaV2 *table = NULL;
       // schema guard cannot be used repeatedly in iterative logic,
       // otherwise it will cause a memory hike in schema cache
       if (!GCTX.root_service_->is_full_service()) {
@@ -296,7 +296,7 @@ int ObTableGroupChecker::inspect_(
         LOG_WARN("rs is not in full service", KR(ret));
       } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret), K(tenant_id));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table))) {
+      } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table))) {
         LOG_WARN("get table schema failed", K(ret), KT(table_id));
       } else if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
