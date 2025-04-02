@@ -2815,7 +2815,8 @@ typedef enum ObItemType
 
   T_DATABASE_FACTOR = 4840,
   T_IGNORE_LAST_EMPTY_COLUMN = 4841,
-
+  T_LOG_ERROR_LIMIT = 4842,
+  T_LOG_ERROR_UNLIMITED = 4843,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

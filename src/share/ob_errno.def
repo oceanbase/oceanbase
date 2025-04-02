@@ -2856,7 +2856,7 @@ DEFINE_ERROR(OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS, -11084, -1, "HY000", "Pr
 DEFINE_ERROR_EXT(OB_CCL_RULE_EXIST, -11085, -1, "HY000", "CCL rule already exist", "CCL rule '%.*s' already exists");
 DEFINE_ERROR_EXT(OB_CCL_RULE_NOT_EXIST, -11086, -1, "HY000", "CCL rule not exist", "CCL rule '%.*s' doesn\'t exist");
 DEFINE_ERROR_EXT(OB_REACH_MAX_CCL_CONCURRENT_NUM, -11087, -1, "HY000", "SQL reach max ccl concurrent num", "SQL reach max ccl rule %s, concurrent num %ld");
-
+DEFINE_ERROR_EXT(OB_REACH_DIAGNOSIS_ERROR_LIMIT, -11088, -1, "HY000", "reject limit reached", "reject limit %ld reached");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)
