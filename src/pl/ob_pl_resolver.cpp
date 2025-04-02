@@ -4106,7 +4106,8 @@ int ObPLResolver::resolve_question_mark_node(
   CK (OB_NOT_NULL(current_block_->get_symbol_table()));
   CK (OB_NOT_NULL(var = current_block_->get_symbol_table()->get_symbol(into_node->value_)));
   CK (var->get_name().prefix_match(ANONYMOUS_ARG));
-  if (NULL != var && var->is_readonly() && var->is_referenced()) {
+  OX (const_cast<ObPLVar*>(var)->set_readonly(false)); // into value need set readonly false
+  if (var->is_referenced()) {
     OX (const_cast<ObPLVar*>(var)->set_name(ANONYMOUS_INOUT_ARG));
   }
   OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, expr));
@@ -16691,6 +16692,7 @@ int ObPLResolver::resolve_questionmark_cursor(
         LOG_WARN("get invalid symbol.", K(symbol_idx));
       } else {
         var->set_readonly(false);
+        var->set_name(ObPLResolver::ANONYMOUS_INOUT_ARG);
         var->set_type(PL_CURSOR_TYPE);
         var->get_type().set_sys_refcursor_type();
         cursor = ns.get_cursors().at(ns.get_cursors().count() - 1);
