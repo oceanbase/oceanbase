@@ -508,7 +508,7 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
     } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, macro_index.ls_id_,
         data_type, macro_index.turn_id_, macro_index.retry_id_, macro_index.file_id_, backup_path))) {
       LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
-    } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(backup_path.get_obstr(),
+    } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data_with_retry(backup_path.get_obstr(),
         restore_base_info_->backup_dest_.get_storage_info(), macro_index, align_size, read_buffer_, data_buffer_))) {
       LOG_WARN("failed to read macro block data", K(ret), K(table_key_), K(macro_index), K(physic_block_id), KPC(restore_base_info_));
     } else {

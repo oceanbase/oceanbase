@@ -2219,3 +2219,8 @@ DEF_CAP(_dtl_tenant_mem_limit, OB_CLUSTER_PARAMETER, "1G", "[1B,)",
         "the buffer size of storage stream rpc"
         "Range: [1B,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_restore_io_max_retry_count, OB_CLUSTER_PARAMETER, "3", "[0, 64]",
+        "the maximum number of retry attempts for restoring when encountering I/O errors."
+        "Range: [0,64] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -38,8 +38,13 @@ public:
   static int read_macro_block_data(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
       const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
       blocksstable::ObBufferReader &data_buffer);
+  static int read_macro_block_data_with_retry(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
+      const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
+      blocksstable::ObBufferReader &data_buffer); // max retry count is GCONF._restore_io_max_retry_count
   static int pread_file(
       const ObString &path, const share::ObBackupStorageInfo *storage_info, const int64_t offset, const int64_t read_size, char *buf);
+private:
+  static const int64_t READ_MACRO_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000LL; // 1s
 };
 
 }  // namespace backup
