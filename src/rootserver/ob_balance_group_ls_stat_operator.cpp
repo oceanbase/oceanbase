@@ -541,18 +541,22 @@ int ObNewTableTabletAllocator::prepare(
     if (OB_FAIL(alloc_ls_for_sys_tablet(table_schema))) {
       LOG_WARN("fail to alloc ls for sys tablet", KR(ret), K(table_schema));
     }
+  } else if (table_schema.is_index_local_storage()) {
+    // At any time, local indexes should be bound to the data table.
+    // Include local index and global index with local storage.
+    if (OB_FAIL(alloc_ls_for_local_index_tablet(table_schema))) {
+      LOG_WARN("fail to alloc ls for local index tablet", KR(ret));
+    }
   } else if (table_schema.is_broadcast_table() || table_schema.is_duplicate_table()) {
+    // When altering duplicate_scope, the data table to be transferred is a broadcast/duplicate table.
+    // However, it still exists on the normal LS. At this point, related tablets that need to be bound
+    // to the data tablet cannot be directly created on the dup LS.
     if (OB_FAIL(alloc_ls_for_duplicate_table_(table_schema))) {
       LOG_WARN("fail to alloc ls for duplicate tablet", KR(ret), K(table_schema));
     }
   } else {
     if (table_schema.is_index_table()) {
-      if (table_schema.is_index_local_storage()) {
-        // local index or global index with local storage
-        if (OB_FAIL(alloc_ls_for_local_index_tablet(table_schema))) {
-          LOG_WARN("fail to alloc ls for local index tablet", KR(ret));
-        }
-      } else { // global index
+      if (table_schema.is_global_index_table()) {
         // In general, global index is allocated to LS just like normal table.
         // Specially, when the data table of the global index is in a sharding none tablegroup,
         // the global index is bound together. We treat it as a global index in the table group.
@@ -563,6 +567,9 @@ int ObNewTableTabletAllocator::prepare(
         } else if (OB_FAIL(alloc_ls_for_global_index_tablet(table_schema))) {
           LOG_WARN("fail to alloc ls for global index tablet", KR(ret));
         }
+      } else { // local index should not be here
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index type", KR(ret), K(table_schema));
       }
     } else {
       if (OB_INVALID_ID != table_schema.get_tablegroup_id()) {
