@@ -47,6 +47,8 @@ struct FastRefreshableNotes
   ObSqlString error_;
 };
 
+typedef common::ObIArray<std::pair<const TableItem*, const share::schema::ObTableSchema*>> MlogSchemaPairIArray;
+
 class ObMVChecker
 {
   public:
@@ -77,9 +79,9 @@ class ObMVChecker
   static bool is_basic_aggr(const ObItemType aggr_type);
   static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObRawExpr *sum_param, const ObAggFunRawExpr *&dep_aggr);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
+  const MlogSchemaPairIArray &get_mlog_tables() const {  return mlog_tables_; }
   const ObTableSchema &get_mv_container_table_schema() const {  return mv_container_table_schema_;  }
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
-  int get_mlog_table_schema(const TableItem *table, const share::schema::ObTableSchema *&mlog_schema) const;
   void set_fast_refreshable_note(FastRefreshableNotes *note) {  fast_refreshable_note_ = note; }
 private:
   int check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);

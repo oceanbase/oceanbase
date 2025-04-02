@@ -235,22 +235,20 @@ int ObMViewRefresher::prepare_for_refresh()
                                          : refresh_param_.refresh_method_;
     ObMVProvider mv_provider(tenant_id, mview_id);
     bool can_fast_refresh = false;
-    FastRefreshableNotes note;
+    const ObIArray<ObString> *operators = nullptr;
     if (ObMVRefreshMode::NEVER == mview_info.get_refresh_mode()) {
       ret = OB_ERR_MVIEW_NEVER_REFRESH;
       LOG_WARN("mview never refresh", KR(ret), K(mview_info));
-    } else if (OB_FAIL(mv_provider.init_mv_provider(refresh_scn_range.start_scn_,
-                                                    refresh_scn_range.end_scn_,
-                                                    &schema_guard,
-                                                    session_info,
-                                                    note))) {
-      LOG_WARN("fail to init mv provider", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(mv_provider.get_mv_dependency_infos(dependency_infos))) {
-      LOG_WARN("fail to get mv dependency infos", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(mv_provider.get_mlog_mv_refresh_infos(session_info,
+                                                             &schema_guard,
+                                                             refresh_scn_range.start_scn_,
+                                                             refresh_scn_range.end_scn_,
+                                                             dependency_infos,
+                                                             can_fast_refresh,
+                                                             operators))) {
+      LOG_WARN("fail to get mlog mv refresh infos", KR(ret), K(tenant_id));
     } else if (OB_FAIL(fetch_based_infos(schema_guard))) {
       LOG_WARN("fail to fetch based infos", KR(ret));
-    } else if (OB_FAIL(mv_provider.check_mv_refreshable(can_fast_refresh))) {
-      LOG_WARN("fail to check refresh type", KR(ret));
     } else if (ObMVRefreshMethod::COMPLETE == refresh_method ||
                (!can_fast_refresh && ObMVRefreshMethod::FORCE == refresh_method)) {
       refresh_type = ObMVRefreshType::COMPLETE;
@@ -258,7 +256,7 @@ int ObMViewRefresher::prepare_for_refresh()
       ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
       LOG_WARN("mv can not fast refresh", KR(ret));
       LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, mview_table_schema->get_table_name(),
-                     note.error_.ptr());
+                     mv_provider.get_error_str().ptr());
     } else if (OB_FAIL(check_fast_refreshable())) {
       if (ObMVRefreshMethod::FORCE == refresh_method &&
           OB_LIKELY(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret || OB_ERR_MLOG_IS_YOUNGER == ret)) {
@@ -271,13 +269,10 @@ int ObMViewRefresher::prepare_for_refresh()
       refresh_type = ObMVRefreshType::FAST;
     }
     if (OB_SUCC(ret) && ObMVRefreshType::FAST == refresh_type) {
-      const ObIArray<ObString> *operators = nullptr;
       ObString fast_refresh_sql;
-      if (OB_FAIL(mv_provider.get_fast_refresh_operators(operators))) {
-        LOG_WARN("fail to get operators", KR(ret));
-      } else if (OB_ISNULL(operators)) {
+      if (OB_ISNULL(operators) || OB_UNLIKELY(operators->empty())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", KR(ret), K(operators));
+        LOG_WARN("unexpected refresh operators", KR(ret), KPC(operators));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < operators->count(); ++i) {
         const ObString &op_sql = operators->at(i);

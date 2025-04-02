@@ -14,7 +14,7 @@
 #include "ob_sql_hint.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/mv/ob_mv_printer.h"
+#include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 
 namespace oceanbase
 {
@@ -2257,7 +2257,7 @@ int LogLeadingHint::try_init_leading_info_for_major_refresh_real_time_mview(cons
   } else if (OB_ISNULL(table_item = stmt.get_table_item_by_id(semi_info->left_table_ids_.at(0)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(table_item));
-  } else if (ObMVPrinter::MR_MV_RT_QUERY_LEADING_TABLE_FLAG != table_item->mr_mv_flags_) {
+  } else if (ObMajorRefreshMJVPrinter::MR_MV_RT_QUERY_LEADING_TABLE_FLAG != table_item->mr_mv_flags_) {
     /* do nothing */
   } else if (OB_ISNULL(leading_info = leading_infos_.alloc_place_holder())) {
     ret = OB_ERR_UNEXPECTED;

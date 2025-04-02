@@ -134,16 +134,14 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
     if (OB_SUCC(ret)) {
       if (ObMVRefreshMethod::FAST == alter_mview_arg.get_refresh_method() ||
           alter_mview_arg.get_enable_on_query_computation()) {
-        ObMVProvider mv_provider(tenant_id, table_schema->get_table_id());
         FastRefreshableNotes note;
         bool can_fast_refresh = false;
-        share::SCN start;
-        share::SCN end;
-        start.set_min();
-        end.set_min();
-        if (OB_FAIL(mv_provider.init_mv_provider(start, end, schema_guard, session_info, note))) {
-          LOG_WARN("fail to init mv provider", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(mv_provider.check_mv_refreshable(can_fast_refresh))) {
+        if (OB_FAIL(ObMVProvider::check_mv_refreshable(tenant_id,
+                                                       table_schema->get_table_id(),
+                                                       session_info,
+                                                       schema_guard,
+                                                       can_fast_refresh,
+                                                       note))) {
           LOG_WARN("fail to check refresh type", KR(ret));
         } else if (!can_fast_refresh) {
           if (alter_mview_arg.get_enable_on_query_computation()) {

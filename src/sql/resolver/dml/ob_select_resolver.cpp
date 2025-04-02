@@ -23,7 +23,7 @@
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/expr/ob_json_param_type.h"
 #include "sql/parser/ob_parser_utils.h"
-#include "sql/resolver/mv/ob_mv_printer.h"
+#include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
@@ -1455,7 +1455,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
 
   if (OB_SUCC(ret) && session_info_->get_ddl_info().is_major_refreshing_mview()
       && !is_substmt() && !is_in_set_query() && !is_in_exists_subquery()
-      && OB_FAIL(ObMVPrinter::set_refresh_table_scan_flag_for_mr_mv(*select_stmt))) {
+      && OB_FAIL(ObMajorRefreshMJVPrinter::set_refresh_table_scan_flag_for_mr_mv(*select_stmt))) {
     LOG_WARN("failed to set refresh table scan flag for mr mv", K(ret));
   }
 

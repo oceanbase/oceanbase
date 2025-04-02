@@ -18,6 +18,7 @@
 #include "sql/rewrite/ob_equal_analysis.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
@@ -14421,13 +14422,16 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
   } else {
     ObString expand_view;
     ObSelectStmt *view_stmt = NULL;
+    bool is_major_refresh_mview = false;
     OPT_TRACE("expand real time materialized view: ", rt_mv_table->get_object_name());
     OPT_TRACE_BEGIN_SECTION;
-    ObMVProvider mv_provider(ctx->session_info_->get_effective_tenant_id(), rt_mv_table->mview_id_, true);
-    if (OB_FAIL(mv_provider.init_mv_provider(ctx->sql_schema_guard_->get_schema_guard(),
-                                             ctx->session_info_))) {
-      LOG_WARN("fail to init mv provider", K(ret));
-    } else if (OB_FAIL(mv_provider.get_real_time_mv_expand_view(*ctx->allocator_, expand_view))) {
+    if (OB_FAIL(ObMVProvider::get_real_time_mv_expand_view(ctx->session_info_->get_effective_tenant_id(),
+                                                           rt_mv_table->mview_id_,
+                                                           ctx->session_info_,
+                                                           ctx->sql_schema_guard_->get_schema_guard(),
+                                                           *ctx->allocator_,
+                                                           expand_view,
+                                                           is_major_refresh_mview))) {
       LOG_WARN("fail to get real time mv expand view", K(ret));
     } else if (OB_FAIL(generate_view_stmt_from_query_string(expand_view, ctx, view_stmt))) {
       LOG_WARN("fail to genearte real time mview stmt", K(ret), K(expand_view));
@@ -14435,8 +14439,8 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
       LOG_WARN("fail to set expand mview flag", K(ret));
-    } else if (mv_provider.is_major_refresh_mview()
-               && OB_FAIL(ObMVPrinter::set_real_time_table_scan_flag_for_mr_mv(*view_stmt))) {
+    } else if (is_major_refresh_mview
+               && OB_FAIL(ObMajorRefreshMJVPrinter::set_real_time_table_scan_flag_for_mr_mv(*view_stmt))) {
       LOG_WARN("fail to set table scan flag for major refresh mview", K(ret));
     } else if (OB_FAIL(upper_stmt->generate_view_name(*ctx->allocator_,
                                                       rt_mv_table->table_name_))) {

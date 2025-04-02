@@ -33,6 +33,10 @@ ob_set_subtarget(ob_sql common_mixed
   resolver/mv/ob_mv_checker.cpp
   resolver/mv/ob_mv_provider.cpp
   resolver/mv/ob_mv_printer.cpp
+  resolver/mv/ob_simple_mav_printer.cpp
+  resolver/mv/ob_simple_mjv_printer.cpp
+  resolver/mv/ob_simple_join_mav_printer.cpp
+  resolver/mv/ob_major_refresh_mjv_printer.cpp
   resolver/mv/ob_mv_dep_utils.cpp
   resolver/mv/ob_alter_mview_utils.cpp
 )
