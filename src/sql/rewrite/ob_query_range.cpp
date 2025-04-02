@@ -9708,8 +9708,11 @@ int ObQueryRange::is_precise_like_range(const ObObjParam &pattern, char escape, 
       } else if (OB_FAIL(ObCharset::like_range(cs_type, pattern_str, escape,
                                        min_str_buf, &min_str_len,
                                        max_str_buf, &max_str_len))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to retrive like range", K(ret));
+        if (OB_EMPTY_RANGE == ret) {
+          ret = OB_SUCCESS;
+          is_precise = false;
+        }
       } else {
         is_precise = ObQueryRange::check_like_range_precise(pattern_str,
                                                             static_cast<char*>(max_str_buf),
