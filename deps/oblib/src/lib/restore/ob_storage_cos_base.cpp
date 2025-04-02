@@ -832,9 +832,9 @@ int ObStorageCosReader::pread(
           handle_.get_object_name().ptr(), handle_.get_object_name().length());
 
       if (OB_FAIL(qcloud_cos::ObCosWrapper::pread(tmp_cos_handle, bucket_name,
-          object_name, offset, buf, get_data_size, is_range_read, read_size))) {
+          object_name, offset, buf, get_data_size, is_range_read, has_meta_, read_size))) {
         OB_LOG(WARN, "fail to read object from cos", K(ret), K(is_range_read),
-            KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta));
+            KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta), K(file_length_));
       }
     }
     if (OB_NOT_NULL(tmp_cos_handle)) {

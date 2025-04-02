@@ -1337,11 +1337,11 @@ int ObStorageS3Reader::pread_(char *buf,
         OB_LOG(WARN, "failed to read object from s3",
             K(ret), K_(bucket), K_(object), K(range_read));
       } else if (FALSE_IT(read_size = outcome.GetResult().GetContentLength())) {
-      } else if (OB_UNLIKELY(read_size > get_data_size)) {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "returned data size is larger than expected",
-            K(ret), K_(has_meta), K_(file_length),
-            K(read_size), K(get_data_size), K(buf_size), K(offset), K_(bucket), K_(object));
+      } else if (OB_UNLIKELY(has_meta_ && read_size != get_data_size)) {
+        ret = OB_S3_ERROR;
+        OB_LOG(WARN, "returned data size is not equal to expected", K(ret),
+            K_(bucket), K_(object), K(offset), K(buf_size), K_(has_meta), K_(file_length));
+        log_s3_status(outcome, ret);
       } else {
         outcome.GetResult().GetBody().read(buf, read_size);
 

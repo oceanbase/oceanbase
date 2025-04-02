@@ -949,6 +949,7 @@ int ObCosWrapper::pread(
     char *buf,
     const int64_t buf_size,
     const bool is_range_read,
+    const bool has_meta,
     int64_t &read_size)
 {
   int ret = OB_SUCCESS;
@@ -1038,6 +1039,14 @@ int ObCosWrapper::pread(
             }
           }
         } // end cos_list_for_each_entry
+
+        if (ret != OB_SUCCESS) {
+        } else if (has_meta && read_size != buf_size) {
+          ret = OB_COS_ERROR;
+          cos_warn_log("[COS]unexpected error, read_size not equal to expected size, ret=%d, buf_size=%ld, read_size=%ld, offset=%ld, req_id=%s.\n",
+              ret, buf_size, read_size, offset, cos_ret->req_id);
+          log_status(cos_ret, ret);
+        }
       }
     }
   }
@@ -1054,7 +1063,7 @@ int ObCosWrapper::get_object(
     int64_t &read_size)
 {
   return ObCosWrapper::pread(h, bucket_name, object_name,
-                             0, buf, buf_size, false/*is_range_read*/, read_size);
+                             0, buf, buf_size, false/*is_range_read*/, false/*has_meta*/, read_size);
 }
 
 int ObCosWrapper::is_object_tagging(

@@ -1301,6 +1301,13 @@ int ObStorageOssReader::pread(
                 break;
               }
             } // end aos_list_for_each_entry
+
+            if (OB_FAIL(ret)) {
+            } else if (OB_UNLIKELY(has_meta_ && get_data_size != read_size)) {
+              ret = OB_OSS_ERROR;
+              OB_LOG(WARN, "real read size not equal to expected read size", K(ret), K(get_data_size), K(read_size), K(offset), K(file_length_));
+              print_oss_info(resp_headers, aos_ret, ret);
+            }
           }
         }
       }
