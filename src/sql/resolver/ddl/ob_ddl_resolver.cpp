@@ -11875,7 +11875,11 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
         } else {
           enable_auto_split = true;
           auto_part_size = tenant_config->auto_split_tablet_size;
-          LOG_INFO("use default tenant config for auto partitioning", K(auto_part_size));
+          const int64_t errsim_auto_part_size = OB_E(common::EventTable::EN_AUTO_SPLIT_TABLET_SIZE) 0;
+          if (0 != errsim_auto_part_size) {
+            auto_part_size = std::abs(errsim_auto_part_size);
+          }
+          LOG_INFO("use default tenant config for auto partitioning", K(auto_part_size), K(errsim_auto_part_size));
         }
       }
 
@@ -12035,7 +12039,13 @@ int ObDDLResolver::try_set_auto_partition_by_config(const ParseNode *node,
     } else if (tenant_config->enable_auto_split) {
       // check table
       ObPartitionFuncType unused_part_func_type = PARTITION_FUNC_TYPE_MAX;// we can make sure that the part_expre is empty so enable_auto_partition will handle this situation
-      if (OB_FAIL(table_schema.enable_auto_partition(tenant_config->auto_split_tablet_size, unused_part_func_type))) {
+      int64_t auto_part_size = tenant_config->auto_split_tablet_size;
+      const int64_t errsim_auto_part_size = OB_E(common::EventTable::EN_AUTO_SPLIT_TABLET_SIZE) 0;
+      if (0 != errsim_auto_part_size) {
+        auto_part_size = std::abs(errsim_auto_part_size);
+      }
+
+      if (OB_FAIL(table_schema.enable_auto_partition(auto_part_size, unused_part_func_type))) {
         LOG_WARN("fail to enable auto partition", KR(ret), K(table_schema));
       } else if (OB_FAIL(table_schema.check_validity_for_auto_partition())) {
         if (OB_NOT_SUPPORTED == ret) {

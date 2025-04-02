@@ -2356,7 +2356,7 @@ private:
   int enable_auto_partition_(const int64_t auto_part_size);
 
 public:
-  static const int64_t MIN_AUTO_PART_SIZE = 128LL * 1024 * 1024; // 128M
+  static const int64_t MIN_AUTO_PART_SIZE = 1LL * 1024 * 1024; // 1M
 
 private:
   ObPartitionFuncType part_func_type_;
