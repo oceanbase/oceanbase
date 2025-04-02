@@ -126,6 +126,14 @@ public:
                         ObChunkDatumStore::StoredRow *&new_row,
                         ObChunkDatumStore::StoredRow *&full_row);
 
+  static int split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
+                                      ObUpdRtDef &upd_rtdef,
+                                      const ObDASTabletLoc *old_tablet_loc,
+                                      const ObDASTabletLoc *new_tablet_loc,
+                                      ObDMLRtCtx &dml_rtctx,
+                                      ObChunkDatumStore::StoredRow *&old_row,
+                                      ObChunkDatumStore::StoredRow *&new_row);
+
   static int delete_row(const ObDASDelCtDef &ctdef,
                         ObDASDelRtDef &rtdef,
                         const ObDASTabletLoc *tablet_loc,

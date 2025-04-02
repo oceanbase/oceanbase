@@ -5333,10 +5333,11 @@ int ObLSTabletService::process_new_row(
         }
       }
     } else {
-      const bool check_exist = rowkey_change &&
-        (!relative_table.is_storage_index_table() ||
-         relative_table.is_unique_index() ||
-         run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
+
+      const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() ||
+        relative_table.is_unique_index() ||
+        run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_immediate_row_check() ||
+        run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
       if (OB_FAIL(tablet_handle.get_obj()->insert_row(relative_table,
                                                       run_ctx.store_ctx_,
                                                       check_exist,

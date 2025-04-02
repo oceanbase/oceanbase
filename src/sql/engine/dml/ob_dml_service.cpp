@@ -1066,6 +1066,64 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                                                 stored_row);
 }
 
+int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
+                                           ObUpdRtDef &upd_rtdef,
+                                           const ObDASTabletLoc *old_tablet_loc,
+                                           const ObDASTabletLoc *new_tablet_loc,
+                                           ObDMLRtCtx &dml_rtctx,
+                                           ObChunkDatumStore::StoredRow *&old_row,
+                                           ObChunkDatumStore::StoredRow *&new_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(old_tablet_loc != new_tablet_loc && !upd_ctdef.multi_ctdef_->is_enable_row_movement_)) {
+    ret = OB_ERR_UPD_CAUSE_PART_CHANGE;
+    LOG_WARN("the updated row is moved across partitions", K(ret),
+             KPC(old_tablet_loc), KPC(new_tablet_loc));
+  } else if (OB_ISNULL(upd_rtdef.ddel_rtdef_)) {
+    if (OB_FAIL(init_das_del_rtdef_for_update(dml_rtctx, upd_ctdef, upd_rtdef))) {
+      LOG_WARN("init das delete rtdef failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+    } else if (OB_FAIL(init_das_ins_rtdef_for_update(dml_rtctx, upd_ctdef, upd_rtdef))) {
+      LOG_WARN("init das insert rtdef failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    //because of this bug:
+    //if the updated row is moved across partitions, we must delete old row at first
+    //and then store new row to a temporary buffer,
+    //only when all old rows have been deleted, new rows can be inserted
+    if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_DELETE>(*upd_ctdef.ddel_ctdef_,
+                                                         *upd_rtdef.ddel_rtdef_,
+                                                         old_tablet_loc,
+                                                         dml_rtctx,
+                                                         upd_ctdef.old_row_,
+                                                         upd_ctdef.trans_info_expr_,
+                                                         old_row))) {
+      LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+    } else if (upd_ctdef.is_heap_table_ &&
+        old_tablet_loc != new_tablet_loc &&
+        OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
+                                     upd_ctdef,
+                                     new_tablet_loc->tablet_id_))) {
+      LOG_WARN("update across partitions fail to set new_hidden_pk", K(ret), KPC(new_tablet_loc));
+    } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_INSERT>(*upd_ctdef.dins_ctdef_,
+                                                                *upd_rtdef.dins_rtdef_,
+                                                                new_tablet_loc,
+                                                                dml_rtctx,
+                                                                upd_ctdef.new_row_,
+                                                                nullptr,
+                                                                new_row))) {
+      LOG_WARN("insert row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+    } else {
+      LOG_DEBUG("update pkey changed", K(ret), KPC(old_tablet_loc), KPC(new_tablet_loc),
+                "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
+                "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
+    }
+  }
+  return ret;
+}
+
+
 /*
  * Note: During the update process,
  * ObDMLService::check_row_whether_changed() and ObDMLService::update_row() must be executed together
@@ -1120,19 +1178,51 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
         new_row = old_row;
       }
     }
-  } else if (OB_LIKELY(!upd_ctdef.das_base_ctdef_.is_update_partition_key() ||
-                      (upd_ctdef.dupd_ctdef_.is_ignore() && old_tablet_loc == new_tablet_loc))) {
-    // For the current ignore semantics, update ignore without cross-partitioning is supported,
-    // but update ignore with cross-partitioning is not supported for the time being.
-    // Since update ignore is only supported without cross-partitioning, update ignore does not have
-    // the problem that DELETE INSERT UPDATE is out of order, then there is no need to split the task.
-    //
-    // Two cases will go straight to the UPDATE logic without splitting:
-    // 1. update a non-partitioned key.
-    // 2. the partition key is updated when using update ignore, but the location does not change.
-    if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
+  } else if (upd_ctdef.das_base_ctdef_.is_update_pk_) {
+    if (!upd_rtdef.dupd_rtdef_.is_immediate_row_conflict_check_ && !upd_ctdef.dupd_ctdef_.is_ignore_) {
+      if (OB_FAIL(split_upd_to_del_and_ins(upd_ctdef,
+                                           upd_rtdef,
+                                           old_tablet_loc,
+                                           new_tablet_loc,
+                                           dml_rtctx,
+                                           old_row,
+                                           new_row))) {
+        LOG_WARN("fail to update row", K(ret), KPC(old_row), KPC(new_row));
+      }
+    } else {
+      if (new_tablet_loc != old_tablet_loc) {
+        if (upd_ctdef.dupd_ctdef_.is_ignore_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-partition update ignore");
+          LOG_WARN("update ignore is not supported in across partition update, it will induce lost data error", K(ret));
+        } else if (OB_FAIL(split_upd_to_del_and_ins(upd_ctdef,
+                                                    upd_rtdef,
+                                                    old_tablet_loc,
+                                                    new_tablet_loc,
+                                                    dml_rtctx,
+                                                    old_row,
+                                                    new_row))) {
+          LOG_WARN("fail to update row", K(ret), KPC(old_row), KPC(new_row));
+        }
+      } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_UPDATE>(upd_ctdef.dupd_ctdef_,
+                                                                upd_rtdef.dupd_rtdef_,
+                                                                old_tablet_loc,
+                                                                dml_rtctx,
+                                                                upd_ctdef.full_row_,
+                                                                upd_ctdef.trans_info_expr_,
+                                                                full_row))) {
+        LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+      } else {
+        LOG_DEBUG("update pkey", K(ret), KPC(old_tablet_loc),
+                  "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
+                  "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
+      }
+    }
+  } else {
+    // do update
+    if (new_tablet_loc != old_tablet_loc) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the updated row is moved across partitions when updating a non-partitioned key", K(ret), KPC(old_tablet_loc), KPC(new_tablet_loc));
+      LOG_WARN("unexpected location change", K(ret), KPC(new_tablet_loc), KPC(old_tablet_loc), KPC(old_row), KPC(new_row));
     } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_UPDATE>(upd_ctdef.dupd_ctdef_,
                                                                 upd_rtdef.dupd_rtdef_,
                                                                 old_tablet_loc,
@@ -1142,62 +1232,9 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                                 full_row))) {
       LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
     } else {
-      LOG_DEBUG("update pkey not changed", K(ret), KPC(old_tablet_loc),
+      LOG_DEBUG("not update pkey", K(ret), KPC(old_tablet_loc),
                 "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
                 "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
-    }
-  } else if (OB_UNLIKELY(upd_ctdef.das_base_ctdef_.is_update_partition_key())) {
-    //the updated row may be moved across partitions
-    if (dml_rtctx.das_ref_.get_parallel_type() == DAS_STREAMING_PARALLEL) {
-      dml_rtctx.das_ref_.get_das_parallel_ctx().set_das_parallel_type(DAS_BLOCKING_PARALLEL);
-    }
-    // update ignore with cross-partitioning is not supported
-    if (upd_ctdef.dupd_ctdef_.is_ignore()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-partition update ignore");
-      LOG_WARN("update ignore is not supported in across partition update, it will induce lost data error", K(ret));
-    } else if (OB_LIKELY(old_tablet_loc != new_tablet_loc && !upd_ctdef.multi_ctdef_->is_enable_row_movement_)) {
-      ret = OB_ERR_UPD_CAUSE_PART_CHANGE;
-      LOG_WARN("the updated row is moved across partitions", K(ret),
-               KPC(old_tablet_loc), KPC(new_tablet_loc));
-    } else if (OB_ISNULL(upd_rtdef.ddel_rtdef_)) {
-      if (OB_FAIL(init_das_del_rtdef_for_update(dml_rtctx, upd_ctdef, upd_rtdef))) {
-        LOG_WARN("init das delete rtdef failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-      } else if (OB_FAIL(init_das_ins_rtdef_for_update(dml_rtctx, upd_ctdef, upd_rtdef))) {
-        LOG_WARN("init das insert rtdef failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      //because of this bug:
-      //if the updated row is moved across partitions, we must delete old row at first
-      //and then store new row to a temporary buffer,
-      //only when all old rows have been deleted, new rows can be inserted
-      if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_DELETE>(*upd_ctdef.ddel_ctdef_,
-                                                           *upd_rtdef.ddel_rtdef_,
-                                                           old_tablet_loc,
-                                                           dml_rtctx,
-                                                           upd_ctdef.old_row_,
-                                                           upd_ctdef.trans_info_expr_,
-                                                           old_row))) {
-        LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-      } else if (upd_ctdef.is_heap_table_ &&
-          OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
-                                       upd_ctdef,
-                                       new_tablet_loc->tablet_id_))) {
-        LOG_WARN("update across partitions fail to set new_hidden_pk", K(ret), KPC(new_tablet_loc));
-      } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_INSERT>(*upd_ctdef.dins_ctdef_,
-                                                                  *upd_rtdef.dins_rtdef_,
-                                                                  new_tablet_loc,
-                                                                  dml_rtctx,
-                                                                  upd_ctdef.new_row_,
-                                                                  nullptr,
-                                                                  new_row))) {
-        LOG_WARN("insert row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-      } else {
-        LOG_DEBUG("update pkey changed", K(ret), KPC(old_tablet_loc), KPC(new_tablet_loc),
-                  "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
-                  "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
-      }
     }
   }
   return ret;
@@ -1278,6 +1315,10 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_ctdef.is_update_pk_with_dop()) {
     dml_param.write_flag_.set_update_pk_dop();
   }
+
+  if (base_rtdef.is_immediate_row_conflict_check_ && base_ctdef.is_update_pk_) {
+    dml_param.write_flag_.set_immediate_row_check();
+  }
   return ret;
 }
 
@@ -1296,6 +1337,7 @@ int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
   das_rtdef.prelock_ = my_session->get_prelock();
   das_rtdef.tenant_schema_version_ = plan_ctx->get_tenant_schema_version();
   das_rtdef.sql_mode_ = my_session->get_sql_mode();
+  das_rtdef.is_immediate_row_conflict_check_ =  my_session->enable_immediate_row_conflict_check() && lib::is_mysql_mode();
   if (OB_ISNULL(das_rtdef.table_loc_ = dml_rtctx.op_.get_input()->get_table_loc())) {
     das_rtdef.table_loc_ = das_ctx.get_table_loc_by_id(table_loc_id, ref_table_id);
     if (OB_ISNULL(das_rtdef.table_loc_)) {

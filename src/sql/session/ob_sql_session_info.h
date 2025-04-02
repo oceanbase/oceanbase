@@ -818,6 +818,7 @@ public:
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  enable_insertup_replace_gts_opt_(false),
+                                 enable_immediate_row_conflict_check_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
                                  _query_record_size_limit_(65536),
                                  _ob_sqlstat_enable_(true),
@@ -855,6 +856,7 @@ public:
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
     bool enable_ps_parameterize() const { return enable_ps_parameterize_; }
+    bool enable_immediate_row_conflict_check() const { return ATOMIC_LOAD(&enable_immediate_row_conflict_check_); }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool enable_batched_multi_statement_;
@@ -871,6 +873,7 @@ public:
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     bool enable_insertup_replace_gts_opt_;
+    bool enable_immediate_row_conflict_check_;
     int64_t range_optimizer_max_mem_size_;
     int64_t _query_record_size_limit_;
     bool _ob_sqlstat_enable_;
@@ -1504,6 +1507,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_insertup_replace_gts_opt();
+  }
+  bool enable_immediate_row_conflict_check()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_immediate_row_conflict_check();
   }
   int64_t get_range_optimizer_max_mem_size()
   {
