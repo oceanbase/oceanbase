@@ -3202,9 +3202,10 @@ int ObIOCallbackManager::enqueue_callback(ObIORequest &req)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(req));
     } else {
+      DRWLock::RDLockGuard guard(lock_);
       ObIOCallback *cb = req.get_callback();
-      const int64_t idx1 = get_callback_queue_idx(cb->get_type());
-      const int64_t idx2 = get_callback_queue_idx(cb->get_type());
+      const int64_t idx1 = get_callback_queue_idx_(cb->get_type());
+      const int64_t idx2 = get_callback_queue_idx_(cb->get_type());
       const int64_t queue_idx = runners_.at(idx1)->get_queue_count() < runners_.at(idx2)->get_queue_count() ? idx1 : idx2;
       if (OB_FAIL(runners_.at(queue_idx)->push(req))) {
         LOG_WARN("push callback failed", K(ret), K(req));
@@ -3214,10 +3215,10 @@ int ObIOCallbackManager::enqueue_callback(ObIORequest &req)
   return ret;
 }
 
-int64_t ObIOCallbackManager::get_callback_queue_idx(const ObIOCallbackType cb_type) const
+int64_t ObIOCallbackManager::get_callback_queue_idx_(const ObIOCallbackType cb_type) const
 {
   int64_t idx = 0;
-  const int64_t active_thread_count = min(get_thread_count(), runners_.count());
+  const int64_t active_thread_count = min(config_thread_count_, runners_.count());
   int64_t atomic_write_cb_thread_idx = (active_thread_count - active_thread_count / ATOMIC_WRITE_CALLBACK_THREAD_RATIO);
   atomic_write_cb_thread_idx = min(atomic_write_cb_thread_idx, active_thread_count - 1);
   if (is_atomic_write_callback(cb_type)) {
@@ -3233,18 +3234,22 @@ void ObIOCallbackManager::try_release_thread()
   if (OB_UNLIKELY(!is_inited_)) {
     //continue
   } else {
-    int64_t cur_runner_count = 0;
     int64_t cur_thread_count = 0;
-    get_thread_and_runner_num(cur_thread_count, cur_runner_count);
+    int64_t cur_runner_count = 0;
+    {
+      DRWLock::RDLockGuard guard(lock_);
+      cur_thread_count = config_thread_count_;
+      cur_runner_count = runners_.count();
+    }
     if (OB_UNLIKELY(cur_thread_count != cur_runner_count)) {
       DRWLock::WRLockGuard guard(lock_);
       for (int64 i = runners_.count() - 1; i >= config_thread_count_; --i) {
         ObIORunner *cur_runner = runners_.at(i);
         if (cur_runner->is_stop_accept() && cur_runner->get_queue_count() == 0) {
+          LOG_INFO("release io callback thread success", KP(cur_runner));
           runners_.pop_back();
           cur_runner->~ObIORunner();
           io_allocator_->free(cur_runner);
-          LOG_INFO("release callback_thread success");
         } else {
           break;
         }
@@ -3296,44 +3301,7 @@ int ObIOCallbackManager::update_thread_count(const int64_t thread_count)
         runners_.at(i)->stop_accept_req();
       }
     }
-  }
-  return ret;
-}
-
-void ObIOCallbackManager::get_thread_and_runner_num(int64_t &thread_num, int64_t &runner_count)
-{
-  DRWLock::RDLockGuard guard(lock_);
-  thread_num = config_thread_count_;
-  runner_count = runners_.count();
-}
-
-int64_t ObIOCallbackManager::get_thread_count() const
-{
-  DRWLock::RDLockGuard guard(lock_);
-  int64_t cur_thread_count = config_thread_count_;
-  return cur_thread_count;
-}
-
-int64_t ObIOCallbackManager::get_queue_depth() const
-{
-  return queue_depth_;
-}
-
-int ObIOCallbackManager::get_queue_count(ObIArray<int64_t> &queue_count_array)
-{
-  int ret = OB_SUCCESS;
-  queue_count_array.reset();
-  if (OB_FAIL(queue_count_array.reserve(runners_.count()))) {
-    LOG_WARN("reserve queue count array failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < runners_.count(); ++i) {
-    ObIORunner *runner = runners_.at(i);
-    if (OB_ISNULL(runner)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("callback runner is null", K(ret), K(i));
-    } else if (OB_FAIL(queue_count_array.push_back(runner->get_queue_count()))) {
-      LOG_WARN("push back queue count failed", K(ret), K(i));
-    }
+    LOG_INFO("update io callback thread count", K(ret), "old_thread_cnt", cur_thread_count, "new_thread_cnt", thread_count);
   }
   return ret;
 }

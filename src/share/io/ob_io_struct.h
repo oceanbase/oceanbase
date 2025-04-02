@@ -569,14 +569,10 @@ public:
 
   int enqueue_callback(ObIORequest &req);
   void try_release_thread();
-  void get_thread_and_runner_num(int64_t &thread_num, int64_t &runner_count);
   int update_thread_count(const int64_t thread_count);
-  int64_t get_thread_count() const;
-  int64_t get_queue_depth() const;
-  int get_queue_count(ObIArray<int64_t> &queue_count_array);
   int64_t to_string(char *buf, const int64_t len) const;
 private:
-  int64_t get_callback_queue_idx(const ObIOCallbackType cb_type) const;
+  int64_t get_callback_queue_idx_(const ObIOCallbackType cb_type) const;
 private:
   static const int64_t ATOMIC_WRITE_CALLBACK_THREAD_RATIO = 2;
 private:

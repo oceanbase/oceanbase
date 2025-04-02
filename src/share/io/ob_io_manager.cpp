@@ -2698,15 +2698,10 @@ int ObTenantIOManager::print_io_status()
       }
     }
     if (need_print_io_config) {
-      ObArray<int64_t> queue_count_array;
-      if (OB_FAIL(callback_mgr_.get_queue_count(queue_count_array))) {
-        LOG_WARN("get callback queue count failed", K(ret));
-      }
       int64_t iops = ips + ops;
       double failed_iops = failed_ips + failed_ops;
       LOG_INFO("[IO STATUS TENANT]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "hold_mem", io_allocator_.get_allocated_size(),
-          "callback_queues", queue_count_array,
           "[FAILED]: "
           "fail_ips", lround(failed_ips),
           "fail_ops", lround(failed_ops),
