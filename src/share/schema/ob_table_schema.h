@@ -2342,6 +2342,7 @@ protected:
   common::ObString storage_cache_policy_;
   ObMergeEngineType merge_engine_type_;
   ObSemiStructEncodingType semistruct_encoding_type_;
+  common::ObString dynamic_partition_policy_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
