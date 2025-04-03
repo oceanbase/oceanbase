@@ -1565,6 +1565,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL, // ObExprArrayUnion::eval_array_union_batch,                  /* 175 */
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
+  NULL, // ObExprUDF::eval_udf_batch                                  /* 178 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1789,6 +1790,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprMapValues::eval_map_values_vector,                      /* 218 */
   NULL, // ObExprRbToArray::eval_rb_to_array_vector,                     /* 219 */
   NULL, // ObExprRbContains::eval_rb_contains_vector,                    /* 220 */
+  NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
