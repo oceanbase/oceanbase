@@ -13,16 +13,10 @@
 #ifndef _OCEANBASE_STORAGE_FTS_DICT_OB_FT_DICT_HUB_H_
 #define _OCEANBASE_STORAGE_FTS_DICT_OB_FT_DICT_HUB_H_
 
-#include "lib/allocator/ob_allocator.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/hash/ob_concurrent_hash_map.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/ob_errno.h"
-#include "share/cache/ob_kv_storecache.h"
-#include "storage/fts/dict/ob_ft_dict.h"
+#include "lib/lock/ob_bucket_lock.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
-
-#include <cstdint>
 
 namespace oceanbase
 {
@@ -35,7 +29,10 @@ class ObFTDictInfo
 {
 public:
   ObFTDictInfo()
-      : name_(""), type_(ObFTDictType::DICT_TYPE_INVALID), charset_(CHARSET_INVALID), version_(0),
+      : name_(""),
+        type_(ObFTDictType::DICT_TYPE_INVALID),
+        charset_(CHARSET_INVALID),
+        version_(0),
         range_count_(0)
   {
   }
@@ -68,6 +65,7 @@ public:
   // name
 };
 
+class ObFTCacheRangeContainer;
 class ObFTDictHub
 {
 public:
@@ -78,6 +76,11 @@ public:
 
   int destroy();
 
+  int build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container);
+
+  int load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container);
+
+private:
   int get_dict_info(const ObFTDictInfoKey &key, ObFTDictInfo &info);
 
   int put_dict_info(const ObFTDictInfoKey &key, const ObFTDictInfo &info);
