@@ -48,6 +48,7 @@
 #include "storage/tx/ob_tx_free_route.h"
 #include "share/ob_service_name_proxy.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "sql/plan_cache/ob_plan_cache_util.h"
 
 namespace oceanbase
 {
@@ -766,6 +767,10 @@ public:
                                  enable_enhanced_cursor_validation_(false),
                                  enable_enum_set_subschema_(false),
                                  _ob_sqlstat_enable_(true),
+                                 force_enable_plan_tracing_(false),
+                                 pc_adaptive_min_exec_time_threshold_(0),
+                                 pc_adaptive_effectiveness_ratio_threshold_(0),
+                                 enable_adaptive_plan_cache_(false),
                                  session_(session)
     {
     }
@@ -797,6 +802,23 @@ public:
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
     bool enable_immediate_row_conflict_check() const { return ATOMIC_LOAD(&enable_immediate_row_conflict_check_); }
+    bool force_enable_plan_tracing() const
+    {
+      return force_enable_plan_tracing_;
+    }
+    int64_t get_pc_adaptive_effectiveness_ratio_threshold() const
+    {
+      return pc_adaptive_effectiveness_ratio_threshold_;
+    }
+    int64_t get_pc_adaptive_min_exec_time_threshold() const
+    {
+      return pc_adaptive_min_exec_time_threshold_;
+    }
+    bool enable_plan_cache_adaptive() const
+    {
+      return enable_adaptive_plan_cache_;
+    }
+
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -828,6 +850,10 @@ public:
     bool enable_enhanced_cursor_validation_;
     bool enable_enum_set_subschema_;
     bool _ob_sqlstat_enable_;
+    bool force_enable_plan_tracing_;
+    int64_t pc_adaptive_min_exec_time_threshold_;
+    int64_t pc_adaptive_effectiveness_ratio_threshold_;
+    bool enable_adaptive_plan_cache_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1533,6 +1559,27 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_ob_sqlstat_enable();
+  }
+  bool force_enable_plan_tracing()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.force_enable_plan_tracing();
+  }
+  const AdaptivePCConf get_adaptive_pc_conf()
+  {
+    AdaptivePCConf conf;
+    cached_tenant_config_info_.refresh();
+    conf.enable_adaptive_plan_cache_ = cached_tenant_config_info_.enable_plan_cache_adaptive();
+    conf.pc_adaptive_effectiveness_ratio_threshold_ =
+      cached_tenant_config_info_.get_pc_adaptive_effectiveness_ratio_threshold();
+    conf.pc_adaptive_min_exec_time_threshold_ =
+      cached_tenant_config_info_.get_pc_adaptive_min_exec_time_threshold();
+    return conf;
+  }
+  bool enable_plan_cache_adaptive()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_plan_cache_adaptive();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

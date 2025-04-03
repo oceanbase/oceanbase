@@ -114,6 +114,7 @@ public:
   // see parse_param_value()
   static int parse_basic_param_value(ObIAllocator &allocator,
                                     const uint32_t type,
+                                    sql::ObSQLSessionInfo *session,
                                     const ObCharsetType charset,
                                     const ObCharsetType ncharset,
                                     const ObCollationType cs_type,

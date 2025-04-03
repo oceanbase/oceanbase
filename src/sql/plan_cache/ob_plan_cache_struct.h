@@ -37,6 +37,7 @@ class ObString;
 
 namespace sql
 {
+class ObPhysicalPlan;
 
 typedef common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> TmpTableNameArray;
 
@@ -402,7 +403,9 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       is_max_curr_limit_(false),
       is_batch_insert_opt_(false),
       is_arraybinding_(false),
-      exist_local_plan_(false)
+      exist_local_plan_(false),
+      compare_plan_(nullptr),
+      flag_(0)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -479,7 +482,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_max_curr_limit_),
     K(is_batch_insert_opt_),
     K(is_arraybinding_),
-    K(exist_local_plan_)
+    K(exist_local_plan_),
+    K(flag_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -547,6 +551,20 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_arraybinding_;
   bool exist_local_plan_;
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> fmt_int_or_ch_decint_idx_;
+  ObPhysicalPlan *compare_plan_;
+  union
+  {
+    struct
+    {
+      uint16_t try_get_plan_ : 1;
+      uint16_t add_with_compare_ : 1;
+      uint16_t enable_adaptive_plan_cache_ : 1;
+      uint16_t has_inactive_plan_ : 1;
+      uint16_t force_enable_plan_tracing_ : 1;
+      uint16_t reserved_ : 11;
+    };
+    uint16_t flag_;
+  };
 };
 
 struct ObPlanCacheStat

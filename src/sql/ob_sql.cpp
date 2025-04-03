@@ -3968,7 +3968,8 @@ int ObSql::code_generate(
   }
 
   if (OB_SUCC(ret)) {
-    bool use_plan_cache = sql_ctx.session_info_->get_local_ob_enable_plan_cache();
+    bool use_plan_cache = (sql_ctx.session_info_->get_local_ob_enable_plan_cache()
+                           || sql_ctx.session_info_->force_enable_plan_tracing());
     ObPlanCache *plan_cache = NULL;
     if (OB_UNLIKELY(NULL == (plan_cache = sql_ctx.session_info_->get_plan_cache()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4054,27 +4055,46 @@ int ObSql::execute_get_plan(ObPlanCache &plan_cache,
   ObIAllocator &allocator = pc_ctx.allocator_;
   ObSQLSessionInfo *session = pc_ctx.sql_ctx_.session_info_;
   ObPhysicalPlanCtx *pctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  bool enable_adaptive_pc = session->enable_plan_cache_adaptive();
   if (OB_ISNULL(session) || OB_ISNULL(pctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
-    // TODO change pl mode hit cache as text mode.
-    ObPsStmtId stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
-    guard.init(PS_EXEC_HANDLE);
-    if (OB_FAIL(plan_cache.get_ps_plan(guard, stmt_id, pc_ctx))) {
-      if (OB_SQL_PC_NOT_EXIST == ret || OB_PC_LOCK_CONFLICT == ret) {
-        // do nothing
-      } else {
-        LOG_WARN("fail to get ps physical plan", K(ret));
-      }
-    }
   } else {
-    guard.init(CLI_QUERY_HANDLE);
-    if (OB_FAIL(plan_cache.get_plan(allocator, pc_ctx, guard))) {
-      if (OB_SQL_PC_NOT_EXIST == ret || OB_PC_LOCK_CONFLICT == ret) {
-        // do nothing
-      } else {
-        LOG_WARN("fail to get physical plan", K(ret), KPC(guard.get_cache_obj()));
+    pctx->set_enable_adaptive_pc(enable_adaptive_pc);
+    pc_ctx.enable_adaptive_plan_cache_ = (!session->is_inner() && enable_adaptive_pc);
+    if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+      // TODO change pl mode hit cache as text mode.
+      ObPsStmtId stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
+      guard.init(PS_EXEC_HANDLE);
+      if (pc_ctx.try_get_plan_ && OB_FAIL(plan_cache.try_get_ps_plan(guard, stmt_id, pc_ctx))) {
+        LOG_TRACE("fail to try get ps plan", K(ret));
+      } else if (!pc_ctx.try_get_plan_ && OB_FAIL(plan_cache.get_ps_plan(guard, stmt_id, pc_ctx))) {
+        if (OB_SQL_PC_NOT_EXIST == ret && pc_ctx.has_inactive_plan_) {
+          pc_ctx.need_evolution_ = false;
+#ifdef OB_BUILD_SPM
+          pc_ctx.sql_ctx_.spm_ctx_.spm_force_disable_ = true;
+#endif
+        } else if (OB_SQL_PC_NOT_EXIST == ret || OB_PC_LOCK_CONFLICT == ret) {
+          // do nothing
+        } else {
+          LOG_WARN("fail to get ps physical plan", K(ret));
+        }
+      }
+    } else {
+      guard.init(CLI_QUERY_HANDLE);
+      if (pc_ctx.try_get_plan_ && OB_FAIL(plan_cache.try_get_plan(allocator, pc_ctx, guard))) {
+        LOG_TRACE("fail to try get plan", K(ret));
+      } else if (!pc_ctx.try_get_plan_ && OB_FAIL(plan_cache.get_plan(allocator, pc_ctx, guard))) {
+        if (OB_SQL_PC_NOT_EXIST == ret && pc_ctx.has_inactive_plan_) {
+          pc_ctx.need_evolution_ = false;
+#ifdef OB_BUILD_SPM
+          pc_ctx.sql_ctx_.spm_ctx_.spm_force_disable_ = true;
+#endif
+        } else if (OB_SQL_PC_NOT_EXIST == ret || OB_PC_LOCK_CONFLICT == ret) {
+          // do nothing
+        } else {
+          LOG_WARN("fail to get physical plan", K(ret), KPC(guard.get_cache_obj()));
+        }
       }
     }
   }
@@ -4479,15 +4499,19 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
             THIS_WORKER.set_timeout_ts(session->get_query_start_time() + GCONF._ob_ddl_timeout);
           }
           if (IS_DML_STMT(type) || is_show_variables) {
+            pc_ctx.force_enable_plan_tracing_ =
+              (session->force_enable_plan_tracing()
+               && !session->get_local_ob_enable_plan_cache());
             if (OB_UNLIKELY(NULL == (plan_cache = session->get_plan_cache()))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("Invalid plan cache", K(ret));
             } else {
               plan_cache->inc_access_cnt();
 #ifndef OB_BUILD_SPM
-              if (OB_SQL_PC_NOT_EXIST == get_plan_err) {
+              if (OB_SQL_PC_NOT_EXIST == get_plan_err || pc_ctx.force_enable_plan_tracing_) {
 #else
-              if (OB_SQL_PC_NOT_EXIST == get_plan_err || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+              if (OB_SQL_PC_NOT_EXIST == get_plan_err || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_
+                  || pc_ctx.force_enable_plan_tracing_) {
 #endif
                 add_plan_to_pc = true;
               } else {
@@ -4974,10 +4998,11 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   result.get_exec_context().get_stmt_factory()->get_query_ctx();
   if (false == need_add_plan) {
-    //do nothing
-  } else if (!is_enable_pc || !pc_ctx.should_add_plan_) {
+    // do nothing
+  } else if ((!is_enable_pc && !pc_ctx.add_with_compare_) || !pc_ctx.should_add_plan_) {
     need_add_plan = false;
-  } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory()) || OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
+  } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory())
+             || OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret), KP(result.get_exec_context().get_stmt_factory()));
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_dblink()) {
@@ -4985,6 +5010,62 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
   } else if (ObPlanCache::is_contains_external_object(
                                             result.get_physical_plan()->get_dependency_table())) {
     need_add_plan = false;
+  }
+  return ret;
+}
+
+int ObSql::try_get_plan(ObPlanCacheCtx &pc_ctx, ObResultSet &result, bool is_enable_pc,
+                        bool &add_plan_to_pc)
+{
+  int ret = OB_SUCCESS;
+  int get_plan_err = OB_SUCCESS;
+  ObSQLSessionInfo &session = result.get_session();
+  ObExecContext &exec_ctx = result.get_exec_context();
+  ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
+  if ((is_enable_pc && !plan_ctx->enable_adaptive_pc())
+    || (!is_enable_pc && !session.force_enable_plan_tracing())
+    || !add_plan_to_pc) {
+    // do nothing
+  } else {
+    bool is_retry_for_spm = false;
+#ifdef OB_BUILD_SPM
+    is_retry_for_spm = pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_;
+#endif
+
+    ObPhysicalPlan *plan = result.get_physical_plan();
+    ObCacheObjGuard &guard = result.get_cache_obj_guard();
+    ObPhysicalPlan *temp_plan = nullptr;
+    ObCacheObjGuard& temp_guard = result.get_temp_cache_obj_guard();
+    pc_ctx.enable_adaptive_plan_cache_ = session.enable_plan_cache_adaptive();
+    if (OB_UNLIKELY(nullptr == plan)) {
+    } else if ((!is_enable_pc && session.force_enable_plan_tracing() && !is_retry_for_spm)
+               || (is_enable_pc && pc_ctx.enable_adaptive_plan_cache_ && pc_ctx.has_inactive_plan_
+                   && !pc_ctx.need_evolution_)) {
+      pc_ctx.try_get_plan_ = true;
+      pc_ctx.compare_plan_ = plan;
+      if (OB_FAIL(pc_get_plan(pc_ctx, temp_guard, get_plan_err,
+                              exec_ctx.get_need_disconnect_for_update()))) {
+        LOG_TRACE("failed to try get plan", K(ret), K(get_plan_err));
+      } else if (OB_SUCCESS != get_plan_err) {
+        pc_ctx.add_with_compare_ = true;
+      } else {
+        add_plan_to_pc = false;
+        temp_plan = static_cast<ObPhysicalPlan *>(temp_guard.get_cache_obj());
+        if (OB_ISNULL(temp_plan)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("plan is null", K(ret));
+        } else {
+          result.set_is_from_plan_cache(true);
+          temp_guard.init(pc_ctx.handle_id_);
+          guard.swap(temp_guard);
+          if (OB_FAIL(result.from_plan(*temp_plan, pc_ctx.fp_result_.raw_params_))) {
+            LOG_WARN("fail to set plan info to ResultSet", K(ret));
+          }
+        }
+      }
+      pc_ctx.compare_plan_ = nullptr;
+      pc_ctx.try_get_plan_ = false;
+    }
   }
   return ret;
 }
@@ -5134,6 +5215,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
       LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
     }
   } else if (OB_FALSE_IT(backup_recovery_guard.recovery())) {
+  } else if (OB_FAIL(try_get_plan(pc_ctx, result, use_plan_cache, add_plan_to_pc))) {
+    LOG_WARN("failed to try get plan", K(ret), K(add_plan_to_pc));
   } else if (OB_FAIL(need_add_plan(pc_ctx,
                                    result,
                                    use_plan_cache,
@@ -5173,6 +5256,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
       LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
     }
   } else if (OB_FALSE_IT(backup_recovery_guard.recovery())) {
+  } else if (OB_FAIL(try_get_plan(pc_ctx, result, use_plan_cache, add_plan_to_pc))) {
+    LOG_WARN("failed to try get plan", K(ret), K(add_plan_to_pc));
   } else if (OB_FAIL(need_add_plan(pc_ctx,
                                    result,
                                    use_plan_cache,

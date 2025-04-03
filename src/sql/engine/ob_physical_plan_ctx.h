@@ -561,6 +561,8 @@ public:
     is_direct_insert_plan_ = is_direct_insert_plan;
   }
   inline bool get_is_direct_insert_plan() const { return is_direct_insert_plan_; }
+  inline void set_enable_adaptive_pc(bool v) { enable_adaptive_pc_ = v; }
+  inline bool enable_adaptive_pc() const { return enable_adaptive_pc_; }
   bool is_param_datum_frame_inited() const { return param_frame_ptrs_.count() > 0; }
 private:
   int init_param_store_after_deserialize();
@@ -716,6 +718,7 @@ private:
   int64_t total_ssstore_read_row_count_;
   bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
   bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
+  bool enable_adaptive_pc_;
   bool is_diagnosis_;
 };
 

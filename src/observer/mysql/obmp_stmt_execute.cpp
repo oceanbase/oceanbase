@@ -1533,21 +1533,29 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.table_scan_stat_ = plan_ctx->get_table_scan_stat();
       }
       if (NULL != plan) {
+        AdaptivePCConf adpt_pc_conf;
+        bool enable_adaptive_pc = plan_ctx->enable_adaptive_pc();
+        if (enable_adaptive_pc) {
+          adpt_pc_conf = session.get_adaptive_pc_conf();
+        }
         if (!(ctx_.self_add_plan_) && ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
               false, // false mean not first update plan stat
-              table_row_count_list);
+              table_row_count_list,
+              enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && !ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
               true,
-              table_row_count_list);
+              table_row_count_list,
+              enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
           // spm evolution plan first execute
           plan->update_plan_stat(audit_record,
               true,
-              table_row_count_list);
+              table_row_count_list,
+              enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }
@@ -2287,12 +2295,14 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   const pl::ObUserDefinedType *pl_type = NULL;
   int64_t param_size = 0, param_pos = 0;
+  ObSQLSessionInfo *session = ctx_.session_info_;
   CK (OB_NOT_NULL(type_info));
   OZ (get_pl_type_by_type_info(allocator, type_info, pl_type));
   CK (OB_NOT_NULL(pl_type));
   OZ (pl_type->init_obj(*(ctx_.schema_guard_), allocator, param, param_size));
   OX (param.set_udt_id(pl_type->get_user_type_id()));
-  OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, charset, cs_type, ncs_type,
+  CK (OB_NOT_NULL(session));
+  OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, session, charset, cs_type, ncs_type,
         tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size, param_pos));
   OX (param.set_need_to_check_extend_type(true));
   return ret;
@@ -2300,6 +2310,7 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
 
 int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                              const uint32_t type,
+                                             sql::ObSQLSessionInfo *session,
                                              const ObCharsetType charset,
                                              const ObCharsetType ncharset,
                                              const ObCollationType cs_type,
@@ -2352,20 +2363,29 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
         if (lib::is_mysql_mode()) {
           param.set_double(value);
         } else {
-          char *buf = NULL;
-          int64_t buf_len = 0;
-          number::ObNumber nb;
-          const int64_t alloc_size = OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH;
-          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory", K(ret));
-          } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
-                                                      buf, NULL, TRUE/*is_oracle_mode*/,
-                                                      FALSE/*is_binary_double*/, FALSE))) {
-          } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
-            LOG_WARN("decode double param to number failed", K(ret));
+          if (OB_ISNULL(session)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null conn ptr", K(ret));
+          } else if (session->is_support_jdbc_binary_double()) {
+            // for setBinaryDouble
+            param.set_double(value);
           } else {
-            param.set_number(nb);
+            // for setDouble in old jdbc, need convert to number type
+            char *buf = NULL;
+            int64_t buf_len = 0;
+            number::ObNumber nb;
+            const int64_t alloc_size = OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH;
+            if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate memory", K(ret));
+            } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
+                                                        buf, NULL, TRUE/*is_oracle_mode*/,
+                                                        FALSE/*is_binary_double*/, FALSE))) {
+            } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
+              LOG_WARN("decode double param to number failed", K(ret));
+            } else {
+              param.set_number(nb);
+            }
           }
         }
       }
@@ -2680,7 +2700,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
   ObPieceCache *piece_cache =
       NULL == ctx_.session_info_ ? NULL : ctx_.session_info_->get_piece_cache();
   ObPiece *piece = NULL;
-  if (OB_NOT_NULL(piece_cache) && OB_FAIL(piece_cache->get_piece(stmt_id_, param_id, piece))) {
+  sql::ObSQLSessionInfo *session = ctx_.session_info_;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_NOT_NULL(piece_cache) && OB_FAIL(piece_cache->get_piece(stmt_id_, param_id, piece))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get piece fail.", K(ret));
   } else if (OB_ISNULL(piece_cache) || OB_ISNULL(piece)) {
@@ -2714,7 +2738,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
       }
     } else {
       bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
-      if (OB_FAIL(parse_basic_param_value(allocator, type, charset, ncharset, cs_type, ncs_type,
+      if (OB_FAIL(parse_basic_param_value(allocator, type, session, charset, ncharset, cs_type, ncs_type,
                                           data, tz_info, param, false, &analysis_checker_, is_unsigned))) {
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
@@ -2796,7 +2820,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         }
       }
     } else {
-      if (OB_FAIL(str_buf.prepare_allocate(count))) {
+      sql::ObSQLSessionInfo *session = ctx_.session_info_;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", K(ret));
+      } else if (OB_FAIL(str_buf.prepare_allocate(count))) {
         LOG_WARN("prepare fail.");
       } else if (OB_FAIL(piece_cache->get_buffer(stmt_id_,
                                                   param_id,
@@ -2817,7 +2845,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         } else {
           const char* src = tmp;
           bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
-          if (OB_FAIL(parse_basic_param_value(allocator, type, charset, ncharset, cs_type, ncs_type,
+          if (OB_FAIL(parse_basic_param_value(allocator, type, session, charset, ncharset, cs_type, ncs_type,
                                               src, tz_info, param, false, NULL ,is_unsigned))) {
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {

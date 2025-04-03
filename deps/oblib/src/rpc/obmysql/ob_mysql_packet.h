@@ -703,13 +703,15 @@ union ObClientAttributeCapabilityFlags
   explicit ObClientAttributeCapabilityFlags(uint64_t cap) : capability_(cap) {}
   bool is_support_lob_locatorv2() const { return 1 == cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2; }
   bool is_support_new_result_meta_data() const { return 1 == cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA; }
+  bool is_support_jdbc_binary_double() const { return  1 == cap_flags_.OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE; }
 
   uint64_t capability_;
   struct CapabilityFlags
   {
     uint64_t OB_CLIENT_CAP_OB_LOB_LOCATOR_V2:       1;
     uint64_t OB_CLIENT_CAP_NEW_RESULT_META_DATA:       1;
-    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       62;
+    uint64_t OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE:     1;
+    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       61;
   } cap_flags_;
 };
 

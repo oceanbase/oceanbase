@@ -1300,21 +1300,29 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         audit_record.table_scan_stat_ = plan_ctx->get_table_scan_stat();
       }
       if (NULL != plan) {
+        AdaptivePCConf adpt_pc_conf;
+        bool enable_adaptive_pc = plan_ctx->enable_adaptive_pc();
+        if (enable_adaptive_pc) {
+          adpt_pc_conf = session.get_adaptive_pc_conf();
+        }
         if (!(ctx_.self_add_plan_) && ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                  false, // false mean not first update plan stat
-                                 table_row_count_list);
+                                 table_row_count_list,
+                                 enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && !ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                  true,
-                                 table_row_count_list);
+                                 table_row_count_list,
+                                 enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
           // spm evolution plan first execute
           plan->update_plan_stat(audit_record,
                                  true,
-                                 table_row_count_list);
+                                 table_row_count_list,
+                                 enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }

@@ -81,6 +81,11 @@ public:
       sql_string_[str_size] = '\0';
     }
   }
+
+  void set_detectable_id(const common::ObDetectableId &detectable_id) { detectable_id_ = detectable_id; }
+  const common::ObDetectableId &get_detectable_id() const { return detectable_id_; }
+  common::ObDetectableId &get_detectable_id() { return detectable_id_; }
+
   TO_STRING_KV(N_OB_TASK_ID, ob_task_id_,
                K_(runner_svr),
                K_(ctrl_svr),
@@ -237,6 +242,9 @@ public:
   }
   int set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { return snapshot_.assign(snapshot); }
   const transaction::ObTxReadSnapshot &get_snapshot() const { return snapshot_; }
+  void set_detectable_id(const common::ObDetectableId &detectable_id) { detectable_id_ = detectable_id; }
+  const common::ObDetectableId &get_detectable_id() const { return detectable_id_; }
+  common::ObDetectableId &get_detectable_id() { return detectable_id_; }
   int fill_buffer(char* buf, int64_t size, int64_t &filled_size) const
   {
     filled_size = 0;

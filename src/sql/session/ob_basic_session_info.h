@@ -1245,6 +1245,11 @@ public:
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA;
   }
 
+  inline bool is_support_jdbc_binary_double() const
+  {
+    return client_attribute_capability_.cap_flags_.OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE;
+  }
+
   void set_proxy_cap_flags(const obmysql::ObProxyCapabilityFlags &proxy_capability)
   {
     proxy_capability_ = proxy_capability;

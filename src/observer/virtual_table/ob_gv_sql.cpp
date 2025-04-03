@@ -1136,11 +1136,23 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PLAN_STATUS: {
-      cells[i].set_null();
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->is_active_status() ? 0 : 1);
+      } else {
+        cells[i].set_null();
+      }
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ADAPTIVE_FEEDBACK_TIMES: {
-      cells[i].set_null();
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->get_adaptive_feedback_times());
+      } else {
+        cells[i].set_null();
+      }
       break;
     }
     default: {

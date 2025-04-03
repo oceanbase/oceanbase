@@ -48,6 +48,9 @@ ObResultSet::~ObResultSet()
   if (OB_NOT_NULL(pc)) {
     cache_obj_guard_.force_early_release(pc);
   }
+  if (OB_NOT_NULL(pc)) {
+    temp_cache_obj_guard_.force_early_release(pc);
+  }
   // Always called at the end of the ObResultSet destructor
   update_end_time();
   is_init_ = false;

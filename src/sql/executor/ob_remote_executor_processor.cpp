@@ -16,6 +16,7 @@
 #include "observer/ob_server.h"
 #include "observer/ob_server.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
 {
@@ -66,6 +67,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_schema_version and sys_schema_version", K(ret),
         K(tenant_schema_version), K(sys_schema_version));
+  } else if (FALSE_IT(session_info->set_current_trace_id(ObCurTraceId::get_trace_id()))) {
   } else if (FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {
     // record tanent_id
   } else if (tenant_id == 0) {
@@ -651,6 +653,19 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     enable_sql_audit = enable_sql_audit && session->get_local_ob_enable_sql_audit();
   }
 
+  const common::ObDetectableId &detectable_id = task.get_detectable_id();
+  const common::ObAddr &control_addr = task.get_ctrl_server();
+  uint64_t node_sequence_id;
+  bool has_reg_dm = false;
+  if (OB_FAIL(ret)) {
+  } else if (session->get_exec_min_cluster_version() <= CLUSTER_VERSION_4_3_5_1) {
+  } else if (OB_FAIL(RemoteExecutionDMUtils::register_check_item(
+                 detectable_id, control_addr, session, node_sequence_id))) {
+    LOG_WARN("failed to register check item into dm");
+  } else {
+    has_reg_dm = true;
+  }
+
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     const bool enable_sqlstat =  session->is_sqlstat_enabled();
@@ -770,6 +785,12 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   }
   NG_TRACE(exec_remote_plan_end);
   //执行相关的错误信息记录在exec_errcode_中，通过scanner向控制端返回，所以这里给RPC框架返回成功
+
+  if (has_reg_dm) {
+    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id,
+                                                                          node_sequence_id);
+  }
+
   return ret;
 }
 
@@ -964,6 +985,20 @@ int ObRpcRemoteExecuteP::process()
     LOG_DEBUG("des_plan", K(task.get_des_phy_plan()));
   }
 
+
+  const common::ObDetectableId &detectable_id = task.get_detectable_id();
+  const common::ObAddr &control_addr = task.get_ctrl_server();
+  uint64_t node_sequence_id;
+  bool has_reg_dm = false;
+  if (OB_FAIL(ret)) {
+  } else if (phy_plan_.get_min_cluster_version() <= CLUSTER_VERSION_4_3_5_1) {
+  } else if (OB_FAIL(RemoteExecutionDMUtils::register_check_item(
+                 detectable_id, control_addr, session, node_sequence_id))) {
+    LOG_WARN("failed to register check item into dm");
+  } else {
+    has_reg_dm = true;
+  }
+
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     const bool enable_sqlstat =  session->is_sqlstat_enabled();
@@ -1066,6 +1101,10 @@ int ObRpcRemoteExecuteP::process()
   phy_plan_.destroy();
   NG_TRACE(exec_remote_plan_end);
   //执行相关的错误信息记录在exec_errcode_中，通过scanner向控制端返回，所以这里给RPC框架返回成功
+  if (has_reg_dm) {
+    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id,
+                                                                          node_sequence_id);
+  }
   return OB_SUCCESS;
 }
 

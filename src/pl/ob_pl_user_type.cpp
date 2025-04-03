@@ -152,13 +152,13 @@ int ObUserDefinedType::serialize(
 }
 
 int ObUserDefinedType::deserialize(
-  share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator,
+  share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator, sql::ObSQLSessionInfo *session,
   const common::ObCharsetType charset, const common::ObCollationType cs_type,
   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,
   const char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const
 {
   UNUSEDx(
-    schema_guard, allocator, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos);
+    schema_guard, allocator, session, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
@@ -1083,6 +1083,7 @@ int ObUserDefinedSubType::serialize(share::schema::ObSchemaGetterGuard &schema_g
 
 int ObUserDefinedSubType::deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                                       common::ObIAllocator &allocator,
+                                      sql::ObSQLSessionInfo *session,
                                       const common::ObCharsetType charset,
                                       const common::ObCollationType cs_type,
                                       const common::ObCollationType ncs_type,
@@ -1094,7 +1095,7 @@ int ObUserDefinedSubType::deserialize(share::schema::ObSchemaGetterGuard &schema
 {
   int ret = OB_SUCCESS;
   OZ (base_type_.deserialize(
-    schema_guard, allocator, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos));
+    schema_guard, allocator, session, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos));
   return ret;
 }
 
@@ -2175,6 +2176,7 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
 
 int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
                               common::ObIAllocator &allocator,
+                              sql::ObSQLSessionInfo *session,
                               const ObCharsetType charset,
                               const ObCollationType cs_type,
                               const ObCollationType ncs_type,
@@ -2237,7 +2239,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
           value->set_null();
         }
         OX (new_dst_pos += sizeof(ObObj));
-      } else if (OB_FAIL(type->deserialize(schema_guard, *record->get_allocator(), charset, cs_type, ncs_type,
+      } else if (OB_FAIL(type->deserialize(schema_guard, *record->get_allocator(), session, charset, cs_type, ncs_type,
                                            tz_info, src, new_dst, new_dst_len, new_dst_pos))) {
         LOG_WARN("deserialize record element type failed", K(i), K(*this), KP(src), KP(dst), K(dst_len), K(dst_pos), K(ret));
       }
@@ -3108,6 +3110,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
 
 int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
                                   ObIAllocator &allocator,
+                                  sql::ObSQLSessionInfo *session,
                                   const ObCharsetType charset,
                                   const ObCollationType cs_type,
                                   const ObCollationType ncs_type,
@@ -3203,7 +3206,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             }
             OX (table_data_pos += sizeof(ObObj));
           } else {
-            if (OB_FAIL(element_type_.deserialize(schema_guard, *collection_allocator, charset, cs_type, ncs_type,
+            if (OB_FAIL(element_type_.deserialize(schema_guard, *collection_allocator, session, charset, cs_type, ncs_type,
                                                 tz_info, src, table_data, table_data_len, table_data_pos))) {
               LOG_WARN("deserialize element failed", K(ret), K(i), K(element_init_size), K(count));
             }
@@ -3422,6 +3425,7 @@ int ObNestedTableType::serialize(share::schema::ObSchemaGetterGuard &schema_guar
 
 int ObNestedTableType::deserialize(ObSchemaGetterGuard &schema_guard,
                                    ObIAllocator &allocator,
+                                   sql::ObSQLSessionInfo *session,
                                    const ObCharsetType charset,
                                    const ObCollationType cs_type,
                                    const ObCollationType ncs_type,
@@ -3434,6 +3438,7 @@ int ObNestedTableType::deserialize(ObSchemaGetterGuard &schema_guard,
   int ret = OB_SUCCESS;
   OZ (ObCollectionType::deserialize(schema_guard,
                                     allocator,
+                                    session,
                                     charset,
                                     cs_type,
                                     ncs_type,

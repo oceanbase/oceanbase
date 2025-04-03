@@ -207,7 +207,7 @@ void ObDetectManager::destroy()
       int temp_ret = node->cb_->do_callback();
       LIB_LOG(WARN, "[DM] do callback during mtl destroy",
             K(temp_ret), K(node->cb_->get_trace_id()),
-            K(detectable_id), K(node->cb_->get_detect_callback_type()),
+            K(detectable_id), K(node->cb_->get_type()),
             K(node->sequence_id_));
       delete_cb_node(node);
       node = next_node;
@@ -339,7 +339,7 @@ int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id,
 
   if (OB_SUCC(ret)) {
     LIB_LOG(DEBUG, "[DM] register_check_item", K(ret), K(detectable_id),
-            K(cb_node->cb_->get_detect_callback_type()), K(node_sequence_id));
+            K(cb_node->cb_->get_type()), K(node_sequence_id));
   }
   return ret;
 }
@@ -520,14 +520,14 @@ bool ObDetectManager::ObDetectCallbackNodeExecuteCall::operator()(hash::HashMapP
     if (!node->is_executed()) {
       LIB_LOG(WARN, "[DM] DM found peer not exist, execute detect callback",
               K(node->cb_->get_trace_id()), K(from_svr_addr_),
-              K(detectable_id), K(node->cb_->get_detect_callback_type()), K(node->sequence_id_));
+              K(detectable_id), K(node->cb_->get_type()), K(node->sequence_id_));
       node->cb_->set_from_svr_addr(from_svr_addr_);
       if (OB_FAIL(node->cb_->do_callback())) {
         // if do_callback failed, reset state to running for next detect loop
         node->cb_->atomic_set_running(from_svr_addr_);
         LIB_LOG(WARN, "[DM] failed to do_callback",
                 K(node->cb_->get_trace_id()), K(from_svr_addr_), K(detectable_id),
-                K(node->cb_->get_detect_callback_type()), K(node->sequence_id_));
+                K(node->cb_->get_type()), K(node->sequence_id_));
       } else {
         if (!node->cb_->reentrant()) {
           node->set_executed();

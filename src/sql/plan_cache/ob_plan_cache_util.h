@@ -493,10 +493,40 @@ struct ObTableRowCount
   OB_UNIS_VERSION(1);
 };
 
-
+struct AdaptivePCConf
+{
+  AdaptivePCConf() :
+    enable_adaptive_plan_cache_(false), pc_adaptive_min_exec_time_threshold_(0),
+    pc_adaptive_effectiveness_ratio_threshold_(0)
+  {}
+  TO_STRING_KV(K_(enable_adaptive_plan_cache), K_(pc_adaptive_min_exec_time_threshold),
+               K_(pc_adaptive_effectiveness_ratio_threshold));
+  bool enable_adaptive_plan_cache_;
+  int64_t pc_adaptive_min_exec_time_threshold_;
+  int64_t pc_adaptive_effectiveness_ratio_threshold_;
+};
 
 struct ObPlanStat
 {
+  enum PlanStatus
+  {
+    ACTIVE = 0,
+    INACTIVE = 1
+  };
+  struct AdaptivePCInfo
+  {
+    AdaptivePCInfo()
+      : positive_feedback_times_(0),
+        negative_feedback_times_(0),
+        status_(PlanStatus::ACTIVE)
+    {}
+    TO_STRING_KV(K_(positive_feedback_times),
+                 K_(negative_feedback_times),
+                 K_(status));
+    uint32_t positive_feedback_times_; // Continuous positive feedback times
+    uint32_t negative_feedback_times_; // Continuous negative feedback times
+    PlanStatus status_;
+  };
   static const int64_t DEFAULT_ADDR_NODE_NUM = 16;
   typedef common::hash::ObHashMap<ObAddr, int64_t,
         common::hash::LatchReadWriteDefendMode, common::hash::hash_func<ObAddr>,
@@ -625,6 +655,7 @@ struct ObPlanStat
   bool hints_all_worked_;
   bool is_inner_;
   bool is_use_auto_dop_;
+  AdaptivePCInfo adaptive_pc_info_;
 
 
   ObPlanStat()
@@ -704,7 +735,8 @@ struct ObPlanStat
       plan_hash_value_(0),
       hints_all_worked_(true),
       is_inner_(false),
-      is_use_auto_dop_(false)
+      is_use_auto_dop_(false),
+      adaptive_pc_info_()
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -785,7 +817,8 @@ struct ObPlanStat
       plan_hash_value_(rhs.plan_hash_value_),
       hints_all_worked_(rhs.hints_all_worked_),
       is_inner_(rhs.is_inner_),
-      is_use_auto_dop_(rhs.is_use_auto_dop_)
+      is_use_auto_dop_(rhs.is_use_auto_dop_),
+      adaptive_pc_info_(rhs.adaptive_pc_info_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);

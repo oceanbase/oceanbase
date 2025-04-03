@@ -126,7 +126,8 @@ public:
    */
   void update_plan_stat(const ObAuditRecordData &record,
                         const bool is_first,
-                        const ObIArray<ObTableRowCount> *table_row_count_list);
+                        const ObIArray<ObTableRowCount> *table_row_count_list,
+                        const AdaptivePCConf *adpt_pc_conf = nullptr);
   void update_cache_access_stat(const ObTableScanStat &scan_stat)
   {
     stat_.update_cache_stat(scan_stat);
@@ -560,7 +561,6 @@ public:
   inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
   void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
   bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
-
   void set_px_node_policy(ObPxNodePolicy px_node_policy)
   {
     px_node_policy_ = px_node_policy;
@@ -576,7 +576,11 @@ public:
   {
     return px_node_addrs_;
   }
-
+  bool is_active_status() const { return ObPlanStat::ACTIVE == ATOMIC_LOAD(&stat_.adaptive_pc_info_.status_); }
+  void set_active_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::ACTIVE);; }
+  void set_inactive_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::INACTIVE);; }
+  int64_t get_adaptive_feedback_times() const;
+  void update_adaptive_pc_info(const ObAuditRecordData &record, const AdaptivePCConf *adpt_pc_conf);
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:

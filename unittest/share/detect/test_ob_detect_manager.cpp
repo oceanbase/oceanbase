@@ -106,7 +106,10 @@ public:
     }
     return ret;
   }
-  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::VIRTUAL; }
+  const char *get_type() const override
+  {
+    return get_detect_callback_type_string(DetectCallBackType::VIRTUAL);
+  }
 private:
   ObMockResource* resouce_;
 };

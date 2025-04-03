@@ -532,7 +532,9 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   } else {
     ParamStore *params = pc_ctx.fp_result_.cache_params_;
     //init param store
-    if (OB_LIKELY(pc_ctx.sql_ctx_.is_batch_params_execute())) {
+    if (pc_ctx.try_get_plan_) {
+      // do nothing
+    } else if (OB_LIKELY(pc_ctx.sql_ctx_.is_batch_params_execute())) {
       if (OB_FAIL(resolve_multi_stmt_params(pc_ctx))) {
         if (OB_BATCHED_MULTI_STMT_ROLLBACK != ret) {
           LOG_WARN("failed to resolver row params", K(ret));
@@ -571,7 +573,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
         session->set_force_rich_format(enable_rich_vector_format_ ?
                                          ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON :
                                          ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
-        if (OB_FAIL(phy_ctx->init_datum_param_store())) {
+        if (!pc_ctx.try_get_plan_ && OB_FAIL(phy_ctx->init_datum_param_store())) {
           LOG_WARN("fail to init datum param store", K(ret));
         }
       }

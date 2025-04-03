@@ -58,3 +58,6 @@ alter tenant mysql set variables ob_plan_cache_percentage = 20;
 
 alter system set _use_hash_rollup = "forced" tenant = 'mysql';
 alter system set _max_px_workers_per_cpu = 10 tenant = 'mysql';
+alter system set _force_enable_plan_tracing = false tenant sys;
+alter system set _force_enable_plan_tracing = false tenant all_user;
+alter system set _force_enable_plan_tracing = false tenant all_meta;

@@ -3153,6 +3153,12 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
       // 8. _enable_enhanced_cursor_validation
       ATOMIC_STORE(&enable_enhanced_cursor_validation_, tenant_config->_enable_enhanced_cursor_validation);
+      ATOMIC_STORE(&force_enable_plan_tracing_, tenant_config->_force_enable_plan_tracing);
+      ATOMIC_STORE(&pc_adaptive_min_exec_time_threshold_,
+                   tenant_config->_pc_adaptive_min_exec_time_threshold);
+      ATOMIC_STORE(&pc_adaptive_effectiveness_ratio_threshold_,
+                   tenant_config->_pc_adaptive_effectiveness_ratio_threshold);
+      ATOMIC_STORE(&enable_adaptive_plan_cache_, tenant_config->enable_adaptive_plan_cache);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(

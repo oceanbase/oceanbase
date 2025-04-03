@@ -139,6 +139,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -252,6 +253,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                           common::ObIAllocator &allocator,
+                          sql::ObSQLSessionInfo *session,
                           const common::ObCharsetType charset,
                           const common::ObCollationType cs_type,
                           const common::ObCollationType ncs_type,
@@ -517,6 +519,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -674,6 +677,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -747,6 +751,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,

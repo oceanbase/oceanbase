@@ -502,6 +502,10 @@ private:
   int get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql);
   int check_need_switch_thread(ObSqlCtx &ctx, const ObStmt *stmt, bool &need_switch);
   void rollback_implicit_trans_when_fail(ObResultSet &result, int &ret);
+  int try_get_plan(ObPlanCacheCtx &ctx,
+                   ObResultSet &result,
+                   bool is_enable_pc,
+                   bool &add_plan_to_pc);
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
 

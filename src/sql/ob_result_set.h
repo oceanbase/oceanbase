@@ -244,6 +244,7 @@ public:
   uint64_t get_last_insert_id_to_client();
   void set_warning_count(const int64_t &warning_count);
   ObCacheObjGuard& get_cache_obj_guard();
+  ObCacheObjGuard& get_temp_cache_obj_guard();
   void set_cmd(ObICmd *cmd);
   bool is_end_trans_async();
   void set_end_trans_async(bool is_async);
@@ -410,6 +411,7 @@ protected:
 private:
   // add cache object guard
   ObCacheObjGuard cache_obj_guard_;
+  ObCacheObjGuard temp_cache_obj_guard_;
   // data members
   common::ObArenaAllocator inner_mem_pool_;
   common::ObIAllocator &mem_pool_;
@@ -503,6 +505,7 @@ private:
 inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator &allocator)
     : is_user_sql_(false),
       cache_obj_guard_(MAX_HANDLE),
+      temp_cache_obj_guard_(MAX_HANDLE),
       inner_mem_pool_(),
       mem_pool_(allocator),
       statement_id_(common::OB_INVALID_ID),
@@ -759,6 +762,11 @@ inline void ObResultSet::set_cmd(ObICmd *cmd)
 inline ObCacheObjGuard& ObResultSet::get_cache_obj_guard()
 {
   return cache_obj_guard_;
+}
+
+inline ObCacheObjGuard& ObResultSet::get_temp_cache_obj_guard()
+{
+  return temp_cache_obj_guard_;
 }
 
 inline void ObResultSet::fields_clear()

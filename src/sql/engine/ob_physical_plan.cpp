@@ -490,7 +490,8 @@ int ObPhysicalPlan::init_operator_stats()
 
 void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_first,
-                                      const ObIArray<ObTableRowCount> *table_row_count_list)
+                                      const ObIArray<ObTableRowCount> *table_row_count_list,
+                                      const AdaptivePCConf *adpt_pc_conf)
 {
   const int64_t current_time = ObClockGenerator::getClock();
   int64_t execute_count = 0;
@@ -499,6 +500,9 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     ATOMIC_AAF(&(stat_.total_process_time_), record.get_process_time());
   }
   if (!GCONF.enable_perf_event) { // short route
+    if (nullptr != adpt_pc_conf) {
+      update_adaptive_pc_info(record, adpt_pc_conf);
+    }
     ATOMIC_AAF(&(stat_.elapsed_time_), record.get_elapsed_time());
     ATOMIC_AAF(&(stat_.cpu_time_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
                                    - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
@@ -518,6 +522,9 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
     }
   } else { // long route stat begin
+    if (nullptr != adpt_pc_conf) {
+      update_adaptive_pc_info(record, adpt_pc_conf);
+    }
     execute_count = ATOMIC_AAF(&stat_.execute_times_, 1);
     ATOMIC_AAF(&(stat_.total_process_time_), record.get_process_time());
     ATOMIC_AAF(&(stat_.disk_reads_), record.exec_record_.get_io_read_count());
@@ -1629,6 +1636,58 @@ int ObPhysicalPlan::set_px_node_addrs(
     LOG_WARN("failed to assign px_node_addrs", K(ret));
   }
   return ret;
+}
+
+int64_t ObPhysicalPlan::get_adaptive_feedback_times() const
+{
+  int64_t feedback_times = 0;
+  if (ObPlanStat::ACTIVE ==  ATOMIC_LOAD(&stat_.adaptive_pc_info_.status_)) {
+    feedback_times = ATOMIC_LOAD(&stat_.adaptive_pc_info_.positive_feedback_times_);
+  } else {
+    feedback_times = ATOMIC_LOAD(&stat_.adaptive_pc_info_.negative_feedback_times_);
+  }
+  return feedback_times;
+}
+
+void ObPhysicalPlan::update_adaptive_pc_info(const ObAuditRecordData &record,
+                                             const AdaptivePCConf *adpt_pc_conf)
+{
+  int ret = OB_SUCCESS;
+  bool is_outline_plan = outline_state_.outline_version_.is_valid();
+  bool is_evolving = ATOMIC_LOAD(&stat_.is_evolution_);
+  if (!is_inner_sql_ && (nullptr != adpt_pc_conf) && adpt_pc_conf->enable_adaptive_plan_cache_
+      && !is_outline_plan && !is_evolving) {
+    static uint32_t MAX_FEEDBACK_TIMES = 5;
+    int64_t get_plan_t = record.exec_timestamp_.get_plan_t_;
+    int64_t executor_t = record.exec_timestamp_.executor_t_;
+    bool is_positive_feedback =
+      (executor_t >= adpt_pc_conf->pc_adaptive_min_exec_time_threshold_
+       && (get_plan_t > 0
+           && (executor_t / get_plan_t)
+                >= adpt_pc_conf->pc_adaptive_effectiveness_ratio_threshold_));
+    if (ObPlanStat::ACTIVE ==  ATOMIC_LOAD(&stat_.adaptive_pc_info_.status_)) {
+      if (is_positive_feedback) {
+        ATOMIC_STORE(&(stat_.adaptive_pc_info_.negative_feedback_times_), 0);
+        if (ATOMIC_AAF(&stat_.adaptive_pc_info_.positive_feedback_times_, 1) >= MAX_FEEDBACK_TIMES) {
+          ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::INACTIVE);
+          LOG_TRACE("set inactive state", K(object_id_), K(stat_.adaptive_pc_info_));
+          ATOMIC_STORE(&(stat_.adaptive_pc_info_.positive_feedback_times_), 0);
+        }
+      } else {
+        ATOMIC_STORE(&(stat_.adaptive_pc_info_.positive_feedback_times_), 0);
+      }
+    } else {
+      if (is_positive_feedback) {
+        ATOMIC_STORE(&(stat_.adaptive_pc_info_.negative_feedback_times_), 0);
+      } else {
+        if (ATOMIC_AAF(&stat_.adaptive_pc_info_.negative_feedback_times_, 1) >= MAX_FEEDBACK_TIMES) {
+          ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::ACTIVE);
+          LOG_TRACE("set active state", K(object_id_), K(stat_.adaptive_pc_info_));
+          ATOMIC_STORE(&(stat_.adaptive_pc_info_.negative_feedback_times_), 0);
+        }
+      }
+    }
+  }
 }
 
 } //namespace sql

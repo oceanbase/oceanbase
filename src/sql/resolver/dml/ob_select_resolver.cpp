@@ -2408,12 +2408,13 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           LOG_WARN("fail to resolve alias in dot notation", K(ret));
         } else {
           if (params_.is_prepare_protocol_
-              || !session_info_->get_local_ob_enable_plan_cache()
+              || (!session_info_->get_local_ob_enable_plan_cache()
+                  && !session_info_->force_enable_plan_tracing())
               || 0 == node.children_[i]->is_val_paramed_item_idx_) {
             // ps 不参数化列; plan cache关闭后不参数化列
             // do nothing
-          } else if (OB_ISNULL(params_.select_item_param_infos_) ||
-                     node.children_[i]->value_ >= params_.select_item_param_infos_->count()) {
+          } else if (OB_ISNULL(params_.select_item_param_infos_)
+                     || node.children_[i]->value_ >= params_.select_item_param_infos_->count()) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid argument", K(params_.select_item_param_infos_));
           } else {
