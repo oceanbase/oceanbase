@@ -219,7 +219,8 @@ int ObLSRecoveryStatHandler::inc_ref(const int64_t timeout)
         }
         curr_timeout -= wait_time;
       }
-    } while (curr_timeout >= 0 && OB_EAGAIN == ret);
+      //不能等于0，会出现死循环
+    } while (curr_timeout > 0 && OB_EAGAIN == ret);
   }
   return ret;
 }
