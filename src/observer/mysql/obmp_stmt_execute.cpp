@@ -1494,6 +1494,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         result.get_exec_context().get_task_exec_ctx().get_expected_worker_cnt();
       audit_record.used_worker_cnt_ =
         result.get_exec_context().get_task_exec_ctx().get_admited_worker_cnt();
+      audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
 
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
