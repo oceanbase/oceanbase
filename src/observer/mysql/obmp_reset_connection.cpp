@@ -29,6 +29,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
+#include "storage/tablelock/ob_table_lock_live_detector.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc;
@@ -202,6 +203,16 @@ int ObMPResetConnection::process()
         LOG_WARN("succ update last_insert_id, but fail to update identity", K(ret));
       } else {
         NG_TRACE_EXT(last_insert_id, OB_ID(last_insert_id), 0);
+      }
+    }
+
+    // 9. Releases locks acquired with GET_LOCK().
+    if (OB_SUCC(ret)) {
+      ObTableLockOwnerID raw_owner_id;
+      if (OB_FAIL(raw_owner_id.convert_from_client_sessid(session->get_client_sessid(), session->get_client_create_time()))) {
+        LOG_WARN("failed to convert from client sessid", K(ret));
+      } else if (OB_FAIL(ObTableLockDetector::remove_lock_by_owner_id(raw_owner_id))) {
+        LOG_WARN("failed to remove lock by owner id", K(ret));
       }
     }
 
