@@ -1069,8 +1069,8 @@ DEF_INT(sync_io_thread_count, OB_CLUSTER_PARAMETER, "0",
         "[0,1024]",
         "The number of io threads for synchronizing request on each device. The default value is 0. Range: [0,1024] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_io_callback_thread_count, OB_TENANT_PARAMETER, "0", "[0,64]",
-        "The number of io callback threads. The default value is 0. Range: [0,64] in integer. If not specified, The number of threads is dynamically configured according to the memory size",
+DEF_INT(_io_callback_thread_count, OB_TENANT_PARAMETER, "0", "[0,128]",
+        "The number of io callback threads. The default value is 0. Range: [0,128] in integer. If not specified, The number of threads is dynamically configured according to the memory size",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "True",

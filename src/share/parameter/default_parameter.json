@@ -142,6 +142,11 @@
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
         },
         {
+          "name": "_io_callback_thread_count",
+          "value": "64",
+          "comment": "The number of io callback threads"
+        },
+        {
           "name": "default_load_mode",
           "value": "FULL_DIRECT_WRITE",
           "comment": "for classic OLAP workloads, the default import is full direct load"
