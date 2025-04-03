@@ -10490,7 +10490,12 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     bool second_can_px_batch_rescan = false;
     bool first_rescan_contain_match_all = false;
     bool second_rescan_contain_match_all = false;
-    if (!first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
+    bool need_compare = false;
+    if (OB_FAIL(ObLogSubPlanFilter::need_compare_batch_rescan(*first_spf, *second_spf, need_compare))) {
+      LOG_WARN("failed to check need compare batch rescan", K(ret));
+    } else if (!need_compare) {
+      /* do nothing */
+    } else if (!first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
       relation = DominateRelation::OBJ_RIGHT_DOMINATE;
       OPT_TRACE("right plan dominate left plan because of group rescan subplan filter");
     } else if (first_spf->enable_das_group_rescan() && !second_spf->enable_das_group_rescan()) {
@@ -10531,7 +10536,7 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     } else {
       /* do nothing */
     }
-    LOG_TRACE("finish compute spf rescan plan relationship",
+    LOG_TRACE("finish compute spf rescan plan relationship", K(need_compare),
                     K(first_spf->enable_das_group_rescan()), K(second_spf->enable_das_group_rescan()),
                     K(first_right_local_rescan), K(second_right_local_rescan),
                     K(first_can_px_batch_rescan), K(second_can_px_batch_rescan));

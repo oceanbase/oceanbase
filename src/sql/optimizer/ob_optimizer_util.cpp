@@ -10616,6 +10616,30 @@ int ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerCo
       }
     }
   }
+  return ret;
+}
 
+int ObOptimizerUtil::get_rescan_path_index_id(const ObLogicalOperator *op,
+                                              bool &simple_rescan_path,
+                                              uint64_t &table_id,
+                                              uint64_t &index_id,
+                                              double &range_row_count)
+{
+  int ret = OB_SUCCESS;
+  while (OB_NOT_NULL(op) && 1 == op->get_num_of_child()) {
+    op = op->get_child(0);
+  }
+
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(op));
+  } else if (!op->is_table_scan() || 1 < op->get_num_of_child()) {
+    simple_rescan_path = false;
+  } else {
+    const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
+    table_id = table_scan->get_table_id();
+    index_id = table_scan->get_index_table_id();
+    range_row_count = table_scan->get_logical_query_range_row_count();
+  }
   return ret;
 }

@@ -1647,6 +1647,14 @@ struct NullAwareAntiJoinInfo {
     int compute_join_path_relationship(const JoinPath &first_path,
                                        const JoinPath &second_path,
                                        DominateRelation &relation);
+    int need_compare_batch_rescan(const JoinPath &first_path,
+                                  const JoinPath &second_path,
+                                  bool &need_compare);
+    int get_rescan_path_index_id(const Path &path,
+                                 bool &simple_rescan_path,
+                                 uint64_t &table_id,
+                                 uint64_t &index_id,
+                                 double &range_row_count);
     int compute_pipeline_relationship(const Path &first_path,
                                       const Path &second_path,
                                       DominateRelation &relation);
