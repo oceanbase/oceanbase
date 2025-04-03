@@ -1509,9 +1509,17 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
             LOG_WARN("session is NULL", K(ret));
           } else {
             const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-            if (OB_FAIL(get_otimestamp_from_datum(datum, in_val, type))) {
+            if (datum.is_null()) {
+              void* buffer = allocator->alloc(sizeof(ObJsonNull));
+              if (OB_ISNULL(buffer)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to allocate json null.", K(ret));
+              } else {
+                json_node = (ObJsonNull*)new(buffer)ObJsonNull();
+              }
+            } else if (OB_FAIL(get_otimestamp_from_datum(datum, in_val, type))) {
               LOG_WARN("get otimestamp fail", K(ret));
-            } else if (OB_SUCC(ret) && OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type, in_val, NULL, ob_time))) {
+            } else if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type, in_val, NULL, ob_time))) {
               LOG_WARN("fail to convert otimestamp to ob_time", K(ret), K(in_val));
             }
           }

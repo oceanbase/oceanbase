@@ -1613,8 +1613,9 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
           LOG_WARN("resolve json table columns failed", K(ret));
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected table type", K_(tmp_table_item->type));
+        // not set error code, public routine new type may enter here
+        LOG_WARN("needn't process table type, current function mainly process json dot notation or json_object with star",
+          K_(tmp_table_item->type));
       }
 
       for (int64_t j = 0; OB_SUCC(ret) && j < column_items.count(); ++j) {
