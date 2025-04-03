@@ -53,10 +53,11 @@
 
 [English](README.md) | 中文版 | [日本語版](README_JA.md)
 
-**OceanBase Database** 是一个分布式关系型数据库。完全由蚂蚁集团自主研发。 OceanBase 基于 [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) 协议以及分布式架构，实现了高可用和线性扩展。OceanBase 数据库运行在常见的服务器集群上，不依赖特殊的硬件架构。
+**OceanBase Database** 是一个分布式关系型数据库。完全由蚂蚁集团自主研发。 OceanBase 基于 [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) 协议以及分布式架构，实现了高可用和线性扩展。OceanBase 数据库运行在常见的服务器集群上，不依赖特殊的硬件架构，并支持向量数据库功能，为 AI 和大规模检索场景提供高效的向量查询能力。
 
 # 关键特性
 
+- **向量检索**：支持向量索引和高效查询，可用于 AI 应用、推荐系统和语义搜索，提供高吞吐、低延迟的向量搜索能力；
 - **水平扩展**：单机群支持超过1500节点、PB级数据量和单表超万亿行数据；
 - **极致性能**：TPC-C 7.07亿tmpC和TPC-H 1526 万 QphH @30000GB；
 - **低成本**：存储成本节省70%-90%；

@@ -54,10 +54,11 @@
 
 English | [中文版](README_CN.md) | [日本語版](README_JA.md)
 
-**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. The OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. The OceanBase Database is not dependent on specific hardware architectures.
+**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. The OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. The OceanBase Database is not dependent on specific hardware architectures. It also supports vector database functionality, enabling efficient vector search for AI and large-scale retrieval scenarios.
 
 # Key features
 
+- **Vector Search**: Supports vector indexing and efficient queries, making it ideal for AI applications, recommendation systems, and semantic search, providing high throughput and low-latency vector search capabilities.
 - **Transparent Scalability**: 1,500 nodes, PB data and a trillion rows of records in one cluster.
 - **Ultra-fast Performance**: TPC-C 707 million tmpC and TPC-H 15.26 million QphH @30000GB.
 - **Cost Efficiency**: saves 70%–90% of storage costs.
