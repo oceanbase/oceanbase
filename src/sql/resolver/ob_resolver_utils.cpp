@@ -1839,7 +1839,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
       OZ (SMART_CALL(resolve_synonym_object_recursively(
         schema_checker, synonym_checker, tenant_id,
         object_database_id, object_name, object_database_id, object_name, exist_with_synonym,
-        search_public_schema)));
+        true)));
     }
   }
   return ret;

@@ -101,7 +101,6 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   } else {
     arg.ddl_stmt_str_ = first_stmt;
   }
-  LOG_INFO("debug for xll: before package executor", K(arg.exec_env_), K(arg));
   // we need send rpc for alter package, because it must refresh package state after alter package
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -117,7 +116,6 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   } else if (with_res && OB_FAIL(common_rpc_proxy->alter_package_with_res(arg, res))) {
     LOG_WARN("rpc proxy drop procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
   }
-  LOG_INFO("debug for xll: after package executor", K(arg));
   if (OB_SUCC(ret) && !has_error && with_res &&
       tenant_config.is_valid() &&
       tenant_config->plsql_v2_compatibility) {
