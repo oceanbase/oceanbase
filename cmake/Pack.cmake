@@ -68,6 +68,7 @@ install(FILES
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_health_checker.py
   tools/upgrade/oceanbase_upgrade_dep.yml
+  tools/upgrade/deps_compat.yml
   DESTINATION etc
   COMPONENT server)
 
