@@ -776,7 +776,6 @@ int ObCopyMacroBlockRestoreReader::convert_logical_id_to_shared_macro_id_(
     macro_block_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
     macro_block_id.set_second_id(logic_block_id.tablet_id_);
     macro_block_id.set_third_id(logic_block_id.data_seq_.get_data_seq());
-    macro_block_id.set_column_group_id(logic_block_id.column_group_idx_);
   }
   return ret;
 }
