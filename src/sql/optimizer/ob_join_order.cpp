@@ -8654,8 +8654,7 @@ int JoinPath::compute_join_path_sharding()
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       }
-    } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_ ||
-               DistAlgo::DIST_HASH_HASH_LOCAL == join_dist_algo_) {
+    } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_) {
       if (OB_FAIL(compute_hash_hash_sharding_info())) {
         LOG_WARN("failed to generate hash-hash sharding info", K(ret));
       } else { /*do nothing*/ }
@@ -8669,7 +8668,8 @@ int JoinPath::compute_join_path_sharding()
     } else if (DistAlgo::DIST_PARTITION_HASH_LOCAL == join_dist_algo_ ||
                DistAlgo::DIST_HASH_LOCAL_PARTITION == join_dist_algo_ ||
                DistAlgo::DIST_BROADCAST_HASH_LOCAL == join_dist_algo_ ||
-               DistAlgo::DIST_HASH_LOCAL_BROADCAST == join_dist_algo_) {
+               DistAlgo::DIST_HASH_LOCAL_BROADCAST == join_dist_algo_ ||
+               DistAlgo::DIST_HASH_HASH_LOCAL == join_dist_algo_) {
       strong_sharding_ = opt_ctx.get_distributed_sharding();
     } else {
       ret = OB_ERR_UNEXPECTED;

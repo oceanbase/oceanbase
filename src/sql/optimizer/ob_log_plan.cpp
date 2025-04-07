@@ -5608,38 +5608,35 @@ int ObLogPlan::get_grouping_style_exchange_info(const ObIArray<ObRawExpr*> &part
                                                 ObExchangeInfo &exch_info)
 {
   int ret = OB_SUCCESS;
-  if (!partition_exprs.empty()) {
-    ObShardingInfo *sharding_info = NULL;
-    if (OB_FAIL(get_cached_hash_sharding_info(partition_exprs, equal_sets, sharding_info))) {
-      LOG_WARN("failed to get cached sharding info", K(ret));
-    } else if (NULL != sharding_info) {
-      if (OB_FAIL(exch_info.append_hash_dist_expr(partition_exprs))) {
-        LOG_WARN("failed to append hash dist exprs", K(ret));
-      } else {
-        exch_info.dist_method_ = ObPQDistributeMethod::HASH;
+  if (partition_exprs.empty()) {
+    exch_info.dist_method_ = ObPQDistributeMethod::LOCAL;
+  } else {
+    exch_info.dist_method_ = ObPQDistributeMethod::HASH;
+    if (OB_FAIL(exch_info.append_hash_dist_expr(partition_exprs))) {
+      LOG_WARN("failed to append hash dist exprs", K(ret));
+    } else if (SlaveMappingType::SM_NONE == exch_info.slave_mapping_type_) {
+      ObShardingInfo *sharding_info = NULL;
+      if (OB_FAIL(get_cached_hash_sharding_info(partition_exprs, equal_sets, sharding_info))) {
+        LOG_WARN("failed to get cached sharding info", K(ret));
+      } else if (NULL != sharding_info) {
         exch_info.strong_sharding_ = sharding_info;
-      }
-    } else if (OB_ISNULL(sharding_info = reinterpret_cast<ObShardingInfo*>(
-                         allocator_.alloc(sizeof(ObShardingInfo))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else {
-      sharding_info = new(sharding_info) ObShardingInfo();
-      if (OB_FAIL(exch_info.append_hash_dist_expr(partition_exprs))) {
-        LOG_WARN("append hash dist expr failed", K(ret));
-      } else if (OB_FAIL(sharding_info->get_partition_keys().assign(partition_exprs))) {
-        LOG_WARN("failed to assign expr", K(ret));
+      } else if (OB_ISNULL(sharding_info = reinterpret_cast<ObShardingInfo*>(
+                          allocator_.alloc(sizeof(ObShardingInfo))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
       } else {
-        sharding_info->set_distributed();
-        exch_info.dist_method_ = ObPQDistributeMethod::HASH;
-        exch_info.strong_sharding_ = sharding_info;
-        if (OB_FAIL(get_hash_dist_info().push_back(sharding_info))) {
-          LOG_WARN("failed to push back sharding info", K(ret));
-        } else { /*do nothing*/ }
+        sharding_info = new(sharding_info) ObShardingInfo();
+        if (OB_FAIL(sharding_info->get_partition_keys().assign(partition_exprs))) {
+          LOG_WARN("failed to assign expr", K(ret));
+        } else {
+          sharding_info->set_distributed();
+          exch_info.strong_sharding_ = sharding_info;
+          if (OB_FAIL(get_hash_dist_info().push_back(sharding_info))) {
+            LOG_WARN("failed to push back sharding info", K(ret));
+          } else { /*do nothing*/ }
+        }
       }
     }
-  } else {
-    exch_info.dist_method_ = ObPQDistributeMethod::LOCAL;
   }
   return ret;
 }

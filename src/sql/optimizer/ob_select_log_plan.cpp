@@ -5061,8 +5061,13 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
     } else if (OB_FAIL(right_exch_info.append_hash_dist_expr(right_set_keys))) {
       LOG_WARN("failed to append hash dist expr", K(ret));
     } else {
-      left_exch_info.strong_sharding_ = sharding_info;
-      right_exch_info.strong_sharding_ = sharding_info;
+      if (DistAlgo::DIST_HASH_HASH_LOCAL == set_method) {
+        left_exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
+        right_exch_info.strong_sharding_ = get_optimizer_context().get_distributed_sharding();
+      } else {
+        left_exch_info.strong_sharding_ = sharding_info;
+        right_exch_info.strong_sharding_ = sharding_info;
+      }
       left_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
       right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
       left_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
@@ -7276,6 +7281,7 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
+  exch_info.slave_mapping_type_ = SlaveMappingType::SM_PWJ_HASH_HASH;
   bool need_hash_sort = false;
   bool need_normal_sort = false;
   const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
@@ -7297,7 +7303,6 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
     need_hash_sort = need_sort && part_cnt > 0 && !win_func_helper.force_normal_sort_;
     is_local_order = top->get_is_local_order();
     is_local_order &= top->is_single() || (top->is_distributed() && top->is_exchange_allocated());
-    exch_info.slave_mapping_type_ = SlaveMappingType::SM_PWJ_HASH_HASH;
   }
 
   if (OB_SUCC(ret) && need_normal_sort) {
