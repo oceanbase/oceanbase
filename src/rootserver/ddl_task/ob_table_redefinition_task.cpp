@@ -14,6 +14,7 @@
 #include "ob_table_redefinition_task.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_root_service.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 
@@ -526,7 +527,10 @@ int ObTableRedefinitionTask::copy_table_indexes()
             LOG_WARN("get all tablet count failed", K(ret));
           } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_tablet_count, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout failed", K(ret));
-          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
+          } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+          } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
                 execute_ddl_task(alter_table_arg_, index_ids))) {
             LOG_WARN("rebuild hidden table index failed", K(ret), K(ddl_rpc_timeout));
           }
@@ -584,7 +588,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
                                          task_id_);
               param.sub_task_trace_id_ = sub_task_trace_id_;
               param.tenant_data_version_ = data_format_version_;
-              if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
+              if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
                 if (OB_ENTRY_EXIST == ret) {
                   ret = OB_SUCCESS;
                   active_task_cnt += 1;
@@ -592,7 +596,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
                   LOG_WARN("submit ddl task failed", K(ret));
                 }
               } else if (FALSE_IT(active_task_cnt += 1)) {
-              } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+              } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
                 LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
               }
             }
@@ -664,7 +668,10 @@ int ObTableRedefinitionTask::copy_table_constraints()
         int64_t ddl_rpc_timeout = 0;
         if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(dst_tenant_id_, target_object_id_, ddl_rpc_timeout))) {
           LOG_WARN("get ddl rpc timeout fail", K(ret));
-        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
+        } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+        } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
               execute_ddl_task(alter_table_arg_, constraint_ids))) {
           LOG_WARN("rebuild hidden table constraint failed", K(ret), K(ddl_rpc_timeout));
         }
@@ -737,7 +744,10 @@ int ObTableRedefinitionTask::copy_table_foreign_keys()
           int64_t ddl_rpc_timeout = 0;
           if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(dst_tenant_id_, target_object_id_, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));
-          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
+          } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+          } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
                 execute_ddl_task(alter_table_arg_, fk_ids))) {
             LOG_WARN("rebuild hidden table constraint failed", K(ret), K(ddl_rpc_timeout));
           }
@@ -762,15 +772,11 @@ int ObTableRedefinitionTask::copy_table_foreign_keys()
 int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   int64_t finished_task_cnt = 0;
   bool state_finish = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_TASK_COPY_DEPENDENT_OBJECTS_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (!dependent_task_result_map_.created() && OB_FAIL(dependent_task_result_map_.create(MAX_DEPEND_OBJECT_COUNT, lib::ObLabel("DepTasMap")))) {
@@ -863,16 +869,15 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   // offline ddl is allowed on table with trigger(enable/disable).
   alter_table_arg_.need_rebuild_trigger_ = true;
   alter_table_arg_.task_id_ = task_id_;
-  ObRootService *root_service = GCTX.root_service_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   ObDDLTaskStatus new_status = next_task_status;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_TAKE_EFFECT_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dst_tenant_id_, schema_guard))) {
@@ -910,7 +915,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     LOG_WARN("fail to convert scn", K(ret), K(snapshot_version_));
   } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(dst_tenant_id_, target_object_id_, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));
-  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
       execute_ddl_task(alter_table_arg_, objs))) {
     int tmp_ret = OB_SUCCESS;
     bool has_took_effect_succ = false;
@@ -1012,11 +1017,7 @@ int ObTableRedefinitionTask::process()
       case ObDDLTaskStatus::PREPARE:
         if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ && parent_task_id_ > 0) {
           const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
-          ObRootService *root_service = GCTX.root_service_;
-          if (OB_ISNULL(root_service)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-          } else if (OB_FAIL(root_service->get_ddl_task_scheduler().on_ddl_task_prepare(parent_task_id, task_id_, trace_id_))) {
+          if (OB_FAIL(ObSysDDLSchedulerUtil::on_ddl_task_prepare(parent_task_id, task_id_, trace_id_))) {
             LOG_WARN("fail to do parent task callback", KR(ret));
           }
         }

@@ -43,6 +43,7 @@
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "share/ob_server_blacklist.h"
+#include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "share/longops_mgr/ob_longops_mgr.h"

@@ -134,9 +134,11 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(Rls, rls)
 
   /* sequence_id related */
-  virtual int init_sequence_id(const int64_t rootservice_epoch);
+  virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
+  virtual int init_sequence_id_by_sys_leader_epoch(const int64_t sys_leader_epoch);
   virtual int inc_sequence_id();
-  virtual uint64_t get_sequence_id() { SpinRLockGuard guard(rw_lock_); return sequence_id_;}
+
+  virtual ObDDLSequenceID get_sequence_id() const { SpinRLockGuard guard(rw_lock_); return sequence_id_; }
 
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
   //enable refresh schema info
@@ -1314,7 +1316,6 @@ private:
 
   common::SpinRWLock rw_lock_;
   uint64_t last_operation_tenant_id_;
-  uint64_t sequence_id_;
   ObRefreshSchemaInfo schema_info_;
 
   ObSysVariableSqlService sys_variable_service_;
@@ -1330,6 +1331,8 @@ private:
   lib::ObMutex object_ids_mutex_;
   lib::ObMutex normal_tablet_ids_mutex_;
   lib::ObMutex extended_tablet_ids_mutex_;
+
+  ObDDLSequenceID sequence_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaServiceSQLImpl);
 };

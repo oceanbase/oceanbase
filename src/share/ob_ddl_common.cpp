@@ -13,10 +13,12 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_ddl_common.h"
+#include "logservice/ob_log_service.h" // for ObLogService
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_sim_point.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -467,6 +469,63 @@ int64_t ObColumnNameMap::to_string(char *buf, const int64_t buf_len) const
 }
 
 /******************           ObDDLUtil         *************/
+int ObDDLUtil::check_local_is_sys_leader()
+{
+  int ret = OB_SUCCESS;
+  common::ObRole role;
+  int64_t proposal_id = 0;
+  if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.omt_));
+  } else if (OB_UNLIKELY(!GCTX.omt_->has_tenant(OB_SYS_TENANT_ID))) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("local server does not have SYS tenant resource", KR(ret));
+  } else if (OB_FAIL(get_sys_log_handler_role_and_proposal_id(role, proposal_id))) {
+    LOG_WARN("fail to get role and proposal id", KR(ret), K(role), K(proposal_id));
+  } else if (!is_strong_leader(role)) {
+    ret = OB_LS_NOT_LEADER;
+    LOG_WARN("current server not leader of SYS tenant", KR(ret), K(role));
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_sys_log_handler_role_and_proposal_id(
+    common::ObRole &role,
+    int64_t &proposal_id)
+{
+  int ret = OB_SUCCESS;
+  role = FOLLOWER;
+  proposal_id = 0;
+  if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.omt_));
+  } else if (OB_UNLIKELY(!GCTX.omt_->has_tenant(OB_SYS_TENANT_ID))) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("local server does not have SYS tenant resource", KR(ret));
+  } else {
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      ObLSService *ls_svr = MTL(ObLSService*);
+      ObLS *ls = NULL;
+      ObLSHandle handle;
+      logservice::ObLogHandler *log_handler = NULL;
+      if (OB_ISNULL(ls_svr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mtl ObLSService should not be null", KR(ret), KP(ls_svr));
+      } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", KR(ret));
+      } else if (OB_ISNULL(ls = handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be null", KR(ret));
+      } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log_handler is null", KR(ret), KP(log_handler));
+      } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
+        LOG_WARN("fail to get role and epoch", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLUtil::get_tablets(
     const uint64_t tenant_id,
@@ -1467,10 +1526,9 @@ int ObDDLUtil::obtain_snapshot(
 {
   int ret = OB_SUCCESS;
   rootserver::ObDDLWaitTransEndCtx* wait_trans_ctx = nullptr;
-  rootserver::ObRootService *root_service = GCTX.root_service_;
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_UNLIKELY(nullptr == task || snapshot_version != 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(task), K(snapshot_version));
@@ -1505,7 +1563,7 @@ int ObDDLUtil::obtain_snapshot(
         LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot), KPC(wait_trans_ctx));
       } else {
         ObMySQLTransaction trans;
-        if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
+        if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
           LOG_WARN("fail to start trans", K(ret), K(tenant_id));
         } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(trans,
                                                                     tenant_id,
@@ -1516,7 +1574,7 @@ int ObDDLUtil::obtain_snapshot(
         } else if (persisted_snapshot > 0) {
           // found a persisted snapshot, do not hold it again.
           FLOG_INFO("found a persisted snapshot in inner table", "task_id", task->get_task_id(), K(persisted_snapshot), K(new_fetched_snapshot));
-        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, root_service, new_fetched_snapshot, extra_mv_tablet_ids))) {
+        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, GCTX.root_service_, new_fetched_snapshot, extra_mv_tablet_ids))) {
           if (OB_SNAPSHOT_DISCARDED == ret) {
             wait_trans_ctx->reset();
           } else {
@@ -1641,16 +1699,12 @@ int ObDDLUtil::release_snapshot(
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
-  rootserver::ObRootService *root_service = GCTX.root_service_;
   ObSEArray<ObTabletID, 1> tablet_ids;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *data_table_schema = nullptr;
   const ObTableSchema *dest_table_schema = nullptr;
   ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_ISNULL(task)) {
+  if (OB_ISNULL(task)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("invalid argument", K(ret));
   } else if (!task->is_inited()) {
@@ -1828,16 +1882,15 @@ int ObDDLUtil::calc_snapshot_with_gts(
   snapshot = 0;
   SCN curr_ts;
   bool is_external_consistent = false;
-  rootserver::ObRootService *root_service = nullptr;
   const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
   ObFreezeInfo frozen_status;
   if (OB_UNLIKELY(tenant_id == common::OB_INVALID_ID || ddl_task_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(ddl_task_id));
-  } else if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service is null", K(ret), KP(root_service));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     {
       MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
@@ -1854,7 +1907,7 @@ int ObDDLUtil::calc_snapshot_with_gts(
     if (OB_SUCC(ret)) {
       snapshot = max(trans_end_snapshot, curr_ts.get_val_for_tx() - index_snapshot_version_diff);
       if (OB_FAIL(freeze_info_proxy.get_freeze_info(
-          root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
+          *GCTX.sql_proxy_, SCN::min_scn(), frozen_status))) {
         LOG_WARN("get freeze info failed", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_FREEZE_INFO_FAILED))) {
         LOG_WARN("ddl sim failure: get freeze info failed", K(ret), K(tenant_id), K(ddl_task_id));
@@ -1924,16 +1977,15 @@ int ObDDLUtil::check_and_cancel_single_replica_dag(
   bool is_cache_hit = false;
   const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
   share::ObLocationService *location_service = GCTX.location_service_;
-  rootserver::ObRootService *root_service = GCTX.root_service_;
   if (OB_ISNULL(task)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_UNLIKELY(!task->is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(location_service) || OB_ISNULL(root_service)) {
+  } else if (OB_ISNULL(location_service) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(location_service), KP(root_service));
+    LOG_WARN("unexpected null", K(ret), KP(location_service), KP(GCTX.srv_rpc_proxy_));
   } else if (OB_UNLIKELY(!check_dag_exit_tablets_map.created())) {
     const int64_t CHECK_DAG_EXIT_BUCKET_NUM = 64;
     common::ObArray<common::ObTabletID> src_tablet_ids;
@@ -2000,13 +2052,13 @@ int ObDDLUtil::check_and_cancel_single_replica_dag(
         for (int64_t j = 0; OB_SUCC(ret) && j < paxos_server_list.count(); j++) {
           int tmp_ret = OB_SUCCESS;
           obrpc::Bool is_replica_dag_exist(true);
-          if (is_complement_data_dag && OB_TMP_FAIL(root_service->get_rpc_proxy().to(paxos_server_list.at(j))
+          if (is_complement_data_dag && OB_TMP_FAIL(GCTX.srv_rpc_proxy_->to(paxos_server_list.at(j))
             .by(dst_tenant_id).timeout(timeout_us).check_and_cancel_ddl_complement_dag(arg, is_replica_dag_exist))) {
             // consider as dag does exist in this server.
             saved_ret = OB_SUCC(saved_ret) ? tmp_ret : saved_ret;
             is_tablet_dag_exist = true;
             LOG_WARN("check and cancel ddl complement dag failed", K(ret), K(tmp_ret), K(arg));
-          } else if (!is_complement_data_dag && OB_TMP_FAIL(root_service->get_rpc_proxy().to(paxos_server_list.at(j))
+          } else if (!is_complement_data_dag && OB_TMP_FAIL(GCTX.srv_rpc_proxy_->to(paxos_server_list.at(j))
             .by(dst_tenant_id).timeout(timeout_us).check_and_cancel_delete_lob_meta_row_dag(arg, is_replica_dag_exist))) {
             // consider as dag does exist in this server.
             saved_ret = OB_SUCC(saved_ret) ? tmp_ret : saved_ret;
@@ -3082,15 +3134,14 @@ int ObDDLUtil::get_tenant_schema_guard(
   int ret = OB_SUCCESS;
   src_tenant_schema_guard = nullptr;
   dst_tenant_schema_guard = nullptr;
-  rootserver::ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(common::OB_INVALID_ID == src_tenant_id || common::OB_INVALID_ID == dst_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(src_tenant_id), K(dst_tenant_id));
-  } else if (OB_ISNULL(root_service)) {
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else {
-    share::schema::ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
+    share::schema::ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     if (OB_FAIL(schema_service.get_tenant_schema_guard(dst_tenant_id, hold_buf_dst_tenant_schema_guard))) {
       LOG_WARN("get tanant schema guard failed", K(ret), K(dst_tenant_id));
     } else if (src_tenant_id != dst_tenant_id) {
@@ -4498,17 +4549,15 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
   int ret = OB_SUCCESS;
   is_old_task_session_exist = false;
   char ip_str[common::OB_IP_STR_BUFF];
-  rootserver::ObRootService *root_service = nullptr;
-
-  if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("fail to get sql proxy, root service is null.!");
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(trace_id), K(inner_sql_exec_addr));
   } else {
     ret = OB_SUCCESS;
-    common::ObMySQLProxy &proxy = root_service->get_sql_proxy();
+    common::ObMySQLProxy &proxy = *GCTX.sql_proxy_;
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
@@ -4965,16 +5014,16 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else if (OB_FAIL(tablet_checksum_status_map.create(tablet_count, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rootservice is null", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record(
       tenant_id,
       execution_id,
       index_table_id,
       ddl_task_id,
       tablet_ids,
-      GCTX.root_service_->get_sql_proxy(),
+      *GCTX.sql_proxy_,
       tablet_checksum_status_map))) {
     LOG_WARN("fail to get tablet checksum status",
       K(ret), K(tenant_id), K(execution_id), K(index_table_id), K(ddl_task_id));

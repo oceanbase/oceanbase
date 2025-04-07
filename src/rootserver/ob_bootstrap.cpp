@@ -1249,29 +1249,10 @@ int ObBootstrap::init_global_stat()
           OB_INVALID_VERSION);
       if (OB_FAIL(schema_status_proxy->set_tenant_schema_status(tenant_status))) {
         LOG_WARN("fail to init create partition status", KR(ret), K(tenant_status));
-      } else if (OB_FAIL(init_sequence_id())) {
-        LOG_WARN("failed to init_sequence_id", KR(ret));
       } else {}
     }
   }
   BOOTSTRAP_CHECK_SUCCESS();
-  return ret;
-}
-
-int ObBootstrap::init_sequence_id()
-{
-  int ret = OB_SUCCESS;
-  const int64_t rootservice_epoch = 0;
-  ObMultiVersionSchemaService &multi_schema_service = ddl_service_.get_schema_service();
-  ObSchemaService *schema_service = multi_schema_service.get_schema_service();
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check_inner_stat failed", K(ret));
-  } else if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", K(ret));
-  } else if (OB_FAIL(schema_service->init_sequence_id(rootservice_epoch))) {
-    LOG_WARN("init sequence id failed", K(ret), K(rootservice_epoch));
-  }
   return ret;
 }
 

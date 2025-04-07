@@ -15,6 +15,7 @@
 #include "ob_disaster_recovery_task.h"
 #include "ob_disaster_recovery_task_utils.h"
 #include "observer/ob_server.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h" //for OTTZ_MGR
 
 namespace oceanbase

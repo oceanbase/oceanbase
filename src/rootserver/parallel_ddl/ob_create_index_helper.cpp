@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX RS
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_root_service.h"
 #include "rootserver/parallel_ddl/ob_create_index_helper.h"
 #include "rootserver/ob_table_creator.h"
@@ -790,14 +791,11 @@ int ObCreateIndexHelper::construct_and_adjust_result_(int &return_ret) {
     if (OB_ISNULL(tsi_generator)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get tsi schema version generator failed", KR(ret));
-    } else if (OB_ISNULL(GCTX.root_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("root_service_ is null", KR(ret));
     } else {
       res_.index_table_id_ = index_schemas_.at(0).get_table_id();
       tsi_generator->get_current_version(res_.schema_version_);
       res_.task_id_ = task_record_.task_id_;
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record_))) {
+      if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record_))) {
         LOG_WARN("fail to schedule ddl task", KR(ret), K_(task_record));
       }
     }

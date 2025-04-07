@@ -13694,6 +13694,30 @@ private:
   int ret_;
 };
 
+struct ObBroadcastConfigVersionArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObBroadcastConfigVersionArg()
+    : global_config_version_(0),
+      tenant_config_version_map_() {}
+public:
+  int assign(const ObBroadcastConfigVersionArg &that);
+  int init_by_global_config_version(const int64_t global_config_version);
+  int init_by_tenant_config_version_map(const ObIArray<std::pair<uint64_t, int64_t>> &tenant_config_version_map);
+  int64_t get_global_config_version() const { return global_config_version_; }
+  const common::ObSEArray<std::pair<uint64_t, int64_t>, 200> &get_tenant_config_version_map() const
+  {
+     return tenant_config_version_map_;
+  }
+  TO_STRING_KV(K_(global_config_version), K_(tenant_config_version_map));
+  bool is_valid() const;
+private:
+  int64_t global_config_version_;
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 200> tenant_config_version_map_;
+};
+
 struct ObNotifyLSRestoreFinishArg final
 {
   OB_UNIS_VERSION(1);

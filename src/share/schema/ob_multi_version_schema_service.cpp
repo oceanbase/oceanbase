@@ -4099,10 +4099,11 @@ int ObMultiVersionSchemaService::set_last_refreshed_schema_info(const ObRefreshS
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(schema_info_rwlock_);
-  const uint64_t last_sequence_id = last_refreshed_schema_info_.get_sequence_id();
-  const uint64_t new_sequence_id = schema_info.get_sequence_id();
-  if (OB_INVALID_ID == new_sequence_id
-      || (OB_INVALID_ID != last_sequence_id && last_sequence_id >= new_sequence_id)) {
+  const ObDDLSequenceID last_sequence_id = last_refreshed_schema_info_.get_sequence_id();
+  const ObDDLSequenceID new_sequence_id = schema_info.get_sequence_id();
+  if (!new_sequence_id.is_valid()
+      || (last_sequence_id.is_valid() && (ObDDLSequenceID::LESS_THAN == new_sequence_id.compare_to_other_id(last_sequence_id)
+                                          || ObDDLSequenceID::EQUAL_TO == new_sequence_id.compare_to_other_id(last_sequence_id)))) {
     LOG_INFO("no need to set last refreshed schema info", K(ret), K(last_refreshed_schema_info_), K(schema_info));
   } else if (OB_FAIL(last_refreshed_schema_info_.assign(schema_info))) {
     LOG_WARN("fail to assign last refreshed schema info", K(ret), K(schema_info), K_(last_refreshed_schema_info));

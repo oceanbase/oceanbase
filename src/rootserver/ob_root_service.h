@@ -50,7 +50,6 @@
 #include "rootserver/ob_create_inner_schema_executor.h"
 #include "rootserver/ob_update_rs_list_task.h"
 #include "rootserver/ob_schema_history_recycler.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
@@ -447,7 +446,6 @@ public:
   common::ObWorkQueue &get_task_queue() { return task_queue_; }
   common::ObWorkQueue &get_inspect_task_queue() { return inspect_task_queue_; }
   common::ObServerConfig *get_server_config() { return config_; }
-  ObDDLScheduler &get_ddl_task_scheduler() { return ddl_scheduler_; }
   int64_t get_core_meta_table_version() { return core_meta_table_version_; }
   ObSchemaHistoryRecycler &get_schema_history_recycler() { return schema_history_recycler_; }
   ObRootMinorFreeze &get_root_minor_freeze() { return root_minor_freeze_; }
@@ -865,7 +863,6 @@ public:
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
-  ObDDLScheduler &get_ddl_scheduler() { return ddl_scheduler_; }
   ObZoneStorageManager &get_zone_storage_manager() { return zone_storage_manager_; }
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
@@ -904,6 +901,9 @@ private:
   int check_parallel_ddl_conflict(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const obrpc::ObDDLArg &arg);
+  int increase_rs_epoch_and_get_proposal_id_(
+      int64_t &new_rs_epoch,
+      int64_t &proposal_id_to_check);
   int fetch_sys_tenant_ls_info();
   // create system table in mysql backend for debugging mode.
   int init_debug_database();
@@ -994,6 +994,7 @@ private:
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
+  int start_ddl_service_();
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;
@@ -1091,8 +1092,6 @@ private:
   // for set_config
   ObLatch set_config_lock_;
 
-  ObDDLScheduler ddl_scheduler_;
-  share::ObDDLReplicaBuilder ddl_builder_;
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
   ObUpdateRsListTimerTask update_rs_list_timer_task_;

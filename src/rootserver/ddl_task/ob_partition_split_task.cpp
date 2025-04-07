@@ -15,6 +15,7 @@
 #include "ob_partition_split_task.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/ob_ddl_checksum.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
@@ -261,9 +262,9 @@ int ObPartitionSplitTask::serialize_compaction_scn_to_task_record()
   ObMySQLTransaction trans;
   const int64_t serialize_param_size = get_serialize_param_size();
   ObArenaAllocator allocator(lib::ObLabel("DDLTask"));
-  if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service is null", K(ret), KP(root_service_));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_ISNULL(buf =
         static_cast<char *>(allocator.alloc(serialize_param_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -271,7 +272,7 @@ int ObPartitionSplitTask::serialize_compaction_scn_to_task_record()
   } else if (OB_FAIL(serialize_params_to_message(buf, serialize_param_size, pos))) {
     LOG_WARN("serialize params to message failed", K(ret));
   } else if (FALSE_IT(msg.assign(buf, serialize_param_size))) {
-  } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::update_message(trans,
           tenant_id_, task_id_, msg))) {
@@ -377,9 +378,9 @@ int ObPartitionSplitTask::init(
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("root service is null", K(ret), KP(root_service_));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service", K(ret));
+    LOG_WARN("ddl service not started", KR(ret));
   } else if (OB_UNLIKELY(!(OB_INVALID_ID != tenant_id &&
                            schema_version > 0 &&
                            OB_INVALID_ID != table_id &&
@@ -444,10 +445,10 @@ int ObPartitionSplitTask::init(const ObDDLTaskRecord &task_record)
     LOG_WARN("init twice", K(ret));
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
-    LOG_WARN("root_service is null", K(ret), KP(root_service_));
-  } else if (!root_service_->in_service()) {
+    LOG_WARN("root service is null", K(ret), KP(root_service_));
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service", K(ret));
+    LOG_WARN("ddl service not started", KR(ret));
   } else if (OB_FAIL(deserialize_params_from_message(
           task_record.tenant_id_,
           task_record.message_.ptr(),
@@ -1200,6 +1201,9 @@ int ObPartitionSplitTask::check_local_index_checksum()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret),
         K(data_table_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     const common::ObIArray<ObAuxTableMetaInfo> &index_infos =
       table_schema->get_simple_index_infos();
@@ -1217,7 +1221,7 @@ int ObPartitionSplitTask::check_local_index_checksum()
               true/*check unique index*/,
               ignore_col_ids,
               dummy_equal,
-              root_service_->get_sql_proxy()))) {
+              *GCTX.sql_proxy_))) {
         LOG_WARN("checksum check failed", K(ret), K(data_table_id), K(index_table_id));
       }
     }
@@ -1308,6 +1312,9 @@ int ObPartitionSplitTask::wait_trans_end(const share::ObDDLTaskStatus next_task_
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (ObDDLTaskStatus::WAIT_TRANS_END != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
@@ -1330,7 +1337,7 @@ int ObPartitionSplitTask::wait_trans_end(const share::ObDDLTaskStatus next_task_
 
   if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
     int64_t persisted_snapshot = 0;
-    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(root_service_->get_sql_proxy(),
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(*GCTX.sql_proxy_,
                                                                  tenant_id_,
                                                                  task_id_,
                                                                  new_fetched_snapshot,
@@ -1598,16 +1605,19 @@ int ObPartitionSplitTask::delete_src_part_stat_info(const uint64_t table_id,
     LOG_WARN("parameter invalid", K(ret), K(table_id), K(src_part_id));
   } else {
     common::ObMySQLTransaction trans;
-    if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
-        LOG_WARN("fail to start transaction", K(ret));
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
+      LOG_WARN("fail to start transaction", K(ret));
     // if the table is none-partitioned-table before spliting, then __all_table_stat fill the partition_id with it's table_id
     // and we need to remove those records, if there exist
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, table_id))) {
       LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, table_id))) {
-      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_COLUMN_STAT_TNAME));
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_HISTOGRAM_STAT_TNAME, table_id, table_id))) {
-      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+      LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_HISTOGRAM_STAT_TNAME));
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, src_part_id))) {
       LOG_WARN("failed to delete the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, src_part_id))) {
@@ -1707,7 +1717,10 @@ int ObPartitionSplitTask::sync_stats_info()
     {
       const ObTableSchema *data_table_schema = nullptr;
       ObSchemaGetterGuard schema_guard;
-      if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id, data_table_schema))) {
         LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(object_id_));
@@ -1772,7 +1785,6 @@ int ObPartitionSplitTask::wait_recovery_task_finish(const share::ObDDLTaskStatus
       SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
         int64_t ddl_rpc_timeout = 0;
         ObSArray<uint64_t> unused_ids;
-        ObRootService *root_service = GCTX.root_service_;
         alter_table_arg.ddl_task_type_ = share::PARTITION_SPLIT_RECOVERY_TASK;
         alter_table_arg.exec_tenant_id_ = tenant_id_;
         alter_table_arg.table_id_ = orig_data_table_schema->get_table_id();
@@ -1795,12 +1807,12 @@ int ObPartitionSplitTask::wait_recovery_task_finish(const share::ObDDLTaskStatus
           if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id_, tz_map_wrap))) {
             LOG_WARN("get tenant timezone map failed", K(ret), K(tenant_id_));
           } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
-          } else if (OB_ISNULL(root_service)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+          } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
           } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, ddl_rpc_timeout))) {
             LOG_WARN("fail to get ddl rpc timeout", K(ret), K(tenant_id_), K(object_id_));
-          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).execute_ddl_task(alter_table_arg, unused_ids))) {
+          } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).execute_ddl_task(alter_table_arg, unused_ids))) {
             LOG_WARN("fail to execute ddl task", K(ret), K(obrpc::ObRpcProxy::myaddr_), K(ddl_rpc_timeout), K(alter_table_arg));
           }
         }
@@ -1817,19 +1829,19 @@ int ObPartitionSplitTask::check_health()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, not need retry", K(ret), K(table_id));
-    need_retry_ = false; // only stop run the task, no need to clean up task context
+    LOG_WARN("ddl service not started", KR(ret));
+    need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) {
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else {
-    ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
+    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *index_schema = nullptr;
     bool is_data_table_exist = false;
@@ -1953,12 +1965,14 @@ int ObPartitionSplitTask::check_src_tablet_exist(
     bool &is_src_tablet_exist)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   int64_t src_part_id = OB_INVALID_PARTITION_ID;
   is_src_tablet_exist = false;
-  if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
@@ -2363,11 +2377,11 @@ int ObPartitionSplitTask::collect_longops_stat(ObLongopsValue &value)
 int ObPartitionSplitTask::batch_insert_reorganize_history()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service should not be null", K(ret));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::batch_insert(
-      root_service_->get_sql_proxy(), tenant_id_, partition_split_arg_, stat_info_.start_time_, ObTimeUtility::current_time()))) {
+      *GCTX.sql_proxy_, tenant_id_, partition_split_arg_, stat_info_.start_time_, ObTimeUtility::current_time()))) {
     LOG_WARN("failed to batch insert reorganize history", K(ret));
   }
   return ret;
@@ -2457,9 +2471,9 @@ int ObPartitionSplitTask::prepare_tablet_split_ranges(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.srv_rpc_proxy_));
   } else if (!data_tablet_parallel_rowkey_list_.empty()) {
     if (OB_UNLIKELY(source_index_tablets_cnt != index_tablet_parallel_rowkey_list_.count())) {
       ret = OB_ERR_UNEXPECTED; // defensive check.
@@ -2490,7 +2504,7 @@ int ObPartitionSplitTask::prepare_tablet_split_ranges(
       arg.user_parallelism_   = parallelism_; // parallelism_;
       arg.schema_tablet_size_ = std::max(tablet_size_, 128 * 1024 * 1024L/*128MB*/);
       arg.ddl_type_ = task_type_;
-      if (OB_FAIL(root_service_->get_rpc_proxy().to(leader_addr)
+      if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr)
         .by(tenant_id_).timeout(rpc_timeout).prepare_tablet_split_task_ranges(arg, result))) {
         LOG_WARN("prepare tablet split task ranges failed", K(ret), K(arg));
       } else if (OB_UNLIKELY(result.parallel_datum_rowkey_list_.empty())) {
@@ -2622,9 +2636,9 @@ int ObPartitionSplitTask::update_task_message()
   ObString msg;
   common::ObArenaAllocator allocator("SplitUpdMsg");
   const int64_t serialize_param_size = get_serialize_param_size();
-  if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service is null", K(ret), KP(root_service_));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_param_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(serialize_param_size));
@@ -2632,7 +2646,7 @@ int ObPartitionSplitTask::update_task_message()
     LOG_WARN("failed to serialize params to message", KR(ret));
   } else {
     msg.assign(buf, serialize_param_size);
-    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(root_service_->get_sql_proxy(), tenant_id_, task_id_, msg))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(*GCTX.sql_proxy_, tenant_id_, task_id_, msg))) {
       LOG_WARN("failed to update message", KR(ret));
     }
   }

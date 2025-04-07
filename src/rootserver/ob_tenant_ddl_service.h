@@ -358,11 +358,6 @@ private:
       const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,
       const share::schema::ObTenantSchema &tenant_schema,
       bool &is_permitted);
-  int check_grant_pools_permitted(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const common::ObIArray<share::ObResourcePoolName> &to_be_grant_pools,
-      const share::schema::ObTenantSchema &tenant_schema,
-      bool &is_permitted);
   int check_normal_tenant_revoke_pools_permitted(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,

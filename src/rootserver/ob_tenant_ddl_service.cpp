@@ -3158,29 +3158,6 @@ int ObTenantDDLService::cal_resource_pool_list_diff(
   return ret;
 }
 
-int ObTenantDDLService::check_grant_pools_permitted(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const common::ObIArray<share::ObResourcePoolName> &to_be_grant_pools,
-    const share::schema::ObTenantSchema &tenant_schema,
-    bool &is_permitted)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(schema_guard);
-  const uint64_t tenant_id = tenant_schema.get_tenant_id();
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("variable is not init", K(ret));
-  } else {
-    if (OB_UNLIKELY(nullptr == unit_mgr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unit mgr ptr is null", K(ret));
-    } else if (OB_FAIL(unit_mgr_->check_locality_for_logonly_unit(
-            tenant_schema, to_be_grant_pools, is_permitted))) {
-      LOG_WARN("fail to check locality for logonly unit", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTenantDDLService::check_normal_tenant_revoke_pools_permitted(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,
@@ -3299,12 +3276,6 @@ int ObTenantDDLService::modify_and_cal_resource_pool_diff(
         if (OB_FAIL(cal_resource_pool_list_diff(
                 new_pool_name_list, old_pool_name_list, diff_pools))) {
           LOG_WARN("fail to cal resource pool list diff", K(ret));
-        } else if (OB_FAIL(check_grant_pools_permitted(
-                schema_guard, diff_pools, new_tenant_schema, is_permitted))) {
-          LOG_WARN("fail to check grant pools permitted", K(ret));
-        } else if (!is_permitted) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("fail to grant pool", K(ret), K(diff_pools));
         } else if (OB_FAIL(unit_mgr_->grant_pools(
                 trans, new_ug_id_array, compat_mode, diff_pools, tenant_id,
                 false/*is_bootstrap*/, OB_INVALID_TENANT_ID/*source_tenant_id*/,

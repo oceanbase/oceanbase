@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_DDL_SCHEDULER_H_
 
 #include "share/ob_ddl_task_executor.h"
+#include "share/scn.h" //for SCN
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "rootserver/ddl_task/ob_column_redefinition_task.h"
 #include "rootserver/ddl_task/ob_constraint_task.h"
@@ -25,14 +26,17 @@
 #include "rootserver/ddl_task/ob_modify_autoinc_task.h"
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
 #include "rootserver/ddl_task//ob_partition_split_task.h"
+#include "rootserver/ob_tenant_thread_helper.h" // for DEFINE_MTL_FUNC
 #include "rootserver/ob_thread_idling.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/profile/ob_trace_id.h"
 
 namespace oceanbase
 {
+using namespace share;
 namespace share
 {
+class SCN;
 namespace schema
 {
 class ObTableSchema;
@@ -234,17 +238,40 @@ private:
  * every ddl task has its record in an inner table(__all_ddl_task_status),
  * which will be used to recover or cleanup the task when the root server has switched
  */
-class ObDDLScheduler : public lib::TGRunnable
+class ObDDLScheduler : public rootserver::ObTenantThreadHelper,
+                       public logservice::ObICheckpointSubHandler,
+                       public logservice::ObIReplaySubHandler
 {
 public:
   ObDDLScheduler();
   virtual ~ObDDLScheduler();
-  int init(ObRootService *root_service);
-  int start();
+
+  int init();
   void stop();
-  void wait();
   void destroy();
-  virtual void run1() override;
+  inline bool is_stoped() const { return is_stop_; }
+
+  virtual void do_work() override;
+  virtual share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
+  virtual int flush(SCN &rec_scn) override { return OB_SUCCESS; }
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn) override
+  {
+    UNUSED(buffer);
+    UNUSED(nbytes);
+    UNUSED(lsn);
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
+  // for role change
+  virtual void switch_to_follower_forcedly() override;
+  virtual int switch_to_leader() override;
+  virtual int switch_to_follower_gracefully() override;
+  virtual int resume_leader() override;
+
+  // mtl_functions
+  static int mtl_init(ObDDLScheduler *&ddl_scheduler);
+  static void mtl_stop(ObDDLScheduler *&ddl_scheduler);
+  static void mtl_wait(ObDDLScheduler *&ddl_scheduler);
 
   int create_ddl_task(
       const ObCreateDDLTaskParam &param,
@@ -309,6 +336,7 @@ public:
   int cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg &arg,
                             obrpc::ObAutoSplitTabletBatchRes &res);
   int schedule_auto_split_task();
+  inline share::ObDDLReplicaBuilder &get_ddl_builder() { return ddl_builder_; }
 private:
   class DDLIdling : public ObThreadIdling
   {
@@ -317,7 +345,7 @@ private:
     virtual ~DDLIdling() {}
     virtual int64_t get_idle_interval_us() override { return 1000L * 1000L; }
   };
-  class DDLScanTask : private common::ObTimerTask
+  class DDLScanTask : public common::ObTimerTask
   {
   public:
     explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler) {}
@@ -638,16 +666,14 @@ private:
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
   static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   bool is_inited_;
-  bool is_started_;
-  int tg_id_;
-  ObRootService *root_service_;
-  bool idle_stop_;
+  bool is_stop_;
   DDLIdling idler_;
   common::ObConcurrentFIFOAllocator allocator_;
   ObDDLTaskQueue task_queue_;
   ObDDLTaskHeartBeatMananger manager_reg_heart_beat_task_;
   DDLScanTask scan_task_;
   HeartBeatCheckTask heart_beat_check_task_;
+  share::ObDDLReplicaBuilder ddl_builder_;
 };
 
 template<typename T>

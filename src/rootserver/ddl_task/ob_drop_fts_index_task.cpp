@@ -257,12 +257,12 @@ int ObDropFTSIndexTask::check_switch_succ()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("hasn't initialized", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, root service is nullptr", K(ret), KP(root_service_));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
-  } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id_));
   } else if (domain_index_.is_valid()
           && OB_FAIL(schema_guard.check_table_exist(tenant_id_, domain_index_.table_id_, is_domain_index_exist))) {
@@ -314,10 +314,10 @@ int ObDropFTSIndexTask::prepare(const share::ObDDLTaskStatus &new_status)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDropFTSIndexTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, root service is nullptr", K(ret), KP(root_service_));
-  } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
   } else if (!domain_index_.is_valid() && !fts_doc_word_.is_valid()) {
     // create fts/multivalue index may also fail, there's possility that domain index create failed just jump into next status
@@ -462,9 +462,9 @@ int ObDropFTSIndexTask::create_drop_index_task(
   const ObTableSchema *data_table_schema = nullptr;
   ObSqlString drop_index_sql;
   bool is_index_exist = false;
-  if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, root service is nullptr", K(ret), KP(root_service_));
+  if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
   } else if (OB_INVALID_ID == index_tid) {
     // nothing to do, just by pass.
     task_id = -1;
@@ -512,7 +512,7 @@ int ObDropFTSIndexTask::create_drop_index_task(
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(
             index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout_us))) {
       LOG_WARN("fail to get ddl rpc timeout", K(ret));
-    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout_us).drop_index(arg, res))) {
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout_us).drop_index(arg, res))) {
       LOG_WARN("fail to drop index", K(ret), K(ddl_rpc_timeout_us), K(arg), K(res.task_id_));
     } else {
       task_id = res.task_id_;
@@ -535,10 +535,10 @@ int ObDropFTSIndexTask::create_drop_doc_rowkey_task()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, root service is nullptr", K(ret), KP(root_service_));
-  } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
   } else if (0 == rowkey_doc_.task_id_ && rowkey_doc_.is_valid()
       && OB_FAIL(create_drop_index_task(schema_guard, rowkey_doc_.table_id_, rowkey_doc_.index_name_, rowkey_doc_.task_id_))) {
@@ -577,7 +577,10 @@ int ObDropFTSIndexTask::cleanup_impl()
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(report_error_code(unused_str))) {
     LOG_WARN("report error code failed", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(root_service_->get_sql_proxy(), tenant_id_, task_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_, tenant_id_, task_id_))) {
     LOG_WARN("delete task record failed", K(ret), K(task_id_), K(schema_version_));
   } else {
     need_retry_ = false;      // clean succ, stop the task

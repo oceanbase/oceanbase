@@ -29,6 +29,8 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_service.h"
 #include "rootserver/backup/ob_backup_task_scheduler.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
+#include "rootserver/ddl_task/ob_ddl_scheduler.h" // for ObDDLScheduler
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_balance_task_execute_service.h"
 #include "rootserver/ob_common_ls_service.h"
 #include "rootserver/ob_create_standby_from_net_actor.h"
@@ -1054,6 +1056,8 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
       REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+      REGISTER_TO_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler *));
+      REGISTER_TO_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher *));
     }
     if (is_meta_tenant(tenant_id)) {
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
@@ -1200,6 +1204,8 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
       UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
       UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+      UNREGISTER_FROM_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler*));
+      UNREGISTER_FROM_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher*));
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);

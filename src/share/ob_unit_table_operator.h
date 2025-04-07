@@ -93,6 +93,9 @@ public:
                                       common::ObIArray<ObUnit> &units);
   int get_units_by_tenant(const uint64_t tenant_id,
                           common::ObIArray<ObUnit> &units) const;
+  int get_alive_servers_by_tenant(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObAddr> &server_array) const;
   int get_unit_groups_by_tenant(const uint64_t tenant_id,
                           common::ObIArray<ObSimpleUnitGroup> &unit_groups) const;
 

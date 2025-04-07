@@ -20,6 +20,7 @@
 #include "ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "storage/tablelock/ob_table_lock_service.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 
 namespace oceanbase
 {
@@ -185,7 +186,7 @@ int ObIndexBuilder::drop_index_on_failed(const ObDropIndexArg &arg, obrpc::ObDro
       int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-      } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+      } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
       }
     }
@@ -488,7 +489,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
         int tmp_ret = OB_SUCCESS;
         if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
           LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-        } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+        } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
           LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
         }
       }
@@ -613,7 +614,7 @@ int ObIndexBuilder::do_create_global_index(
       int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-      } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+      } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
       }
     }
@@ -670,7 +671,7 @@ int ObIndexBuilder::submit_build_index_task(
     } else if (share::schema::is_vec_ivfpq_index(create_index_arg.index_type_)) {
       param.type_ = ObDDLType::DDL_CREATE_VEC_IVFPQ_INDEX;
     }
-    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+    if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                    task_record.task_id_))) {
@@ -864,9 +865,9 @@ int ObIndexBuilder::submit_rebuild_index_task(
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(index_schema) || OB_ISNULL(GCTX.root_service_)) {
+  if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), KP(index_schema), K(GCTX.root_service_));
+    LOG_WARN("unexpected nullptr", K(ret), KP(index_schema));
   } else {
     ObTableLockOwnerID owner_id;
     const int64_t old_index_table_id = OB_INVALID_ID;
@@ -886,7 +887,7 @@ int ObIndexBuilder::submit_rebuild_index_task(
     if (OB_UNLIKELY(nullptr == data_schema || nullptr == index_schema || tenant_data_version <= 0)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("schema is invalid", K(ret), KP(data_schema), KP(index_schema), K(tenant_data_version));
-    } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+    } else if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                   task_record.task_id_))) {
@@ -1032,9 +1033,6 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     && OB_FAIL(recognize_vec_ivf_index_schemas(index_schemas, arg.is_vec_inner_drop_, index_ith,
       vec_centroid_ith, vec_cid_vector_ith, vec_rowkey_cid_ith, vec_sq_meta_ith, vec_pq_centroid_ith, vec_pq_code_ith))) {
     LOG_WARN("fail to recognize index and aux table from schema array", K(ret));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, root service is nullptr", K(ret), KP(GCTX.root_service_));
   } else if (OB_UNLIKELY(index_ith < 0 || index_ith >= index_schemas.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, invalid array index", K(ret), K(index_ith));
@@ -1084,7 +1082,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                  &allocator,
                                  &arg,
                                  parent_task_id);
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+      if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         if (OB_HASH_EXIST == ret) {
           task_has_exist = true;
           ret = OB_SUCCESS;
@@ -1118,7 +1116,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
         param.fts_index_aux_schema_ = (-1 == fts_domain_index_ith) ? nullptr : &(index_schemas.at(fts_domain_index_ith));
         param.aux_doc_word_schema_ = (-1 == aux_doc_word_ith) ? nullptr : &(index_schemas.at(aux_doc_word_ith));
       }
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+      if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         LOG_WARN("fail to create drop fts index task", K(ret), K(param));
       }
     } else if (is_drop_vec_task) {
@@ -1154,7 +1152,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
       param.vec_pq_centroid_schema_ = vec_pq_centroid_ith == -1 ? nullptr : &(index_schemas.at(vec_pq_centroid_ith));
       param.vec_pq_code_schema_ = vec_pq_code_ith == -1 ? nullptr : &(index_schemas.at(vec_pq_code_ith));
 
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+      if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         if (OB_HASH_EXIST == ret) {
           task_has_exist = true;
           ret = OB_SUCCESS;
@@ -1389,7 +1387,7 @@ int ObIndexBuilder::do_create_local_index(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+      } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
       }
     }

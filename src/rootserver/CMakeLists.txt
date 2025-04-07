@@ -1,5 +1,6 @@
 ob_set_subtarget(ob_rootserver ALONE
   ob_ddl_service.cpp
+  ob_ddl_service_launcher.cpp
   ob_root_service.cpp
   ddl_task/ob_ddl_redefinition_task.cpp
   ob_unit_manager.cpp
@@ -144,6 +145,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_drop_vec_ivf_index_task.cpp
   ddl_task/ob_rebuild_index_task.cpp
   ddl_task/ob_vec_index_build_task.cpp
+  ddl_task/ob_sys_ddl_util.cpp
   ddl_task/ob_vec_ivf_index_build_task.cpp
   ddl_task/ob_drop_lob_task.cpp
 )

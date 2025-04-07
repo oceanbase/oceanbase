@@ -1018,6 +1018,11 @@ public:
     common::ObAddr addr_;
   };
 
+  static int check_local_is_sys_leader();
+  static int get_sys_log_handler_role_and_proposal_id(
+      common::ObRole &role,
+      int64_t &proposal_id);
+
   // get all tablets of a table by table_id
   static int get_tablets(
       const uint64_t tenant_id,

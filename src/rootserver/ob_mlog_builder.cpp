@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX RS
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_mlog_builder.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
@@ -544,7 +545,7 @@ int ObMLogBuilder::do_create_mlog(
                                   &create_index_arg);
       param.tenant_data_version_ = tenant_data_version;
       ObTableLockOwnerID owner_id;
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+      if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         LOG_WARN("failed to submit create mlog task", KR(ret));
       } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                               task_record.task_id_))) {
@@ -575,7 +576,7 @@ int ObMLogBuilder::do_create_mlog(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
         LOG_WARN("failed to publish schema", KR(ret));
-      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+      } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("failed to schedule ddl task", KR(ret), K(task_record));
       }
     }

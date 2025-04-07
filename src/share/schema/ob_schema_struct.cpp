@@ -687,6 +687,120 @@ int ObSysTableChecker::ob_write_string(const ObString &src, ObString &dst)
   return ret;
 }
 
+// implement for ObDDLSequenceID
+int ObDDLSequenceID::assign(const ObDDLSequenceID &other)
+{
+  int ret = OB_SUCCESS;
+  seq_id_ = other.seq_id_;
+  sys_leader_epoch_ = other.sys_leader_epoch_;
+  enable_new_seq_id_ = other.enable_new_seq_id_;
+  return ret;
+}
+
+void ObDDLSequenceID::reset()
+{
+  seq_id_ = common::OB_INVALID_ID;
+  sys_leader_epoch_ = common::OB_INVALID_ID;
+  enable_new_seq_id_ = false;
+}
+
+bool ObDDLSequenceID::is_valid() const
+{
+  return common::OB_INVALID_ID != seq_id_
+         && (!enable_new_seq_id_
+             || common::OB_INVALID_ID != sys_leader_epoch_);
+}
+
+int ObDDLSequenceID::init_by_rs_epoch(const int64_t rs_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 > rs_epoch)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(rs_epoch));
+  } else {
+    uint64_t pure_sequence_id = 0;
+    seq_id_ = combine_sequence_id(rs_epoch, pure_sequence_id);
+    sys_leader_epoch_ = common::OB_INVALID_ID;
+    enable_new_seq_id_ = false;
+    FLOG_INFO("init sequence id by rs_epoch", KR(ret), K(rs_epoch),
+              K(seq_id_), K(sys_leader_epoch_), K(enable_new_seq_id_));
+  }
+  return ret;
+}
+
+int ObDDLSequenceID::init_by_sys_leader_epoch(const int64_t sys_leader_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 > sys_leader_epoch)
+      || OB_UNLIKELY(common::OB_INVALID_ID == sys_leader_epoch)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(sys_leader_epoch));
+  } else {
+    seq_id_ = 0;
+    sys_leader_epoch_ = sys_leader_epoch;
+    enable_new_seq_id_ = true;
+    FLOG_INFO("init sequence id by sys leader epoch", KR(ret), K(sys_leader_epoch),
+              K(seq_id_), K(sys_leader_epoch_), K(enable_new_seq_id_));
+  }
+  return ret;
+}
+
+int ObDDLSequenceID::inc_seq_id()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(seq_id_), K(sys_leader_epoch_), K(enable_new_seq_id_));
+  } else if (OB_INVALID_ID == seq_id_ + 1) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("seq_id_ reach max, need restart/switch rs", KR(ret),
+             K(seq_id_), K(sys_leader_epoch_), K(enable_new_seq_id_));
+  } else if (enable_new_seq_id_) {
+    // increase seq_id_ as new logic
+    seq_id_++;
+    FLOG_INFO("inc seq_id with new logic", KR(ret), K(seq_id_), K(sys_leader_epoch_), K(enable_new_seq_id_));
+  } else {
+    // increase seq_id_ as old logic
+    uint64_t new_seq_id = seq_id_ + 1;
+    if (extract_rootservice_epoch(new_seq_id)
+          != extract_rootservice_epoch(seq_id_)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("sequence_id reach max, need restart/switch rs", K(ret), K(new_seq_id), K(seq_id_));
+    } else {
+      seq_id_ = new_seq_id;
+      FLOG_INFO("inc seq_id with old logic", KR(ret), K(seq_id_), K(sys_leader_epoch_), K(enable_new_seq_id_));
+    }
+  }
+  return ret;
+}
+
+ObDDLSequenceID::CompareResult ObDDLSequenceID::compare_to_other_id(const ObDDLSequenceID &other) const
+{
+  CompareResult result = CompareResult::NOT_COMPARABLE;
+  if (OB_UNLIKELY(!is_valid())
+      || OB_UNLIKELY(!other.is_valid())) {
+    result = CompareResult::NOT_COMPARABLE;
+  } else if (enable_new_seq_id_ != other.enable_new_seq_id_) {
+    // in different mode, not_comparable
+    result = CompareResult::NOT_COMPARABLE;
+    // compare sys_leader_epoch first
+  } else if (enable_new_seq_id_ && sys_leader_epoch_ < other.sys_leader_epoch_) {
+    result = CompareResult::LESS_THAN;
+  } else if (enable_new_seq_id_ && sys_leader_epoch_ > other.sys_leader_epoch_) {
+    result = CompareResult::MORE_OVER;
+    // sys_leader_epoch is equal or sequence_id in old mode, compare seq_id_ next
+  } else if (seq_id_ < other.seq_id_) {
+    result = CompareResult::LESS_THAN;
+  } else if (seq_id_ == other.seq_id_) {
+    result = CompareResult::EQUAL_TO;
+  } else if (seq_id_ == other.seq_id_ + 1) {
+    result = CompareResult::ONE_OVER;
+  } else {
+    result = CompareResult::MORE_OVER;
+  }
+  return result;
+}
+
 OB_SERIALIZE_MEMBER(ObDDLSequenceID, seq_id_, sys_leader_epoch_, enable_new_seq_id_);
 
 ObRefreshSchemaInfo::ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other)
@@ -697,9 +811,12 @@ ObRefreshSchemaInfo::ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other)
 int ObRefreshSchemaInfo::assign(const ObRefreshSchemaInfo &other)
 {
   int ret = OB_SUCCESS;
-  tenant_id_ = other.tenant_id_;
-  schema_version_ = other.schema_version_;
-  sequence_id_ = other.sequence_id_;
+  if (OB_FAIL(new_sequence_id_.assign(other.new_sequence_id_))) {
+    LOG_WARN("fail to assign sequence_id", KR(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    schema_version_ = other.schema_version_;
+  }
   return ret;
 }
 
@@ -707,7 +824,7 @@ void ObRefreshSchemaInfo::reset()
 {
   tenant_id_ = common::OB_INVALID_TENANT_ID;
   schema_version_ = common::OB_INVALID_VERSION;
-  sequence_id_ = common::OB_INVALID_ID;
+  new_sequence_id_.reset();
 }
 
 // In schema split mode:
@@ -719,8 +836,19 @@ bool ObRefreshSchemaInfo::is_valid() const
   return true;
 }
 
+// In 4.3.5.2 we add a new member(new_sequence_id_) of type ObDDLSequenceID for ObRefreshSchemaInfo.
+// ObDDLSequenceID supports both old logic and new logic to manage seq_id_.
+// A bool membership in ObDDLSequenceID indicates which logic to use.
+// For compatible reasons, we serialize/deserialize old sequence_id_ with seq_id_ in ObDDLSequenceID.
+// We ensure that new_sequence_id_ must be valid with new logic after cluster version
+// promoted to 4.2.5.2 in ObDDLServiceLauncher.
+// Based on this reason, we can ensure:
+//   1. Observer with new version could parse new_sequence_id_ after binary replaced,
+//      new_sequence_id_ must be valid with old OR new logic.
+//   2. Observer with old version could parse seq_id_ before binary replaced,
+//      sed_id_ in new_sequence_id_ must be valid with old logic
 OB_SERIALIZE_MEMBER(ObRefreshSchemaInfo, // FARM COMPAT WHITELIST
-                    tenant_id_, schema_version_, sequence_id_, new_sequence_id_);
+                    tenant_id_, schema_version_, new_sequence_id_.seq_id_, new_sequence_id_);
 
 OB_SERIALIZE_MEMBER(ObSchemaObjVersion, object_id_, version_, object_type_);
 

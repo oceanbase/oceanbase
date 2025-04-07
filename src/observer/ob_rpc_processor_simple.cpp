@@ -49,6 +49,7 @@
 #include "rootserver/ob_split_partition_helper.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "storage/tablelock/ob_table_lock_live_detector.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
@@ -4149,6 +4150,26 @@ int ObNotifySharedStorageInfoP::process()
     }
   }
   result_.set_ret(ret);
+  return ret;
+}
+
+int ObRpcBroadcastConfigVersionP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid()) || OB_ISNULL(GCTX.config_mgr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg), KP(GCTX.config_mgr_));
+  // refresh tenant config version in local OMT
+  } else if (0 < arg_.get_tenant_config_version_map().count()
+             && OB_FAIL(OTC_MGR.got_versions(arg_.get_tenant_config_version_map()))) {
+    LOG_WARN("fail to refresh tenant config version map", KR(ret), K_(arg));
+  // refresh global config version in global config manager
+  } else if (0 < arg_.get_global_config_version()
+             && OB_FAIL(GCTX.config_mgr_->got_version(arg_.get_global_config_version()))) {
+    LOG_WARN("fail to refresh global config version", KR(ret), K_(arg));
+  } else {
+    LOG_INFO("success to refresh config version", K_(arg));
+  }
   return ret;
 }
 

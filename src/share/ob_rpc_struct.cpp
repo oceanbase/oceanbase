@@ -13408,6 +13408,52 @@ int ObNotifySharedStorageInfoResult::get_ret() const
   return ret_;
 }
 
+OB_SERIALIZE_MEMBER(ObBroadcastConfigVersionArg,
+                    global_config_version_,
+                    tenant_config_version_map_);
+int ObBroadcastConfigVersionArg::assign(
+    const ObBroadcastConfigVersionArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tenant_config_version_map_.assign(that.tenant_config_version_map_))) {
+    LOG_WARN("fail to assign tenant config version map", KR(ret), K(that));
+  } else {
+    global_config_version_ = that.global_config_version_;
+  }
+  return ret;
+}
+
+int ObBroadcastConfigVersionArg::init_by_global_config_version(
+    const int64_t global_config_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 >= global_config_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(global_config_version));
+  } else {
+    global_config_version_ = global_config_version;
+  }
+  return ret;
+}
+
+int ObBroadcastConfigVersionArg::init_by_tenant_config_version_map(
+    const ObIArray<std::pair<uint64_t, int64_t>> &tenant_config_version_map)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 >= tenant_config_version_map.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_config_version_map));
+  } else if (OB_FAIL(tenant_config_version_map_.assign(tenant_config_version_map))) {
+    LOG_WARN("fail to assign tenant config version map", KR(ret), K(tenant_config_version_map));
+  }
+  return ret;
+}
+
+bool ObBroadcastConfigVersionArg::is_valid() const
+{
+  return 0 < global_config_version_ || 0 < tenant_config_version_map_.count();
+}
+
 OB_SERIALIZE_MEMBER(ObNotifyLSRestoreFinishArg, tenant_id_, ls_id_);
 bool ObNotifyLSRestoreFinishArg::is_valid() const
 {

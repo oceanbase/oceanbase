@@ -599,9 +599,20 @@ public:
 };
 typedef ObSchemaVersionGenerator TSISchemaVersionGenerator;
 
+struct ObRefreshSchemaInfo;
 class ObDDLSequenceID
 {
   OB_UNIS_VERSION(1);
+public:
+  friend class ObRefreshSchemaInfo;
+public:
+  enum CompareResult {
+    NOT_COMPARABLE = 0,
+    LESS_THAN,
+    EQUAL_TO,
+    ONE_OVER,
+    MORE_OVER,
+  };
 public:
   ObDDLSequenceID()
     : seq_id_(common::OB_INVALID_ID),
@@ -609,12 +620,35 @@ public:
       enable_new_seq_id_(false)
   {}
   virtual ~ObDDLSequenceID() {}
-  // TODO@jingyu.cr: add functions here and remove sequence_id in ObRefreshSchemaInfo
+  int assign(const ObDDLSequenceID &other);
+  void reset();
+  bool is_valid() const;
+
+  int init_by_rs_epoch(const int64_t rs_epoch); // for compatible use only
+  int init_by_sys_leader_epoch(const int64_t sys_leader_epoch);
+  ObDDLSequenceID::CompareResult compare_to_other_id(const ObDDLSequenceID &other) const;
+  int inc_seq_id();
+
+  uint64_t get_seq_id() const { return seq_id_; }
+  int64_t get_sys_leader_epoch() const { return sys_leader_epoch_; }
+  bool enable_new_seq_id() const { return enable_new_seq_id_; }
 
   TO_STRING_KV(K_(seq_id), K_(sys_leader_epoch), K_(enable_new_seq_id));
 private:
   uint64_t seq_id_;
   int64_t sys_leader_epoch_;
+  // enable_new_seq_id_ is for compatible use
+  // 1. enable_new_seq_id_ = false means seq_id_ is init/inc/compare by old logic
+  //    seq_id_ remains format with old logic:
+  //    ----------------------------------------------------
+  //    |        24 bits           |         40 bits       |
+  //    ----------------------------------------------------
+  //    | rs_epoch(in core table)  |    pure_sequence_id   |
+  //    ----------------------------------------------------
+  //
+  // 2. enable_new_seq_id_ = true means seq_id_ is init/inc/compare by new logic
+  //    seq_id_ has the same effect with pure_sequence_id,
+  //    and sys_leader_epoch_ is setted to take effect with seq_id_
   bool enable_new_seq_id_;
 };
 
@@ -625,7 +659,6 @@ public:
   ObRefreshSchemaInfo()
     : schema_version_(common::OB_INVALID_VERSION),
       tenant_id_(common::OB_INVALID_TENANT_ID),
-      sequence_id_(common::OB_INVALID_ID),
       new_sequence_id_()
   {}
   ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other);
@@ -635,15 +668,14 @@ public:
   bool is_valid() const;
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
-  void set_sequence_id(const uint64_t sequence_id) { sequence_id_ = sequence_id; }
+  int set_sequence_id(const ObDDLSequenceID &new_sequence_id) { return new_sequence_id_.assign(new_sequence_id); }
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_schema_version() const { return schema_version_; }
-  uint64_t get_sequence_id() const { return sequence_id_; }
-  TO_STRING_KV(K_(schema_version), K_(tenant_id), K_(sequence_id), K_(new_sequence_id));
+  const ObDDLSequenceID &get_sequence_id() const { return new_sequence_id_; }
+  TO_STRING_KV(K_(schema_version), K_(tenant_id), K_(new_sequence_id));
 private:
   int64_t schema_version_;
   uint64_t tenant_id_;
-  uint64_t sequence_id_;
   ObDDLSequenceID new_sequence_id_;
 };
 

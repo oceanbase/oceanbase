@@ -206,6 +206,8 @@ namespace rootserver
   class ObTenantSnapshotScheduler;
   class ObCloneScheduler;
   class ObMViewMaintenanceService;
+  class ObDDLScheduler;
+  class ObDDLServiceLauncher;
 }
 namespace observer
 {
@@ -444,7 +446,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTableGroupCommitMgr*,                 \
       observer::ObTableQueryASyncMgr*,               \
       table::ObTableClientInfoMgr*,                  \
-      table::ObHTableRowkeyMgr*                      \
+      table::ObHTableRowkeyMgr*,                     \
+      rootserver::ObDDLServiceLauncher*,             \
+      rootserver::ObDDLScheduler*                   \
   )
 
 

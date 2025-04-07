@@ -1184,18 +1184,17 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     real_new_status = OB_SUCCESS != real_ret_code ? FAIL : real_new_status;
   }
   ObMySQLTransaction trans;
-  ObRootService *root_service = nullptr;
-  if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(DDL_SIM(dst_tenant_id_, task_id_, CHECK_TENANT_STANDBY_FAILED))) {
     LOG_WARN("ddl sim failure: check tenant standby failed", K(ret), K(dst_tenant_id_), K(task_id_));
-  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), dst_tenant_id_))) {
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(GCTX.sql_proxy_, dst_tenant_id_))) {
     if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
       need_retry_ = false;
       LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K_(task_id), K_(parent_task_id), K_(dst_tenant_id));
     }
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
     int64_t table_task_status = 0;
@@ -1251,7 +1250,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     }
 
     if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_) {
-      (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
+      (void)ObDDLTaskRecordOperator::kill_task_inner_sql(*GCTX.sql_proxy_,
           trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addrs_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
     }
@@ -1292,14 +1291,13 @@ int ObDDLTask::refresh_schema_version()
 int ObDDLTask::remove_task_record()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(root_service->get_sql_proxy(),
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_,
                                                             dst_tenant_id_,
                                                             task_id_))) {
     LOG_WARN("delete record failed", K(ret), K(dst_tenant_id_), K(task_id_));
@@ -1326,7 +1324,10 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
     error_message.affected_rows_ = affected_rows;
     const bool is_ddl_retry_task = is_drop_schema_block_concurrent_trans(task_type_);
     if (OB_SUCCESS != ret_code_) {
-      if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(dst_tenant_id_, task_id_, object_id_,
+      if (OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+      } else if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(dst_tenant_id_, task_id_, object_id_,
               *GCTX.sql_proxy_, error_message))) {
         LOG_WARN("load ddl user error failed", K(ret), K(dst_tenant_id_), K(task_id_), K(object_id_));
         if (OB_ITER_END == ret) {     // no single replica error message found, use ret_code_
@@ -1382,7 +1383,7 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDDLErrorMessageTableOperator::report_ddl_error_message(error_message, dst_tenant_id_, trace_id_, task_id_, parent_task_id_,
-          target_object_id_, schema_version_, -1/*object id*/, GCTX.self_addr(), GCTX.root_service_->get_sql_proxy()))) {
+          target_object_id_, schema_version_, -1/*object id*/, GCTX.self_addr(), *GCTX.sql_proxy_))) {
         LOG_WARN("report ddl error message failed", K(ret));
       }
     }
@@ -1421,14 +1422,10 @@ int ObDDLTask::wait_trans_end(
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *data_table_schema = nullptr;
   ObDDLTaskStatus new_status = PREPARE;
-  ObRootService *root_service = GCTX.root_service_;
   ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
@@ -1479,13 +1476,12 @@ int ObDDLTask::batch_release_snapshot(
   int ret = OB_SUCCESS;
   bool need_commit = false;
   ObMySQLTransaction trans;
-  ObRootService *root_service = GCTX.root_service_;
   SCN snapshot_scn;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 0;
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, BATCH_RELEASE_SNAPSHOT_FAILED))) {
     LOG_WARN("ddl sim failure: remove snapshot failed", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
@@ -1496,9 +1492,15 @@ int ObDDLTask::batch_release_snapshot(
     LOG_WARN("set timeout ctx failed", K(ret));
   } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
     LOG_WARN("set timeout failed", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_ddl_service().get_sql_proxy(), tenant_id_))) {
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret));
-  } else if (OB_FAIL(root_service->get_ddl_service().get_snapshot_mgr().batch_release_snapshot_in_trans(
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+  } else if (OB_UNLIKELY(!GCTX.root_service_->get_ddl_service().is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_snapshot_mgr().batch_release_snapshot_in_trans(
           trans, SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, tablet_ids))) {
     LOG_WARN("batch release snapshot failed", K(ret), K(tablet_ids));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(trans,
@@ -1557,16 +1559,15 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
   int ret = OB_SUCCESS;
   new_execution_id = DEFAULT_EXECUTION_ID;
   ObMySQLTransaction trans;
-  ObRootService *root_service = nullptr;
   int64_t task_status = 0;
   int64_t execution_id = 0;
   new_execution_id = 0;
   int64_t ret_code = OB_SUCCESS;
   int64_t unused_snapshot_ver = OB_INVALID_VERSION;
-  if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code, unused_snapshot_ver))) {
@@ -2507,15 +2508,14 @@ int ObDDLWaitColumnChecksumCtx::send_calc_rpc(int64_t &send_succ_count)
 {
   int ret = OB_SUCCESS;
   send_succ_count = 0;
-  ObRootService *root_service = nullptr;
   share::ObLocationService *location_service = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_ISNULL(root_service = GCTX.root_service_)
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)
       || OB_ISNULL(location_service = GCTX.location_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service or location_cache is null", K(ret), KP(root_service), KP(location_service));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(GCTX.srv_rpc_proxy_), KP(location_service));
   } else {
     ObLSID ls_id;
     int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
@@ -2562,7 +2562,7 @@ int ObDDLWaitColumnChecksumCtx::send_calc_rpc(int64_t &send_succ_count)
         const SendItem &send_item = send_array.at(i);
         if (send_item.leader_addr_ != last_addr) {
           if (arg.calc_items_.count() > 0) {
-            if (OB_FAIL(send_batch_calc_rpc(root_service->get_rpc_proxy(), last_addr,
+            if (OB_FAIL(send_batch_calc_rpc(*GCTX.srv_rpc_proxy_, last_addr,
                     arg, res, send_array, group_start_idx, i, lock_, send_succ_count))) {
               LOG_WARN("send batch calc rpc failed", K(ret));
             }
@@ -2585,7 +2585,7 @@ int ObDDLWaitColumnChecksumCtx::send_calc_rpc(int64_t &send_succ_count)
         }
       }
       if (OB_SUCC(ret) && arg.calc_items_.count() > 0) {
-        if (OB_FAIL(send_batch_calc_rpc(root_service->get_rpc_proxy(), last_addr,
+        if (OB_FAIL(send_batch_calc_rpc(*GCTX.srv_rpc_proxy_, last_addr,
                 arg, res, send_array, group_start_idx, send_array.count(), lock_, send_succ_count))) {
           LOG_WARN("send batch calc rpc failed", K(ret));
         }
@@ -2867,7 +2867,10 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
   if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == parent_task_id || OB_INVALID_ID == target_table_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(parent_task_id), K(target_table_id));
-  } else if (OB_FAIL(get_ddl_task_record(tenant_id, parent_task_id, GCTX.root_service_->get_sql_proxy(), allocator, task_record))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(get_ddl_task_record(tenant_id, parent_task_id, *GCTX.sql_proxy_, allocator, task_record))) {
     LOG_WARN("fail to get ddl task record", K(ret), K(parent_task_id));
   } else {
     if (task_record.ddl_type_ == DDL_CREATE_VEC_INDEX) {

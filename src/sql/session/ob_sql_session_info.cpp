@@ -23,6 +23,7 @@
 #include "pl/ob_pl_profiler.h"
 #endif
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "ob_sess_info_verify.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #ifdef OB_BUILD_AUDIT_SECURITY

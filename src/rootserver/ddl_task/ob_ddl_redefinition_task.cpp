@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_ddl_redefinition_task.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_sim_point.h"
@@ -210,8 +212,8 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       }
     }
   }
-  if (OB_SUCCESS != (tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, unused_addr, task_key, snapshot_version_, execution_id_, ret, info))) {
-    LOG_WARN("fail to finish sstable complement", K(ret), "ddl_event_info", ObDDLEventInfo());
+  if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::on_sstable_complement_job_reply(unused_tablet_id, unused_addr, task_key, snapshot_version_, execution_id_, ret, info))) {
+    LOG_WARN("fail to finish sstable complement", KR(tmp_ret), "ddl_event_info", ObDDLEventInfo());
   }
   add_event_info(ret, "ddl redefinition sstable build task finish");
   return ret;
@@ -404,7 +406,6 @@ int ObDDLRedefinitionTask::prepare_tablets_for_major_refresh_mv_(common::ObIArra
 int ObDDLRedefinitionTask::release_snapshot(const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   ObSEArray<ObTabletID, 1> tablet_ids;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *data_table_schema = nullptr;
@@ -413,9 +414,6 @@ int ObDDLRedefinitionTask::release_snapshot(const int64_t snapshot_version)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_RELEASE_SNAPSHOT_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
@@ -772,15 +770,15 @@ int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum(const int64_t
     } else if (OB_UNLIKELY(OB_INVALID_ID == target_object_id_ || !dest_table_column_checksums.created())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret),  "dest_table_id", target_object_id_, K(dest_table_column_checksums.created()));
-    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(dst_tenant_id_, execution_id, object_id_, task_id_, false/*replica build*/, data_table_column_checksums, GCTX.root_service_->get_sql_proxy()))) {
-      LOG_WARN("fail to get table column checksum", K(ret), K(dst_tenant_id_), K(execution_id), "table_id", object_id_, K_(task_id), K(data_table_column_checksums.created()), KP(GCTX.root_service_));
-    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(dst_tenant_id_, execution_id, target_object_id_, task_id_, false /*replica build*/, dest_table_column_checksums, GCTX.root_service_->get_sql_proxy()))) {
+    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(dst_tenant_id_, execution_id, object_id_, task_id_, false/*replica build*/, data_table_column_checksums, *GCTX.sql_proxy_))) {
+      LOG_WARN("fail to get table column checksum", K(ret), K(dst_tenant_id_), K(execution_id), "table_id", object_id_, K_(task_id), K(data_table_column_checksums.created()), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(dst_tenant_id_, execution_id, target_object_id_, task_id_, false /*replica build*/, dest_table_column_checksums, *GCTX.sql_proxy_))) {
       /**
        * For DDL_RESTORE_TABLE, dst tenant id is differen to source tenant id.
        * Meanwhile, the original tenant is a backup one, can not support write operation,
        * and its' checksum is recorded into to the dest tenant.
       */
-      LOG_WARN("fail to get table column checksum", K(ret), K(dst_tenant_id_), K(execution_id), "table_id", target_object_id_, K_(task_id), K(dest_table_column_checksums.created()), KP(GCTX.root_service_));
+      LOG_WARN("fail to get table column checksum", K(ret), K(dst_tenant_id_), K(execution_id), "table_id", target_object_id_, K_(task_id), K(dest_table_column_checksums.created()), KP(GCTX.sql_proxy_));
     } else {
       uint64_t dest_column_id = 0;
       for (hash::ObHashMap<int64_t, int64_t>::const_iterator iter = data_table_column_checksums.begin();
@@ -888,15 +886,15 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
                                      &alter_table_arg,
                                      task_id_);
           param.sub_task_trace_id_ = sub_task_trace_id_;
-          if (OB_FAIL(root_service->get_ddl_task_scheduler().create_ddl_task(param,
-                                                                             *GCTX.sql_proxy_,
-                                                                             task_record))) {
+          if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param,
+                                                             *GCTX.sql_proxy_,
+                                                             task_record))) {
             if (OB_ENTRY_EXIST == ret) {
               ret = OB_SUCCESS;
             } else {
               LOG_WARN("submit ddl task failed", K(ret));
             }
-          } else if (OB_FAIL(root_service->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+          } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
           }
           if (OB_SUCC(ret)) {
@@ -1020,13 +1018,13 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
           param.sub_task_trace_id_ = sub_task_trace_id_;
           if (OB_FAIL(alter_table_arg.foreign_key_arg_list_.push_back(fk_arg))) {
             LOG_WARN("push back foreign key arg failed", K(ret));
-          } else if (OB_FAIL(root_service->get_ddl_task_scheduler().create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
+          } else if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
             if (OB_ENTRY_EXIST == ret) {
               ret = OB_SUCCESS;
             } else {
               LOG_WARN("submit ddl task failed", K(ret));
             }
-          } else if (OB_FAIL(root_service->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+          } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
           }
           if (OB_SUCC(ret)) {
@@ -1347,13 +1345,12 @@ int ObDDLRedefinitionTask::finish()
   alter_table_arg_.hidden_table_id_ = target_object_id_;
   alter_table_arg_.task_id_ = task_id_;
   alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_TASK_FINISH_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (snapshot_version_ > 0 && OB_FAIL(ObDDLUtil::release_snapshot(this, object_id_, target_object_id_, snapshot_version_))) {
@@ -1368,7 +1365,7 @@ int ObDDLRedefinitionTask::finish()
     } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, data_table_schema->get_all_part_num()), rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout failed", K(ret));
     } else if (data_table_schema->get_association_table_id() != OB_INVALID_ID &&
-        OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+        OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
                   execute_ddl_task(alter_table_arg_, objs))) {
       LOG_WARN("cleanup garbage failed", K(ret));
     }
@@ -1464,18 +1461,14 @@ int ObDDLRedefinitionTask::notify_update_autoinc_finish(const uint64_t autoinc_v
 int ObDDLRedefinitionTask::check_health()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_TASK_CHECK_HEALTH_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-  } else if (!root_service->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, do not need retry", K(ret), K(object_id_), K(target_object_id_));
+    LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
@@ -1629,13 +1622,12 @@ int ObDDLRedefinitionTask::sync_stats_info_in_same_tenant(common::ObMySQLTransac
                                                           const ObTableSchema &new_table_schema)
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   bool need_sync_history = check_need_sync_stats_history();
 
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
     LOG_WARN("fail to start transaction", K(ret));
   } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, new_table_schema, need_sync_history))) {
     LOG_WARN("fail to sync table level stats", K(ret));
@@ -1665,15 +1657,14 @@ int ObDDLRedefinitionTask::sync_stats_info_accross_tenant(common::ObMySQLTransac
   ObSEArray<ObOptTableStat, 4> src_part_stats;
   ObSEArray<ObOptKeyColumnStat, 4> src_column_stats;
   common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
-  ObRootService *root_service = GCTX.root_service_;
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(get_src_part_stats(data_table_schema, src_part_stats))) {
     LOG_WARN("fail to get src part stats", K(ret));
   } else if (OB_FAIL(get_src_column_stats(data_table_schema, allocator, src_column_stats))) {
     LOG_WARN("fail to get src column stats", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
     LOG_WARN("fail to start transaction", K(ret));
   } else if (OB_FAIL(sync_part_stats_info_accross_tenant(trans,
                                                          data_table_schema,

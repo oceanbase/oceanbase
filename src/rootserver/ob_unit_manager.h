@@ -188,9 +188,6 @@ public:
     const uint64_t tenant_id,
     int64_t &job_id,
     common::ObISQLClient &sql_proxy);
-  virtual int check_locality_for_logonly_unit(const share::schema::ObTenantSchema &tenant_schema,
-                                              const common::ObIArray<share::ObResourcePoolName> &pool_names,
-                                              bool &is_permitted);
   virtual int grant_pools(
       common::ObMySQLTransaction &trans,
       common::ObIArray<uint64_t> &new_ug_id_array,
@@ -264,6 +261,10 @@ public:
       common::hash::ObHashSet<uint64_t> &tenant_id_set) const;
   virtual int check_tenant_on_server(const uint64_t tenant_id,
       const common::ObAddr &server, bool &on_server) const;
+  int get_tenant_unit_servers_with_lock(
+      const uint64_t tenant_id,
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &server_array) const;
   int get_tenant_unit_servers(
       const uint64_t tenant_id,
       const common::ObZone &zone,
@@ -397,10 +398,6 @@ private:
                        const bool is_manual = false);
   int get_zone_units(const common::ObArray<share::ObResourcePool *> &pools,
                      common::ObArray<ZoneUnit> &zone_units) const;
-  int get_tenant_unit_servers_(
-      const uint64_t tenant_id,
-      const common::ObZone &zone,
-      common::ObIArray<common::ObAddr> &server_array) const;
   virtual int end_migrate_unit(const uint64_t unit_id, const EndMigrateOp end_migrate_op = COMMIT);
   int get_excluded_servers(
       const share::ObUnit &unit,

@@ -12,7 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_modify_autoinc_task.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_lock.h"
 
@@ -115,8 +117,8 @@ int ObUpdateAutoincSequenceTask::process()
         }
       }
     }
-    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().notify_update_autoinc_end(task_key, max_value + 1, ret))) {
-      LOG_WARN("fail to finish update autoinc task", K(ret), K(max_value));
+    if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::notify_update_autoinc_end(task_key, max_value + 1, ret))) {
+      LOG_WARN("fail to finish update autoinc task", KR(tmp_ret), K(max_value));
     }
     LOG_INFO("execute finish update autoinc task finish", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_key), K(data_table_id_), K(column_id_), K(max_value));
   }
@@ -294,16 +296,15 @@ int ObModifyAutoincTask::process()
 int ObModifyAutoincTask::unlock_table()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   ObMySQLTransaction trans;
   ObTableLockOwnerID owner_id;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                  task_id_))) {
@@ -463,13 +464,12 @@ int ObModifyAutoincTask::set_schema_available()
   int ret = OB_SUCCESS;
   int64_t tablet_count = 0;
   int64_t rpc_timeout = 0;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_TAKE_EFFECT_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
@@ -478,7 +478,7 @@ int ObModifyAutoincTask::set_schema_available()
     alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
       LOG_WARN("get rpc timeout failed", K(ret));
-    } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
         execute_ddl_task(alter_table_arg_, unused_ids))) {
       LOG_WARN("alter table failed", K(ret));
     }
@@ -491,13 +491,12 @@ int ObModifyAutoincTask::rollback_schema()
   int ret = OB_SUCCESS;
   int64_t tablet_count = 0;
   int64_t rpc_timeout = 0;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
   } else {
     ObArenaAllocator allocator;
     SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
@@ -510,7 +509,7 @@ int ObModifyAutoincTask::rollback_schema()
         alter_table_arg.alter_table_schema_.reset_column_info();
         if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
           LOG_WARN("get rpc timeout failed", K(ret));
-        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+        } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             execute_ddl_task(alter_table_arg, unused_ids))) {
           LOG_WARN("alter table failed", K(ret));
         }
@@ -589,23 +588,22 @@ int ObModifyAutoincTask::notify_update_autoinc_finish(const uint64_t autoinc_val
 int ObModifyAutoincTask::check_health()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
-  } else if (!root_service->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, do not need retry", K(ret), K(object_id_), K(target_object_id_));
+    LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else {
-    ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
+    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *index_schema = nullptr;
     bool is_source_table_exist = false;

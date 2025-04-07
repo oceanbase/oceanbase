@@ -16,6 +16,7 @@
 #include "share/ob_ddl_sim_point.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "rootserver/ddl_task/ob_table_redefinition_task.h" // for ObTableRedefinitionTask
 
 namespace oceanbase
 {

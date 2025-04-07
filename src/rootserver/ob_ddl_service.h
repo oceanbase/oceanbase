@@ -115,9 +115,6 @@ public:
            ObSnapshotInfoManager &snapshot_mgr,
            ObTenantDDLService &tenant_ddl_service);
   bool is_inited() const { return inited_; }
-  void stop() { stopped_ = true; }
-  void restart() { stopped_ = false; }
-  bool is_stopped() { return stopped_; }
   // these functions should be called after ddl_service has been inited
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
   common::ObMySQLProxy &get_sql_proxy() { return *sql_proxy_; }
@@ -2593,7 +2590,6 @@ private:
 
 private:
   bool inited_;
-  volatile bool stopped_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   obrpc::ObCommonRpcProxy *common_rpc_;
   common::ObMySQLProxy *sql_proxy_;

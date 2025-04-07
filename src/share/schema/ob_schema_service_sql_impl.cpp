@@ -15,6 +15,8 @@
 #include "share/ob_global_stat_proxy.h"
 // TODO, move basic structs to ob_schema_struct.h
 #include "share/schema/ob_schema_retrieve_utils.h"
+#include "src/rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
+#include "src/rootserver/ob_root_service.h" // for ObRootService
 #include "observer/ob_sql_client_decorator.h"
 
 #define COMMON_SQL              "SELECT * FROM %s"
@@ -240,7 +242,6 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       audit_service_(*this),
       rw_lock_(common::ObLatchIds::SCHEMA_REFRESH_INFO_LOCK),
       last_operation_tenant_id_(OB_INVALID_TENANT_ID),
-      sequence_id_(OB_INVALID_ID),
       schema_info_(),
       sys_variable_service_(*this),
       dblink_service_(*this),
@@ -252,7 +253,8 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       schema_service_(NULL),
       object_ids_mutex_(),
       normal_tablet_ids_mutex_(),
-      extended_tablet_ids_mutex_()
+      extended_tablet_ids_mutex_(),
+      sequence_id_()
 {
 }
 
@@ -8745,17 +8747,33 @@ int ObSchemaServiceSQLImpl::construct_schema_version_history(
   return ret;
 }
 
-int ObSchemaServiceSQLImpl::init_sequence_id(const int64_t rootservice_epoch)
+int ObSchemaServiceSQLImpl::init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch)
 {
   int ret = OB_SUCCESS;
-  if (rootservice_epoch < 0) {
+  if (OB_UNLIKELY(rootservice_epoch < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("rootservice_epoch is invalid", K(ret), K(rootservice_epoch));
+    LOG_WARN("rootservice_epoch is invalid", KR(ret), K(rootservice_epoch));
   } else {
     SpinWLockGuard guard(rw_lock_);
-    uint64_t pure_sequence_id = 0;
-    sequence_id_ = combine_sequence_id(rootservice_epoch, pure_sequence_id);
-    LOG_INFO("init sequence id", K(ret), K(schema_info_), K(sequence_id_));
+    if (OB_FAIL(sequence_id_.init_by_rs_epoch(rootservice_epoch))) {
+      LOG_WARN("fail to init sequence_id by rs epoch", KR(ret), K(rootservice_epoch));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::init_sequence_id_by_sys_leader_epoch(const int64_t sys_leader_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(sys_leader_epoch < 0)
+      || OB_UNLIKELY(OB_INVALID_ID == sys_leader_epoch)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sys_leader_epoch is invalid", KR(ret), K(sys_leader_epoch));
+  } else {
+    SpinWLockGuard guard(rw_lock_);
+    if (OB_FAIL(sequence_id_.init_by_sys_leader_epoch(sys_leader_epoch))) {
+      LOG_WARN("fail to init sequence_id by sys leader epoch", KR(ret), K(sys_leader_epoch));
+    }
   }
   return ret;
 }
@@ -8764,21 +8782,7 @@ int ObSchemaServiceSQLImpl::inc_sequence_id()
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(rw_lock_);
-  if (OB_INVALID_ID == sequence_id_ || OB_INVALID_ID == sequence_id_ + 1) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sequence_id", K(ret), K(sequence_id_));
-  } else {
-    uint64_t new_sequence_id = sequence_id_ + 1;
-    if (extract_rootservice_epoch(new_sequence_id)
-        != extract_rootservice_epoch(sequence_id_)) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("sequence_id reach max, need restart/switch rs", K(ret), K(new_sequence_id), K(sequence_id_));
-    } else {
-      LOG_INFO("inc sequence id", K(ret), K(sequence_id_), K(new_sequence_id));
-      sequence_id_ = new_sequence_id;
-    }
-  }
-  return ret;
+  return sequence_id_.inc_seq_id();
 }
 
 int ObSchemaServiceSQLImpl::set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info)

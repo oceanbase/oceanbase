@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
@@ -694,8 +695,8 @@ int ObSplitPartitionHelper::create_ddl_task_(
                                &split_arg,
                                0/*parent_task_id*/,
                                task_id);
-    if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
-      LOG_WARN("submit ddl task failed", K(ret));
+    if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
+      LOG_WARN("submit ddl task failed", KR(ret));
     }
     LOG_TRACE("create ddl task for spliting partition", K(ret), K(param));
   }

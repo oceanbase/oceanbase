@@ -17,6 +17,7 @@
 #include "ob_unit_manager.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/ob_tenant_memstore_info_operator.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h"  // for ObSysDDLServiceUtil
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "rootserver/ob_heartbeat_service.h"
@@ -3486,58 +3487,6 @@ int ObUnitManager::check_server_enough(const uint64_t tenant_id,
   return ret;
 }
 
-//The F/L scheme has new restrictions.
-//If the logonly replica exists in the locality before adding the Logonly pool, the change is not allowed
-int ObUnitManager::check_locality_for_logonly_unit(const share::schema::ObTenantSchema &tenant_schema,
-                                                   const ObIArray<ObResourcePoolName> &pool_names,
-                                                   bool &is_permitted)
-{
-  int ret = OB_SUCCESS;
-  is_permitted = true;
-  ObArray<ObZone> zone_with_logonly_unit;
-  ObArray<share::ObZoneReplicaNumSet> zone_locality;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else if (pool_names.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(pool_names), K(ret));
-  } else {
-    FOREACH_CNT_X(pool_name, pool_names, OB_SUCCESS == ret) {
-      share::ObResourcePool *pool = NULL;
-      if (OB_FAIL(inner_get_resource_pool_by_name(*pool_name, pool))) {
-        LOG_WARN("get resource pool by name failed", "pool_name", *pool_name, K(ret));
-      } else if (NULL == pool) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool is null", KP(pool), K(ret));
-      } else if (REPLICA_TYPE_LOGONLY != pool->replica_type_) {
-        //nothing todo
-      } else {
-        for (int64_t i = 0; i < pool->zone_list_.count() && OB_SUCC(ret); i++) {
-          if (OB_FAIL(zone_with_logonly_unit.push_back(pool->zone_list_.at(i)))) {
-            LOG_WARN("fail to push back", K(ret));
-          }
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tenant_schema.get_zone_replica_attr_array(zone_locality))) {
-    LOG_WARN("fail to get zone replica attr array", K(ret));
-  } else {
-    for (int64_t i = 0; i < zone_locality.count() && OB_SUCC(ret); i++) {
-      if ((zone_locality.at(i).replica_attr_set_.get_logonly_replica_num() == 1
-           || zone_locality.at(i).replica_attr_set_.get_encryption_logonly_replica_num() == 1)
-          && has_exist_in_array(zone_with_logonly_unit, zone_locality.at(i).zone_)) {
-        is_permitted = false;
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("logonly replica already exist before logonly pool create", K(ret), K(zone_locality),
-                 K(zone_with_logonly_unit));
-      }
-    }
-  }
-  return ret;
-}
-
 /* when expand zone resource for tenant this func is invoked,
  * we need to check whether the tenant units are in deleting.
  * if any tenant unit is in deleting,
@@ -5185,10 +5134,9 @@ int ObUnitManager::check_dest_data_version_is_loaded_(
  if (OB_FAIL(check_inner_stat_())) {
    LOG_WARN("check_inner_stat failed", KR(ret), K(inited_), K(loaded_));
  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-            || !addr.is_valid()
-            || OB_ISNULL(proxy_))) {
+            || !addr.is_valid())) {
    ret = OB_INVALID_ARGUMENT;
-   LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(addr), KP_(proxy));
+   LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(addr));
  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFTAULT_TIMEOUT_TS))) {
    LOG_WARN("fail to set default timeout ctx", KR(ret));
  } else if (OB_UNLIKELY(!addr.ip_to_string(ip_buf, sizeof(ip_buf)))) {
@@ -5214,7 +5162,10 @@ int ObUnitManager::check_dest_data_version_is_loaded_(
      } else {
        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
          sqlclient::ObMySQLResult *result = NULL;
-         if (OB_FAIL(proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+         if (OB_ISNULL(GCTX.sql_proxy_)) {
+           ret = OB_INVALID_ARGUMENT;
+           LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+         } else if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
            LOG_WARN("fail to read by sql", KR(ret), K(sql));
          } else if (OB_ISNULL(result = res.get_result())) {
            ret = OB_ERR_UNEXPECTED;
@@ -5379,20 +5330,20 @@ int ObUnitManager::rollback_persistent_units_(
   return ret;
 }
 
-int ObUnitManager::get_tenant_unit_servers(
+int ObUnitManager::get_tenant_unit_servers_with_lock(
     const uint64_t tenant_id,
     const common::ObZone &zone,
     common::ObIArray<common::ObAddr> &server_array) const
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
-  if (OB_FAIL(get_tenant_unit_servers_(tenant_id, zone, server_array))) {
-    LOG_WARN("fail to get_tenant_unit_servers_", KR(ret), K(tenant_id), K(zone));
+  if (OB_FAIL(get_tenant_unit_servers(tenant_id, zone, server_array))) {
+    LOG_WARN("fail to get_tenant_unit_servers", KR(ret), K(tenant_id), K(zone));
   }
   return ret;
 }
 
-int ObUnitManager::get_tenant_unit_servers_(
+int ObUnitManager::get_tenant_unit_servers(
     const uint64_t tenant_id,
     const common::ObZone &zone,
     common::ObIArray<common::ObAddr> &server_array) const
@@ -5738,14 +5689,14 @@ int ObUnitManager::get_excluded_servers(const uint64_t resource_pool_id,
     }
   }
   // get all tenant resource pool related servers on target zone
-  else if (OB_FAIL(get_tenant_unit_servers_(tenant_id, zone, excluded_servers))) {
+  else if (OB_FAIL(get_tenant_unit_servers(tenant_id, zone, excluded_servers))) {
     LOG_WARN("get tennat unit server fail", KR(ret), K(tenant_id), K(zone));
   }
 
   if (OB_SUCC(ret) && GCONF.enable_sys_unit_standalone) {
     // When the system tenant is deployed independently,
     // the server where the unit of the system tenant is located is also required as the executed servers
-    if (OB_FAIL(get_tenant_unit_servers_(OB_SYS_TENANT_ID, zone, sys_standalone_servers))) {
+    if (OB_FAIL(get_tenant_unit_servers(OB_SYS_TENANT_ID, zone, sys_standalone_servers))) {
       LOG_WARN("fail to get tenant unit servers", KR(ret), K(zone));
     } else if (OB_FAIL(append(excluded_servers, sys_standalone_servers))) {
       LOG_WARN("fail to append other excluded servers", K(ret));
@@ -11521,9 +11472,12 @@ int ObUnitManager::fetch_new_unit_group_id(uint64_t &unit_group_id)
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     uint64_t combine_id = OB_INVALID_ID;
-    ObMaxIdFetcher id_fetcher(*proxy_);
+    ObMaxIdFetcher id_fetcher(*GCTX.sql_proxy_);
     if (OB_FAIL(id_fetcher.fetch_new_max_id(OB_SYS_TENANT_ID,
         OB_MAX_USED_UNIT_GROUP_ID_TYPE, combine_id))) {
       LOG_WARN("fetch_new_max_id failed", "id_type", OB_MAX_USED_UNIT_ID_TYPE, K(ret));

@@ -16,6 +16,8 @@
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_ddl_sim_point.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "share/schema/ob_mlog_info.h"
 
@@ -197,7 +199,7 @@ int ObIndexSSTableBuildTask::process()
   }
   ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
   ObDDLTaskInfo info;
-  int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
+  int tmp_ret = ObSysDDLSchedulerUtil::on_sstable_complement_job_reply(
       unused_tablet_id, unused_addr, task_key, snapshot_version_, execution_id_, ret, addition_info_);
   if (OB_SUCCESS != tmp_ret) {
     LOG_WARN("report build finish failed", K(ret), K(tmp_ret));
@@ -371,9 +373,9 @@ int ObIndexBuildTask::init(
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("root_service is null", K(ret), KP(root_service_));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service", K(ret));
+    LOG_WARN("ddl service not started", KR(ret));
   } else if (OB_UNLIKELY(
         !(data_table_schema != nullptr
           && OB_INVALID_ID != tenant_id
@@ -465,9 +467,9 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("root_service is null", KR(ret), KP(root_service_));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service", KR(ret));
+    LOG_WARN("ddl service not started", KR(ret));
   } else if (!task_record.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(task_record));
@@ -562,16 +564,19 @@ int ObIndexBuildTask::check_health()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, not need retry", K(ret), K(object_id_), K(index_table_id_));
-    need_retry_ = false; // only stop run the task, need not clean up task context
+    LOG_WARN("ddl service not started", KR(ret));
+    need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else {
-    ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
+    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *index_schema = nullptr;
     bool is_data_table_exist = false;
@@ -677,7 +682,10 @@ int ObIndexBuildTask::wait_trans_end()
   // persistent snapshot_version into inner table and hold snapshot of data_table and index table
   if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
     ObMySQLTransaction trans;
-    if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(trans,
                                                                  tenant_id_,
@@ -737,7 +745,6 @@ int ObIndexBuildTask::hold_snapshot(
   } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot))) {
     LOG_WARN("failed to convert", K(snapshot), K(ret));
   } else {
-    ObDDLService &ddl_service = root_service_->get_ddl_service();
     ObSEArray<ObTabletID, 2> tablet_ids;
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *data_table_schema = nullptr;
@@ -765,7 +772,13 @@ int ObIndexBuildTask::hold_snapshot(
     } else if (need_acquire_lob && data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get data lob piece table snapshot", K(ret));
-    } else if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
+    } else if (OB_ISNULL(GCTX.root_service_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+    } else if (OB_UNLIKELY(!GCTX.root_service_->get_ddl_service().is_inited())) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", KR(ret));
+    } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_snapshot_mgr().batch_acquire_snapshot(
             trans, SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, nullptr, tablet_ids))) {
       LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
     }
@@ -886,6 +899,9 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
     LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_SEND_BUILD_REPLICA_REQUEST_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (OB_ISNULL(root_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(root_service_));
   } else {
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, create_index_arg_.inner_sql_exec_addr_))) {
       LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
@@ -1043,9 +1059,9 @@ int ObIndexBuildTask::wait_data_complement()
   share::ObLSID ls_id;
   common::ObAddr leader_addr;
   ObArray<ObTabletID> index_partition_ids;
-  if (OB_UNLIKELY(!is_inited_) || OB_ISNULL(root_service_)) {
+  if (OB_UNLIKELY(!is_inited_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+    LOG_WARN("not init", KR(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
@@ -1096,7 +1112,7 @@ int ObIndexBuildTask::wait_data_complement()
 #endif
     ObArray<int64_t> ignore_col_ids;
     const ObTableSchema *data_table_schema = nullptr;
-    ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
+    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     share::schema::ObSchemaGetterGuard schema_guard;
     uint64_t doc_id_col_id = OB_INVALID_ID;
     if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
@@ -1117,7 +1133,7 @@ int ObIndexBuildTask::wait_data_complement()
     }
     if (OB_FAIL(ret)) {
     } else if (need_verify_checksum && OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-            tenant_id_, get_execution_id(), src_table_id, index_table_id_, task_id_, false/*index build*/, ignore_col_ids, dummy_equal, root_service_->get_sql_proxy()))) {
+            tenant_id_, get_execution_id(), src_table_id, index_table_id_, task_id_, false/*index build*/, ignore_col_ids, dummy_equal, *GCTX.sql_proxy_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to check column checksum", K(ret), K(index_table_id_), K(src_table_id), K(task_id_));
         state_finished = true;
@@ -1146,9 +1162,9 @@ int ObIndexBuildTask::wait_local_index_data_complement()
   int ret = OB_SUCCESS;
   bool state_finished = false;
   bool is_request_end = false;
-  if (OB_UNLIKELY(!is_inited_) || OB_ISNULL(root_service_)) {
+  if (OB_UNLIKELY(!is_inited_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+    LOG_WARN("not init", KR(ret), K_(is_inited), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
@@ -1194,7 +1210,7 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     const ObTableSchema *data_table_schema = nullptr;
     uint64_t doc_id_col_id = OB_INVALID_ID;
     share::schema::ObSchemaGetterGuard schema_guard;
-    ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
+    ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
         share::schema::is_doc_rowkey_aux(create_index_arg_.index_type_)) {
       if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
@@ -1213,7 +1229,7 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     }
     if (OB_FAIL(ret)) {
     } else if (need_verify_checksum && OB_FAIL(ObDDLChecksumOperator::check_column_checksum_without_execution_id(
-            tenant_id_, object_id_, index_table_id_, task_id_, false/*index build*/, ignore_col_ids, dummy_equal, root_service_->get_sql_proxy()))) {
+            tenant_id_, object_id_, index_table_id_, task_id_, false/*index build*/, ignore_col_ids, dummy_equal, *GCTX.sql_proxy_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to check column checksum", K(ret), K(tenant_id_), K(object_id_), K(index_table_id_), K(task_id_));
       } else if (REACH_TIME_INTERVAL(1000L * 1000L)) {
@@ -1368,7 +1384,7 @@ int ObIndexBuildTask::verify_checksum()
     } else {
       ObArray<int64_t> ignore_col_ids;
       if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-              tenant_id_, 0/*execution_id*/, object_id_, index_table_id_, task_id_, true/*check unique index*/, ignore_col_ids, dummy_equal, root_service_->get_sql_proxy()))) {
+              tenant_id_, 0/*execution_id*/, object_id_, index_table_id_, task_id_, true/*check unique index*/, ignore_col_ids, dummy_equal, *GCTX.sql_proxy_))) {
         if (OB_CHECKSUM_ERROR == ret && is_unique_index_) {
           ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
         }
@@ -1470,8 +1486,11 @@ int ObIndexBuildTask::enable_index()
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_TAKE_EFFECT_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else {
-    share::schema::ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
+    share::schema::ObMultiVersionSchemaService &schema_service = *GCTX.schema_service_;
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObTableSchema *index_schema = NULL;
     bool index_table_exist = false;
@@ -1580,12 +1599,15 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     } else if (OB_FALSE_IT(ddl_rpc_timeout += tmp_timeout)) {
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UPDATE_INDEX_STATUS_FAILED))) {
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+    } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
     } else {
       const bool is_parallel = create_index_arg_.is_parallel_;
       if (!is_parallel
           || data_format_version_ < DATA_VERSION_4_2_2_0
           || (data_format_version_ >= DATA_VERSION_4_3_3_0 && data_format_version_ < DATA_VERSION_4_3_5_0)) {
-        if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
+        if (OB_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
           LOG_WARN("update index status failed", K(ret), K(arg));
         }
       } else {
@@ -1593,7 +1615,7 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
         ObTimeoutCtx ctx;
         if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
           LOG_WARN("fail to set timeout ctx", KR(ret));
-        } else if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).parallel_update_index_status(arg, res))) {
+        } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr()).timeout(ddl_rpc_timeout).parallel_update_index_status(arg, res))) {
           LOG_WARN("fail to parallel update index status", KR(ret), K(arg));
         } else {
           consensus_schema_version_ = res.schema_version_;
@@ -1624,7 +1646,10 @@ int ObIndexBuildTask::clean_on_failed()
     ObSchemaGetterGuard schema_guard;
     bool drop_index_on_failed = true; // TODO@wenqu: index building triggered by truncate partition may need keep the failed index schema
     bool index_status_is_available = false;
-    if (OB_FAIL(root_service_->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
+    if (OB_ISNULL(root_service_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(root_service_));
+    } else if (OB_FAIL(root_service_->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, is_index_exist))) {
       LOG_WARN("check table exist failed", K(ret), K_(tenant_id), K(index_table_id_));
@@ -1728,7 +1753,10 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.task_id_ = task_id_;
           if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));
-          } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
+          } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+          } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
             LOG_WARN("drop index failed", K(ret));
           }
           LOG_INFO("drop index when build failed", K(ret), K(drop_index_arg));
@@ -1772,7 +1800,10 @@ int ObIndexBuildTask::cleanup_impl()
   DEBUG_SYNC(CREATE_INDEX_SUCCESS);
 
   if(OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(root_service_->get_sql_proxy(), tenant_id_, task_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_, tenant_id_, task_id_))) {
     LOG_WARN("delete task record failed", K(ret), K(task_id_), K(schema_version_));
   } else {
     need_retry_ = false;      // clean succ, stop the task
@@ -1780,7 +1811,7 @@ int ObIndexBuildTask::cleanup_impl()
 
   if (OB_SUCC(ret) && parent_task_id_ > 0) {
     const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
-    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id, get_task_key(), ret_code_, trace_id_);
+    ObSysDDLSchedulerUtil::on_ddl_task_finish(parent_task_id, get_task_key(), ret_code_, trace_id_);
   }
   LOG_INFO("clean task finished", K(ret), K(*this));
   return ret;

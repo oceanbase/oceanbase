@@ -82,6 +82,9 @@ public:
       const ObZone &zone,
       common::ObISQLClient &sql_client,
       ObZoneInfo &zone_info);
+  static int update_global_config_version_with_lease(
+      ObMySQLTransaction &trans,
+      const int64_t global_config_version);
 private:
   template <typename T>
       static int set_info_item(const char *name, const int64_t value, const char *info_str,
@@ -100,6 +103,14 @@ private:
       common::ObISQLClient &sql_client,
       common::ObIArray<common::ObZone> &zone_list,
       const bool is_active);
+  static int get_config_version_with_lease_(
+      ObMySQLTransaction &trans,
+      int64_t &current_config_version,
+      int64_t &current_lease_info_version);
+  static int inner_update_global_config_version_with_lease_(
+      ObMySQLTransaction &trans,
+      const int64_t global_config_version_to_update,
+      const int64_t lease_info_version_to_update);
 };
 
 }//end namespace share

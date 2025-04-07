@@ -185,6 +185,7 @@ class ObDDLReplicaBuilder
 public:
   ObDDLReplicaBuilder();
   ~ObDDLReplicaBuilder();
+  int init();
   int start();
   void stop();
   void destroy();

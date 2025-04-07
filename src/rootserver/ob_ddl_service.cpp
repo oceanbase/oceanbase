@@ -24,6 +24,8 @@
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // ObSysDDLSchedulerUtil
 #include "rootserver/ob_index_builder.h"
 #include "rootserver/ob_ddl_sql_generator.h"
 #include "rootserver/ob_ddl_help.h"
@@ -67,6 +69,7 @@
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
 #include "storage/ddl/ob_ddl_alter_auto_part_attr.h"
 #include "src/share/ob_vec_index_builder_util.h"
+#include "share/ob_zone_table_operation.h" // for ObZoneTableOperation
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
@@ -89,7 +92,6 @@ namespace rootserver
 
 ObDDLService::ObDDLService()
   : inited_(false),
-    stopped_(false),
     rpc_proxy_(NULL),
     common_rpc_(NULL),
     sql_proxy_(NULL),
@@ -126,7 +128,6 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
     lst_operator_ = &lst_operator;
     snapshot_mgr_ = &snapshot_mgr;
     tenant_ddl_service_ = &tenant_ddl_service;
-    stopped_ = false;
     inited_ = true;
   }
   return ret;
@@ -654,9 +655,6 @@ int ObDDLService::create_mlog_tablet(
   } else if (!mlog_schema.is_mlog_table() || tenant_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg must be materialized view log table", KR(ret), K(tenant_id), K(tenant_data_version), K(mlog_schema));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else {
@@ -2187,9 +2185,6 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
   } else if (OB_FAIL(frozen_scn.convert_for_tx(
                  compaction::ObBasicMergeScheduler::INIT_COMPACTION_SCN))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
@@ -2290,9 +2285,6 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
   } else if (OB_ISNULL(first_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("first_table is null", KR(ret));
@@ -2680,7 +2672,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
     if (OB_SUCC(ret)
         && first_table->is_materialized_view()) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+      if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", KR(tmp_ret), K(task_record));
       }
     }
@@ -2797,7 +2789,7 @@ int ObDDLService::start_mview_complete_refresh_task(
                         &allocator,
                         &arg);
       param.tenant_data_version_ = tenant_data_version;
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+      if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         LOG_WARN("submit create index ddl task failed", K(ret));
       }
     }
@@ -7319,12 +7311,11 @@ int ObDDLService::create_aux_index_task_(
   int ret = OB_SUCCESS;
   if (OB_ISNULL(data_schema) ||
       OB_ISNULL(idx_schema) ||
-      OB_ISNULL(GCTX.root_service_) ||
       OB_ISNULL(GCTX.sql_proxy_) ||
       !create_index_arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KPC(data_schema), KPC(idx_schema),
-        KP(GCTX.root_service_), KP(GCTX.sql_proxy_), K(create_index_arg));
+             KP(GCTX.sql_proxy_), K(create_index_arg));
   } else {
     bool need_partitioned = ((DATA_VERSION_4_2_2_0 <= tenant_data_version &&
                               tenant_data_version < DATA_VERSION_4_3_0_0) ||
@@ -7344,8 +7335,7 @@ int ObDDLService::create_aux_index_task_(
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
     param.new_snapshot_version_ = snapshot_version;
-    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-        create_ddl_task(param, trans, task_record))) {
+    if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
         trans.reset_last_error();
         ret = OB_SUCCESS;
@@ -7382,9 +7372,6 @@ int ObDDLService::create_aux_index(
     if (!arg.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(arg));
-    } else if (OB_ISNULL(GCTX.root_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("root service is nullptr", K(ret));
     } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id,
                                                                            schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
@@ -7522,8 +7509,7 @@ int ObDDLService::create_aux_index(
       } else if (OB_INVALID_ID == result.ddl_task_id_) { // no need to schedule
       } else {
         DEBUG_SYNC(CREATE_AUX_INDEX_TABLE);
-        if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-                         schedule_ddl_task(task_record))) {
+        if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
           LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
         }
       }
@@ -7604,9 +7590,6 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
   } else if (!index_schema.is_index_table() || tenant_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg must be index table", KR(ret), K(tenant_id), K(tenant_data_version), K(index_schema));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else {
@@ -13959,9 +13942,6 @@ int ObDDLService::split_global_index_partitions(obrpc::ObAlterTableArg &arg, obr
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
@@ -14077,7 +14057,7 @@ int ObDDLService::split_global_index_partitions(obrpc::ObAlterTableArg &arg, obr
       int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(publish_schema(tenant_id))) {
         LOG_WARN("publish_schema failed", KR(ret));
-      } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_scheduler().schedule_ddl_task(ddl_tasks.at(0)))) {
+      } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(ddl_tasks.at(0)))) {
         LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(ddl_tasks.at(0)));
       }
     }
@@ -15168,9 +15148,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             const bool need_check_tablet_cnt = obrpc::ObAlterTableArg::ADD_PARTITION == alter_table_arg.alter_part_type_
                      || obrpc::ObAlterTableArg::ADD_SUB_PARTITION == alter_table_arg.alter_part_type_;
             if (alter_table_arg.alter_table_schema_.is_external_table()) {
-            } else if (OB_ISNULL(GCTX.root_service_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("root service is null", KR(ret));
             } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
               LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
             } else {
@@ -15384,7 +15361,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                         const_alter_table_arg.consumer_group_id_,
                                         &alter_table_arg.allocator_,
                                         &const_alter_table_arg);
-              if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+              if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit constraint task failed", K(ret));
               } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                              task_record.task_id_))) {
@@ -15454,7 +15431,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                            const_alter_table_arg.consumer_group_id_,
                                            &alter_table_arg.allocator_,
                                            &const_alter_table_arg);
-                if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+                if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
                   LOG_WARN("submit constraint task", K(ret));
                 } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                                task_record.task_id_))) {
@@ -15494,7 +15471,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           } else {
             for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < ddl_tasks.count(); i++) {
               ObDDLTaskRecord &task_record = ddl_tasks.at(i);
-              if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+              if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
                 LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
               }
             }
@@ -16148,14 +16125,13 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   uint64_t tenant_id = alter_table_schema.get_tenant_id();
   const ObDDLType ddl_type = res.ddl_type_;
-  ObRootService *root_service = GCTX.root_service_;
   bool need_redistribute_column_id = false;
   if (OB_UNLIKELY(DDL_INVALID == ddl_type || tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected ddl type", K(ret), K(ddl_type), K(alter_table_arg), K(tenant_data_version));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -16191,7 +16167,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-      } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
+      } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, tenant_id, task_id))) {
         LOG_WARN("fetch new task id failed", K(ret));
       } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                      task_id))) {
@@ -16451,7 +16427,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         } else if (has_conflict_ddl) {
           ret = OB_EAGAIN;
           LOG_WARN("failed to alter table that has conflict ddl", K(ret), K(orig_table_schema->get_table_id()));
-        } else if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+        } else if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret));
         } else {
           res.task_id_ = task_record.task_id_;
@@ -16471,7 +16447,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    0/*parent_task_id*/,
                                    task_id);
         param.tenant_data_version_ = tenant_data_version;
-        if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+        if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
             LOG_WARN("submit ddl task failed", K(ret));
         } else {
           res.task_id_ = task_record.task_id_;
@@ -16494,7 +16470,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         int tmp_ret = OB_SUCCESS;
         if (OB_FAIL(publish_schema(tenant_id))) {
           LOG_WARN("publish_schema failed", K(ret));
-        } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+        } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
           LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
         }
       }
@@ -16757,7 +16733,6 @@ int ObDDLService::create_hidden_table(
   const uint64_t tenant_id = create_hidden_table_arg.get_tenant_id();
   const int64_t table_id = create_hidden_table_arg.get_table_id();
   const uint64_t dest_tenant_id = tenant_id;
-  ObRootService *root_service = GCTX.root_service_;
   bool bind_tablets = true;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *orig_table_schema = NULL;
@@ -16766,9 +16741,9 @@ int ObDDLService::create_hidden_table(
   if (OB_UNLIKELY(!create_hidden_table_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create_hidden_table_arg is invalid", K(ret), K(create_hidden_table_arg));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -16804,7 +16779,7 @@ int ObDDLService::create_hidden_table(
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
           LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-        } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
+        } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, tenant_id, task_id))) {
           LOG_WARN("fetch new task id failed", K(ret));
         } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id))) {
           LOG_WARN("failed to get owner id", K(ret), K(task_id));
@@ -16846,7 +16821,7 @@ int ObDDLService::create_hidden_table(
                                    create_hidden_table_arg.get_nls_formats(),
                                    create_hidden_table_arg.get_foreign_key_checks()))) {
               LOG_WARN("param init failed", K(ret));
-            } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
+            } else if (OB_FAIL(ObSysDDLSchedulerUtil::prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
             } else if (!create_hidden_table_arg.get_tablet_ids().empty()){
               const ObIArray<ObTabletID> &tablet_ids = create_hidden_table_arg.get_tablet_ids();
@@ -16878,7 +16853,7 @@ int ObDDLService::create_hidden_table(
                                         0,
                                         task_id);
               param.tenant_data_version_ = tenant_data_version;
-              if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+              if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit ddl task failed", K(ret));
               } else {
                 res.tenant_id_ = tenant_id;
@@ -16903,7 +16878,7 @@ int ObDDLService::create_hidden_table(
           int tmp_ret = OB_SUCCESS;
           if (OB_FAIL(publish_schema(tenant_id))) {
             LOG_WARN("publish_schema failed", K(ret));
-          } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+          } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
           } else {
             LOG_INFO("schedule ddl task success", K(task_record));
@@ -16922,7 +16897,6 @@ int ObDDLService::mview_complete_refresh(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
-  ObRootService *root_service = GCTX.root_service_;
   int64_t refreshed_schema_version = 0;
   common::ObArenaAllocator allocator("MVRef");
   ObDDLTaskRecord task_record;
@@ -16930,9 +16904,6 @@ int ObDDLService::mview_complete_refresh(
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error unexpected, root service must not be nullptr", KR(ret));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -16958,7 +16929,7 @@ int ObDDLService::mview_complete_refresh(
     int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(publish_schema(tenant_id))) {
       LOG_WARN("publish_schema failed", KR(ret));
-    } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+    } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
       LOG_WARN("fail to schedule ddl task", KR(tmp_ret), K(task_record));
     } else {
       LOG_INFO("schedule ddl task success", K(task_record));
@@ -16979,7 +16950,6 @@ int ObDDLService::mview_complete_refresh_in_trans(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
   const int64_t mview_table_id = arg.table_id_;
-  ObRootService *root_service = GCTX.root_service_;
   const ObTableSchema *mview_table_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
   const ObTableSchema *container_table_schema = nullptr;
@@ -16988,9 +16958,9 @@ int ObDDLService::mview_complete_refresh_in_trans(
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error unexpected, root service must not be nullptr", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -17022,7 +16992,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         new_container_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
         ObTableLockOwnerID owner_id;
-        if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
+        if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, tenant_id, task_id))) {
           LOG_WARN("fetch new task id failed", KR(ret), K(tenant_id));
         } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                 task_id))) {
@@ -17065,7 +17035,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                           arg.nls_formats_,
                                           true/*foreign key checks*/))) {
             LOG_WARN("prepare param init failed", KR(ret));
-          } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(prepare_param, &new_container_table_schema, alter_table_arg))) {
+          } else if (OB_FAIL(ObSysDDLSchedulerUtil::prepare_alter_table_arg(prepare_param, &new_container_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg fail", KR(ret));
           } else if (OB_FAIL(alter_table_arg.based_schema_object_infos_.assign(arg.based_schema_object_infos_))) {
             LOG_WARN("fail to assign based schema object infos", KR(ret));
@@ -17088,7 +17058,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                         arg.parent_task_id_,
                                         task_id);
             param.tenant_data_version_ = tenant_data_version;
-            if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+            if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
               LOG_WARN("submit ddl task failed", KR(ret));
             } else {
               res.trace_id_ = task_record.trace_id_;
@@ -17108,13 +17078,9 @@ int ObDDLService::recover_restore_table_ddl_task(
   int ret = OB_SUCCESS;
   ObDDLTaskRecord task_record;
   common::ObArenaAllocator allocator(lib::ObLabel("CreateDDLParam"));
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root_service is nullptr", K(ret));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else {
@@ -17203,7 +17169,7 @@ int ObDDLService::recover_restore_table_ddl_task(
               src_table_schema->get_table_name_str(), src_db_schema->get_database_name_str(),
               dst_db_schema->get_database_name_str(), arg.tz_info_, arg.tz_info_wrap_, arg.nls_formats_, true/*foreign_key_checks*/))) {
             LOG_WARN("fail to prepare alter table arg param", K(ret), K(arg));
-          } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &dst_table_schema, alter_table_arg))) {
+          } else if (OB_FAIL(ObSysDDLSchedulerUtil::prepare_alter_table_arg(param, &dst_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg failed", K(ret), K(param));
           } else {
             alter_table_arg.alter_table_schema_.set_schema_version(dst_table_schema.get_schema_version());
@@ -17223,7 +17189,7 @@ int ObDDLService::recover_restore_table_ddl_task(
                                       0,
                                       arg.ddl_task_id_);
             param.tenant_data_version_ = tenant_data_version;
-            if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, dst_tenant_trans, task_record))) {
+            if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, dst_tenant_trans, task_record))) {
               LOG_WARN("submit ddl task failed", K(ret));
             }
           }
@@ -17241,7 +17207,7 @@ int ObDDLService::recover_restore_table_ddl_task(
       int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(publish_schema(dst_table_schema.get_tenant_id()))) {
         LOG_WARN("publish_schema failed", K(ret), K(dst_table_schema));
-      } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+      } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
       }
     }
@@ -19883,9 +19849,6 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
 
       SCN frozen_scn;
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(GCTX.root_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("root service is null", KR(ret));
       } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
         LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
       } else {
@@ -20630,10 +20593,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     true : orig_table_schema.check_can_do_ddl();
   hidden_table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list); // allow offline ddl execute if there's no offline ddl doing
   bool have_spatial_generated_column = false;
-  if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
-  } else if (OB_UNLIKELY(tenant_data_version <= 0)) {
+  if (OB_UNLIKELY(tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_data_version));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
@@ -23966,7 +23926,6 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
   uint64_t tenant_data_version = 0;
   int64_t refreshed_schema_version = 0;
   ObDDLTaskRecord task_record;
-  ObRootService *root_service = GCTX.root_service_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *orig_data_table_schema = nullptr;
   const ObDatabaseSchema *orig_database_schema = nullptr;
@@ -23978,9 +23937,6 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
   if (OB_UNLIKELY(!alter_table_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("alter_table_arg is invalid", K(ret), K(alter_table_arg));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -24006,7 +23962,10 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
     LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", K(ret), K(tenant_id), K(refreshed_schema_version));
-  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, new_task_id))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, tenant_id, new_task_id))) {
     LOG_WARN("fetch new task id failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(new_owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, new_task_id))) {
     LOG_WARN("failed to get new owner id", K(ret), K(new_task_id));
@@ -24049,7 +24008,7 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
       HEAP_VAR(ObPartitionSplitTask, split_task) {
         if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id,
                                                                  task_id,
-                                                                 root_service->get_sql_proxy(),
+                                                                 *GCTX.sql_proxy_,
                                                                  allocator,
                                                                  old_split_task_record))) {
           LOG_WARN("get ddl task record failed", K(ret), K(tenant_id), K(task_id));
@@ -24134,7 +24093,7 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
                                       0,
                                       new_task_id);
             param.tenant_data_version_ = tenant_data_version;
-            if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+            if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
               LOG_WARN("submit ddl task failed", K(ret));
             } else if (ObTableStateFlag::TABLE_STATE_OFFLINE_DDL == orig_data_table_schema->get_table_state_flag()) {
               ret = OB_OP_NOT_ALLOW;
@@ -24156,10 +24115,10 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
     int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(publish_schema(tenant_id))) {
       LOG_WARN("publish_schema failed", K(ret));
-    } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+    } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
       LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
     } else {
-      LOG_INFO("schedule ddl task success");
+      LOG_INFO("schedule ddl task success", K(task_record));
     }
   }
   return ret;
@@ -28215,6 +28174,9 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     ObSchemaGetterGuard schema_guard;
     schema_guard.set_session_id(arg.session_id_);
@@ -28269,7 +28231,7 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
             LOG_WARN("fail to assign rebuild index arg", K(ret));
           } else if (OB_FAIL(ObVectorIndexUtil::generate_new_index_name(allocator, rebuild_index_arg.index_name_))) {
             LOG_WARN("fail to generate new index name", K(ret));
-          } else if (OB_FAIL(trans.start(&GCTX.root_service_->get_sql_proxy(), tenant_id, refreshed_schema_version))) {
+          } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id, refreshed_schema_version))) {
             LOG_WARN("fail to start trans", K(ret));
           } else if (OB_FAIL(index_builder.submit_rebuild_index_task(trans,
                                                                     rebuild_index_arg,
@@ -28298,7 +28260,7 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
             int tmp_ret = OB_SUCCESS;
             if (OB_FAIL(publish_schema(tenant_id))) {
               LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-            } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+            } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
               LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
             }
           }
@@ -28392,7 +28354,10 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
       SMART_VAR(ObCreateIndexArg, create_index_arg) {
         ObDDLTaskRecord task_record;
         ObDDLSQLTransaction trans(schema_service_);
-        if (OB_FAIL(trans.start(&GCTX.root_service_->get_sql_proxy(), tenant_id, refreshed_schema_version))) {
+        if (OB_ISNULL(GCTX.sql_proxy_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+        } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id, refreshed_schema_version))) {
           LOG_WARN("fail to start trans", K(ret));
         } else if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
           LOG_WARN("fail to assign schema", KR(ret));
@@ -28430,7 +28395,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
           int tmp_ret = OB_SUCCESS;
           if (OB_FAIL(publish_schema(tenant_id))) {
             LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-          } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+          } else if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
           }
         }
@@ -30113,6 +30078,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
 {
   int ret = OB_SUCCESS;
   int64_t refresh_count = 0;
+  bool need_stop = !ObDDLServiceLauncher::is_ddl_service_started();
   DEBUG_SYNC(BEFORE_REFRESH_SCHEMA);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
@@ -30127,7 +30093,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
     } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
       LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
     }
-    while (!stopped_) {
+    while (!need_stop) {
       // reset ctx to retry to die
       common::ObTimeoutCtx ctx;
       ctx.reset_timeout_us();
@@ -30153,8 +30119,9 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         }
         ob_usleep<ObWaitEventIds::WAIT_REFRESH_SCHEMA>(REFRESH_SCHEMA_INTERVAL_US);
       }
+      need_stop = !ObDDLServiceLauncher::is_ddl_service_started();
     } // end while
-    if (OB_SUCC(ret) && !stopped_) {
+    if (OB_SUCC(ret) && !need_stop) {
       int64_t schema_version = OB_INVALID_VERSION;
       if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
                          tenant_id, schema_version))) {
@@ -30176,7 +30143,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         }
       }
     }
-    if (OB_FAIL(ret) && stopped_) {
+    if (OB_FAIL(ret) && need_stop) {
       ret = OB_CANCELED;
       LOG_WARN("rs is stopped", KR(ret), K(tenant_id));
     }
@@ -35974,9 +35941,8 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
       if (OB_FAIL(schema_service_->get_ddl_epoch_mgr().get_ddl_epoch(tenant_id, ddl_epoch_tmp))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
-          if (!GCTX.root_service_->in_service()) {
-            ret = OB_RS_NOT_MASTER;
-            LOG_WARN("rs not in service", K(ret));
+          if (OB_FAIL(ObDDLUtil::check_local_is_sys_leader())) {
+            LOG_WARN("fail to check whether local is sys tenant leader", KR(ret));
           } else if (OB_FAIL(schema_service_->get_ddl_epoch_mgr().promote_ddl_epoch(tenant_id, ctx.get_timeout(), ddl_epoch_tmp))) {
             LOG_WARN("promote epoch fail", K(ret), K(tenant_id));
           } else {
@@ -38948,10 +38914,7 @@ int ObDDLService::submit_drop_lob_task_(ObMySQLTransaction &trans,
                              &allocator,
                              &arg);
   ObTableLockOwnerID owner_id;
-  if (OB_ISNULL(GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("root service is null", KR(ret));
-  } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+  if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
     LOG_WARN("submit create index ddl task failed", KR(ret));
   } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                  task_record.task_id_))) {
