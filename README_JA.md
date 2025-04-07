@@ -94,13 +94,13 @@ obd demo
 1. OceanBase インスタンスを起動します。
 
     ```shell
-    # ミニスタンドアロンインスタンスをデプロイします。
+    # ミニ・スタンドアロンインスタンスをデプロイします。
     docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
 
-    # quay.io のイメージを使用してミニスタ​​ンドアロンインスタンスをデプロイします。
+    # quay.io のイメージを使用してミニ・スタ​​ンドアロンインスタンスをデプロイします。
     # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d quay.io/oceanbase/oceanbase-ce
 
-    # ghcr.io のイメージを使用してミニスタ​​ンドアロンインスタンスをデプロイします。
+    # ghcr.io のイメージを使用してミニ・スタ​​ンドアロンインスタンスをデプロイします。
     # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d ghcr.io/oceanbase/oceanbase-ce
     ```
 
