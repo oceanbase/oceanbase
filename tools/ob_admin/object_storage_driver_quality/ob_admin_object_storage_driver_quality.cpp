@@ -547,7 +547,6 @@ int OSDQMetric::add_latency_metric(
         OB_LOG(WARN, "failed to log entry", KR(ret), K(op_type), K(op_cost_time_us));
       } else {
         total_operation_num_++;
-        total_queued_num_--;
         total_throughput_mb_ += 1.0 * object_size / 1024 / 1024;
       }
     }
@@ -758,6 +757,7 @@ static int iter_memory_label(
   const char *cos_label = "COS";
   // S3_SDK or StorageS3
   const char *s3_label = "S3";
+  const char *obdal_label = "OBDAL";
   const char *default_label = "OBJECT_STORAGE";
   const char *object_label = "OBJECT_DEVICE";
 
@@ -765,6 +765,7 @@ static int iter_memory_label(
   if (strstr(label.str_, oss_label) != nullptr
       || strstr(label.str_, cos_label) != nullptr
       || strstr(label.str_, s3_label) != nullptr
+      || strstr(label.str_, obdal_label) != nullptr
       || strstr(label.str_, default_label) != nullptr
       || strstr(label.str_, object_label) != nullptr) {
     object_storage_hold_bytes += l_item->hold_;
@@ -1030,9 +1031,9 @@ int ObAdminObjectStorageDriverQualityExecutor::execute(int argc, char *argv[])
   free_scene_(scene);
   if (OB_SUCC(ret)) {
     OSDQLogEntry::print_log("TEST RESULT SUCCESS", "");
-    OSDQLogEntry::print_log("WAIT 10 seconds for MemoryDump to refresh", "");
-    // wait 10 seconds for MemoryDump to refresh
-    ::sleep(10);
+    OSDQLogEntry::print_log("WAIT 60 seconds for MemoryDump to refresh", "");
+    // wait 60 seconds for MemoryDump to refresh
+    ::sleep(60);
     if (OB_FAIL(metric_.summary(true/*is_final*/))) {
       OB_LOG(WARN, "failed to execute the last summary", KR(ret));
     }
@@ -1045,7 +1046,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:S:R:r:i:t:";
+  const char *opt_str = "h:d:s:S:R:r:i:t:a";
   struct option longopts[] = {
     {"help", 0, NULL, 'h'},
     {"file-path-prefix", 1, NULL, 'd'},
@@ -1058,6 +1059,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
     {"run-time", 1, NULL, 'r'},
     {"interval", 1, NULL, 'i'},
     {"thread_cnt", 1, NULL, 't'},
+    {"enable_obdal", 0, NULL, 'a'},
     {NULL, 0, NULL, 0},
   };
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
@@ -1110,6 +1112,11 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
         if (OB_FAIL(c_str_to_int(optarg, params_.thread_cnt_))) {
           OB_LOG(WARN, "failed to parse thread cnt", KR(ret), K((char *)optarg));
         }
+        break;
+      }
+      case 'a': {
+        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
+        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
         break;
       }
       case '0': {
@@ -1204,6 +1211,7 @@ int ObAdminObjectStorageDriverQualityExecutor::print_usage_()
   printf("options:\n");
   printf(HELP_FMT, "-d, --file-path-prefix", "absolute file path with file prefix");
   printf(HELP_FMT, "-s, --storage-info", "oss/cos should provide storage info");
+  printf(HELP_FMT, "-a", "enable obdal");
   printf(HELP_FMT, "-S, --scene-type", "indicate the Scene to be run");
   printf(HELP_FMT, "", "0, Hybrid Scene");
   printf(HELP_FMT, "", "1, Resource Limited Scene");

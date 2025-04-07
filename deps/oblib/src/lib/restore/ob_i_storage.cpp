@@ -12,6 +12,7 @@
 
 #include "ob_i_storage.h"
 #include "lib/container/ob_se_array_iterator.h"
+#include "obdal/obdal_accessor.h"
 
 namespace oceanbase
 {
@@ -589,6 +590,7 @@ int ObStorageListCtxBase::init(
 
 void ObStorageListCtxBase::reset()
 {
+  int ret = OB_SUCCESS;
   max_list_num_ = 0;
   name_arr_ = NULL;
   max_name_len_ = 0;
@@ -598,6 +600,9 @@ void ObStorageListCtxBase::reset()
   size_arr_ = NULL;
   cur_listed_count_ = 0;
   total_list_limit_ = -1;
+  if (OB_FAIL(ObDalAccessor::obdal_lister_free(opendal_lister_))) {
+    OB_LOG(WARN, "fail to free opendal lister", K(ret));
+  }
 }
 
 bool ObStorageListCtxBase::is_valid() const

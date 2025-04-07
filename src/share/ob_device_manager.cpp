@@ -103,6 +103,11 @@ int ObClusterVersionMgr::is_supported_assume_version() const
   return ret;
 }
 
+bool ObClusterEnableObdalConfig::is_enable_obdal() const
+{
+  return GCONF._enable_obdal;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
 {
@@ -135,6 +140,8 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(init_obdal_env())) {
+      OB_LOG(WARN, "fail to init obdal", K(ret));
     } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
         &ObClusterVersionMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
@@ -154,6 +161,7 @@ int ObDeviceManager::init_devices_env()
       const bool compliantRfc3986Encoding =
           (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
       Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
+      cluster_enable_obdal_config = &ObClusterEnableObdalConfig::get_instance();
     }
   }
 
@@ -200,6 +208,7 @@ void ObDeviceManager::destroy()
     fin_oss_env();
     fin_cos_env();
     fin_s3_env();
+    fin_obdal_env();
     lock_.destroy();
     ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;

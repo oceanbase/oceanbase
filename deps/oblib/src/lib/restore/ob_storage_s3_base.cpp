@@ -2181,10 +2181,10 @@ int ObStorageS3AppendWriter::open_(const ObString &uri, ObObjectStorageInfo *sto
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_OBJECT_STORAGE_IO_ERROR;
+    ret = OB_OPEN_TWICE;
     OB_LOG(WARN, "s3 append writer already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageS3Writer::open(uri, storage_info))) {
-    OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
+    OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri), KPC(storage_info));
   } else {
     is_opened_ = true;
     storage_info_ = storage_info;

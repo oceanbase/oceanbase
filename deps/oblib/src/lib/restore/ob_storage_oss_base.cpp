@@ -1440,7 +1440,6 @@ int ObStorageParallelOssMultiPartWriter::upload_part(
       if (OB_SUCC(ret) && is_slow) {
         print_oss_info(resp_headers, aos_ret, ret);
       }
-
     }
   }
 

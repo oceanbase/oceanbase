@@ -1821,6 +1821,7 @@ int ObServer::wait()
     common::occam::ObThreadHungDetector::get_instance().wait();
     FLOG_INFO("wait thread hung detector success");
 
+
 #ifdef ENABLE_IMC
     FLOG_INFO("begin to wait imc tasks");
     imc_tasks_.wait();

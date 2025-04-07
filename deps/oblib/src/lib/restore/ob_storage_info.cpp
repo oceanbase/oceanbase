@@ -23,6 +23,7 @@ namespace oceanbase
 
 namespace common
 {
+ObClusterEnableObdalConfigBase *cluster_enable_obdal_config = nullptr;
 const char *OB_STORAGE_CHECKSUM_TYPE_STR[] = {CHECKSUM_TYPE_NO_CHECKSUM, CHECKSUM_TYPE_MD5, CHECKSUM_TYPE_CRC32};
 
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
@@ -33,6 +34,15 @@ const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
     str = OB_STORAGE_CHECKSUM_TYPE_STR[type];
   }
   return str;
+}
+
+bool is_use_obdal()
+{
+  if (OB_NOT_NULL(cluster_enable_obdal_config)) {
+    return cluster_enable_obdal_config->is_enable_obdal();
+  } else {
+    return false;
+  }
 }
 
 //***********************ObSTSToken***************************
@@ -567,6 +577,13 @@ bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
       || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
 }
 
+bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO
+      || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+}
+
 int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
 {
   int ret = OB_SUCCESS;
@@ -768,9 +785,10 @@ int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len
   } else if (is_assume_role_mode_) {
     // access by assume_role
     int64_t pos = 0;
-    if (OB_FAIL(databuff_printf(key_str, len, pos, "%u&%u&%s&%s&%s",
-            static_cast<uint32_t>(device_type_), static_cast<uint32_t>(checksum_type_), endpoint_,
-            role_arn_, extension_))) {
+    if (OB_FAIL(databuff_printf(key_str, len, pos, "%u&%u&%u&%s&%s&%s",
+            static_cast<uint32_t>(device_type_), static_cast<uint32_t>(checksum_type_),
+            static_cast<uint8_t>(is_use_obdal()),
+            endpoint_, role_arn_, extension_))) {
       LOG_WARN("failed to set key str with assume role", K(ret), K(len), K(pos), KPC(this));
     } else if (strlen(external_id_) > strlen(EXTERNAL_ID)) {
       if (OB_FAIL(databuff_printf(key_str, len, pos, "&%s", external_id_))) {
@@ -779,8 +797,9 @@ int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len
     }
   }
   // access by access_id
-  else if (OB_FAIL(databuff_printf(key_str, len, "%u&%u&%s&%s&%s&%s",
+  else if (OB_FAIL(databuff_printf(key_str, len, "%u&%u&%u&%s&%s&%s&%s",
                static_cast<uint32_t>(device_type_), static_cast<uint32_t>(checksum_type_),
+               static_cast<uint8_t>(is_use_obdal()),
                endpoint_, access_id_, access_key_, extension_))) {
     LOG_WARN("failed to set key str with access_id", K(ret), K(len), KPC(this));
   }
@@ -793,18 +812,18 @@ int64_t ObObjectStorageInfo::get_device_map_key_len() const
 {
   // ObStorageType and ObStorageChecksumType are uint8_t, but static_cast to uint32_t in get_device_map_key_str.
   // therefore, ObStorageType and ObStorageChecksumType each occupies up to 10 characters.
-  // 10(one ObStorageType) + 10(one ObStorageChecksumType) + 5(five '&') + 1(one '\0') = 26.
-  // reserve some free space, increase 26 to 30.
+  // 10(one ObStorageType) + 10(one ObStorageChecksumType) + 3(one bool type use_obdal) + 6(six '&') + 1(one '\0') = 30.
+  // reserve some free space, increase 30 to 35.
   int64_t len = 0;
   if (is_assume_role_mode_) {
     // When accessing by assume_role, the length of key_str is also need reversed free space.
-    len = STRLEN(endpoint_) + STRLEN(role_arn_) + STRLEN(extension_) + 30;
+    len = STRLEN(endpoint_) + STRLEN(role_arn_) + STRLEN(extension_) + 35;
     // external_id is optional
     if (STRLEN(external_id_) > STRLEN(EXTERNAL_ID)) {
       len += STRLEN(external_id_);
     }
   } else {
-    len = STRLEN(endpoint_) + STRLEN(access_id_) + STRLEN(access_key_) + STRLEN(extension_) + 30;
+    len = STRLEN(endpoint_) + STRLEN(access_id_) + STRLEN(access_key_) + STRLEN(extension_) + 35;
   }
   return len;
 }

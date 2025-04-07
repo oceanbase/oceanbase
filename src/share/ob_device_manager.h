@@ -54,6 +54,19 @@ public:
   }
 };
 
+class ObClusterEnableObdalConfig: public ObClusterEnableObdalConfigBase
+{
+public:
+  ObClusterEnableObdalConfig() {};
+  virtual ~ObClusterEnableObdalConfig() override {};
+  virtual bool is_enable_obdal() const override;
+  static ObClusterEnableObdalConfig &get_instance()
+  {
+    static ObClusterEnableObdalConfig cfg;
+    return cfg;
+  }
+};
+
 class ObDeviceManager
 {
 public:

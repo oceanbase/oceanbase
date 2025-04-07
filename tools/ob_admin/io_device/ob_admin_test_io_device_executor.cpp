@@ -77,7 +77,7 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:q:e:f:i:";
+  const char *opt_str = "h:d:s:q:e:f:i:a";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -85,6 +85,7 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
       {"s3_url_encode_type", 0, NULL, 'e'},
       {"trigger_freq", 0, NULL, 'f'}, // used for internal testing only
       {"sts_credential", 0, NULL, 'i'},
+      {"enable_obdal", 0, NULL, 'a'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -136,6 +137,10 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
         if (OB_FAIL(set_sts_credential_key(optarg))) {
           STORAGE_LOG(WARN, "failed to set sts credential", KR(ret));
         }
+        break;
+      }
+      case 'a': {
+        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
         break;
       }
       default: {
@@ -795,6 +800,7 @@ int ObAdminTestIODeviceExecutor::print_usage_()
   printf(HELP_FMT, "-s,--storage-info", "oss/cos should provide storage info");
   printf(HELP_FMT, "-i, --sts_credential", "set STS credential");
   printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
+  printf(HELP_FMT, "-a", "enable obdal");
   printf("samples:\n");
   printf("  test nfs device: \n");
   printf("\tob_admin test_io_device -dfile:///home/admin/backup_info \n");

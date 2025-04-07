@@ -104,13 +104,22 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
 }
 
 bool is_object_storage_type(const ObStorageType &type)
-{ return ObStorageType::OB_STORAGE_FILE != type
+{
+  return ObStorageType::OB_STORAGE_FILE != type
       && ObStorageType::OB_STORAGE_MAX_TYPE != type;
 }
+
+bool is_adaptive_append_mode(const ObStorageType &type)
+{
+  return ObStorageType::OB_STORAGE_S3 == type
+      || (ObStorageType::OB_STORAGE_COS == type && is_use_obdal());
+}
+
 bool is_io_error(const int result)
 {
   return OB_IO_ERROR == result || OB_OBJECT_STORAGE_IO_ERROR == result;
 }
+
 
 int get_storage_type_from_name(const char *type_str, ObStorageType &type)
 {
@@ -525,16 +534,18 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), KPC(storage_info));
   } else if (OB_FALSE_IT(device_type_ = storage_info->get_type())) {
+  } else if (OB_STORAGE_FILE == device_type_) {
+    util_ = &file_util_;
+  } else if (OB_STORAGE_HDFS == device_type_) {
+    util_ = &hdfs_util_;
+  } else if (is_use_obdal()) {
+    util_ = &obdal_util_;
   } else if (OB_STORAGE_OSS == device_type_) {
     util_ = &oss_util_;
   } else if (OB_STORAGE_COS == device_type_) {
     util_ = &cos_util_;
   } else if (OB_STORAGE_S3 == device_type_) {
     util_ = &s3_util_;
-  } else if (OB_STORAGE_FILE == device_type_) {
-    util_ = &file_util_;
-  } else if (OB_STORAGE_HDFS == device_type_) {
-    util_ = &hdfs_util_;
   } else {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid device type", K(ret), K_(device_type));
@@ -1972,16 +1983,18 @@ int ObStorageReader::open(const common::ObString &uri,
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
+  } else if (OB_STORAGE_FILE == type) {
+    reader_ = &file_reader_;
+  } else if (OB_STORAGE_HDFS == type) {
+    reader_ = &hdfs_reader_;
+  } else if (is_use_obdal()) {
+    reader_ = &obdal_reader_;
   } else if (OB_STORAGE_OSS == type) {
     reader_ = &oss_reader_;
   } else if (OB_STORAGE_COS == type) {
     reader_ = &cos_reader_;
   } else if (OB_STORAGE_S3 == type) {
     reader_ = &s3_reader_;
-  } else if (OB_STORAGE_FILE == type) {
-    reader_ = &file_reader_;
-  } else if (OB_STORAGE_HDFS == type) {
-    reader_ = &hdfs_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2169,16 +2182,18 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
+  } else if (OB_STORAGE_FILE == type) {
+    reader_ = &file_reader_;
+  } else if (OB_STORAGE_HDFS == type) {
+    reader_ = &hdfs_reader_;
+  } else if (is_use_obdal()) {
+    reader_ = &obdal_reader_;
   } else if (OB_STORAGE_OSS == type) {
     reader_ = &oss_reader_;
   } else if (OB_STORAGE_COS == type) {
     reader_ = &cos_reader_;
   } else if (OB_STORAGE_S3 == type) {
     reader_ = &s3_reader_;
-  } else if (OB_STORAGE_FILE == type) {
-    reader_ = &file_reader_;
-  } else if (OB_STORAGE_HDFS == type) {
-    reader_ = &hdfs_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2389,14 +2404,16 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
+  } else if (OB_STORAGE_FILE == type) {
+    writer_ = &file_writer_;
+  } else if (is_use_obdal()) {
+    writer_ = &obdal_writer_;
   } else if (OB_STORAGE_OSS == type) {
     writer_ = &oss_writer_;
   } else if (OB_STORAGE_COS == type) {
     writer_ = &cos_writer_;
   } else if (OB_STORAGE_S3 == type) {
     writer_ = &s3_writer_;
-  } else if (OB_STORAGE_FILE == type) {
-    writer_ = &file_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2536,7 +2553,13 @@ int ObStorageAppender::open(
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
-  } else if (OB_STORAGE_OSS == type_ || OB_STORAGE_COS == type_ || OB_STORAGE_S3 == type_) {
+  } else if (OB_STORAGE_FILE == type_) {
+    appender_ = &file_appender_;
+  } else if (is_use_obdal()) {
+    appender_ = &obdal_appender_;
+  } else if (OB_STORAGE_OSS == type_ ||
+             OB_STORAGE_COS == type_ ||
+             OB_STORAGE_S3 == type_) {
     if (OB_STORAGE_OSS == type_) {
       appender_ = &oss_appender_;
     } else if (OB_STORAGE_COS == type_) {
@@ -2544,8 +2567,6 @@ int ObStorageAppender::open(
     } else if (OB_STORAGE_S3 == type_) {
       appender_ = &s3_appender_;
     }
-  } else if (OB_STORAGE_FILE == type_) {
-    appender_ = &file_appender_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2676,7 +2697,7 @@ int64_t ObStorageAppender::get_length()
 
   if (OB_ISNULL(appender_)) {
     STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
-  } else if (OB_STORAGE_S3 != type_) {
+  } else if (!is_adaptive_append_mode(type_)) {
     ret_int = appender_->get_length();
   } else {
     int ret = OB_SUCCESS;
@@ -2726,7 +2747,7 @@ int ObStorageAppender::seal_for_adaptive()
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_STORAGE_S3 != type_) {
+  } else if (!is_adaptive_append_mode(type_)) {
   } else {
     char *buf = NULL;
     char seal_meta_uri[OB_MAX_URI_LENGTH] = { 0 };
@@ -2816,7 +2837,13 @@ int ObStorageMultiPartWriter::open(
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (FALSE_IT(storage_info_ = storage_info)) {
-  } else if (OB_STORAGE_OSS == type || OB_STORAGE_COS == type || OB_STORAGE_S3 == type) {
+  } else if (OB_STORAGE_FILE == type) {
+    multipart_writer_ = &file_multipart_writer_;
+  } else if (is_use_obdal()) {
+    multipart_writer_ = &obdal_multipart_writer_;
+  } else if (OB_STORAGE_OSS == type ||
+             OB_STORAGE_COS == type ||
+             OB_STORAGE_S3 == type) {
     if (OB_STORAGE_OSS == type) {
       multipart_writer_ = &oss_multipart_writer_;
     } else if (OB_STORAGE_COS == type) {
@@ -2824,8 +2851,6 @@ int ObStorageMultiPartWriter::open(
     } else if (OB_STORAGE_S3 == type) {
       multipart_writer_ = &s3_multipart_writer_;
     }
-  } else if (OB_STORAGE_FILE == type) {
-    multipart_writer_ = &file_multipart_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -3045,14 +3070,16 @@ int ObStorageParallelMultiPartWriterBase::open(
         K(ret), K(uri), KPC(storage_info), K(type));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
+  } else if (OB_STORAGE_FILE == type) {
+    multipart_writer_ = &file_multipart_writer_;
+  } else if (is_use_obdal()) {
+    multipart_writer_ = &obdal_multipart_writer_;
   } else if (OB_STORAGE_OSS == type) {
     multipart_writer_ = &oss_multipart_writer_;
   } else if (OB_STORAGE_COS == type) {
     multipart_writer_ = &cos_multipart_writer_;
   } else if (OB_STORAGE_S3 == type) {
     multipart_writer_ = &s3_multipart_writer_;
-  } else if (OB_STORAGE_FILE == type) {
-    multipart_writer_ = &file_multipart_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri), K(type));

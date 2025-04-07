@@ -10,6 +10,7 @@ arch=x86_64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/x86_64/
 
 [deps]
+obdal-0.2-132025040114.al8.x86_64.rpm target=community
 devdeps-gtest-1.8.0-192024092714.al8.x86_64.rpm
 devdeps-isa-l-static-2.22.0-52024092714.al8.x86_64.rpm
 devdeps-libcurl-static-8.2.1-202024102810.al8.x86_64.rpm

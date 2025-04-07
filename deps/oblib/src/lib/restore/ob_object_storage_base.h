@@ -121,20 +121,20 @@ template<typename FuncType, typename... Args>
 FuncRetType<FuncType, Args...> execute_until_timeout(
     ObStorageIORetryStrategyBase<FuncRetType<FuncType, Args...>> &retry_strategy,
     FuncType func,
-    Args... args)
+    Args && ... args)
 {
   int64_t retries = 0;
   bool should_retry_flag = true;
   // func_ret may be pointer, so use {} construct it
   FuncRetType<FuncType, Args...> func_ret {};
   do {
-    func_ret = func(args...);
+    func_ret = func(std::forward<Args>(args)...);
     if (!retry_strategy.should_retry(func_ret, retries)) {
       should_retry_flag = false;
     } else {
       // if should_retry, log the current error
-      retry_strategy.log_error(func_ret, retries);
       uint32_t sleep_time_us = retry_strategy.calc_delay_time_us(func_ret, retries);
+      retry_strategy.log_error(func_ret, retries);
       ::usleep(sleep_time_us);
     }
     retries++;

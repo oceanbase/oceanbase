@@ -26,6 +26,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "tools/ob_admin/shared_storage_tool/ob_admin_shared_storage_tool_executor.h"
 #endif
+#include "deps/oblib/src/lib/alloc/malloc_hook.h"
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
 
@@ -111,6 +112,7 @@ int get_log_base_directory(char *log_file_name, const int64_t log_file_name_len,
 
 int main(int argc, char *argv[])
 {
+  init_malloc_hook();
   int ret = 0;
   char log_file_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   char log_file_rs_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};

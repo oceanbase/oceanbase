@@ -112,7 +112,9 @@ enum ObStorageChecksumType : uint8_t
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
+bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
+bool is_use_obdal();
 // [Extensions]
 //   load_data_* : sql/engine/cmd/ob_load_data_storage_info.h
 
@@ -408,6 +410,21 @@ public:
   bool update_access_time_us_;
   int64_t original_access_time_us_;
 };
+
+// @brief ObClusterEnableObdalConfigBase is used to check whether enable obdal or not.
+class ObClusterEnableObdalConfigBase
+{
+public:
+  ObClusterEnableObdalConfigBase() {};
+  virtual ~ObClusterEnableObdalConfigBase() {};
+  virtual bool is_enable_obdal() const { return true; }
+  static ObClusterEnableObdalConfigBase &get_instance() {
+    static ObClusterEnableObdalConfigBase instance;
+    return instance;
+  }
+};
+extern ObClusterEnableObdalConfigBase *cluster_enable_obdal_config;
+
 }
 }
 

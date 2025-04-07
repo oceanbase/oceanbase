@@ -18,6 +18,7 @@
 #include "ob_storage_cos_base.h"
 #include "ob_storage_s3_base.h"
 #include "hdfs/ob_storage_hdfs_jni_base.h"
+#include "ob_storage_obdal_base.h"
 #include "common/storage/ob_io_device.h"
 
 namespace oceanbase
@@ -45,6 +46,7 @@ int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
 bool is_io_error(const int result);
 bool is_object_storage_type(const ObStorageType &type);
+bool is_adaptive_append_mode(const ObStorageType &type);
 
 class ObExternalIOCounter final
 {
@@ -362,6 +364,7 @@ private:
   ObStorageCosUtil cos_util_;
   ObStorageS3Util s3_util_;
   ObStorageHdfsJniUtil hdfs_util_;
+  ObStorageObDalUtil obdal_util_;
   ObIStorageUtil* util_;
   common::ObObjectStorageInfo* storage_info_;
   bool init_state;
@@ -435,6 +438,7 @@ protected:
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
   ObStorageHdfsReader hdfs_reader_;
+  ObStorageObDalReader obdal_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   bool has_meta_;
@@ -466,6 +470,7 @@ private:
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
   ObStorageHdfsReader hdfs_reader_;
+  ObStorageObDalReader obdal_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -486,6 +491,7 @@ protected:
   ObStorageOssWriter oss_writer_;
   ObStorageCosWriter cos_writer_;
   ObStorageS3Writer s3_writer_;
+  ObStorageObDalWriter obdal_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -521,6 +527,7 @@ private:
   ObStorageOssAppendWriter oss_appender_;
   ObStorageCosAppendWriter cos_appender_;
   ObStorageS3AppendWriter s3_appender_;
+  ObStorageObDalAppendWriter obdal_appender_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -554,6 +561,7 @@ protected:
   ObStorageCosMultiPartWriter cos_multipart_writer_;
   ObStorageOssMultiPartWriter oss_multipart_writer_;
   ObStorageS3MultiPartWriter s3_multipart_writer_;
+  ObStorageObDalMultiPartWriter obdal_multipart_writer_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -577,11 +585,11 @@ protected:
   ObStorageParallelCosMultiPartWriter cos_multipart_writer_;
   ObStorageParallelOssMultiPartWriter oss_multipart_writer_;
   ObStorageParallelS3MultiPartWriter s3_multipart_writer_;
+  ObStorageParallelObDalMultiPartWriter obdal_multipart_writer_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
   common::ObObjectStorageInfo *storage_info_;
-
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageParallelMultiPartWriterBase);

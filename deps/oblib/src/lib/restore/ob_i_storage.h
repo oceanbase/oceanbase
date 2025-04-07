@@ -20,6 +20,7 @@
 #include "common/storage/ob_device_common.h"
 #include "ob_storage_info.h"
 #include "ob_object_storage_base.h"
+#include <opendal.h>
 
 namespace oceanbase
 {
@@ -181,11 +182,13 @@ public:
   int64_t *size_arr_; // save all the length of each object/file (the order is the same with name_arr)
   int64_t cur_listed_count_;
   int64_t total_list_limit_;  // The maximum number of objects required to be listed. <= 0 means there is no limit
+  opendal_lister *opendal_lister_; // The intermediate state of the list is kept in opendal, and we save opendal_lister to access the next page
 
   ObStorageListCtxBase()
     : max_list_num_(0), name_arr_(NULL), max_name_len_(0), rsp_num_(0),
       has_next_(false), need_size_(false), size_arr_(NULL),
-      cur_listed_count_(0), total_list_limit_(-1)
+      cur_listed_count_(0), total_list_limit_(-1),
+      opendal_lister_(nullptr)
   {}
 
   virtual ~ObStorageListCtxBase() { reset(); }

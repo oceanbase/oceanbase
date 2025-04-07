@@ -33,9 +33,10 @@ ObAdminIOAdapterBenchmarkExecutor::ObAdminIOAdapterBenchmarkExecutor()
 
 int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
 {
+  const int64_t MEMORY_LIMIT = 16 * 1024 * 1024 * 1024LL;
   int ret = OB_SUCCESS;
-  lib::set_memory_limit(16 * 1024 * 1024 * 1024LL);
-  lib::set_tenant_memory_limit(500, 16 * 1024 * 1024 * 1024LL);
+  lib::set_memory_limit(MEMORY_LIMIT);
+  lib::set_tenant_memory_limit(500, MEMORY_LIMIT);
   OB_LOGGER.set_log_level("INFO");
 
   ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
@@ -51,10 +52,17 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
   } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
   } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
     STORAGE_LOG(WARN, "init device manager failed", KR(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().init())) {
+  } else if (OB_FAIL(ObIOManager::get_instance().init(MEMORY_LIMIT))) {
     STORAGE_LOG(WARN, "failed to init io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  }
+
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  if (FAILEDx(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_holder))) {
+    STORAGE_LOG(WARN, "failed to get tenant io manager", K(ret));
+  } else if (OB_FAIL(tenant_holder.get_ptr()->update_memory_pool(MEMORY_LIMIT))) {
+    STORAGE_LOG(WARN, "failed to update memory pool", K(ret), K(MEMORY_LIMIT));
   }
 
   if (FAILEDx(parse_cmd_(argc, argv))) {
@@ -70,7 +78,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:t:r:l:o:n:f:p:b:c:j:e:i:";
+  const char *opt_str = "h:d:s:t:r:l:o:n:f:p:b:c:j:e:i:a";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"file-path-prefix", 1, NULL, 'd'},
       {"storage-info", 1, NULL, 's'},
@@ -86,6 +94,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       {"clean-after-execution", 0, NULL, 'c'},
       {"s3_url_encode_type", 0, NULL, 'e'},
       {"sts_credential", 0, NULL, 'i'},
+      {"enable_obdal", 0, NULL, 'a'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -189,6 +198,11 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
         if (OB_FAIL(set_sts_credential_key(optarg))) {
           STORAGE_LOG(WARN, "failed to set sts credential", KR(ret));
         }
+        break;
+      }
+      case 'a': {
+        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
+        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
         break;
       }
       default: {
@@ -326,6 +340,7 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf(HELP_FMT, "-c, --clean-after-execution", "clean after execution");
   printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
   printf(HELP_FMT, "-i, --sts_credential", "set sts credential");
+  printf(HELP_FMT, "-a", "enable obdal");
   printf("samples:\n");
   printf("  test nfs device: \n");
   printf("\tob_admin io_adapter_benchmark -dfile:///home/admin/backup_info \n");
