@@ -117,7 +117,7 @@ obd demo
 [ob-operator](https://github.com/oceanbase/ob-operator)を使用すると、OceanBase DatabaseインスタンスをKubernetesクラスターに素早くデプロイして管理できます。詳細については、[ob-operatorのクイックスタート](https://oceanbase.github.io/ob-operator)のドキュメントを参照してください。
 
 ## 👨‍💻 開発を始める
-手動でコンパイルされたオブザーバーをコンパイルしてデプロイする方法については、[OceanBase 開発者ドキュメント](https://oceanbase.github.io/oceanbase/build-and-run)を参照してください。
+手動でオブザーバーをコンパイルしてデプロイする方法については、[OceanBase 開発者ドキュメント](https://oceanbase.github.io/oceanbase/build-and-run)を参照してください。
 
 # ロードマップ
 
