@@ -2274,6 +2274,13 @@ DEF_BOOL(_enable_tree_based_io_scheduler, OB_CLUSTER_PARAMETER, "True",
          "A switch that allows enabling the tree-based IO scheduler."
          "Value: True: allowed; False: disabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(clog_io_isolation_mode, OB_CLUSTER_PARAMETER, "1", "[1,2]",
+         "Specifies the I/O isolation mode for Commit Log (clog). "
+         "Values: "
+         "1 - Non-isolation mode (disable I/O isolation), "
+         "2 - Full isolation mode (enable I/O isolation). "
+         "Example: 1=Off, 2=On",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ob_error_msg_style, OB_CLUSTER_PARAMETER, "True",
          "A switch that determines whether to use the ORA-xx or OBE-xx error code format for ORA error codes, with a default value of True to use the OBE-xx format."
          "The default value is True. Value: False means we use the ORA-xx format, True means we use the OBE-xx format.",

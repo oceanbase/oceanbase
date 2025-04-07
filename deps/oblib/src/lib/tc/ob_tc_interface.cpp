@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-const int QID_CAPACITY = 1<<16;
+const int QID_CAPACITY = 1<<18;
 const int MAX_QDISC_COUNT = QID_CAPACITY * (MAX_N_CHAN + 1);
 void** qdtable = nullptr;
 

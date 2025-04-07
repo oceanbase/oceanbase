@@ -820,10 +820,10 @@ int ObResourceManagerProxy::check_iops_validity(
   } else {
     //step 1: check io calibration status
     if (!ObIOCalibration::get_instance().is_valid()) {
-      valid = false;
-      ret = OB_INVALID_CONFIG;
+      // valid = false;
+      // ret = OB_INVALID_CONFIG;
       LOG_WARN("not run io_calibration yet", K(ret));
-      LOG_USER_ERROR(OB_INVALID_CONFIG, "not run io_calibration yet");
+      // LOG_USER_ERROR(OB_INVALID_CONFIG, "not run io_calibration yet");
     } else {
       //step 2: check unit_config.min_iops
       int64_t iops_16k = 0;

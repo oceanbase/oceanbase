@@ -10,11 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
- #define USING_LOG_PREFIX COMMON
-
+#define USING_LOG_PREFIX COMMON
 #include "ob_io_define.h"
 #include "storage/backup/ob_backup_factory.h"
-
+#include "src/storage/ob_file_system_router.h"
+#include "src/observer/ob_server.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 /******************             IOMode              **********************/
@@ -80,6 +80,51 @@ ObIOMode oceanbase::common::get_io_mode_enum(const char *mode_string)
   return mode;
 }
 
+class DiskChecker
+{
+private:
+  DiskChecker() : is_clog_data_in_same_disk_(false)
+  {}
+  ~DiskChecker()
+  {}
+  int get_major_device(const char *path) const
+  {
+    struct stat fileStat;
+    if (stat(path, &fileStat) != 0) {
+      LOG_ERROR_RET(OB_IO_ERROR, "read file stat failed", K(path));
+    }
+    return (fileStat.st_dev >> 8) & 0xFF;
+  }
+  bool is_same_disk(const char *path1, const char *path2)
+  {
+    bool is_same_disk = false;
+    if (OB_ISNULL(path1) || OB_ISNULL(path2)) {
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "clog or data path is nullptr", K(path1), K(path2));
+    } else {
+      const int dev1 = get_major_device(path1);
+      const int dev2 = get_major_device(path1);
+      is_same_disk = (dev1 == dev2);
+    }
+    return is_same_disk;
+  }
+public:
+  static DiskChecker &get_instance()
+  {
+    static DiskChecker instance_;
+    return instance_;
+  }
+  bool is_clog_data_in_same_disk()
+  {
+    int ret = OB_SUCCESS;
+    if (REACH_TIME_INTERVAL(60 * 1000L * 1000L)) {
+      is_clog_data_in_same_disk_ = is_same_disk(oceanbase::ObFileSystemRouter::get_instance().get_data_dir(),
+          oceanbase::ObFileSystemRouter::get_instance().get_clog_dir());
+    }
+    return is_clog_data_in_same_disk_;
+  }
+private:
+  bool is_clog_data_in_same_disk_;
+};
 const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
 {
   const char *ret_name = "UNKNOWN";
@@ -1198,6 +1243,43 @@ uint64_t ObIORequest::get_sys_module_id() const
   return nullptr == io_result_ ? OB_INVALID_ID : io_result_->flag_.get_sys_module_id();
 }
 
+oceanbase::share::ObFunctionType ObIORequest::get_func_type() const
+{
+  oceanbase::share::ObFunctionType func_type = oceanbase::share::ObFunctionType::DEFAULT_FUNCTION;
+  if (io_result_ != nullptr) {
+    func_type = static_cast<oceanbase::share::ObFunctionType>(get_flag().get_func_type());
+  }
+  return func_type;
+}
+
+bool ObIORequest::is_local_clog_not_isolated()
+{
+  bool clog_not_isolated = false;
+  const int64_t clog_io_isolation_mode = GCONF.clog_io_isolation_mode;
+  const ObIOGroupKey group_key = get_group_key();
+  const oceanbase::share::ObFunctionType func_type = get_func_type();
+  if (OB_UNLIKELY(OBSERVER.is_arbitration_mode())) {
+  } else if (group_key.mode_ != ObIOMode::MAX_MODE) {
+  } else if (clog_io_isolation_mode == 0 || clog_io_isolation_mode > 2) {
+    if ((func_type == ObFunctionType::PRIO_CLOG_HIGH ||
+         func_type == ObFunctionType::PRIO_CLOG_MID ||
+         func_type == ObFunctionType::PRIO_CLOG_LOW)) {
+      clog_not_isolated = !DiskChecker::get_instance().is_clog_data_in_same_disk();
+    }
+  } else if (clog_io_isolation_mode == 1) {
+    if ((func_type == ObFunctionType::PRIO_CLOG_HIGH ||
+         func_type == ObFunctionType::PRIO_CLOG_MID ||
+         func_type == ObFunctionType::PRIO_CLOG_LOW)) {
+      clog_not_isolated = true;
+    }
+  } else if (clog_io_isolation_mode == 2) {
+  }
+  if (REACH_TIME_INTERVAL(60 * 1000L * 1000L)) { // 60s
+    LOG_INFO("clog_not_isolated", K(clog_not_isolated), K(clog_io_isolation_mode), K(group_key), K(func_type));
+  }
+  return clog_not_isolated;
+}
+
 bool ObIORequest::is_sys_module() const
 {
   return nullptr == io_result_ ? false : io_result_->flag_.is_sys_module();
@@ -2213,6 +2295,7 @@ int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id,
   } else {
     ObTenantIOConfig::GroupConfig tmp_group_config;
     strncpy(tmp_group_config.group_name_, group_name, common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH);
+    tmp_group_config.group_name_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH - 1] = '\0';
     tmp_group_config.min_percent_ = min_percent;
     tmp_group_config.max_percent_ = max_percent;
     tmp_group_config.weight_percent_ = weight_percent;

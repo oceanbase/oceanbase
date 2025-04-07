@@ -52,6 +52,7 @@ bf_cache_priority
 builtin_db_data_verify_cycle
 cache_wash_threshold
 choose_migration_source_policy
+clog_io_isolation_mode
 clog_sync_time_warn_threshold
 cluster
 cluster_id
