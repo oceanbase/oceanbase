@@ -54,7 +54,7 @@
 
 [English](README.md) | [中文版](README_CN.md) | 日本語版
 
-**OceanBaseデータベース**は分散リレーショナルデータベースです。Ant Groupによって完全に開発されています。OceanBaseデータベースは共通のサーバークラスター上に構築されています。 OceanBase データベースは、[Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) プロトコルとその分散構造に基づいて、高可用性と線形スケーラビリティを実現します。OceanBase データベースは、特定のハードウェア アーキテクチャに依存しません。また、ベクトルデータベース機能をサポートしており、AI や大規模検索シナリオ向けに高効率なベクトル検索能力を提供します。
+**OceanBase** は分散リレーショナルデータベースです。Ant Group によって開発されています。OceanBase は、汎用的なサーバークラスター上に構築されています。 OceanBase は、[Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) プロトコルとその分散構造に基づいて、高可用性と線形スケーラビリティを実現します。OceanBase は、特定のハードウェア アーキテクチャに依存しません。また、ベクトルデータベース機能をサポートしており、AI や大規模検索シナリオ向けに高効率なベクトル検索能力を提供します。
 
 # 主な特徴
 
