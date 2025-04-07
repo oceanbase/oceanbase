@@ -104,7 +104,7 @@ obd demo
     # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d ghcr.io/oceanbase/oceanbase-ce
     ```
 
-2. OceanBase データベース インスタンスに接続します。
+2. OceanBase インスタンスに接続します。
 
     ```shell
     docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # sys テナントの root ユーザーに接続します。
