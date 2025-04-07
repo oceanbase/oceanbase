@@ -139,7 +139,7 @@ OceanBase は 2,000 社を超える顧客にサービスを提供しており、
 
 # ライセンス
 
-OceanBase データベースは、Mulan Public License バージョン 2 に基づいてライセンスされています。詳細については、[LICENSE](LICENSE) ファイルを参照してください。
+OceanBase は、Mulan Public License バージョン 2 に基づいてライセンスされています。詳細については、[LICENSE](LICENSE) ファイルを参照してください。
 
 # コミュニティ
 
