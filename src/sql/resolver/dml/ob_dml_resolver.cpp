@@ -16101,7 +16101,7 @@ int ObDMLResolver::resolve_join_hint(const ParseNode &join_node,
   } else {
     ObJoinHint *join_hint = NULL;
     const ParseNode *cur_table_node = NULL;
-    ObSEArray<ObTableInHint, 4> hint_tables;
+    ObHint::TablesInHint hint_tables;
     for (int64_t i = 0; OB_SUCC(ret) && i < join_tables->num_child_; i++) {
       hint_tables.reuse();
       if (OB_ISNULL(cur_table_node = join_tables->children_[i])) {
@@ -16663,7 +16663,7 @@ int ObDMLResolver::resolve_win_magic_hint(const ParseNode &hint_node,
   } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
     LOG_WARN("failed to resolve qb name", K(ret));
   } else {
-    ObSEArray<ObSEArray<ObTableInHint, 4>, 4> tb_name_list;
+    ObSEArray<ObHint::TablesInHint, 4> tb_name_list;
     const ParseNode *tb_name_list_node = hint_node.children_[1];
     if (NULL != tb_name_list_node &&
         OB_FAIL(resolve_tb_name_list(tb_name_list_node, tb_name_list))) {
@@ -16775,7 +16775,7 @@ int ObDMLResolver::resolve_mv_rewrite_hint(const ParseNode &hint_node,
 }
 
 int ObDMLResolver::resolve_tb_name_list(const ParseNode *tb_name_list_node,
-                                        ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list)
+                                        ObIArray<ObHint::TablesInHint> &tb_name_list)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tb_name_list_node)) {
@@ -16783,7 +16783,7 @@ int ObDMLResolver::resolve_tb_name_list(const ParseNode *tb_name_list_node,
     LOG_WARN("get unexpected null", K(ret));
   } else if (tb_name_list_node->type_ == T_RELATION_FACTOR_IN_USE_JOIN_HINT_LIST) {
     const ParseNode *cur_table_node = NULL;
-    ObSEArray<ObTableInHint, 4> hint_tables;
+    ObHint::TablesInHint hint_tables;
     for (int64_t i = 0; OB_SUCC(ret) && i < tb_name_list_node->num_child_; ++i) {
       hint_tables.reuse();
       if (OB_ISNULL(cur_table_node = tb_name_list_node->children_[i])) {
@@ -19516,8 +19516,8 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
       ObJoinHint *main_join_hint = NULL;
       ObJoinHint *rowkey_join_hint = NULL;
       ObJoinOrderHint *ordered_hint = NULL;
-      ObSEArray<ObTableInHint, 4> main_hint_tables;
-      ObSEArray<ObTableInHint, 4> rowkey_hint_tables;
+      ObHint::TablesInHint main_hint_tables;
+      ObHint::TablesInHint rowkey_hint_tables;
       ObTableInHint main_table;
       ObTableInHint rowkey_doc;
       main_table.qb_name_ = left_table->qb_name_;

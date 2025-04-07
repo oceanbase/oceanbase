@@ -2687,7 +2687,7 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
         } else if (index_hint->is_trans_added()) {
           //do nothing
         } else if (OB_FAIL(index_hint->print_hint(plan_text))) {
-          LOG_WARN("failed to print index hint", K(ret), K(*hint));
+          LOG_WARN("failed to print index hint", K(ret), KPC(index_hint));
         }
       }
     } else {// print all no index
@@ -2698,7 +2698,7 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL", K(ret), K(hint));
         } else if (OB_FAIL(hint->print_hint(plan_text))) {
-          LOG_WARN("failed to print index hint", K(ret), K(*hint));
+          LOG_WARN("failed to print index hint", K(ret), KPC(hint));
         }
       }
     }

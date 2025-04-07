@@ -657,7 +657,7 @@ public:
 
   // basic/generated table: size = 1
   // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4> TablesInHint;
+  typedef ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> TablesInHint;
 
   ObHint(ObItemType hint_type = T_INVALID)
     : hint_class_(HINT_INVALID_CLASS),
