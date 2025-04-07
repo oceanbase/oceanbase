@@ -164,12 +164,12 @@ int64_t ObTenantTransferService::calc_transfer_retry_interval_(
     ++retry_count;
   }
 
-  // If retry counts exceed the threshold, use _transfer_task_retry_interval as the interval.
-  // Otherwise, the interval is the minimum of the exponential backoff and _transfer_task_retry_interval.
+  // retry interval to the range [BUSY_IDLE_TIME_US, max(BUSY_IDLE_TIME_US, get_transfer_config_retry_interval_())]
+  int64_t max_retry_interval = max(BUSY_IDLE_TIME_US, get_transfer_config_retry_interval_());
   if (retry_count >= MAX_EXPONENTIAL_BACKOFF_COUNTS) {
-    retry_interval = get_transfer_config_retry_interval_();
+    retry_interval = max_retry_interval;
   } else {
-    retry_interval = min(BUSY_IDLE_TIME_US * (1 << retry_count), get_transfer_config_retry_interval_());
+    retry_interval = min(BUSY_IDLE_TIME_US * (1 << retry_count), max_retry_interval);
   }
   return retry_interval;
 }

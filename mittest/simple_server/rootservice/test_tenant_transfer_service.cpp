@@ -488,6 +488,13 @@ TEST_F(TestTenantTransferService, test_transfer_retry_limit)
   current_failed_task_id = 1;
   ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
   ASSERT_TRUE(0 == retry_count);
+
+  // ensure that retry_interval is not less than the lower limit (BUSY_IDLE_TIME_US)
+  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set _transfer_task_retry_interval = '0' tenant='tt1'");
+  ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
 }
 
 } // namespace rootserver
