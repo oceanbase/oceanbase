@@ -115,6 +115,7 @@ int ObBloomFilter::init_by_row_count(const int64_t element_count, const double f
 void ObBloomFilter::destroy()
 {
   if (NULL != bits_) {
+    allocator_.free(bits_);
     allocator_.reset();
     bits_ = NULL;
     nhash_ = 0;
@@ -142,6 +143,22 @@ int ObBloomFilter::insert(const uint32_t key_hash)
     for (int64_t i = 0; i < nhash_; i++) {
       bits_[bit_pos / CHAR_BIT] = static_cast<unsigned char>(bits_[bit_pos / CHAR_BIT] | (1 << (bit_pos % CHAR_BIT)));
       bit_pos = (bit_pos + delta) < nbit_ ? bit_pos + delta : bit_pos + delta - nbit_;
+    }
+  }
+  return ret;
+}
+
+int ObBloomFilter::merge(const ObBloomFilter &src_bf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(src_bf.bits_ == nullptr || bits_ == nullptr ||
+                  src_bf.nhash_ != nhash_ || src_bf.nbit_ != nbit_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to merge bloom filter, invalid argument", K(ret), K(src_bf), KPC(this));
+  } else {
+    const int64_t nbyte = get_nbytes();
+    for (int64_t i = 0; i < nbyte; ++i) {
+      bits_[i] |= src_bf.bits_[i];
     }
   }
   return ret;
@@ -484,13 +501,9 @@ int ObBloomFilterCacheValue::merge_bloom_filter(const ObBloomFilterCacheValue &b
   } else if (OB_UNLIKELY(!could_merge_bloom_filter(bf_cache_value))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexcepted bloomfitler cache to merge", K(bf_cache_value), K_(rowkey_column_cnt), K_(bloom_filter), K(ret));
+  } else if (OB_FAIL(bloom_filter_.merge(bf_cache_value.get_bloom_filter()))) {
+    LOG_WARN("fail to merge bloom filter", K(ret), KPC(this), K(bf_cache_value));
   } else {
-    int64_t num_bytes = bloom_filter_.get_nbytes();
-    const uint8_t *merge_bits = bf_cache_value.get_bloom_filter_bits();
-    uint8_t *dest_bits = bloom_filter_.get_bits();
-    for (int64_t i = 0; i < num_bytes; i++) {
-      dest_bits[i] |= merge_bits[i];
-    }
     row_count_ += bf_cache_value.get_row_count();
   }
 
@@ -850,15 +863,13 @@ int ObBloomFilterCache::inc_empty_read(
         } else if (OB_ISNULL(rowkey)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected rowkey", K(ret), KP(rowkey), KPC(read_handle));
-        } else if (OB_FAIL(check_need_load(bfc_key, need_load))) {
-          LOG_WARN("fail to check need load", K(bfc_key));
-        } else if (!need_load) {
-          // already loaded, do nothing.
+        } else if (cell->check_waiting()) {
+          // bf is on the way, do nothing
         } else if (OB_FAIL(MTL(storage::ObTenantMetaMemMgr *)
                         ->schedule_load_bloomfilter(sstable_key, ls_id, macro_id, *rowkey))) {
           LOG_WARN("fail to schedule load bf", K(ret), K(sstable_key), K(macro_id));
         } else {
-          cell->reset();
+          cell->set_waiting();
         }
       } else {
         if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)

@@ -43,6 +43,7 @@ public:
   int deep_copy(const ObBloomFilter &other, char *buf);
   int64_t get_deep_copy_size() const;
   int insert(const uint32_t key_hash);
+  int merge(const ObBloomFilter &src_bf);
   int may_contain(const uint32_t key_hash, bool &is_contain) const;
   int64_t calc_nbyte(const int64_t nbit) const;
   double calc_nhash(const double false_positive_prob) const;
@@ -111,6 +112,7 @@ public:
   OB_INLINE int64_t get_nhash() const { return bloom_filter_.get_nhash(); }
   OB_INLINE int64_t get_nbit() const { return bloom_filter_.get_nbit(); }
   OB_INLINE int64_t get_nbytes() const { return bloom_filter_.get_nbytes(); }
+  OB_INLINE const ObBloomFilter & get_bloom_filter() const { return bloom_filter_; }
   TO_STRING_KV(K_(version), K_(rowkey_column_cnt), K_(row_count), K_(bloom_filter), K_(is_inited));
   OB_UNIS_VERSION(BLOOM_FILTER_CACHE_VALUE_VERSION);
 private:

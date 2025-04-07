@@ -2826,8 +2826,10 @@ int ObDataIndexBlockBuilder::insert_and_update_index_tree(
   return ret;
 }
 
-int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
-    const ObDatumRowkey &rowkey, int64_t &estimate_meta_block_size) {
+int ObDataIndexBlockBuilder::cal_macro_meta_block_size(const ObDatumRowkey &rowkey,
+                                                       const int64_t macro_block_bf_size,
+                                                       int64_t &estimate_meta_block_size)
+{
   int ret = OB_SUCCESS;
   ObDataMacroBlockMeta macro_meta;
   const int64_t rowkey_cnt = rowkey.datum_cnt_;
@@ -2867,8 +2869,6 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
         STORAGE_LOG(WARN, "fail to append meta row", K(ret), K_(meta_row));
       } else {
         const int64_t max_agg_data_size = index_block_aggregator_.get_max_agg_size();
-        const int64_t max_macro_block_bf_size
-            = data_store_desc_->enable_macro_block_bloom_filter() ? ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE : 0;
         // for cs_encoding, the estimate_block_size calculated by build_block
         // may less than the real block_size, because the the cs_encoding has
         // compression for string column and the real macro meta data may has
@@ -2877,7 +2877,7 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
         if (ObStoreFormat::is_row_store_type_with_cs_encoding(
                 index_store_desc_->row_store_type_)) {
           estimate_meta_block_size =
-              meta_block_writer_->get_original_size() + max_agg_data_size + max_macro_block_bf_size;
+              meta_block_writer_->get_original_size() + max_agg_data_size + macro_block_bf_size;
 #ifdef OB_BUILD_TDE_SECURITY
           const int64_t encrypted_size =
               share::ObEncryptionUtil::encrypted_length(
@@ -2902,7 +2902,7 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
             estimate_meta_block_size = meta_block_desc.buf_size_ +
                                        meta_block_desc.header_->header_size_ +
                                        max_agg_data_size +
-                                       max_macro_block_bf_size;
+                                       macro_block_bf_size;
 #ifdef OB_BUILD_TDE_SECURITY
             const int64_t encrypted_size =
                 share::ObEncryptionUtil::encrypted_length(
@@ -2962,13 +2962,13 @@ int ObDataIndexBlockBuilder::append_row(const ObMicroBlockDesc &micro_block_desc
     if (remain_size <= 0) {
       ret = OB_BUF_NOT_ENOUGH;
     } else if (OB_FAIL(cal_macro_meta_block_size(row_desc.row_key_,
+                                                 macro_block.get_macro_block_bloom_filter_serialize_size(),
                                                  estimate_meta_block_size))) {
-      STORAGE_LOG(WARN, "fail to cal macro meta block size", K(ret),
-                  K(micro_block_desc));
+      LOG_WARN("fail to cal macro meta block size",
+               K(ret), K(micro_block_desc), K(macro_block.get_macro_block_bloom_filter_serialize_size()));
     } else if ((remain_size = remain_size - estimate_meta_block_size) <= 0) {
       ret = OB_BUF_NOT_ENOUGH;
-    } else if (FALSE_IT(
-                   micro_writer_->set_block_size_upper_bound(remain_size))) {
+    } else if (FALSE_IT(micro_writer_->set_block_size_upper_bound(remain_size))) {
       // remain_size is set to be block_size_upper_bound of n-1 level
       // micro_writer
     } else if (OB_FAIL(ObBaseIndexBlockBuilder::append_row(row_desc))) {

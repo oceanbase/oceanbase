@@ -391,7 +391,9 @@ public:
   int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id, const int64_t ddl_start_row_offset);
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta,
                          const ObMicroBlockData *micro_block_data);
-  int cal_macro_meta_block_size(const ObDatumRowkey &rowkey, int64_t &estimate_block_size);
+  int cal_macro_meta_block_size(const ObDatumRowkey &rowkey,
+                                const int64_t macro_block_bf_size,
+                                int64_t &estimate_block_size);
   int set_parallel_task_idx(const int64_t task_idx);
   inline int64_t get_estimate_index_block_size() const { return estimate_leaf_block_size_; }
   inline int64_t get_estimate_meta_block_size() const { return estimate_meta_block_size_; }

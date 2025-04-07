@@ -121,7 +121,6 @@ public:
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   compaction::ObExecMode exec_mode_;
   bool micro_index_clustered_;
-  // TODO(baichangmin): 需要对比 micro_index_clustered 来检查是否有遗漏，已知 mds 和 ddl 的入口都还没改
   bool enable_macro_block_bloom_filter_;
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.

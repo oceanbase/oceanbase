@@ -15,9 +15,13 @@
 #include <errno.h>
 #include <gtest/gtest.h>
 #include <iostream>
+#include <random>
+#include <chrono>
+#include <string>
 #define protected public
 #define private public
 #include "lib/oblog/ob_log_module.h"
+#include "lib/hash_func/murmur_hash.h"
 #include "mittest/mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_macro_block_bloom_filter.h"
@@ -379,7 +383,7 @@ TEST_F(TestMacroBlockBloomFilter, test_serialize_0)
   data_desc.desc_.static_desc_->enable_macro_block_bloom_filter_ = true;
 
   ObMacroBlockBloomFilter mb_bf;
-  ASSERT_EQ(OB_SUCCESS, mb_bf.alloc_bf(data_desc.desc_));
+  ASSERT_EQ(OB_SUCCESS, mb_bf.alloc_bf(data_desc.desc_, 0));
 
   mb_bf.row_count_ = 0;
   int64_t val = mb_bf.get_serialize_size();
@@ -399,10 +403,10 @@ TEST_F(TestMacroBlockBloomFilter, test_serialize_1)
 
   ObMacroBlockBloomFilter mb_bf;
   int64_t max_row_count = mb_bf.calc_max_row_count(ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE);
-  ASSERT_EQ(OB_SUCCESS, mb_bf.alloc_bf(data_desc.desc_));
+  ASSERT_EQ(OB_SUCCESS, mb_bf.alloc_bf(data_desc.desc_, 0));
   int64_t nbits = mb_bf.bf_.nbit_;
   int64_t tmp_size = ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE;
-  ASSERT_EQ(tmp_size, mb_bf.bf_.calc_nbyte(nbits));
+  ASSERT_EQ(max_row_count, mb_bf.max_row_count_);
 
   char * buf = new char[2 * 1024 * 1024]; // 2MB buffer
   mb_bf.row_count_ = 1;
@@ -430,6 +434,127 @@ TEST_F(TestMacroBlockBloomFilter, test_compat)
   ASSERT_EQ(pos, mock_pos);
   ASSERT_EQ(0, macro_meta_val.macro_block_bf_size_);
   ASSERT_EQ(10, macro_meta_val.ddl_end_row_offset_);
+}
+
+constexpr int SEED = 20240415;
+constexpr int TOTAL_STRINGS = 60000;
+constexpr int STR_LENGTH = 40;
+
+static const std::string CHAR_SET = "0123456789"
+                                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                    "abcdefghijklmnopqrstuvwxyz";
+
+std::mt19937_64 initialize_rng()
+{
+  std::mt19937_64 generator(SEED);
+  return generator;
+}
+
+std::string generate_random_string(std::mt19937_64& rng) {
+  std::uniform_int_distribution<int> dist(0, CHAR_SET.size() - 1);
+  std::string result;
+  result.reserve(STR_LENGTH);
+
+  for (int i = 0; i < STR_LENGTH; ++i) {
+      result += CHAR_SET[dist(rng)];
+  }
+  return result;
+}
+
+TEST_F(TestMacroBlockBloomFilter, test_disable_get_bf_size)
+{
+  // prepare data store desc and macro block writer
+  ObWholeDataStoreDesc data_desc;
+  prepare_data_store_desc(data_desc, root_index_builder_);
+  data_desc.desc_.static_desc_->enable_macro_block_bloom_filter_ = false;
+
+  ObMacroBlockWriter data_writer;
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+
+  ASSERT_EQ(data_writer.data_store_desc_->enable_macro_block_bloom_filter(), false);
+  ASSERT_EQ(data_writer.macro_blocks_[0].get_macro_block_bloom_filter_serialize_size(), 0);
+  ASSERT_EQ(data_writer.macro_blocks_[1].get_macro_block_bloom_filter_serialize_size(), 0);
+}
+
+TEST_F(TestMacroBlockBloomFilter, test_insert)
+{
+  // prepare data store desc and macro block writer
+  ObWholeDataStoreDesc data_desc;
+  prepare_data_store_desc(data_desc, root_index_builder_);
+  data_desc.desc_.static_desc_->enable_macro_block_bloom_filter_ = true;
+
+  char buffer[50];
+  auto cal_hash = [&buffer](std::string &str) {
+    MEMSET(buffer, 0, sizeof(buffer));
+    for (int i = 0; i < str.length(); ++i) {
+      buffer[i] = str[i];
+    }
+    uint64_t hash_val = 0;
+    return murmurhash(buffer, sizeof(buffer), 0);
+  };
+
+  // 1. parallel insert and merge
+  {
+    ObMacroBlockBloomFilter macro_bf;
+    ASSERT_EQ(OB_SUCCESS, macro_bf.alloc_bf(data_desc.desc_, 0));
+    ObMacroBlockBloomFilter micro_bf_08;
+    ASSERT_EQ(OB_SUCCESS, micro_bf_08.alloc_bf(data_desc.desc_, 7500));
+    ObMacroBlockBloomFilter micro_bf_16;
+    ASSERT_EQ(OB_SUCCESS, micro_bf_16.alloc_bf(data_desc.desc_, 15000));
+    ObMacroBlockBloomFilter micro_bf_32;
+    ASSERT_EQ(OB_SUCCESS, micro_bf_32.alloc_bf(data_desc.desc_, 30000));
+    ObMacroBlockBloomFilter micro_bf_64;
+    ASSERT_EQ(OB_SUCCESS, micro_bf_64.alloc_bf(data_desc.desc_, 0));
+
+    auto rng = initialize_rng();
+    const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
+    for (int i = 1; i <= 60000; ++i) {
+      auto str = generate_random_string(rng);
+      uint64_t hash_val = cal_hash(str);
+      ASSERT_EQ(OB_SUCCESS, micro_bf_08.bf_.insert(static_cast<uint32_t>(hash_val)));
+      ASSERT_EQ(OB_SUCCESS, micro_bf_16.bf_.insert(static_cast<uint32_t>(hash_val)));
+      ASSERT_EQ(OB_SUCCESS, micro_bf_32.bf_.insert(static_cast<uint32_t>(hash_val)));
+      ASSERT_EQ(OB_SUCCESS, micro_bf_64.bf_.insert(static_cast<uint32_t>(hash_val)));
+      if (i % 1000 == 0) {
+        ASSERT_EQ(OB_SUCCESS, macro_bf.bf_.merge(micro_bf_64.bf_));
+        micro_bf_08.bf_.clear();
+        micro_bf_16.bf_.clear();
+        micro_bf_32.bf_.clear();
+        micro_bf_64.bf_.clear();
+      }
+    }
+    const int64_t end_ts = common::ObTimeUtility::fast_current_time();
+    const int64_t cost_ts = end_ts - begin_ts;
+    FLOG_INFO("cmdebug, parallel insert and merge", K(cost_ts));
+  }
+
+  // 2. set insert and merge
+  {
+    ObMacroBlockBloomFilter macro_bf;
+    ASSERT_EQ(OB_SUCCESS, macro_bf.alloc_bf(data_desc.desc_, 0));
+    ObMicroBlockBloomFilter micro_bf;
+    ASSERT_EQ(OB_SUCCESS, micro_bf.init(data_desc.desc_));
+
+    auto rng = initialize_rng();
+    const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
+    for (int i = 1; i <= 60000; ++i) {
+      auto str = generate_random_string(rng);
+      uint64_t hash_val = cal_hash(str);
+      ASSERT_EQ(OB_SUCCESS, micro_bf.hash_set_.set_refactored(static_cast<uint32_t>(hash_val), 1 /* cover */));
+      if (i % 1000 == 0) {
+        ASSERT_EQ(OB_SUCCESS, macro_bf.merge(micro_bf));
+        micro_bf.reuse();
+      }
+    }
+    const int64_t end_ts = common::ObTimeUtility::fast_current_time();
+    const int64_t cost_ts = end_ts - begin_ts;
+    FLOG_INFO("cmdebug, hashset insert and merge", K(cost_ts));
+  }
 }
 
 } // namespace blocksstable

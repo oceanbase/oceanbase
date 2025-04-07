@@ -24,13 +24,14 @@ namespace storage
 {
 struct ObEmptyReadCell
 {
-  ObEmptyReadCell(): count_(0), hashcode_(0), build_time_(0) {}
+  ObEmptyReadCell(): count_(0), hashcode_(0), build_time_(0), is_waiting_(false) {}
   virtual ~ObEmptyReadCell() {}
   void reset()
   {
     count_ = 0;
     hashcode_ = 0;
     build_time_ = 0;
+    is_waiting_ = false;
   }
   void set(
       const uint64_t hashcode,
@@ -39,6 +40,7 @@ struct ObEmptyReadCell
     count_ = static_cast<int32_t>(inc_val);
     hashcode_ = hashcode;
     build_time_ = ObTimeUtility::current_time();
+    is_waiting_ = false;
   }
   int inc_and_fetch(
       const uint64_t hashcode,
@@ -77,11 +79,20 @@ struct ObEmptyReadCell
     }
     return bool_ret;
   }
-  TO_STRING_KV(K_(count), K_(hashcode), K_(build_time));
+  bool check_waiting()
+  {
+    return is_waiting_;
+  }
+  void set_waiting()
+  {
+    is_waiting_ = true;
+  }
+  TO_STRING_KV(K_(count), K_(hashcode), K_(build_time), K_(is_waiting));
   static const int64_t ELIMINATE_TIMEOUT_US = 1000 * 1000 * 120; //2min
   volatile int32_t count_;
   volatile uint64_t hashcode_;
   volatile int64_t build_time_;
+  volatile bool is_waiting_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyReadCell);
 };

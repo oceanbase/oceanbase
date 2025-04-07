@@ -36,6 +36,7 @@
 #include "ob_micro_block_checksum_helper.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/blocksstable/ob_macro_seq_generator.h"
+#include "storage/blocksstable/ob_macro_block_bloom_filter.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/blocksstable/ob_batch_datum_rows.h"
@@ -252,6 +253,7 @@ protected:
   compaction::ObMergeBlockInfo merge_block_info_;
 private:
   ObIMicroBlockWriter *micro_writer_;
+  ObMicroBlockBloomFilter micro_block_bf_;
   ObMicroBlockReaderHelper reader_helper_;
   ObMicroBlockBufferHelper micro_helper_;
   ObMacroBlock macro_blocks_[2];

@@ -2170,7 +2170,7 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   }
   const ObDatumRowkey& last_data_key = data_writer.last_key_;
   int64_t estimate_meta_block_size = 0;
-  OK(data_writer.builder_->cal_macro_meta_block_size(last_data_key, estimate_meta_block_size));
+  OK(data_writer.builder_->cal_macro_meta_block_size(last_data_key, 0, estimate_meta_block_size));
 
   ObMacroBlock &macro_block = data_writer.macro_blocks_[0];
   ObStorageObjectHandle &macro_handle = data_writer.macro_handles_[0];
