@@ -584,6 +584,15 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
   }
 }
 
+bool ObPhysicalPlan::check_if_is_expired_by_error(const int error_code) const
+{
+  return common::OB_TIMEOUT == error_code
+         || common::OB_TRANS_STMT_TIMEOUT == error_code
+         || common::OB_SESSION_KILLED == error_code
+         || common::OB_ERR_QUERY_INTERRUPTED == error_code
+         || common::OB_ERR_SESSION_INTERRUPTED == error_code;
+}
+
 void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
                                               const bool is_first,
                                               const ObIArray<ObTableRowCount> *table_row_count_list)
@@ -591,9 +600,9 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
   bool bret = false;
   bool is_evolution = ATOMIC_LOAD(&stat_.is_evolution_);
   bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_row_count_)) >= 0;
-  if (!is_evolution && (record.is_timeout() || OB_SESSION_KILLED == record.status_)) {
+  if (!is_evolution && check_if_is_expired_by_error(record.status_)) {
     set_is_expired(true);
-    LOG_INFO("query plan is expired due to execution timeout", K(stat_));
+    LOG_INFO("query plan is expired due to execution error", K(record.status_), K(stat_));
   } else if (is_first) {
     ATOMIC_STORE(&(stat_.sample_times_), 0);
     ATOMIC_STORE(&(stat_.first_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
