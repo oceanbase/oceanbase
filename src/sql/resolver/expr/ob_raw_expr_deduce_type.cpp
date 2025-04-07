@@ -566,7 +566,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     // demands that we set the calculation type here.
     for (int64_t i = 0; i < types.count() && OB_SUCC(ret); ++i) {
       types.at(i).set_calc_meta(types.at(i));
-      if (lib::is_mysql_mode() && types.at(i).is_double()) {
+      if (lib::is_mysql_mode() && ob_is_double_type(types.at(i).get_type())) {
         const ObPrecision p = types.at(i).get_precision();
         const ObScale s = types.at(i).get_scale();
         // check whether the precision and scale is valid
