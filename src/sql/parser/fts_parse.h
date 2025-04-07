@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 // this is a C wrapper to call murmurhash in C++ definition
-void fts_parse_docment(const char *input, void *pool, FtsParserResult *ss);
+void fts_parse_docment(const char *input, const int length, void *pool, FtsParserResult *ss);
 
 #ifdef __cplusplus
 }

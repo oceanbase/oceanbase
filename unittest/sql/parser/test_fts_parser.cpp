@@ -80,43 +80,43 @@ TEST_F(TestFtsParser, input_error_test)
   const char *query_str = nullptr;
   FtsParserResult ss;
   query_str = "you ++me";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "you +-me2";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "you --me2";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "you (+-me2)";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "you (+-)me2";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "you (me2";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "you me2)";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "+you +(-me2 +(A C) -)";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = ">";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "<";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "~";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "@";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
   query_str = "*";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, transfer_ret_code(ss.ret_));
 }
 
@@ -125,13 +125,13 @@ TEST_F(TestFtsParser, input_ok_test)
   int ret = OB_SUCCESS;
   const char *query_str = "you me";
   FtsParserResult ss;
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_SUCCESS, transfer_ret_code(ss.ret_));
   query_str = "you +(-me2)";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_SUCCESS, transfer_ret_code(ss.ret_));
   query_str = "+you +(-me2 +(A +C))";
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_SUCCESS, transfer_ret_code(ss.ret_));
 }
 
@@ -142,7 +142,7 @@ TEST_F(TestFtsParser, create_node_test)
   const char *query_str = "";
   query_str = "+you -me and (let +and)";
   FtsParserResult ss;
-  fts_parse_docment(query_str, &allocator_, &ss);
+  fts_parse_docment(query_str, strlen(query_str), &allocator_, &ss);
   ASSERT_EQ(OB_SUCCESS, transfer_ret_code(ss.ret_));
   FtsNode *node = ss.root_;
   ObFtsEvalNode *parant_node =nullptr;
@@ -152,7 +152,7 @@ TEST_F(TestFtsParser, create_node_test)
   const int64_t ft_word_bkt_cnt = MAX(strlen(query_str) / 10, 2);
   ret = tokens_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMapTest"));
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObFtsEvalNode::fts_boolean_node_create(parant_node, node, allocator_, query_tokens, tokens_map);
+  ObFtsEvalNode::fts_boolean_node_create(parant_node, node, ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, allocator_, query_tokens, tokens_map);
   ASSERT_FALSE(parant_node->leaf_node_);
 
   ASSERT_TRUE(parant_node->child_nodes_.at(0)->leaf_node_);
