@@ -818,8 +818,8 @@ int ObDMLService::check_column_type_batch(
         ret = log_user_error_inner(ret, row_num, column_name, exec_ctx, expr->datum_meta_.type_);
       } else if (!ins_ctdef.has_instead_of_trigger_) {
         if (OB_UNLIKELY(expr->obj_meta_.is_geometry())
-            && OB_FAIL(check_geometry_column_batch(ins_ctdef, dml_op, column_info))) {
-          LOG_WARN("failed to check geometry column batch", KR(ret), K(column_info));
+            && OB_FAIL(check_geometry_column_batch(ins_ctdef, dml_op, column_info, use_rich_format))) {
+          LOG_WARN("failed to check geometry column batch", KR(ret), K(column_info), K(use_rich_format));
         } else if (!column_info.is_nullable_) {
           bool need_check_null = use_rich_format ? expr->get_vector(eval_ctx)->has_null() : true;
           if (need_check_null && OB_FAIL(check_column_null_batch(
@@ -836,7 +836,8 @@ int ObDMLService::check_column_type_batch(
 int ObDMLService::check_geometry_column_batch(
     const ObInsCtDef &ins_ctdef,
     ObTableModifyOp &dml_op,
-    const ColumnContent &column_info)
+    const ColumnContent &column_info,
+    const bool use_rich_format)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
@@ -852,8 +853,27 @@ int ObDMLService::check_geometry_column_batch(
     bool is_skipped = batch_rows.skip_->at(i);
     batch_info_guard.set_batch_idx(i);
     if (!is_skipped) {
-      ObDatum &datum = expr->locate_expr_datum(eval_ctx);
-      if (OB_FAIL(check_geometry_type(eval_ctx, dml_expr_array, column_info, tmp_allocator, datum))) {
+      ObDatum gis_datum;
+      ObDatum *ptr_datum = &gis_datum;
+      if (use_rich_format) {
+        ObIVector *vec = expr->get_vector(eval_ctx);
+        if (OB_ISNULL(vec)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null vec", KR(ret), KP(vec));
+        } else if (vec->is_null(i)) {
+          gis_datum.set_null();
+        } else {
+          const char *payload = nullptr;
+          int32_t len = 0;
+          vec->get_payload(i, payload, len);
+          gis_datum.ptr_ = payload;
+          gis_datum.len_ = len;
+        }
+      } else {
+        ptr_datum = &expr->locate_expr_datum(eval_ctx);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(check_geometry_type(eval_ctx, dml_expr_array, column_info, tmp_allocator, *ptr_datum))) {
         LOG_WARN("failed to check geometry type", KR(ret), K(column_info));
         if (OB_FAIL(check_error_ret_by_row(ins_ctdef, dml_op, ret))) {
           LOG_WARN("failed to check error ret by row", KR(ret));

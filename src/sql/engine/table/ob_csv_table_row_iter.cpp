@@ -273,6 +273,9 @@ int ObCSVTableRowIterator::load_next_buf()
       if (OB_SUCC(ret)) {
         state_.pos_ = state_.buf_;
         state_.data_end_ = next_load_pos + read_size;
+        state_.has_escape_ = (nullptr != memchr(state_.buf_,
+                                                parser_.get_format().field_escaped_char_,
+                                                state_.data_end_ - state_.pos_));
       }
     }
 
@@ -521,9 +524,15 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         if (OB_UNLIKELY(0 == nrows)) {
           // if line_count_limit = 0, get next file.
         } else {
-          ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
+          if (state_.has_escape_) {
+            ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
                                           state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
                                           error_msgs, file_reader_.eof());
+          } else {
+            ret = parser_.scan<decltype(handle_one_line), false>(state_.pos_, state_.data_end_, nrows,
+                                          state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
+                                          error_msgs, file_reader_.eof());
+          }
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to scan csv", K(ret));
           } else if (OB_UNLIKELY(error_msgs.count() > 0)) {

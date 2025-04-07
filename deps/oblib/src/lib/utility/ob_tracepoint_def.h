@@ -559,6 +559,7 @@ GLOBAL_ERRSIM_POINT_DEF(1189, EN_SQL_AUDIT_RELEASE_BACK_THREAD_STUCK, "");
 GLOBAL_ERRSIM_POINT_DEF(1190, EN_SQL_AUDIT_CONSTRUCT_BACK_THREAD_STUCK, "");
 GLOBAL_ERRSIM_POINT_DEF(1199, EN_DISABLE_ENCODESORTKEY_OPT, "Used for disable encode sortkey simd optimization");
 GLOBAL_ERRSIM_POINT_DEF(1200, EN_ENABLE_NEWSORT_FORCE, "");
+GLOBAL_ERRSIM_POINT_DEF(1201, EN_DISABLE_NEWSORT_FIXED_KEY_OPT, "Used to control whether to turn off the newsort fixed key opt when use encode sortkey");
 
 // Transaction // 2001 - 2100
 // Transaction free route

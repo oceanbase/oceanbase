@@ -911,6 +911,7 @@ public:
                                    uint16_t &subschema_id);
   static bool is_external_pseudo_column(const ObRawExpr &expr);
   static int cnt_external_pseudo_column(const ObRawExpr &expr, bool &contain);
+  static bool is_pseudo_partition_column_name(const ObString name);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

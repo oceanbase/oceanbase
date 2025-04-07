@@ -1509,6 +1509,13 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
         } else if (OB_FAIL(resolve_column_name(column, element))) {
           SQL_RESV_LOG(WARN, "resolve column name failed", K(ret));
         } else {
+          if (GCONF._enable_pseudo_partition_id &&
+              ObResolverUtils::is_pseudo_partition_column_name(column.get_column_name_str())) {
+            ret = OB_ERR_COLUMN_DUPLICATE;
+            LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column.get_column_name_str().length(),
+              column.get_column_name_str().ptr());
+            LOG_WARN("invalid partition pseudo column", K(ret), K(column.get_column_name_str()));
+          }
           OZ (resolved_cols.push_back(column));
         }
       }
@@ -2142,6 +2149,16 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             OZ(column.set_column_name(select_item.alias_name_));
           } else {
             OZ(column.set_column_name(select_item.expr_name_));
+          }
+          if (OB_SUCC(ret)) {
+            if (GCONF._enable_pseudo_partition_id &&
+                ObResolverUtils::is_pseudo_partition_column_name(column.get_column_name_str())) {
+              ret = OB_ERR_COLUMN_DUPLICATE;
+              LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column.get_column_name_str().length(),
+                column.get_column_name_str().ptr());
+              LOG_WARN("cannot create table from select stmt, duplicate partition pseudo column",
+                K(ret), K(column.get_column_name_str()));
+            }
           }
           if (OB_SUCC(ret) && is_mysql_mode()) {
             if (new_table_item != NULL && new_table_item->is_basic_table()) {

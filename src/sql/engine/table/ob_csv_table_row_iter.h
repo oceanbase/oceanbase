@@ -43,7 +43,8 @@ public:
     ip_port_len_(0),
     need_expand_buf_(false),
     duration_(0),
-    cur_file_size_(0) {}
+    cur_file_size_(0),
+    has_escape_(true) {}
 
   virtual void reuse() override
   {
@@ -59,6 +60,7 @@ public:
     need_expand_buf_ = false;
     duration_ = 0;
     cur_file_size_ = 0;
+    has_escape_ = true;
   }
   DECLARE_VIRTUAL_TO_STRING;
   char *buf_;
@@ -75,6 +77,7 @@ public:
   bool need_expand_buf_;
   int64_t duration_;
   int64_t cur_file_size_;
+  bool has_escape_;
 };
 
 class ObCSVTableRowIterator : public ObExternalTableRowIterator {

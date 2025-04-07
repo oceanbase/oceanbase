@@ -12,6 +12,7 @@
 #include "sql/engine/expr/vector_cast/vector_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "sql/engine/expr/vector_cast/float_to_decimal_impl.h"
 
 namespace oceanbase
 {
@@ -125,24 +126,31 @@ struct ToDecimalintCastImpl
           } else {
             ObDecimalIntBuilder tmp_alloc;
             ObDecimalInt *decint = nullptr;
-            int32_t val_len = 0;
-            in_scale_ = in_prec_ = 0;
             ob_gcvt_arg_type arg_type = std::is_same<IN_TYPE, float>::value
                                         ? OB_GCVT_ARG_FLOAT : OB_GCVT_ARG_DOUBLE;
-            if (OB_FAIL(ObDataTypeCastUtil::common_floating_decimalint_wrap(
-                          in_val, arg_type, tmp_alloc, decint, val_len, in_scale_, in_prec_))) {
-              SQL_LOG(WARN, "common_floating_decimalint failed", K(ret), K(in_val));
-            } else if (ObDatumCast::need_scale_decimalint(in_scale_, in_prec_, out_scale_, out_prec_)) {
-              ObDecimalIntBuilder res_val;
-              if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, val_len, in_scale_, out_scale_,
-                                                               out_prec_, expr.extra_, res_val,
-                                                               ctx_.exec_ctx_.get_user_logging_ctx()))) {
-                SQL_LOG(WARN, "scale decimalint failed", K(ret));
-              } else {
-                res_vec_->set_payload(idx, res_val.get_decimal_int(), res_val.get_int_bytes());
-              }
-            } else {
+            int32_t val_len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec_);
+            if (OB_SUCCESS
+                == ObFloatToDecimal::float2decimal(in_val, lib::is_oracle_mode(), arg_type,
+                                                   out_prec_, out_scale_, expr.extra_, tmp_alloc,
+                                                   ctx_.exec_ctx_.get_user_logging_ctx(), decint)) {
               res_vec_->set_payload(idx, decint, val_len);
+            } else {
+              in_scale_ = in_prec_ = 0;
+              if (OB_FAIL(ObDataTypeCastUtil::common_floating_decimalint_wrap(
+                            in_val, arg_type, tmp_alloc, decint, val_len, in_scale_, in_prec_))) {
+                SQL_LOG(WARN, "common_floating_decimalint failed", K(ret), K(in_val));
+              } else if (ObDatumCast::need_scale_decimalint(in_scale_, in_prec_, out_scale_, out_prec_)) {
+                ObDecimalIntBuilder res_val;
+                if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, val_len, in_scale_, out_scale_,
+                                                                out_prec_, expr.extra_, res_val,
+                                                                ctx_.exec_ctx_.get_user_logging_ctx()))) {
+                  SQL_LOG(WARN, "scale decimalint failed", K(ret));
+                } else {
+                  res_vec_->set_payload(idx, res_val.get_decimal_int(), res_val.get_int_bytes());
+                }
+              } else {
+                res_vec_->set_payload(idx, decint, val_len);
+              }
             }
           }
           return ret;

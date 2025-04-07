@@ -5848,6 +5848,11 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
             } else {
               LOG_WARN("set refactored failed", KR(ret), K(column_name));
             }
+          } else if (GCONF._enable_pseudo_partition_id
+              && ObResolverUtils::is_pseudo_partition_column_name(column_name)) {
+            ret = OB_ERR_COLUMN_DUPLICATE;
+            LOG_WARN("duplicate column name", KR(ret), K(column_name));
+            LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
           }
         }
 
@@ -6878,10 +6883,36 @@ int ObAlterTableResolver::resolve_drop_column(
         LOG_WARN("check column definition ref node failed", K(ret));
       } else if (OB_FAIL(alter_column_schema.set_column_name(alter_column_schema.get_origin_column_name()))) {
       } else {
-        alter_column_schema.alter_type_ = OB_DDL_DROP_COLUMN;
-        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = lib::is_oracle_mode()
-                                                                   && can_drop_column_instant(tenant_data_version)
-                                                                     ? obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT : obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
+        ObString column_name = alter_column_schema.get_column_name();
+        if (GCONF._enable_pseudo_partition_id &&
+          ObResolverUtils::is_pseudo_partition_column_name(column_name)) {
+          // check table_schema has the partition column or not,
+          // if has drop normally, if not return OB_ERR_COLUMN_DUPLICATE
+          bool is_exist = false;
+          if (OB_ISNULL(params_.schema_checker_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("params_.schema_checker_ is null", K(ret));
+          } else if (OB_ISNULL(params_.session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("params_.session_info_ is null", K(ret));
+          } else if (OB_FAIL(params_.schema_checker_->check_column_exists(
+                params_.session_info_->get_effective_tenant_id(), table_schema_->get_table_id(),
+                column_name, is_exist))) {
+            LOG_WARN("check column exists failed", K(ret), K(column_name));
+          } else if (!is_exist) {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+              table_schema_->get_table_name_str().length(),
+              table_schema_->get_table_name_str().ptr());
+            LOG_WARN("invalid partition pseudo column", K(ret), K(column_name));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          alter_column_schema.alter_type_ = OB_DDL_DROP_COLUMN;
+          alter_table_stmt->get_alter_table_arg().alter_algorithm_ = lib::is_oracle_mode()
+                                                                    && can_drop_column_instant(tenant_data_version)
+                                                                      ? obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT : obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
+        }
       }
       if (OB_SUCC(ret)) {
         ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
@@ -7034,6 +7065,11 @@ int ObAlterTableResolver::resolve_rename_column(const ParseNode &node)
       LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, new_column_name.length(), new_column_name.ptr(),
                                              table_name_.length(), table_name_.ptr());
       LOG_WARN("invalid rowid column for rename stmt", K(ret));
+    } else if (GCONF._enable_pseudo_partition_id &&
+        ObResolverUtils::is_pseudo_partition_column_name(new_column_name)) {
+      ret = OB_ERR_COLUMN_DUPLICATE;
+      LOG_WARN("duplicate column name", KR(ret), K(new_column_name));
+      LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, new_column_name.length(), new_column_name.ptr());
     }
     const ObString origin_column_name = alter_column_schema.get_origin_column_name();
     const ObColumnSchemaV2 *origin_col_schema = NULL;

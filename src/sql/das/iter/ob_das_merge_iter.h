@@ -16,12 +16,19 @@
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
+enum class PseudoCalcType
+{
+  PSEUDO_PART_ID = 0,
+  PSEUDO_PART_NAME,
+  PSEUDO_PART_INDEX
+};
 
 struct ObDASMergeIterParam : public ObDASIterParam
 {
@@ -51,6 +58,12 @@ public:
   bool execute_das_directly_;
   bool enable_rich_format_;
   bool used_for_keep_order_;
+  ObExpr *pseudo_partition_id_expr_;
+  ObExpr *pseudo_sub_partition_id_expr_;
+  ObExpr *pseudo_partition_name_expr_;
+  ObExpr *pseudo_sub_partition_name_expr_;
+  ObExpr *pseudo_partition_index_expr_;
+  ObExpr *pseudo_sub_partition_index_expr_;
 
   virtual bool is_valid() const override
   {
@@ -151,6 +164,7 @@ public:
   DASTaskIter begin_task_iter();
   bool is_all_local_task() const;
   int rescan_das_task(ObDASScanOp *scan_op);
+  bool has_pseudo_part_id_columnref();
   /********* DAS REF END *********/
 
 protected:
@@ -165,6 +179,11 @@ protected:
   void update_wild_datum_ptr(int64_t rows_count);
   void clear_evaluated_flag();
   int update_output_tablet_id(ObIDASTaskOp *output_das_task);
+  int update_pseudo_columns(ObIDASTaskOp *output_das_task);
+  template<bool is_sub_partition, PseudoCalcType calc_type>
+  int update_pseudo_parittion_id(const ObDASTabletLoc *tablet_loc, const ObExpr *expr);
+  int get_index_by_partition_id(int64_t id, int64_t &index, bool is_sub_partition);
+  int get_name_by_partition_id(int64_t id, ObString &name, bool is_sub_partition);
 
 private:
   int get_next_seq_row();
@@ -241,6 +260,14 @@ private:
   MergeStateArray merge_state_arr_;
   MergeStoreRowsArray merge_store_rows_arr_;
   bool used_for_keep_order_;
+  ObExpr *pseudo_partition_id_expr_;
+  ObExpr *pseudo_sub_partition_id_expr_;
+  ObExpr *pseudo_partition_name_expr_;
+  ObExpr *pseudo_sub_partition_name_expr_;
+  ObExpr *pseudo_partition_index_expr_;
+  ObExpr *pseudo_sub_partition_index_expr_;
+  const share::schema::ObTableSchema *table_schema_ = NULL;
+  share::schema::ObPartitionLevel part_level_;
   /********* SORT MERGE END *********/
 };
 

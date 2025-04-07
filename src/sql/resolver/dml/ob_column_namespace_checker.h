@@ -92,6 +92,9 @@ public:
       const ObQualifiedName &q_name,
       const TableItem *&table_item,
       bool is_from_multi_tab_insert = false);
+  int check_parittion_id_table_column_namespace(
+      const ObQualifiedName &q_name,
+      const TableItem *&table_item);
 
   void enable_check_unique() { check_unique_ = true; }
   void disable_check_unique() { check_unique_ = false; }

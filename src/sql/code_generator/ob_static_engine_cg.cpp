@@ -2197,7 +2197,8 @@ int ObStaticEngineCG::fill_sort_info(
       } else {
         ObSortFieldCollation field_collation(start_pos++, expr->datum_meta_.cs_type_,
             order_item.is_ascending(),
-            (order_item.is_null_first() ^ order_item.is_ascending()) ? NULL_LAST : NULL_FIRST);
+            (order_item.is_null_first() ^ order_item.is_ascending()) ? NULL_LAST : NULL_FIRST,
+            order_item.is_not_null_);
         if (OB_FAIL(collations.push_back(field_collation))) {
           LOG_WARN("failed to push back field collation", K(ret));
         } else {
@@ -2209,6 +2210,30 @@ int ObStaticEngineCG::fill_sort_info(
   return ret;
 }
 
+int ObStaticEngineCG::check_not_support_cmp_type(const ObExpr* expr)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+    // other udt types not supported, xmltype does not have order or map member function
+    ret = OB_ERR_NO_ORDER_MAP_SQL;
+    LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+  } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == expr->datum_meta_.type_
+                                              || ObLobType == expr->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("order by lob not allowed", K(ret));
+  } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == expr->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_CMP_OP;
+    LOG_WARN("order by json not allowed", K(ret));
+  } else if (OB_UNLIKELY(ObRoaringBitmapType == expr->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("order by roaringbitmap not allowed", K(ret));
+  } else if (OB_UNLIKELY(ObCollectionSQLType == expr->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("order by collection not allowed", K(ret));
+  }
+  return ret;
+
+}
 int ObStaticEngineCG::check_not_support_cmp_type(
   const ObSortCollations &collations,
   const ObIArray<ObExpr*> &sort_exprs)
@@ -2219,16 +2244,22 @@ int ObStaticEngineCG::check_not_support_cmp_type(
     ObExpr* expr = nullptr;
     if (OB_FAIL(sort_exprs.at(sort_collation.field_idx_, expr))) {
       LOG_WARN("failed to get sort exprs", K(ret));
-    } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
-      // other udt types not supported, xmltype does not have order or map member function
-      ret = OB_ERR_NO_ORDER_MAP_SQL;
-      LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
-    } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("invalid operation for roaringbitmap", K(ret));
+    } else if (OB_FAIL(check_not_support_cmp_type(expr))) {
+      LOG_WARN("cmp type not support", K(ret));
     }
   }
   return ret;
+}
+
+bool ObStaticEngineCG::use_single_col_compare(ObSortVecSpec &spec)
+{
+  bool enable_single_col_compare = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2
+                               && false == spec.has_addon_
+                               && 1 == spec.sk_collations_.count()
+                               && 1 == spec.sk_exprs_.count()
+                               && spec.sk_collations_.at(0).is_ascending_
+                               && spec.sk_collations_.at(0).is_not_null_;
+  return enable_single_col_compare;
 }
 
 int ObStaticEngineCG::fill_sort_funcs(
@@ -2245,23 +2276,8 @@ int ObStaticEngineCG::fill_sort_funcs(
       ObExpr* expr = nullptr;
       if (OB_FAIL(sort_exprs.at(sort_collation.field_idx_, expr))) {
         LOG_WARN("failed to get sort exprs", K(ret));
-      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
-        // other udt types not supported, xmltype does not have order or map member function
-        ret = OB_ERR_NO_ORDER_MAP_SQL;
-        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
-      } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == expr->datum_meta_.type_
-                                                 || ObLobType == expr->datum_meta_.type_)) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("order by lob not allowed", K(ret));
-      } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == expr->datum_meta_.type_)) {
-        ret = OB_ERR_INVALID_CMP_OP;
-        LOG_WARN("order by json not allowed", K(ret));
-      } else if (OB_UNLIKELY(ObRoaringBitmapType == expr->datum_meta_.type_)) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("order by roaringbitmap not allowed", K(ret));
-      } else if (OB_UNLIKELY(ObCollectionSQLType == expr->datum_meta_.type_)) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("order by collection not allowed", K(ret));
+      } else if (OB_FAIL(check_not_support_cmp_type(expr))) {
+        LOG_WARN("cmp type not support", K(ret));
       } else {
         ObSortCmpFunc cmp_func;
         cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -2660,8 +2676,10 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
         spec.has_addon_ = (spec.addon_exprs_.count() != 0);
         spec.enable_encode_sortkey_opt_ = enable_encode_sortkey_opt;
         spec.part_cnt_ = op.get_part_cnt();
+        spec.enable_single_col_compare_opt_ = use_single_col_compare(spec);
         LOG_TRACE("trace order by", K(spec.sk_exprs_.count()), K(spec.addon_exprs_.count()),
-                  K(spec.sk_exprs_), K(spec.addon_exprs_));
+                  K(spec.sk_exprs_), K(spec.addon_exprs_),
+                  K(spec.sk_collations_), K(spec.addon_collations_), K(spec.enable_single_col_compare_opt_));
       }
       if (OB_SUCC(ret)) {
         if (spec.part_cnt_ > 0 && spec.part_cnt_ >= spec.sk_collations_.count()) {
@@ -5686,6 +5704,94 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         spec.pdml_partition_id_ = rt_expr;
         spec.partition_id_calc_type_ = op.get_tablet_id_type();
         found = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && op.get_pseudo_columnref_exprs().count() > 0) {
+    // get part_level_ from table_schema
+    uint64_t ref_table_id = op.get_ref_table_id();
+    ObLogPlan *log_plan = op.get_plan();
+    const ObDMLStmt *stmt = op.get_stmt();
+    ObSqlSchemaGuard *schema_guard = NULL;
+    const ObTableSchema *table_schema = NULL;
+    if (OB_ISNULL(log_plan) || OB_ISNULL(stmt)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(spec), K(log_plan), K(stmt), K(ret));
+    } else if (OB_INVALID_ID == ref_table_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid table id", K(ref_table_id), K(ret));
+    } else if (OB_FAIL(spec.pseudo_column_exprs_.prepare_allocate_and_keep_count(
+        op.get_pseudo_columnref_exprs().count()))) {
+      LOG_WARN("fail to prepare_allocate pseudo_column_exprs_", K(ret));
+    } else if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("null schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+      LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null table schema", K(table_schema), K(ret));
+    } else if (!table_schema->is_partitioned_table()) {
+      /*do nothing*/
+    } else if (table_schema->get_table_type() != share::schema::USER_TABLE) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can only generate partition pseudo column from user table",
+        K(ret), K(table_schema->get_table_type()));
+    }
+    ObIArray<ObRawExpr*> &pseudo_columnref_exprs = op.get_pseudo_columnref_exprs();
+    for (int i = 0; OB_SUCC(ret) && i < pseudo_columnref_exprs.count(); i++) {
+      ObExpr *rt_expr = NULL;
+      ObRawExpr* raw_expr = pseudo_columnref_exprs.at(i);
+      ObColumnRefRawExpr *columnref_expr = NULL;
+      if (OB_ISNULL(raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected pseudo_columnref_expr", K(ret));
+      } else if (!raw_expr->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected pseudo_columnref_expr, not columnref", K(ret));
+      } else if (FALSE_IT(columnref_expr = static_cast<ObColumnRefRawExpr*>(raw_expr))){
+      } else if (!columnref_expr->is_pseudo_column_ref()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected pseudo_columnref_expr, not pseudo columnref", K(ret));
+      } else if (OB_FAIL(mark_expr_self_produced(raw_expr))) {
+        LOG_INFO("mark_expr_self_produced failed", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr, rt_expr))) {
+        LOG_WARN("generate rt expr failed", K(ret));
+      } else {
+        if (columnref_expr->get_column_name().case_compare(
+                                  OB_PART_ID_PSEUDO_COLUMN_NAME) == 0) {
+          rt_expr->extra_ =
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_ID);
+        } else if (columnref_expr->get_column_name().case_compare(
+                                  OB_SUBPART_ID_PSEUDO_COLUMN_NAME) == 0) {
+          rt_expr->extra_ =
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_ID);
+        } else if (columnref_expr->get_column_name().case_compare(
+                                  OB_PART_NAME_PSEUDO_COLUMN_NAME) == 0) {
+          rt_expr->extra_ =
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_NAME);
+        } else if (columnref_expr->get_column_name().case_compare(
+                                  OB_SUBPART_NAME_PSEUDO_COLUMN_NAME) == 0) {
+          rt_expr->extra_ =
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_NAME);
+        } else if (columnref_expr->get_column_name().case_compare(
+                                  OB_PART_INDEX_PSEUDO_COLUMN_NAME) == 0) {
+          rt_expr->extra_ =
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_INDEX);
+        } else if (columnref_expr->get_column_name().case_compare(
+                                  OB_SUBPART_INDEX_PSEUDO_COLUMN_NAME) == 0) {
+          rt_expr->extra_ =
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_INDEX);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected pseudo column name", K(ret), K(columnref_expr->get_column_name()));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(spec.pseudo_column_exprs_.push_back(rt_expr))) {
+            LOG_WARN("push_back spec.pseudo_column_exprs_ failed", K(ret));
+          }
+        }
       }
     }
   }
@@ -9721,8 +9827,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       int tmp_ret = OB_SUCCESS;
       bool use_vec_sort = true;
       const ObLogSort &sort_op = static_cast<const ObLogSort &>(log_op);
-      if ((1 == sort_op.get_sort_keys().count() && !sort_op.enable_pd_topn_filter())
-          || (NULL != sort_op.get_topn_expr() && sort_op.get_part_cnt() > 0)) {
+      if (NULL != sort_op.get_topn_expr() && sort_op.get_part_cnt() > 0) {
         use_vec_sort = false;
       }
       tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SORT) OB_SUCCESS;

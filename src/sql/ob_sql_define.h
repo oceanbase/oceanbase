@@ -572,6 +572,16 @@ enum ObIDPAbortType
   IDP_NO_ABORT = 4
 };
 
+enum class PseudoColumnRefType {
+  PSEUDO_PARTITION_ID = 0,
+  PSEUDO_SUB_PARTITION_ID = 1,
+  PSEUDO_PARTITION_NAME = 2,
+  PSEUDO_SUB_PARTITION_NAME = 3,
+  PSEUDO_PARTITION_INDEX = 4,
+  PSEUDO_SUB_PARTITION_INDEX = 5,
+  MAX = 255  // 不超过 8 位的最大值
+};
+
 struct ObSqlDatumArray
 {
   ObSqlDatumArray()

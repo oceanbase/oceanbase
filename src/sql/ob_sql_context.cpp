@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_sql_context.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 
 using namespace ::oceanbase::common;
 namespace oceanbase
@@ -581,10 +582,18 @@ int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, const ObString &colum
       column_schema = table_schema->get_column_schema(column_name);
     }
   } else {
+    // first get table_schema, than try mock column_schema for part id
     const uint64_t tenant_id = MTL_ID();
+    const ObTableSchema *table_schema = NULL;
     OV (OB_NOT_NULL(schema_guard_));
-    OZ (schema_guard_->get_column_schema(tenant_id, table_id, column_name, column_schema),
-        table_id, column_name, is_link);
+    OV ((OB_INVALID_ID != table_id && !column_name.empty()));
+    OZ (schema_guard_->get_table_schema(tenant_id, table_id, table_schema));
+    if (table_schema == NULL) {
+      // do nothing, same as schema_guard_->get_column_schema()
+    } else {
+      OZ (sql::ObSQLMockSchemaUtils::try_mock_partid(table_schema, table_schema));
+      OX (column_schema = table_schema->get_column_schema(column_name));
+    }
   }
   return ret;
 }
@@ -604,10 +613,18 @@ int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, uint64_t column_id,
       column_schema = table_schema->get_column_schema(column_id);
     }
   } else {
+    // first get table_schema, than try mock column_schema for part id
     const uint64_t tenant_id = MTL_ID();
+    const ObTableSchema *table_schema = NULL;
     OV (OB_NOT_NULL(schema_guard_));
-    OZ (schema_guard_->get_column_schema(tenant_id, table_id, column_id, column_schema),
-        table_id, column_id, is_link);
+    OV ((OB_INVALID_ID != table_id && OB_INVALID_ID != column_id));
+    OZ (schema_guard_->get_table_schema(tenant_id, table_id, table_schema));
+    if (table_schema == NULL) {
+      // do nothing, same as schema_guard_->get_column_schema()
+    } else {
+      OZ (sql::ObSQLMockSchemaUtils::try_mock_partid(table_schema, table_schema));
+      OX (column_schema = table_schema->get_column_schema(column_id));
+    }
   }
   return ret;
 }

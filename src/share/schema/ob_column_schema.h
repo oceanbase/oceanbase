@@ -253,6 +253,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_cte_generated_column() const { return column_flags_ & CTE_GENERATED_COLUMN_FLAG; }
   inline bool is_default_expr_v2_column() const { return column_flags_ & DEFAULT_EXPR_V2_COLUMN_FLAG; }
   inline bool is_generated_column() const { return (is_virtual_generated_column() || is_stored_generated_column()); }
+  inline bool is_mock_column() const { return column_flags_ & MOCK_COLUMN_FLAG; }
   inline bool is_identity_column() const { return is_always_identity_column() || is_default_identity_column() || is_default_on_null_identity_column(); }
   inline bool is_generated_column_using_udf() const { return /*is_generated_column() && global index table clean the virtual gen col flag*/ !!(column_flags_ & GENERATED_COLUMN_UDF_EXPR); }
   // to check whether storing column in index table is specified by user.

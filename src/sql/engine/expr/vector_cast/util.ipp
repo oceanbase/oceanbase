@@ -185,6 +185,34 @@ struct DecintRangeChecker
   }
 };
 
+template <typename InputVec, typename OutputVec, typename in_type>
+void logging_truncated_decint(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                              const EvalBound &bound, const ObScale in_scale,
+                              const ObScale out_scale)
+{
+  if (CM_IS_COLUMN_CONVERT(expr.extra_) && in_scale > out_scale && lib::is_mysql_mode()) {
+    InputVec *input_vector = static_cast<InputVec *>(expr.args_[0]->get_vector(ctx));
+    OutputVec *output_vector = static_cast<OutputVec *>(expr.get_vector(ctx));
+    in_type sf = get_scale_factor<in_type>(in_scale - out_scale);
+    int diff_len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(in_scale - out_scale);
+    for (int i = bound.start(); i < bound.end(); i++) {
+      if (skip.at(i) || input_vector->is_null(i)) { continue; }
+      const in_type &input_val = *reinterpret_cast<const in_type *>(input_vector->get_payload(i));
+      bool logging_warning = false;
+      if (diff_len > sizeof(in_type)) {
+        logging_warning = (input_val != 0);
+      } else {
+        logging_warning = ((input_val % sf) != 0);
+      }
+      if (logging_warning) {
+        sql::ObDataTypeCastUtil::log_user_error_warning(ctx.exec_ctx_.get_user_logging_ctx(),
+                                                        OB_ERR_DATA_TRUNCATED, ObString(""),
+                                                        ObString(""), expr.extra_);
+      }
+    }
+  }
+}
+
 template<VecValueTypeClass vec_tc, typename Vector>
 struct FloatRangeChecker
 {

@@ -167,6 +167,16 @@ int string_length_check(const ObExpr &expr,
                         const ObDatum &in_datum,
                         ObDatum &res_datum,
                         int &warning);
+int string_length_check(const ObExpr &expr,
+                        const ObCastMode &cast_mode,
+                        const ObAccuracy &accuracy,
+                        const ObObjType type,
+                        const ObCollationType cs_type,
+                        ObEvalCtx &ctx,
+                        const int64_t idx,
+                        const ObString &in_str,
+                        ObIVector &out_vec,
+                        int &warning);
 
 // extract accuracy info from %expr and call datum_accuracy_check() below.
 int datum_accuracy_check(const ObExpr &expr,
@@ -187,6 +197,25 @@ int datum_accuracy_check(const ObExpr &expr,
                          bool has_lob_header,
                          const common::ObDatum &in_datum,
                          ObDatum &res_datum,
+                         int &warning);
+
+int vector_accuracy_check(const ObExpr &expr,
+                          const uint64_t cast_mode,
+                          ObEvalCtx &ctx,
+                          bool has_lob_header,
+                          const int64_t idx,
+                          const ObIVector &in_vec,
+                          ObIVector &out_vec,
+                          int &warning);
+
+int vector_accuracy_check(const ObExpr &expr,
+                         const uint64_t cast_mode,
+                         ObEvalCtx &ctx,
+                         const ObAccuracy &accuracy,
+                         bool has_lob_header,
+                         const int64_t idx,
+                         const ObIVector &in_vec,
+                         ObIVector &out_vec,
                          int &warning);
 
 // 根据in_type,force_use_standard_format信息，获取fromat_str,优先从rt_expr保存的本地session变量列表获取，不存在则从session获取

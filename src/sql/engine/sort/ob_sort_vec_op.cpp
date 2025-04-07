@@ -408,6 +408,7 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   context.eval_ctx_ = &eval_ctx_;
   context.exec_ctx_ = &ctx_;
   context.enable_encode_sortkey_ = MY_SPEC.enable_encode_sortkey_opt_;
+  context.enable_single_col_compare_ = MY_SPEC.enable_single_col_compare_opt_;
   context.topn_cnt_ = topn_cnt;
   context.is_fetch_with_ties_ = MY_SPEC.is_fetch_with_ties_;
   context.has_addon_ = MY_SPEC.has_addon_;

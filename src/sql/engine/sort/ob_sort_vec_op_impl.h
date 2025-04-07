@@ -63,7 +63,7 @@ public:
     ties_array_pos_(0), ties_array_(), sorted_dumped_rows_ptrs_(), last_ties_row_(nullptr), rows_(nullptr),
     sort_exprs_getter_(allocator_),
     store_row_factory_(allocator_, sql_mem_processor_, sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
-    topn_filter_(nullptr), is_topn_filter_enabled_(false), compress_type_(NONE_COMPRESSOR)
+    topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0), compress_type_(NONE_COMPRESSOR)
   {}
   virtual ~ObSortVecOpImpl()
   {
@@ -150,7 +150,7 @@ public:
   public:
     CopyableComparer(Compare &compare) : compare_(compare)
     {}
-    bool operator()(const Store_Row *l, const Store_Row *r)
+    OB_INLINE bool operator()(const Store_Row *l, const Store_Row *r)
     {
       return compare_(l, r);
     }
@@ -275,6 +275,8 @@ protected:
   int update_max_available_mem_size_periodically();
   int eager_topn_filter(common::ObIArray<Store_Row *> *sorted_dumped_rows);
   int eager_topn_filter_update(const common::ObIArray<Store_Row *> *sorted_dumped_rows);
+  int init_fixed_key_sort();
+  int do_fixed_key_sort(int64_t begin);
   template <typename Input>
   int build_chunk(const int64_t level, Input &input)
   {
@@ -489,6 +491,8 @@ protected:
   ObSortVecOpStoreRowFactory<Store_Row, has_addon> store_row_factory_;
   ObSortVecOpEagerFilter<Compare, Store_Row, has_addon> *topn_filter_;
   bool is_topn_filter_enabled_;
+  bool is_fixed_key_sort_enabled_;
+  uint32_t fixed_sort_key_len_;
   ObCompressorType compress_type_;
   ObPushDownTopNFilter pd_topn_filter_;
 };

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "sql/engine/expr/ob_expr_extract.h"
-#include "share/vector/ob_vec_visitor.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 
@@ -23,29 +22,6 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-#define EXTRACT_FUN_VAL(ARG_VEC_FORMAT_TYPE, RES_VEC_FORMAT_TYPE)              \
-  (ARG_VEC_FORMAT_TYPE << 4) | (RES_VEC_FORMAT_TYPE)
-#define EXTRACT_FUN_SWITCH_CASE_ORA(ARG_VEC_FORMAT_TYPE, RES_VEC_FORMAT_TYPE,  \
-                                    ARG_VEC_FORMAT, RES_VEC_FORMAT, arg_vec,   \
-                                    res_vec)                                   \
-  case EXTRACT_FUN_VAL(ARG_VEC_FORMAT_TYPE, RES_VEC_FORMAT_TYPE): {            \
-    ret = process_vector_oracle<ARG_VEC_FORMAT, RES_VEC_FORMAT>(               \
-        expr, static_cast<const ARG_VEC_FORMAT &>(arg_vec), date_type, bound,  \
-        skip, eval_flags, session, ctx, extract_field,                         \
-        static_cast<const RES_VEC_FORMAT &>(res_vec));                         \
-    break;                                                                     \
-  }
-#define EXTRACT_FUN_SWITCH_CASE_MSQ(ARG_VEC_FORMAT_TYPE, RES_VEC_FORMAT_TYPE,  \
-                                    ARG_VEC_FORMAT, RES_VEC_FORMAT, arg_vec,   \
-                                    res_vec)                                   \
-  case EXTRACT_FUN_VAL(ARG_VEC_FORMAT_TYPE, RES_VEC_FORMAT_TYPE): {            \
-    ret = process_vector_mysql<ARG_VEC_FORMAT, RES_VEC_FORMAT>(                \
-        expr, static_cast<const ARG_VEC_FORMAT &>(arg_vec), date_type, bound,  \
-        skip, eval_flags, session, ctx, extract_field,                         \
-        static_cast<const RES_VEC_FORMAT &>(res_vec));                         \
-    break;                                                                     \
-  }
-
 ObExprExtract::ObExprExtract(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_EXTRACT, N_EXTRACT, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
@@ -166,8 +142,8 @@ int check_extract_field_valid_oracle(const ObExpr &expr, ObDateUnitType &unit_va
   return ret;
 }
 
-template <typename T, bool with_date>
-inline int obj_to_time(const T &date, ObObjType type, const ObScale scale,
+template <bool with_date>
+inline int obj_to_time(const ObDatum &date, ObObjType type, const ObScale scale,
                        const ObTimeZoneInfo *tz_info, ObTime &ob_time, const int64_t cur_ts_value,
                        const ObDateSqlMode date_sql_mode, bool has_lob_header)
 {
@@ -179,37 +155,9 @@ inline int obj_to_time(const T &date, ObObjType type, const ObScale scale,
   }
 }
 
-template <bool with_date>
-inline int obj_to_time(const ObObj &obj, ObObjType type, const ObTimeZoneInfo *tz_info,
-                       ObTime &ob_time, const int64_t cur_ts_value,
-                       const ObDateSqlMode date_sql_mode, bool has_lob_header);
-template <>
-inline int obj_to_time<ObObj, true>(const ObObj &date, ObObjType type, const ObScale scale,
-                                    const ObTimeZoneInfo *tz_info, ObTime &ob_time,
-                                    const int64_t cur_ts_value, const ObDateSqlMode date_sql_mode,
-                                    bool has_lob_header)
-{
-  UNUSED(type);
-  UNUSED(has_lob_header);
-  return  ob_obj_to_ob_time_with_date(date, tz_info, ob_time, cur_ts_value, date_sql_mode);
-}
-
-template <>
-inline int obj_to_time<false>(const ObObj &date, ObObjType type, const ObTimeZoneInfo *tz_info,
-                              ObTime &ob_time, const int64_t cur_ts_value,
-                              const ObDateSqlMode date_sql_mode, bool has_lob_header)
-{
-  UNUSED(type);
-  UNUSED(cur_ts_value);
-  UNUSED(date_sql_mode);
-  UNUSED(has_lob_header);
-  return  ob_obj_to_ob_time_without_date(date, tz_info, ob_time);
-}
-
-template <typename T_ARG, typename T_RES>
 int ObExprExtract::calc(
       ObObjType date_type,
-      const T_ARG &date,
+      const ObDatum &date,
       const ObDateUnitType extract_field,
       const ObScale scale,
       const ObCastMode cast_mode,
@@ -217,14 +165,15 @@ int ObExprExtract::calc(
       const int64_t cur_ts_value,
       const ObDateSqlMode date_sql_mode,
       bool has_lob_header,
-      T_RES &result)
+      bool &is_null,
+      int64_t &res)
 {
   int ret = OB_SUCCESS;
-  class ObTime ob_time;
-  memset(&ob_time, 0, sizeof(ob_time));
   if (date.is_null()) {
-    result.set_null();
+    is_null = true;
   } else {
+    class ObTime ob_time;
+    memset(&ob_time, 0, sizeof(ob_time));
     int warning = OB_SUCCESS;
     int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
     switch (extract_field){
@@ -238,66 +187,48 @@ int ObExprExtract::calc(
       case DATE_UNIT_DAY_MINUTE:
       case DATE_UNIT_DAY_HOUR:
       case DATE_UNIT_YEAR_MONTH:
-        cast_ret =  obj_to_time<T_ARG, true>(
+        cast_ret =  obj_to_time<true>(
                     date, date_type, scale, tz_info, ob_time, cur_ts_value, date_sql_mode, has_lob_header);
         break;
       default:
-        cast_ret = obj_to_time<T_ARG, false>(date, date_type, scale, tz_info, ob_time, cur_ts_value, 0,
+        cast_ret = obj_to_time<false>(date, date_type, scale, tz_info, ob_time, cur_ts_value, 0,
                                          has_lob_header);
      }
 
      if (OB_SUCC(ret)) {
        if (OB_LIKELY(OB_SUCCESS == warning)) {
-         result.set_int(ObTimeConverter::ob_time_to_int_extract(ob_time, extract_field));
+         res = ObTimeConverter::ob_time_to_int_extract(ob_time, extract_field);
        } else {
-         result.set_null();
+         is_null = true;
        }
      }
   }
   return ret;
 }
 
-template <typename T>
-void ob_set_string(T &result, ObString str);
-template <typename T>
-void ob_set_string(T &result, ObString str)
-{
-  result.set_string(str);
-}
-template <>
-void ob_set_string<ObObj>(ObObj &result, ObString str)
-{
-  result.set_varchar(str);
-}
-
-template <typename T>
-ObOTimestampData get_otimestamp_value(const T &param, ObObjType type);
-template <>
-ObOTimestampData get_otimestamp_value<ObObj>(const ObObj &param, ObObjType type)
-{
-  UNUSED(type);
-  return param.get_otimestamp_value();
-}
-template <typename T>
-ObOTimestampData get_otimestamp_value(const T &param, ObObjType type)
+ObOTimestampData get_otimestamp_value(const ObDatum &param, ObObjType type)
 {
   return ObTimestampTZType == type ? param.get_otimestamp_tz()
                                    : param.get_otimestamp_tiny();
 }
 
-template <typename T_ARG, typename T_RES>
 int ObExprExtract::calc_oracle(const ObSQLSessionInfo *session,
                                ObEvalCtx &ctx,
                                const ObObjType date_type,
-                               const T_ARG &date,
+                               const ObDatum &date,
                                const ObDateUnitType &extract_field,
-                               T_RES &result)
+                               ObIAllocator *allocator,
+                               bool &is_null,
+                               bool &is_number_res,
+                               number::ObNumber &num_res,
+                               ObString &str_res)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
   ObIntervalParts interval_part;
+  is_number_res = false;
   if (date.is_null()) {
-    result.set_null();
+    is_null = true;
   } else {
     switch (ob_obj_type_class(date_type)) {
     case ObDateTimeTC:
@@ -329,7 +260,6 @@ int ObExprExtract::calc_oracle(const ObSQLSessionInfo *session,
     }
     int64_t result_value = INT64_MIN;
     int64_t fsecond = INT64_MIN;
-    ObString result_str;
 
     if (OB_SUCC(ret)) {
       bool is_interval_tc = (ObIntervalTC == ob_obj_type_class(date_type));
@@ -361,15 +291,15 @@ int ObExprExtract::calc_oracle(const ObSQLSessionInfo *session,
         result_value = ob_time.parts_[DT_OFFSET_MIN] % 60;
         break;
       case DATE_UNIT_TIMEZONE_REGION:
-        result_str = ob_time.get_tz_name_str();
-        if (result_str.empty()) {
-          result_str = ObString("UNKNOWN");
+        str_res = ob_time.get_tz_name_str();
+        if (str_res.empty()) {
+          str_res = ObString("UNKNOWN");
         }
         break;
       case DATE_UNIT_TIMEZONE_ABBR:
-        result_str = ob_time.get_tzd_abbr_str();
-        if (result_str.empty()) {
-          result_str = ObString("UNK");
+        str_res = ob_time.get_tzd_abbr_str();
+        if (str_res.empty()) {
+          str_res = ObString("UNK");
         }
         break;
       default:
@@ -381,17 +311,11 @@ int ObExprExtract::calc_oracle(const ObSQLSessionInfo *session,
     if (OB_SUCC(ret)) {
       if (result_value != INT64_MIN) {
         //interger result
-        number::ObNumber res_number;
         number::ObNumber res_with_fsecond_number;
         number::ObNumber fs_value;
         number::ObNumber power10;
         number::ObNumber fs_number;
-        ObIAllocator *allocator = NULL;
-        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-        if (OB_ISNULL(allocator = &alloc_guard.get_allocator())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("calc buf is null", K(ret));
-        } else if (OB_FAIL(res_number.from(result_value, *allocator))) {
+        if (OB_FAIL(num_res.from(result_value, *allocator))) {
           LOG_WARN("fail to convert interger to ob number", K(ret));
         } else if (fsecond != INT64_MIN) {
           if (OB_FAIL(fs_value.from(fsecond, *allocator))) {
@@ -400,16 +324,13 @@ int ObExprExtract::calc_oracle(const ObSQLSessionInfo *session,
             LOG_WARN("failed to round number", K(ret));
           } else if (OB_FAIL(fs_value.div(power10, fs_number, *allocator))) {
             LOG_WARN("fail to div fs", K(ret));
-          } else if (OB_FAIL(res_number.add(fs_number, res_with_fsecond_number, *allocator))) {
+          } else if (OB_FAIL(num_res.add(fs_number, res_with_fsecond_number, *allocator))) {
             LOG_WARN("fail to add fsecond", K(ret));
           } else {
-            result.set_number(res_with_fsecond_number);
+            num_res = res_with_fsecond_number;
           }
-        } else {
-          result.set_number(res_number);
         }
-      } else {
-        ob_set_string(result, result_str);
+        is_number_res = true;
       }
     }
   }
@@ -467,17 +388,32 @@ int ObExprExtract::calc_extract_oracle(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, param_datum2))) {
     LOG_WARN("eval param2 value failed");
   } else {
-    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ObDateUnitType extract_field = static_cast<ObDateUnitType>(param_datum1->get_int());
     // check the extraction field is valid
     if (OB_FAIL(check_extract_field_valid_oracle(expr, extract_field))) {
       ret = OB_ERR_EXTRACT_FIELD_INVALID;
       LOG_WARN("invalid extract field for extract source");
     } else {
+      bool is_null = false;
+      bool is_number_res = false;
+      number::ObNumber num_res;
+      ObString str_res;
       ObObjType date_type = expr.args_[1]->datum_meta_.type_;
-      if (OB_FAIL(ObExprExtract::calc_oracle(session, ctx, date_type, *param_datum2,
-                                             extract_field, expr_datum))) {
+      ObIAllocator *allocator = NULL;
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      if (OB_ISNULL(allocator = &alloc_guard.get_allocator())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("calc buf is null", K(ret));
+      } else if (OB_FAIL(ObExprExtract::calc_oracle(session, ctx, date_type, *param_datum2,
+                                             extract_field, allocator, is_null, is_number_res,
+                                             num_res, str_res))) {
         LOG_WARN("failed to calculate extract expression", K(ret));
+      } else if (is_null) {
+        expr_datum.set_null();
+      } else if (is_number_res) {
+        expr_datum.set_number(num_res);
+      } else {
+        expr_datum.set_string(str_res);
       }
     }
   }
@@ -508,13 +444,19 @@ int ObExprExtract::calc_extract_mysql(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(session->get_sql_mode());
+    bool is_null = false;
+    int64_t value = 0;
     if (OB_FAIL(ObExprExtract::calc(date_type, *param_datum2,
                                     extract_field,
                                     scale,
                                     cast_mode, tz_info,
                                     cur_ts_value,
-                                    date_sql_mode, has_lob_header, expr_datum))) {
+                                    date_sql_mode, has_lob_header, is_null, value))) {
       LOG_WARN("failed to calculate extract expression", K(ret));
+    } else if (is_null) {
+      expr_datum.set_null();
+    } else {
+      expr_datum.set_int(value);
     }
   }
   return ret;
@@ -564,9 +506,14 @@ int ObExprExtract::calc_extract_mysql_batch(
           int64_t value = 0;
           if (OB_FAIL(ObExprExtract::calc(
                   date_type, datum_array[j], extract_field, scale, cast_mode,
-                  tz_info, cur_ts_value, date_sql_mode, has_lob_header, results[j]))) {
+                  tz_info, cur_ts_value, date_sql_mode, has_lob_header, is_null, value))) {
             LOG_WARN("failed to calculate extract expression", K(ret));
           } else {
+            if (is_null) {
+              results[j].set_null();
+            } else {
+              results[j].set_int(value);
+            }
             eval_flags.set(j);
           }
         }
@@ -602,11 +549,20 @@ int ObExprExtract::calc_extract_oracle_batch(
       ObDatum *datum_array = expr.args_[1]->locate_batch_datums(ctx);
       ObObjType type = expr.args_[1]->datum_meta_.type_;
       ObDateUnitType extract_field = static_cast<ObDateUnitType>(date_unit_datum->get_int());
-      if (OB_FAIL(check_extract_field_valid_oracle(expr, extract_field))) {
+      ObIAllocator *allocator = NULL;
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      if (OB_ISNULL(allocator = &alloc_guard.get_allocator())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("calc buf is null", K(ret));
+      } else if (OB_FAIL(check_extract_field_valid_oracle(expr, extract_field))) {
         ret = OB_ERR_EXTRACT_FIELD_INVALID;
         LOG_WARN("invalid extract field for extract source");
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+          bool is_null = false;
+          bool is_number_res = false;
+          number::ObNumber num_res;
+          ObString str_res;
           if (skip.at(j) || eval_flags.at(j)) {
             continue;
           } else if (datum_array[j].is_null()) {
@@ -617,9 +573,20 @@ int ObExprExtract::calc_extract_oracle_batch(
                       type,
                       datum_array[j],
                       extract_field,
-                      results[j]))) {
+                      allocator,
+                      is_null,
+                      is_number_res,
+                      num_res,
+                      str_res))) {
               LOG_WARN("failed to calculate extract expression", K(ret));
           } else {
+            if (is_null) {
+              results[j].set_null();
+            } else if (is_number_res) {
+              results[j].set_number(num_res);
+            } else {
+              results[j].set_string(str_res);
+            }
             eval_flags.set(j);
           }
         }
@@ -634,30 +601,47 @@ template <typename T_ARG_VEC, typename T_RES_VEC>
 int process_vector_oracle(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObObjType date_type,
                     const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
                     const ObSQLSessionInfo *session, ObEvalCtx &ctx,
-                    ObDateUnitType extract_field, const T_RES_VEC &res_vec)
+                    ObDateUnitType extract_field, T_RES_VEC &res_vec)
 {
   int ret = OB_SUCCESS;
-  ObVectorCellVisitor<T_ARG_VEC> arg_vec_visitor(
-      static_cast<T_ARG_VEC &>(const_cast<T_ARG_VEC &>(arg_date_vec)), bound.start());
-  ObVectorCellVisitor<T_RES_VEC> res_vec_visitor(
-      static_cast<T_RES_VEC &>(const_cast<T_RES_VEC &>(res_vec)), bound.start());
+  ObIAllocator *allocator = NULL;
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  if (OB_ISNULL(allocator = &alloc_guard.get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("calc buf is null", K(ret));
+  }
   for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
-    arg_vec_visitor.set_batch_idx(i);
-    res_vec_visitor.set_batch_idx(i);
     if (skip.at(i) || eval_flags.at(i)) {
       continue;
-    } else if (arg_vec_visitor.is_null()) {
-      res_vec_visitor.set_null();
-      eval_flags.set(i);
     } else {
+      const char *arg_payload = NULL;
+      bool arg_is_null = false;
+      ObLength arg_len = 0;
+      arg_date_vec.get_payload(i, arg_is_null, arg_payload, arg_len);
+      ObDatum date(arg_payload, arg_len, arg_is_null);
+      bool is_null = false;
+      bool is_number_res = false;
+      number::ObNumber num_res;
+      ObString str_res;
       if (OB_FAIL(ObExprExtract::calc_oracle(session,
                                             ctx,
                                             date_type,
-                                            arg_vec_visitor,
+                                            date,
                                             extract_field,
-                                            res_vec_visitor))) {
+                                            allocator,
+                                            is_null,
+                                            is_number_res,
+                                            num_res,
+                                            str_res))) {
         LOG_WARN("failed to calculate extract expression", K(ret));
       } else {
+        if (is_null) {
+          res_vec.set_null(i);
+        } else if (is_number_res) {
+          res_vec.set_number(i, num_res);
+        } else {
+          res_vec.set_string(i, str_res);
+        }
         eval_flags.set(i);
       }
     }
@@ -689,132 +673,12 @@ int sql::ObExprExtract::calc_extract_oracle_vector(const ObExpr &expr, ObEvalCtx
       ObObjType date_type = expr.args_[1]->datum_meta_.type_;
       VectorFormat arg_format = arg_date_vec->get_format();
       VectorFormat res_format = res_vec->get_format();
-      switch (EXTRACT_FUN_VAL(arg_format, res_format)) {
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_FIXED, VEC_FIXED, FixedLengthVecVisitor,
-            FixedLengthVecVisitor,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_FIXED, VEC_DISCRETE, FixedLengthVecVisitor, ObDiscreteFormat,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_FIXED, VEC_CONTINUOUS, FixedLengthVecVisitor,
-            ObContinuousFormat,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_FIXED, VEC_UNIFORM, FixedLengthVecVisitor,
-            ObUniformFormat<false>,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_FIXED, VEC_UNIFORM_CONST, FixedLengthVecVisitor,
-            ObUniformFormat<true>,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-            *res_vec);
-
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_DISCRETE, VEC_FIXED, ObDiscreteFormat, FixedLengthVecVisitor,
-            *arg_date_vec,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_DISCRETE, VEC_DISCRETE, ObDiscreteFormat, ObDiscreteFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_DISCRETE, VEC_CONTINUOUS, ObDiscreteFormat, ObContinuousFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_DISCRETE, VEC_UNIFORM, ObDiscreteFormat, ObUniformFormat<false>,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_DISCRETE, VEC_UNIFORM_CONST, ObDiscreteFormat,
-            ObUniformFormat<true>,
-            *arg_date_vec,
-            *res_vec);
-
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_CONTINUOUS, VEC_FIXED, ObContinuousFormat,
-            FixedLengthVecVisitor,
-            *arg_date_vec,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_CONTINUOUS, VEC_DISCRETE, ObContinuousFormat, ObDiscreteFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_CONTINUOUS, VEC_CONTINUOUS, ObContinuousFormat,
-            ObContinuousFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_CONTINUOUS, VEC_UNIFORM, ObContinuousFormat,
-            ObUniformFormat<false>,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_CONTINUOUS, VEC_UNIFORM_CONST, ObContinuousFormat,
-            ObUniformFormat<true>,
-            *arg_date_vec,
-            *res_vec);
-
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM, VEC_FIXED, ObUniformFormat<false>,
-            FixedLengthVecVisitor,
-            *arg_date_vec,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM, VEC_DISCRETE, ObUniformFormat<false>, ObDiscreteFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM, VEC_CONTINUOUS, ObUniformFormat<false>,
-            ObContinuousFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM, VEC_UNIFORM, ObUniformFormat<false>,
-            ObUniformFormat<false>,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM, VEC_UNIFORM_CONST, ObUniformFormat<false>,
-            ObUniformFormat<true>,
-            *arg_date_vec,
-            *res_vec);
-
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM_CONST, VEC_FIXED, ObUniformFormat<true>,
-            FixedLengthVecVisitor,
-            *arg_date_vec,
-            FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM_CONST, VEC_DISCRETE, ObUniformFormat<true>,
-            ObDiscreteFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM_CONST, VEC_CONTINUOUS, ObUniformFormat<true>,
-            ObContinuousFormat,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM_CONST, VEC_UNIFORM, ObUniformFormat<true>,
-            ObUniformFormat<false>,
-            *arg_date_vec,
-            *res_vec);
-        EXTRACT_FUN_SWITCH_CASE_ORA(
-            VEC_UNIFORM_CONST, VEC_UNIFORM_CONST, ObUniformFormat<true>,
-            ObUniformFormat<true>,
-            *arg_date_vec,
-            *res_vec);
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", K(res_format), K(arg_format));
+      ret = process_vector_oracle<ObVectorBase, ObVectorBase>(
+          expr, static_cast<ObVectorBase &>(*arg_date_vec), date_type, bound,
+          skip, eval_flags, session, ctx, extract_field,
+          static_cast<ObVectorBase &>(*res_vec));
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to calc extract expression in Oracle mode", K(ret));
       }
     }
   }
@@ -825,13 +689,9 @@ template <typename T_ARG_VEC, typename T_RES_VEC>
 int process_vector_mysql(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObObjType date_type,
                     const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
                     const ObSQLSessionInfo *session, ObEvalCtx &ctx,
-                    ObDateUnitType extract_field, const T_RES_VEC &res_vec)
+                    ObDateUnitType extract_field, T_RES_VEC &res_vec)
 {
   int ret = OB_SUCCESS;
-  ObVectorCellVisitor<T_ARG_VEC> arg_vec_visitor(
-      static_cast<T_ARG_VEC &>(const_cast<T_ARG_VEC &>(arg_date_vec)), bound.start());
-  ObVectorCellVisitor<T_RES_VEC> res_vec_visitor(
-      static_cast<T_RES_VEC &>(const_cast<T_RES_VEC &>(res_vec)), bound.start());
   uint64_t cast_mode = 0;
   ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
   bool is_with_date = false;
@@ -844,18 +704,17 @@ int process_vector_mysql(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObOb
   date_sql_mode.init(session->get_sql_mode());
   bool has_lob_header = expr.args_[1]->obj_meta_.has_lob_header();
   for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
-    arg_vec_visitor.set_batch_idx(i);
-    res_vec_visitor.set_batch_idx(i);
     if (skip.at(i) || eval_flags.at(i)) {
       continue;
-    } else if (arg_vec_visitor.is_null()) {
-      res_vec_visitor.set_null();
-      eval_flags.set(i);
     } else {
-      int64_t value = 0;
+      const char *payload = NULL;
       bool is_null = false;
+      ObLength len = 0;
+      arg_date_vec.get_payload(i, is_null, payload, len);
+      ObDatum date(payload, len, is_null);
+      int64_t value = 0;
       if (OB_FAIL(ObExprExtract::calc(date_type,
-                          arg_vec_visitor,
+                          date,
                           extract_field,
                           scale,
                           cast_mode,
@@ -863,9 +722,15 @@ int process_vector_mysql(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObOb
                           cur_ts_value,
                           date_sql_mode,
                           has_lob_header,
-                          res_vec_visitor))) {
+                          is_null,
+                          value))) {
         LOG_WARN("failed to calculate extract expression", K(ret));
       } else {
+        if (is_null) {
+          res_vec.set_null(i);
+        } else {
+          res_vec.set_int(i, value);
+        }
         eval_flags.set(i);
       }
     }
@@ -893,132 +758,120 @@ int sql::ObExprExtract::calc_extract_mysql_vector(const ObExpr &expr, ObEvalCtx 
     ObObjType date_type = expr.args_[1]->datum_meta_.type_;
     VectorFormat arg_format = arg_date_vec->get_format();
     VectorFormat res_format = res_vec->get_format();
-    switch (EXTRACT_FUN_VAL(arg_format, res_format)) {
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_FIXED, VEC_FIXED, FixedLengthVecVisitor,
-          FixedLengthVecVisitor,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_FIXED, VEC_DISCRETE, FixedLengthVecVisitor, ObDiscreteFormat,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_FIXED, VEC_CONTINUOUS, FixedLengthVecVisitor,
-          ObContinuousFormat,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_FIXED, VEC_UNIFORM, FixedLengthVecVisitor,
-          ObUniformFormat<false>,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-          static_cast<ObUniformFormat<false> &>(*res_vec));
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_FIXED, VEC_UNIFORM_CONST, FixedLengthVecVisitor,
-          ObUniformFormat<true>,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(arg_date_vec)),
-          *res_vec);
+    if (arg_format == VEC_FIXED && res_format == VEC_FIXED) {
+      VecValueTypeClass date_vec_tc = expr.args_[1]->get_vec_value_tc();
+      VecValueTypeClass res_vec_tc = expr.get_vec_value_tc();
+      if (res_vec_tc != VEC_TC_INTEGER) {
+        ret = process_vector_mysql<ObVectorBase, ObVectorBase>(
+            expr, static_cast<ObVectorBase &>(*arg_date_vec), date_type, bound,
+            skip, eval_flags, session, ctx, extract_field,
+            static_cast<ObVectorBase &>(*res_vec));
+      } else {
+        switch (date_vec_tc) {
+        case (VEC_TC_DATETIME):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_DATETIME>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_DATETIME>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
+        case (VEC_TC_DATE):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_DATE>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_DATE>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
 
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_DISCRETE, VEC_FIXED, ObDiscreteFormat, FixedLengthVecVisitor,
-          *arg_date_vec,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_DISCRETE, VEC_DISCRETE, ObDiscreteFormat, ObDiscreteFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_DISCRETE, VEC_CONTINUOUS, ObDiscreteFormat, ObContinuousFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_DISCRETE, VEC_UNIFORM, ObDiscreteFormat, ObUniformFormat<false>,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_DISCRETE, VEC_UNIFORM_CONST, ObDiscreteFormat,
-          ObUniformFormat<true>,
-          *arg_date_vec,
-          *res_vec);
+        case (VEC_TC_TIME):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_TIME>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_TIME>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
+        case (VEC_TC_YEAR):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_YEAR>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_YEAR>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
 
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_CONTINUOUS, VEC_FIXED, ObContinuousFormat,
-          FixedLengthVecVisitor,
-          *arg_date_vec,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_CONTINUOUS, VEC_DISCRETE, ObContinuousFormat, ObDiscreteFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_CONTINUOUS, VEC_CONTINUOUS, ObContinuousFormat,
-          ObContinuousFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_CONTINUOUS, VEC_UNIFORM, ObContinuousFormat,
-          ObUniformFormat<false>,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_CONTINUOUS, VEC_UNIFORM_CONST, ObContinuousFormat,
-          ObUniformFormat<true>,
-          *arg_date_vec,
-          *res_vec);
-
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM, VEC_FIXED, ObUniformFormat<false>,
-          FixedLengthVecVisitor,
-          *arg_date_vec,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM, VEC_DISCRETE, ObUniformFormat<false>, ObDiscreteFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM, VEC_CONTINUOUS, ObUniformFormat<false>,
-          ObContinuousFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM, VEC_UNIFORM, ObUniformFormat<false>,
-          ObUniformFormat<false>,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM, VEC_UNIFORM_CONST, ObUniformFormat<false>,
-          ObUniformFormat<true>,
-          *arg_date_vec,
-          *res_vec);
-
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM_CONST, VEC_FIXED, ObUniformFormat<true>,
-          FixedLengthVecVisitor,
-          *arg_date_vec,
-          FixedLengthVecVisitor(static_cast<ObFixedLengthBase *>(res_vec)));
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM_CONST, VEC_DISCRETE, ObUniformFormat<true>,
-          ObDiscreteFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM_CONST, VEC_CONTINUOUS, ObUniformFormat<true>,
-          ObContinuousFormat,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM_CONST, VEC_UNIFORM, ObUniformFormat<true>,
-          ObUniformFormat<false>,
-          *arg_date_vec,
-          *res_vec);
-      EXTRACT_FUN_SWITCH_CASE_MSQ(
-          VEC_UNIFORM_CONST, VEC_UNIFORM_CONST, ObUniformFormat<true>,
-          ObUniformFormat<true>,
-          *arg_date_vec,
-          *res_vec);
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected vector format", K(res_format), K(arg_format));
+        case (VEC_TC_TIMESTAMP_TZ):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TZ>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TZ>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
+        case (VEC_TC_TIMESTAMP_TINY):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TINY>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TINY>>
+                              &>(*arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
+        case (VEC_TC_INTERVAL_YM):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_YM>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_YM>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
+        case (VEC_TC_INTERVAL_DS):
+          ret = process_vector_mysql<
+              ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_DS>>,
+              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_DS>> &>(
+                  *arg_date_vec),
+              date_type, bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+          break;
+        default:
+          ret = process_vector_mysql<
+              ObVectorBase, ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              expr, static_cast<ObVectorBase &>(*arg_date_vec), date_type,
+              bound, skip, eval_flags, session, ctx, extract_field,
+              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
+                  *res_vec));
+        }
+      }
+    } else {
+      ret = process_vector_mysql<ObVectorBase, ObVectorBase>(
+          expr, static_cast<ObVectorBase &>(*arg_date_vec), date_type, bound,
+          skip, eval_flags, session, ctx, extract_field,
+          static_cast<ObVectorBase &>(*res_vec));
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to calculate extract expression in vector format", K(ret));

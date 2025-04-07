@@ -702,6 +702,14 @@ const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
 
+// partid pseudo column
+const char *const OB_PART_ID_PSEUDO_COLUMN_NAME = "__ob_partition_id";
+const char *const OB_PART_NAME_PSEUDO_COLUMN_NAME = "__ob_partition_name";
+const char *const OB_PART_INDEX_PSEUDO_COLUMN_NAME = "__ob_partition_index";
+const char *const OB_SUBPART_ID_PSEUDO_COLUMN_NAME = "__ob_sub_partition_id";
+const char *const OB_SUBPART_NAME_PSEUDO_COLUMN_NAME = "__ob_sub_partition_name";
+const char *const OB_SUBPART_INDEX_PSEUDO_COLUMN_NAME = "__ob_sub_partition_index";
+
 // vector index search
 const char *const OB_VEC_VID_COLUMN_NAME = "__vid";
 const char *const OB_VEC_TYPE_COLUMN_NAME_PREFIX = "__type";

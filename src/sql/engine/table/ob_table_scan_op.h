@@ -476,10 +476,44 @@ public:
   ExprFixedArray pseudo_column_exprs_;
 };
 
+// for random batch_size & skip
+struct ObRandScanProcessor
+{
+  ObRandScanProcessor() : rand_brs_(), status_(RandScanStatus::RAND_SCAN_OFF),
+                          rand_seed_(0), tsc_spec_(nullptr), tsc_op_(nullptr) {}
+  OB_INLINE bool use_rand_scan() { return !(RandScanStatus::RAND_SCAN_OFF == status_); }
+  int init(const ObTableScanSpec *tsc_spec, ObTableScanOp *tsc_op);
+  int inner_get_next_batch(const int64_t max_row_cnt);
+  void reset()
+  {
+    rand_brs_.skip_ = nullptr;
+    rand_brs_.size_ = 0;
+    status_ = RandScanStatus::RAND_SCAN_OFF;
+    rand_seed_ = 0;
+  }
+  void reuse()
+  {
+    status_ = RandScanStatus::RAND_SCAN_INIT;
+  }
+  enum class RandScanStatus
+  {
+    RAND_SCAN_OFF,
+    RAND_SCAN_INIT,
+    RAND_SCAN_FIRST_PART,
+    RAND_SCAN_SECOND_PART
+  };
+  ObBatchRows rand_brs_;
+  RandScanStatus status_;
+  int64_t rand_seed_;
+  const ObTableScanSpec *tsc_spec_;
+  ObTableScanOp *tsc_op_;
+};
+
 class ObTableScanOp : public ObOperator
 {
   friend class ObDASScanOp;
   friend class ObGlobalIndexLookupOpImpl;
+  friend class ObRandScanProcessor;
 public:
   static constexpr int64_t CHECK_STATUS_ROWS_INTERVAL =  1 << 13;
 
@@ -709,9 +743,6 @@ private:
   int inner_get_next_batch_for_tsc(const int64_t max_row_cnt);
   int inner_rescan_for_tsc();
 
-  void gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size, int64_t &skip_bits);
-
-  void adjust_rand_output_brs(const int64_t rand_skip_bits);
   int inner_get_next_fts_index_row();
   int fetch_next_fts_index_rows();
   int fill_generated_fts_cols(ObDatumRow *row);
@@ -766,6 +797,8 @@ protected:
   // all tasks belonging to this op share the same key
   ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
+private:
+  ObRandScanProcessor rand_scan_processor_;
  };
 
 } // end namespace sql

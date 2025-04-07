@@ -212,7 +212,8 @@ int ObDASIterUtils::create_tsc_iter_tree(ObDASIterTreeType tree_type,
       break;
     }
     case ITER_TREE_GLOBAL_LOOKUP: {
-      ret = create_global_lookup_iter_tree(tsc_ctdef, tsc_rtdef, eval_ctx, exec_ctx, eval_infos, spec, can_retry, scan_iter, iter_tree);
+      ret = create_global_lookup_iter_tree(tsc_ctdef, tsc_rtdef, eval_ctx, exec_ctx, eval_infos, spec, can_retry,
+        scan_iter, iter_tree);
       break;
     }
     default: {
@@ -2273,6 +2274,39 @@ int ObDASIterUtils::create_table_scan_iter_tree(const ObTableScanCtDef &tsc_ctde
   param.execute_das_directly_ = !spec.use_dist_das_;
   param.enable_rich_format_ = spec.use_rich_format_;
   param.used_for_keep_order_ = false;
+  param.pseudo_partition_id_expr_ = NULL;
+  param.pseudo_sub_partition_id_expr_ = NULL;
+  param.pseudo_partition_name_expr_ = NULL;
+  param.pseudo_sub_partition_name_expr_ = NULL;
+  param.pseudo_partition_index_expr_ = NULL;
+  param.pseudo_sub_partition_index_expr_ = NULL;
+  for (int i = 0; OB_SUCC(ret) && i < spec.pseudo_column_exprs_.count(); i++) {
+    ObExpr *expr = spec.pseudo_column_exprs_.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr", K(ret));
+    } else {
+      if (expr->extra_ ==
+          static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_ID)) {
+        param.pseudo_partition_id_expr_ = expr;
+      } else if (expr->extra_ ==
+          static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_ID)) {
+        param.pseudo_sub_partition_id_expr_ = expr;
+      } else if (expr->extra_ ==
+          static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_NAME)) {
+        param.pseudo_partition_name_expr_ = expr;
+      } else if (expr->extra_ ==
+          static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_NAME)) {
+        param.pseudo_sub_partition_name_expr_ = expr;
+      } else if (expr->extra_ ==
+          static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_INDEX)) {
+        param.pseudo_partition_index_expr_ = expr;
+      } else if (expr->extra_ ==
+          static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_INDEX)) {
+        param.pseudo_sub_partition_index_expr_ = expr;
+      }
+    }
+  }
 
   if (OB_FAIL(create_das_iter(exec_ctx.get_allocator(), param, iter))) {
     LOG_WARN("failed to create das merge iter", K(ret));
@@ -2320,7 +2354,12 @@ int ObDASIterUtils::create_global_lookup_iter_tree(const ObTableScanCtDef &tsc_c
   param.execute_das_directly_ = !spec.use_dist_das_;
   param.enable_rich_format_ = spec.use_rich_format_;
   param.used_for_keep_order_ = false;
-
+  param.pseudo_partition_id_expr_ = NULL;
+  param.pseudo_sub_partition_id_expr_ = NULL;
+  param.pseudo_partition_name_expr_ = NULL;
+  param.pseudo_sub_partition_name_expr_ = NULL;
+  param.pseudo_partition_index_expr_ = NULL;
+  param.pseudo_sub_partition_index_expr_ = NULL;
   if (OB_FAIL(create_das_iter(exec_ctx.get_allocator(), param, index_table_iter))) {
     LOG_WARN("failed to create global index table iter", K(ret));
   }
@@ -2333,6 +2372,33 @@ int ObDASIterUtils::create_global_lookup_iter_tree(const ObTableScanCtDef &tsc_c
     param.execute_das_directly_ = false;
     param.enable_rich_format_ = false;
     param.used_for_keep_order_ = tsc_ctdef.is_das_keep_order_;
+    for (int i = 0; OB_SUCC(ret) && i < spec.pseudo_column_exprs_.count(); i++) {
+      ObExpr *expr = spec.pseudo_column_exprs_.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr", K(ret));
+      } else {
+        if (expr->extra_ ==
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_ID)) {
+          param.pseudo_partition_id_expr_ = expr;
+        } else if (expr->extra_ ==
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_ID)) {
+          param.pseudo_sub_partition_id_expr_ = expr;
+        } else if (expr->extra_ ==
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_NAME)) {
+          param.pseudo_partition_name_expr_ = expr;
+        } else if (expr->extra_ ==
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_NAME)) {
+          param.pseudo_sub_partition_name_expr_ = expr;
+        } else if (expr->extra_ ==
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_PARTITION_INDEX)) {
+          param.pseudo_partition_index_expr_ = expr;
+        } else if (expr->extra_ ==
+            static_cast<uint64_t>(PseudoColumnRefType::PSEUDO_SUB_PARTITION_INDEX)) {
+          param.pseudo_sub_partition_index_expr_ = expr;
+        }
+      }
+    }
     if (OB_FAIL(create_das_iter(exec_ctx.get_allocator(), param, data_table_iter))) {
       LOG_WARN("failed to create global data table iter", K(ret));
     } else {

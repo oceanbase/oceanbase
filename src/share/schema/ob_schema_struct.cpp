@@ -4524,6 +4524,41 @@ int ObPartitionSchema::get_subpartition_by_name(const ObString &name, const ObPa
   return ret;
 }
 
+int ObPartitionSchema::get_subpartition_by_sub_part_id(const int64_t part_id, const ObPartition *&part, const ObSubPartition *&subpart) const
+{
+  int ret = OB_SUCCESS;
+  part = nullptr;
+  subpart = nullptr;
+  const ObPartitionLevel part_level = this->get_part_level();
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  ObPartitionSchemaIter iter(*this, check_partition_mode);
+  ObPartitionSchemaIter::Info info;
+  if (PARTITION_LEVEL_TWO != part_level) {
+    ret = OB_UNKNOWN_SUBPARTITION;
+    LOG_WARN("could not get subpartition on not composite partition table", KR(ret), K(part_level));
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter.next_partition_info(info))) {
+        if (OB_ITER_END == ret) {
+          //subpart not exist errno is same with the part right now
+          ret = OB_UNKNOWN_SUBPARTITION;
+          LOG_WARN("could not find the subpartition by given part_id", KR(ret), K(part_id), KPC(this));
+        } else {
+          LOG_WARN("unexpected erro happened when get subpartition by name", KR(ret));
+        }
+      } else if (OB_ISNULL(info.part_) || OB_ISNULL(info.partition_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("info.part_ or info.partition_ is null", KR(ret), KP(info.part_), KP(info.partition_), KPC(this));
+      } else if (part_id == ((ObSubPartition *)info.partition_)->get_sub_part_id()) {
+        part = info.part_;
+        subpart = reinterpret_cast<const ObSubPartition*>(info.partition_);
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPartitionSchema::check_partition_duplicate_with_name(const ObString &name) const
 {
   int ret = OB_SUCCESS;

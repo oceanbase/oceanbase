@@ -16,6 +16,7 @@
 #include "observer/ob_server.h"
 #include "observer/ob_server.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 #include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
@@ -1014,6 +1015,7 @@ int ObRpcRemoteExecuteP::process()
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      ObSQLMockSchemaGuard mock_schema_guard;
       if (enable_perf_event) {
         exec_record.record_start();
       }

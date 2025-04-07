@@ -280,6 +280,8 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get functional lookup exprs", K(ret));
   } else if (use_index_merge() && OB_FAIL(get_index_merge_calc_exprs(all_exprs))) {
     LOG_WARN("failed to get index merge calc exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, pseudo_columnref_exprs_))) {
+    LOG_WARN("failed to append pseudo_columnref_exprs_", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
@@ -311,6 +313,15 @@ int ObLogTableScan::allocate_expr_post(ObAllocExprContext &ctx)
   for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_aggr_exprs_.count(); i++) {
     ObRawExpr *expr = NULL;
     if (OB_ISNULL(expr = pushdown_aggr_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null expr", K(ret));
+    } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {
+      LOG_WARN("failed to mark expr as produced", K(*expr), K(branch_id_), K(id_), K(ret));
+    } else { /*do nothing*/ }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < pseudo_columnref_exprs_.count(); i++) {
+    ObRawExpr *expr = NULL;
+    if (OB_ISNULL(expr = pseudo_columnref_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr", K(ret));
     } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {
@@ -621,7 +632,7 @@ int ObLogTableScan::generate_access_exprs()
   } else if (OB_FAIL(append_array_no_dup(access_exprs_, domain_exprs_))) {
     LOG_WARN("failed to append domain exprs", K(ret));
   } else if (is_index_global_ && index_back_) {
-    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_exprs_, temp_exprs))) {
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_exprs_, temp_exprs, false, false))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (OB_FAIL(append_array_no_dup(access_exprs_, temp_exprs))) {
       LOG_WARN("failed to append array no dup", K(ret));
@@ -629,7 +640,7 @@ int ObLogTableScan::generate_access_exprs()
   }
   if (OB_SUCC(ret) && nullptr != auto_split_filter_) {
     ObSEArray<ObRawExpr*, 8> temp_col_exprs;
-    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(auto_split_filter_, temp_col_exprs))) {
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(auto_split_filter_, temp_col_exprs, false, false))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (OB_FAIL(append_array_no_dup(access_exprs_, temp_col_exprs))) {
       LOG_WARN("failed to append array no dup", K(ret));
@@ -645,6 +656,12 @@ int ObLogTableScan::generate_access_exprs()
         //do nothing
       } else if (col_item->expr_->is_only_referred_by_stored_gen_col()) {
         //skip if is only referred by stored generated columns which don't need to be recalculated
+      } else if (col_item->expr_->is_column_ref_expr() &&
+            static_cast<const ObColumnRefRawExpr*>(col_item->expr_)->is_pseudo_column_ref()) {
+        if (OB_FAIL(add_var_to_array_no_dup(pseudo_columnref_exprs_,
+            static_cast<ObRawExpr*>(col_item->expr_)))) {
+          LOG_WARN("fail to push back expr into pseudo_columnref_exprs_", K(ret));
+        }
       } else if (is_index_scan() && !get_index_back() && !col_item->expr_->is_referred_by_normal()) {
         //skip the dependant columns of partkeys and generated columns if index_back is false in index scan
       } else if (OB_FAIL(temp_exprs.push_back(col_item->expr_))) {
@@ -863,6 +880,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
     //2. data table scan filter when TSC use the data table scan directly
     //lookup_pushdown_filters means that the data table filter when
     //TSC use index scan and lookup the data table
+    bool contains_part_id_columnref = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       if (use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
         //In Batch table scan the dynamic param filter do not push down to storage
@@ -893,6 +911,15 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         }
       } else if (ignore_pd_filter) {
         //ignore_pd_filter: only extract non-pushdown filters, ignore others
+      } else if (OB_FAIL(ObOptimizerUtil::check_contain_part_id_columnref_expr(filters.at(i),
+                          contains_part_id_columnref))) {
+          LOG_WARN("check_contain_part_id_columnref_expr failed", K(ret));
+      } else if (contains_part_id_columnref) {
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("push variable assign filter store non-pushdown filter failed", K(ret), K(i));
+        } else {
+          LOG_TRACE("check for not pushdown partid columnref filter here");
+        }
       } else if (!get_index_back()) {
         if (OB_FAIL(scan_pushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("store pushdown filter failed", K(ret));
@@ -1349,6 +1376,9 @@ int ObLogTableScan::index_back_check()
             static_cast<const ObColumnRefRawExpr*>(expr)->get_column_id());
       }
     } //end for
+    if (pseudo_columnref_exprs_.count() > 0) {
+      column_found = false;
+    }
   }
 
   if (OB_SUCC(ret)) {

@@ -833,7 +833,8 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     group_rescan_cnt_(0),
     group_id_(0),
     das_tasks_key_(),
-    tsc_monitor_info_()
+    tsc_monitor_info_(),
+    rand_scan_processor_()
 {
 }
 
@@ -1060,9 +1061,21 @@ int ObTableScanOp::prepare_das_task()
              K(tablet_ids), K(partition_ids), K(first_level_part_ids), K(ret), K(das_location));
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       ObDASTabletLoc *tablet_loc = nullptr;
+      ObObjectID partition_id = OB_INVALID_ID;
+      ObObjectID first_partition_id = OB_INVALID_ID;
+      if (MY_SPEC.pseudo_column_exprs_.count() > 0) {
+        if (i < partition_ids.count()) {
+          partition_id = partition_ids.at(i);
+        }
+        if (i < first_level_part_ids.count()) {
+          first_partition_id = first_level_part_ids.at(i);
+        }
+      }
       if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(*tsc_rtdef_.scan_rtdef_.table_loc_,
                                                     tablet_ids.at(i),
-                                                    tablet_loc))) {
+                                                    tablet_loc,
+                                                    partition_id,
+                                                    first_partition_id))) {
         LOG_WARN("extended tablet loc failed", K(ret));
       } else if (OB_FAIL(create_one_das_task(tablet_loc))) {
         LOG_WARN("create one das task failed", K(ret));
@@ -1814,6 +1827,9 @@ int ObTableScanOp::inner_open()
     LOG_WARN("failed to create table scan iter tree", K(tree_type), K(ret));
   }
   output_ = iter_tree_;
+  if (OB_SUCC(ret) && OB_FAIL(rand_scan_processor_.init(&spec, this))) {
+    LOG_WARN("failed to init rand scan processor", K(ret));
+  }
   return ret;
 }
 
@@ -1847,6 +1863,7 @@ int ObTableScanOp::inner_close()
     fts_index_.reuse();
     iter_end_ = false;
     need_init_before_get_row_ = true;
+    rand_scan_processor_.reset();
   }
   return ret;
 }
@@ -1911,6 +1928,7 @@ void ObTableScanOp::destroy()
   scan_iter_ = nullptr;
   domain_index_.~ObDomainIndexCache();
   das_tasks_key_.reset();
+  rand_scan_processor_.reset();
 }
 
 void ObTableScanOp::init_scan_monitor_info()
@@ -2053,6 +2071,9 @@ int ObTableScanOp::inner_rescan_for_tsc()
       LOG_TRACE("[group rescan] need perform real batch rescan");
       fold_iter_->init_group_range(0, tsc_rtdef_.bnlj_params_.at(0).gr_param_->count_);
     }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(rand_scan_processor_.use_rand_scan())) {
+    rand_scan_processor_.reuse();
   }
 
   return ret;
@@ -2596,17 +2617,13 @@ ERRSIM_POINT_DEF(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM);
 int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_E(EventTable::EN_ENABLE_RANDOM_TSC) OB_SUCCESS;
-  bool enable_random_output = (tmp_ret != OB_SUCCESS);
-
-  int64_t rand_row_cnt = max_row_cnt;
-  int64_t rand_append_bits = 0;
-  if (enable_random_output && max_row_cnt > 1) {
-    gen_rand_size_and_skip_bits(max_row_cnt, rand_row_cnt, rand_append_bits);
-  }
   if (OB_UNLIKELY(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM)) {
     ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM;
-  } else if (OB_FAIL(inner_get_next_batch_for_tsc(rand_row_cnt))) {
+  } else if (OB_UNLIKELY(rand_scan_processor_.use_rand_scan())) {
+    if (OB_FAIL(rand_scan_processor_.inner_get_next_batch(max_row_cnt))) {
+      LOG_WARN("random table scan failed", K(ret));
+    }
+  } else if (OB_FAIL(inner_get_next_batch_for_tsc(max_row_cnt))) {
     LOG_WARN("failed to get next batch", K(ret));
   }
 
@@ -2620,17 +2637,6 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
             eval_ctx_, MY_CTDEF.get_das_output_exprs(), MY_SPEC.agent_vt_meta_.access_exprs_))) {
         LOG_WARN("convert output row failed", K(ret));
       }
-    }
-  }
-
-  if (OB_SUCC(ret) && enable_random_output && !brs_.end_
-      && brs_.skip_->accumulate_bit_cnt(brs_.size_) == 0) {
-    if (OB_UNLIKELY(brs_.size_ > max_row_cnt || rand_append_bits + brs_.size_ > max_row_cnt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected tsc output rows", K(brs_), K(rand_append_bits), K(max_row_cnt),
-                K(rand_row_cnt));
-    } else {
-      adjust_rand_output_brs(rand_append_bits);
     }
   }
   return ret;
@@ -4003,33 +4009,6 @@ int ObTableScanOp::fill_generated_cellid_mbr(const ObStorageDatum &cellid, const
   return ret;
 }
 
-void ObTableScanOp::gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size,
-                                                int64_t &skip_bits)
-{
-  rand_size = batch_size;
-  skip_bits = 0;
-  if (batch_size > 1) {
-    std::default_random_engine rd;
-    rd.seed(std::random_device()());
-    std::uniform_int_distribution<int64_t> irand(0, batch_size/2);
-    skip_bits = irand(rd);
-    if (skip_bits <= 0) {
-      skip_bits = 1;
-    }
-    rand_size = batch_size - skip_bits;
-    LOG_TRACE("random batch size", K(rand_size), K(skip_bits));
-  }
-}
-
-void ObTableScanOp::adjust_rand_output_brs(const int64_t rand_append_bits)
-{
-  LOG_TRACE("random output", K(brs_.size_), K(rand_append_bits));
-  int64_t output_size = brs_.size_ + rand_append_bits;
-  brs_.skip_->set_all(brs_.size_, output_size);
-  brs_.size_ = output_size;
-  brs_.all_rows_active_ = false;
-}
-
 int ObTableScanOp::inner_get_next_fts_index_row()
 {
   int ret = OB_SUCCESS;
@@ -4173,6 +4152,117 @@ int ObTableScanOp::get_output_fts_col_expr_by_type(
   if (OB_SUCC(ret) && OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, fts column expr isn't found", K(ret), "type", get_type_name(type), K(MY_SPEC.output_));
+  }
+  return ret;
+}
+
+int ObRandScanProcessor::init(const ObTableScanSpec *tsc_spec,
+                              ObTableScanOp *tsc_op)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_E(EventTable::EN_ENABLE_RANDOM_TSC) OB_SUCCESS;
+  if (OB_UNLIKELY(tmp_ret != OB_SUCCESS)) {
+    if (0 != tsc_spec->max_batch_size_) {
+      int skip_buf_size = ObBitVector::memory_size(tsc_spec->max_batch_size_);
+      void *skip_buf = tsc_op->ctx_.get_allocator().alloc(skip_buf_size);
+      if (OB_ISNULL(skip_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(skip_buf_size));
+      } else {
+        MEMSET(skip_buf, 0, skip_buf_size);
+        rand_brs_.skip_ = to_bit_vector(skip_buf);
+        status_ = RandScanStatus::RAND_SCAN_INIT;
+        rand_seed_ = tmp_ret;
+        tsc_op_ = tsc_op;
+        tsc_spec_ = tsc_spec;
+      }
+      LOG_DEBUG("enable random tsc", K(ret), K(rand_seed_));
+    }
+  }
+  return ret;
+}
+
+int ObRandScanProcessor::inner_get_next_batch(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rand_brs_.skip_) || OB_ISNULL(tsc_op_) || OB_ISNULL(tsc_spec_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null arguments", K(ret));
+  } else {
+    ObBatchRows &brs = tsc_op_->brs_;
+    ObEvalCtx &eval_ctx = tsc_op_->eval_ctx_;
+    bool need_output = false;
+    std::mt19937_64 gen(rand_seed_++);
+    while (OB_SUCC(ret) && !need_output) {
+      switch (status_) {
+      case RandScanStatus::RAND_SCAN_INIT: {
+        std::uniform_int_distribution<uint64_t> rand_func(1, max_row_cnt);
+        int64_t rand_max_row_cnt = rand_func(gen);
+        if (OB_FAIL(tsc_op_->inner_get_next_batch_for_tsc(rand_max_row_cnt))) {
+          LOG_WARN("inner get next batch failed", K(ret));
+        } else if (brs.size_ >= 2) {
+          status_ = RandScanStatus::RAND_SCAN_FIRST_PART;
+          rand_brs_.size_ = brs.size_;
+          rand_brs_.end_ = brs.end_;
+          rand_brs_.skip_->deep_copy(*brs.skip_, brs.size_);
+          // for array type need cast to uniform firstly
+          for (int64_t i = 0; i < tsc_spec_->output_.count(); i++) {
+            ObExpr *e = tsc_spec_->output_.at(i);
+            if (OB_FAIL(e->eval_vector(eval_ctx, brs))) {
+              LOG_WARN("eval batch failed", K(ret));
+            } else if (e->is_nested_expr() && !is_uniform_format(e->get_format(eval_ctx)) &&
+                      OB_FAIL(e->nested_cast_to_uniform(brs.size_, eval_ctx, brs.skip_))) {
+              LOG_WARN("failed to cast nested expr to uniform", K(ret));
+            }
+          }
+        } else {
+          need_output = true;
+        }
+        break;
+      }
+      case RandScanStatus::RAND_SCAN_FIRST_PART: {
+        int output_row_cnt = 0;
+        brs.size_ = rand_brs_.size_;
+        brs.skip_->set_all(brs.size_);
+        for (int i = 0; i < brs.size_; i++) {
+          if (!rand_brs_.skip_->at(i)) {
+            if (i <= brs.size_ / 2) {
+              output_row_cnt++;
+              rand_brs_.skip_->set(i);
+              brs.skip_->unset(i);
+            }
+          }
+        }
+        brs.end_ = false;
+        brs.all_rows_active_ = (output_row_cnt == brs.size_);
+        status_ = RandScanStatus::RAND_SCAN_SECOND_PART;
+        need_output = true;
+        break;
+      }
+      case RandScanStatus::RAND_SCAN_SECOND_PART: {
+        tsc_op_->clear_evaluated_flag();
+        int output_row_cnt = 0;
+        brs.size_ = rand_brs_.size_;
+        brs.skip_->set_all(brs.size_);
+        for (int i = 0; i < brs.size_; i++) {
+          if (!rand_brs_.skip_->at(i)) {
+            output_row_cnt++;
+            rand_brs_.skip_->set(i);
+            brs.skip_->unset(i);
+          }
+        }
+        brs.all_rows_active_ = (output_row_cnt == brs.size_);
+        status_ = RandScanStatus::RAND_SCAN_INIT;
+        brs.end_ = rand_brs_.end_;
+        need_output = true;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected random scan status", K(ret), K(status_));
+      }
+      }
+    }
   }
   return ret;
 }

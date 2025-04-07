@@ -190,22 +190,30 @@ struct ObEvalCtx
     {
       batch_idx_ptr_ = &eval_ctx.batch_idx_;
       batch_size_ptr_ = &eval_ctx.batch_size_;
+      max_batch_size_ptr_ = &eval_ctx.max_batch_size_;
       batch_idx_default_val_ = eval_ctx.batch_idx_;
       batch_size_default_val_ = eval_ctx.batch_size_;
+      max_batch_size_default_val_ = eval_ctx.max_batch_size_;
     }
     ~BatchInfoScopeGuard()
     {
        *batch_idx_ptr_ = batch_idx_default_val_;
        *batch_size_ptr_ = batch_size_default_val_;
+       *max_batch_size_ptr_ = max_batch_size_default_val_;
     }
     inline void set_batch_idx(int64_t v) { *batch_idx_ptr_ = v; }
     inline void set_batch_size(int64_t v) { *batch_size_ptr_ = v; }
+private:
+    friend class ObExpr;
+    inline void set_max_batch_size(int64_t v) { *max_batch_size_ptr_ = v; }
 
   private:
     int64_t *batch_idx_ptr_ = nullptr;
     int64_t *batch_size_ptr_ = nullptr;
+    int64_t *max_batch_size_ptr_ = nullptr;
     int64_t batch_idx_default_val_ = 0;
     int64_t batch_size_default_val_ = 0;
+    int64_t max_batch_size_default_val_ = 0;
   };
   explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL);
   explicit ObEvalCtx(ObEvalCtx &eval_ctx);
@@ -262,6 +270,8 @@ private:
     return tmp_alloc_;
   }
 
+  int get_pvt_skip_for_eval_row(ObBitVector *&skip);
+
 public:
   char **frames_;
   // Used for das, the semantics is the same as max_batch_size_ in spec
@@ -277,6 +287,8 @@ private:
   int64_t batch_size_;
   // Expression result allocator, never reset.
   common::ObArenaAllocator &expr_res_alloc_;
+  // used in `eval_one_datum_of_batch`
+  ObBitVector *pvt_skip_for_eval_row_;
 };
 
 
@@ -1361,11 +1373,13 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
   int ret = common::OB_SUCCESS;
   const ObEvalInfo &info = get_eval_info(ctx);
   if (!is_batch_result()) {
-    if (skip.accumulate_bit_cnt(size) < size) {
-      common::ObDatum *datum = NULL;
-      ret = eval(ctx, datum);
-    } else {
-      // all skiped
+    bool const_dry_run = skip.accumulate_bit_cnt(size) >= size;
+    common::ObDatum *datum = NULL;
+    ret = eval(ctx, datum);
+    if (!const_dry_run) {
+      // do nothing
+    } else if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
     }
   } else if (info.projected_ || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.

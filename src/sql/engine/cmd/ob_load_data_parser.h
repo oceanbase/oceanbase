@@ -204,7 +204,7 @@ struct ObCSVGeneralFormat {
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
-               K(compression_algorithm_), K(file_extension_), K(binary_format_));
+               K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_));
   OB_UNIS_VERSION(1);
 };
 
@@ -339,6 +339,126 @@ public:
                  handle_func &handle_one_line,
                  common::ObIArray<LineErrRec> &errors,
                  bool is_end_file);
+  // used for utf8, single char term, no enclosed char and no need escaped result
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD, bool IS_END_FILE>
+  int scan_utf8_ex(const char *&str, const char *end, int64_t &nrows,
+                   char *escape_buf, char *escaped_buf_end,
+                   handle_func &handle_one_line,
+                   common::ObIArray<LineErrRec> &errors);
+
+  template<typename handle_func, bool HAS_ESCAPE>
+  OB_INLINE int dispatch_scan_utf8_l1(bool HAS_LINE_START,
+                            bool SKIP_BLANK_LINES,
+                            bool NO_FIELD,
+                            const char *&str, const char *end, int64_t &nrows,
+                            char *escape_buf, char *escaped_buf_end,
+                            handle_func &handle_one_line,
+                            common::ObIArray<LineErrRec> &errors,
+                            bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (HAS_LINE_START) {
+      ret = dispatch_scan_utf8_l2<handle_func, HAS_ESCAPE, true> (SKIP_BLANK_LINES, NO_FIELD, str, end,
+                                                      nrows, escape_buf, escaped_buf_end,
+                                                      handle_one_line, errors, is_end_file);
+    } else {
+      ret = dispatch_scan_utf8_l2<handle_func, HAS_ESCAPE, false> (SKIP_BLANK_LINES, NO_FIELD, str, end,
+                                                       nrows, escape_buf, escaped_buf_end,
+                                                       handle_one_line, errors, is_end_file);
+    }
+    return ret;
+  }
+
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START>
+  OB_INLINE int dispatch_scan_utf8_l2(bool SKIP_BLANK_LINES,
+                            bool NO_FIELD,
+                            const char *&str, const char *end, int64_t &nrows,
+                            char *escape_buf, char *escaped_buf_end,
+                            handle_func &handle_one_line,
+                            common::ObIArray<LineErrRec> &errors,
+                            bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (SKIP_BLANK_LINES) {
+      ret = dispatch_scan_utf8_l3<handle_func, HAS_ESCAPE, HAS_LINE_START, true> (NO_FIELD, str, end,
+                                                                      nrows, escape_buf,
+                                                                      escaped_buf_end, handle_one_line,
+                                                                      errors, is_end_file);
+    } else {
+      ret = dispatch_scan_utf8_l3<handle_func, HAS_ESCAPE, HAS_LINE_START, false> (NO_FIELD, str, end,
+                                                                       nrows, escape_buf,
+                                                                       escaped_buf_end, handle_one_line,
+                                                                       errors, is_end_file);
+    }
+    return ret;
+  }
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES>
+  OB_INLINE int dispatch_scan_utf8_l3(bool NO_FIELD,
+                            const char *&str, const char *end, int64_t &nrows,
+                            char *escape_buf, char *escaped_buf_end,
+                            handle_func &handle_one_line,
+                            common::ObIArray<LineErrRec> &errors,
+                            bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (NO_FIELD) {
+      ret = dispatch_scan_utf8_l4<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, true>(str, end, nrows,
+                                                                              escape_buf, escaped_buf_end,
+                                                                              handle_one_line, errors,
+                                                                              is_end_file);
+    } else {
+      ret = dispatch_scan_utf8_l4<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, false>(str, end, nrows,
+                                                                               escape_buf, escaped_buf_end,
+                                                                               handle_one_line, errors,
+                                                                               is_end_file);
+    }
+    return ret;
+  }
+
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD>
+  OB_INLINE int dispatch_scan_utf8_l4(const char *&str, const char *end, int64_t &nrows,
+                                      char *escape_buf, char *escaped_buf_end,
+                                      handle_func &handle_one_line,
+                                      common::ObIArray<LineErrRec> &errors,
+                                      bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (is_end_file) {
+      ret = scan_utf8_ex<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, NO_FIELD, true>(str, end, nrows,
+                                                                              escape_buf, escaped_buf_end,
+                                                                              handle_one_line, errors);
+    } else {
+      ret = scan_utf8_ex<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, NO_FIELD, false>(str, end, nrows,
+                                                                               escape_buf, escaped_buf_end,
+                                                                               handle_one_line, errors);
+    }
+    return ret;
+  }
+
+  template <bool SKIP_BLANK_LINES>
+  OB_INLINE void process_term(const char *line_t, const char *&ori_field_begin, const char *&field_begin,
+                              const char *&str, int &field_idx, bool &find_new_line)
+  {
+    while (OB_LIKELY(str < line_t)) {
+      if (static_cast<unsigned> (*str) == opt_param_.field_term_c_
+          && field_idx++ < format_.file_column_nums_) {
+        gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx);
+        ori_field_begin = str + 1;
+        field_begin = ori_field_begin;
+      }
+      ++str;
+    }
+    find_new_line = true;
+    if (field_idx < format_.file_column_nums_) {
+      if (!SKIP_BLANK_LINES || field_idx > 0) {
+        ++field_idx;
+        gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx);
+      } else {
+        find_new_line = false;
+      }
+    }
+    str++;
+  }
 
   template<typename handle_func, bool NEED_ESCAPED_RESULT = false>
   int scan(const char *&str, const char *end, int64_t &nrows,
@@ -364,8 +484,18 @@ public:
         }
       } else {
         if (single_char_term) {
-          ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, true, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+          const bool has_line_start = !format_.line_start_str_.empty();
+          const bool skip_blank_lines = format_.skip_blank_lines_;
+          const bool no_field = (0 == format_.file_column_nums_ && !skip_blank_lines);
+          if (opt_param_.is_line_term_by_counting_field_ || (!no_field && NEED_ESCAPED_RESULT)) {
+            ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, true, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+          } else {
+            ret = dispatch_scan_utf8_l1<handle_func, NEED_ESCAPED_RESULT/*only process no field*/> (
+                                                      has_line_start, skip_blank_lines, no_field,
+                                                      str, end, nrows, escape_buf, escaped_buf_end,
+                                                      handle_one_line, errors, is_end_file);
+          }
         } else {
           ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
@@ -692,6 +822,101 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
     }
     if (OB_LIKELY(find_new_line) || is_end_file) {
       if (!format_.skip_blank_lines_ || field_idx > 0) {
+        if (field_idx < format_.file_column_nums_
+            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
+          ret = handle_irregular_line(field_idx, line_no, errors);
+        }
+        if (OB_SUCC(ret)) {
+          HandleOneLineParam param(fields_per_line_, field_idx);
+          ret = handle_one_line(param);
+        }
+      } else {
+        if (format_.skip_blank_lines_) {
+          blank_line_cnt++;
+        }
+      }
+      line_no++;
+      line_begin = str;
+    }
+  }
+
+  str = line_begin;
+  nrows = line_no;
+  return ret;
+}
+
+OB_INLINE bool is_valid_term(const char *begin, const char *term, const char escape) {
+  int64_t escape_num = 0;
+  const char *curr = term;
+  while (curr > begin && OB_UNLIKELY(*(curr - 1) == escape)) {
+    curr = curr - 1;
+    ++escape_num;
+  }
+  return escape_num == 0 || (escape_num  % 2) == 0;
+}
+
+template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD, bool IS_END_FILE>
+int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
+                                     const char *end,
+                                     int64_t &nrows,
+                                     char *escape_buf,
+                                     char *escape_buf_end,
+                                     handle_func &handle_one_line,
+                                     common::ObIArray<LineErrRec> &errors)
+{
+  int ret = common::OB_SUCCESS;
+  int line_no = 0;
+  int blank_line_cnt = 0;
+  const char *line_begin = str;
+  char *escape_buf_pos = escape_buf;
+  while (OB_SUCC(ret) && str < end && line_no - blank_line_cnt < nrows) {
+    bool find_new_line = false;
+    int field_idx = 0;
+    if (HAS_LINE_START) {
+      bool is_line_start_found = false;
+      for (; str + format_.line_start_str_.length() <= end; str++) {
+        if (0 == MEMCMP(str, format_.line_start_str_.ptr(), format_.line_start_str_.length())) {
+          str += format_.line_start_str_.length();
+          is_line_start_found = true;
+          break;
+        }
+      }
+      if (!is_line_start_found) {
+        if (IS_END_FILE) {
+          line_begin = end;
+        } else {
+          line_begin = str;
+        }
+        break;
+      }
+    }
+    const char *ori_field_begin = str;
+    const char *field_begin = str;
+    const char *line_t = nullptr;
+    line_t = static_cast<const char *> (memchr(str, opt_param_.line_term_c_, end - str));
+    if (HAS_ESCAPE) {
+      while (OB_LIKELY(line_t != nullptr)
+            && OB_UNLIKELY(!is_valid_term(line_begin, line_t, format_.field_escaped_char_))
+            && OB_LIKELY(++line_t < end)) {
+        line_t = static_cast<const char *> (memchr(line_t, opt_param_.line_term_c_, end - line_t));
+      }
+    }
+    if (NO_FIELD && OB_NOT_NULL(line_t)) {
+      str = line_t + 1;
+      find_new_line = true;
+    } else if (OB_NOT_NULL(line_t)) {
+      process_term<SKIP_BLANK_LINES> (line_t, ori_field_begin, field_begin,
+                                      str, field_idx, find_new_line);
+    } else if (IS_END_FILE) {
+      line_t = end;
+      process_term<SKIP_BLANK_LINES> (line_t, ori_field_begin, field_begin,
+                                      str, field_idx, find_new_line);
+    } else {
+      str = end;
+    }
+
+    if (OB_LIKELY(find_new_line) || IS_END_FILE) {
+      if (!SKIP_BLANK_LINES || field_idx > 0) {
         if (field_idx < format_.file_column_nums_
             || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
           ret = handle_irregular_line(field_idx, line_no, errors);

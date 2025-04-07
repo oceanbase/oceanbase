@@ -2560,6 +2560,9 @@ DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "True",
 DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h]",
          "Control the trigger time of px task rebalance. Range: [1us, 1h]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_pseudo_partition_id, OB_CLUSTER_PARAMETER, "True",
+         "Control whether to enable pseudo_partition_id.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_obdal, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable use obdal to access object storage.",

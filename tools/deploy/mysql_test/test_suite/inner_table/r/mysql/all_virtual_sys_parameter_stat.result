@@ -401,6 +401,7 @@ _enable_plan_cache_mem_diagnosis
 _enable_pl_recompile_job
 _enable_prefetch_limiting
 _enable_protocol_diagnose
+_enable_pseudo_partition_id
 _enable_px_batch_rescan
 _enable_px_fast_reclaim
 _enable_px_ordered_coord

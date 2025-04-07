@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -1172,7 +1173,10 @@ int ObTableColumns::set_col_attrs_according_binary_expr(
       ret = OB_SUCCESS;
       LOG_WARN("fail to get table schema", K(ret), K(tenant_id), "table_id", tbl_item->ref_id_);
     } else if (table_schema->is_table()) {
-      if (OB_UNLIKELY(NULL == (column_schema = table_schema->get_column_schema(bexpr->get_column_id())))) {
+      if (OB_FAIL(sql::ObSQLMockSchemaUtils::try_mock_partid(table_schema, table_schema))) {
+        LOG_WARN("failed to try mock rowid column", K(ret));
+      } else if (OB_UNLIKELY(NULL == (column_schema =
+            table_schema->get_column_schema(bexpr->get_column_id())))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN(" column schema is NULL", K(ret), K(column_schema));
       } else if (!nullable && !column_schema->is_not_null_validate_column()

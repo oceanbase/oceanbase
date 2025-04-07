@@ -434,6 +434,8 @@
 #include "ob_expr_vec_ivf_pq_center_id.h"
 #include "ob_expr_vec_ivf_pq_center_ids.h"
 #include "ob_expr_vec_ivf_pq_center_vector.h"
+#include "ob_expr_bool.h"
+#include "ob_expr_not_between.h"
 #include "ob_expr_inner_info_cols_printer.h"
 
 namespace oceanbase
@@ -1768,22 +1770,22 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprIsNot::calc_vector_is_not_null,                         /* 196 */
   ObExprIsNot::calc_vector_is_not_true,                         /* 197 */
   ObExprIsNot::calc_vector_is_not_false,                        /* 198 */
-  NULL, // ObExprBool::calc_vector_bool_expr,                            /* 199 */
-  NULL, // ObExprNotBetween::eval_not_between_vector,                    /* 200 */
-  NULL, // ObExprNot::eval_not_vector,                                   /* 201 */
+  ObExprBool::calc_vector_bool_expr,                            /* 199 */
+  ObExprNotBetween::eval_not_between_vector,                    /* 200 */
+  ObExprNot::eval_not_vector,                                   /* 201 */
   NULL, // ObExprArrayExcept::eval_array_except_vector,                  /* 202 */
   NULL, // ObExprArrayIntersect::eval_array_intersect_vector,            /* 203 */
   NULL, // ObExprArrayUnion::eval_array_union_vector,                    /* 204 */
   NULL, // ObExprArrayReplace::eval_array_replace_vector,                /* 205 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_vector,              /* 206 */
-  NULL, // ObExprColumnConv::column_convert_vector,                      /* 207 */
-  NULL, // ObExprColumnConv::column_convert_vector_fast,                 /* 208 */
+  ObExprColumnConv::column_convert_vector,                               /* 207 */
+  ObExprColumnConv::column_convert_vector_fast,                          /* 208 */
   NULL, // ObExprConcat::eval_concat_vector,                             /* 209 */
   NULL, // ObExprLpad::calc_mysql_lpad_expr_vector,                      /* 210 */
   NULL, // ObExprRpad::calc_mysql_rpad_expr_vector,                      /* 211 */
   NULL, // ObExprOracleLpad::calc_oracle_lpad_expr_vector,               /* 212 */
   NULL, // ObExprOracleRpad::calc_oracle_rpad_expr_vector,               /* 213 */
-  NULL, // ObExprFindInSet::calc_find_in_set_vector,                     /* 214 */
+  ObExprFindInSet::calc_find_in_set_vector,                              /* 214 */
   NULL, // ObExprSubstringIndex::eval_substring_index_vector,            /* 215 */
   NULL, // ObExprConcatWs::calc_concat_ws_expr_vector,                   /* 216 */
   NULL, // ObExprMapKeys::eval_map_keys_vector,                          /* 217 */

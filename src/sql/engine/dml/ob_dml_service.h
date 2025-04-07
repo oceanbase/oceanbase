@@ -102,7 +102,8 @@ public:
                                      const bool use_rich_format);
   static int check_geometry_column_batch(const ObInsCtDef &ins_ctdef,
                                          ObTableModifyOp &dml_op,
-                                         const ColumnContent &column_info);
+                                         const ColumnContent &column_info,
+                                         const bool use_rich_format);
   static int check_column_null_batch(const ObInsCtDef &ins_ctdef,
                                      ObTableModifyOp &dml_op,
                                      const ColumnContent &column_info,

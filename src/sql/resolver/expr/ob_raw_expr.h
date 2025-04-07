@@ -1468,6 +1468,7 @@ public:
 
   ObRawExpr* expr_;
   ObOrderDirection order_type_;
+  bool is_not_null_{false};
 };
 
 class ObQueryRefRawExpr;
@@ -2744,7 +2745,8 @@ public:
       is_mul_key_column_(false),
       is_strict_json_column_(0),
       srs_id_(UINT64_MAX),
-      udt_set_id_(0)
+      udt_set_id_(0),
+      is_pseudo_column_ref_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2889,6 +2891,8 @@ public:
                                       || ob_is_xml_sql_type(get_data_type(), get_subschema_id()); }
   bool is_geo_column() const { return get_data_type() == ObObjType::ObGeometryType; }
   bool is_udt_hidden_column() const { return is_hidden_column() && get_udt_set_id() > 0;}
+  bool is_pseudo_column_ref() const { return is_pseudo_column_ref_; }
+  void set_is_pseudo_column_ref(bool value) { is_pseudo_column_ref_ = value; }
 
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
 
@@ -2944,6 +2948,7 @@ private:
     uint64_t srs_id_;
   };
   uint64_t udt_set_id_;
+  bool is_pseudo_column_ref_;
 };
 
 inline void ObColumnRefRawExpr::set_ref_id(uint64_t table_id, uint64_t column_id)

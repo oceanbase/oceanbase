@@ -163,6 +163,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_IVF_META_VECTOR_COLUMN_FLAG (INT64_C(1) << 47)
 #define GENERATED_VEC_IVF_PQ_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 48)
 #define GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG (INT64_C(1) << 49)
+#define MOCK_COLUMN_FLAG (INT64_C(1) << 50)
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
@@ -3091,6 +3092,7 @@ public:
   //            the ret would be OB_UNKNOWN_SUBPARTITION.
   //note this function would only check subpartition
   int get_subpartition_by_name(const ObString &name, const ObPartition *&part, const ObSubPartition *&subpart) const;
+  int get_subpartition_by_sub_part_id(const int64_t part_id, const ObPartition *&part, const ObSubPartition *&subpart) const;
   //@param[in] name: the partition or subpartition name you want to check
   //           whether there is already a partition or subpartition have the same name
   //@param[ret] when this function traversal all partitions and subpartitions and find the name is duplicate with

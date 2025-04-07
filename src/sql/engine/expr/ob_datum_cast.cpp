@@ -3426,6 +3426,23 @@ static OB_INLINE int common_construct_otimestamp(const ObObjType type,
   return ret;
 }
 
+static OB_INLINE int common_construct_otimestamp(const ObObjType type,
+                                                 const int64_t idx,
+                                                 const ObIVector &in_vec,
+                                                 ObOTimestampData &out_val)
+{
+  int ret = OB_SUCCESS;
+  if (ObTimestampTZType == type) {
+    out_val = in_vec.get_otimestamp_tz(idx);
+  } else if (ObTimestampLTZType == type || ObTimestampNanoType == type) {
+    out_val = in_vec.get_otimestamp_tiny(idx).to_timestamp_data();
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid in type", K(ret), K(type));
+  }
+  return ret;
+}
+
 static int common_number_datetime(const number::ObNumber nmb,
                                   const ObTimeConvertCtx &cvrt_ctx,
                                   int64_t &out_val,
@@ -13570,6 +13587,57 @@ int interval_scale_check(const ObCastMode &cast_mode,
   return ret;
 }
 
+int interval_scale_check(const ObCastMode &cast_mode,
+                     const ObAccuracy &accuracy,
+                     const ObObjType type,
+                     const int64_t idx,
+                     const ObIVector &in_vec,
+                     ObIVector &out_vec,
+                     int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cast_mode);
+  UNUSED(warning);
+  ObScale expected_scale = accuracy.get_scale();
+  if (ob_is_interval_ym(type)) {
+    ObIntervalYMValue in_val(in_vec.get_interval_nmonth(idx));
+    int8_t expected_year_scale =
+      ObIntervalScaleUtil::ob_scale_to_interval_ym_year_scale(
+          static_cast<int8_t>(expected_scale));
+    int8_t input_year_scale = in_val.calc_leading_scale();
+    if (OB_UNLIKELY(expected_year_scale < input_year_scale)) {
+      ret = OB_ERR_THE_LEADING_PRECISION_OF_THE_INTERVAL_IS_TOO_SMALL;
+      LOG_WARN("interval obj scale check", K(ret), K(expected_year_scale),
+                                            K(input_year_scale));
+    } else {
+      out_vec.set_interval_ym(idx, in_vec.get_interval_nmonth(idx));
+    }
+  } else if (ob_is_interval_ds(type)) {
+    ObIntervalDSValue in_val = in_vec.get_interval_ds(idx);
+    int8_t expected_day_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_day_scale(
+        static_cast<int8_t>(expected_scale));
+    int8_t expected_fs_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_second_scale(
+        static_cast<int8_t>(expected_scale));
+
+    if (OB_FAIL(ObTimeConverter::round_interval_ds(expected_fs_scale, in_val))) {
+      LOG_WARN("fail to round interval ds", K(ret), K(in_val));
+    } else {
+      int8_t input_day_scale = in_val.calc_leading_scale();
+      if (OB_UNLIKELY(expected_day_scale < input_day_scale)) {
+        ret = OB_ERR_THE_LEADING_PRECISION_OF_THE_INTERVAL_IS_TOO_SMALL;
+        LOG_WARN("interval obj scale check", K(ret), K(expected_day_scale),
+            K(input_day_scale));
+      } else {
+        out_vec.set_interval_ds(idx, in_val);
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected in type", K(ret), K(type));
+  }
+  return ret;
+}
+
 int bit_length_check(const ObCastMode &cast_mode,
                      const ObAccuracy &accuracy,
                      const ObObjType type,
@@ -13605,6 +13673,42 @@ int bit_length_check(const ObCastMode &cast_mode,
   return ret;
 }
 
+int bit_length_check(const ObCastMode &cast_mode,
+                     const ObAccuracy &accuracy,
+                     const ObObjType type,
+                     const int64_t idx,
+                     const ObIVector &in_vec,
+                     ObIVector &out_vec,
+                     int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type);
+  uint64_t value = in_vec.get_uint(idx);
+  int32_t bit_len = 0;
+  int32_t dst_bit_len = accuracy.get_precision();
+  if (OB_FAIL(get_bit_len(value, bit_len))) {
+    LOG_WARN("fail to get_bit_length", K(ret), K(value), K(bit_len));
+  } else if(OB_UNLIKELY(bit_len <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bit length is negative", K(ret), K(value), K(bit_len));
+  } else {
+    if (OB_UNLIKELY(bit_len > dst_bit_len)) {
+      ret = OB_ERR_DATA_TOO_LONG;
+      LOG_WARN("bit type length is too long", K(ret), K(bit_len),
+          K(dst_bit_len), K(value));
+    } else {
+      out_vec.set_bit(idx, value);
+    }
+    if (OB_FAIL(ret) && CM_IS_WARN_ON_FAIL(cast_mode)) {
+      warning = OB_DATA_OUT_OF_RANGE;
+      ret = OB_SUCCESS;
+      uint64_t max_value = (1ULL<<dst_bit_len) - 1;
+      out_vec.set_bit(idx, max_value);
+    }
+  }
+  return ret;
+}
+
 int raw_length_check(const ObCastMode &cast_mode,
                      const ObAccuracy &accuracy,
                      const ObObjType type,
@@ -13623,6 +13727,29 @@ int raw_length_check(const ObCastMode &cast_mode,
     LOG_WARN("char type length is too long", K(str_len_byte), K(max_accuracy_len));
   } else {
     res_datum.set_datum(in_datum);
+  }
+  return ret;
+}
+
+int raw_length_check(const ObCastMode &cast_mode,
+                     const ObAccuracy &accuracy,
+                     const ObObjType type,
+                     const int64_t idx,
+                     const ObIVector &in_vec,
+                     ObIVector &out_vec,
+                     int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cast_mode);
+  UNUSED(type);
+  UNUSED(warning);
+  const ObLength max_accuracy_len = accuracy.get_length();
+  const int32_t str_len_byte = in_vec.get_length(idx);
+  if (OB_UNLIKELY(str_len_byte > max_accuracy_len)) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_WARN("char type length is too long", K(str_len_byte), K(max_accuracy_len));
+  } else {
+    out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), str_len_byte);
   }
   return ret;
 }
@@ -13706,6 +13833,37 @@ int time_scale_check(const ObCastMode &cast_mode,
   return ret;
 }
 
+int time_scale_check(const ObCastMode &cast_mode,
+                     const ObAccuracy &accuracy,
+                     const ObObjType type,
+                     const int64_t idx,
+                     const ObIVector &in_vec,
+                     ObIVector &out_vec,
+                     int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type);
+  UNUSED(warning);
+  ObScale scale = accuracy.get_scale();
+  int64_t value = in_vec.get_int(idx);
+  // First, judge whether it is inserted or updated(CM_IS_COLUMN_CONVERT), and then judge whether the current sqlmode is truncate(CM_IS_TIME_TRUNCATE_FRACTIONAL)
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
+  if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+    LOG_WARN("check usec scale fail.", K(ret), K(value));
+  } else if (OB_LIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+    if(need_truncate) {
+      value /= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+      value *= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+    } else {
+      ObTimeConverter::round_datetime(scale, value);
+    }
+    out_vec.set_time(idx, value);
+  } else {
+    out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+  }
+  return ret;
+}
+
 int otimestamp_scale_check(const ObCastMode &cast_mode,
                            const ObAccuracy &accuracy,
                            const ObObjType type,
@@ -13743,6 +13901,50 @@ int otimestamp_scale_check(const ObCastMode &cast_mode,
     }
   } else {
     res_datum.set_datum(in_datum);
+  }
+  return ret;
+}
+
+int otimestamp_scale_check(const ObCastMode &cast_mode,
+                           const ObAccuracy &accuracy,
+                           const ObObjType type,
+                           const int64_t idx,
+                           const ObIVector &in_vec,
+                           ObIVector &out_vec,
+                           int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cast_mode);
+  UNUSED(warning);
+  ObScale scale = accuracy.get_scale();
+  ObOTimestampData in_val;
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST",
+        static_cast<int64_t>(MAX_SCALE_FOR_ORACLE_TEMPORAL));
+  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
+    ObOTimestampData in_val;
+    if (OB_FAIL(common_construct_otimestamp(type, idx, in_vec, in_val))) {
+      LOG_WARN("common_construct_otimestamp failed", K(ret));
+    } else {
+      ObOTimestampData ot_data = ObTimeConverter::round_otimestamp(scale, in_val);
+      if (ObTimeConverter::is_valid_otimestamp(ot_data.time_us_,
+            static_cast<int32_t>(ot_data.time_ctx_.tail_nsec_))) {
+        if (ObTimestampTZType == type) {
+          out_vec.set_otimestamp_tz(idx, ot_data);
+        } else {
+          ObOTimestampTinyData ott_data;
+          ott_data.from_timestamp_data(ot_data);
+          out_vec.set_otimestamp_tiny(idx, ott_data);
+        }
+      } else {
+        OB_LOG(DEBUG, "invalid otimestamp, set it null ", K(ot_data), K(scale),
+            "orig_date", in_val);
+        out_vec.set_null(idx);
+      }
+    }
+  } else {
+    out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
   }
   return ret;
 }
@@ -13788,6 +13990,48 @@ int datetime_scale_check(const ObCastMode &cast_mode,
   return ret;
 }
 
+int datetime_scale_check(const ObCastMode &cast_mode,
+                         const ObAccuracy &accuracy,
+                         const ObObjType type,
+                         const int64_t idx,
+                         const ObIVector &in_vec,
+                         ObIVector &out_vec,
+                         int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type);
+  UNUSED(warning);
+  ObScale scale = accuracy.get_scale();
+  // First, judge whether it is inserted or updated(CM_IS_COLUMN_CONVERT), and then judge whether the current sqlmode is truncate(CM_IS_TIME_TRUNCATE_FRACTIONAL)
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST",
+        static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+  } else {
+    int64_t value = in_vec.get_int(idx);
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check zero scale fail.", K(ret), K(value), K(scale));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      int64_t value = in_vec.get_int(idx);
+      if(need_truncate) {
+        value /= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+        value *= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+      } else {
+        ObTimeConverter::round_datetime(scale, value);
+      }
+      if (ObTimeConverter::is_valid_datetime(value)) {
+        out_vec.set_datetime(idx, value);
+      } else {
+        out_vec.set_null(idx);
+      }
+    } else {
+      out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+    }
+  }
+  return ret;
+}
+
 int mdatetime_scale_check(const ObCastMode &cast_mode,
                           const ObAccuracy &accuracy,
                           const ObObjType type,
@@ -13824,6 +14068,48 @@ int mdatetime_scale_check(const ObCastMode &cast_mode,
       }
     } else {
       res_datum.set_datum(in_datum);
+    }
+  }
+  return ret;
+}
+
+int mdatetime_scale_check(const ObCastMode &cast_mode,
+                          const ObAccuracy &accuracy,
+                          const ObObjType type,
+                          const int64_t idx,
+                          const ObIVector &in_vec,
+                          ObIVector &out_vec,
+                          int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type);
+  UNUSED(warning);
+  ObScale scale = accuracy.get_scale();
+  // First, judge whether it is inserted or updated(CM_IS_COLUMN_CONVERT), and then judge whether the current sqlmode is truncate(CM_IS_TIME_TRUNCATE_FRACTIONAL)
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST",
+        static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+  } else {
+    ObMySQLDateTime value = in_vec.get_mysql_datetime(idx);
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check zero scale fail.", K(ret), K(value), K(scale));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      ObMySQLDateTime value = in_vec.get_mysql_datetime(idx);
+      if(need_truncate) {
+        value.microseconds_ /= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+        value.microseconds_ *= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+      } else {
+        ObTimeConverter::round_mdatetime(scale, value);
+      }
+      if (ObTimeConverter::is_valid_mdatetime(value)) {
+        out_vec.set_mysql_datetime(idx, value);
+      } else {
+        out_vec.set_null(idx);
+      }
+    } else {
+      out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
     }
   }
   return ret;
@@ -13976,6 +14262,154 @@ int number_range_check_v2(const ObCastMode &cast_mode,
   return ret;
 }
 
+int number_range_check_v2(const ObCastMode &cast_mode,
+                          const ObAccuracy &accuracy,
+                          const ObObjType type,
+                          const int64_t idx,
+                          const ObIVector &in_vec,
+                          ObIVector &out_vec,
+                          int &warning)
+{
+  int ret = OB_SUCCESS;
+  int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
+  ObPrecision precision = accuracy.get_precision();
+  ObScale scale = accuracy.get_scale();
+  const number::ObNumber *min_check_num = NULL;
+  const number::ObNumber *max_check_num = NULL;
+  const number::ObNumber *min_num_mysql = NULL;
+  const number::ObNumber *max_num_mysql = NULL;
+  const number::ObNumber in_val(in_vec.get_number(idx));
+  const static int64_t num_alloc_used_times = 2; // out val alloc will be used twice
+  ObNumStackAllocator<num_alloc_used_times> out_val_alloc;
+  number::ObNumber out_val;
+  bool is_finish = false;
+
+  if (ObUNumberType == type && in_val.is_negative()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsiged type with negative value", K(ret), K(in_val));
+  } else if (ObNumberFloatType == type) {
+    if (OB_MIN_NUMBER_FLOAT_PRECISION <= precision
+        && precision <= OB_MAX_NUMBER_FLOAT_PRECISION) {
+      const int64_t number_precision = static_cast<int64_t>(floor(precision *
+            OB_PRECISION_BINARY_TO_DECIMAL_FACTOR));
+      if (OB_FAIL(out_val.from(in_val, out_val_alloc))) {
+      } else if (OB_FAIL(out_val.round_precision(number_precision))) {
+      } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+        in_val.compare(out_val) != 0) {
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("input value is out of range.", K(scale), K(in_val));
+      } else {
+        out_vec.set_number(idx, out_val);
+        is_finish = true;
+      }
+      LOG_DEBUG("finish round_precision", K(in_val), K(number_precision), K(precision));
+    } else if (PRECISION_UNKNOWN_YET == precision) {
+      out_vec.set_number(idx, in_val);
+      is_finish = true;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(precision), K(scale));
+    }
+  } else if (lib::is_oracle_mode()) {
+    if (OB_MAX_NUMBER_PRECISION >= precision
+        && precision >= OB_MIN_NUMBER_PRECISION
+        && number::ObNumber::MAX_SCALE >= scale
+        && scale >= number::ObNumber::MIN_SCALE) {
+      min_check_num = &(ObNumberConstValue::ORACLE_CHECK_MIN[precision][scale +
+          ObNumberConstValue::MAX_ORACLE_SCALE_DELTA]);
+      max_check_num = &(ObNumberConstValue::ORACLE_CHECK_MAX[precision][scale +
+          ObNumberConstValue::MAX_ORACLE_SCALE_DELTA]);
+    } else if (ORA_NUMBER_SCALE_UNKNOWN_YET == scale
+        && PRECISION_UNKNOWN_YET == precision) {
+      out_vec.set_number(idx, in_val);
+      is_finish = true;
+    } else if (PRECISION_UNKNOWN_YET == precision
+        && number::ObNumber::MAX_SCALE >= scale
+        && scale >= number::ObNumber::MIN_SCALE) {
+      ObNumStackOnceAlloc tmp_alloc;
+      number::ObNumber num;
+      if (OB_FAIL(num.from(in_val, tmp_alloc))) {
+      } else if (OB_FAIL(num.round(scale))) {
+      } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+        in_val.compare(num) != 0) {
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("input value is out of range.", K(scale), K(in_val));
+      } else {
+        out_vec.set_number(idx, num);
+        is_finish = true;
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(precision), K(scale));
+    }
+  } else {
+    if (OB_UNLIKELY(precision < scale)) {
+      ret = OB_ERR_M_BIGGER_THAN_D;
+    } else if (number::ObNumber::MAX_PRECISION >= precision
+        && precision >= OB_MIN_DECIMAL_PRECISION
+        && number::ObNumber::MAX_SCALE >= scale
+        && scale >= 0) {
+      min_check_num = &(ObNumberConstValue::MYSQL_CHECK_MIN[precision][scale]);
+      max_check_num = &(ObNumberConstValue::MYSQL_CHECK_MAX[precision][scale]);
+      min_num_mysql = &(ObNumberConstValue::MYSQL_MIN[precision][scale]);
+      max_num_mysql = &(ObNumberConstValue::MYSQL_MAX[precision][scale]);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(precision), K(scale));
+    }
+  }
+
+  if (OB_SUCC(ret) && !is_finish) {
+    if (OB_ISNULL(min_check_num) || OB_ISNULL(max_check_num)
+        || (!lib::is_oracle_mode()
+          && (OB_ISNULL(min_num_mysql) || OB_ISNULL(max_num_mysql)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("min_num or max_num is null", K(ret), KPC(min_check_num), KPC(max_check_num));
+    } else if (in_val <= *min_check_num) {
+      if (lib::is_oracle_mode()) {
+        cast_ret = OB_ERR_VALUE_LARGER_THAN_ALLOWED;
+      } else {
+        cast_ret = OB_DATA_OUT_OF_RANGE;
+        out_vec.set_number(idx, *min_num_mysql);
+      }
+      is_finish = true;
+    } else if (in_val >= *max_check_num) {
+      if (lib::is_oracle_mode()) {
+        cast_ret = OB_ERR_VALUE_LARGER_THAN_ALLOWED;
+      } else {
+        cast_ret = OB_DATA_OUT_OF_RANGE;
+        out_vec.set_number(idx, *max_num_mysql);
+      }
+      is_finish = true;
+    } else {
+      if (OB_FAIL(out_val.from(in_val, out_val_alloc))) {
+        LOG_WARN("out_val.from failed", K(ret), K(in_val));
+      } else if (OB_FAIL(out_val.round(scale))) {
+        LOG_WARN("out_val.round failed", K(ret), K(scale));
+      } else if (!in_val.is_equal(out_val)) {
+        if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+        } else if (lib::is_mysql_mode()) {
+          // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+          warning = OB_ERR_DATA_TOO_LONG;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        out_vec.set_number(idx, out_val);
+        is_finish = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_finish) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected situation, res is not set", K(ret));
+  }
+  LOG_DEBUG("number_range_check_v2 done", K(ret), K(is_finish), K(accuracy), K(in_val), K(out_val),
+            KPC(min_check_num), KPC(max_check_num));
+  return ret;
+}
+
 template <typename IN_TYPE>
 static int float_range_check(const ObCastMode &cast_mode,
                              const ObAccuracy &accuracy,
@@ -14019,6 +14453,56 @@ static int float_range_check(const ObCastMode &cast_mode,
         }
       } else {
         res_datum.set_datum(in_datum);
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename IN_TYPE>
+static int float_range_check(const ObCastMode &cast_mode,
+                             const ObAccuracy &accuracy,
+                             const ObObjType type,
+                             const int64_t idx,
+                             const ObIVector &in_vec,
+                             ObIVector &out_vec,
+                             int &warning)
+{
+  int ret = OB_SUCCESS;
+  ObObjTypeClass type_class = ob_obj_type_class(type);
+  if (OB_UNLIKELY(ObFloatTC != type_class && ObDoubleTC != type_class)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("obj type is invalid, must be float/double tc", K(ret), K(type), K(type_class));
+  } else {
+    IN_TYPE in_val = *(reinterpret_cast<const IN_TYPE*>(in_vec.get_payload(idx)));
+    IN_TYPE out_val = in_val;
+    if (ob_is_unsigned_type(type) && in_val < 0.0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsiged type with negative value", K(ret), K(type), K(in_val));
+    } else if (lib::is_oracle_mode() && 0.0 == in_val) {
+      if (ObFloatTC == type_class) {
+        out_vec.set_float(idx, 0.0);
+      } else {
+        out_vec.set_double(idx, 0.0);
+      }
+    } else if (lib::is_oracle_mode() && isnan(in_val)) {
+      // overwrite -NAN to NAN, OB only store NAN
+      if (ObFloatTC == type_class) {
+        out_vec.set_float(idx, NAN);
+      } else {
+        out_vec.set_double(idx, NAN);
+      }
+    } else {
+      if (CAST_FAIL_CM(real_range_check(accuracy, out_val), cast_mode)) {
+        LOG_WARN("real_range_check failed", K(ret));
+      } else if (in_val != out_val) {
+        if (ObFloatTC == type_class) {
+          out_vec.set_float(idx, out_val);
+        } else {
+          out_vec.set_double(idx, out_val);
+        }
+      } else {
+        out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
       }
     }
   }
@@ -14183,6 +14667,164 @@ int string_length_check(const ObExpr &expr,
   return ret;
 }
 
+int string_length_check(const ObExpr &expr,
+                        const ObCastMode &cast_mode,
+                        const ObAccuracy &accuracy,
+                        const ObObjType type,
+                        const ObCollationType cs_type,
+                        ObEvalCtx &ctx,
+                        const int64_t idx,
+                        const ObString &in_str,
+                        ObIVector &out_vec,
+                        int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  UNUSED(ctx);
+  const ObLength max_accuracy_len = accuracy.get_length();
+  const int32_t str_len_byte = in_str.length();
+  bool is_oracle = lib::is_oracle_mode();
+  bool is_from_pl = !expr.is_called_in_sql_;
+  ObObjMeta meta;
+  meta.set_type_simple(type);
+  meta.set_collation_type(cs_type);
+  out_vec.set_payload_shallow(idx, in_str.ptr(), in_str.length());
+  // 处理异常情况，但str_len_byte大于max_len_char不一定有问题，还需要具体判断
+  if (max_accuracy_len <= 0 || str_len_byte > max_accuracy_len) {
+    int &cast_ret = (CM_IS_ERROR_ON_FAIL(cast_mode) && !is_oracle)
+                    ? ret
+                    : warning;
+    const char *str = in_str.ptr();
+    int32_t str_len_char = -1;
+    // 在parse时,如果长度大于int32_t最大值, length就会设置为-1
+    if (max_accuracy_len == -1) {
+    } else if (OB_UNLIKELY(max_accuracy_len <= 0)) {
+      out_vec.set_string(idx, NULL, 0);
+      if (OB_UNLIKELY(0 == max_accuracy_len && str_len_byte > 0)) {
+        cast_ret = OB_ERR_DATA_TOO_LONG;
+        str_len_char = meta.is_lob() ?
+                        str_len_byte :
+                        static_cast<int32_t>(ObCharset::strlen_char(
+                                                        cs_type, str, str_len_byte));
+        OB_LOG(WARN, "char type length is too long", K(max_accuracy_len),
+                      K(str_len_char));
+      }
+    } else {
+      int32_t trunc_len_byte = -1;
+      int32_t trunc_len_char = -1;
+      if (meta.is_varbinary() || meta.is_binary() ||
+          meta.is_blob()) {
+        str_len_char = meta.is_blob() ?
+          str_len_byte : static_cast<int32_t>(ObCharset::strlen_char(cs_type,
+                                                                     str, str_len_byte));
+        if (OB_UNLIKELY(str_len_char > max_accuracy_len)) {
+          cast_ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("binary type length is too long", K(max_accuracy_len),
+                    K(str_len_char));
+        }
+      } else if (is_oracle_byte_length(is_oracle, accuracy.get_length_semantics())) {
+        const ObLength max_len_byte = accuracy.get_length();
+        if (OB_UNLIKELY(str_len_byte > max_len_byte)) {
+          cast_ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("char type length is too long", K(str_len_byte), K(max_len_byte));
+        }
+      } else if (is_oracle && (meta.is_char() || meta.is_nchar())) {
+        const int32_t str_len_char =
+          static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
+        if (OB_UNLIKELY(str_len_byte > (is_from_pl ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE
+                                                   : OB_MAX_ORACLE_CHAR_LENGTH_BYTE))) {
+          cast_ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("char byte length is too long", K(str_len_byte),
+                    K((is_from_pl ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE
+                                  : OB_MAX_ORACLE_CHAR_LENGTH_BYTE)));
+        } else if (OB_UNLIKELY(str_len_char > max_accuracy_len)) {
+          cast_ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("char char length is too long", K(str_len_char),
+                    K(max_accuracy_len));
+        }
+      } else {//mysql, oracle varchar(char)
+        // trunc_len_char > max_accuracy_len means an error or warning, without tail ' '
+        // str_len_char > max_accuracy_len means only warning, even in strict mode.
+        // lengthsp()  - returns the length of the given string without trailing spaces.
+        // 所以strlen_byte_no_sp返回的结果是小于等于str的长度
+        trunc_len_byte =
+          static_cast<int32_t>(ObCharset::strlen_byte_no_sp(cs_type, str, str_len_byte));
+        trunc_len_char = meta.is_lob() ?
+          trunc_len_byte :
+          static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, trunc_len_byte));
+
+        if (is_oracle && OB_UNLIKELY(str_len_byte > OB_MAX_ORACLE_VARCHAR_LENGTH)) {
+          cast_ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("varchar2 byte length is too long", K(str_len_byte),
+                    K(OB_MAX_ORACLE_VARCHAR_LENGTH));
+        } else if (OB_UNLIKELY(trunc_len_char > max_accuracy_len)) {
+          cast_ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("char type length is too long", K(max_accuracy_len),
+                    K(trunc_len_char));
+        } else {
+          str_len_char = meta.is_lob() ?
+            str_len_byte :
+            static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
+          if (OB_UNLIKELY(str_len_char > max_accuracy_len)) {
+            warning = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("char type length is too long", K(max_accuracy_len),
+                      K(str_len_char));
+          }
+        }
+      }
+      if (OB_SUCCESS != cast_ret) {
+        LOG_WARN("string accuracy check failed", K(cast_ret), K(ret), K(warning), K(is_oracle), K(meta));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(OB_ERR_DATA_TOO_LONG == warning)) {
+          // when warning, always trunc to max_accuracy_len first.
+          // besides, if char (not binary), trunc to trunc_len_char again,
+          // trim tail ' ' after first trunc.
+          // the reason of two-trunc for char (not binary):
+          // insert 'ab  ! ' to char(3), we get an 'ab' in column, not 'ab ':
+          // first trunc: 'ab  ! ' to 'ab ',
+          // second trunc: 'ab ' to 'ab'.
+          if (meta.is_text() || meta.is_json()) {
+            int64_t char_len = 0;
+            trunc_len_byte = static_cast<int32_t>(ObCharset::max_bytes_charpos(cs_type,
+                                                  str, str_len_byte,
+                                                  max_accuracy_len, char_len));
+          } else {
+            trunc_len_byte = static_cast<int32_t>(ObCharset::charpos(cs_type, str,
+                                                    str_len_byte, max_accuracy_len));
+          }
+          if (is_oracle) {
+          // 在oracle模式下不清理末尾的空格字符,原因如下:
+          // #bug18529663:例如select cast(' a' as char) from dual;
+          // 执行至此时,trunc_len_byte = 1,意思是截取到' a'的第一个字符' '
+          // 如果不加判断将会直接执行strlen_byte_no_sp来清理末尾的空格字符,
+          // 执行完毕后由于空格被清理掉,导致trunc_len_byte=0
+          // trunc_len_byte = 0会导致最终的obchar类型的输出长度为0,
+          // 在oracle模式的比较中将会判其为空,不符号预期.
+          } else if (meta.is_fixed_len_char_type() &&
+                     !meta.is_binary()) {
+            trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(cs_type,
+                                                                  str, trunc_len_byte));
+          }
+          out_vec.set_length(idx, trunc_len_byte);
+          if (is_oracle) {
+            ret = warning;
+          }
+        } else if (OB_SUCC(warning) && is_oracle) {
+          ret = warning;
+        } else {
+          // do nothing
+        }
+      }
+    }
+  } else {
+    // 正常分支
+    // do nothing
+  }
+
+  return ret;
+}
+
 int text_length_check(const ObExpr &expr,
                       const ObCastMode &cast_mode,
                       const ObAccuracy &accuracy,
@@ -14225,6 +14867,50 @@ int text_length_check(const ObExpr &expr,
   return ret;
 }
 
+int text_length_check(const ObExpr &expr,
+                      const ObCastMode &cast_mode,
+                      const ObAccuracy &accuracy,
+                      const ObObjType type,
+                      const ObCollationType cs_type,
+                      ObEvalCtx &ctx,
+                      bool has_lob_header,
+                      const int64_t idx,
+                      const ObIVector &in_vec,
+                      ObIVector &out_vec,
+                      int &warning)
+{
+  int ret = OB_SUCCESS;
+  const ObLength max_accuracy_len = accuracy.get_length();
+  if (expr.obj_meta_.is_lob_storage() && has_lob_header) {
+    ObString inrow_data;
+    ObLobLocatorV2 lob(in_vec.get_string(idx), has_lob_header);
+    if (!lob.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lob locator is invalid", K(ret));
+    } else if (!lob.is_full_temp_lob() || !lob.is_inrow()) {
+      // do nothing, persist/delta/outrow lob loator not support length check
+      out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+    } else if (OB_FAIL(lob.get_inrow_data(inrow_data))) {
+      LOG_WARN("fail to get inrow data", K(ret));
+    } else if (OB_FAIL(string_length_check(expr, cast_mode, accuracy, type,
+                                           cs_type, ctx, idx, inrow_data, out_vec, warning))) {
+      LOG_WARN("fail to do string length check", K(ret));
+    } else {
+      int32_t lob_handle_len = lob.size_ - inrow_data.length();
+      int32_t new_inrow_byte_len = lob_handle_len + out_vec.get_length(idx);
+      out_vec.set_string(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+      out_vec.set_length(idx, new_inrow_byte_len);
+    }
+  } else {
+    ObString in_str = in_vec.get_string(idx);
+    if (OB_FAIL(string_length_check(expr, cast_mode, accuracy, type,
+                                    cs_type, ctx, idx, in_str, out_vec, warning))) {
+      LOG_WARN("fail to do string length check", K(ret));
+    }
+  }
+  return ret;
+}
+
 int rowid_length_check(const ObExpr &expr,
                        const ObCastMode &cast_mode,
                        const ObAccuracy &accuracy,
@@ -14260,6 +14946,42 @@ int rowid_length_check(const ObExpr &expr,
   return ret;
 }
 
+int rowid_length_check(const ObExpr &expr,
+                       const ObCastMode &cast_mode,
+                       const ObAccuracy &accuracy,
+                       const ObObjType type,
+                       const ObCollationType cs_type,
+                       ObEvalCtx &ctx,
+                       const int64_t idx,
+                       const ObIVector &in_vec,
+                       ObIVector &out_vec,
+                       int &warning)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  UNUSED(cast_mode);
+  UNUSED(type);
+  UNUSED(cs_type);
+  UNUSED(ctx);
+  UNUSED(warning);
+  ObURowIDData urowid_data(in_vec.get_length(idx), reinterpret_cast<const uint8_t *>(in_vec.get_payload(idx)));
+  if (OB_UNLIKELY(lib::is_mysql_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rowid is not supported in mysql mode", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowid in mysql mode");
+  } else if (-1 == accuracy.get_length()) {
+    // select cast('xx' as rowid) from dual;
+    // length will be -1
+    out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+  } else if (urowid_data.rowid_len_ > accuracy.get_length()) {
+    ret = OB_ERR_DATA_TOO_LONG;
+    LOG_WARN("rowid data length is too long", K(urowid_data.rowid_len_), K(accuracy));
+  } else {
+    out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+  }
+  return ret;
+}
+
 int datum_accuracy_check(const ObExpr &expr,
                          const uint64_t cast_mode,
                          ObEvalCtx &ctx,
@@ -14278,6 +15000,27 @@ int datum_accuracy_check(const ObExpr &expr,
     accuracy.set_precision(expr.datum_meta_.precision_);
   }
   return datum_accuracy_check(expr, cast_mode, ctx, accuracy, has_lob_header, in_datum, res_datum, warning);
+}
+
+int vector_accuracy_check(const ObExpr &expr,
+                          const uint64_t cast_mode,
+                          ObEvalCtx &ctx,
+                          bool has_lob_header,
+                          const int64_t idx,
+                          const ObIVector &in_vec,
+                          ObIVector &out_vec,
+                          int &warning)
+{
+  ObAccuracy accuracy;
+  accuracy.set_length(expr.max_length_);
+  accuracy.set_scale(expr.datum_meta_.scale_);
+  const ObObjTypeClass &dst_tc = ob_obj_type_class(expr.datum_meta_.type_);
+  if (ObStringTC == dst_tc || ObTextTC == dst_tc || ObJsonTC == dst_tc) {
+    accuracy.set_length_semantics(expr.datum_meta_.length_semantics_);
+  } else {
+    accuracy.set_precision(expr.datum_meta_.precision_);
+  }
+  return vector_accuracy_check(expr, cast_mode, ctx, accuracy, has_lob_header, idx, in_vec, out_vec, warning);
 }
 
 int datum_accuracy_check(const ObExpr &expr,
@@ -14375,6 +15118,113 @@ int datum_accuracy_check(const ObExpr &expr,
     }
   } else {
     res_datum.set_null();
+  }
+  return ret;
+}
+
+int vector_accuracy_check(const ObExpr &expr,
+                         const uint64_t cast_mode,
+                         ObEvalCtx &ctx,
+                         const ObAccuracy &accuracy,
+                         bool has_lob_header,
+                         const int64_t idx,
+                         const ObIVector &in_vec,
+                         ObIVector &out_vec,
+                         int &warning)
+{
+  int ret = OB_SUCCESS;
+  if (!in_vec.is_null(idx)) {
+    ObObjType type = expr.datum_meta_.type_;
+    ObCollationType cs_type = expr.datum_meta_.cs_type_;
+    switch (ob_obj_type_class(type)) {
+      case ObFloatTC: {
+        ret = float_range_check<float>(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObDoubleTC: {
+        ret = float_range_check<double>(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObNumberTC: {
+        ret = number_range_check_v2(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObDateTimeTC: {
+        ret = datetime_scale_check(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObOTimestampTC: {
+        ret = otimestamp_scale_check(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObTimeTC: {
+        ret = time_scale_check(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObStringTC: {
+        ret = string_length_check(expr, cast_mode, accuracy, type,
+                                  cs_type, ctx, idx, in_vec.get_string(idx),
+                                  out_vec, warning);
+        break;
+      }
+      case ObRawTC: {
+        ret = raw_length_check(cast_mode, accuracy, type, idx, in_vec,
+                                       out_vec, warning);
+        break;
+      }
+      case ObTextTC: {
+        ret = text_length_check(expr, cast_mode, accuracy, type,
+                                cs_type, ctx, has_lob_header, idx, in_vec,
+                                out_vec, warning);
+        break;
+      }
+      case ObBitTC: {
+        ret = bit_length_check(cast_mode, accuracy, type, idx, in_vec,
+                               out_vec, warning);
+        break;
+      }
+      case ObIntervalTC: {
+        ret = interval_scale_check(cast_mode, accuracy, type, idx, in_vec,
+                                   out_vec, warning);
+        break;
+      }
+      case ObRowIDTC: {
+        ret = rowid_length_check(expr, cast_mode, accuracy, type,
+                                 cs_type, ctx, idx, in_vec,
+                                 out_vec, warning);
+        break;
+      }
+      case ObDecimalIntTC: {
+        ObDecimalIntBuilder res_val;
+        ret = check_decimalint_accuracy(cast_mode, in_vec.get_decimal_int(idx),
+                                        in_vec.get_length(idx), accuracy.get_precision(),
+                                        accuracy.get_scale(), res_val, warning);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("decimal int accuracy failed", K(ret), K(accuracy));
+        } else {
+          out_vec.set_decimal_int(idx, res_val.get_decimal_int(), res_val.get_int_bytes());
+        }
+        break;
+      }
+      case ObMySQLDateTimeTC: {
+        ret = mdatetime_scale_check(cast_mode, accuracy, type, idx, in_vec,
+                                 out_vec, warning);
+        break;
+      }
+
+      default: {
+        out_vec.set_payload_shallow(idx, in_vec.get_payload(idx), in_vec.get_length(idx));
+        break;
+      }
+    }
+  } else {
+    out_vec.set_null(idx);
   }
   return ret;
 }

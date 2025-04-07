@@ -180,6 +180,219 @@ int GeneralCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx 
   return cmp;
 }
 
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::init_cmp_func(const ObIArray<ObExpr *> &cmp_sk_exprs)
+{
+  int ret = OB_SUCCESS;
+#define BASIC_SORT_CMP_FUNC_SWITCH(type_class)                                          \
+  case type_class: {                                                                    \
+    cmp_func_ = FixedCmpFunc<type_class, false>::cmp_not_null;                          \
+    break;                                                                              \
+  }
+
+#define CMP_FUNC_SWITCH(type_class)                                                    \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_INTEGER);                                          \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_UINTEGER);                                         \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DATE);                                             \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_TIME);                                             \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DATETIME);                                         \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_YEAR);                                             \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_BIT);                                              \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_ENUM_SET);                                         \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_INTERVAL_YM);                                      \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT32);                                        \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT64);                                        \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT128);                                       \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT256);                                       \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT512);                                       \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_MYSQL_DATE);                                       \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_MYSQL_DATETIME);
+
+  const ObExpr *expr = cmp_sk_exprs.at(0);
+  VecValueTypeClass vec_tc = expr->get_vec_value_tc();
+  switch (vec_tc) {
+    CMP_FUNC_SWITCH(type_class);
+  default:
+    ret = OB_INVALID_ARGUMENT;
+    SQL_LOG(WARN, "invalid vector value type class", K(vec_tc), K(ret));
+  }
+#undef CMP_FUNC_SWITCH
+#undef BASIC_SORT_CMP_FUNC_SWITCH
+  return ret;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::init(
+  const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_row_meta, const RowMeta *addon_row_meta,
+  const ObIArray<ObSortFieldCollation> *cmp_sort_collations, ObExecContext *exec_ctx,
+  bool enable_encode_sortkey)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == cmp_sk_exprs || nullptr == cmp_sort_collations || nullptr == exec_ctx) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_ENG_LOG(WARN, "invalid argument", K(ret), KP(cmp_sort_collations));
+  } else {
+    cmp_sk_exprs_ = cmp_sk_exprs;
+    sk_row_meta_ = sk_row_meta;
+    addon_row_meta_ = addon_row_meta;
+    cmp_sort_collations_ = cmp_sort_collations;
+    exec_ctx_ = exec_ctx;
+    cnt_ = cmp_sort_collations_->count();
+    cmp_start_ = 0;
+    cmp_end_ = cmp_sort_collations_->count();
+    cmp_obj_meta_ = cmp_sk_exprs->at(0)->obj_meta_;
+    cs_ = ObCharset::get_charset(cmp_obj_meta_.get_collation_type());
+    const ObDatumMeta &datum_data = cmp_sk_exprs->at(0)->datum_meta_;
+  }
+  if (OB_SUCC(ret) && is_basic_cmp && OB_FAIL(init_cmp_func(*cmp_sk_exprs))) {
+    SQL_ENG_LOG(WARN, "failed to init compare sort key", K(ret));
+  }
+  return ret;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+bool SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::operator()(const Store_Row *l, const Store_Row *r)
+{
+  bool less = false;
+  int &ret = ret_;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+  } else if (OB_FAIL(fast_check_status())) {
+    SQL_ENG_LOG(WARN, "fast check failed", K(ret));
+  } else {
+    __builtin_prefetch(l, 0 /* read */, 2 /*high temp locality*/);
+    __builtin_prefetch(r, 0 /* read */, 2 /*high temp locality*/);
+    less = (compare(l, r, sk_row_meta_) > 0);
+  }
+  return less;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+bool SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::operator()(Store_Row **l, Store_Row **r)
+{
+  bool less = false;
+  int &ret = ret_;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+  } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+  } else {
+    // Return the reverse order since the heap top is the maximum element.
+    // NOTE: can not return !(*this)(l->row_, r->row_)
+    //       because we should always return false if l == r.
+    less = (*this)(*r, *l);
+  }
+  return less;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+bool SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::operator()(const SortVecOpChunk *l,
+                                          const SortVecOpChunk *r)
+{
+  bool less = false;
+  int &ret = ret_;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+  } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(l), KP(r));
+  } else {
+    // Return the reverse order since the heap top is the maximum element.
+    // NOTE: can not return !(*this)(l->row_, r->row_)
+    //       because we should always return false if l == r.
+    less = (*this)(r->sk_row_, l->sk_row_);
+  }
+  return less;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+bool SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::operator()(const Store_Row *r, ObEvalCtx &eval_ctx)
+{
+  bool less = false;
+  int &ret = ret_;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+  } else {
+    less = (compare(r, eval_ctx, sk_row_meta_) > 0);
+  }
+  return less;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx)
+{
+  int &ret = ret_;
+  int cmp = 0;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+  } else {
+    cmp = compare(r, eval_ctx, sk_row_meta_);
+  }
+  return cmp;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::with_ties_cmp(const Store_Row *l, const Store_Row *r)
+{
+  int cmp = 0;
+  int &ret = ret_;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+  } else {
+    cmp = compare(l, r, sk_row_meta_);
+  }
+  return cmp;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::compare(const Store_Row *l, const Store_Row *r,
+                                                  const RowMeta *row_meta)
+{
+  int &ret = ret_;
+  int cmp = 0;
+  if (!is_basic_cmp) {
+    ObLength l_len = *(reinterpret_cast<const ObLength *>(
+        reinterpret_cast<const char *>(l) + LEN_OFFSET));
+    ObLength r_len = *(reinterpret_cast<const ObLength *>(
+        reinterpret_cast<const char *>(r) + LEN_OFFSET));
+    const unsigned char *l_data = reinterpret_cast<const unsigned char *>(
+        reinterpret_cast<const char *>(l) + DATA_OFFSET);
+    const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
+        reinterpret_cast<const char *>(r) + DATA_OFFSET);
+    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, false);
+    cmp = (cmp_ret > 0 ? -1 : (cmp_ret < 0 ? 1 : 0));
+  } else {
+    const unsigned char *l_data = reinterpret_cast<const unsigned char *>(
+        reinterpret_cast<const char *>(l) + FIXED_DATA_OFFSET);
+    const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
+        reinterpret_cast<const char *>(r) + FIXED_DATA_OFFSET);
+    cmp = -cmp_func_(l_data, r_data);
+  }
+  return cmp;
+}
+
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, is_basic_cmp, is_topn_sort>::compare(const Store_Row *r, ObEvalCtx &eval_ctx,
+                                                  const RowMeta *row_meta)
+{
+  int &ret = ret_;
+  int cmp = 0;
+  ObLength l_len = 0;
+  const unsigned char *l_data = nullptr;
+  const int64_t batch_idx = eval_ctx.get_batch_idx();
+  l_data = reinterpret_cast<const unsigned char *>(
+      sk_col_result_list_[0].get_payload(batch_idx));
+  l_len = sk_col_result_list_[0].get_length(batch_idx);
+  ObLength r_len = *(reinterpret_cast<const ObLength *>(
+      reinterpret_cast<const char *>(r) + LEN_OFFSET));
+  if (!is_basic_cmp) {
+    const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
+      reinterpret_cast<const char *>(r) + DATA_OFFSET);
+    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, false);
+    cmp = (cmp_ret > 0 ? -1 : (cmp_ret < 0 ? 1 : 0));
+  } else {
+    const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
+      reinterpret_cast<const char *>(r) + FIXED_DATA_OFFSET);
+    cmp = -cmp_func_(l_data, r_data);
+  }
+  return cmp;
+}
+
 template <typename Store_Row, bool has_addon>
 int FixedCompare<Store_Row, has_addon>::init_basic_cmp_func(
   const ObIArray<ObExpr *> &cmp_sk_exprs, const ObIArray<ObSortFieldCollation> &cmp_sort_collations)

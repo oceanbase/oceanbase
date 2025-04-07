@@ -448,6 +448,32 @@ inline static void scale_down_with_types(const ObDecimalInt *decint, unsigned sc
 // ==================================================================================
 // batch cast to decimalint types
 
+template<typename in_type>
+static void logging_truncated_decint(const ObExpr &expr, ObEvalCtx &ctx, int64_t batch_size,
+                                     const ObBitVector &skip, const ObScale in_scale, const ObScale out_scale)
+{
+  ObDatumVector arg_dv = expr.args_[0]->locate_expr_datumvector(ctx);
+  if (CM_IS_COLUMN_CONVERT(expr.extra_) && in_scale > out_scale && lib::is_mysql_mode()) {
+    in_type sf = get_scale_factor<in_type>(in_scale - out_scale);
+    int diff_len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(in_scale - out_scale);
+    for (int i = 0; i < batch_size; i++) {
+      if (skip.at(i) || arg_dv.at(i)->is_null()) { continue; }
+      in_type input_val = *reinterpret_cast<const in_type *>(arg_dv.at(i)->get_decimal_int());
+      bool logging_warning = false;
+      if (diff_len > sizeof(in_type)) {
+        logging_warning = (input_val != 0);
+      } else {
+        logging_warning = ((input_val % sf) != 0);
+      }
+      if (logging_warning) {
+        sql::ObDataTypeCastUtil::log_user_error_warning(ctx.exec_ctx_.get_user_logging_ctx(),
+                                                        OB_ERR_DATA_TRUNCATED, ObString(""),
+                                                        ObString(""), expr.extra_);
+      }
+    }
+  }
+}
+
 template <typename in_type, typename out_type, bool is_up_scale, bool is_explicit>
 
 static int decimalint_fast_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
@@ -473,6 +499,7 @@ static int decimalint_fast_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const 
       } else {
         batch_implicit_scale<in_type, out_type, false>(arg_dv, result_dv, in_scale - out_scale,
                                                        batch_size, skip, eval_flags);
+        logging_truncated_decint<in_type>(expr, ctx, batch_size, skip, in_scale, out_scale);
       }
     }
   }
@@ -624,6 +651,7 @@ int ObBatchCast::implicit_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const O
   } else {                                                                                         \
     batch_explicit_scale<in_type, out_type, false>(arg_dv, result_dv, in_scale - out_scale,        \
                                                    out_prec, batch_size, skip, eval_flags);        \
+    logging_truncated_decint<in_type>(expr, ctx, batch_size, skip, in_scale, out_scale);           \
   }
 
 #define DO_IMPLICIT_CAST(in_type, out_type)                                                        \

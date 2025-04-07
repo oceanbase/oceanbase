@@ -148,10 +148,24 @@ public:
                                   ObEvalCtx &ctx,
                                   const ObBitVector &skip,
                                   const int64_t batch_size);
+  static int column_convert_vector(const ObExpr &expr,
+                                   ObEvalCtx &ctx,
+                                   const ObBitVector &skip,
+                                   const EvalBound &bound);
   static int column_convert_batch_fast(const ObExpr &expr,
                                        ObEvalCtx &ctx,
                                        const ObBitVector &skip,
                                        const int64_t batch_size);
+
+  static int column_convert_vector_fast(const ObExpr &expr,
+                                        ObEvalCtx &ctx,
+                                        const ObBitVector &skip,
+                                        const EvalBound &bound);
+  template <typename ArgVec, typename ResVec>
+  static int inner_calc_column_convert_vector_fast(const ObExpr &expr,
+                                                   ObEvalCtx &ctx,
+                                                   const ObBitVector &skip,
+                                                   const EvalBound &bound);
 
   inline static bool check_is_ascii(ObString &str);
 
@@ -167,6 +181,15 @@ public:
                                           ObDatum *vals,
                                           ObDatum *results,
                                           ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
+  template <PARAM_TC TC, typename ArgVec, typename ResVec, bool ALL_ROWS_ACTIVE, bool HAS_NULL>
+  static int inner_loop_for_convert_vector(const ObExpr &expr,
+                                           ObEvalCtx &ctx,
+                                           const ObBitVector &skip,
+                                           const EvalBound &bound,
+                                           const bool is_strict,
+                                           const ObLength max_accuracy_len,
+                                           const uint64_t cast_mode,
+                                           ObBitVector &eval_flags);
 
   virtual bool need_rt_ctx() const override
   { return ob_is_enum_or_set_type(result_type_.get_type()); }

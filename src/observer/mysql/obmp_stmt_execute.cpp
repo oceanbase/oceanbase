@@ -30,6 +30,7 @@
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 
 namespace oceanbase
 {
@@ -1341,6 +1342,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      ObSQLMockSchemaGuard mock_schema_guard;
       if (enable_perf_event) {
         audit_record.exec_record_.record_start();
       }

@@ -3653,7 +3653,8 @@ int ObRawExprUtils::extract_set_op_exprs(const ObIArray<ObRawExpr*> &exprs,
 
 int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
                                          ObIArray<ObRawExpr*> &column_exprs,
-                                         bool need_pseudo_column)
+                                         bool need_pseudo_column,
+                                         bool can_extract_pseudo_column_ref)
 {
   int ret = OB_SUCCESS;
   if (NULL == raw_expr) {
@@ -3661,7 +3662,10 @@ int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
     LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
   } else {
     if (T_REF_COLUMN == raw_expr->get_expr_type()) {
-      ret = add_var_to_array_no_dup(column_exprs, const_cast<ObRawExpr*>(raw_expr));
+      const ObColumnRefRawExpr *columnref_expr = static_cast<const ObColumnRefRawExpr*>(raw_expr);
+      if (can_extract_pseudo_column_ref || !columnref_expr->is_pseudo_column_ref()) {
+        ret = add_var_to_array_no_dup(column_exprs, const_cast<ObRawExpr*>(raw_expr));
+      }
     } else if ((raw_expr->is_pseudo_column_expr() ||
                 raw_expr->is_op_pseudo_column_expr() ||
                 raw_expr->is_specified_pseudocolumn_expr()) && need_pseudo_column) {
@@ -3669,7 +3673,8 @@ int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
     } else {
       int64_t N = raw_expr->get_param_count();
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-        if (OB_FAIL(SMART_CALL(extract_column_exprs(raw_expr->get_param_expr(i), column_exprs, need_pseudo_column)))) {
+        if (OB_FAIL(SMART_CALL(extract_column_exprs(raw_expr->get_param_expr(i), column_exprs,
+            need_pseudo_column, can_extract_pseudo_column_ref)))) {
           LOG_WARN("failed to extract column exprs", K(ret));
         }
       }
@@ -3941,14 +3946,16 @@ int ObRawExprUtils::extract_virtual_generated_column_parents(
 
 int ObRawExprUtils::extract_column_exprs(const ObIArray<ObRawExpr*> &exprs,
                                          ObIArray<ObRawExpr*> &column_exprs,
-                                         bool need_pseudo_column)
+                                         bool need_pseudo_column,
+                                         bool can_extract_pseudo_column_ref)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     if (OB_ISNULL(exprs.at(i))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Expr is NULL", K(ret), K(i));
-    } else if (OB_FAIL(extract_column_exprs(exprs.at(i), column_exprs, need_pseudo_column))) {
+    } else if (OB_FAIL(extract_column_exprs(exprs.at(i), column_exprs, need_pseudo_column,
+        can_extract_pseudo_column_ref))) {
       LOG_WARN("Failed to extract column exprs", K(ret));
     } else { } //do nothing
   }

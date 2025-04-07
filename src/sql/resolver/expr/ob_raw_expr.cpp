@@ -2252,6 +2252,7 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       is_strict_json_column_ = tmp.is_strict_json_column_;
       srs_id_ = tmp.srs_id_;
       udt_set_id_ = tmp.udt_set_id_;
+      is_pseudo_column_ref_ = tmp.is_pseudo_column_ref_;
     }
   }
   return ret;

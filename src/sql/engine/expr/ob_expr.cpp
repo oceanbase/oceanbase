@@ -41,7 +41,9 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
     tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
     batch_idx_(0),
     batch_size_(0),
-    expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ? (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator())
+    expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ?
+                      (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator()),
+    pvt_skip_for_eval_row_(nullptr)
 {
 }
 
@@ -54,7 +56,8 @@ ObEvalCtx::ObEvalCtx(ObEvalCtx &eval_ctx)
     tmp_alloc_used_(eval_ctx.tmp_alloc_used_),
     batch_idx_(eval_ctx.get_batch_idx()),
     batch_size_(eval_ctx.get_batch_size()),
-    expr_res_alloc_(eval_ctx.expr_res_alloc_)
+    expr_res_alloc_(eval_ctx.expr_res_alloc_),
+    pvt_skip_for_eval_row_(eval_ctx.pvt_skip_for_eval_row_)
 {
 }
 
@@ -64,6 +67,7 @@ ObEvalCtx::~ObEvalCtx()
     datum_caster_->destroy();
     datum_caster_ = NULL;
   }
+  pvt_skip_for_eval_row_ = nullptr;
 }
 
 int ObEvalCtx::init_datum_caster()
@@ -81,6 +85,30 @@ int ObEvalCtx::init_datum_caster()
     } else {
       datum_caster_ = datum_caster;
     }
+  }
+  return ret;
+}
+
+int ObEvalCtx::get_pvt_skip_for_eval_row(ObBitVector *&skip)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pvt_skip_for_eval_row_)) {
+    int64_t batch_size = MAX(max_batch_size_, batch_size_);
+    batch_size = MAX(1, batch_size);
+    int64_t skip_buf_size = ObBitVector::memory_size(batch_size);
+    void *skip_buf = exec_ctx_.get_allocator().alloc(skip_buf_size);
+    if (OB_ISNULL(skip_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(max_batch_size_), K(batch_size_));
+    } else {
+      MEMSET(skip_buf, 0, skip_buf_size);
+      pvt_skip_for_eval_row_ = to_bit_vector(skip_buf);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    skip = pvt_skip_for_eval_row_;
+  } else {
+    skip = nullptr;
   }
   return ret;
 }
@@ -709,6 +737,7 @@ void ObExpr::reset_discretes_ptr(char *frame, const int64_t size, char** ptrs) c
 
 int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const
 {
+#define INNER_BATCH_SIZE() MAX(1, ctx.get_batch_size())
   int ret = OB_SUCCESS;
   char *frame = ctx.frames_[frame_idx_];
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
@@ -716,7 +745,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
 
   if (info->projected_ || NULL == eval_func_ || info->evaluated_) {
     if (UINT32_MAX != vector_header_off_) {
-      ret = cast_to_uniform(ctx.get_batch_size(), ctx);
+      ret = cast_to_uniform(INNER_BATCH_SIZE(), ctx);
     }
   }
   if (OB_FAIL(ret)) {
@@ -732,7 +761,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     info->point_to_frame_ = true;
     info->notnull_ = true;
     if (enable_rich_format()) {
-      ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
+      ret = init_vector(ctx, VEC_UNIFORM, INNER_BATCH_SIZE());
     } else if (UINT32_MAX != vector_header_off_) {
       get_vector_header(ctx).format_ = VEC_INVALID;
     }
@@ -747,8 +776,30 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
-      ret = eval_func_(*this, ctx, *datum);
+      reset_datum_ptr(frame, INNER_BATCH_SIZE(), ctx.get_batch_idx());
+      if (enable_rich_format() && eval_vector_func_ != expr_default_eval_vector_func) {
+        ObBitVector *tmp_skip = nullptr;
+        if (OB_FAIL(ctx.get_pvt_skip_for_eval_row(tmp_skip))) {
+          LOG_WARN("get tmp skip failed", K(ret));
+        } else if (OB_ISNULL(tmp_skip)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null skip", K(ret));
+        } else {
+          tmp_skip->unset(ctx.get_batch_idx());
+          // we may have non-vectorized with vectorized expr
+          // in this case, set batch_size to 1 to avoid unexpected errors
+          int64_t tmp_batch_size = INNER_BATCH_SIZE();
+          int64_t tmp_max_batch_size = MAX(ctx.max_batch_size_, 1);
+          ObEvalCtx::BatchInfoScopeGuard batch_guard(ctx);
+          batch_guard.set_batch_size(tmp_batch_size);
+          batch_guard.set_max_batch_size(tmp_max_batch_size);
+          EvalBound tmp_bound(tmp_batch_size, ctx.get_batch_idx(), ctx.get_batch_idx() + 1, true);
+          ret = eval_vector_func_(*this, ctx, *tmp_skip, tmp_bound);
+          datum = &locate_expr_datum(ctx);
+        }
+      } else {
+        ret = eval_func_(*this, ctx, *datum);
+      }
       CHECK_STRING_LENGTH((*this), (*datum));
       if (OB_SUCC(ret)) {
         ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
@@ -763,6 +814,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   }
 
   return ret;
+#undef INNER_BATCH_SIZE
 }
 
 int ObExpr::do_eval_batch(ObEvalCtx &ctx,
@@ -1236,10 +1288,8 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
   //TODO shengle CHECK_BOUND(bound); check skip and all_rows_active wheth match
   ObEvalInfo &info = get_eval_info(ctx);
   char *frame = ctx.frames_[frame_idx_];
-  int64_t const_skip = 1;
-  if (!batch_result_ && skip.accumulate_bit_cnt(bound) < bound.range_size()) {
-    const_skip = 0;
-  }
+  int64_t const_skip = 0;
+  bool const_dry_run = (!batch_result_ && skip.accumulate_bit_cnt(bound) >= bound.range_size());
   const ObBitVector *rt_skip = batch_result_ ? &skip : to_bit_vector(&const_skip);
   bool need_evaluate = false;
   // in old operator, rowset_v2 expr eval param use eval_vector,
@@ -1255,7 +1305,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
     // expr values is projected by child or has no evaluate func, do nothing.
   } else if (!info.evaluated_) {
     // if const_skip == 1, no need to evaluated expr, just `init_vector`
-    need_evaluate = batch_result_ || (const_skip == 0);
+    need_evaluate = true;
     get_evaluated_flags(ctx).reset(BATCH_SIZE());
     info.notnull_ = false;
     info.point_to_frame_ = true;
@@ -1277,7 +1327,11 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else if (OB_FAIL(
                  (*eval_vector_func_)(*this, ctx, *rt_skip, batch_result_ ? bound : EvalBound(1)))) {
-      set_all_null(ctx, BATCH_SIZE());
+      if (const_dry_run) {
+        ret = OB_SUCCESS;
+      } else {
+        set_all_null(ctx, BATCH_SIZE());
+      }
     } else {
       info.evaluated_ = true;
     }

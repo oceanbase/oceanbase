@@ -546,6 +546,12 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_access_exprs()
   { return access_exprs_; }
 
+  inline const common::ObIArray<ObRawExpr *> &get_pseudo_columnref_exprs() const
+  { return pseudo_columnref_exprs_; }
+
+  inline common::ObIArray<ObRawExpr *> &get_pseudo_columnref_exprs()
+  { return pseudo_columnref_exprs_; }
+
 // removal it in cg layer, up to opt layer.
   inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
   { return ddl_output_column_ids_; }
@@ -1158,6 +1164,7 @@ protected: // memeber variables
 
   int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_columnref_exprs_;
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

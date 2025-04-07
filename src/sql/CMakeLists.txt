@@ -23,6 +23,7 @@ ob_set_subtarget(ob_sql common
   ob_sql_trans_control.cpp
   ob_sql_utils.cpp
   ob_optimizer_trace_impl.cpp
+  ob_sql_mock_schema_utils.cpp
 )
 
 ob_set_subtarget(ob_sql common_mixed
@@ -903,6 +904,7 @@ ob_set_subtarget(ob_sql_extra ALONE
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part5.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part6.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_all.cpp
+  engine/expr/vector_cast/float_to_decimal_impl.cpp
   engine/expr/vector_cast/vector_cast.cpp
 )
 

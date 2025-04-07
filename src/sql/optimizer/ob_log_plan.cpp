@@ -7149,6 +7149,12 @@ int ObLogPlan::make_order_items(const common::ObIArray<ObRawExpr *> &exprs,
     LOG_WARN("Get unexpected null", K(ret), K(get_stmt()));
   } else {
     ObOrderDirection direction = default_asc_direction();
+    ObNotNullContext not_null_ctx(get_optimizer_context().get_exec_ctx(),
+                                  &get_allocator(),
+                                  get_stmt());
+    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))) {
+      LOG_WARN("failed to generate stmt context", K(ret));
+    }
     if (get_stmt()->get_order_item_size() > 0) {
       direction = get_stmt()->get_order_item(0).order_type_;
     } else { /* Do nothing */ }
@@ -7157,7 +7163,14 @@ int ObLogPlan::make_order_items(const common::ObIArray<ObRawExpr *> &exprs,
       OrderItem key;
       key.expr_ = exprs.at(i);
       key.order_type_ = direction;
-      ret = items.push_back(key);
+      if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
+                                                     exprs.at(i),
+                                                     key.is_not_null_,
+                                                     NULL))) {
+        LOG_WARN("get expr is not null failed", K(ret), K(exprs.at(i)));
+      } else if (OB_FAIL(items.push_back(key))) {
+        LOG_WARN("Failed to push array", K(ret));
+      }
     }
   }
   return ret;
@@ -7172,6 +7185,12 @@ int ObLogPlan::make_order_items(const ObIArray<ObRawExpr *> &exprs,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr and dir count not match", K(ret));
   } else {
+    ObNotNullContext not_null_ctx(get_optimizer_context().get_exec_ctx(),
+                                  &get_allocator(),
+                                  get_stmt());
+    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))) {
+      LOG_WARN("failed to generate stmt context", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
       OrderItem key;
       if (OB_ISNULL(exprs.at(i))) {
@@ -7182,7 +7201,12 @@ int ObLogPlan::make_order_items(const ObIArray<ObRawExpr *> &exprs,
       } else {
         key.expr_ = exprs.at(i);
         key.order_type_ = dirs.at(i);
-        if (OB_FAIL(items.push_back(key))) {
+        if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
+                                                       exprs.at(i),
+                                                       key.is_not_null_,
+                                                       NULL))) {
+          LOG_WARN("get expr is not null failed", K(ret), K(exprs.at(i)));
+        } else if (OB_FAIL(items.push_back(key))) {
           LOG_WARN("Failed to push array", K(ret));
         }
       }
@@ -14851,6 +14875,9 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
       LOG_WARN("get unexpected null", K(ret));
     } else if (!first_param->is_column_ref_expr() ||
                 table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id()) {
+      can_push = false;
+    } else if (first_param->is_column_ref_expr() &&
+              static_cast<const ObColumnRefRawExpr*>(first_param)->is_pseudo_column_ref()) {
       can_push = false;
     } else if (!cur_aggr->is_param_distinct() && !distinct_exprs.empty()) {
       can_push = false;

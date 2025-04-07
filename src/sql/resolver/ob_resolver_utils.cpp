@@ -10740,5 +10740,15 @@ int ObResolverUtils::cnt_external_pseudo_column(const ObRawExpr &expr, bool &con
   return ret;
 }
 
+bool ObResolverUtils::is_pseudo_partition_column_name(const ObString name)
+{
+  return (0 == name.case_compare(OB_PART_ID_PSEUDO_COLUMN_NAME) ||
+          0 == name.case_compare(OB_PART_NAME_PSEUDO_COLUMN_NAME) ||
+          0 == name.case_compare(OB_PART_INDEX_PSEUDO_COLUMN_NAME) ||
+          0 == name.case_compare(OB_SUBPART_ID_PSEUDO_COLUMN_NAME) ||
+          0 == name.case_compare(OB_SUBPART_NAME_PSEUDO_COLUMN_NAME) ||
+          0 == name.case_compare(OB_SUBPART_INDEX_PSEUDO_COLUMN_NAME));
+}
+
 }  // namespace sql
 }  // namespace oceanbase

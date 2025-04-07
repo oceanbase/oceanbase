@@ -414,14 +414,19 @@ public:
   static int extract_set_op_exprs(const ObIArray<ObRawExpr*> &exprs,
                                   common::ObIArray<ObRawExpr*> &set_op_exprs);
   /// extract column exprs from the raw expr
+  // can_extract_pseudo_column_ref default is true.
+  // only when extract expr in ObLogTableScan::generate_access_exprs,
+  // it will be false because pseudo_column_ref cannot be an access_expr.
   static int extract_column_exprs(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &column_exprs,
-                                  bool need_pseudo_column = false);
+                                  bool need_pseudo_column = false,
+                                  bool can_extract_pseudo_column_ref = true);
   static int extract_column_exprs_and_rowscn(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &column_exprs);
   static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
                                   common::ObIArray<ObRawExpr *> &column_exprs,
-                                  bool need_pseudo_column = false);
+                                  bool need_pseudo_column = false,
+                                  bool can_extract_pseudo_column_ref = true);
   static int extract_column_exprs(const ObRawExpr *raw_expr,
                                   int64_t table_id,
                                   common::ObIArray<ObRawExpr*> &column_exprs);

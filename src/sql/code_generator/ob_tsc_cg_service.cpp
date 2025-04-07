@@ -1661,7 +1661,9 @@ int ObTscCgService::extract_das_column_ids(const ObIArray<ObRawExpr*> &column_ex
       }
     } else if (column_exprs.at(i)->is_column_ref_expr()) {
       const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr*>(column_exprs.at(i));
-      if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
+      if (col_expr->is_pseudo_column_ref()) {
+        //part_id pseudo columnref exprs not produced in DAS, ignore it
+      } else if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
         LOG_WARN("store column id failed", K(ret));
       }
     } else {

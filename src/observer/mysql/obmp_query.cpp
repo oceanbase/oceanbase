@@ -21,6 +21,7 @@
 #include "observer/mysql/ob_async_plan_driver.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_server.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
@@ -503,6 +504,10 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       do {
         ret = OB_SUCCESS; //当发生本地重试的时候，需要重置错误码，不然无法推进重试
         need_disconnect = true;
+        // if query need mock schema, will remember table_id in mocked_tables (local thread var)
+        // when resolve, and then will try mock a table schema in sqlschemaguard.
+        // ObSQLMockSchemaGuard here is only used for reset mocked_tables.
+        ObSQLMockSchemaGuard mock_schema_guard;
         // do the real work
         //create a new temporary memory context for executing sql can
         //avoid the problem the memory cannot be released in time due to too many sql items

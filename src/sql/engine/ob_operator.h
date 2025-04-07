@@ -538,6 +538,22 @@ protected:
       } else {
         SQL_ENG_LOG(WARN, "Failed to get_next_row", K(ret));
       }
+      /*
+        SORT (output: cast_expr, order_by: cast_expr)
+          TSC (output: cast_expr, filter: like(cast_expr, pattern_expr), access virtual table)
+      */
+      // output expr may have non-uniform format, and is shared and outputed in parent operator
+      // if parent is a vectorized operator which doesn't enable rich format
+      // cast_to_uniform is called when parent projecting expr and corresponding `datum.ptr_` becomes dangling pointer
+      // thus here we reset format to VEC_INVALID
+      if (OB_SUCC(ret)) {
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          ObExpr *expr = *e;
+          if (expr->enable_rich_format()) {
+            expr->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+          }
+        }
+      }
     } else {
       brs_.size_ = 1;
       brs_.end_ = false;

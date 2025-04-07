@@ -42,6 +42,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 #include "sql/resolver/dml/ob_transpose_resolver.h"
 
 namespace oceanbase
@@ -2673,6 +2674,11 @@ int ObDMLResolver::resolve_basic_column_ref(const ObQualifiedName &q_name, ObRaw
       }
       if (OB_SUCC(ret)) {
         real_ref_expr = column_item->expr_;
+        ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr *>(real_ref_expr);
+        if (!can_resolve_pseudo_column_ref_with_empty_tablename_ && q_name.tbl_name_.empty()
+            && static_cast<ObColumnRefRawExpr *>(real_ref_expr)->is_pseudo_column_ref()) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+        }
       }
     }
   }
@@ -2863,6 +2869,9 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       column_item.base_tid_ = tid;
       column_item.base_cid_ = column_item.column_id_;
       column_item.is_geo_ = col_schema->is_geometry();
+      if (col_schema->is_mock_column()) {
+        col_expr->set_is_pseudo_column_ref(true);
+      }
       LOG_DEBUG("succ to fill column_item", K(column_item), KPC(col_schema));
       if (OB_FAIL(stmt->add_column_item(column_item))) {
         LOG_WARN("add column item to stmt failed", K(ret));
@@ -14263,6 +14272,12 @@ int ObDMLResolver::resolve_pseudo_column(
     } else if (OB_FAIL(add_var_to_array_no_dup(get_stmt()->get_pseudo_column_like_exprs(), real_ref_expr))) {
       LOG_WARN("get pseudo column like exprs", K(ret));
     }
+  } else if (GCONF._enable_pseudo_partition_id
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2
+          && ObResolverUtils::is_pseudo_partition_column_name(q_name.col_name_)) {
+    if (OB_FAIL(resolve_part_id_ref_column(q_name, real_ref_expr))) {
+      LOG_WARN("resolve partition pseudo column failed", K(ret), K(q_name));
+    }
   } else {
     ret = OB_ERR_BAD_FIELD_ERROR;
   }
@@ -14306,6 +14321,60 @@ int ObDMLResolver::resolve_ora_rowscn_pseudo_column(
     OZ(get_stmt()->get_pseudo_column_like_exprs().push_back(pseudo_column_expr));
     LOG_DEBUG("ora_rowscn_expr build success", K(*pseudo_column_expr));
   }
+  return ret;
+}
+
+int ObDMLResolver::resolve_part_id_ref_column(
+    const ObQualifiedName &q_name,
+    ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  const TableItem *table_item = NULL;
+  const ObTableSchema *data_table_schema = NULL;
+  ColumnItem *exist_column_item;
+  // 所有的伪列表达式都必须进入这里才可以进行resolver，防止直接调用resolve_column_ref_expr解析
+  // qname=""时就会解析到上层query的table_id,逻辑见ObColumnNamespaceChecker::check_table_column_namespace
+  can_resolve_pseudo_column_ref_with_empty_tablename_ = true;
+
+  if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(allocator_)
+      || OB_ISNULL(get_stmt()) || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(params_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(params_.expr_factory_), K(ret));
+  } else if (OB_FAIL(column_namespace_checker_.
+      check_parittion_id_table_column_namespace(q_name, table_item))) {
+    LOG_WARN("check ext table column namespce failed", K(ret));
+  } else if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("invalid table name", K(ret), K(q_name.tbl_name_));
+  } else if (table_item->is_view_table_) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_INFO("cannot get partition id from view table",K(q_name.col_name_),
+      K(table_item->table_name_), K(ret));
+  } else if (table_item->table_type_ != share::schema::USER_TABLE) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("can only generate partition pseudo column from user table",
+      K(ret), K(*table_item));
+  } else if (NULL != (exist_column_item = get_stmt()->get_column_item(
+      table_item->table_id_, q_name.col_name_))) {
+    real_ref_expr = exist_column_item->expr_;
+  } else if (OB_FAIL(ObSQLMockSchemaUtils::add_mock_table(table_item->ref_id_))) {
+    LOG_WARN("failed to add mock table id", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_
+      ->get_effective_tenant_id(),
+      table_item->ref_id_, data_table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(*table_item));
+  } else if (data_table_schema == NULL) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("invalid table schema", K(ret), K(q_name.tbl_name_), K(data_table_schema));
+  } else if (OB_FAIL(resolve_column_ref_expr(q_name, real_ref_expr))) {
+    LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sequence object failed after mock partid"
+      , K(ret), K(q_name));
+  } else if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret), K(real_ref_expr));
+  }
+  can_resolve_pseudo_column_ref_with_empty_tablename_ = false;
   return ret;
 }
 

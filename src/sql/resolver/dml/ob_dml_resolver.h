@@ -912,6 +912,7 @@ private:
   int check_stmt_order_by(const ObSelectStmt *stmt);
 
   int resolve_ora_rowscn_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
+  int resolve_part_id_ref_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_old_new_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_rowid_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
@@ -1183,6 +1184,7 @@ protected:
 
   //for values table used to insert stmt:insert into table values row()....
   ObInsertResolver *upper_insert_resolver_;
+  bool can_resolve_pseudo_column_ref_with_empty_tablename_ = false;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

@@ -507,9 +507,11 @@ private:
 
   int fill_compress_type(ObLogSort &op, ObCompressorType &compr_type);
   int get_query_compress_type(const ObLogPlan &log_plan, ObCompressorType &compress_type);
+  int check_not_support_cmp_type(const ObExpr *expr);
   int check_not_support_cmp_type(
     const ObSortCollations &collations,
     const ObIArray<ObExpr*> &sort_exprs);
+  bool use_single_col_compare(ObSortVecSpec &spec);
   int recursive_get_column_expr(const ObColumnRefRawExpr *&column, const TableItem &table_item);
   int fill_aggr_infos(ObLogGroupBy &op,
                       ObGroupBySpec &spec,

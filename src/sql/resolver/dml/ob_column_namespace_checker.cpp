@@ -623,6 +623,45 @@ int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifi
   return ret;
 }
 
+int ObColumnNamespaceChecker::check_parittion_id_table_column_namespace(
+                              const ObQualifiedName &q_name,
+                              const TableItem *&table_item) {
+  int ret = OB_SUCCESS;
+  table_item = nullptr;
+  const TableItem *cur_table = nullptr;
+  bool is_match = false;
+  ObTableItemIterator table_item_iter(*this);
+  while (OB_SUCC(ret) && !is_match
+      && (cur_table = table_item_iter.get_next_table_item()) != nullptr) {
+    if (!q_name.tbl_name_.empty()) {
+      if (cur_table->is_joined_table()) {
+        if (OB_FAIL(check_rowid_existence_in_joined_table(params_.session_info_,
+                                                          q_name.tbl_name_,
+                                                          reinterpret_cast<const JoinedTable*>(cur_table),
+                                                          is_match,
+                                                          table_item))) {
+          LOG_WARN("failed to check rowid existence in joined table", K(ret));
+        }
+      } else if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_,
+                                                        q_name.tbl_name_,
+                                                        cur_table->get_object_name(),
+                                                        OB_TABLE_NAME_CLASS,
+                                                        is_match))) {
+        LOG_WARN("table name case compare failed", K(ret),
+            K(q_name.tbl_name_), K(cur_table->get_object_name()));
+      } else if (is_match) {
+        table_item = cur_table;
+      }
+    } else if (!cur_table->is_joined_table() && NULL == table_item) {
+      table_item = cur_table;
+    } else {
+      ret = OB_NON_UNIQ_ERROR;
+      LOG_WARN("column in all tables is ambiguous", K(ret), K(q_name));
+    }
+  }
+  return ret;
+}
+
 int ObColumnNamespaceChecker::check_rowid_existence_in_joined_table(const ObSQLSessionInfo *session_info,
                                                                     const ObString &tbl_name,
                                                                     const JoinedTable *joined_table,

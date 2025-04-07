@@ -12,7 +12,12 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "sql/engine/expr/ob_expr_func_round.h"
+#include <string.h>
+#include "share/object/ob_obj_cast.h"
+#include "objit/common/ob_item_type.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -380,6 +385,7 @@ static bool is_vector_need_cal_all(LeftVec *left_vec,
   return is_need;
 }
 
+
 static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &expr,
                                   ObEvalCtx &ctx, const ObBitVector &skip,
                                   const int64_t batch_size)
@@ -526,6 +532,237 @@ if (IsCheck) {                             \
   }                                        \
 }
 
+template <typename T, typename ArgVec, typename ResVec, bool IsCheck>
+class RoundFunctor {
+public:
+  using Func = std::function<T (T, int64_t)>;
+  RoundFunctor(Func round, const ObBitVector &skip, const EvalBound &bound,
+               ObBitVector &eval_flags, const int64_t scale)
+      : round_(round), skip_(skip), bound_(bound), eval_flags_(eval_flags),
+        scale_(scale) {}
+
+  OB_INLINE int64_t operator() (ArgVec *arg_vec, ResVec *res_vec) {
+    int ret = OB_SUCCESS;
+    if (!IsCheck) {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        ret = eval_scalar(arg_vec, i, res_vec);
+      }
+      eval_flags_.set_all(bound_.start(), bound_.end());
+    } else {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        if (skip_.at(i) || eval_flags_.at(i)) {
+          continue;
+        } else if (OB_UNLIKELY(arg_vec->is_null(i))) {
+          res_vec->set_null(i);
+        } else {
+          ret = eval_scalar(arg_vec, i, res_vec);
+        }
+        eval_flags_.set(i);
+      }
+    }
+    return ret;
+  }
+
+private:
+  OB_INLINE int64_t eval_scalar(ArgVec *arg_vec, int idx, ResVec *res_vec) {
+    int ret = OB_SUCCESS;
+    const char *in_ptr = arg_vec->get_payload(idx);
+    const T in = *reinterpret_cast<const T *>(in_ptr);
+    T out = round_(in, scale_);
+    res_vec->set_payload(idx, &out, sizeof(T));
+    return ret;
+  }
+
+
+  Func round_;
+  const ObBitVector &skip_;
+  const EvalBound &bound_;
+  ObBitVector &eval_flags_;
+  int64_t scale_;
+  int64_t scale_factor_;
+};
+
+template <bool NEG_SCALE, bool IS_OVERFLOW>
+OB_INLINE uint64_t round_uint64(uint64_t x, int64_t scale) {
+  if (NEG_SCALE) {
+    scale = -scale;
+    if (IS_OVERFLOW) {
+      x = 0;
+    } else {
+      uint64_t scale_factor = get_scale_factor<uint64_t>(scale);
+      uint64_t tmp = x / scale_factor * scale_factor;
+      x = (x - tmp) >= (scale_factor >> 1) ? tmp + scale_factor : tmp;
+    }
+  }
+  return x;
+}
+
+template <bool NEG_SCALE, bool IS_OVERFLOW>
+OB_INLINE int64_t round_integer(int64_t x, int64_t scale) {
+  if (x < 0) {
+    x = -x;
+    x = round_uint64<NEG_SCALE, IS_OVERFLOW>(x, scale);
+    x = -x;
+  } else {
+    x = round_uint64<NEG_SCALE, IS_OVERFLOW>(x, scale);
+  }
+  return x;
+}
+
+OB_INLINE double round_double(double d, int64_t scale) {
+  const double scale_factor = get_scale_factor<double>(std::abs(scale));
+  double val_div_tmp = d / scale_factor;
+  double val_mul_tmp = d * scale_factor;
+  double res = 0.0;
+  if (scale < 0 && std::isinf(scale_factor)) {
+    res = 0.0;
+  } else if (scale >= 0 && !std::isfinite(val_mul_tmp)) {
+    res = d;
+  } else {
+    res = scale < 0 ? rint(val_div_tmp) * scale_factor : rint(val_mul_tmp) / scale_factor;
+  }
+  return res;
+}
+
+OB_INLINE float round_float(float f, int64_t scale) {
+  return static_cast<float>(round_double(f, scale));
+}
+
+template <typename T, typename ArgVec, typename ResVec, bool IsCheck>
+class DecimalIntRoundFunctor {
+public:
+  static constexpr int16_t INT_BYTES = sizeof(T);
+
+  DecimalIntRoundFunctor(const ObBitVector &skip, const EvalBound &bound, ObBitVector &eval_flags,
+      const ObDatumMeta &in_meta, const ObDatumMeta &out_meta, const int16_t round_scale)
+    : skip_(skip), bound_(bound), eval_flags_(eval_flags), in_scale_(in_meta.scale_), out_scale_(out_meta.scale_),
+      round_scale_(round_scale), in_prec_(in_meta.precision_), out_prec_(out_meta.precision_)
+  {
+    in_round_scale_factor_ = get_scale_factor<T>(std::abs(in_scale_ - round_scale_));
+    out_round_scale_factor_ = get_scale_factor<T>(std::abs(out_scale_ - round_scale_));
+    in_out_scale_factor_ = get_scale_factor<T>(std::abs(in_scale_ - out_scale_));
+    expected_int_bytes_ = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec_);
+  }
+
+  OB_INLINE int64_t operator() (ArgVec *arg_vec, ResVec *res_vec) {
+    int ret = OB_SUCCESS;
+    if (!IsCheck) {
+      if (OB_UNLIKELY(in_scale_ == round_scale_
+          && get_decimalint_type(in_prec_) == get_decimalint_type(out_prec_))) {
+        // no need to round
+        for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+          res_vec->set_payload(i, arg_vec->get_payload(i), INT_BYTES);
+        }
+      } else {
+        if (OB_UNLIKELY(round_scale_ > in_scale_)) {
+          if (out_scale_ > round_scale_) {
+            for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+              ret = eval_scalar<true, true>(arg_vec, i, res_vec);
+            }
+          } else {
+            for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+              ret = eval_scalar<true, false>(arg_vec, i, res_vec);
+            }
+          }
+        } else {
+          if (OB_UNLIKELY(out_scale_ > round_scale_)) {
+            for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+              ret = eval_scalar<false, true>(arg_vec, i, res_vec);
+            }
+          } else {
+            for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+              ret = eval_scalar<false, false>(arg_vec, i, res_vec);
+            }
+          }
+        }
+      }
+      eval_flags_.set_all(bound_.start(), bound_.end());
+    } else {
+      for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
+        if (skip_.at(i) || eval_flags_.at(i)) {
+          continue;
+        } else if (OB_UNLIKELY(arg_vec->is_null(i))) {
+          res_vec->set_null(i);
+        } else if (OB_UNLIKELY(in_scale_ == round_scale_ && get_decimalint_type(in_prec_) == get_decimalint_type(out_prec_))) {
+          res_vec->set_payload(i, arg_vec->get_payload(i), INT_BYTES);
+        } else {
+          if (OB_UNLIKELY(round_scale_ > in_scale_)) {
+            if (out_scale_ > round_scale_) {
+              ret = eval_scalar<true, true>(arg_vec, i, res_vec);
+            } else {
+              ret = eval_scalar<true, false>(arg_vec, i, res_vec);
+            }
+          } else {
+            if (OB_UNLIKELY(out_scale_ > round_scale_)) {
+              ret = eval_scalar<false, true>(arg_vec, i, res_vec);
+            } else {
+              ret = eval_scalar<false, false>(arg_vec, i, res_vec);
+            }
+          }
+        }
+        eval_flags_.set(i);
+      }
+    }
+    return ret;
+  }
+
+private:
+  // SCALE_UP_ROUND = round_scale_ > in_scale_
+  // SCALE_UP_OUT = out_scale_ > round_scale_
+  template <bool SCALE_UP_ROUND, bool SCALE_UP_OUT>
+  OB_INLINE int64_t eval_scalar(ArgVec *arg_vec, int idx, ResVec *res_vec) {
+    int ret = OB_SUCCESS;
+    const ObDecimalInt *x_decint = arg_vec->get_decimal_int(idx);
+    T x = *(reinterpret_cast<const T *>(x_decint));
+    if (SCALE_UP_ROUND) {
+      if (SCALE_UP_OUT) {
+        x = x * in_out_scale_factor_;
+      } else {
+        x = x * in_round_scale_factor_;
+      }
+    } else {
+      if (wide::is_negative(x_decint, INT_BYTES)) {
+        x = x - (in_round_scale_factor_ >> 1);
+      } else {
+        x = x + (in_round_scale_factor_ >> 1);
+      }
+      if (SCALE_UP_OUT) {
+        x = x / in_round_scale_factor_;
+        x = x * out_round_scale_factor_;
+      } else {
+        x = x / in_round_scale_factor_;
+      }
+    }
+    if (OB_UNLIKELY(INT_BYTES != expected_int_bytes_)) {
+      ObDecimalIntBuilder res_val;
+      if (OB_FAIL(ObDatumCast::align_decint_precision_unsafe(
+              reinterpret_cast<const ObDecimalInt *>(&x), INT_BYTES,
+              expected_int_bytes_, res_val))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("align_decint_precision_unsafe failed", K(ret), K(expected_int_bytes_));
+      } else {
+        res_vec->set_payload(idx, res_val.get_decimal_int(), res_val.get_int_bytes());
+      }
+    } else {
+      res_vec->set_payload(idx, &x, INT_BYTES);
+    }
+    return ret;
+  }
+
+  const ObBitVector &skip_;
+  const EvalBound &bound_;
+  ObBitVector &eval_flags_;
+  const int16_t in_scale_;
+  const int16_t out_scale_;
+  const int16_t round_scale_;
+  T in_round_scale_factor_;
+  T out_round_scale_factor_;
+  T in_out_scale_factor_;
+  const ObPrecision in_prec_;
+  const ObPrecision out_prec_;
+  int32_t expected_int_bytes_;
+};
+
 template <typename LeftVec, typename ResVec, bool IsCheck>
 static int do_round_by_type_vector(const int64_t scale, const ObExpr &expr,
                                   ObEvalCtx &ctx, const ObBitVector &skip,
@@ -559,55 +796,109 @@ static int do_round_by_type_vector(const int64_t scale, const ObExpr &expr,
     case ObDecimalIntType: {
       const ObDatumMeta &in_meta = expr.args_[0]->datum_meta_;
       const ObDatumMeta &out_meta = expr.datum_meta_;
-      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-        CHECK_ROUND_VECTOR();
-        if (OB_FAIL((ObExprFuncRound::calc_round_decimalint<LeftVec, ResVec>)(
-                            in_meta, out_meta, GET_SCALE_FOR_CALC(scale), left_vec, res_vec, j))) {
-          LOG_WARN("calc_round_decimalint failed", K(ret), K(in_meta), K(out_meta), K(scale));
+      const int16_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(in_meta.precision_);
+      switch (int_bytes) {
+        case 4: {
+          DecimalIntRoundFunctor<int32_t, LeftVec, ResVec, IsCheck> round_func(
+              skip, bound, eval_flags, in_meta, out_meta,
+              GET_SCALE_FOR_CALC(scale));
+          if (OB_FAIL(round_func(left_vec, res_vec))) {
+            LOG_WARN("DecimalIntRoundFunctor<int32_t>::operator() failed", K(ret));
+          }
+          break;
         }
-        eval_flags.set(j);
+        case 8: {
+          DecimalIntRoundFunctor<int64_t, LeftVec, ResVec, IsCheck> round_func(
+              skip, bound, eval_flags, in_meta, out_meta,
+              GET_SCALE_FOR_CALC(scale));
+          if (OB_FAIL(round_func(left_vec, res_vec))) {
+            LOG_WARN("DecimalIntRoundFunctor<int64_t>::operator() failed", K(ret));
+          }
+          break;
+        }
+        case 16: {
+          DecimalIntRoundFunctor<int128_t, LeftVec, ResVec, IsCheck> round_func(
+              skip, bound, eval_flags, in_meta, out_meta,
+              GET_SCALE_FOR_CALC(scale));
+          if (OB_FAIL(round_func(left_vec, res_vec))) {
+            LOG_WARN("DecimalIntRoundFunctor<int128_t>::operator() failed", K(ret));
+          }
+          break;
+        }
+        case 32: {
+          DecimalIntRoundFunctor<int256_t, LeftVec, ResVec, IsCheck> round_func(
+              skip, bound, eval_flags, in_meta, out_meta,
+              GET_SCALE_FOR_CALC(scale));
+          if (OB_FAIL(round_func(left_vec, res_vec))) {
+            LOG_WARN("DecimalIntRoundFunctor<int256_t>::operator() failed", K(ret));
+          }
+          break;
+        }
+        case 64: {
+          DecimalIntRoundFunctor<int512_t, LeftVec, ResVec, IsCheck> round_func(
+              skip, bound, eval_flags, in_meta, out_meta,
+              GET_SCALE_FOR_CALC(scale));
+          if (OB_FAIL(round_func(left_vec, res_vec))) {
+            LOG_WARN("DecimalIntRoundFunctor<int512_t>::operator() failed", K(ret));
+          }
+          break;
+        }
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected decimal int bytes", K(ret), K(int_bytes));
+          break;
       }
       break;
     }
     case ObFloatType: {
-      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-        CHECK_ROUND_VECTOR();
-        // if in Oracle mode, param_num must be 1(scale is 0)
-        // MySQL mode cannot be here. because if param type is float, calc type will be double.
-        res_vec->set_float(j, ObExprUtil::round_double(left_vec->get_float(j), scale));
-        eval_flags.set(j);
+      RoundFunctor<float, LeftVec, ResVec, IsCheck> round_func(
+          round_float, skip, bound, eval_flags, scale);
+      if (OB_FAIL(round_func(left_vec, res_vec))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("RoundFunctor<float>::operator() failed", K(ret));
       }
       break;
     }
     case ObDoubleType: {
-      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-        CHECK_ROUND_VECTOR();
-        // if in Oracle mode, param_num must be 1(scale is 0)
-        res_vec->set_double(j, ObExprUtil::round_double(left_vec->get_double(j), scale));
-        eval_flags.set(j);
+      RoundFunctor<double, LeftVec, ResVec, IsCheck> round_func(
+          round_double, skip, bound, eval_flags, scale);
+      if (OB_FAIL(round_func(left_vec, res_vec))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("RoundFunctor<double>::operator() failed", K(ret));
       }
       break;
     }
     case ObIntType: {
-      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-        CHECK_ROUND_VECTOR();
-        int64_t x_int = left_vec->get_int(j);
-        bool neg = x_int < 0;
-        x_int = neg ? -x_int : x_int;
-        int64_t res_int = static_cast<int64_t>(ObExprUtil::round_uint64(x_int, scale));
-        res_int = neg ? -res_int : res_int;
-        res_vec->set_int(j, res_int);
-        eval_flags.set(j);
+      std::function<int64_t (int64_t, int64_t)> func;
+      if (scale >= 0) {
+        func = round_integer<false, false>;
+      } else if (scale > -20) {
+        func = round_integer<true, false>;
+      } else {
+        func = round_integer<true, true>;
+      }
+      RoundFunctor<int64_t, LeftVec, ResVec, IsCheck> round_func(
+          func, skip, bound, eval_flags, scale);
+      if (OB_FAIL(round_func(left_vec, res_vec))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("RoundFunctor<int64_t>::operator() failed", K(ret));
       }
       break;
     }
     case ObUInt64Type: {
-      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-       CHECK_ROUND_VECTOR();
-        uint64_t x_uint = left_vec->get_uint(j);
-        uint64_t res_uint = ObExprUtil::round_uint64(x_uint, scale);
-        res_vec->set_uint(j, res_uint);
-        eval_flags.set(j);
+      std::function<int64_t (int64_t, int64_t)> func;
+      if (scale >= 0) {
+        func = round_uint64<false, false>;
+      } else if (scale > -20) {
+        func = round_uint64<true, false>;
+      } else {
+        func = round_uint64<true, true>;
+      }
+      RoundFunctor<int64_t, LeftVec, ResVec, IsCheck> round_func(
+          func, skip, bound, eval_flags, scale);
+      if (OB_FAIL(round_func(left_vec, res_vec))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("RoundFunctor<uint64>::operator() failed", K(ret));
       }
       break;
     }
