@@ -294,6 +294,9 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     LOG_WARN("connection already disconnected", K(ret));
   } else if (OB_ISNULL(session)) {
     // do nothing
+  } else if (proto20_context_.is_proto20_used_
+             && OB_FALSE_IT(proto20_context_.is_dup_ls_modified_ = session->is_dup_ls_modified())) {
+    // do nothing
   } else if (conn_->proxy_cap_flags_.is_full_link_trace_support() &&
               proto20_context_.is_proto20_used_ &&
               OB_FAIL(sql::ObFLTUtils::append_flt_extra_info(session->get_extra_info_alloc(),

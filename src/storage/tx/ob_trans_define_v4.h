@@ -260,8 +260,9 @@ struct ObTxPart
   bool is_clean() const { return flag_.is_clean(); }
   bool is_without_valid_write() const { return !first_scn_.is_valid() || last_scn_ < first_scn_; }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
+  bool is_dup_ls() const { return flag_.is_dup_ls(); }
   static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
-  TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
+  TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts), K(flag_.flag_bit_));
   OB_UNIS_VERSION(1);
 };
 
@@ -897,6 +898,7 @@ public:
   int64_t get_expire_ts() const;
   int64_t get_tx_lock_timeout() const { return lock_timeout_us_; }
   bool is_in_tx() const { return state_ > State::IDLE; }
+  bool is_dup_ls_modified() const;
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();

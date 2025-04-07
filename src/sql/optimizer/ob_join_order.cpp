@@ -507,7 +507,8 @@ int ObJoinOrder::compute_sharding_info_with_part_info(ObTableLocationType locati
     bool can_reselect_replica = (phy_tbl_info.is_duplicate_table_not_in_dml() &&
         (1 == phy_tbl_info.get_phy_part_loc_info_list().count())
         && !session_info->get_is_in_retry_for_dup_tbl()
-        && !is_modified);
+        && !is_modified
+        && !session_info->is_dup_ls_modified());
     sharding_info = new(sharding_info) ObShardingInfo();
     sharding_info->set_location_type(location_type);
     if (OB_FAIL(sharding_info->init_partition_info(

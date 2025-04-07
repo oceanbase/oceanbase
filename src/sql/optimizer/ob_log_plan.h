@@ -1566,6 +1566,10 @@ public:
                                              bool need_exchange,
                                              const ObIArray<OrderItem> &sort_keys,
                                              bool &need_further_sort);
+  static int adjust_dup_table_replica_by_cons(
+    const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
+    common::ObIArray<ObCandiTableLoc> &phy_tbl_info_list);
+
 protected:
   virtual int generate_normal_raw_plan() = 0;
   virtual int generate_dblink_raw_plan();
@@ -1819,7 +1823,8 @@ private: // member functions
   static int strong_select_replicas(const common::ObAddr &local_server,
                                     common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,
-                                    bool sess_in_retry);
+                                    bool sess_in_retry,
+                                    bool is_dup_ls_modified);
   static int weak_select_replicas(const common::ObAddr &local_server,
                                   ObRoutePolicyType route_type,
                                   bool proxy_priority_hit_support,

@@ -747,7 +747,8 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
   } else {
     const bool sess_in_retry = session->get_is_in_retry_for_dup_tbl(); //重试状态下不优化复制表的副本选择
-    if (OB_FAIL(ObLogPlan::strong_select_replicas(local_server, phy_tbl_loc_info_list, is_hit_partition, sess_in_retry))) {
+    const bool is_dup_ls_modified = session->is_dup_ls_modified();
+    if (OB_FAIL(ObLogPlan::strong_select_replicas(local_server, phy_tbl_loc_info_list, is_hit_partition, sess_in_retry, is_dup_ls_modified))) {
       LOG_WARN("fail to strong select replicas", K(ret), K(local_server), K(phy_tbl_loc_info_list.count()));
     } else {
       session->partition_hit().try_set_bool(is_hit_partition);
@@ -759,7 +760,8 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
 int ObLogPlan::strong_select_replicas(const ObAddr &local_server,
                                       ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                       bool &is_hit_partition,
-                                      bool sess_in_retry) //当前session是否在retry中
+                                      bool sess_in_retry,      //当前session是否在retry中
+                                      bool is_dup_ls_modified)
 {
   int ret = OB_SUCCESS;
   // 全部选主
@@ -776,7 +778,9 @@ int ObLogPlan::strong_select_replicas(const ObAddr &local_server,
     } else if (0 == phy_tbl_loc_info->get_partition_cnt()) {
       // 该table的partition个数为0，跳过
     } else {
-      if (!sess_in_retry && phy_tbl_loc_info->is_duplicate_table_not_in_dml()) {
+      if (!sess_in_retry
+          && !is_dup_ls_modified
+          && phy_tbl_loc_info->is_duplicate_table_not_in_dml()) {
         if (OB_FAIL(phy_tbl_loc_info->all_select_local_replica_or_leader(is_on_same_server, cur_same_server, local_server))) {
           LOG_WARN("fail to all select leader", K(ret), K(*phy_tbl_loc_info));
         } else {
@@ -14945,6 +14949,49 @@ int ObLogPlan::construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogic
   } else if (OB_FAIL(log_op->expr_constraints_.push_back(
       ObExprConstraint(limit_is_zero, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE)))) {
     LOG_WARN("failed to add expr constraint", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::adjust_dup_table_replica_by_cons(
+  const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
+  common::ObIArray<ObCandiTableLoc> &phy_tbl_info_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < phy_tbl_info_list.count(); ++i) {
+    const ObCandiTableLoc &phy_tbl_info = phy_tbl_info_list.at(i);
+    if (phy_tbl_info.get_partition_cnt() == 1) {
+      const ObCandiTabletLoc &dup_tbl_loc = phy_tbl_info.get_phy_part_loc_info_list().at(0);
+      int64_t replica_idx = 0;
+      int64_t left_tbl_pos = -1;
+      // find first constraint
+      for (int64_t j = 0; OB_SUCC(ret) && j < dup_table_replica_cons.count(); ++j) {
+        ObDupTabConstraint con = dup_table_replica_cons.at(j);
+        if (con.first_ == common::OB_INVALID_ID) {
+          // do nothing
+        } else if (con.first_ == i) {
+          left_tbl_pos = con.second_;
+        }
+      }
+      if (left_tbl_pos != -1) {
+        const ObCandiTabletLoc &left_tbl_part_loc_info =
+          phy_tbl_info_list.at(left_tbl_pos).get_phy_part_loc_info_list().at(0);
+        share::ObLSReplicaLocation replica_loc;
+        if (OB_FAIL(left_tbl_part_loc_info.get_selected_replica(replica_loc))) {
+          LOG_WARN("failed to set selected replica idx", K(ret), K(left_tbl_part_loc_info));
+        } else if (dup_tbl_loc.is_server_in_replica(replica_loc.get_server(), replica_idx)) {
+          LOG_DEBUG("reselect replica index according to pwj constraints will happen",
+                    K(dup_tbl_loc), K(replica_idx), K(replica_loc.get_server()), K(replica_loc));
+          ObRoutePolicy::CandidateReplica replica;
+          if (OB_FAIL(dup_tbl_loc.get_priority_replica(replica_idx, replica))) {
+            LOG_WARN("failed to get priority replica", K(ret));
+          } else if (OB_FAIL(const_cast<ObCandiTabletLoc &>(dup_tbl_loc)
+                               .set_selected_replica_idx(replica_idx))) {
+            LOG_WARN("failed to set selected replica idx", K(ret), K(replica_idx));
+          }
+        }
+      }
+    }
   }
   return ret;
 }

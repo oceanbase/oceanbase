@@ -905,6 +905,29 @@ int64_t ObTxDesc::get_expire_ts() const
   return ret;
 }
 
+bool ObTxDesc::is_dup_ls_modified() const
+{
+  int ret = OB_SUCCESS;
+  bool dup_ls_modified = false;
+  const bool self_locked = lock_.self_locked();
+  if (!self_locked && OB_FAIL(lock_.lock())) {
+    TRANS_LOG(ERROR, "lock tx_desc failed", K(ret), K_(tx_id));
+  } else {
+    ARRAY_FOREACH_NORET(parts_, i)
+    {
+     if(parts_[i].flag_.is_dup_ls())
+     {
+       dup_ls_modified = true;
+       break;
+     }
+    }
+    if (!self_locked) {
+      lock_.unlock();
+    }
+  }
+  return dup_ls_modified;
+}
+
 int ObTxDesc::update_parts_(const ObTxPartList &list)
 {
   int ret = OB_SUCCESS;
@@ -1577,14 +1600,18 @@ ObTxPart::ObTxPart()
     epoch_(-1),
     first_scn_(),
     last_scn_(),
-    last_touch_ts_(0)
-{}
+    last_touch_ts_(0),
+    flag_()
+{
+}
+
 ObTxPart::~ObTxPart()
 {
   epoch_ = -1;
   first_scn_.reset();
   last_scn_.reset();
   last_touch_ts_ = 0;
+  flag_.reset();
 }
 
 int ObTxDescMgr::init(std::function<int(ObTransID&)> tx_id_allocator, const lib::ObMemAttr &mem_attr)

@@ -1384,6 +1384,9 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
       p.epoch_      = tx_ctx->epoch_;
       p.first_scn_  = tx_ctx->first_scn_;
       p.last_scn_   = tx_ctx->last_scn_;
+      if (dup_table_loop_worker_.is_useful_dup_ls(p.id_)) {
+        p.flag_.set_dup_ls();
+      }
       if (OB_FAIL(tx->update_part(p))) {
         TRANS_LOG(WARN, "append part fail", K(ret), K(p), KPC(tx_ctx));
       }

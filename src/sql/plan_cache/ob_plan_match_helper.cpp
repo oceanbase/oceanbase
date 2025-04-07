@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_PC
 #include "sql/plan_cache/ob_plan_match_helper.h"
 #include "sql/plan_cache/ob_plan_set.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 using namespace oceanbase::share;
 
@@ -28,6 +29,7 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   bool has_duplicate_table = false;
   bool is_retrying = false;
+  bool is_dup_ls_modified = false;
   is_matched = true;
   const ObAddr &server = pc_ctx.exec_ctx_.get_addr();
   const ObIArray<LocationConstraint>& base_cons = plan->get_base_constraints();
@@ -37,14 +39,19 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
   const ObIArray<ObTableLocation> &plan_tbl_locs = plan->get_table_locations();
   PWJTabletIdMap pwj_map;
   bool use_pwj_map = false;
-  if (0 == base_cons.count()) {
+
+  if (OB_ISNULL(GET_MY_SESSION(pc_ctx.exec_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get session", KR(ret));
+  } else if (0 == base_cons.count()) {
     // match all
     is_matched = true;
   } else {
+    is_dup_ls_modified = GET_MY_SESSION(pc_ctx.exec_ctx_)->is_dup_ls_modified();
     if (OB_NOT_NULL(plan_set_) && plan_set_->has_duplicate_table()) {
       if (OB_FAIL(pc_ctx.is_retry(is_retrying))) {
         LOG_WARN("failed to test if retrying", K(ret));
-      } else if (is_retrying) {
+      } else if (is_retrying || is_dup_ls_modified) {
         has_duplicate_table = false;
       } else {
         has_duplicate_table = true;
@@ -57,8 +64,7 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
                                       out_tbl_locations, phy_tbl_infos))) {
         LOG_WARN("failed to calculate table locations", K(ret), K(base_cons));
       } else if (has_duplicate_table &&
-                OB_FAIL(reselect_duplicate_table_best_replica(base_cons, server, phy_tbl_infos,
-                                                                                dup_rep_cons))) {
+                OB_FAIL(ObLogPlan::adjust_dup_table_replica_by_cons(dup_rep_cons, phy_tbl_infos))) {
         LOG_WARN("failed to reselect duplicate table replica", K(ret));
       } else if (OB_FAIL(cmp_table_types(base_cons, server, out_tbl_locations,
                                         phy_tbl_infos, is_matched))) {
@@ -188,78 +194,6 @@ int ObPlanMatchHelper::calc_table_locations(
   if (OB_FAIL(ret)) {
     out_tbl_locations.reset();
     phy_tbl_infos.reset();
-  }
-  return ret;
-}
-
-int ObPlanMatchHelper::reselect_duplicate_table_best_replica(
-    const ObIArray<LocationConstraint> &loc_cons,
-    const common::ObAddr &server,
-    const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
-    const ObIArray<ObDupTabConstraint> &dup_table_replica_cons) const
-{
-  int ret = OB_SUCCESS;
-  if (loc_cons.count() == phy_tbl_infos.count()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < phy_tbl_infos.count(); ++i) {
-      const ObCandiTableLoc &phy_tbl_info = phy_tbl_infos.at(i);
-      if (phy_tbl_info.is_duplicate_table_not_in_dml()) {
-        bool selected_replica = false;
-        if (phy_tbl_info.get_partition_cnt() == 1) {
-          const ObCandiTabletLoc &dup_phy_part_loc =
-                                        phy_tbl_info.get_phy_part_loc_info_list().at(0);
-          int64_t replica_idx = 0;
-          int64_t left_tbl_pos = -1;
-          // find first constraint
-          for (int64_t j = 0; OB_SUCC(ret) && j < dup_table_replica_cons.count(); ++j) {
-            ObDupTabConstraint con = dup_table_replica_cons.at(j);
-            if (con.first_ == OB_INVALID) {
-              // do nothing
-            } else if (con.first_==i) {
-              left_tbl_pos = con.second_;
-            }
-          }
-          if (left_tbl_pos != -1) {
-            const ObCandiTabletLoc& left_tbl_part_loc_info =
-                            phy_tbl_infos.at(left_tbl_pos).get_phy_part_loc_info_list().at(0);
-            share::ObLSReplicaLocation replica_loc;
-            if (OB_FAIL(left_tbl_part_loc_info.get_selected_replica(replica_loc))) {
-              LOG_WARN("failed to set selected replica idx", K(ret), K(left_tbl_part_loc_info));
-            } else if (dup_phy_part_loc.is_server_in_replica(replica_loc.get_server(), replica_idx)) {
-              LOG_DEBUG("reselect replica index according to pwj constraints will happen",
-                        K(dup_phy_part_loc), K(replica_idx), K(replica_loc.get_server()), K(replica_loc));
-              ObRoutePolicy::CandidateReplica replica;
-              if (OB_FAIL(dup_phy_part_loc.get_priority_replica(replica_idx, replica))) {
-                LOG_WARN("failed to get priority replica", K(ret));
-              } else if (OB_FAIL(const_cast<ObCandiTabletLoc&>(dup_phy_part_loc).
-                    set_selected_replica_idx(replica_idx))) {
-                LOG_WARN("failed to set selected replica idx", K(ret), K(replica_idx));
-              } else {
-                selected_replica = true;
-              }
-            }
-          }
-        }
-        // if not found, just select local
-        if (!selected_replica) {
-          for (int64_t j = 0; OB_SUCC(ret) && j < phy_tbl_info.get_partition_cnt(); ++j) {
-            const ObCandiTabletLoc &phy_part_loc_info =
-                phy_tbl_info.get_phy_part_loc_info_list().at(j);
-            int64_t replica_idx = 0;
-            if (phy_part_loc_info.is_server_in_replica(server, replica_idx)) {
-              LOG_DEBUG("reselect replica index will happen",
-                        K(phy_tbl_info), K(replica_idx), K(server));
-              ObRoutePolicy::CandidateReplica replica;
-              if (OB_FAIL(phy_part_loc_info.get_priority_replica(replica_idx, replica))) {
-                LOG_WARN("failed to get priority replica", K(ret));
-              } else if (OB_FAIL(const_cast<ObCandiTabletLoc&>(phy_part_loc_info).
-                  set_selected_replica_idx(replica_idx))) {
-                LOG_WARN("failed to set selected replica idx", K(ret), K(replica_idx));
-              }
-            }
-          }
-        }
-      }
-    }
   }
   return ret;
 }
