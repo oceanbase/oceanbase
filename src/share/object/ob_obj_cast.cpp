@@ -6313,7 +6313,8 @@ static int string_number(const ObObjType expect_type, ObObjCastParams &params,
         if (OB_SUCCESS != (tmp_ret = value.from(*bound_num, *params.allocator_v2_))) {
           LOG_WARN("copy min number failed", K(ret), K(tmp_ret), KPC(bound_num));
         }
-      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret
+          && OB_NOT_NULL(params.exec_ctx_)) {
         if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
           ObString decimal_type_str("decimal");
           ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
@@ -12353,7 +12354,7 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
       } else {
         MEMCPY(decint, limit_decint, int_bytes);
       }
-    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret && OB_NOT_NULL(params.exec_ctx_)) {
       if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
         ObString decimal_type_str("decimal");
         ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
