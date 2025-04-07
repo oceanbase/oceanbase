@@ -143,7 +143,7 @@ OceanBase は、Mulan Public License バージョン 2 に基づいてライセ�
 
 # コミュニティ
 
-以下の方法で OceanBase コミュニティに参加してください:
+OceanBase コミュニティにぜひご参加ください！
 
 * [Discord](https://discord.gg/74cF8vbNEs)
 * [Stack Overflow で質問](https://stackoverflow.com/questions/tagged/oceanbase)
