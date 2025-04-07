@@ -3242,7 +3242,7 @@ int ObAlterTableResolver::resolve_exchange_partition(const ParseNode &node,
       } else if (OB_FAIL(exchange_partition_arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(exchange_table_schema->get_table_id(), TABLE_SCHEMA, exchange_table_schema->get_schema_version())))) {
         LOG_WARN("failed to add exchange table info", K(ret), KPC(exchange_table_schema));
       } else {
-        exchange_partition_arg.session_id_ = session_info_->get_sessid();
+        exchange_partition_arg.session_id_ = session_info_->get_server_sid();
         exchange_partition_arg.tenant_id_  = session_info_->get_effective_tenant_id();
         exchange_partition_arg.exchange_partition_level_ = orig_table_schema.get_part_level();
         exchange_partition_arg.base_table_id_ = orig_table_schema.get_table_id();

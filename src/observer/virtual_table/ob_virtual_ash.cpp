@@ -138,7 +138,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case SESSION_ID: {
-        cells[cell_idx].set_int(node.session_id_);
+        if (node.session_type_ == 0) {
+          cells[cell_idx].set_int(node.client_sid_);
+        } else {
+          cells[cell_idx].set_int(node.session_id_);
+        }
         break;
       }
       case SESSION_TYPE: {

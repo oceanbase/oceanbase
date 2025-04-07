@@ -95,6 +95,7 @@ public:
         tablet_id_(0),
         block_sessid_(0),
         proxy_sid_(0),
+        client_sid_(INVALID_SESSID),
         delta_read_(0),
         delta_write_(0)
   {
@@ -183,6 +184,7 @@ public:
   int64_t tablet_id_;
   int64_t block_sessid_;
   uint64_t proxy_sid_; //proxy session id
+  uint32_t client_sid_; //client session id
   ObIOData delta_read_;
   ObIOData delta_write_;
   char program_[ASH_PROGRAM_STR_LEN];

@@ -42,7 +42,7 @@ int ObMViewPurgeLogExecutor::execute(ObExecContext &ctx, const ObMViewPurgeLogAr
   CK(OB_NOT_NULL(session_info_ = ctx.get_my_session()));
   CK(OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
-  OZ(schema_checker_.init(*ctx.get_sql_ctx()->schema_guard_, session_info_->get_sessid()));
+  OZ(schema_checker_.init(*ctx.get_sql_ctx()->schema_guard_, session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObMViewExecutorUtil::check_min_data_version(
     tenant_id_, DATA_VERSION_4_3_0_0, "tenant's data version is below 4.3.0.0, purge mlog is"));

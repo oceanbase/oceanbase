@@ -86,7 +86,7 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
         // set dblink_info, to unparse a link sql with dblink_info hint
         oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
         if (OB_FAIL(const_cast<oceanbase::sql::ObSQLSessionInfo *>(session_)->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
-          LOG_WARN("failed to get reverse link info from session", K(ret), K(session_->get_sessid()));
+          LOG_WARN("failed to get reverse link info from session", K(ret), K(session_->get_server_sid()));
         } else if (NULL == reverse_dblink_info) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));

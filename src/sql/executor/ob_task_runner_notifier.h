@@ -35,7 +35,7 @@ public:
     int ret = OB_SUCCESS;
     if (NULL != mgr_ && NULL != session_) {
       if (OB_FAIL(mgr_->kill_query(*session_))) {
-        SQL_LOG(WARN, "kill query failed", K(ret), K(session_->get_sessid()));
+        SQL_LOG(WARN, "kill query failed", K(ret), K(session_->get_server_sid()));
       }
     }
     return ret;

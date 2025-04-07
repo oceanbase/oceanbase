@@ -36,7 +36,7 @@ int ObVectorRefreshIndexExecutor::execute_refresh(
   CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
-                          session_info_->get_sessid()));
+                          session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
       tenant_id_, DATA_VERSION_4_3_3_0,
@@ -64,7 +64,7 @@ int ObVectorRefreshIndexExecutor::execute_refresh_inner(
   CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
-                          session_info_->get_sessid()));
+                          session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
       tenant_id_, DATA_VERSION_4_3_3_0,
@@ -93,7 +93,7 @@ int ObVectorRefreshIndexExecutor::execute_rebuild(
   CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
-                          session_info_->get_sessid()));
+                          session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
       tenant_id_, DATA_VERSION_4_3_3_0,
@@ -121,7 +121,7 @@ int ObVectorRefreshIndexExecutor::execute_rebuild_inner(
   CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
   OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
-                          session_info_->get_sessid()));
+                          session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
       tenant_id_, DATA_VERSION_4_3_3_0,

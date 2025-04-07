@@ -704,7 +704,7 @@ int ObMPStmtFetch::process()
       //session has been killed some moment ago
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(cursor_id),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       //packet size check with session variable max_allowd_packet or net_buffer_length
       ret = OB_ERR_NET_PACKET_TOO_LARGE;

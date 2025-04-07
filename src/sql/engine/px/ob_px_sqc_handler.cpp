@@ -283,7 +283,7 @@ int ObPxSqcHandler::init_env()
     // we don't need explicitly cll unlock() here, we do it in
     // ObPxSqcHandler::destroy_sqc()
     ret = OB_ERR_SESSION_INTERRUPTED;
-    LOG_WARN("session has been killed", K(session->get_session_state()), K(session->get_sessid()),
+    LOG_WARN("session has been killed", K(session->get_session_state()), K(session->get_server_sid()),
              "proxy_sessid", session->get_proxy_sessid(), K(ret));
   }
   return ret;

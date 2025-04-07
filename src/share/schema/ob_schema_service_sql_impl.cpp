@@ -9444,10 +9444,10 @@ int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_s
     LOG_WARN("invalid sql_request_level", K(sql_request_level), K(ret));
   } else if (is_reverse_link) { // RM process sql within @! and @xxxx! send by TM
     if (OB_FAIL(session_info->get_dblink_context().get_reverse_link(reverse_link))) {
-      LOG_WARN("failed to get reverse link info", KP(reverse_link), K(session_info->get_sessid()), K(ret));
+      LOG_WARN("failed to get reverse link info", KP(reverse_link), K(session_info->get_server_sid()), K(ret));
     } else if (NULL == reverse_link) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), KP(reverse_link), KP(session_info->get_sessid()));
+      LOG_WARN("unexpected null", K(ret), KP(reverse_link), KP(session_info->get_server_sid()));
     } else {
       LOG_DEBUG("link schema, RM process sql within @! and @xxxx! send by TM", K(*reverse_link));
       conn_type = sql::DblinkGetConnType::TEMP_CONN;

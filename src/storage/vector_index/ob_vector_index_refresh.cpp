@@ -678,7 +678,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     const bool is_support_cancel = true;
     rebuild_index_arg.tenant_id_ = tenant_id;
     rebuild_index_arg.exec_tenant_id_ = tenant_id;
-    rebuild_index_arg.session_id_ = session_info->get_sessid();
+    rebuild_index_arg.session_id_ = session_info->get_server_sid();
     rebuild_index_arg.database_name_ = db_schema->get_database_name_str();
     rebuild_index_arg.table_name_ = base_table_schema->get_table_name_str();
     rebuild_index_arg.index_name_ = domain_table_schema->get_table_name_str();

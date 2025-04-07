@@ -58,7 +58,7 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
   const int64_t buf_len = OB_MAX_SQL_LENGTH;
   char *buf = static_cast<char*>(allocator.alloc(buf_len));
   int64_t pos = 0;
-  const int64_t session_id = my_session.get_sessid();
+  const int64_t session_id = my_session.get_server_sid();
   const int64_t timestamp = ObTimeUtility::current_time();
   obrpc::ObCreateTableArg &create_table_arg = stmt.get_create_table_arg();
   create_table_name = create_table_arg.schema_.get_table_name_str();

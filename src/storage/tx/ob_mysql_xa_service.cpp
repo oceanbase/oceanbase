@@ -32,6 +32,7 @@ namespace transaction
 int ObXAService::xa_start_for_mysql(const ObXATransID &xid,
                                     const int64_t flags,
                                     const uint32_t session_id,
+                                    const uint32_t client_sid,
                                     const ObTxParam &tx_param,
                                     ObTxDesc *&tx_desc)
 {
@@ -44,7 +45,7 @@ int ObXAService::xa_start_for_mysql(const ObXATransID &xid,
   } else if (ObXAFlag::OBTMNOFLAGS != flags) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid flags for mysql xa start", K(ret), K(xid));
-  } else if (OB_FAIL(xa_start_for_mysql_(xid, session_id, tx_param, tx_desc))) {
+  } else if (OB_FAIL(xa_start_for_mysql_(xid, session_id, client_sid, tx_param, tx_desc))) {
     TRANS_LOG(WARN, "mysql xa start failed", K(ret), K(xid));
   } else {
     // do nothing
@@ -59,6 +60,7 @@ int ObXAService::xa_start_for_mysql(const ObXATransID &xid,
 
 int ObXAService::xa_start_for_mysql_(const ObXATransID &xid,
                                      const uint32_t session_id,
+                                     const uint32_t client_sid,
                                      const ObTxParam &tx_param,
                                      ObTxDesc *&tx_desc)
 {
@@ -72,7 +74,7 @@ int ObXAService::xa_start_for_mysql_(const ObXATransID &xid,
     MTL(ObTransService *)->release_tx(*tx_desc);
     tx_desc = NULL;
   }
-  if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id))) {
+  if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id, client_sid))) {
     TRANS_LOG(WARN, "acquire trans failed", K(ret), K(tx_param));
   } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param))) {
     TRANS_LOG(WARN, "start trans failed", K(ret), KPC(tx_desc));

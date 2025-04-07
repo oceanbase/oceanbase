@@ -2309,7 +2309,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
 int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_sessid()));
+  LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_server_sid()));
   if (isopen()) { //如果游标已经打开，需要释放资源
     if (!is_server_cursor()) {
       session.del_non_session_cursor(this);  // delete cursor from cursor map first, then release resource

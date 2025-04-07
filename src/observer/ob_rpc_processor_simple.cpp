@@ -3490,7 +3490,7 @@ int ObClientSessionConnectTimeP::process()
       result_.set_have_kill_auth(false);
     }
     LOG_DEBUG("get connect time rpc", K(session->get_client_create_time()),
-        K(session->get_sessid()), K(session->get_client_sessid()));
+        K(session->get_server_sid()), K(session->get_client_sid()));
   }
   if (NULL != session) {
     gctx_.session_mgr_->revert_session(session);

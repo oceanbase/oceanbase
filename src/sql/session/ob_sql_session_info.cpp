@@ -674,7 +674,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
   if (is_inited_) {
     int ret = OB_SUCCESS;
     if (rpc::is_io_thread()) {
-      LOG_WARN("free session at IO thread", "sessid", get_sessid(), "proxy_sessid", get_proxy_sessid());
+      LOG_WARN("free session at IO thread", "sessid", get_server_sid(), "proxy_sessid", get_proxy_sessid());
       //事务层需要保持在end trans时，既没有阻塞操作，又没有rpc调用。否则会影响server IO性能或产生死锁
     }
 
@@ -690,17 +690,17 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
         bool need_disconnect = false;
         // NOTE: only rollback trans if it is started on this node
         // otherwise the transaction maybe rollbacked by idle session disconnect
-        if (is_in_transaction() && (tx_desc_->get_session_id() == get_sessid())) {
+        if (is_in_transaction() && (tx_desc_->get_session_id() == get_server_sid())) {
           transaction::ObTransID tx_id = get_tx_id();
           MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
           // inner session skip check switch tenant, because the inner connection was shared between tenant
           if (OB_SUCC(guard.switch_to(get_effective_tenant_id(), !is_inner()))) {
             if (OB_FAIL(ObSqlTransControl::rollback_trans(this, need_disconnect))) {
-              LOG_WARN("fail to rollback transaction", K(get_sessid()),
+              LOG_WARN("fail to rollback transaction", K(get_server_sid()),
                        "proxy_sessid", get_proxy_sessid(), K(ret));
             } else if (false == inner_flag_ && false == is_remote_session_) {
               LOG_INFO("end trans successfully",
-                       "sessid", get_sessid(),
+                       "sessid", get_server_sid(),
                        "proxy_sessid", get_proxy_sessid(),
                        "trans id", tx_id);
             }
@@ -747,7 +747,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
 
 #ifdef OB_BUILD_ORACLE_PL
     if (OB_SUCC(ret)) {
-      const int64_t session_id = get_sessid();
+      const int64_t session_id = get_server_sid();
       // utl file should close all fd when user session exits,
       // so we should check session type here to avoid fd closing
       // unexpectedly when inner session exists
@@ -779,10 +779,10 @@ int ObSQLSessionInfo::close_ps_stmt(ObPsStmtId client_stmt_id)
   int ret = OB_SUCCESS;
   ObPsSessionInfo *ps_sess_info = NULL;
   if (OB_FAIL(get_ps_session_info(client_stmt_id, ps_sess_info))) {
-    LOG_WARN("fail to get ps session info", K(client_stmt_id), "session_id", get_sessid(), K(ret));
+    LOG_WARN("fail to get ps session info", K(client_stmt_id), "session_id", get_server_sid(), K(ret));
   } else if (OB_ISNULL(ps_sess_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ps session info is null", K(client_stmt_id), "session_id", get_sessid(), K(ret));
+    LOG_WARN("ps session info is null", K(client_stmt_id), "session_id", get_server_sid(), K(ret));
   } else {
     ObPsStmtId inner_stmt_id = ps_sess_info->get_inner_stmt_id();
     ps_sess_info->dec_ref_count();
@@ -791,14 +791,14 @@ int ObSQLSessionInfo::close_ps_stmt(ObPsStmtId client_stmt_id)
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ps cache is null", K(ret));
       } else if (OB_FAIL(ps_cache_->deref_ps_stmt(inner_stmt_id))) {
-        LOG_WARN("close ps stmt failed", K(ret), "session_id", get_sessid(), K(ret));
+        LOG_WARN("close ps stmt failed", K(ret), "session_id", get_server_sid(), K(ret));
       }
       //无论上面是否成功, 都需要将session info资源释放
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = remove_ps_session_info(client_stmt_id))) {
         ret = tmp_ret;
         LOG_WARN("remove ps session info failed", K(client_stmt_id),
-                  "session_id", get_sessid(), K(ret));
+                  "session_id", get_server_sid(), K(ret));
       }
       LOG_TRACE("close ps stmt", K(ret), K(client_stmt_id), K(inner_stmt_id), K(lbt()));
     }
@@ -1007,7 +1007,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to drop temp tables", K(ret),
-             K(get_effective_tenant_id()), K(get_sessid()),
+             K(get_effective_tenant_id()), K(get_server_sid()),
              K(has_accessed_session_level_temp_table()),
              K(is_xa_trans),
              K(lbt()));
@@ -1319,7 +1319,7 @@ int ObSQLSessionInfo::get_ps_session_info(const ObPsStmtId stmt_id,
     ret = OB_HASH_NOT_EXIST;
     LOG_WARN("map not created before insert any element", K(ret));
   } else if (OB_FAIL(ps_session_info_map_.get_refactored(stmt_id, ps_session_info))) {
-    LOG_WARN("get ps session info failed", K(stmt_id), K(get_sessid()));
+    LOG_WARN("get ps session info failed", K(stmt_id), K(get_server_sid()));
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_EER_UNKNOWN_STMT_HANDLER;
     }
@@ -1334,7 +1334,7 @@ int ObSQLSessionInfo::remove_ps_session_info(const ObPsStmtId stmt_id)
 {
   int ret = OB_SUCCESS;
   ObPsSessionInfo *session_info = NULL;
-  LOG_TRACE("remove ps session info", K(ret), K(stmt_id), K(get_sessid()), K(lbt()));
+  LOG_TRACE("remove ps session info", K(ret), K(stmt_id), K(get_server_sid()), K(lbt()));
   if (OB_UNLIKELY(!ps_session_info_map_.created())) {
     ret = OB_HASH_NOT_EXIST;
     LOG_WARN("map not created before insert any element", K(ret));
@@ -1344,7 +1344,7 @@ int ObSQLSessionInfo::remove_ps_session_info(const ObPsStmtId stmt_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
   } else {
-    LOG_TRACE("remove ps session info", K(ret), K(stmt_id), K(get_sessid()));
+    LOG_TRACE("remove ps session info", K(ret), K(stmt_id), K(get_server_sid()));
     session_info->~ObPsSessionInfo();
     ps_session_info_allocator_.free(session_info);
     session_info = NULL;
@@ -1452,7 +1452,7 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
                                         K(stmt_info->get_ps_stmt_checksum()),
                                         K(client_stmt_id),
                                         K(inner_stmt_id),
-                                        K(get_sessid()),
+                                        K(get_server_sid()),
                                         K(stmt_info->get_num_of_param()),
                                         K(stmt_info->get_num_of_returning_into()));
         }
@@ -1460,7 +1460,7 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
                                         K(stmt_info->get_ps_stmt_checksum()),
                                         K(client_stmt_id),
                                         K(inner_stmt_id),
-                                        K(get_sessid()),
+                                        K(get_server_sid()),
                                         K(stmt_info->get_num_of_param()),
                                         K(stmt_info->get_num_of_returning_into()));
       }
@@ -1471,7 +1471,7 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
           // OB_HASH_EXIST cannot be here, no need to handle
           LOG_WARN("push back ps_session info failed", K(ret), K(client_stmt_id));
         } else {
-          LOG_TRACE("add ps session info success", K(client_stmt_id), K(get_sessid()));
+          LOG_TRACE("add ps session info success", K(client_stmt_id), K(get_server_sid()));
         }
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(session_info)) {
@@ -1498,7 +1498,7 @@ int ObSQLSessionInfo::get_inner_ps_stmt_id(ObPsStmtId cli_stmt_id, ObPsStmtId &i
     LOG_WARN("get inner ps stmt id failed", K(ret), K(cli_stmt_id), K(lbt()));
   } else if (OB_ISNULL(ps_session_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ps session info is null", K(cli_stmt_id), "session_id", get_sessid(), K(ret));
+    LOG_WARN("ps session info is null", K(cli_stmt_id), "session_id", get_server_sid(), K(ret));
   } else {
     inner_stmt_id = ps_session_info->get_inner_stmt_id();
   }
@@ -1509,7 +1509,7 @@ ObPLCursorInfo *ObSQLSessionInfo::get_cursor(int64_t cursor_id)
 {
   ObPLCursorInfo *cursor = NULL;
   if (OB_SUCCESS != pl_cursor_cache_.pl_cursor_map_.get_refactored(cursor_id, cursor)) {
-    LOG_TRACE("get cursor info failed", K(cursor_id), K(get_sessid()));
+    LOG_TRACE("get cursor info failed", K(cursor_id), K(get_server_sid()));
   }
   return cursor;
 }
@@ -1575,7 +1575,7 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
           EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
           EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
         }
-        LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_sessid()));
+        LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_server_sid()));
       }
     }
   }
@@ -1584,7 +1584,7 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
     int tmp_ret = close_cursor(cursor);
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
     if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("close cursor fail when add cursor to sesssion.", K(ret), K(id), K(get_sessid()));
+      LOG_WARN("close cursor fail when add cursor to sesssion.", K(ret), K(id), K(get_server_sid()));
     }
   }
   return ret;
@@ -1599,9 +1599,9 @@ int ObSQLSessionInfo::close_cursor(ObPLCursorInfo *&cursor)
     cursor->~ObPLCursorInfo();
     get_cursor_allocator().free(cursor);
     cursor = NULL;
-    LOG_DEBUG("close cursor", K(ret), K(id), K(get_sessid()));
+    LOG_DEBUG("close cursor", K(ret), K(id), K(get_server_sid()));
   } else {
-    LOG_DEBUG("close cursor is null", K(get_sessid()));
+    LOG_DEBUG("close cursor is null", K(get_server_sid()));
   }
   return ret;
 }
@@ -1610,7 +1610,7 @@ int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
 {
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
-  LOG_INFO("ps cursor : remove cursor", K(ret), K(cursor_id), K(get_sessid()));
+  LOG_INFO("ps cursor : remove cursor", K(ret), K(cursor_id), K(get_server_sid()));
   // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
   // so we need get_thread_data_lock there
   ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
@@ -1620,7 +1620,7 @@ int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
   } else {
-    LOG_DEBUG("close cursor", K(ret), K(cursor_id), K(get_sessid()));
+    LOG_DEBUG("close cursor", K(ret), K(cursor_id), K(get_server_sid()));
     OZ (cursor->close(*this));
     cursor->~ObPLCursorInfo();
     get_cursor_allocator().free(cursor);
@@ -1707,7 +1707,7 @@ int ObSQLSessionInfo::init_cursor_cache()
     OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
                               get_effective_tenant_id(),
                               get_proxy_sessid(),
-                              get_sessid());
+                              get_server_sid());
   }
   return ret;
 }
@@ -1717,7 +1717,7 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   ObDbmsCursorInfo *dbms_cursor = NULL;
-  LOG_INFO("remove dbms cursor", K(ret), K(cursor_id), K(get_sessid()));
+  LOG_INFO("remove dbms cursor", K(ret), K(cursor_id), K(get_server_sid()));
   // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
   // so we need get_thread_data_lock there
   ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
@@ -1763,7 +1763,7 @@ int ObSQLSessionInfo::make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
   void *buf = NULL;
   if (!pl_cursor_cache_.is_inited()) {
     OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
-        get_effective_tenant_id(), get_proxy_sessid(), get_sessid());
+        get_effective_tenant_id(), get_proxy_sessid(), get_server_sid());
   }
   OV (OB_NOT_NULL(buf = get_cursor_allocator().alloc(sizeof(ObDbmsCursorInfo))),
       OB_ALLOCATE_MEMORY_FAILED, sizeof(ObDbmsCursorInfo));
@@ -2000,7 +2000,7 @@ int ObSQLSessionInfo::name_case_cmp(
 
 int ObSQLSessionInfo::kill_query()
 {
-  LOG_INFO("kill query", K(get_sessid()), K(get_proxy_sessid()), K(get_current_query_string()));
+  LOG_INFO("kill query", K(get_server_sid()), K(get_proxy_sessid()), K(get_current_query_string()));
   ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   update_last_active_time();
   set_session_state(QUERY_KILLED);
@@ -2009,7 +2009,7 @@ int ObSQLSessionInfo::kill_query()
 
 int ObSQLSessionInfo::set_query_deadlocked()
 {
-  LOG_INFO("set query deadlocked", K(get_sessid()), K(get_proxy_sessid()), K(get_current_query_string()));
+  LOG_INFO("set query deadlocked", K(get_server_sid()), K(get_proxy_sessid()), K(get_current_query_string()));
   ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   update_last_active_time();
   set_session_state(QUERY_DEADLOCKED);
@@ -2022,7 +2022,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   int ret = OB_SUCCESS;
   audit_record_.trace_id_ = *ObCurTraceId::get_trace_id();
   audit_record_.request_type_ = mode;
-  audit_record_.session_id_ = get_sessid();
+  audit_record_.session_id_ = get_sid();
   audit_record_.proxy_session_id_ = get_proxy_sessid();
   // sql audit don't distinguish between two tenant IDs
   audit_record_.tenant_id_ = get_effective_tenant_id();
@@ -2133,7 +2133,7 @@ void ObSQLSessionInfo::set_early_lock_release(bool enable)
   enable_early_lock_release_ = enable;
   if (enable) {
     SQL_SESSION_LOG(DEBUG, "set early lock release success",
-        "sessid", get_sessid(), "proxy_sessid", get_proxy_sessid());
+        "sessid", get_server_sid(), "proxy_sessid", get_proxy_sessid());
   }
 }
 
@@ -3513,7 +3513,7 @@ int ObErrorSyncSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
   } else {
     LOG_TRACE("success serialize sys var delta", K(ret), K(sys_var_delta_ids),
               "inc sys var ids", sess.sys_var_inc_info_.get_all_sys_var_ids(),
-              K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+              K(sess.get_server_sid()), K(sess.get_proxy_sessid()));
   }
   return ret;
 }
@@ -3661,7 +3661,7 @@ int ObSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
   } else {
     LOG_TRACE("success serialize sys var delta", K(ret), K(sys_var_delta_ids),
               "inc sys var ids", sess.sys_var_inc_info_.get_all_sys_var_ids(),
-              K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+              K(sess.get_server_sid()), K(sess.get_proxy_sessid()));
   }
   return ret;
 }
@@ -4628,7 +4628,7 @@ int ObControlInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int
   } else if (OB_FAIL(ObProtoTransUtil::store_int1(buf, buf_len, pos, sess.is_coninfo_set_by_sess(), CONINFO_BY_SESS))) {
     LOG_WARN("failed to store control info set by sess", K(sess.is_coninfo_set_by_sess()), K(pos));
   } else {
-    LOG_TRACE("serialize control info", K(sess.get_sessid()), K(sess.get_control_info()));
+    LOG_TRACE("serialize control info", K(sess.get_server_sid()), K(sess.get_control_info()));
   }
   return ret;
 }
@@ -4665,7 +4665,7 @@ int ObControlInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, c
       sess.get_control_info_encoder().is_changed_ = false;
     }
 
-    LOG_TRACE("deserialize control info", K(sess.get_sessid()), K(sess.get_control_info()));
+    LOG_TRACE("deserialize control info", K(sess.get_server_sid()), K(sess.get_control_info()));
   }
   return ret;
 }
@@ -4809,11 +4809,11 @@ int64_t ObSQLSessionInfo::get_xa_end_timeout_seconds() const
         LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid xa timeout", K(tmp_val));
       } else {
         ret_val = tmp_val;
-        LOG_INFO("get xa timeout from user variable", K(ret_val), "session_id", get_sessid());
+        LOG_INFO("get xa timeout from user variable", K(ret_val), "session_id", get_server_sid());
       }
     } else {
       ret_val = xa_end_timeout_seconds_;
-      LOG_INFO("get xa timeout from local", K(ret_val), "session_id", get_sessid());
+      LOG_INFO("get xa timeout from local", K(ret_val), "session_id", get_server_sid());
     }
   } else {
     ret_val = xa_end_timeout_seconds_;
@@ -4845,7 +4845,7 @@ int ObSQLSessionInfo::set_xa_end_timeout_seconds(int64_t seconds)
         if (OB_FAIL(replace_user_variable(xa_timeout_var, sess_var))) {
           LOG_WARN("failed to set variable xa timeout", K(ret), K(seconds));
         } else {
-          LOG_INFO("set xa timeout in session", K(seconds), "session_id", get_sessid());
+          LOG_INFO("set xa timeout in session", K(seconds), "session_id", get_server_sid());
         }
       }
     } else {

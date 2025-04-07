@@ -218,11 +218,11 @@ int ObMPChangeUser::process()
     } else {
       session->clean_status();
       if (OB_FAIL(load_login_info(session))) {
-        OB_LOG(WARN,"load log info failed", K(ret),K(session->get_sessid()));
+        OB_LOG(WARN,"load log info failed", K(ret),K(session->get_server_sid()));
       } else if (need_send_auth_switch) {
         // do nothing
       } else if (OB_FAIL(load_privilege_info_for_change_user(session))) {
-        OB_LOG(WARN,"load privilige info failed", K(ret),K(session->get_sessid()));
+        OB_LOG(WARN,"load privilige info failed", K(ret),K(session->get_server_sid()));
       } else {
         if (is_proxy_mod) {
           if (!sys_vars_.empty()) {

@@ -35,6 +35,7 @@ ObDISessionCollect::~ObDISessionCollect()
 void ObDISessionCollect::clean()
 {
   session_id_ = 0;
+  client_sid_ = INVALID_SESSID;
   base_value_.reset();
 }
 

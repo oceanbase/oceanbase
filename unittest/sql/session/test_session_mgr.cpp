@@ -76,7 +76,7 @@ TEST_F(DISABLED_TestSessionMgr, test_create)
     conn_.proxy_sessid_ = i * 10;
     EXPECT_EQ(OB_SUCCESS, mgr_.create_session(&conn_, sess_info));
     EXPECT_TRUE(sess_info);
-    EXPECT_EQ(i, sess_info->get_sessid());
+    EXPECT_EQ(i, sess_info->get_server_sid());
     EXPECT_EQ(i * 10, sess_info->get_proxy_sessid());
     EXPECT_EQ(SESSION_INIT, sess_info->get_session_state());
     mgr_.revert_session(sess_info);
@@ -85,7 +85,7 @@ TEST_F(DISABLED_TestSessionMgr, test_create)
   for (uint32_t i = 1; i < SESSION_COUNT; ++i) {
     EXPECT_EQ(OB_SUCCESS, mgr_.get_session(i, sess_info));
     EXPECT_TRUE(sess_info);
-    EXPECT_EQ(i, sess_info->get_sessid());
+    EXPECT_EQ(i, sess_info->get_server_sid());
     EXPECT_EQ(i * 10, sess_info->get_proxy_sessid());
     EXPECT_EQ(SESSION_INIT, sess_info->get_session_state());
     mgr_.revert_session(sess_info);
@@ -135,7 +135,7 @@ TEST_F(DISABLED_TestSessionMgr, test_version)
     EXPECT_EQ(OB_SUCCESS, mgr_.create_session(&conn_, sess_info));
     EXPECT_TRUE(sess_info);
     EXPECT_EQ(SESSION_INIT, sess_info->get_session_state());
-    EXPECT_EQ(SESS_ID, sess_info->get_sessid());
+    EXPECT_EQ(SESS_ID, sess_info->get_server_sid());
     EXPECT_EQ(SESS_ID * 10, sess_info->get_proxy_sessid());
     sess_info->set_shadow(true);
     mgr_.revert_session(sess_info);
@@ -143,7 +143,7 @@ TEST_F(DISABLED_TestSessionMgr, test_version)
 
   for (uint32_t i = 0; i < 100; ++i) {
     EXPECT_EQ(OB_SUCCESS, mgr_.get_session(SESS_ID, sess_info));
-    EXPECT_EQ(SESS_ID, sess_info->get_sessid());
+    EXPECT_EQ(SESS_ID, sess_info->get_server_sid());
     EXPECT_EQ(SESS_ID * 10, sess_info->get_proxy_sessid());
     EXPECT_EQ(true, sess_info->is_shadow());
     mgr_.revert_session(sess_info);
@@ -184,7 +184,7 @@ public:
         EXPECT_EQ(true, OB_SUCCESS == err || OB_SESSION_ENTRY_EXIST == err);
         if (OB_SUCCESS == err) {
           ATOMIC_AAF(&create_num, 1);
-          EXPECT_EQ(id, sess_info->get_sessid());
+          EXPECT_EQ(id, sess_info->get_server_sid());
           EXPECT_EQ(id + 1, sess_info->get_proxy_sessid());
           // ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
           // sess_info->set_query_start_time(id);

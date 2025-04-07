@@ -633,12 +633,12 @@ int ObLockFuncExecutor::query_lock_owner_(const uint64_t &lock_id,
 void ObLockFuncExecutor::mark_lock_session_(sql::ObSQLSessionInfo *session, const bool is_lock_session)
 {
   if (session->is_lock_session() != is_lock_session) {
-    LOG_INFO("mark lock_session", K(session->get_sessid()), K(is_lock_session));
+    LOG_INFO("mark lock_session", K(session->get_server_sid()), K(is_lock_session));
     session->set_is_lock_session(is_lock_session);
     session->set_need_send_feedback_proxy_info(true);
   } else {
     LOG_DEBUG("the lock_session status on the session won't be changed, no need to mark again",
-              K(session->get_sessid()),
+              K(session->get_server_sid()),
               K(session->is_lock_session()),
               K(session->is_need_send_feedback_proxy_info()));
   }
@@ -677,8 +677,8 @@ int ObGetLockExecutor::execute(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = ctx.get_my_session();
-  uint32_t client_session_id = sess->get_client_sessid();
-  uint32_t server_session_id = sess->get_sessid();
+  uint32_t client_session_id = sess->get_client_sid();
+  uint32_t server_session_id = sess->get_server_sid();
   uint64_t client_session_create_ts = sess->get_client_create_time();
   uint64_t lock_id = 0;
   bool is_rollback = false;
@@ -904,9 +904,9 @@ int ObGetLockExecutor::check_need_reroute_(ObLockFuncContext &ctx,
       } else if (OB_SUCCESS == ret) {
         OV (lock_session_addr == GCTX.self_addr(), OB_ERR_PROXY_REROUTE, lock_session_addr, GCTX.self_addr());
         // can not reroute in one observer, so just return OB_SUCCESS
-        OV (lock_session_id == session->get_sessid(), OB_SUCCESS, lock_session_id, session->get_sessid());
+        OV (lock_session_id == session->get_server_sid(), OB_SUCCESS, lock_session_id, session->get_server_sid());
         // to avoid this session wasn't marked as lock_session before
-        if (lock_session_addr == GCTX.self_addr() && lock_session_id == session->get_sessid()) {
+        if (lock_session_addr == GCTX.self_addr() && lock_session_id == session->get_server_sid()) {
           mark_lock_session_(session, true);
         }
       }
@@ -1029,7 +1029,7 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
   OZ (ObLockFuncContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
     SMART_VAR(ObLockFuncContext, stack_ctx) {
-      client_session_id = ctx.get_my_session()->get_client_sessid();
+      client_session_id = ctx.get_my_session()->get_client_sid();
       client_session_create_ts = ctx.get_my_session()->get_client_create_time();
       OZ (stack_ctx.init(ctx));
       if (OB_SUCC(ret)) {
@@ -1109,7 +1109,7 @@ int ObReleaseAllLockExecutor::execute(ObExecContext &ctx,
   uint64_t client_session_create_ts = 0;
   bool is_rollback = false;
   OZ (ObLockFuncContext::valid_execute_context(ctx));
-  OX (client_session_id = ctx.get_my_session()->get_client_sessid());
+  OX (client_session_id = ctx.get_my_session()->get_client_sid());
   OX (client_session_create_ts = ctx.get_my_session()->get_client_create_time());
   OZ (execute_(ctx, client_session_id, client_session_create_ts, release_cnt));
   return ret;

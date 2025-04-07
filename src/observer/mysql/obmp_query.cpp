@@ -133,7 +133,7 @@ int ObMPQuery::process()
         //session has been killed some moment ago
         ret = OB_ERR_SESSION_INTERRUPTED;
         LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
-                 K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+                 K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
       } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, sql_))) {
         // 注意，retry info和last query trace id的逻辑要写在query lock内，否则会有并发问题
         LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K_(sql));
@@ -178,7 +178,7 @@ int ObMPQuery::process()
                       client_info, session.get_client_info(),
                       module_name, session.get_module_name(),
                       action_name, session.get_action_name(),
-                      sess_id, session.get_sessid());
+                      sess_id, session.get_server_sid());
         }
 
         THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
@@ -204,7 +204,7 @@ int ObMPQuery::process()
           } else {
             session.set_app_trace_id(pre_parse_result.trace_id_);
             LOG_DEBUG("app trace id", "app_trace_id", pre_parse_result.trace_id_,
-                                      "sessid", session.get_sessid(), K_(sql));
+                                      "sessid", session.get_server_sid(), K_(sql));
           }
         }
 
@@ -785,7 +785,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
     if (OB_SUCCESS != tmp_ret) {
       LOG_INFO("query info:", K(sql_),
-               "sess_id", session.get_sessid(),
+               "sess_id", session.get_server_sid(),
                "database_id", session.get_database_id(),
                "database_name", session.get_database_name(),
                "trans_id", audit_record.trans_id_);
@@ -1130,7 +1130,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         LOG_INFO("query info:", K(sql_),
-              "sess_id", result.get_session().get_sessid(),
+              "sess_id", result.get_session().get_server_sid(),
               "database_id", result.get_session().get_database_id(),
               "database_name", result.get_session().get_database_name(),
               "trans_id", audit_record.trans_id_);

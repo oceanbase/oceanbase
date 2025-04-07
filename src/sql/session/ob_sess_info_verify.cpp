@@ -52,7 +52,7 @@ int ObSessInfoVerify::sync_sess_info_veri(sql::ObSQLSessionInfo &sess,
   const char *end = buf + len;
   int64_t pos = 0;
   LOG_DEBUG("start sync proxy sess info verification", K(sess.get_is_in_retry()),
-            K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
+            K(sess.get_server_sid()), KP(data), K(len), KPHEX(data, len));
 
   // decode sess_info
   if (NULL != sess_info_veri.ptr() && !sess.get_is_in_retry()) {
@@ -60,7 +60,7 @@ int ObSessInfoVerify::sync_sess_info_veri(sql::ObSQLSessionInfo &sess,
       int16_t extra_id = 0;
       int32_t info_len = 0;
       char *sess_buf = NULL;
-      LOG_DEBUG("sync field sess_inf", K(sess.get_sessid()),
+      LOG_DEBUG("sync field sess_inf", K(sess.get_server_sid()),
                 KP(data), K(pos), K(len), KPHEX(data+pos, len-pos));
       if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, extra_id, info_len))) {
         LOG_WARN("failed to resolve type and len", K(ret), K(len), K(pos));
@@ -81,7 +81,7 @@ int ObSessInfoVerify::sync_sess_info_veri(sql::ObSQLSessionInfo &sess,
       }
     }
     LOG_DEBUG("success to get sess info verification requied by proxy",
-              K(sess_info_verification), K(sess.get_sessid()),
+              K(sess_info_verification), K(sess.get_server_sid()),
               K(sess.get_proxy_sessid()));
   }
 
@@ -144,7 +144,7 @@ int ObSessInfoVerify::verify_session_info(sql::ObSQLSessionInfo &sess,
           ret = OB_SUCCESS;
         } else if (OB_FAIL(ObSessInfoVerify::compare_verify_session_info(sess,
                             current_verify_info, value_buffer))) {
-          LOG_ERROR("session info self-verification failed", K(ret), K(sess.get_sessid()),
+          LOG_ERROR("session info self-verification failed", K(ret), K(sess.get_server_sid()),
                   K(sess.get_proxy_sessid()), K(sess_info_verification));
         } else {
           LOG_DEBUG("session info self-verification success", K(ret));
@@ -152,11 +152,11 @@ int ObSessInfoVerify::verify_session_info(sql::ObSQLSessionInfo &sess,
       } else {
         LOG_DEBUG("session info no need self-verification", K(ret));
       }
-      LOG_DEBUG("verify end", K(sess.get_sessid()),
+      LOG_DEBUG("verify end", K(sess.get_server_sid()),
           K(sess.get_proxy_sessid()), K(sess_info_verification));
     }
   } else {
-    LOG_TRACE("verify version not consistent, no need self-verification", K(sess.get_sessid()),
+    LOG_TRACE("verify version not consistent, no need self-verification", K(sess.get_server_sid()),
           K(sess.get_proxy_sessid()), K(GET_MIN_CLUSTER_VERSION()), K(CLUSTER_CURRENT_VERSION));
   }
 
@@ -215,7 +215,7 @@ int ObSessInfoVerify::compare_verify_session_info(sql::ObSQLSessionInfo &sess,
       } else if (OB_FAIL(encoder->compare_sess_info(sess, buf1 + pos1, info_len1,
                                   buf2 + pos2, info_len2))) {
         LOG_ERROR("fail to compare session info", K(ret),
-                    K(sess.get_sessid()),
+                    K(sess.get_server_sid()),
                   K(sess.get_proxy_sessid()),
                   "info_type", info_type1);
         int temp_ret = ret;
@@ -531,13 +531,13 @@ bool GetAnotherSessID::operator()(ObSQLSessionMgr::Key key,
   int ret = OB_SUCCESS;
   UNUSED(key);
   LOG_TRACE("current session info", K(sess_info->get_proxy_sessid()),
-    K(sess_info->get_sessid()), K(sess_id_), K(proxy_sess_id_));
+    K(sess_info->get_server_sid()), K(sess_id_), K(proxy_sess_id_));
   if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", KR(ret));
   } else if (sess_info->get_proxy_sessid() == proxy_sess_id_ &&
-            sess_info->get_sessid() != sess_id_) {
-    sess_id_ = sess_info->get_sessid();
+            sess_info->get_server_sid() != sess_id_) {
+    sess_id_ = sess_info->get_server_sid();
     LOG_TRACE("find another session id", K(sess_id_));
   } else {
     LOG_INFO("not find another session id", K(sess_id_));

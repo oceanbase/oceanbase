@@ -162,7 +162,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
         switch(col_id) {
           case ID: {
             cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(
-                                  sess_info->get_compatibility_sessid()));
+                                  sess_info->get_sid()));
             break;
           }
           case USER: {

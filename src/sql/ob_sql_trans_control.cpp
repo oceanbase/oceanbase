@@ -169,7 +169,7 @@ int ObSqlTransControl::explicit_start_trans(ObSQLSessionInfo *session,
   }
 
   OZ (build_tx_param_(session, tx_param, &read_only));
-  OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid(), session->get_data_version()));
+  OZ (txs->acquire_tx(session->get_tx_desc(), session->get_server_sid(), session->get_sid(), session->get_data_version()));
   OZ (txs->start_tx(*session->get_tx_desc(), tx_param), tx_param);
   OX (tx_id = session->get_tx_desc()->get_tx_id());
 
@@ -187,7 +187,7 @@ int ObSqlTransControl::explicit_start_trans(ObSQLSessionInfo *session,
 
   if (hint.length()) {
     LOG_INFO("explicit start trans with hint", "trans_id", tx_id,
-             K(ret), K(hint), K(read_only), "session_id", (session ? session->get_sessid() : 0));
+             K(ret), K(hint), K(read_only), "session_id", (session ? session->get_server_sid() : 0));
   }
 #ifndef NDEBUG
   LOG_INFO("start_trans", K(ret), K(tx_id), KPC(session), K(read_only));
@@ -311,7 +311,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
   if (is_explicit && hint.length()) {
     LOG_INFO("explicit end trans with hint",
              "trans_id", tx_id, "action", (is_rollback ? "ROLLBACK" : "COMMIT"),
-             K(ret), K(hint), "session_id", session->get_sessid());
+             K(ret), K(hint), "session_id", session->get_server_sid());
   }
   FLT_SET_TAG(trans_id, tx_id);
   return ret;
@@ -374,7 +374,7 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
 {
   int ret = OB_SUCCESS;
   if (!session->get_is_deserialized() && session->is_in_transaction()) {
-    uint32_t session_id = session->get_sessid();
+    uint32_t session_id = session->get_server_sid();
     if (cause >= 0) {
       LOG_INFO("begin to kill tx", "caused_by", ObTxAbortCauseNames::of(cause), K(cause), K(session_id), KPC(session));
     } else {
@@ -625,7 +625,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
   bool start_hook = false;
   if (!ObSQLUtils::is_nested_sql(&exec_ctx)) {
-    OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid(), get_real_session_id(*session)));
+    OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_server_sid(), get_real_session_id(*session)));
     if (OB_SUCC(ret)) {
       start_hook = true;
       OX (session->get_tx_desc()->clear_interrupt());
@@ -636,7 +636,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   bool is_plain_select = false;
   int64_t nested_level = 0;
   OX (nested_level = exec_ctx.get_nested_level());
-  OX (session_id = session->get_sessid());
+  OX (session_id = session->get_server_sid());
   OX (tx_desc = session->get_tx_desc());
   OX (is_plain_select = plan->is_plain_select());
   OX (tx_desc->clear_interrupt());
@@ -747,7 +747,7 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
     } else {
       ObIArray<uint64_t> &dblink_ids = plan_ctx->get_dblink_ids();
       tenant_id = session->get_effective_tenant_id();
-      sessid = session->get_sessid();
+      sessid = session->get_server_sid();
       for(int64_t i = 0; OB_SUCC(ret) && i < dblink_ids.count(); ++i) {
         uint64_t dblink_id = dblink_ids.at(i);
         const ObDbLinkSchema *dblink_schema = NULL;
@@ -1174,7 +1174,7 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
 
 uint32_t ObSqlTransControl::get_real_session_id(ObSQLSessionInfo &session)
 {
-  return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_sessid());
+  return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_server_sid());
 }
 
 int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid, bool &is_single_tablet)
@@ -1266,7 +1266,7 @@ int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   if (!session.get_tx_desc()->is_shadow() && !session.has_start_stmt() &&
-      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_sessid(), get_real_session_id(session)))) {
+      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_server_sid(), get_real_session_id(session)))) {
     start_hook = true;
   }
   return ret;
@@ -1433,7 +1433,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
       OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
     }
     ObTxExecResult &tx_result = session->get_trans_result();
-    if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
+    if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_server_sid()) tx_result.is_incomplete()) {
       if (!rollback) {
         LOG_ERROR("trans result incomplete, but rollback not issued");
       }
@@ -1692,7 +1692,9 @@ int ObSqlTransControl::acquire_tx_if_need_(ObTransService *txs, ObSQLSessionInfo
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session.get_tx_desc())) {
-    OZ (txs->acquire_tx(session.get_tx_desc(), session.get_sessid(), session.get_data_version()), session);
+    OZ(txs->acquire_tx(session.get_tx_desc(), session.get_server_sid(),
+                       session.get_sid(), session.get_data_version()),
+       session);
   }
   return ret;
 }
@@ -1714,7 +1716,9 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   OZ (get_tx_service(session, txs));
   OZ (get_lock_service(session->get_effective_tenant_id(), lock_service));
   if (OB_SUCC(ret) && OB_ISNULL(session->get_tx_desc())) {
-    OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid(), session->get_data_version()), *session);
+    OZ(txs->acquire_tx(session->get_tx_desc(), session->get_server_sid(),
+                       session->get_sid(), session->get_data_version()),
+       *session);
   }
   ObTxParam tx_param;
   OZ (build_tx_param_(session, tx_param));
@@ -1843,7 +1847,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     bool has_tx_desc = OB_NOT_NULL(tx_desc);                            \
     ObTransID prev_tx_id;                                               \
     if (has_tx_desc) { prev_tx_id =  session.get_tx_id(); }             \
-    OZ (txs->txn_free_route__update_##name##_state(session.get_sessid(), tx_desc, session.get_txn_free_route_ctx(), buf, len, pos, session.get_data_version()), session); \
+    OZ (txs->txn_free_route__update_##name##_state(session.get_server_sid(), session.get_sid(), tx_desc, session.get_txn_free_route_ctx(), buf, len, pos, session.get_data_version()), session); \
     if (OB_SUCC(ret) && has_tx_desc && (OB_ISNULL(tx_desc) || tx_desc->get_tx_id() !=  prev_tx_id)) { \
       session.reset_tx_variable();                                      \
     }                                                                   \
@@ -1861,7 +1865,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     MTL_SWITCH(session.get_effective_tenant_id()) {                     \
       ObTransService *txs = NULL;                                       \
       OZ (get_tx_service(&session, txs));                               \
-      OZ (txs->txn_free_route__serialize_##name##_state(session.get_sessid(), session.get_tx_desc(), session.get_txn_free_route_ctx(), buf, len, pos)); \
+      OZ (txs->txn_free_route__serialize_##name##_state(session.get_server_sid(), session.get_tx_desc(), session.get_txn_free_route_ctx(), buf, len, pos)); \
     }                                                                   \
     LOG_DEBUG("serialize-txn-state", K(session));                       \
     return ret;                                                         \
@@ -1922,7 +1926,7 @@ int ObSqlTransControl::check_free_route_tx_alive(ObSQLSessionInfo &session, ObTx
     MTL_SWITCH(tx->get_tenant_id()) {
       ObTransService *txs = MTL(ObTransService*);
       CK (OB_NOT_NULL(txs));
-      OZ (txs->tx_free_route_check_alive(txn_free_route_ctx, *tx, session.get_sessid()));
+      OZ (txs->tx_free_route_check_alive(txn_free_route_ctx, *tx, session.get_server_sid()));
     }
   }
   return ret;

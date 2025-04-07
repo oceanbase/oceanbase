@@ -965,6 +965,7 @@ int ObPxTaskProcess::OpPostparation::reset(ObOpSpec &op)
 
 uint64_t ObPxTaskProcess::get_session_id() const
 {
+  int ret = OB_SUCCESS;
   uint64_t session_id = 0;
   ObExecContext *exec_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
@@ -973,7 +974,7 @@ uint64_t ObPxTaskProcess::get_session_id() const
   } else if (OB_ISNULL(session = exec_ctx->get_my_session())) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is NULL", K(exec_ctx));
   } else {
-    session_id = session->get_sessid();
+    session_id = session->get_sid();
   }
   return session_id;
 }

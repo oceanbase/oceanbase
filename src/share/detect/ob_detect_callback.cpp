@@ -329,7 +329,7 @@ int ObRemoteSqlDetectCB::do_callback()
   if (OB_NOT_NULL(session_mgr)) {
     ret = session_mgr->kill_session(*session_);
   }
-  LIB_LOG(WARN, "[DM] Remote Sql kill session", K(ret), K(session_->get_sessid()), K_(trace_id));
+  LIB_LOG(WARN, "[DM] Remote Sql kill session", K(ret), K(session_->get_server_sid()), K_(trace_id));
   return ret;
 }
 

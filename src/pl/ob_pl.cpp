@@ -2523,7 +2523,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
 
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;
-    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_server_sid() : 0;
     pc_ctx.key_.mode_ = ctx.get_my_session()->get_pl_profiler() != nullptr
                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
@@ -2681,7 +2681,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PRCR;
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.key_id_ = routine_id;
-    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_server_sid() : 0;
     pc_ctx.key_.mode_ =  ctx.get_my_session()->get_pl_profiler() != nullptr
                            ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 

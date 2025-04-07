@@ -713,7 +713,7 @@ int ObMViewRefresher::calc_mv_refresh_parallelism(int64_t explict_parallelism,
   }
 
   LOG_INFO("calc mv refresh parallelism", KR(ret), K(explict_parallelism), K(session_parallelism),
-           K(final_parallelism), K(session_info->get_sessid()));
+           K(final_parallelism), K(session_info->get_server_sid()));
 
   return ret;
 }

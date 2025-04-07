@@ -642,21 +642,21 @@ int ObMPBase::process_kill_client_session(sql::ObSQLSessionInfo &session, bool i
   } else if (OB_UNLIKELY(session.is_mark_killed())) {
     ret = OB_ERR_KILL_CLIENT_SESSION;
     LOG_WARN("client session need be killed", K(session.get_session_state()),
-            K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-            K(session.get_client_sessid()), K(ret));
+            K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(),
+            K(session.get_client_sid()), K(ret));
   } else if (is_connect) {
     if (OB_UNLIKELY(OB_HASH_NOT_EXIST != (gctx_.session_mgr_->get_kill_client_sess_map().
-              get_refactored(session.get_client_sessid(), create_time)))) {
+              get_refactored(session.get_client_sid(), create_time)))) {
       if (session.get_client_create_time() == create_time) {
         ret = OB_ERR_KILL_CLIENT_SESSION;
         LOG_WARN("client session need be killed", K(session.get_session_state()),
-                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-                K(session.get_client_sessid()), K(ret),K(create_time));
+                K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(),
+                K(session.get_client_sid()), K(ret),K(create_time));
       } else {
         LOG_DEBUG("client session is created later", K(create_time),
                 K(session.get_client_create_time()),
-                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-                K(session.get_client_sessid()));
+                K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(),
+                K(session.get_client_sid()));
       }
     }
   } else {

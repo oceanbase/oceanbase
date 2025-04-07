@@ -35,7 +35,7 @@ int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &alloc
 
   if (sess.is_need_send_feedback_proxy_info()) {
     len = get_serialize_size_(sess);
-    LOG_DEBUG("begin to feedback proxy info", K(sess.get_sessid()), K(len));
+    LOG_DEBUG("begin to feedback proxy info", K(sess.get_server_sid()), K(len));
     if (len == 0) {
       // no new feedback_proxy_info needs to be sent, do nothing
     } else if (OB_UNLIKELY(len < 0 || len > MAX_FEEDBACK_INFO_LENGTH)) {
@@ -56,7 +56,7 @@ int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &alloc
       LOG_WARN("failed to add extra info kv", K(ret), K(fb_proxy_info_ecd));
     } else {
       LOG_INFO("append_feedback_proxy_info successfully",
-                K(sess.get_sessid()),
+                K(sess.get_server_sid()),
                 K(ObHexStringWrap(fb_proxy_info_ecd->feedback_proxy_info_)),
                 K(len),
                 K(pos));

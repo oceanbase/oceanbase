@@ -61,7 +61,7 @@ int ObCompileRoutineInf::compile_routine(ObExecContext &ctx,
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PRCR;
     pc_ctx.key_.db_id_ = db_id;
     pc_ctx.key_.key_id_ = routine_info->get_routine_id();
-    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_server_sid() : 0;
     CK (OB_NOT_NULL(ctx.get_pl_engine()));
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {

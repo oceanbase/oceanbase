@@ -183,6 +183,7 @@ public:
   int init(const uint64_t tenant_id,
            const common::ObAddr &scheduler,
            const uint32_t session_id,
+           const uint32_t client_sid,
            const uint32_t associated_session_id,
            const ObTransID &trans_id,
            const int64_t trans_expired_time,
@@ -271,6 +272,7 @@ public:
 
   share::ObLSID get_ls_id() const { return ls_id_; }
   uint32_t get_session_id() const { return session_id_; }
+  uint32_t get_client_sid() const { return client_sid_; }
 
   // for elr
   bool is_can_elr() const { return can_elr_; }

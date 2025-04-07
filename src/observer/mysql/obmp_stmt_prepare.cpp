@@ -185,7 +185,7 @@ int ObMPStmtPrepare::process()
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
       LOG_WARN("fail to get query timeout", K_(sql), K(ret));
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
@@ -222,7 +222,7 @@ int ObMPStmtPrepare::process()
                       client_info, session.get_client_info(),
                       module_name, session.get_module_name(),
                       action_name, session.get_action_name(),
-                      sess_id, session.get_sessid());
+                      sess_id, session.get_server_sid());
       }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);

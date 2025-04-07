@@ -37,7 +37,7 @@ int ObCompilePackageInf::compile_package(sql::ObExecContext &ctx,
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
   CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
-  OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_sessid()));
+  OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_server_sid()));
   OZ (schema_checker.get_package_info(tenant_id, db_name, package_name, type, compatible_mode, package_info));
   CK (OB_NOT_NULL(package_info));
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));

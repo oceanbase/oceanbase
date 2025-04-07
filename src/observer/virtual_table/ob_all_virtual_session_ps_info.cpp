@@ -109,6 +109,10 @@ int ObAllVirtualSessionPsInfo::inner_open()
       SERVER_LOG(WARN, "GCTX.session_mgr_ is NULL", K(ret));
     } else if (OB_FAIL(GCTX.session_mgr_->for_each_session(all_sql_session_iterator_))) {
       SERVER_LOG(WARN, "failed to read each session", K(ret));
+    } else {
+      int64_t cnt = 0;
+      GCTX.session_mgr_->get_session_count(cnt);
+      SERVER_LOG(WARN, "all virtual ssinfo get_session_count", K(cnt));
     }
   }
 
@@ -180,7 +184,7 @@ int ObAllVirtualSessionPsInfo::fill_cells(uint64_t tenant_id,
           break;
         }
         case share::ALL_VIRTUAL_SESSION_PS_INFO_CDE::SESSION_ID: {
-          cells[i].set_uint64(cur_session_info_->get_sessid());
+          cells[i].set_uint64(cur_session_info_->get_sid());
           break;
         }
         case share::ALL_VIRTUAL_SESSION_PS_INFO_CDE::PS_CLIENT_STMT_ID: {
@@ -337,9 +341,9 @@ bool ObAllVirtualSessionPsInfo::ObTenantSessionInfoIterator::operator()(
           const_cast<ObArray<SessionID> *>(
               tenant_session_id_map_.get(sess_info->get_priv_tenant_id()));
       if (OB_ISNULL(session_id_list)) {
-      } else if (OB_FAIL(session_id_list->push_back(sess_info->get_sessid()))) {
+      } else if (OB_FAIL(session_id_list->push_back(sess_info->get_server_sid()))) {
         SERVER_LOG(WARN, "failed to push session id into session_id_list", K(ret),
-               K(sess_info->get_sessid()));
+               K(sess_info->get_sid()));
       }
     }
   }

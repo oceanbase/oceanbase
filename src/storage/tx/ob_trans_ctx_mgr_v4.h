@@ -101,6 +101,7 @@ struct ObTxCreateArg
                 const uint64_t cluster_id,
                 const uint64_t cluster_version,
                 const uint32_t session_id,
+                const uint32_t client_sid,
                 const uint32_t associated_session_id,
                 const common::ObAddr &scheduler,
                 const int64_t trans_expired_time,
@@ -116,6 +117,7 @@ struct ObTxCreateArg
         cluster_id_(cluster_id),
         cluster_version_(cluster_version),
         session_id_(session_id),
+        client_sid_(client_sid),
         associated_session_id_(associated_session_id),
         scheduler_(scheduler),
         trans_expired_time_(trans_expired_time),
@@ -133,7 +135,7 @@ struct ObTxCreateArg
   TO_STRING_KV(K_(for_replay), "ctx_source", to_str_ctx_source(ctx_source_),
                  K_(tenant_id), K_(tx_id),
                  K_(ls_id), K_(cluster_id), K_(cluster_version),
-                 K_(session_id), K_(associated_session_id),
+                 K_(session_id),K_(client_sid), K_(associated_session_id),
                  K_(scheduler), K_(trans_expired_time), KP_(trans_service),
                  K_(epoch), K_(xid));
   bool for_replay_;
@@ -144,6 +146,7 @@ struct ObTxCreateArg
   uint64_t cluster_id_;
   uint64_t cluster_version_;
   uint32_t session_id_;
+  uint32_t client_sid_;
   uint32_t associated_session_id_;
   const common::ObAddr &scheduler_;
   int64_t trans_expired_time_;

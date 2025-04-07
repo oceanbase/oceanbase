@@ -222,7 +222,7 @@ int ObRemoteSequenceExecutor::init_dblink_connection(ObExecContext &ctx)
   } else if (OB_ISNULL(my_session) || OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("my_session or plan_ctx is NULL", K(my_session), K(plan_ctx), K(ret));
-  } else if (FALSE_IT(sessid_ = my_session->get_sessid())) {
+  } else if (FALSE_IT(sessid_ = my_session->get_server_sid())) {
   } else if (FALSE_IT(tenant_id = my_session->get_effective_tenant_id())) {
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));

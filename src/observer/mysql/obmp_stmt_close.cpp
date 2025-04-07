@@ -67,7 +67,7 @@ int ObMPStmtClose::process()
     session->set_proxy_version(get_proxy_version());
     session->init_use_rich_format();
     const bool enable_flt = session->get_control_info().is_valid();
-    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
+    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
     if (OB_FAIL(session->check_tenant_status())) {
       LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(
@@ -80,19 +80,19 @@ int ObMPStmtClose::process()
     if (OB_FAIL(ret)) {
     } else if (is_cursor_close()) {
       if (OB_FAIL(session->close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_sessid()));
+        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
       }
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_NOT_NULL(session->get_cursor(stmt_id_))) {
         if (OB_FAIL(session->close_cursor(stmt_id_))) {
           tmp_ret = ret;
-          LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_sessid()));
+          LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
         }
       }
       if (OB_FAIL(session->close_ps_stmt(stmt_id_))) {
         // overwrite ret, 优先级低，被覆盖
-        LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_sessid()));
+        LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_server_sid()));
       }
       if (OB_SUCCESS != tmp_ret) {
         // close_cursor 失败时错误码的优先级比 close_ps_stmt 高，此处进行覆盖

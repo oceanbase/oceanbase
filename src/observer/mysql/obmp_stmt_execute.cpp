@@ -893,17 +893,17 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
     // 新协议不在这里做
   } else if (ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum()) {
     ret = OB_ERR_PREPARE_STMT_CHECKSUM;
-    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
+    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_server_sid(),
                                         K(ps_stmt_checksum), K(*ps_session_info));
     LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
                      "ps stmt checksum fail. ",
                      "the ps stmt checksum is ", ps_stmt_checksum,
                      ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
-                     ". current session id is ", session->get_sessid(), ". ");
+                     ". current session id is ", session->get_server_sid(), ". ");
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("ps session info",
-              K(ret), "session_id", session->get_sessid(), K(*ps_session_info));
+              K(ret), "session_id", session->get_server_sid(), K(*ps_session_info));
     share::schema::ObSchemaGetterGuard *old_guard = ctx_.schema_guard_;
     ObSQLSessionInfo *old_sess_info = ctx_.session_info_;
     ctx_.schema_guard_ = &schema_guard;
@@ -1190,7 +1190,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     // 1.创建cursor
     if (OB_NOT_NULL(session.get_cursor(stmt_id_))) {
       if (OB_FAIL(session.close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close result set", K(ret), K(stmt_id_), K(session.get_sessid()));
+        LOG_WARN("fail to close result set", K(ret), K(stmt_id_), K(session.get_server_sid()));
       }
     }
     OZ (session.make_dbms_cursor(cursor, stmt_id_));
@@ -1999,7 +1999,7 @@ int ObMPStmtExecute::process()
       //session has been killed some moment ago
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, ctx_.cur_sql_))) {
       LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K(ctx_.cur_sql_));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
@@ -2044,7 +2044,7 @@ int ObMPStmtExecute::process()
                       client_info, session.get_client_info(),
                       module_name, session.get_module_name(),
                       action_name, session.get_action_name(),
-                      sess_id, session.get_sessid());
+                      sess_id, session.get_server_sid());
       }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);
@@ -2204,7 +2204,7 @@ int ObMPStmtExecute::get_package_type_by_name(ObIAllocator &allocator,
   CK (OB_NOT_NULL(ctx_.session_info_));
   CK (OB_NOT_NULL(ctx_.session_info_->get_pl_engine()));
   if (OB_SUCC(ret) && OB_ISNULL(pl_type ))
-  OZ (schema_checker.init(*ctx_.schema_guard_, ctx_.session_info_->get_sessid()));
+  OZ (schema_checker.init(*ctx_.schema_guard_, ctx_.session_info_->get_server_sid()));
   OZ (schema_checker.get_package_info(ctx_.session_info_->get_effective_tenant_id(),
                                       type_info->relation_name_,
                                       type_info->package_name_,

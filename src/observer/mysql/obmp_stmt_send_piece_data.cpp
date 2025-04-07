@@ -152,7 +152,7 @@ int ObMPStmtSendPieceData::process()
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id), K_(param_id),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       LOG_WARN("packet too large than allowd for the session", K_(stmt_id), K_(param_id), K(ret));
@@ -353,7 +353,7 @@ int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
                                                       &buffer_))) {
         LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
       } else {
-        LOG_INFO("store piece successfully", K(ret), K(session.get_sessid()),
+        LOG_INFO("store piece successfully", K(ret), K(session.get_server_sid()),
                                              K(stmt_id_), K(param_id_));
         if (is_null_) {
           OZ (piece->get_is_null_map().add_member(piece->get_position()));

@@ -8969,7 +8969,7 @@ int ObSPIService::resolve_ref_objects(const ParseResult &parse_result,
             if (OB_SUCC(ret)) {
               ObSchemaChecker schema_checker;
               const ObRoutineInfo *func_info = NULL;
-              if (OB_FAIL(schema_checker.init(schema_guard, session.get_sessid()))) {
+              if (OB_FAIL(schema_checker.init(schema_guard, session.get_server_sid()))) {
                 LOG_WARN("fail to init schema checker", K(ret));
               } else if (OB_FAIL(schema_checker.get_standalone_function_info(
                                                   session.get_effective_tenant_id(),

@@ -149,7 +149,11 @@ int ObAllVirtualSessionStat::inner_get_next_row(ObNewRow *&row)
         uint64_t col_id = output_column_ids_.at(cell_idx);
         switch(col_id) {
           case SESSION_ID: {
-            cells[cell_idx].set_int(collect_->session_id_);
+            if (INVALID_SESSID == collect_->client_sid_) {
+              cells[cell_idx].set_int(collect_->session_id_);
+            } else {
+              cells[cell_idx].set_int(collect_->client_sid_);
+            }
             break;
           }
           case TENANT_ID: {
@@ -219,23 +223,31 @@ int ObAllVirtualSessionStatI1::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
   int64_t index_id = -1;
-  int64_t key = 0;
+  uint64_t key = 0;
   typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
   HEAP_VAR(DiPair, pair)
   {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_index_ids().count(); ++i) {
       index_id = get_index_ids().at(i);
       key = index_id;
-      pair.first = key;
-      if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_the_diag_info(key, pair.second))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_FAIL(get_server_sid_by_client_sid(get_session_mgr(), key))) {
+        if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
-          SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
+          SERVER_LOG(WARN, "Fail to get server sid by client sid, ", K(ret));
         }
       } else {
-        if (OB_SUCCESS != (ret = session_status_.push_back(pair))) {
-          SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
+        pair.first = key;
+        if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(key, pair.second))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
+          }
+        } else {
+          if (OB_FAIL(session_status_.push_back(pair))) {
+            SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
+          }
         }
       }
     }

@@ -159,6 +159,7 @@ int ObDiagnosticInfos::get_session_diag_info(int64_t session_id, ObDISessionColl
     tmp_di->get_event_stats().accumulate_to(diag_info.base_value_.get_event_stats());
     diag_info.base_value_.get_add_stat_stats().add(tmp_di->get_add_stat_stats());
     diag_info.session_id_ = session_id;
+    diag_info.client_sid_ = tmp_di->get_client_sid();
     diag_info.base_value_.set_tenant_id(tmp_di->get_tenant_id());
     di_infos_.revert(tmp_di);
   }

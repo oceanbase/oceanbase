@@ -77,7 +77,7 @@ void ObSqlEndTransCb::callback(int cb_param)
       || OB_TRANS_COMMITED == cb_param
       || OB_TRANS_ROLLBACKED == cb_param;
       ObSqlTransControl::reset_session_tx_state(session_info, reuse_tx);
-    sessid = session_info->get_sessid();
+    sessid = session_info->get_server_sid();
     proxy_sessid = session_info->get_proxy_sessid();
     // 临界区内检查这些变量，预防并发callback造成的不良影响
     if (OB_UNLIKELY(!pkt_param_.is_valid())) {

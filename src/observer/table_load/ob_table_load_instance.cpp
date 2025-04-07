@@ -296,9 +296,10 @@ int ObTableLoadInstance::start_sql_tx()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("trans already exist", KR(ret), KPC(tx_desc));
     } else if (OB_ISNULL(tx_desc) && OB_FAIL(txs->acquire_tx(tx_desc,
-                                                             session_info->get_sessid(),
+                                                             session_info->get_server_sid(),
+                                                             session_info->get_sid(),
                                                              session_info->get_data_version()))) {
-      LOG_WARN("failed to acquire tx", KR(ret), K(session_info->get_sessid()),
+      LOG_WARN("failed to acquire tx", KR(ret), K(session_info->get_server_sid()),
                K(session_info->get_data_version()));
     } else if (OB_FAIL(txs->start_tx(*tx_desc, stmt_ctx_.tx_param_))) {
       LOG_WARN("failed to start tx", KR(ret), K(stmt_ctx_));

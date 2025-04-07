@@ -140,7 +140,7 @@ int ObMPStmtPrexecute::before_process()
       } else if (OB_UNLIKELY(session->is_zombie())) {
         ret = OB_ERR_SESSION_INTERRUPTED;
         LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
-                K(session->get_sessid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
+                K(session->get_server_sid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
       } else if (pkt.exist_trace_info()
                  && OB_FAIL(session->update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                          pkt.get_trace_info()))) {
@@ -321,7 +321,7 @@ int ObMPStmtPrexecute::before_process()
                   //   if (OB_NOT_NULL(session->get_cursor(close_stmt_id))) {
                   //     if (OB_FAIL(session->close_cursor(close_stmt_id))) {
                   //       tmp_ret = ret;
-                  //       LOG_WARN("fail to close cursor", K(ret), K(stmt_id_), K(close_stmt_id), K(session->get_sessid()));
+                  //       LOG_WARN("fail to close cursor", K(ret), K(stmt_id_), K(close_stmt_id), K(session->get_server_sid()));
                   //     }
                   //   }
                   //   if (OB_FAIL(session->close_ps_stmt(close_stmt_id))) {
@@ -342,13 +342,13 @@ int ObMPStmtPrexecute::before_process()
                       || (OB_NOT_NULL(ps_session_info)
                           && ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum())) {
                     ret = OB_ERR_PREPARE_STMT_CHECKSUM;
-                    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
+                    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_server_sid(),
                                                     K(ps_stmt_checksum), K(*ps_session_info));
                     LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
                                      "ps stmt checksum fail. ",
                                      "the ps stmt checksum is ", ps_stmt_checksum,
                                      ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
-                                     ". current session id is ", session->get_sessid(), ". ");
+                                     ". current session id is ", session->get_server_sid(), ". ");
                 } else {
                   PS_DEFENSE_CHECK(4) // extend_flag
                   {
@@ -436,7 +436,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     ObPsStmtId inner_stmt_id = OB_INVALID_ID;
     if (OB_NOT_NULL(session.get_cursor(stmt_id_))) {
       if (OB_FAIL(session.close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close result set", K(ret), K(stmt_id_), K(session.get_sessid()));
+        LOG_WARN("fail to close result set", K(ret), K(stmt_id_), K(session.get_server_sid()));
       }
     }
     OZ (session.make_dbms_cursor(cursor, stmt_id_));
