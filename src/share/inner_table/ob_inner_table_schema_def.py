@@ -7990,9 +7990,26 @@ def_table_schema(
     gm_columns = [],
     rowkey_columns = [
     ('word', 'varchar:2048'),
-  ],
+],
   in_tenant_space = True,
   normal_columns = [],
+)
+
+def_table_schema(
+  owner = 'jiabokai.jbk',
+  table_name = '__all_pl_recompile_objinfo',
+  table_id = '544',
+  table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+    ('recompile_obj_id', 'int'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('ref_obj_name', 'varchar:OB_MAX_CORE_TALBE_NAME_LENGTH'),
+    ('schema_version', 'int'),
+    ('fail_count', 'int'),
+  ],
 )
 
 # 534: __ft_dict_ik_gbk
@@ -15943,7 +15960,12 @@ def_table_schema(
 # 12521: __all_virtual_sswriter_lease_mgr
 
 # 12522: __all_virtual_tenant_flashback_log_scn
-# 12523: __all_pl_recompile_objinfo
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12523',
+  table_name = '__all_virtual_pl_recompile_objinfo',
+  keywords = all_def_keywords['__all_pl_recompile_objinfo']))
+
 # 12524: __all_virtual_vector_index_task
 # 12525: __all_virtual_vector_index_task_history
 # 12526: __tenant_virtual_show_create_catalog
@@ -16502,7 +16524,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15500: __idx_15494_idx_catalog_name_real_agent
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 # 15502: __all_virtual_tenant_flashback_log_scn
-# 15503: __all_pl_recompile_objinfo
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15503', all_def_keywords['__all_pl_recompile_objinfo']))
+
 # 15504: __tenant_virtual_show_create_catalog
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status

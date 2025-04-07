@@ -11050,3 +11050,16 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_plugin_info limit 1;
+desc oceanbase.__all_virtual_pl_recompile_objinfo;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+recompile_obj_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ref_obj_name	varchar(128)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
+fail_count	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_pl_recompile_objinfo;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_pl_recompile_objinfo limit 1;

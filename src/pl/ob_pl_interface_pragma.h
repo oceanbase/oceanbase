@@ -80,6 +80,7 @@
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
+#include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -297,6 +298,7 @@
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
   INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
+  INTERFACE_DEF(INTERFACE_RECOMPILE, "PL_RECOMPILE", (ObPLRecompileTaskHelper::recompile_pl_objs))
   // end dbms_utility
 
 #endif

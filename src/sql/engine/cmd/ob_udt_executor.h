@@ -16,6 +16,7 @@
 #include "lib/container/ob_vector.h"
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
+#include "src/share/schema/ob_udt_info.h"
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
   class name##Executor                                     \

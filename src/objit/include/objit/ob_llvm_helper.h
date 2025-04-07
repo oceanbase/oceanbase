@@ -81,7 +81,7 @@ public:
 
   TO_STRING_KV(KP_(v))
 
-  inline const llvm::Type *get_v() const { return v_; }
+  inline llvm::Type *get_v() const { return v_; }
   inline llvm::Type *&get_v() { return v_; }
   inline void set_v(llvm::Type *v) { v_ = v; }
   inline void reset() { v_ = NULL; }
@@ -109,12 +109,18 @@ public:
   ObLLVMValue(llvm::Value *v) : v_(v) {}
   virtual ~ObLLVMValue() {}
 
-  TO_STRING_KV(KP_(v))
+  TO_STRING_KV(KP_(v), KP_(t))
 
-  inline const llvm::Value *get_v() const { return v_; }
+  inline llvm::Value *get_v() const { return v_; }
   inline llvm::Value *get_v() { return v_; }
   inline void set_v(llvm::Value *v) { v_ = v; }
-  inline void reset() { v_ = NULL; }
+  inline void set_t(llvm::Type *t) { t_ = t; }
+  inline void set_t(ObLLVMType &t) { t_ = t.get_v(); }
+  inline void reset()
+  {
+    v_ = nullptr;
+    t_ = nullptr;
+  }
 
 public:
   int get_type(ObLLVMType &result) const;
@@ -124,9 +130,14 @@ public:
 public:
   ObLLVMType get_type() const;
   int64_t get_type_id() const;
+  int get_pointee_type(ObLLVMType &result);
 
 protected:
-  llvm::Value *v_;
+  inline llvm::Type *get_t() const { return t_; }
+
+protected:
+  llvm::Value *v_;  // value
+  llvm::Type *t_ = nullptr;  // pointee type if value is a pointer
 };
 
 class ObLLVMStructType : public ObLLVMType
@@ -456,11 +467,9 @@ public:
   int get_int_value(const ObLLVMType &value, int64_t i, ObLLVMValue &i_value);
   int get_insert_block(ObLLVMBasicBlock &block);
 
-#ifdef CPP_STANDARD_20
   static int64 get_integer_type_id();
   static int64 get_pointer_type_id();
   static int64 get_struct_type_id();
-#endif
 
 public:
   core::JitContext *get_jc() { return jc_; }

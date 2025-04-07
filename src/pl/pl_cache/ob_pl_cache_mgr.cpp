@@ -12,19 +12,90 @@
 
 #define USING_LOG_PREFIX PL_CACHE
 #include "ob_pl_cache_mgr.h"
-
+#include "src/sql/plan_cache/ob_plan_cache_util.h"
 using namespace oceanbase::observer;
 
 namespace oceanbase
 {
 namespace pl
 {
+/*INFLUENCE_PL sys var:
+ *div_precision_increment only mysql mode
+ *nls_length_semantics
+ *ob_compatibility_version
+ *_enable_old_charset_aggregation
+*/
+static constexpr int64_t PL_CACHE_SYS_VAR_COUNT = 4;
+static constexpr share::ObSysVarClassType InfluencePLMap[PL_CACHE_SYS_VAR_COUNT + 1] = {
+  share::SYS_VAR_DIV_PRECISION_INCREMENT,
+  share::SYS_VAR_NLS_LENGTH_SEMANTICS,
+  share::SYS_VAR_OB_COMPATIBILITY_VERSION,
+  share::SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
+  share::SYS_VAR_INVALID
+};
 
+int ObPLCacheMgr::get_sys_var_in_pl_cache_str(ObBasicSessionInfo &session,
+                                              ObIAllocator &allocator,
+                                              ObString &sys_var_str)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_SYS_VARS_STR_SIZE = 256;
+  ObObj val;
+  ObSysVarInPC sys_vars;
+  char *buf = nullptr;
+  int64_t pos = 0;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < PL_CACHE_SYS_VAR_COUNT; ++i) {
+    val.reset();
+    if (OB_FAIL(session.get_sys_variable(InfluencePLMap[i], val))) {
+      LOG_WARN("failed to get sys_variable", K(InfluencePLMap[i]), K(ret));
+    } else if (OB_FAIL(sys_vars.push_back(val))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t sys_var_encode_max_size = MAX_SYS_VARS_STR_SIZE;
+    if (nullptr == (buf = (char *)allocator.alloc(MAX_SYS_VARS_STR_SIZE))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocator memory", K(ret), K(MAX_SYS_VARS_STR_SIZE));
+    } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
+      if (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret) {
+        ret = OB_SUCCESS;
+        // expand MAX_SYS_VARS_STR_SIZE 3 times.
+        for (int64_t i = 0; OB_SUCC(ret) && i < 3; ++i) {
+          sys_var_encode_max_size = 2 * sys_var_encode_max_size;
+          if (NULL == (buf = (char *)allocator.alloc(sys_var_encode_max_size))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocator memory", K(ret), K(sys_var_encode_max_size));
+          } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
+            if (i != 2 && (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret)) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to serialize system vars", K(ret));
+            }
+          } else {
+            break;
+          }
+        }
+      } else {
+        LOG_WARN("fail to serialize system vars", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        (void)sys_var_str.assign(buf, int32_t(pos));
+      }
+    } else {
+      (void)sys_var_str.assign(buf, int32_t(pos));
+    }
+  }
+
+  return ret;
+}
 
 int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObCacheObjGuard& guard)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_get_pl_object);
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   FLT_SET_TAG(pl_cache_key_id, pc_ctx.key_.key_id_);
   FLT_SET_TAG(pl_cache_key_name, pc_ctx.key_.name_);
@@ -33,8 +104,9 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
   if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
+  } else if (OB_FAIL(get_sys_var_in_pl_cache_str(*pc_ctx.session_info_, tmp_alloc, pc_ctx.key_.sys_vars_str_))) {
+    LOG_WARN("fail to gen sys var", K(ret));
   } else {
-    pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
     if (OB_FAIL(lib_cache->get_cache_obj(ctx, &pc_ctx.key_, guard))) {
       PL_CACHE_LOG(DEBUG, "failed to get plan", K(ret));
       // if schema expired, update pl cache;
@@ -72,6 +144,7 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
     } else {
       lib_cache->inc_access_cnt();
     }
+    pc_ctx.key_.sys_vars_str_.reset();
   }
   FLT_SET_TAG(pl_hit_pl_cache, (OB_NOT_NULL(guard.get_cache_obj()) && OB_SUCC(ret)));
   return ret;
@@ -109,6 +182,7 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
                                       ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   if (OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
@@ -116,8 +190,9 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
   } else if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
+  } else if (OB_FAIL(get_sys_var_in_pl_cache_str(*pc_ctx.session_info_, tmp_alloc, pc_ctx.key_.sys_vars_str_))) {
+    LOG_WARN("fail to gen sys var", K(ret));
   } else {
-    pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
     pl::PLCacheObjStat *stat = NULL;
     pl::ObPLCacheObject* pl_object = static_cast<pl::ObPLCacheObject*>(cache_obj);
     stat = &pl_object->get_stat_for_update();
@@ -135,6 +210,7 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
         }
       }
     } while (OB_OLD_SCHEMA_VERSION == ret);
+    pc_ctx.key_.sys_vars_str_.reset();
   }
   return ret;
 }

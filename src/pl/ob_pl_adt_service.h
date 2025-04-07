@@ -41,6 +41,7 @@ public:
     obstring_(),
     seg_pointer_array_(),
     pl_composite_write_value_(),
+    se_array_local_data_buf_(),
     arg_count_(0),
     param_count_(0) {}
   virtual ~ObPLADTService() {}
@@ -66,6 +67,7 @@ public:
   int get_wrapper_allocator(jit::ObLLVMType &type);
   int get_memory_context(jit::ObLLVMType &type);
   int get_pl_composite_write_value(jit::ObLLVMType &type);
+  int get_se_array_local_data_buf(jit::ObLLVMType &type);
 
 private:
   jit::ObLLVMHelper &helper_;
@@ -87,6 +89,7 @@ private:
   jit::ObLLVMType wrapper_allocator_;
   jit::ObLLVMType memory_context_;
   jit::ObLLVMType pl_composite_write_value_;
+  jit::ObLLVMType se_array_local_data_buf_;
 
 private:
   int64_t arg_count_;

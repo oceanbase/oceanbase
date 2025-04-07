@@ -1096,6 +1096,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_parameter_anonymous_block",
   "ob_enable_pl_cache",
   "ob_enable_plan_cache",
+  "ob_enable_ps_parameter_anonymous_block",
   "ob_enable_rich_error_msg",
   "ob_enable_show_trace",
   "ob_enable_sql_audit",
@@ -1933,6 +1934,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK,
   SYS_VAR_OB_ENABLE_PL_CACHE,
   SYS_VAR_OB_ENABLE_PLAN_CACHE,
+  SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK,
   SYS_VAR_OB_ENABLE_RICH_ERROR_MSG,
   SYS_VAR_OB_ENABLE_SHOW_TRACE,
   SYS_VAR_OB_ENABLE_SQL_AUDIT,
@@ -3065,6 +3067,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "mview_refresh_dop",
   "enable_optimizer_rowgoal",
   "ob_ivf_nprobes",
+  "ob_enable_ps_parameter_anonymous_block",
   "ob_hnsw_extra_info_max_size",
   "_push_join_predicate"
 };
@@ -4103,6 +4106,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarMviewRefreshDop)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
         + sizeof(ObSysVarObIvfNprobes)
+        + sizeof(ObSysVarObEnablePsParameterAnonymousBlock)
         + sizeof(ObSysVarObHnswExtraInfoMaxSize)
         + sizeof(ObSysVarPushJoinPredicate)
         ;
@@ -11599,6 +11603,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObIvfNprobes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePsParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePsParameterAnonymousBlock", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePsParameterAnonymousBlock));
       }
     }
     if (OB_SUCC(ret)) {
@@ -20778,6 +20791,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnablePsParameterAnonymousBlock)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnablePsParameterAnonymousBlock)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePsParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePsParameterAnonymousBlock", K(ret));
       }
       break;
     }

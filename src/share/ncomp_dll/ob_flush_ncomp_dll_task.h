@@ -38,8 +38,7 @@ public:
       const uint64_t tenant_id,
       const bool is_enabled,
       common::ObMySQLTransaction &trans);
-private:
-  static int check_flush_ncomp_dll_job_exists(ObMySQLTransaction &trans,
+  static int check_job_exists(ObMySQLTransaction &trans,
                                               const uint64_t tenant_id,
                                               const ObString &job_name,
                                               bool &is_job_exists);

@@ -50,7 +50,8 @@ int ObCompileTriggerInf::compile_trigger(sql::ObExecContext &ctx,
                                     *ctx.get_sql_ctx()->schema_guard_,
                                     package_guard,
                                     *ctx.get_sql_proxy(),
-                                    false);
+                                    false, false, false, NULL, NULL, TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                    false, false/*no need add pl cache*/);
 
     OZ (package_guard.init());
     OZ (ctx.get_pl_engine()->get_package_manager().get_cached_package(resolve_ctx,

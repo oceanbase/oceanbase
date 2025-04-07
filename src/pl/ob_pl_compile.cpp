@@ -421,7 +421,7 @@ int ObPLCompiler::compile(
   int ret = OB_SUCCESS;
 
   FLTSpanGuard(pl_compile);
-  ObPLCompilerEnvGuard env_guard(routine, session_info_, schema_guard_, ret);
+  ObPLCompilerEnvGuard env_guard(routine, session_info_, schema_guard_, func_ast, ret);
   const share::schema::ObDatabaseSchema *db_schema = NULL;
 
   int64_t init_start = ObTimeUtility::current_time();
@@ -554,8 +554,9 @@ int ObPLCompiler::compile(
       lib::ObMallocCallbackGuard memory_guard(pmcb);
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
+      uint64_t session_database_id = func_ast.get_compile_flag().compile_with_invoker_right() ? func_ast.get_invoker_db_id() : session_info_.get_database_id();
       ObRoutinePersistentInfo routine_storage(
-        MTL_ID(), routine.get_database_id(), session_info_.get_database_id(), func_ast.get_id(), routine.get_tenant_id());
+        MTL_ID(), routine.get_database_id(), session_database_id, func_ast.get_id(), routine.get_tenant_id());
       bool exist_same_name_obj_with_public_synonym = false;
       OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
                                                                             func_ast.get_dependency_table(),
@@ -833,9 +834,10 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
   OX (is_from_disk = false);
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
+      uint64_t session_database_id = package_ast.get_compile_flag().compile_with_invoker_right() ? package_ast.get_invoker_db_id() : session_info_.get_database_id();
       ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         package.get_database_id(),
-                                        session_info_.get_database_id(),
+                                        session_database_id,
                                         package.get_id(),
                                         get_tenant_id_by_object_id(package.get_id()));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
@@ -902,7 +904,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
   int64_t compile_start = ObTimeUtility::current_time();
 
-  ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, ret, parent_ns);
+  ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, package_ast, ret, parent_ns);
   ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
   session_info_.set_for_trigger_package(package_info.is_for_trigger());
   if (OB_NOT_NULL(parent_ns)) {
@@ -1656,31 +1658,36 @@ int ObPLCompiler::format_object_name(ObSchemaGetterGuard &schema_guard,
 ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObPackageInfo &info,
                                            ObSQLSessionInfo &session_info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
+                                           ObPLCompileUnitAST &compile_unit,
                                            int &ret,
                                            const ObPLBlockNS *parent_ns)
   : ret_(ret), session_info_(session_info)
 {
-  init(info, session_info, schema_guard, ret, parent_ns);
+  init(info, session_info, schema_guard, compile_unit, ret, parent_ns);
 }
 
 ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                                            ObSQLSessionInfo &session_info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
+                                           ObPLCompileUnitAST &compile_unit,
                                            int &ret)
   : ret_(ret), session_info_(session_info), allocator_()
 {
-  init(info, session_info, schema_guard, ret);
+  init(info, session_info, schema_guard, compile_unit, ret);
 }
 
 template<class Info>
 void ObPLCompilerEnvGuard::init(const Info &info,
                                 ObSQLSessionInfo &session_info,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObPLCompileUnitAST &compile_unit,
                                 int &ret,
                                 const ObPLBlockNS *parent_ns)
 {
   ObExecEnv env;
   bool need_set_db = true;
+  bool invoker_set_db = false;
+  uint64_t compat_version = 0;
   bool is_invoker_right = OB_NOT_NULL(parent_ns) ? parent_ns->get_compile_flag().compile_with_invoker_right()
                                                  : info.is_invoker_right();
   OX (need_reset_exec_env_ = false);
@@ -1693,12 +1700,23 @@ void ObPLCompilerEnvGuard::init(const Info &info,
     OX (need_reset_exec_env_ = true);
   }
 
-  // in mysql mode, only system packages with invoker's right do not need set db
-  // in oracle mode, set db by if the routine is invoker's right
-  if (OB_SUCC(ret)
-      && (lib::is_oracle_mode()
-          || get_tenant_id_by_object_id(info.get_package_id()) == OB_SYS_TENANT_ID)) {
-    need_set_db = !is_invoker_right;
+  OZ (session_info_.get_compatibility_version(compat_version));
+  OZ (ObCompatControl::check_feature_enable(compat_version, ObCompatFeatureType::INVOKER_RIGHT_COMPILE, invoker_set_db));
+
+  if (OB_SUCC(ret)) {
+    if (invoker_set_db) {
+      // alway set db in compile phase when version greater or equal than 4.3.5.2
+      need_set_db = true;
+    } else if (lib::is_oracle_mode() || get_tenant_id_by_object_id(info.get_package_id()) == OB_SYS_TENANT_ID) {
+      // in mysql mode, only system packages with invoker's right do not need set db
+      // in oracle mode, set db by if the routine is invoker's right
+      need_set_db = !is_invoker_right;
+    }
+  }
+
+  if (OB_SUCC(ret) && is_invoker_right) {
+    compile_unit.set_invoker_db_name(session_info_.get_database_name());
+    compile_unit.set_invoker_db_id(session_info_.get_database_id());
   }
   if (OB_SUCC(ret)
       && need_set_db

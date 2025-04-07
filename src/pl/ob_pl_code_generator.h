@@ -19,7 +19,6 @@
 #include "ob_pl_adt_service.h"
 #include "ob_pl_exception_handling.h"
 #include "ob_pl_di_adt_service.h"
-#include "lib/hash/ob_placement_hashmap.h"
 #include "pl/ob_pl_user_type.h"
 
 namespace oceanbase {

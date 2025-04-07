@@ -31,6 +31,7 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
+#include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 
 namespace oceanbase
 {
@@ -5960,6 +5961,8 @@ int ObDDLOperator::init_tenant_schemas(
     LOG_WARN("insert default user failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_keystore(tenant_id, sys_variable, trans))) {
     LOG_WARN("fail to init tenant keystore", K(ret));
+  } else if (OB_FAIL(init_tenant_recompile_pl_obj(sys_variable, tenant_id, trans))) {
+    LOG_WARN("failed to init tenant recompile pl obj", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_freeze_info(tenant_id, trans))) {
     LOG_WARN("insert freeze info failed", K(tenant_id), KR(ret));
   } else if (OB_FAIL(init_tenant_srs(tenant_id, trans))) {
@@ -6156,6 +6159,20 @@ int ObDDLOperator::init_tenant_databases(const ObTenantSchema &tenant_schema,
     }
   }
 
+  return ret;
+}
+
+int ObDDLOperator::init_tenant_recompile_pl_obj(const share::schema::ObSysVariableSchema &sys_variable,
+                                       uint64_t tenant_id,
+                                       ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pl::ObPLRecompileTaskHelper::init_tenant_recompile_job(
+                                      sys_variable, tenant_id, trans))) {
+    RS_LOG(WARN, "failed init pl recompile task!", K(ret), K(tenant_id));
+  } else {
+    // do nothing
+  }
   return ret;
 }
 

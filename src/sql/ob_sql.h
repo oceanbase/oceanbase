@@ -260,8 +260,6 @@ private:
                                ParamStore &param_store);
   int construct_param_store_from_parameterized_params(const ObPlanCacheCtx &phy_ctx,
                                                       ParamStore &param_store);
-  bool is_exist_in_fixed_param_idx(const int64_t idx,
-                                   const ObIArray<int64_t> &fixed_param_idx);
   int do_real_prepare(const ObString &stmt,
                       ObSqlCtx &context,
                       ObResultSet &result,
@@ -512,6 +510,8 @@ private:
 public:
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
+  static bool is_exist_in_fixed_param_idx(const int64_t idx,
+                                   const ObIArray<int64_t> &fixed_param_idx);
 private:
   bool inited_;
   // BEGIN 全局单例依赖接口

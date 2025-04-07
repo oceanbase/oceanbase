@@ -43,4 +43,8 @@ DEF_COMPAT_CONTROL_FEATURE(FUNC_LOCATE_NULL,
     "The result of REPLACE('x', 'abc', null) is different in MySQL 5.7 and 8.0",
     MOCK_CLUSTER_VERSION_4_2_5_0, CLUSTER_VERSION_4_3_0_0,
     CLUSTER_VERSION_4_3_3_0)
+
+DEF_COMPAT_CONTROL_FEATURE(INVOKER_RIGHT_COMPILE,
+    "Use the definer's database during compile, regardless of whether is definer or invoker right",
+    CLUSTER_VERSION_4_3_5_2)
 #endif

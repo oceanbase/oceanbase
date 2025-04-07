@@ -14,6 +14,7 @@
 #define OCEANBASE_SRC_SQL_OB_SPI_H_
 
 #include "pl/ob_pl.h"
+#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_user_type.h"
 #include "ob_sql_utils.h"
 #include "sql/engine/basic/ob_ra_row_store.h"
@@ -499,7 +500,8 @@ public:
                          const ObString &sql,
                          bool is_cursor,
                          pl::ObPLBlockNS *secondary_namespace,
-                         ObSPIPrepareResult &prepare_result);
+                         ObSPIPrepareResult &prepare_result,
+                         pl::ObPLCompileUnitAST &func);
   static int spi_execute_with_expr_idx(pl::ObPLExecCtx *ctx,
                                        const char *ps_sql,
                                        int64_t type,
@@ -1326,6 +1328,23 @@ struct ObPLPartitionHitGuard
   bool old_partition_hit_;
   bool can_freeze_;
 };
+
+class ObPLPrepareEnvGuard
+{
+public:
+ ObPLPrepareEnvGuard(ObSQLSessionInfo &session_info,
+                     pl::ObPLCompileUnitAST &func,
+                     int &ret);
+  ~ObPLPrepareEnvGuard();
+private:
+  int &ret_;
+  ObSQLSessionInfo &session_info_;
+  ObSqlString old_db_name_;
+  uint64_t old_db_id_;
+  bool need_reset_default_database_;
+  ObArenaAllocator allocator_;
+};
+
 
 }
 }

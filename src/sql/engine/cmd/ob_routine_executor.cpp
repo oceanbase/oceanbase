@@ -20,7 +20,7 @@
 #include "pl/ob_pl_package.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "src/pl/pl_cache/ob_pl_cache_mgr.h"
-
+#include "src/pl/ob_pl_compile.h"
 namespace oceanbase
 {
 namespace sql
@@ -31,7 +31,8 @@ int ObCompileRoutineInf::compile_routine(ObExecContext &ctx,
                                           uint64_t database_id,
                                           ObString &routine_name,
                                           ObRoutineType routine_type,
-                                          int64_t schema_version)
+                                          int64_t schema_version,
+                                          bool need_add_pl_cache)
 {
   int ret = OB_SUCCESS;
   ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
@@ -76,11 +77,17 @@ int ObCompileRoutineInf::compile_routine(ObExecContext &ctx,
       CK (OB_NOT_NULL(routine));
       OZ (ctx.get_my_session()->get_database_id(db_id));
       if (OB_SUCC(ret)
-          && routine->get_can_cached()) {
+          && routine->get_can_cached() && need_add_pl_cache) {
         routine->get_stat_for_update().name_ = routine->get_function_name();
         routine->get_stat_for_update().type_ = pl::ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
         OZ (ctx.get_pl_engine()->add_pl_lib_cache(routine, pc_ctx));
       }
+      OZ (pl::ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(),
+                                                          routine->get_tenant_id(),
+                                                          routine->get_owner(),
+                                                          routine_info->get_routine_id(),
+                                                          routine_info->get_schema_version(),
+                                                          routine_info->get_object_type()));
     }
   }
 

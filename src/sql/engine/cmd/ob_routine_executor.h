@@ -65,7 +65,8 @@ public:
                       uint64_t database_id,
                       ObString &routine_name,
                       share::schema::ObRoutineType routine_type,
-                      int64_t schema_version);
+                      int64_t schema_version,
+                      bool need_add_pl_cache = true);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCompileRoutineInf);
 };

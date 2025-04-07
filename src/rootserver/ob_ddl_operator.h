@@ -1197,6 +1197,10 @@ private:
   int init_tenant_optimizer_stats_info(const share::schema::ObSysVariableSchema &sys_variable,
                                        uint64_t tenant_id,
                                        ObMySQLTransaction &trans);
+
+  int init_tenant_recompile_pl_obj(const share::schema::ObSysVariableSchema &sys_variable,
+                                       uint64_t tenant_id,
+                                       ObMySQLTransaction &trans);
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;

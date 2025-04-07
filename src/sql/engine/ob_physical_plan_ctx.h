@@ -503,8 +503,8 @@ public:
   bool is_exec_param_readable() const { return param_store_.count() > original_param_cnt_; }
   void set_orig_question_mark_cnt(const int64_t cnt) { orig_question_mark_cnt_ = cnt; }
   int64_t get_orig_question_mark_cnt() const { return orig_question_mark_cnt_; }
-  void set_is_ps_rewrite_sql() { is_ps_rewrite_sql_ = true; }
-  bool get_is_ps_rewrite_sql() const { return is_ps_rewrite_sql_; }
+  void set_ps_fixed_array_index(const common::ObIArray<int64_t> &fixed_array) { ps_fixed_array_index_ = &fixed_array; }
+  const common::ObIArray<int64_t> *get_ps_fixed_array_index() const { return ps_fixed_array_index_; }
   void set_plan_start_time(int64_t t) { plan_start_time_ = t; }
   int64_t get_plan_start_time() const { return plan_start_time_; }
   int replace_batch_param_datum(const int64_t cur_group_id, const int64_t start_param, const int64_t param_cnt);
@@ -699,7 +699,7 @@ private:
   bool is_ps_protocol_;
   //used for monitor operator information
   int64_t plan_start_time_;
-  bool is_ps_rewrite_sql_;
+  const common::ObIArray<int64_t> *ps_fixed_array_index_;
   // timeout use by spm, don't need to serialize
   int64_t spm_ts_timeout_us_;
   ObSubSchemaCtx subschema_ctx_;

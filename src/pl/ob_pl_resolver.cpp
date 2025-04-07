@@ -5960,7 +5960,8 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
                                               parse_tree->str_value_ : new_sql.ptr(),
                                             is_cursor,
                                             &current_block_->get_namespace(),
-                                            prepare_result))) {
+                                            prepare_result,
+                                            func))) {
         if (OB_ERR_TOO_BIG_DISPLAYWIDTH == ret) {
           LOG_WARN("%s is too big, max is 65", K(parse_tree->str_value_), K(ret));
           LOG_USER_ERROR(OB_ERR_TOO_BIG_DISPLAYWIDTH, parse_tree->str_value_, OB_MAX_BIT_LENGTH);
@@ -7910,7 +7911,8 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                           sql_node->str_value_,
                                           true, /*is_cursor*/
                                           &sql_ns,
-                                          prepare_result))) {
+                                          prepare_result,
+                                          func))) {
       LOG_WARN("failed to prepare stmt", K(ret));
     } else if (!prepare_result.into_exprs_.empty()
                && lib::is_mysql_mode()) { // oracle不报错,会忽略掉INTO
@@ -10592,7 +10594,8 @@ int ObPLResolver::transform_subquery_expr(const ParseNode *node,
                               sql_str,
                               false,
                               &current_block_->get_namespace(),
-                              prepare_result))) {
+                              prepare_result,
+                              func))) {
       LOG_WARN("failed to prepare stmt", K(ret));
     } else if (0 != prepare_result.into_exprs_.count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -10862,6 +10865,9 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(params.secondary_namespace_)) {
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, *(params.allocator_)) {
+      ParamStore param_list( ObWrapperAllocator(*(params.allocator_)) );
+    const ParamStore *p_param_list = (params.param_list_ != NULL && params.param_list_->count() > 0)
+        ? (params.param_list_) : &param_list;
       ObPLStmtBlock *null_block = NULL;
       ObPLPackageGuard dummy_pkg_guard(params.session_info_->get_effective_tenant_id());
       ObPLPackageGuard *package_guard = (NULL != params.package_guard_ ? params.package_guard_ : &dummy_pkg_guard);
@@ -10875,17 +10881,26 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                             params.is_prepare_protocol_,
                             false, /*check mode*/
                             false, /*sql mode*/
-                            params.param_list_);
+                            p_param_list);
       if (NULL == params.package_guard_) {
         OZ (package_guard->init());
       }
+
+      if (OB_SUCC(ret) && p_param_list == &param_list) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < params.query_ctx_->question_marks_count_; ++i) {
+          ObObjParam param = ObObjParam(ObObj(ObNullType));
+          const_cast<ObObjMeta&>(param.get_param_meta()).reset();
+          OZ (param_list.push_back(param));
+        }
+      }
+
       OZ (ObPLCompiler::init_anonymous_ast(func_ast,
                                             *(params.allocator_),
                                             *(params.session_info_),
                                             *(params.sql_proxy_),
                                             *(params.schema_checker_->get_schema_guard()),
                                             *package_guard,
-                                            params.param_list_,
+                                            p_param_list,
                                             params.is_prepare_protocol_));
       OZ (resolver.init(func_ast));
       // build first namespace
@@ -17768,6 +17783,10 @@ int ObPLResolver::resolve_routine_def(const ObStmtNodeTree *parse_tree,
       }
       if (routine_info->is_udt_cons()) {
         routine_ast->set_is_udt_cons();
+      }
+      if (unit_ast.get_compile_flag().compile_with_invoker_right()) {
+        routine_ast->set_invoker_db_name(ObString(unit_ast.get_invoker_db_name()));
+        routine_ast->set_invoker_db_id(unit_ast.get_invoker_db_id());
       }
     }
     OZ (resolve_routine_block(parse_tree->children_[1], *routine_info, *routine_ast));

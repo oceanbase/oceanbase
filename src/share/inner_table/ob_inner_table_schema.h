@@ -660,6 +660,7 @@ public:
   static int ft_dict_ik_utf8_schema(share::schema::ObTableSchema &table_schema);
   static int ft_stopword_ik_utf8_schema(share::schema::ObTableSchema &table_schema);
   static int ft_quantifier_ik_utf8_schema(share::schema::ObTableSchema &table_schema);
+  static int all_pl_recompile_objinfo_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1152,6 +1153,7 @@ public:
   static int all_virtual_cs_replica_tablet_stats_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plugin_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_pl_recompile_objinfo_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1458,6 +1460,7 @@ public:
   static int all_virtual_tablet_pointer_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_sql_plan_aux_key2snapshot_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_cs_replica_tablet_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_pl_recompile_objinfo_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -2823,6 +2826,7 @@ public:
   static int ft_dict_ik_utf8_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int ft_stopword_ik_utf8_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int ft_quantifier_ik_utf8_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_pl_recompile_objinfo_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3147,6 +3151,7 @@ public:
   static int ft_dict_ik_utf8_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int ft_stopword_ik_utf8_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int ft_quantifier_ik_utf8_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_pl_recompile_objinfo_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3705,6 +3710,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::ft_dict_ik_utf8_schema,
   ObInnerTableSchema::ft_stopword_ik_utf8_schema,
   ObInnerTableSchema::ft_quantifier_ik_utf8_schema,
+  ObInnerTableSchema::all_pl_recompile_objinfo_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4200,6 +4206,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_cs_replica_tablet_stats_schema,
   ObInnerTableSchema::all_virtual_ddl_diagnose_info_schema,
   ObInnerTableSchema::all_virtual_plugin_info_schema,
+  ObInnerTableSchema::all_virtual_pl_recompile_objinfo_schema,
   ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema,
   ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
@@ -4517,6 +4524,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tablet_pointer_status_ora_schema,
   ObInnerTableSchema::all_virtual_wr_sql_plan_aux_key2snapshot_ora_schema,
   ObInnerTableSchema::all_virtual_cs_replica_tablet_stats_ora_schema,
+  ObInnerTableSchema::all_virtual_pl_recompile_objinfo_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_tb_name_real_agent_schema,
@@ -6083,6 +6091,7 @@ const uint64_t tenant_space_tables [] = {
   OB_FT_DICT_IK_UTF8_TID,
   OB_FT_STOPWORD_IK_UTF8_TID,
   OB_FT_QUANTIFIER_IK_UTF8_TID,
+  OB_ALL_PL_RECOMPILE_OBJINFO_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -6660,6 +6669,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_ORA_TID,
   OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_ORA_TID,
+  OB_ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -8051,6 +8061,7 @@ const uint64_t tenant_space_tables [] = {
   OB_FT_DICT_IK_UTF8_AUX_LOB_META_TID,
   OB_FT_STOPWORD_IK_UTF8_AUX_LOB_META_TID,
   OB_FT_QUANTIFIER_IK_UTF8_AUX_LOB_META_TID,
+  OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -8348,7 +8359,8 @@ const uint64_t tenant_space_tables [] = {
   OB_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_AUX_LOB_PIECE_TID,
   OB_FT_DICT_IK_UTF8_AUX_LOB_PIECE_TID,
   OB_FT_STOPWORD_IK_UTF8_AUX_LOB_PIECE_TID,
-  OB_FT_QUANTIFIER_IK_UTF8_AUX_LOB_PIECE_TID,  };
+  OB_FT_QUANTIFIER_IK_UTF8_AUX_LOB_PIECE_TID,
+  OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -9005,6 +9017,7 @@ const char* const tenant_space_table_names [] = {
   OB_FT_DICT_IK_UTF8_TNAME,
   OB_FT_STOPWORD_IK_UTF8_TNAME,
   OB_FT_QUANTIFIER_IK_UTF8_TNAME,
+  OB_ALL_PL_RECOMPILE_OBJINFO_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -9582,6 +9595,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TNAME,
   OB_ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_ORA_TNAME,
   OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_ORA_TNAME,
+  OB_ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -10973,6 +10987,7 @@ const char* const tenant_space_table_names [] = {
   OB_FT_DICT_IK_UTF8_AUX_LOB_META_TNAME,
   OB_FT_STOPWORD_IK_UTF8_AUX_LOB_META_TNAME,
   OB_FT_QUANTIFIER_IK_UTF8_AUX_LOB_META_TNAME,
+  OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -11270,7 +11285,8 @@ const char* const tenant_space_table_names [] = {
   OB_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_AUX_LOB_PIECE_TNAME,
   OB_FT_DICT_IK_UTF8_AUX_LOB_PIECE_TNAME,
   OB_FT_STOPWORD_IK_UTF8_AUX_LOB_PIECE_TNAME,
-  OB_FT_QUANTIFIER_IK_UTF8_AUX_LOB_PIECE_TNAME,  };
+  OB_FT_QUANTIFIER_IK_UTF8_AUX_LOB_PIECE_TNAME,
+  OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -14422,6 +14438,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     ObInnerTableSchema::ft_quantifier_ik_utf8_aux_lob_piece_schema
   },
 
+  {
+    OB_ALL_PL_RECOMPILE_OBJINFO_TID,
+    OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TID,
+    OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_pl_recompile_objinfo_aux_lob_meta_schema,
+    ObInnerTableSchema::all_pl_recompile_objinfo_aux_lob_piece_schema
+  },
+
 };
 
 static inline bool get_sys_table_lob_aux_table_id(const uint64_t tid, uint64_t& meta_tid, uint64_t& piece_tid)
@@ -14459,12 +14483,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 321;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 899;
+const int64_t OB_SYS_TABLE_COUNT = 322;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 901;
 const int64_t OB_SYS_VIEW_COUNT = 1041;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2266;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2269;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2269;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2272;
 
 } // end namespace share
 } // end namespace oceanbase

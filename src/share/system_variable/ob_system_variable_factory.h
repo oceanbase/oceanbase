@@ -6021,19 +6021,26 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_IVF_NPROBES; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(831); }
 };
+class ObSysVarObEnablePsParameterAnonymousBlock : public ObBoolSysVar
+{
+public:
+  ObSysVarObEnablePsParameterAnonymousBlock() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(832); }
+};
 class ObSysVarObHnswExtraInfoMaxSize : public ObIntSysVar
 {
 public:
   ObSysVarObHnswExtraInfoMaxSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(832); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(833); }
 };
 class ObSysVarPushJoinPredicate : public ObBoolSysVar
 {
 public:
   ObSysVarPushJoinPredicate() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__PUSH_JOIN_PREDICATE; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(833); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(834); }
 };
 
 
@@ -6058,7 +6065,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 735;
+  const static int64_t OB_SYS_VARS_COUNT = 736;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

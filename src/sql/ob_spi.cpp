@@ -2094,31 +2094,73 @@ int ObSPIService::spi_prepare(common::ObIAllocator &allocator,
                               const ObString &sql,
                               bool is_cursor,
                               pl::ObPLBlockNS *secondary_namespace,
-                              ObSPIPrepareResult &prepare_result)
+                              ObSPIPrepareResult &prepare_result,
+                              pl::ObPLCompileUnitAST &func)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_prepare);
+  ObPLPrepareEnvGuard prepareEnvGuard(session, func, ret);
   FLT_SET_TAG(pl_prepare_sql_text, sql);
   CHECK_COMPATIBILITY_MODE(&session);
-  ret = is_oracle_mode() ?
-      spi_resolve_prepare(allocator,
-                          session,
-                          sql_proxy,
-                          schema_guard,
-                          expr_factory,
-                          sql,
-                          is_cursor,
-                          secondary_namespace,
-                          prepare_result)
-      : spi_parse_prepare(allocator,
-                          session,
-                          sql_proxy,
-                          schema_guard,
-                          expr_factory,
-                          sql,
-                          secondary_namespace,
-                          prepare_result);
+  if (OB_SUCC(ret)) {
+    ret = is_oracle_mode() ?
+        spi_resolve_prepare(allocator,
+                            session,
+                            sql_proxy,
+                            schema_guard,
+                            expr_factory,
+                            sql,
+                            is_cursor,
+                            secondary_namespace,
+                            prepare_result)
+        : spi_parse_prepare(allocator,
+                            session,
+                            sql_proxy,
+                            schema_guard,
+                            expr_factory,
+                            sql,
+                            secondary_namespace,
+                            prepare_result);
+  }
   return ret;
+}
+
+ObPLPrepareEnvGuard::ObPLPrepareEnvGuard(ObSQLSessionInfo &session_info,
+                                         pl::ObPLCompileUnitAST &func,
+                                         int &ret)
+  : ret_(ret), session_info_(session_info)
+{
+  ret = OB_SUCCESS;
+  bool invoker_set_db = false;
+  uint64_t compat_version = 0;
+  need_reset_default_database_ = false;
+  OZ (session_info.get_compatibility_version(compat_version));
+  OZ (ObCompatControl::check_feature_enable(compat_version, ObCompatFeatureType::INVOKER_RIGHT_COMPILE, invoker_set_db));
+
+  if (OB_SUCC(ret)
+      && invoker_set_db
+      && lib::is_oracle_mode()   //only oracle mode need set default_database during spi_prepare
+      && func.get_compile_flag().compile_with_invoker_right()
+      && func.get_invoker_db_id() != session_info_.get_database_id()) {
+      OX (old_db_id_ = session_info_.get_database_id());
+      OZ (old_db_name_.append(session_info_.get_database_name()));
+      OZ (session_info_.set_default_database(func.get_invoker_db_name()));
+      OX (session_info_.set_database_id(func.get_invoker_db_id()));
+      OX (need_reset_default_database_ = true);
+  }
+}
+
+ObPLPrepareEnvGuard::~ObPLPrepareEnvGuard()
+{
+  int ret = OB_SUCCESS;
+  if (need_reset_default_database_) {
+   if ((ret = session_info_.set_default_database(old_db_name_.string())) != OB_SUCCESS) {
+      ret_ = OB_SUCCESS == ret_ ? ret : ret_;
+      LOG_WARN("failed to reset default database in pl env guard", K(ret), K(ret_), K(old_db_name_));
+   } else {
+    session_info_.set_database_id(old_db_id_);
+   }
+  }
 }
 
 int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,

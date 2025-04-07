@@ -782,7 +782,7 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
                                 NULL));
       {
         ObPLCompilerEnvGuard guard(
-          *package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, ret);
+          *package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
         OZ (compiler.analyze_package(source, null_parent_ns,
                                      package_spec_ast, package_spec_info->is_for_trigger()));
       }
@@ -1158,7 +1158,7 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
                                   package_spec_ast,
                                   *package_spec));
       if (OB_SUCC(ret)) {
-        if (package_spec->get_can_cached()
+        if (package_spec->get_can_cached() && resolve_ctx.need_add_pl_cache_
             && OB_FAIL(add_package_to_plan_cache(resolve_ctx, package_spec))) {
           LOG_WARN("failed to add package spec to cached", K(ret));
           ret = OB_SUCCESS; // cache add failed, need not fail execute path
@@ -1227,7 +1227,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
           resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
     {
       ObPLCompilerEnvGuard guard(
-        package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, ret);
+        package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
       OZ (compiler.analyze_package(source, null_parent_ns,
                                    package_spec_ast, package_spec_info.is_for_trigger()));
     }
@@ -1262,7 +1262,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
                                   package_body_ast,
                                   *package_body));
       if (OB_SUCC(ret)
-          && package_body->get_can_cached()
+          && package_body->get_can_cached() && resolve_ctx.need_add_pl_cache_
           && OB_FAIL(add_package_to_plan_cache(resolve_ctx, package_body))) {
         LOG_WARN("add package body to plan cache failed", K(package_body_id), K(ret));
         ret = OB_SUCCESS; //cache add failed, need not fail execute path

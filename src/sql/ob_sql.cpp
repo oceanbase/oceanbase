@@ -560,7 +560,7 @@ int ObSql::fill_result_set(ObResultSet &result_set,
       break;
     }
 
-    const int64_t question_marks_count = pctx->get_is_ps_rewrite_sql() ?
+    const int64_t question_marks_count = pctx->get_ps_fixed_array_index() != nullptr && stmt::T_ANONYMOUS_BLOCK != stmt->get_stmt_type() ?
           pctx->get_orig_question_mark_cnt() : stmt->get_query_ctx()->get_prepare_param_count();
     // param column is only needed in ps mode
     if (OB_SUCC(ret) && question_marks_count > 0
@@ -580,7 +580,11 @@ int ObSql::fill_result_set(ObResultSet &result_set,
         ObField param_field;
         param_field.type_.set_type(ObIntType); // @bug
         param_field.cname_ = ObString::make_string("?");
-        if (OB_NOT_NULL(anonymous_stmt) && anonymous_stmt->get_out_idx().has_member(i)) {
+        if (OB_NOT_NULL(pctx->get_ps_fixed_array_index()) &&
+            OB_NOT_NULL(anonymous_stmt) &&
+            is_exist_in_fixed_param_idx(i, *pctx->get_ps_fixed_array_index())) {
+          continue;
+        } else if (OB_NOT_NULL(anonymous_stmt) && anonymous_stmt->get_out_idx().has_member(i)) {
           ObField column_field;
           column_field.type_.set_type(ObNullType);
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
@@ -1236,6 +1240,13 @@ int ObSql::do_real_prepare(const ObString &sql,
         && context.is_prepare_protocol_
         && context.is_prepare_stage_
         && context.is_pre_execute_) {
+      if (OB_FAIL(ectx.get_pl_engine()->parameter_ps_anonymous_block(ectx,
+                                                                     allocator,
+                                                                     parse_result,
+                                                                     info_ctx.no_param_sql_,
+                                                                     pc_ctx))) {
+        LOG_INFO("parameterize anonymous syntax tree failed", K(ret));
+      }
 
       OZ (result.reserve_param_columns(param_cnt));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
@@ -1299,6 +1310,35 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                   session.get_charsets4parser()))) {
         LOG_INFO("parameterize syntax tree failed", K(ret));
         pc_ctx.ps_need_parameterized_ = false;
+        ret = OB_SUCCESS;
+      }
+      if (OB_SUCC(ret)) {
+        if (!pc_ctx.ps_need_parameterized_) {
+          pc_ctx.fixed_param_idx_.reset();
+          pc_ctx.fp_result_.raw_params_.reset();
+        } else {
+          info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+        }
+      }
+    } else if (!is_inner_sql && stmt::T_ANONYMOUS_BLOCK == stmt_type) {
+      if (OB_FAIL(ectx.get_pl_engine()->parameter_ps_anonymous_block(ectx,
+                                                                     allocator,
+                                                                     parse_result,
+                                                                     info_ctx.no_param_sql_,
+                                                                     pc_ctx))) {
+        LOG_WARN("parameterize anonymous syntax tree failed", K(ret));
+      }
+    } else if (!is_inner_sql && stmt::T_CALL_PROCEDURE == stmt_type) {
+      if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
+                                                                  false,
+                                                                  pc_ctx,
+                                                                  parse_result.result_tree_,
+                                                                  param_store,
+                                                                  session.get_charsets4parser()))) {
+        LOG_INFO("parameterize call procedure syntax tree failed", K(ret));
+        pc_ctx.ps_need_parameterized_ = false;
+        pc_ctx.fixed_param_idx_.reset();
+        pc_ctx.fp_result_.raw_params_.reset();
         ret = OB_SUCCESS;
       }
       if (OB_SUCC(ret)) {
@@ -2140,6 +2180,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       NULL, session.get_sql_mode(),
                                                       enable_decimal_int, compat_type,
                                                       enable_mysql_compatible_dates,
+                                                      stmt::T_ANONYMOUS_BLOCK == stmt_type,
                                                       session.get_min_const_integer_precision()))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
@@ -2368,7 +2409,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
 #endif
 
       if (!ps_info->get_fixed_raw_params().empty()) {
-        pctx->set_is_ps_rewrite_sql();
+        pctx->set_ps_fixed_array_index(ps_info->get_raw_params_idx());
       }
       if (OB_FAIL(session.store_query_string(sql))) {
         LOG_WARN("store query string fail", K(ret));

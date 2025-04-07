@@ -2951,6 +2951,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_ob_enable_parameter_anonymous_block(int_val != 0));
       break;
     }
+    case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_ob_enable_ps_parameter_anonymous_block(int_val != 0));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3468,6 +3474,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_enable_sql_plan_monitor(int_val != 0));
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_ob_enable_ps_parameter_anonymous_block(int_val != 0));
       break;
     }
     default: {
@@ -7166,9 +7178,12 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
   ObObj val;
+  bool is_mysql = lib::is_mysql_mode();
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
     val.reset();
-    if (lib::is_mysql_mode() && PLSQL_CCFLAGS == i) {
+    if (is_mysql && PLSQL_CCFLAGS == i) {
+      // do nothing ...
+    } else if (!is_mysql && SQL_MODE == i) {
       // do nothing ...
     } else if (OB_FAIL(session.get_sys_variable(ExecEnvMap[i], val))) {
       LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
@@ -7217,6 +7232,7 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   ObObj val;
+  bool is_mysql = lib::is_mysql_mode();
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
     val.reset();
     switch (i) {
@@ -7252,7 +7268,9 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
     break;
     }
     if (OB_FAIL(ret)) {
-    } else if (lib::is_mysql_mode() && PLSQL_CCFLAGS == i) {
+    } else if (is_mysql && PLSQL_CCFLAGS == i) {
+      // do nothing ...
+    } else if (!is_mysql && SQL_MODE == i) {
       // do nothing ...
     } else if (OB_FAIL(session.update_sys_variable(ExecEnvMap[i], val))) {
       LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));

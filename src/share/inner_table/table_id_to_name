@@ -381,6 +381,7 @@
 # 531: __ft_dict_ik_utf8
 # 532: __ft_stopword_ik_utf8
 # 533: __ft_quantifier_ik_utf8
+# 544: __all_pl_recompile_objinfo
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1209,6 +1210,8 @@
 # 12513: __all_virtual_cs_replica_tablet_stats
 # 12514: __all_virtual_ddl_diagnose_info
 # 12515: __all_virtual_plugin_info
+# 12523: __all_virtual_pl_recompile_objinfo
+# 12523: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1889,6 +1892,8 @@
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME1
 # 15493: ALL_VIRTUAL_CS_REPLICA_TABLET_STATS
 # 15493: __all_virtual_cs_replica_tablet_stats  # BASE_TABLE_NAME
+# 15503: ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT
+# 15503: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

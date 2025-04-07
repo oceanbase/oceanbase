@@ -86,7 +86,8 @@ public:
                  const ParamStore *param_list = NULL,
                  sql::ExternalParams *extern_param_info = NULL,
                  TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID,
-                 bool is_sync_package_var = false) :
+                 bool is_sync_package_var = false,
+                 bool need_add_pl_cache = true) :
         allocator_(allocator),
         session_info_(session_info),
         schema_guard_(schema_guard),
@@ -98,7 +99,8 @@ public:
         is_sql_scope_(is_sql_scope_),
         extern_param_info_(extern_param_info),
         is_udt_udf_ctx_(false),
-        is_sync_package_var_(is_sync_package_var)
+        is_sync_package_var_(is_sync_package_var),
+        need_add_pl_cache_(need_add_pl_cache)
   {
     params_.param_list_ = param_list;
     params_.tg_timing_event_ = tg_timing_event;
@@ -122,6 +124,7 @@ public:
   sql::ExternalParams *extern_param_info_;
   bool is_udt_udf_ctx_; // indicate this context is belong to a udt udf
   bool is_sync_package_var_;
+  bool need_add_pl_cache_; // indicate if this pl object need add into pl cache when re_compile
   ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
   ObPLEnumSetCtx *enum_set_ctx_;
 };

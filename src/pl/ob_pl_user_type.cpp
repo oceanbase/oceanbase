@@ -195,6 +195,7 @@ int ObUserDefinedType::generate_new(ObPLCodeGenerator &generator,
   OZ (ir_type.get_pointer_to(ir_pointer_type));
   OZ (generator.get_helper().create_int_to_ptr(ObString("ptr_to_user_type"), value, ir_pointer_type,
                                              composite_value));
+  OX (composite_value.set_t(ir_type));
   OZ (generate_construct(generator, ns, composite_value, allocator, is_top_level, s));
   return ret;
 }
@@ -1803,6 +1804,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
             OZ (generator.get_llvm_type(member->member_type_, ir_type));
             OZ (ir_type.get_pointer_to(ir_pointer_type));
             OZ (generator.get_helper().create_int_to_ptr(ObString("cast_extend_to_ptr"), extend_value, ir_pointer_type, composite_value));
+            OX (composite_value.set_t(ir_type));
             OZ (member->member_type_.generate_assign_with_null(generator, ns, record_allocator, composite_value));
             OZ (generator.get_helper().create_br(final_branch));
             // final branch

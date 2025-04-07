@@ -2543,6 +2543,10 @@ DEF_BOOL(_enable_parallel_tenant_creation, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable parallel create meta and user tenants.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
+         "Enable pl recompile task.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "True",
          "Enable or disable px task rebalance.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2553,6 +2557,7 @@ DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h
 DEF_BOOL(_enable_obdal, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable use obdal to access object storage.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR(default_table_merge_engine, OB_TENANT_PARAMETER, "PARTIAL_UPDATE",
          "Specify the default merge_engine when creating table: partial_update, delete_insert.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

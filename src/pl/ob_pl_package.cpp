@@ -47,6 +47,10 @@ int ObPLPackageAST::init(const ObString &db_name,
     parent_user_type_table = &parent_package_ast->get_user_type_table();
     parent_routine_table = &parent_package_ast->get_routine_table();
     parent_condition_table = &parent_package_ast->get_condition_table();
+    if (parent_package_ast->get_compile_flag().compile_with_invoker_right()) {
+      set_invoker_db_name(parent_package_ast->get_invoker_db_name());
+      set_invoker_db_id(parent_package_ast->get_invoker_db_id());
+    }
   }
   if (OB_NOT_NULL(parent_user_type_table)) {
     user_type_table_.set_type_start_gen_id(parent_user_type_table->get_type_start_gen_id());

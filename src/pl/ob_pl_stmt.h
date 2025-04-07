@@ -1604,8 +1604,11 @@ public:
        compile_flag_(),
        can_cached_(true),
        priv_user_(),
+       invoker_database_id_(OB_INVALID_ID),
        analyze_flag_(0)
-  {}
+  {
+    CHAR_CARRAY_INIT(invoker_database_name_);
+  }
 
   virtual ~ObPLCompileUnitAST();
 
@@ -1655,6 +1658,14 @@ public:
   inline const ObPLDependencyTable &get_dependency_table() const { return dependency_table_; }
   inline ObPLDependencyTable &get_dependency_table() { return dependency_table_; }
   inline pl::ObPLEnumSetCtx &get_enum_set_ctx() { return enum_set_ctx_; }
+  inline char* get_invoker_db_name() { return invoker_database_name_; }
+  inline void set_invoker_db_name(const ObString &database_name) {
+    uint64_t db_name_len = min(database_name.length(), OB_MAX_DATABASE_NAME_LENGTH * OB_MAX_CHAR_LEN);
+    MEMCPY(invoker_database_name_, database_name.ptr(), db_name_len);
+    invoker_database_name_[db_name_len] = '\0';
+  }
+  inline uint64_t get_invoker_db_id() { return invoker_database_id_; }
+  inline void set_invoker_db_id(uint64_t db_id) { invoker_database_id_ = db_id; }
 
   inline bool get_can_cached() const { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
@@ -1739,6 +1750,8 @@ protected:
   ObPLCompileFlag compile_flag_;
   bool can_cached_;
   ObString priv_user_;
+  char invoker_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  //invoker database
+  uint64_t invoker_database_id_; //invoker database_id
   union {
     uint64_t analyze_flag_;
     struct {

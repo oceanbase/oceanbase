@@ -83,6 +83,7 @@ int ObAnonymousBlockResolver::resolve(const ParseNode &parse_tree)
       CK (OB_NOT_NULL(block_node = parse_tree.children_[0]));
       CK (OB_LIKELY(T_SP_BLOCK_CONTENT == block_node->type_
                     || T_SP_LABELED_BLOCK == block_node->type_));
+      OX (block_node->is_forbid_anony_parameter_ |= params_.query_ctx_->question_marks_count_ > 0);
       OX (stmt->set_prepare_protocol(false));
       OX (stmt->set_body(block_node));
       OZ (add_param());

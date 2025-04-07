@@ -1100,6 +1100,9 @@ struct PlTransformTreeCtx
   int64_t copied_idx_;
   ParamList *p_list_; // 存储匿名块内部所有expr和sql语句fast parser后得到的raw param node
   int64_t raw_param_num_; // 匿名块内部单个expr或者sql fast parser后raw param node的个数, 每个expr和sql fast parser后, 会将param num存储在node节点中
+  bool is_ps_mode_;
+  int64_t total_param_nums_;
+  ObPlanCacheCtx *ps_pc_ctx_;
   PlTransformTreeCtx() :
     allocator_(NULL),
     params_(NULL),
@@ -1112,7 +1115,10 @@ struct PlTransformTreeCtx
     no_param_sql_(),
     copied_idx_(0),
     p_list_(NULL),
-    raw_param_num_(0)
+    raw_param_num_(0),
+    is_ps_mode_(false),
+    total_param_nums_(0),
+    ps_pc_ctx_(nullptr)
   {}
 };
 
@@ -1141,7 +1147,9 @@ public:
                               const ObStmtNodeTree *block,
                               ParamStore &params,
                               ObIAllocator &allocator,
-                              ObCacheObjGuard &cacheobj_guard);
+                              bool is_ps_mode,
+                              ObString &parameter_sql,
+                              ObPlanCacheCtx *pc_ctx = nullptr);
   int transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *block, ParseNode *no_param_root, ObExecContext &ctx, ParseResult &parse_result);
   int trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContext &ctx);
   // for anonymous
@@ -1249,6 +1257,13 @@ public:
   std::pair<common::ObBucketLock, common::ObBucketLock>& get_jit_lock() { return jit_lock_; }
 
   static int check_session_alive(const ObBasicSessionInfo &session);
+
+  bool forbid_anony_parameter(ObSQLSessionInfo &session, bool is_ps_mode, bool forbid);
+  bool parameter_ps_anonymous_block(ObExecContext &ctx,
+                                            ObIAllocator &allocator,
+                                            ParseResult &parse_result,
+                                            ObString &no_param_sql,
+                                            ObPlanCacheCtx &pc_ctx);
 
 private:
   common::ObMySQLProxy *sql_proxy_;

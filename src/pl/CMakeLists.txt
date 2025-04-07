@@ -68,6 +68,10 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_external_table.cpp
 )
 
+ob_set_subtarget(ob_pl pl_recompile
+  pl_recompile/ob_pl_recompile_task_helper.cpp
+)
+
 ob_set_subtarget(ob_pl dblink
   dblink/ob_pl_dblink_guard.cpp
 )

@@ -390,6 +390,8 @@ do {                                                                            
     do { \
       if (NULL == result) { \
         YY_UNEXPECTED_ERROR("invalid var node\n"); \
+      } else if (result->is_fp_) {  \
+        /* do nothing */  \
       } else if ((result->pl_parse_info_.is_pl_parse_ && NULL == result->pl_parse_info_.pl_ns_) \
                  || result->is_dynamic_sql_) { \
         if (result->no_param_sql_len_ + (start - result->pl_parse_info_.last_pl_symbol_pos_ - 1) \
