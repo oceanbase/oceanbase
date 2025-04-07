@@ -2775,6 +2775,21 @@ int ObTransformAggrSubquery::check_can_trans_any_all_as_scalar_subquery(ObDMLStm
              has_rownum) {
     is_valid = false;
   } else {
+    bool has_col_in_select_items = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_col_in_select_items && i < subquery->get_select_item_size(); ++i) {
+      SelectItem &select_item = subquery->get_select_item(i);
+      if (OB_ISNULL(select_item.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (select_item.expr_->has_flag(CNT_COLUMN)) {
+        has_col_in_select_items = true;
+      }
+    }
+    if (OB_SUCC(ret) && !has_col_in_select_items) {
+      is_valid = false;
+    }
+  }
+  if (OB_SUCC(ret) && is_valid) {
     OPT_TRACE("can convert any all as scalar subquery");
   }
   return ret;
