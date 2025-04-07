@@ -453,6 +453,7 @@ int ObDASDomainIdMergeIter::init_rowkey_domain_scan_param(
 int ObDASDomainIdMergeIter::concat_row()
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DomainIDCR"));
   if (OB_FAIL(data_table_iter_->get_next_row())) {
     if (OB_ITER_END == ret && is_no_sample_) {
       int tmp_ret = ret;
@@ -468,7 +469,6 @@ int ObDASDomainIdMergeIter::concat_row()
             ret = OB_SUCCESS;
           }
         } else {
-          ObArenaAllocator allocator("RowkeyDomain");
           common::ObRowkey rowkey;
           if (OB_FAIL(get_rowkey(allocator, rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i), rowkey))) {
             LOG_WARN("fail to process_data_table_rowkey", K(ret));
@@ -494,7 +494,6 @@ int ObDASDomainIdMergeIter::concat_row()
         } else if (OB_FAIL(rowkey_domain_iters_.at(i)->get_next_row())) {
           LOG_WARN("fail to get next row", K(ret));
           int tmp_ret = OB_SUCCESS;
-          ObArenaAllocator allocator("RowkeyDomain");
           common::ObRowkey rowkey;
           if (OB_TMP_FAIL(get_rowkey(allocator, data_table_ctdef_, data_table_rtdef_, rowkey))) {
             LOG_WARN("fail to process_data_table_rowkey", K(ret), K(tmp_ret));
@@ -505,7 +504,7 @@ int ObDASDomainIdMergeIter::concat_row()
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_and_fill_domain_id_in_data_table(rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i)))) {
+      } else if (OB_FAIL(get_and_fill_domain_id_in_data_table(rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i), allocator))) {
         LOG_WARN("fail to get and fill domain id", K(ret));
       }
     }
@@ -516,6 +515,7 @@ int ObDASDomainIdMergeIter::concat_row()
 int ObDASDomainIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DomainIDCRS"));
   int64_t data_row_cnt = 0;
   int64_t rowkey_domain_row_cnt = 0;
   ObArray<share::ObDomainIdUtils::DomainIds> domain_ids;
@@ -566,6 +566,7 @@ int ObDASDomainIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
             if (OB_FAIL(get_domain_ids(rowkey_domain_row_cnt,
                                       rowkey_domain_ctdefs_.at(i),
                                       rowkey_domain_rtdefs_.at(i),
+                                      allocator,
                                       domain_ids))) {
               LOG_WARN("fail to get domain ids", K(ret), K(count));
             } else {
@@ -607,7 +608,7 @@ int ObDASDomainIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
 int ObDASDomainIdMergeIter::sorted_merge_join_row()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("DomainIDMR");
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DomainIDMR"));
   common::ObRowkey data_table_rowkey;
   if (OB_FAIL(data_table_iter_->get_next_row()) && OB_ITER_END != ret) {
     LOG_WARN("fail to get next data table row", K(ret));
@@ -642,7 +643,7 @@ int ObDASDomainIdMergeIter::sorted_merge_join_row()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, The row count of data table isn't equal to rowkey domain", K(ret));
         }
-      } else if (OB_FAIL(get_and_fill_domain_id_in_data_table(rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i)))) {
+      } else if (OB_FAIL(get_and_fill_domain_id_in_data_table(rowkey_domain_ctdefs_.at(i), rowkey_domain_rtdefs_.at(i), allocator))) {
         LOG_WARN("fail to get domain id", K(ret));
       }
     }
@@ -653,7 +654,7 @@ int ObDASDomainIdMergeIter::sorted_merge_join_row()
 int ObDASDomainIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("DomainIdMRs");
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DomainIdMRs"));
   common::ObArray<common::ObRowkey> rowkeys_in_data_table;
   common::ObArray<share::ObDomainIdUtils::DomainIds> domain_ids;
   bool is_iter_end = false;
@@ -815,6 +816,7 @@ int ObDASDomainIdMergeIter::get_rowkeys(
 int ObDASDomainIdMergeIter::get_domain_id(
     const ObDASScanCtDef *ctdef,
     ObDASScanRtDef *rtdef,
+    common::ObIAllocator &allocator,
     share::ObDomainIdUtils::DomainIds &domain_id)
 {
   int ret = OB_SUCCESS;
@@ -855,8 +857,7 @@ int ObDASDomainIdMergeIter::get_domain_id(
         LOG_WARN("unexpected error, domain id expr is nullptr", K(ret), K(rowkey_cnt), K(ctdef->result_output_));
       } else {
         ObDatum &datum = expr->locate_expr_datum(*rtdef->eval_ctx_);
-        ObArenaAllocator &alloc = get_arena_allocator();
-        void *buf = alloc.alloc(datum.get_string().length());
+        void *buf = allocator.alloc(datum.get_string().length());
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory", K(ret), KP(buf));
@@ -876,7 +877,8 @@ int ObDASDomainIdMergeIter::get_domain_id(
 
 int ObDASDomainIdMergeIter::get_and_fill_domain_id_in_data_table(
     const ObDASScanCtDef *ctdef,
-    ObDASScanRtDef *rtdef)
+    ObDASScanRtDef *rtdef,
+    common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef) || OB_ISNULL(data_table_ctdef_) || OB_ISNULL(data_table_rtdef_)) {
@@ -884,7 +886,7 @@ int ObDASDomainIdMergeIter::get_and_fill_domain_id_in_data_table(
     LOG_WARN("invalid arguments", K(ret), KP(ctdef), KP(rtdef), KP(data_table_ctdef_), KP(data_table_rtdef_));
   } else {
     share::ObDomainIdUtils::DomainIds domain_id;
-    if (is_no_sample_ && OB_FAIL(get_domain_id(ctdef, rtdef, domain_id))) {
+    if (is_no_sample_ && OB_FAIL(get_domain_id(ctdef, rtdef, allocator, domain_id))) {
       LOG_WARN("fail to get domain id",K(ret));
     } else {
       int64_t domain_type = ObDomainIdUtils::ObDomainIDType::MAX;
@@ -934,6 +936,7 @@ int ObDASDomainIdMergeIter::get_domain_ids(
       const int64_t size,
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
+      common::ObIAllocator &allocator,
       common::ObIArray<share::ObDomainIdUtils::DomainIds> &domain_ids)
 {
   int ret = OB_SUCCESS;
@@ -942,7 +945,7 @@ int ObDASDomainIdMergeIter::get_domain_ids(
   for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
     batch_info_guard.set_batch_idx(i);
     share::ObDomainIdUtils::DomainIds domain_id;
-    if (OB_FAIL(get_domain_id(ctdef, rtdef, domain_id))) {
+    if (OB_FAIL(get_domain_id(ctdef, rtdef, allocator, domain_id))) {
       LOG_WARN("fail to get domain id", K(ret), K(i));
     } else if (OB_FAIL(domain_ids.push_back(domain_id))) {
       LOG_WARN("fail to push back domain id", K(ret), K(domain_id));
@@ -1022,7 +1025,7 @@ int ObDASDomainIdMergeIter::get_rowkeys_and_domain_ids(
       LOG_WARN("fail to process_data_table_rowkey", K(ret), K(i));
     } else if (OB_FAIL(rowkeys.push_back(rowkey))) {
       LOG_WARN("fail to push back rowkey", K(ret), K(rowkey));
-    } else if (OB_FAIL(get_domain_id(ctdef, rtdef, domain_id))) {
+    } else if (OB_FAIL(get_domain_id(ctdef, rtdef, allocator, domain_id))) {
       LOG_WARN("fail to get domain id", K(ret), K(i));
     } else if (OB_FAIL(domain_ids.push_back(domain_id))) {
       LOG_WARN("fail to push back domain id", K(ret), K(domain_id));
