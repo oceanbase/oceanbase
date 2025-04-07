@@ -446,7 +446,9 @@ public:
 
   static ObBackgroundSessionIdGenerator &get_instance();
   static bool is_background_session_id(uint64_t session_id);
-  uint64_t get_next_sess_id();
+  uint64_t get_next_rpc_session_id();
+  uint64_t get_next_background_session_id();
+  uint64_t get_next_inner_sql_session_id();
 private:
   ObBackgroundSessionIdGenerator *generator_;
   volatile uint64_t local_seq_;

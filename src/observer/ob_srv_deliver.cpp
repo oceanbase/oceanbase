@@ -613,7 +613,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
           ObDiagnosticInfoContainer::get_di_experimental_feature_flag().di_rpc_cache();
       int64_t session_id = 0;
       if (!using_cache) {
-        session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+        session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
       }
       if (OB_SUCCESS != acquire_diagnostic_info_object(tenant_id, group_id, session_id, di,
                             using_cache)) {

@@ -471,7 +471,7 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
       ObDiagnosticInfo *di = nullptr;
       ObDiagnosticInfo *cur_di = ObLocalDiagnosticInfo::get();
       int64_t tenant_id = ((0 == ob_get_tenant_id()) ? OB_SYS_TENANT_ID : ob_get_tenant_id()); // thread local tenant id
-      const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+      const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_inner_sql_session_id();
       MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_switch_guard);
       if (OB_TMP_FAIL(tenant_switch_guard.switch_to(tenant_id))) {
         LOG_DEBUG("failed to switch tenant", K(tmp_ret), K(tenant_id));

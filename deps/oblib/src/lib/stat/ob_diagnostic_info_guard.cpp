@@ -31,7 +31,7 @@ ObBackGroundSessionGuard::ObBackGroundSessionGuard(int64_t tenant_id, int64_t gr
       tenant_id = OB_SYS_TENANT_ID;
     }
     int ret = OB_SUCCESS;
-    const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+    const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_background_session_id();
     if (ObDiagnosticInfoContainer::get_global_di_container()->is_inited()) {
       // using global di for all background sessions. because when the tenant is dropped there could
       // be some tenant thread is left. like TXXXX_UnitGC thread when mtl_wait is called.

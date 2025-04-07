@@ -33,6 +33,19 @@ namespace share
 
 #define WR_SQL_PLAN_BATCH_SIZE 20
 
+const int64_t default_value = INT64_MIN;
+
+#define FILL_NULLABLE_COLUMN(column)                                                         \
+  }                                                                                          \
+  else if (ash.column##_ == default_value && OB_FAIL(dml_splicer.add_column(true, #column))) \
+  {                                                                                          \
+    LOG_WARN("failed to add column " #column, KR(ret), K(ash));                              \
+  }                                                                                          \
+  else if (ash.column##_ != default_value &&                                                 \
+           OB_FAIL(dml_splicer.add_column(#column, ash.column##_)))                          \
+  {                                                                                          \
+    LOG_WARN("failed to add column " #column, KR(ret), K(ash));
+
 ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
     int64_t snapshot_end_time, int64_t snapshot_timeout_ts)
     : snap_id_(snap_id),
@@ -50,7 +63,7 @@ ERRSIM_POINT_DEF(ERRSIM_WR_SNAPSHOT_COLLECTOR_FAILURE);
 
 int ObWrCollector::init()
 {
-  // read from __wr_snapshot to get the newest snapshot_begin_time
+  // read from __wr_snapshot to get the latest snapshot_begin_time
   ObSqlString sql;
   int ret = OB_SUCCESS;
   int64_t begin_interval_time = 0;
@@ -334,7 +347,7 @@ int ObWrCollector::collect_ash()
             "time_to_usec(sample_time) as sample_time, "
             "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
             "time_waited, "
-            "p1, p2, p3, sql_plan_line_id, plan_hash, thread_id, stmt_type, group_id, time_model, "
+            "p1, p2, p3, sql_plan_line_id, plan_hash, thread_id, stmt_type, tx_id, group_id, time_model, "
             "module, action, "
             "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, "
             "tm_delta_db_time, "
@@ -363,7 +376,6 @@ int ObWrCollector::collect_ash()
         } else {
           const bool skip_null_error = true;
           const bool skip_column_error = false;
-          const int64_t default_value = -1;
           while (OB_SUCC(ret)) {
             if (OB_FAIL(result->next())) {
               if (OB_ITER_END == ret) {
@@ -424,6 +436,8 @@ int ObWrCollector::collect_ash()
                   skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "stmt_type", ash.stmt_type_, int64_t,
                   skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "tx_id", ash.tx_id_, int64_t,
+                  skip_null_error, skip_column_error, default_value);
               EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", ash.plan_hash_,
                   uint64_t, skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "tablet_id", ash.tablet_id_, int64_t,
@@ -467,44 +481,22 @@ int ObWrCollector::collect_ash()
                   LOG_WARN("failed to add column user_id", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.add_column("session_type", ash.session_type_))) {
                   LOG_WARN("failed to add column session_type", KR(ret), K(ash));
-                } else if (OB_FAIL(dml_splicer.add_column("sql_id", ash.sql_id_))) {
+                } else if (ash.sql_id_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "sql_id"))) {
+                  LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
+                } else if (ash.sql_id_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column("sql_id", ash.sql_id_))) {
                   LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
                   LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
-                } else if (ash.event_no_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_no"))) {
-                  LOG_WARN("failed to add column event_no", KR(ret), K(ash));
-                } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_no", ash.event_no_))) {
-                  LOG_WARN("failed to add column event_no", KR(ret), K(ash));
-                } else if (ash.event_id_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_id"))) {
-                  LOG_WARN("failed to add column event_id", KR(ret), K(ash));
-                } else if (ash.event_id_ >= 0 && OB_FAIL(dml_splicer.add_column("event_id", ash.event_id_))) {
-                  LOG_WARN("failed to add column event_id", KR(ret), K(ash));
-                } else if (ash.time_waited_ < 0 && OB_FAIL(dml_splicer.add_column(true, "time_waited"))) {
-                  LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
-                } else if (ash.time_waited_ >= 0 && OB_FAIL(dml_splicer.add_column("time_waited", ash.time_waited_))) {
-                  LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
-                } else if (ash.p1_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p1"))) {
-                  LOG_WARN("failed to add column p1", KR(ret), K(ash));
-                } else if (ash.p1_ >= 0 && OB_FAIL(dml_splicer.add_column("p1", ash.p1_))) {
-                  LOG_WARN("failed to add column p1", KR(ret), K(ash));
-                } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
-                  LOG_WARN("failed to add column p2", KR(ret), K(ash));
-                } else if (ash.p2_ >= 0 && OB_FAIL(dml_splicer.add_column("p2", ash.p2_))) {
-                  LOG_WARN("failed to add column p2", KR(ret), K(ash));
-                } else if (ash.p3_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p3"))) {
-                  LOG_WARN("failed to add column p3", KR(ret), K(ash));
-                } else if (ash.p3_ >= 0 && OB_FAIL(dml_splicer.add_column("p3", ash.p3_))) {
-                  LOG_WARN("failed to add column p3", KR(ret), K(ash));
-                } else if (ash.sql_plan_line_id_ < 0 &&
-                          OB_FAIL(dml_splicer.add_column(true, "sql_plan_line_id"))) {
-                  LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
-                } else if (ash.sql_plan_line_id_ >= 0 &&
-                          OB_FAIL(dml_splicer.add_column("sql_plan_line_id", ash.sql_plan_line_id_))) {
-                  LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
-                } else if (ash.group_id_ < 0 && OB_FAIL(dml_splicer.add_column(true, "group_id"))) {
-                  LOG_WARN("failed to add column group_id", KR(ret), K(ash));
-                } else if (ash.group_id_ >= 0 && OB_FAIL(dml_splicer.add_column("group_id", ash.group_id_))) {
-                  LOG_WARN("failed to add column group_id", KR(ret), K(ash));
+                FILL_NULLABLE_COLUMN(event_no)
+                FILL_NULLABLE_COLUMN(event_id)
+                FILL_NULLABLE_COLUMN(time_waited)
+                FILL_NULLABLE_COLUMN(p1)
+                FILL_NULLABLE_COLUMN(p2)
+                FILL_NULLABLE_COLUMN(p3)
+                FILL_NULLABLE_COLUMN(sql_plan_line_id)
+                FILL_NULLABLE_COLUMN(group_id) // 20
                 } else if (OB_FAIL(dml_splicer.add_column("time_model", ash.time_model_))) {
                   LOG_WARN("failed to add column time_model", KR(ret), K(ash));
                 } else if (ash.module_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "module"))) {
@@ -581,54 +573,23 @@ int ObWrCollector::collect_ash()
                 } else if (ash.plsql_subprogram_name_[0] != '\0'  &&
                           OB_FAIL(dml_splicer.add_column("plsql_subprogram_name", ash.plsql_subprogram_name_))) {
                   LOG_WARN("failed to add column plsql_subprogram_name", KR(ret), K(ash));
-                } else if (ash.plan_hash_ == static_cast<uint64_t>(-1) &&
+                } else if (ash.plan_hash_ == static_cast<uint64_t>(default_value) &&
                           OB_FAIL(dml_splicer.add_column(true, "plan_hash"))) {
                   LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
-                } else if (ash.plan_hash_ != static_cast<uint64_t>(-1) &&
+                } else if (ash.plan_hash_ != static_cast<uint64_t>(default_value) &&
                           OB_FAIL(dml_splicer.add_column("plan_hash", plan_hash_char))) {
                   LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
-                } else if (ash.thread_id_ < 0 &&
-                          OB_FAIL(dml_splicer.add_column(true, "thread_id"))) {
-                  LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
-                } else if (ash.thread_id_ >= 0 &&
-                          OB_FAIL(dml_splicer.add_column("thread_id", ash.thread_id_))) {
-                  LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
-                } else if (ash.stmt_type_ < 0 &&
-                          OB_FAIL(dml_splicer.add_column(true, "stmt_type"))) {
-                  LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
-                } else if (ash.stmt_type_ >= 0 &&
-                          OB_FAIL(dml_splicer.add_column("stmt_type", ash.stmt_type_))) {
-                  LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
-                } else if (ash.tablet_id_ < 0 &&
-                          OB_FAIL(dml_splicer.add_column(true, "tablet_id"))) {
-                  LOG_WARN("failed to add column tablet_id", KR(ret), K(ash));
-                } else if (ash.tablet_id_ >= 0 &&
-                          OB_FAIL(dml_splicer.add_column("tablet_id", ash.tablet_id_))) {
-                  LOG_WARN("failed to add column tablet_id", KR(ret), K(ash));
-                } else if (ash.blocking_session_id_ < 0 &&
-                          OB_FAIL(dml_splicer.add_column(true, "blocking_session_id"))) {
-                  LOG_WARN("failed to add column blocking_session_id", KR(ret), K(ash));
-                } else if (ash.blocking_session_id_ >= 0 &&
-                          OB_FAIL(dml_splicer.add_column("blocking_session_id", ash.blocking_session_id_))) {
-                  LOG_WARN("failed to add column blocking_session_id", KR(ret), K(ash));
+                FILL_NULLABLE_COLUMN(thread_id)
+                FILL_NULLABLE_COLUMN(stmt_type)
+                FILL_NULLABLE_COLUMN(tx_id)
+                FILL_NULLABLE_COLUMN(tablet_id)
+                FILL_NULLABLE_COLUMN(blocking_session_id)
                 } else if (OB_FAIL(dml_splicer.add_column("proxy_sid", ash.proxy_sid_))) {
                   LOG_WARN("failed to add column proxy_sid", KR(ret), K(ash));
-                } else if (ash.delta_read_io_requests_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_read_io_requests"))) {
-                  LOG_WARN("failed to add column delta_read_io_requests", KR(ret), K(ash));
-                } else if (ash.delta_read_io_requests_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_read_io_requests", ash.delta_read_io_requests_))) {
-                  LOG_WARN("failed to add column delta_read_io_requests", KR(ret), K(ash));
-                } else if (ash.delta_read_io_bytes_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_read_io_bytes"))) {
-                  LOG_WARN("failed to add column delta_read_io_bytes", KR(ret), K(ash));
-                } else if (ash.delta_read_io_bytes_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_read_io_bytes", ash.delta_read_io_bytes_))) {
-                  LOG_WARN("failed to add column delta_read_io_bytes", KR(ret), K(ash));
-                } else if (ash.delta_write_io_requests_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_write_io_requests"))) {
-                  LOG_WARN("failed to add column delta_write_io_requests", KR(ret), K(ash));
-                } else if (ash.delta_write_io_requests_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_write_io_requests", ash.delta_write_io_requests_))) {
-                  LOG_WARN("failed to add column delta_write_io_requests", KR(ret), K(ash));
-                } else if (ash.delta_write_io_bytes_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_write_io_bytes"))) {
-                  LOG_WARN("failed to add column delta_write_io_bytes", KR(ret), K(ash));
-                } else if (ash.delta_write_io_bytes_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_write_io_bytes", ash.delta_write_io_bytes_))) {
-                  LOG_WARN("failed to add column delta_write_io_bytes", KR(ret), K(ash));
+                FILL_NULLABLE_COLUMN(delta_read_io_requests)
+                FILL_NULLABLE_COLUMN(delta_read_io_bytes)
+                FILL_NULLABLE_COLUMN(delta_write_io_requests)
+                FILL_NULLABLE_COLUMN(delta_write_io_bytes)
                 } else if (OB_FAIL(dml_splicer.finish_row())) {
                   LOG_WARN("failed to finish row", KR(ret));
                 }
@@ -981,7 +942,6 @@ int ObWrCollector::collect_sqlstat()
       } else {
         const bool null_error = false;
         const bool skip_column_error = false;
-        const int64_t default_value = -1;
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END == ret) {
@@ -1335,7 +1295,6 @@ int ObWrCollector::collect_sqltext()
       } else {
         const bool skip_null_error = true;
         const bool skip_column_error = false;
-        const int64_t default_value = -1;
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END == ret) {
@@ -1348,12 +1307,12 @@ int ObWrCollector::collect_sqltext()
             ObWrSqlText sqltext;
             const bool skip_null_error = true;
             const bool skip_column_error = false;
-            const int64_t default_value = 0;
+            const int64_t sql_type_default_value = 0;
             EXTRACT_STRBUF_FIELD_MYSQL(
                 *result, "sql_id", sqltext.sql_id_, sizeof(sqltext.sql_id_), tmp_real_str_len);
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(
                 *result, "query_sql", sqltext.query_sql_, sizeof(sqltext.query_sql_), tmp_real_str_len);
-            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "sql_type", sqltext.sql_type_, int64_t, skip_null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "sql_type", sqltext.sql_type_, int64_t, skip_null_error, skip_column_error, sql_type_default_value);
 
 
             if (OB_SUCC(ret)) {
@@ -1427,7 +1386,6 @@ int ObWrCollector::collect_sql_plan()
       const bool skip_null_error = true;
       const bool skip_column_error = false;
       const bool need_insert_ignore = true;
-      const int64_t default_value = -1;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(result->next())) {
           if (OB_ITER_END == ret) {

@@ -427,7 +427,7 @@ int ObDiagnosticInfoContainer::acquire_diagnostic_info(int64_t tenant_id, int64_
     if (using_cache) {
       // if using_cache = true but cache didn't work, we generate new session id for it.
       OB_ASSERT(session_id == 0);
-      session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+      session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
     }
     if (OB_FAIL(runnings_.allocate_diagnostic_info(tenant_id, group_id, session_id,
             ObDiagnosticInfoContainer::get_global_di_container()->get_wait_event_pool(),
@@ -618,7 +618,7 @@ int ObDiagnosticInfoContainer::push_element_to_cache()
   int cnt = 0;
   while (OB_SUCC(ret)) {
     if (cache_.get_free()) {
-      const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+      const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
       ObDiagnosticInfo *di = nullptr;
       if (OB_FAIL(acquire_diagnostic_info(tenant_id_, 0, bg_sess_id, di, false))) {
         LOG_WARN("failed to acquire di for cache", KPC(this), K(bg_sess_id));
