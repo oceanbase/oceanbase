@@ -667,8 +667,6 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
 
-  //for outline use
-  ObOutlineState outline_state_;
   int64_t concurrent_num_;           //plan当前的并发执行个数
   int64_t max_concurrent_num_;       //plan最大并发可执行个数, -1表示没有限制
   //for plan cache, not need serialize

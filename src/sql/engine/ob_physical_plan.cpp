@@ -1653,7 +1653,7 @@ void ObPhysicalPlan::update_adaptive_pc_info(const ObAuditRecordData &record,
                                              const AdaptivePCConf *adpt_pc_conf)
 {
   int ret = OB_SUCCESS;
-  bool is_outline_plan = outline_state_.outline_version_.is_valid();
+  bool is_outline_plan = get_outline_state().outline_version_.is_valid();
   bool is_evolving = ATOMIC_LOAD(&stat_.is_evolution_);
   if (!is_inner_sql_ && (nullptr != adpt_pc_conf) && adpt_pc_conf->enable_adaptive_plan_cache_
       && !is_outline_plan && !is_evolving) {
