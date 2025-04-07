@@ -11702,6 +11702,17 @@ int ObDDLResolver::resolve_auto_partition_with_tenant_config(ObCreateTableStmt *
     LOG_WARN("get unexpected null", KR(ret), K(stmt));
   } else if (nullptr != node && OB_FAIL(resolve_auto_partition(stmt, node, table_schema))) {
     LOG_WARN("fail to resolve auto partition", KR(ret), K(table_schema), KPC(stmt));
+  } else if (stmt->use_auto_partition_clause()) {
+    // check if all index support auto split
+    const common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list = stmt->get_index_arg_list();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); ++i) {
+      const obrpc::ObCreateIndexArg &index_arg = index_arg_list.at(i);
+      if (!is_support_split_index_type(index_arg.index_type_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("there are the index types that are not supported by auto-partition", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto-partition table with domain index is");
+      }
+    }
   } else if (!stmt->use_auto_partition_clause() && !GCTX.is_shared_storage_mode() &&
              OB_FAIL(try_set_auto_partition_by_config(node, stmt->get_index_arg_list(), table_schema))) {
     LOG_WARN("fail to try to set auto_partition by config", KR(ret), K(table_schema), KPC(stmt));
