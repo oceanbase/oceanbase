@@ -91,7 +91,7 @@ obd demo
 
 **注記**: [dockerhub](https://hub.docker.com/r/oceanbase/oceanbase-ce/tags)、[quay.io](https://quay.io/repository/oceanbase/oceanbase-ce?tab=tags)、[ghcr.io](https://github.com/oceanbase/docker-images/pkgs/container/oceanbase-ce) でイメージを提供しています。dockerhub からイメージを取得できない場合は、他の 2 つのレジストリを試してください。
 
-1. OceanBase データベース インスタンスを起動します。
+1. OceanBase インスタンスを起動します。
 
     ```shell
     # ミニスタンドアロンインスタンスをデプロイします。
