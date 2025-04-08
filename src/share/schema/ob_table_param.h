@@ -388,7 +388,6 @@ private:
                                   Projector &rowid_projector,
                                   bool is_use_lob_locator_v2);
   int convert_fulltext_index_info(const ObTableSchema &table_schema);
-
 private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;
   common::ObIAllocator &allocator_;

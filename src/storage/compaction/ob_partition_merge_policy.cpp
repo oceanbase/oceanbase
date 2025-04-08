@@ -1371,7 +1371,8 @@ const char * ObAdaptiveMergeReasonStr[] = {
   "REBUILD_COLUMN_GROUP",
   "CRAZY_MEDIUM_FOR_TEST",
   "NO_INC_DATA",
-  "DURING_DDL"
+  "DURING_DDL",
+  "RECYCLE_TRUNCATE_INFO"
 };
 
 const char* ObAdaptiveMergePolicy::merge_reason_to_str(const int64_t merge_reason)
@@ -1396,7 +1397,8 @@ bool ObAdaptiveMergePolicy::is_valid_merge_reason(const AdaptiveMergeReason &rea
 bool ObAdaptiveMergePolicy::is_user_request_merge_reason(const AdaptiveMergeReason &reason)
 {
   return ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == reason
-    || ObAdaptiveMergePolicy::USER_REQUEST == reason;
+    || ObAdaptiveMergePolicy::USER_REQUEST == reason
+    || ObAdaptiveMergePolicy::CRAZY_MEDIUM_FOR_TEST == reason;
 }
 
 bool ObAdaptiveMergePolicy::is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy)
@@ -1409,6 +1411,11 @@ bool ObAdaptiveMergePolicy::is_skip_merge_reason(const AdaptiveMergeReason &reas
 {
   return reason == AdaptiveMergeReason::NO_INC_DATA ||
          reason == AdaptiveMergeReason::DURING_DDL;
+}
+
+bool ObAdaptiveMergePolicy::is_recycle_truncate_info_merge_reason(const AdaptiveMergeReason &reason)
+{
+  return AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO == reason;
 }
 
 #ifdef ERRSIM
@@ -1658,12 +1665,15 @@ int ObAdaptiveMergePolicy::add_meta_merge_result(
 }
 
 int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
-    const ObTablet &tablet,
-    AdaptiveMergeReason &reason)
+    ObTablet &tablet,
+    AdaptiveMergeReason &reason,
+    int64_t &least_medium_snapshot)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool crazy_medium_flag = false;
+  int64_t truncate_info_count = 0;
+  int64_t truncate_newest_commit_version = 0;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
 
@@ -1700,6 +1710,15 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
     if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_analyzer, reason))) {
       LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_TMP_FAIL(tablet.get_truncate_info_newest_version(truncate_newest_commit_version, truncate_info_count))) {
+    LOG_WARN("failed to get truncate info range", KR(tmp_ret));
+  } else if ((AdaptiveMergeReason::NONE != reason && truncate_info_count > RECYCLE_TRUNCATE_INFO_THRESHOLD)
+            || AdaptiveMergeReason::NONE == reason) {
+    reason = AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO;
+    least_medium_snapshot = truncate_newest_commit_version;
+    LOG_INFO("[TRUNCATE INFO]success to get adaptive merge reason", KR(tmp_ret), K(ls_id), K(tablet_id), K(reason), K(least_medium_snapshot));
   }
 
 #ifdef ERRSIM

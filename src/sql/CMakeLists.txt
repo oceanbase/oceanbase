@@ -247,6 +247,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_values_table_access_op.cpp
   engine/basic/ob_hp_infrastructure_manager.ipp
   engine/basic/ob_hp_infras_vec_mgr.cpp
+  engine/basic/ob_truncate_filter_struct.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd

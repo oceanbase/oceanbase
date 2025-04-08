@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_read_info.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-
+#include "share/truncate_info/ob_truncate_info_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -221,7 +221,7 @@ void ObReadInfoStruct::reset()
   is_oracle_mode_ = false;
   allocator_ = nullptr;
   schema_column_count_ = 0;
-  compat_version_ = READ_INFO_VERSION_V3;
+  compat_version_ = READ_INFO_VERSION_V4;
   is_cs_replica_compat_ = false;
   is_delete_insert_table_ = false;
   reserved_ = 0;
@@ -305,8 +305,10 @@ int ObReadInfoStruct::init_compat_version()
     compat_version_ = READ_INFO_VERSION_V1;
   } else if (compat_version < DATA_VERSION_4_3_4_0) {
     compat_version_ = READ_INFO_VERSION_V2;
-  } else {
+  } else if (compat_version < share::ObTruncateInfoUtil::TRUNCATE_INFO_CMP_DATA_VERSION) {
     compat_version_ = READ_INFO_VERSION_V3;
+  } else {
+    compat_version_ = READ_INFO_VERSION_V4;
   }
   return ret;
 }
@@ -324,7 +326,8 @@ ObTableReadInfo::ObTableReadInfo()
     cols_param_(),
     cols_extend_(),
     has_all_column_group_(true),
-    mock_sstable_query_(false)
+    mock_sstable_query_(false),
+    need_truncate_filter_(false)
 {
 }
 
@@ -364,6 +367,7 @@ int ObTableReadInfo::mock_for_sstable_query(
   } else {
     mock_sstable_query_ = true;
     has_all_column_group_ = false;
+    need_truncate_filter_ = false;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -413,7 +417,8 @@ int ObTableReadInfo::init(
     const common::ObIArray<int32_t> *cg_idxs,
     const common::ObIArray<ObColExtend> *cols_extend,
     const bool has_all_column_group,
-    const bool is_cg_sstable)
+    const bool is_cg_sstable,
+    const bool need_truncate_filter)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_pre_check(schema_column_count, schema_rowkey_cnt, cols_desc,
@@ -435,6 +440,7 @@ int ObTableReadInfo::init(
     LOG_WARN("failed to init sequence read info & datum utils", K(ret));
   } else {
     has_all_column_group_ = has_all_column_group;
+    need_truncate_filter_ = need_truncate_filter;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -544,6 +550,7 @@ void ObTableReadInfo::reset()
   memtable_cols_index_.reset();
   has_all_column_group_ = true;
   mock_sstable_query_ = false;
+  need_truncate_filter_ = false;
 }
 
 /*
@@ -588,6 +595,11 @@ int ObTableReadInfo::serialize(
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V3) {
     if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, mview_old_new_col_index_))) {
       LOG_WARN("Fail to encode mview old new col index", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V4) {
+    if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, need_truncate_filter_))) {
+      LOG_WARN("Fail to encode need truncate filter", K(ret));
     }
   }
   return ret;
@@ -676,6 +688,15 @@ int ObTableReadInfo::deserialize(
       mview_old_new_col_index_ = OB_INVALID_INDEX;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (compat_version_ >= READ_INFO_VERSION_V4) {
+      if (OB_FAIL(serialization::decode_bool(buf, data_len, pos, &need_truncate_filter_))) {
+        LOG_WARN("Fail to decode need truncate filter", K(ret));
+      }
+    } else {
+      need_truncate_filter_ = false;
+    }
+  }
 
   if (OB_SUCC(ret) && cols_desc_.count() > 0) {
     const bool is_cg_sstable = ObCGReadInfo::is_cg_sstable(schema_rowkey_cnt_, schema_column_count_);
@@ -736,6 +757,9 @@ int64_t ObTableReadInfo::get_serialize_size() const
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V3) {
     len += serialization::encoded_length_vi64(mview_old_new_col_index_);
   }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V4) {
+    len += serialization::encoded_length_bool(need_truncate_filter_);
+  }
   return len;
 }
 
@@ -760,6 +784,7 @@ int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
         K_(cg_idxs),
         K_(cols_extend),
         K_(has_all_column_group),
+        K_(need_truncate_filter),
         K_(datum_utils),
         "cols_param",
         ObArrayWrap<ObColumnParam *>(0 == cols_param_.count() ? NULL : &cols_param_.at(0),

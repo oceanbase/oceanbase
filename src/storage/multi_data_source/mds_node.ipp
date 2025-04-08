@@ -424,6 +424,23 @@ int UserMdsNode<K, V>::fill_event_(observer::MdsEvent &event,
   }
   return ret;
 }
+
+template <typename K, typename V>
+int UserMdsNode<K, V>::assign(const UserMdsNode<K, V> &rhs)
+{
+  int ret = OB_SUCCESS;
+  status_ = rhs.status_;
+  writer_id_ = rhs.writer_id_;
+  seq_no_ = rhs.seq_no_;
+  redo_scn_ = rhs.redo_scn_;
+  end_scn_ = rhs.end_scn_;
+  trans_version_ = rhs.trans_version_;
+  if (OB_FAIL(meta::copy_or_assign(rhs.user_data_, user_data_, DefaultAllocator::get_instance()))) {
+    MDS_LOG(WARN, "fail to do no_link_assign", KR(ret), K(*this));
+  }
+  return ret;
+}
+
 #undef CONSTRUCT_ROW_LOCK_GUARD
 }
 }

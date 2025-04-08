@@ -4457,34 +4457,60 @@ int ObPartitionSchema::mock_list_partition_array()
   return ret;
 }
 
+int find_partition_by_name(
+  const ObString &name,
+  const ObPartitionLevel find_part_level,
+  ObPartitionSchemaIter &iter,
+  ObPartitionSchemaIter::Info &info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(PARTITION_LEVEL_TWO != find_part_level && PARTITION_LEVEL_ONE != find_part_level)) {
+    ret = OB_UNKNOWN_PARTITION;
+    LOG_WARN("invalid partition level", KR(ret), K(find_part_level));
+  } else {
+    const bool check_level_two = (PARTITION_LEVEL_TWO == find_part_level);
+    while (OB_SUCC(ret)) {
+      ObPartitionSchemaIter::Info tmp_info;
+      const share::schema::ObBasePartition *check_part_ptr = nullptr;
+      if (OB_FAIL(iter.next_partition_info(tmp_info))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_UNKNOWN_PARTITION;
+          LOG_WARN("could not find the partition by given name", KR(ret), K(name), K(find_part_level));
+        } else {
+          LOG_WARN("unexpected erro happened when get partition by name", KR(ret));
+        }
+      } else if (check_level_two) {
+        check_part_ptr = tmp_info.partition_;
+      } else {
+        check_part_ptr = tmp_info.part_;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(check_part_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check_part_ptr is null", KR(ret), K(tmp_info), K(check_part_ptr), K(find_part_level));
+      } else if (ObCharset::case_insensitive_equal(name, check_part_ptr->get_part_name())) {
+        info = tmp_info;
+        break;
+      }
+    } // while
+  }
+  return ret;
+}
+
 int ObPartitionSchema::get_partition_by_name(const ObString &name, const ObPartition *&part) const
 {
   int ret = OB_SUCCESS;
   part = nullptr;
   const ObPartitionLevel part_level = this->get_part_level();
-  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
-  ObPartitionSchemaIter iter(*this, check_partition_mode);
   ObPartitionSchemaIter::Info info;
+  ObPartitionSchemaIter iter(*this, CHECK_PARTITION_MODE_NORMAL);
   if (PARTITION_LEVEL_ZERO == part_level) {
     ret = OB_UNKNOWN_PARTITION;
     LOG_WARN("could not get partition on nonpartitioned table", KR(ret), K(part_level));
+  } else if (OB_FAIL(find_partition_by_name(name, PARTITION_LEVEL_ONE/*find_part_level*/, iter, info))) {
+    LOG_WARN("failed to get partition by name", KR(ret), K(name));
   } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(iter.next_partition_info(info))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_UNKNOWN_PARTITION;
-          LOG_WARN("could not find the partition by given name", KR(ret), K(name), KPC(this));
-        } else {
-          LOG_WARN("unexpected erro happened when get partition by name", KR(ret));
-        }
-      } else if (OB_ISNULL(info.part_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("info.part_ is null", KR(ret), KPC(this));
-      } else if (ObCharset::case_insensitive_equal(name, info.part_->get_part_name())) {
-        part = info.part_;
-        break;
-      }
-    }
+    part = info.part_;
   }
   return ret;
 }
@@ -4495,29 +4521,112 @@ int ObPartitionSchema::get_subpartition_by_name(const ObString &name, const ObPa
   part = nullptr;
   subpart = nullptr;
   const ObPartitionLevel part_level = this->get_part_level();
-  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
-  ObPartitionSchemaIter iter(*this, check_partition_mode);
   ObPartitionSchemaIter::Info info;
+  ObPartitionSchemaIter iter(*this, CHECK_PARTITION_MODE_NORMAL);
   if (PARTITION_LEVEL_TWO != part_level) {
     ret = OB_UNKNOWN_SUBPARTITION;
     LOG_WARN("could not get subpartition on not composite partition table", KR(ret), K(part_level));
+  } else if (OB_FAIL(find_partition_by_name(name, PARTITION_LEVEL_TWO/*find_part_level*/, iter, info))) {
+    LOG_WARN("failed to get partition by name", KR(ret), K(name));
   } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(iter.next_partition_info(info))) {
-        if (OB_ITER_END == ret) {
-          //subpart not exist errno is same with the part right now
-          ret = OB_UNKNOWN_SUBPARTITION;
-          LOG_WARN("could not find the subpartition by given name", KR(ret), K(name), KPC(this));
-        } else {
-          LOG_WARN("unexpected erro happened when get subpartition by name", KR(ret));
-        }
-      } else if (OB_ISNULL(info.part_) || OB_ISNULL(info.partition_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("info.part_ or info.partition_ is null", KR(ret), KP(info.part_), KP(info.partition_), KPC(this));
-      } else if (ObCharset::case_insensitive_equal(name, info.partition_->get_part_name())) {
-        part = info.part_;
-        subpart = reinterpret_cast<const ObSubPartition*>(info.partition_);
-        break;
+    part = info.part_;
+    subpart = static_cast<const ObSubPartition*>(info.partition_);
+  }
+  return ret;
+}
+
+int ObPartitionSchema::get_partition_and_prev_by_name(
+    const ObString &name,
+    const ObPartitionLevel find_part_level,
+    const ObBasePartition *&part,
+    const ObBasePartition *&prev_part) const
+{
+  int ret = OB_SUCCESS;
+  part = nullptr;
+  prev_part = nullptr;
+  ObPartitionSchemaIter::Info info;
+  ObPartitionSchemaIter iter(*this, CHECK_PARTITION_MODE_NORMAL);
+  const ObPartitionLevel part_level = this->get_part_level();
+  if (OB_UNLIKELY(find_part_level > part_level
+      || find_part_level <= PARTITION_LEVEL_ZERO
+      || find_part_level >= PARTITION_LEVEL_MAX)) {
+    ret = OB_UNKNOWN_PARTITION;
+    SHARE_SCHEMA_LOG(WARN, "could not get partition on cur table", KR(ret), K(part_level), K(find_part_level));
+  } else if (OB_FAIL(find_partition_by_name(name, find_part_level, iter, info))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to get partition by name", KR(ret), K(name), K(find_part_level));
+  } else if (PARTITION_LEVEL_ONE == find_part_level) {
+    part = info.part_;
+    if (info.part_idx_ > 0) {
+      if (OB_ISNULL(partition_array_)) {
+        ret = OB_INVALID_DATA;
+        SHARE_SCHEMA_LOG(WARN, "part array should not be null", KR(ret), KPC(info.part_));
+      } else {
+        prev_part = partition_array_[info.part_idx_ - 1];
+      }
+    }
+  } else if (PARTITION_LEVEL_TWO == find_part_level) {
+    part = info.partition_;
+    if (info.subpart_idx_ > 0) {
+      if (OB_UNLIKELY(nullptr == info.part_ || nullptr == info.part_->get_subpart_array())) {
+        ret = OB_INVALID_DATA;
+        SHARE_SCHEMA_LOG(WARN, "subpart array should not be null", KR(ret), KPC(info.part_));
+      } else {
+        prev_part = info.part_->get_subpart_array()[info.subpart_idx_ - 1];
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected part level", KR(ret), K(find_part_level), K(part_level));
+  }
+  return ret;
+}
+
+int ObPartitionSchema::get_other_part_by_name(
+    const ObString &name,
+    const ObPartitionLevel find_part_level,
+    ObIArray<ObBasePartition *> &other_part_array) const
+{
+  int ret = OB_SUCCESS;
+  ObPartitionSchemaIter::Info info;
+  ObPartitionSchemaIter iter(*this, CHECK_PARTITION_MODE_NORMAL);
+  const ObPartitionLevel part_level = this->get_part_level();
+  if (OB_UNLIKELY(find_part_level > part_level
+      || find_part_level <= PARTITION_LEVEL_ZERO
+      || find_part_level >= PARTITION_LEVEL_MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_SCHEMA_LOG(WARN, "invalid part level", KR(ret), K(part_level), K(find_part_level));
+  } else if (OB_FAIL(find_partition_by_name(name, find_part_level, iter, info))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to get partition by name", KR(ret), K(name), K(find_part_level));
+  } else if (PARTITION_LEVEL_ONE == find_part_level) {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_num_; ++idx) {
+      if (info.part_idx_ == idx) { // skip
+      } else if (OB_ISNULL(partition_array_[idx])) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid nullptr in part array", KR(ret), K(idx), KP(partition_array_[idx]));
+      } else if (OB_FAIL(other_part_array.push_back(partition_array_[idx]))) {
+        LOG_WARN("failed to push into part array", KR(ret), K(idx), KP(partition_array_[idx]));
+      }
+    }
+  } else if (OB_UNLIKELY(PARTITION_LEVEL_TWO != find_part_level)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected part level", KR(ret), K(find_part_level), K(part_level));
+  } else if (OB_ISNULL(info.part_)) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("invalid nullptr in part array", KR(ret), K(find_part_level), K(info));
+  } else {
+    ObSubPartition **subpart_array = info.part_->get_subpart_array();
+    const int64_t subpartition_num = info.part_->get_subpartition_num();
+    if (OB_UNLIKELY(nullptr == subpart_array || subpartition_num <= 0)) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid nullptr or part_num", KR(ret), KPC(info.part_), KP(subpart_array), K(subpartition_num));
+    }
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < subpartition_num; ++idx) {
+      if (info.subpart_idx_ == idx) { // skip
+      } else if (OB_ISNULL(subpart_array[idx])) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid nullptr in subpart array", KR(ret), K(idx), KP(partition_array_[idx]));
+      } else if (OB_FAIL(other_part_array.push_back(subpart_array[idx]))) {
+        LOG_WARN("failed to push into part array", KR(ret), K(idx), KP(partition_array_[idx]));
       }
     }
   }
@@ -5385,8 +5494,7 @@ ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
     schema_version_(OB_INVALID_VERSION), name_(),
     high_bound_val_(),
     schema_allocator_(*allocator),
-    list_row_values_(SCHEMA_MALLOC_BLOCK_SIZE,
-                     common::ModulePageAllocator(schema_allocator_)),
+    list_row_values_(schema_allocator_),
     status_(PARTITION_STATUS_ACTIVE),
     projector_(NULL),
     projector_size_(0),
@@ -5451,22 +5559,8 @@ int ObBasePartition::assign(const ObBasePartition & src_part)
       LOG_WARN("Fail to deep copy high_bound_val_", K(ret));
     } else if (OB_FAIL(set_low_bound_val(src_part.low_bound_val_))) {
       LOG_WARN("Fail to deep copy low_bound_val_", K(ret));
-    } else {
-      int64_t count = src_part.list_row_values_.count();
-      if (OB_FAIL(list_row_values_.reserve(count))) {
-        LOG_WARN("fail to reserve se array", K(ret), K(count));
-      } else {
-        ObNewRow tmp_row;
-        ObIAllocator *allocator = get_allocator();
-        for (int64_t i = 0; OB_SUCC(ret) && i < count; i ++) {
-          const ObNewRow &row = src_part.list_row_values_.at(i);
-          if (OB_FAIL(ob_write_row(*allocator, row, tmp_row))) {
-            LOG_WARN("Fail to write row", K(ret));
-          } else if (OB_FAIL(list_row_values_.push_back(tmp_row))) {
-            LOG_WARN("Fail to push back row", K(ret));
-          }
-        }
-      }
+    } else if (OB_FAIL(list_row_values_.assign(*get_allocator(), src_part.list_row_values_))) {
+      LOG_WARN("fail to assign list row value", K(ret), K(src_part));
     }
   }
   return ret;
@@ -5546,9 +5640,7 @@ int ObBasePartition::set_list_vector_values_with_hex_str(
     const common::ObString &list_vector_vals_hex)
 {
   int ret = OB_SUCCESS;
-  const int obj_capacity = 1024;
-  HEAP_VARS_2((char[OB_MAX_B_HIGH_BOUND_VAL_LENGTH], serialize_buf),
-              (ObObj[obj_capacity], obj_array)) {
+  HEAP_VAR(char[OB_MAX_B_HIGH_BOUND_VAL_LENGTH], serialize_buf) {
     ObIAllocator *allocator = get_allocator();
     int64_t pos = 0;
     const int64_t hex_length = list_vector_vals_hex.length();
@@ -5563,34 +5655,10 @@ int ObBasePartition::set_list_vector_values_with_hex_str(
          serialize_buf, OB_MAX_B_HIGH_BOUND_VAL_LENGTH))) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("Failed to get hex_str buf", K(ret));
-    }
-
-    if (OB_SUCC(ret)) {
-      int64_t size = 0;
-      if (OB_FAIL(serialization::decode_vi64(serialize_buf, hex_length, pos, &size))) {
-        LOG_WARN("fail to decode vi64", K(ret));
-      }
-      ObNewRow row;
-      ObNewRow tmp_row;
-      row.assign(obj_array, obj_capacity);
-      for (int64_t i = 0; OB_SUCC(ret) && i < size; i ++) {
-        row.count_ = obj_capacity; // reset count for sparse row
-        if (OB_FAIL(row.deserialize(serialize_buf, hex_length, pos))) {
-          LOG_WARN("fail to deserialize row", K(ret));
-        } else if (OB_FAIL(ob_write_row(*allocator, row, tmp_row))) {
-          LOG_WARN("fail to write row", K(ret));
-        } else if (OB_FAIL(list_row_values_.push_back(tmp_row))) {
-          LOG_WARN("fail to push back tmp_row", K(ret));
-        }
-      }
-      // Sort each point in the partition list according to the rules
-      if (OB_SUCC(ret)) {
-        InnerPartListVectorCmp part_list_vector_op;
-        lib::ob_sort(list_row_values_.begin(), list_row_values_.end(), part_list_vector_op);
-        if (OB_FAIL(part_list_vector_op.get_ret())) {
-          LOG_WARN("fail to sort list row values", K(ret));
-        }
-      }
+    } else if (OB_FAIL(list_row_values_.deserialize(*allocator, serialize_buf, hex_length, pos))) {
+      LOG_WARN("failed to deserialize from hex buf", KR(ret), K(hex_length), K(pos));
+    } else if (OB_FAIL(list_row_values_.sort_array())) {
+      LOG_WARN("failed to sort", KR(ret), K(list_row_values_));
     }
   }
 
@@ -5697,21 +5765,8 @@ OB_DEF_SERIALIZE(ObBasePartition)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, table_id_, part_id_,
-              schema_version_, name_, high_bound_val_, status_);
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(serialization::encode_vi64(buf,
-                                                buf_len,
-                                                pos,
-                                                list_row_values_.count()))) {
-    LOG_WARN("fail to encode count", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < list_row_values_.count(); i ++) {
-    if (OB_FAIL(list_row_values_.at(i).serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to encode row", K(ret));
-    }
-  }
-  LST_DO_CODE(OB_UNIS_ENCODE,
+              schema_version_, name_, high_bound_val_, status_,
+              list_row_values_,
               part_idx_,
               is_empty_partition_name_,
               tablespace_id_,
@@ -5761,37 +5816,8 @@ OB_DEF_DESERIALIZE(ObBasePartition)
     LOG_WARN("Fail to deep copy name, ", K(ret), K_(name));
   } else if (OB_FAIL(set_high_bound_val(high_bound_val))) {
     LOG_WARN("Fail to deep copy high_bound_val", K(ret), K(high_bound_val));
-  } else { }//do nothing
-
-  if (OB_SUCC(ret) && pos < data_len) {
-    int64_t size = 0;
-    void *tmp_buf = NULL;
-    ObObj *obj_array = NULL;
-    const int obj_capacity = 1024;
-    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &size))) {
-      LOG_WARN("fail to decode vi64", K(ret));
-    } else if (OB_ISNULL(tmp_buf = allocator.alloc(sizeof(ObObj) * obj_capacity))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc buf", KR(ret));
-    } else if (OB_ISNULL(obj_array = new (tmp_buf) ObObj[obj_capacity])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to new obj array", KR(ret));
-    } else {
-      ObNewRow row;
-      ObNewRow tmp_row;
-      row.assign(obj_array, obj_capacity);
-      ObIAllocator *allocator = get_allocator();
-      for (int64_t i = 0; OB_SUCC(ret) && i < size; i ++) {
-        row.count_ = obj_capacity; // reset count for sparse row
-        if (OB_FAIL(row.deserialize(buf, data_len, pos))) {
-          LOG_WARN("fail to deserialize row", K(ret));
-        } else if (OB_FAIL(ob_write_row(*allocator, row, tmp_row))) {
-          LOG_WARN("fail to write row", K(ret));
-        } else if (OB_FAIL(list_row_values_.push_back(tmp_row))) {
-          LOG_WARN("fail to push back tmp_row", K(ret));
-        }
-      }
-    }
+  } else if (OB_FAIL(list_row_values_.deserialize(*get_allocator(), buf, data_len, pos))) {
+    LOG_WARN("Fail to deserialize list row val", K(ret), K(data_len), K(pos));
   }
 
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -5820,14 +5846,10 @@ OB_DEF_SERIALIZE_SIZE(ObBasePartition)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, table_id_, part_id_,
-      schema_version_, name_, high_bound_val_, status_,
+      schema_version_, name_, high_bound_val_, status_, list_row_values_,
       part_idx_, is_empty_partition_name_,
       tablespace_id_, partition_type_, low_bound_val_, tablet_id_,
       external_location_, split_source_tablet_id_, part_storage_cache_policy_type_);
-  len += serialization::encoded_length_vi64(list_row_values_.count());
-  for (int64_t i = 0; i < list_row_values_.count(); i ++) {
-    len += list_row_values_.at(i).get_serialize_size();
-  }
   return len;
 }
 
@@ -5836,11 +5858,7 @@ int64_t ObBasePartition::get_deep_copy_size() const
   int64_t deep_copy_size = name_.length() + 1;
   deep_copy_size += high_bound_val_.get_deep_copy_size();
   deep_copy_size += low_bound_val_.get_deep_copy_size();
-  int64_t list_row_size = list_row_values_.get_data_size();
-  for (int64_t i = 0; i < list_row_values_.count(); i ++) {
-    list_row_size += list_row_values_.at(i).get_deep_copy_size();
-  }
-  deep_copy_size += list_row_size * 2 - 1;
+  deep_copy_size += list_row_values_.get_deep_copy_size();
   deep_copy_size += external_location_.length() + 1;
   deep_copy_size += sizeof(part_storage_cache_policy_type_);
   return deep_copy_size;

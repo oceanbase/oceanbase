@@ -63,6 +63,23 @@ struct ObStorageHATabletsBuilderParam final
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilderParam);
 };
 
+struct ObBuildMajorSSTablesParam final
+{
+  ObBuildMajorSSTablesParam(
+      const ObStorageSchema &storage_schema,
+      const bool has_truncate_info)
+    : storage_schema_(storage_schema),
+      has_truncate_info_(has_truncate_info)
+  {}
+  bool is_valid() const
+  {
+    return storage_schema_.is_valid();
+  }
+  TO_STRING_KV(K_(storage_schema), K_(has_truncate_info));
+  const ObStorageSchema &storage_schema_;
+  const bool has_truncate_info_;
+};
+
 class ObStorageHATabletsBuilder
 {
 public:
@@ -150,7 +167,7 @@ private:
       ObLS *ls,
       const obrpc::ObCopyTabletInfo &tablet_info,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const bool is_only_replace_major);
   int hold_local_tablet_(
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
@@ -355,13 +372,13 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const bool is_only_replace_major);
   static int build_tablet_with_major_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const BatchBuildTabletTablesExtraParam &extra_param);
   static int build_table_with_minor_tables(
       const BatchBuildMinorSSTablesParam &param);
@@ -373,20 +390,20 @@ private:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &hybrid_major_tables,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const BatchBuildTabletTablesExtraParam &extra_param);
   static int build_tablet_for_row_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const BatchBuildTabletTablesExtraParam &extra_param);
   // for column store
   static int build_tablet_for_column_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const BatchBuildTabletTablesExtraParam &extra_param);
 
   static int get_tablet_(
@@ -403,7 +420,7 @@ private:
       const BatchBuildTabletTablesExtraParam &batch_extra_param,
       ObLS *ls,
       ObTablet *tablet,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const int64_t transfer_seq,
       const BuildTabletTableExtraParam &table_extra_param);
   static int inner_update_tablet_table_store_with_minor_(
@@ -422,7 +439,7 @@ private:
   static int build_tablet_with_co_tables_(
       ObLS *ls,
       ObTablet *tablet,
-      const ObStorageSchema &storage_schema,
+      const ObBuildMajorSSTablesParam &major_sstables_param,
       const int64_t multi_version_start,
       const ObTablesHandleArray &co_tables,
       const BatchBuildTabletTablesExtraParam &extra_batch_param);

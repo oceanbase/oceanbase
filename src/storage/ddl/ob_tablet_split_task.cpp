@@ -17,6 +17,7 @@
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
+#include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/access/ob_multiple_scan_merge.h"
@@ -1600,7 +1601,25 @@ int ObTabletSplitMergeTask::create_sstable(
               "src_tablet_id", param_->source_tablet_id_, K(dest_tablet_id));
           } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle))) {
             LOG_WARN("add table failed", K(ret));
-          } else if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+          }
+
+          table_handle.reset();
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObTabletSplitUtil::build_truncate_info_mds_sstable(
+                build_mds_arena,
+                context_->ls_handle_,
+                context_->tablet_handle_,
+                dest_tablet_id,
+                table_handle))) {
+            LOG_WARN("build truncate info mds sstable failed", K(ret), KPC(param_));
+          } else if (OB_UNLIKELY(!table_handle.is_valid())) {
+            LOG_INFO("no need to fill truncate mds sstable", K(ret),
+              "src_tablet_id", param_->source_tablet_id_, K(dest_tablet_id));
+          } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle))) {
+            LOG_WARN("add table failed", K(ret));
+          }
+          if (OB_SUCC(ret) && !batch_sstables_handle.empty()) {
+            if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
                 context_->ls_handle_,
                 context_->tablet_handle_,
                 dest_tablet_id,
@@ -1608,7 +1627,8 @@ int ObTabletSplitMergeTask::create_sstable(
                 compaction::ObMergeType::MDS_MINI_MERGE,
                 param_->can_reuse_macro_block_,
                 context_->skipped_split_major_keys_))) {
-            LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle));
+              LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle));
+            }
           }
         }
       }
@@ -2921,17 +2941,20 @@ int ObTabletSplitUtil::build_lost_medium_mds_sstable(
     HEAP_VARS_3 ((ObTableScanParam, scan_param),
                  (ObTabletDumpMediumMds2MiniOperator, op),
                  (ObMdsTableMiniMerger, mds_mini_merger)) {
+      ObMdsReadInfoCollector unused_collector;
       if (OB_FAIL(check_and_build_mds_sstable_merge_ctx(ls_handle, dest_tablet_handle, tablet_merge_ctx))) {
         LOG_WARN("prepare medium mds merge ctx failed", K(ret), K(ls_handle), K(dest_tablet_id));
       } else if (tablet_merge_ctx.static_param_.scn_range_.end_scn_.is_base_scn()) { // = 1
         LOG_INFO("no need to build lost mds sstable again", K(ls_id), K(source_tablet_id), K(dest_tablet_id));
       } else if (OB_FAIL(mds_mini_merger.init(tablet_merge_ctx, op))) {
         LOG_WARN("fail to init mds mini merger", K(ret), K(tablet_merge_ctx), K(ls_id), K(dest_tablet_id));
-      } else if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(
+      } else if (OB_FAIL((ObMdsScanParamHelper::build_customized_scan_param<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
           allocator,
           ls_id,
           source_tablet_id,
-          scan_param))) {
+          ObMdsScanParamHelper::get_whole_read_version_range(),
+          unused_collector,
+          scan_param)))) {
         LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(source_tablet_id));
       } else if (OB_FAIL(medium_info_reader.init(*source_tablet_handle.get_obj(), scan_param))) {
         LOG_WARN("failed to init medium info reader", K(ret));
@@ -2963,6 +2986,87 @@ int ObTabletSplitUtil::build_lost_medium_mds_sstable(
           } else if (OB_FAIL(op.finish())) {
             LOG_WARN("finish failed", K(ret));
           } else if (OB_FAIL(mds_mini_merger.generate_mds_mini_sstable(allocator, medium_mds_table_handle))) {
+            LOG_WARN("fail to generate mds mini sstable with mini merger", K(ret), K(mds_mini_merger));
+          }
+        }
+      }
+    }
+    }
+  }
+  return ret;
+}
+
+int ObTabletSplitUtil::build_truncate_info_mds_sstable(
+    common::ObArenaAllocator &allocator,
+    const ObLSHandle &ls_handle,
+    const ObTabletHandle &source_tablet_handle,
+    const ObTabletID &dest_tablet_id,
+    ObTableHandleV2 &mds_table_handle)
+{
+  int ret = OB_SUCCESS;
+  mds_table_handle.reset();
+  ObTabletHandle dest_tablet_handle;
+  if (OB_UNLIKELY(!ls_handle.is_valid() || !source_tablet_handle.is_valid() || !dest_tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ls_handle), K(source_tablet_handle), K(dest_tablet_id));
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+      dest_tablet_id, dest_tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+    LOG_WARN("get tablet failed", K(ret), K(dest_tablet_id));
+  } else {
+    const share::ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
+    const ObTabletID &source_tablet_id = source_tablet_handle.get_obj()->get_tablet_id();
+    const ObVersionRange read_version_range(1, INT64_MAX);
+    HEAP_VARS_3 ((compaction::ObTabletMergeDagParam, param),
+                 (compaction::ObTabletMergeCtx, tablet_merge_ctx, param, allocator),
+                 (ObTabletTruncateInfoReader, truncate_info_reader)) {
+    HEAP_VARS_3 ((ObTableScanParam, scan_param),
+                 (ObTabletDumpMediumMds2MiniOperator, op),
+                 (ObMdsTableMiniMerger, mds_mini_merger)) {
+      ObMdsReadInfoCollector unused_collector;
+      if (OB_FAIL(check_and_build_mds_sstable_merge_ctx(ls_handle, dest_tablet_handle, tablet_merge_ctx))) {
+        LOG_WARN("prepare medium mds merge ctx failed", K(ret), K(ls_handle), K(dest_tablet_id));
+      } else if (tablet_merge_ctx.static_param_.scn_range_.end_scn_.is_base_scn()) { // = 1
+        LOG_INFO("no need to build lost mds sstable again", K(ls_id), K(source_tablet_id), K(dest_tablet_id));
+      } else if (OB_FAIL(mds_mini_merger.init(tablet_merge_ctx, op))) {
+        LOG_WARN("fail to init mds mini merger", K(ret), K(tablet_merge_ctx), K(ls_id), K(dest_tablet_id));
+      } else if (OB_FAIL((ObMdsScanParamHelper::build_customized_scan_param<ObTruncateInfoKey, ObTruncateInfo>(
+          allocator,
+          ls_id,
+          source_tablet_id,
+          read_version_range,
+          unused_collector,
+          scan_param)))) {
+        LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(source_tablet_id));
+      } else if (OB_FAIL(truncate_info_reader.init(*source_tablet_handle.get_obj(), scan_param))) {
+        LOG_WARN("failed to init medium info reader", K(ret));
+      } else {
+        bool has_truncate_info = false;
+        mds::MdsDumpKV *kv = nullptr;
+        common::ObArenaAllocator iter_arena("SplitIterTrunc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        while (OB_SUCC(ret)) {
+          iter_arena.reuse();
+          if (OB_FAIL(truncate_info_reader.get_next_mds_kv(iter_arena, kv))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("iter truncate mds failed", K(ret), K(ls_id), K(source_tablet_id));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_FAIL(op(*kv))) {
+            LOG_WARN("write truncate row failed", K(ret));
+          } else {
+            kv->mds::MdsDumpKV::~MdsDumpKV();
+            iter_arena.free(kv);
+            kv = nullptr;
+            has_truncate_info = true;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (!has_truncate_info) {
+            LOG_INFO("no need to build truncate info mds sstable", K(ls_id), K(source_tablet_id), K(dest_tablet_id));
+          } else if (OB_FAIL(op.finish())) {
+            LOG_WARN("finish failed", K(ret));
+          } else if (OB_FAIL(mds_mini_merger.generate_mds_mini_sstable(allocator, mds_table_handle))) {
             LOG_WARN("fail to generate mds mini sstable with mini merger", K(ret), K(mds_mini_merger));
           }
         }

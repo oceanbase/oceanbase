@@ -465,6 +465,19 @@ int ObDDLLock::lock_for_modify_auto_part_size_in_trans(
   return ret;
 }
 
+int ObDDLLock::lock_for_modify_truncate_info_in_trans(
+    const uint64_t tenant_id,
+    const uint64_t global_index_table_id,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_us = DEFAULT_TIMEOUT;
+  if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, global_index_table_id, EXCLUSIVE, timeout_us, trans))) {
+    LOG_WARN("failed to lock online ddl table", K(ret));
+  }
+  return ret;
+}
+
 int ObDDLLock::lock_for_add_lob_in_trans(
     const ObTableSchema &data_table_schema,
     ObMySQLTransaction &trans)

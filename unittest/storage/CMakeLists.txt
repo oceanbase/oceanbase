@@ -6,6 +6,11 @@ add_library(mock_access_service SHARED
   mock_access_service.cpp)
 target_link_libraries(mock_access_service PUBLIC oceanbase)
 
+add_library(truncate_info_helper ob_truncate_info_helper.cpp)
+target_include_directories(truncate_info_helper PUBLIC
+  ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
+target_link_libraries(truncate_info_helper PUBLIC ob_base mockcontainer)
+
 # add_library(mock_ft_parser SHARED
 #   mock_ft_parser.cpp)
 # target_link_libraries(mock_ft_parser PUBLIC oceanbase)
@@ -55,6 +60,8 @@ storage_unittest(test_sample_filter)
 #storage_unittest(test_row_sample_iterator)
 #storage_unittest(test_table_store_stat_mgr)
 storage_unittest(test_tenant_tablet_stat_mgr)
+storage_unittest(test_truncate_info)
+target_link_libraries(test_truncate_info PRIVATE truncate_info_helper)
 storage_unittest(test_tenant_compaction_mem_pool)
 storage_unittest(test_compaction_memory_context)
 #storage_unittest(test_dag_size)

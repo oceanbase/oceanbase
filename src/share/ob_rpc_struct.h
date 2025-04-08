@@ -2405,6 +2405,7 @@ public:
     return part_storage_cache_policy_;
   }
   TO_STRING_KV(K_(session_id),
+               K_(alter_part_type),
                K_(index_arg_list),
                K_(foreign_key_arg_list),
                K_(alter_table_schema),

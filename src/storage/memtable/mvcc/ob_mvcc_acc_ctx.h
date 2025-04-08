@@ -31,12 +31,29 @@ namespace storage {
 class ObTxTable;
 class ObTxTableGuard;
 class ObTxTableGuards;
+class ObTruncatePartitionFilter;
+class ObITableReadInfo;
 }
 
 namespace memtable
 {
 class ObQueryAllocator;
 class ObMemtableCtx;
+
+struct ObMvccMdsFilter final
+{
+  ObMvccMdsFilter()
+    : read_info_(nullptr),
+      truncate_part_filter_(nullptr)
+  {}
+  ~ObMvccMdsFilter() { reset(); }
+  bool is_valid() const { return nullptr != read_info_ && nullptr != truncate_part_filter_; }
+  void reset() { read_info_ = nullptr; truncate_part_filter_ = nullptr; }
+  int init(ObMvccMdsFilter &mds_filter);
+  TO_STRING_KV(KP_(read_info), KP_(truncate_part_filter));
+  const storage::ObITableReadInfo *read_info_;
+  storage::ObTruncatePartitionFilter *truncate_part_filter_;
+};
 
 class ObMvccAccessCtx
 {
@@ -96,6 +113,7 @@ public:
       is_standby_read_ = false;
       has_create_tx_ctx_ = false;
       lock_wait_start_ts_ = 0;
+      mds_filter_.reset();
       is_inited_ = false;
     }
   }
@@ -278,6 +296,9 @@ public:
     return expire_ts;
   }
   int get_write_seq(transaction::ObTxSEQ &seq) const;
+  int init_mds_filter(ObMvccMdsFilter &mds_filter)
+  { return mds_filter_.init(mds_filter); }
+  void clear_mds_filter() { mds_filter_.reset(); }
   TO_STRING_KV(K_(type),
                K_(abs_lock_timeout_ts),
                K_(tx_lock_timeout_us),
@@ -292,6 +313,7 @@ public:
                K_(handle_start_time),
                K_(is_standby_read),
                K_(lock_wait_start_ts),
+               K_(mds_filter),
                K_(is_inited));
 private:
   void warn_tx_ctx_leaky_();
@@ -325,6 +347,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   // this was used for runtime metric
   int64_t handle_start_time_;
   bool has_create_tx_ctx_;
+  ObMvccMdsFilter mds_filter_; // to record filter info on ObTableAccessContext
   bool is_standby_read_;
 protected:
   int64_t lock_wait_start_ts_;

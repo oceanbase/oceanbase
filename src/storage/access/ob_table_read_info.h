@@ -134,6 +134,7 @@ public:
   virtual const common::ObIArray<int32_t> *get_cg_idxs() const = 0;
   virtual bool is_access_rowkey_only() const = 0;
   virtual bool has_all_column_group() const = 0;
+  virtual bool need_truncate_filter() const = 0;
   virtual bool is_valid() const = 0;
   virtual void reset() = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -148,7 +149,7 @@ public:
       is_oracle_mode_(false),
       allocator_(nullptr),
       schema_column_count_(0),
-      compat_version_(READ_INFO_VERSION_V3),
+      compat_version_(READ_INFO_VERSION_V4),
       is_cs_replica_compat_(false),
       is_delete_insert_table_(false),
       reserved_(0),
@@ -232,6 +233,11 @@ public:
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise all column group");
     return false;
   }
+  virtual bool need_truncate_filter() const override
+  {
+    OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise need truncate filter");
+    return false;
+  }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   OB_INLINE bool is_delete_insert_table() const { return is_delete_insert_table_; }
   DECLARE_VIRTUAL_TO_STRING;
@@ -252,6 +258,7 @@ protected:
   static const int64_t READ_INFO_VERSION_V1 = 1;
   static const int64_t READ_INFO_VERSION_V2 = 2;
   static const int64_t READ_INFO_VERSION_V3 = 3;
+  static const int64_t READ_INFO_VERSION_V4 = 4;
   static const int32_t READ_INFO_ONE_BIT = 1;
   static const int32_t READ_INFO_RESERVED_BITS = 14;
 
@@ -302,7 +309,8 @@ public:
       const common::ObIArray<int32_t> *cg_idxs = nullptr,
       const common::ObIArray<ObColExtend> *cols_extend = nullptr,
       const bool has_all_column_group = true,
-      const bool is_cg_sstable = false);
+      const bool is_cg_sstable = false,
+      const bool need_truncate_filter = false);
   int mock_for_sstable_query(
     common::ObIAllocator &allocator,
     const int64_t schema_column_count,
@@ -350,6 +358,8 @@ public:
   OB_INLINE virtual int64_t get_max_col_index() const override { return max_col_index_; }
   virtual bool has_all_column_group() const override
   { return has_all_column_group_; }
+  virtual bool need_truncate_filter() const override
+  { return need_truncate_filter_; }
   int deserialize(
       common::ObIAllocator &allocator,
       const char *buf,
@@ -391,6 +401,7 @@ private:
   ColExtendArray cols_extend_;
   bool has_all_column_group_;
   bool mock_sstable_query_;
+  bool need_truncate_filter_;
 };
 
 class ObRowkeyReadInfo final : public ObReadInfoStruct
@@ -519,6 +530,11 @@ public:
     OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise all column group");
     return false;
   }
+  virtual bool need_truncate_filter() const override
+  {
+    OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise need truncate filter");
+    return false;
+  }
   TO_STRING_KV(K_(need_release), KPC(cg_basic_info_), KPC(cols_param_), K_(cols_extend));
 protected:
   friend class ObTenantCGReadInfoMgr;
@@ -593,6 +609,11 @@ public:
   virtual bool has_all_column_group() const override
   {
     OB_ASSERT_MSG(false, "ObCGRowkeyReadInfo dose not promise all column group");
+    return false;
+  }
+  virtual bool need_truncate_filter() const override
+  {
+    OB_ASSERT_MSG(false, "ObCGRowkeyReadInfo dose not promise need truncate filter");
     return false;
   }
   virtual bool is_valid() const override { return rowkey_read_info_.is_valid(); }

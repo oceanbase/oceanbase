@@ -27,8 +27,7 @@ class ObAllVirtualTabletCompactionHistory : public common::ObVirtualTableScanner
                                             public omt::ObMultiTenantOperator
 {
 public:
-  enum COLUMN_ID_LIST
-  {
+  enum COLUMN_ID_LIST { // FARM COMPAT WHITELIST
     SVR_IP  = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     TENANT_ID,

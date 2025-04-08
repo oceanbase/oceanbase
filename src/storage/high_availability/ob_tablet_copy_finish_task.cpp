@@ -527,11 +527,14 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
         LOG_WARN("failed to push back extra param", K(ret));
       }
     }
+    ObBuildMajorSSTablesParam major_sstables_param(
+      param_.src_tablet_meta_->storage_schema_,
+      param_.src_tablet_meta_->has_truncate_info_);
 
     if (FAILEDx(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(param_.ls_,
                                                                              param_.tablet_id_,
                                                                              major_tables_handle_,
-                                                                             param_.src_tablet_meta_->storage_schema_,
+                                                                             major_sstables_param,
                                                                              batch_extra_param))) {
       LOG_WARN("failed to build tablet with major tables", K(ret), K(param_), K(batch_extra_param));
     }

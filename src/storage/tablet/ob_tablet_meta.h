@@ -76,7 +76,8 @@ public:
       const share::ObSplitTabletInfo &split_info,
       const bool micro_index_clustered,
       const bool has_cs_replica,
-      const bool need_generate_cs_replica_cg_array);
+      const bool need_generate_cs_replica_cg_array,
+      const bool has_truncate_info);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const int64_t snapshot_version,
@@ -84,7 +85,8 @@ public:
       const int64_t max_sync_storage_schema_version,
       const share::ObSplitTabletInfo &split_info,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
-      const ObDDLTableStoreParam &ddl_info = ObDDLTableStoreParam());
+      const ObDDLTableStoreParam &ddl_info = ObDDLTableStoreParam(),
+      const bool has_truncate_info = false);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const share::SCN &flush_scn);
@@ -168,7 +170,8 @@ public:
                K_(space_usage),
                K_(micro_index_clustered),
                K_(ddl_replay_status),
-               K_(split_info));
+               K_(split_info),
+               K_(has_truncate_info));
 
 public:
   int32_t version_; // alignment: 4B, size: 4B
@@ -233,7 +236,7 @@ public:
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
-
+  bool has_truncate_info_; // be True after first major with truncate info
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
@@ -319,7 +322,8 @@ public:
                K_(major_ckm_info),
                K_(ddl_replay_status),
                K_(is_storage_schema_cs_replica),
-               K_(split_info));
+               K_(split_info),
+               K_(has_truncate_info));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -331,7 +335,6 @@ public:
   const static int64_t PARAM_VERSION = 1;
   const static int64_t PARAM_VERSION_V2 = 2;
   const static int64_t PARAM_VERSION_V3 = 3;
-
   int64_t magic_number_;
   int64_t version_;
   bool is_empty_shell_;
@@ -375,6 +378,9 @@ public:
   ObCSReplicaDDLReplayStatus ddl_replay_status_;
   bool is_storage_schema_cs_replica_;
   share::ObSplitTabletInfo split_info_;
+  // [since 4.3.5 bp2] be True after first major with truncate info
+  // will never be false even after truncate info recycled
+  bool has_truncate_info_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

@@ -13,7 +13,7 @@
 #include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/multi_data_source/ob_mds_compaction_filter.h"
+#include "storage/multi_data_source/ob_mds_minor_compaction_filter.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -55,19 +55,20 @@ int ObTabletMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
   void *buf = nullptr;
   if (OB_FAIL(get_tables_by_key(get_merge_table_result))) {
     LOG_WARN("failed to get tables by key", KR(ret), "param", get_dag_param(), KPC(merge_dag_));
-  } else if (OB_ISNULL(buf = mem_ctx_.alloc(sizeof(ObMdsMediumInfoFilter)))) {
+  } else if (OB_ISNULL(buf = mem_ctx_.alloc(sizeof(ObMdsMinorFilter)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret), "size", sizeof(ObMdsMediumInfoFilter));
+    LOG_WARN("fail to alloc memory", K(ret), "size", sizeof(ObMdsMinorFilter));
   } else {
     // prepare mds compaction filter
-    ObMdsMediumInfoFilter *compaction_filter = new (buf) ObMdsMediumInfoFilter();
+    ObMdsMinorFilter *compaction_filter = new (buf) ObMdsMinorFilter();
     const int64_t last_major_snapshot = get_tablet()->get_last_major_snapshot_version();
+    const int64_t multi_version_start = get_tablet()->get_multi_version_start();
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(compaction_filter->init(last_major_snapshot))) {
-      LOG_WARN("failed to init mds compaction_filter", K(tmp_ret), K(last_major_snapshot));
+    if (OB_TMP_FAIL(compaction_filter->init(last_major_snapshot, multi_version_start))) {
+      LOG_WARN("failed to init mds compaction_filter", K(tmp_ret), K(last_major_snapshot), K(multi_version_start));
     } else {
-      info_collector_.compaction_filter_ = compaction_filter;
-      FLOG_INFO("success to init mds compaction filter", K(tmp_ret), K(last_major_snapshot));
+      filter_ctx_.compaction_filter_ = compaction_filter;
+      FLOG_INFO("success to init mds compaction filter", K(tmp_ret), K(last_major_snapshot), K(multi_version_start));
     }
 
     if (OB_TMP_FAIL(tmp_ret)) {
@@ -95,7 +96,7 @@ int ObTabletMdsMinorMergeCtx::update_tablet(ObTabletHandle &new_tablet_handle)
                                       sstable,
                                       false/*allow_duplicate_sstable*/);
     if (OB_FAIL(mds_param.init_with_compaction_info(
-      ObCompactionTableStoreParam(get_merge_type(), sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/)))) {
+      ObCompactionTableStoreParam(get_merge_type(), sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/, false/*has_truncate_info*/)))) {
       LOG_WARN("failed to init with compaction info", KR(ret));
     } else if (OB_FAIL(get_ls()->update_tablet_table_store(get_tablet_id(), mds_param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(mds_param), K(new_tablet_handle));
@@ -179,7 +180,7 @@ int ObTabletCrossLSMdsMinorMergeCtx::prepare_compaction_filter()
     LOG_WARN("fail to alloc memory", K(ret), "size", sizeof(ObCrossLSMdsMinorFilter));
   } else {
     ObCrossLSMdsMinorFilter *filter = new (buf) ObCrossLSMdsMinorFilter();
-    info_collector_.compaction_filter_ = filter;
+    filter_ctx_.compaction_filter_ = filter;
     FLOG_INFO("success to init mds compaction filter", K(ret));
   }
 

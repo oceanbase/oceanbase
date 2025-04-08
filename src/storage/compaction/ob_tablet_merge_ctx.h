@@ -93,8 +93,8 @@ protected:
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int cal_merge_param() override;
   int get_tables_by_key(ObGetMergeTablesResult &get_merge_table_result);
+  virtual int prepare_compaction_filter() override; // for tx_minor
 private:
-  int prepare_compaction_filter(); // for tx_minor
   int init_static_param_tx_id();
 };
 
@@ -107,8 +107,10 @@ protected:
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   virtual int cal_merge_param() override {
     return ObBasicTabletMergeCtx::cal_major_merge_param(
-        false /*force_full_merge*/, progressive_merge_mgr_);
+        has_filter() /*force_full_merge*/, progressive_merge_mgr_);
   }
+  virtual int prepare_compaction_filter() override
+  { return alloc_mds_info_compaction_filter(); }
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE

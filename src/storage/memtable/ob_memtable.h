@@ -307,27 +307,6 @@ public: // derived from ObITable
       storage::ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey);
 
-  // exist/prefix_exist is used to ensure the (prefix) existance of the row
-  // ctx is the locker tx's context, we need the tx_id, version and scn to do the concurrent control(mvcc_write)
-  // tablet_id is necessary for the query_engine's key engine(NB: do we need it now?)
-  // rowkey is the row key used for read
-  // columns is the schema of the new_row, it contains the row key
-  // rows_info is the the above information for multiple rowkeys
-  // is_exist returns the existance of (one of) the rowkey(must not be deleted)
-  // has_found returns the existance of the rowkey(may be deleted)
-  // all_rows_found returns the existance of all of the rowkey(may be deleted) or existance of one of the rowkey(must not be deleted)
-  // may_exist returns the possible existance of the rowkey(may be deleted)
-  virtual int exist(
-      const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
-	  const blocksstable::ObDatumRowkey &rowkey,
-	  bool &is_exist,
-	  bool &has_found);
-  virtual int exist(
-      storage::ObRowsInfo &rows_info,
-      bool &is_exist,
-      bool &all_rows_found);
-
   // get/scan is used to read/scan the row
   // param is the memtable access parameter, we need the descriptor(column schema and so on) of row in order to read the value
   // ctx is the reader tx's context, we need the tx_id, version and scn to do the concurrent control(lock_for_read)

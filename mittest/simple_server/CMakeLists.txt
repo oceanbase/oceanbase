@@ -62,6 +62,11 @@ function(ob_offline_observer case case_file)
     gmock)
 endfunction()
 
+function(ob_truncate_case case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test truncate_info_helper oceanbase)
+endfunction()
+
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
 ob_offline_observer(test_tx_data test_tx_data.cpp)
@@ -158,3 +163,9 @@ ob_unittest_observer(test_transfer_task_operator rootservice/test_transfer_task_
 ob_unittest_observer(test_ob_parallel_migration_mode rootservice/test_ob_parallel_migration_mode.cpp)
 ob_unittest_observer(test_ls_status_operator rootservice/test_ls_status_operator.cpp)
 ####### rootservice case #########
+
+
+####### truncate case #########
+ob_truncate_case(test_truncate_partition_filter test_truncate_partition_filter.cpp)
+ob_truncate_case(test_truncate_info_service test_truncate_info_service.cpp)
+####### truncate case #########

@@ -888,7 +888,7 @@ private:
       share::schema::ObMultiVersionSchemaService &schema_service);
   static void dump_diag_info_for_old_row_loss(
       ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow &datum_row);
+      const blocksstable::ObDatumRow &datum_row);
   int set_allow_to_read_(ObLS *ls);
   // TODO(chenqingxiang.cqx): remove this
   int create_empty_shell_tablet(

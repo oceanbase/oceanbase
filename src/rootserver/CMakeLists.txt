@@ -233,6 +233,10 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_tenant_role_transition_service.cpp
 )
 
+ob_set_subtarget(ob_rootserver truncate_info
+  truncate_info/ob_truncate_info_service.cpp
+)
+
 ob_set_subtarget(ob_rootserver pl_ddl
   pl_ddl/ob_pl_ddl_service.cpp
   pl_ddl/ob_pl_ddl_operator.cpp

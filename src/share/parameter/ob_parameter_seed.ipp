@@ -2568,6 +2568,11 @@ DEF_BOOL(_enable_obdal, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable use obdal to access object storage.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// for new created tenant, _ob_enable_truncate_partition_preserve_global_index will be True
+//
+DEF_BOOL(_ob_enable_truncate_partition_preserve_global_index, OB_TENANT_PARAMETER, "False",
+         "Specifies Whether to allow global indexes to be preserved when truncating/dropping the main table partition.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(default_table_merge_engine, OB_TENANT_PARAMETER, "PARTIAL_UPDATE",
          "Specify the default merge_engine when creating table: partial_update, delete_insert.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

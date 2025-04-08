@@ -131,11 +131,12 @@ ObSingleRowGetter::ObSingleRowGetter(ObIAllocator &allocator, ObTablet &tablet)
   : tablet_(&tablet),
     single_merge_(nullptr),
     store_ctx_(nullptr),
-    output_projector_(allocator),
+    output_projector_(),
     relative_table_(nullptr),
     allocator_(allocator),
     cached_iter_node_(nullptr)
 {
+  output_projector_.set_attr(ObMemAttr(MTL_ID(), "SingleRGetter"));
 }
 
 ObSingleRowGetter::~ObSingleRowGetter()
@@ -170,7 +171,7 @@ int ObSingleRowGetter::init_dml_access_ctx(
   trans_version_range.multi_version_start_ = 0;
   store_ctx_ = &store_ctx;
 
-  if (OB_FAIL(access_ctx_.init(query_flag, store_ctx, allocator_, trans_version_range, cached_iter_node_))) {
+  if (OB_FAIL(access_ctx_.init(query_flag, store_ctx, allocator_, trans_version_range, nullptr/*mds_filter*/, cached_iter_node_))) {
     LOG_WARN("failed to init table access ctx", K(ret));
   }
   return ret;
@@ -184,7 +185,6 @@ int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
   relative_table_ = &relative_table;
 
   const share::schema::ObTableSchemaParam *schema_param = relative_table.get_schema_param();
-  output_projector_.set_capacity(out_col_ids.count());
   if (OB_FAIL(get_table_param_.tablet_iter_.assign(relative_table.tablet_iter_))) {
     LOG_WARN("assign tablet iterator fail", K(ret));
   }

@@ -43,6 +43,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -1306,7 +1307,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
                                           mds_sstable,
                                           false/*allow_duplicate_sstable*/);
         if (OB_FAIL(mds_param.init_with_compaction_info(
-          ObCompactionTableStoreParam(ctx.get_merge_type(), mds_sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/)))) {
+          ObCompactionTableStoreParam(ctx.get_merge_type(), mds_sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/, false/*has_truncate_info*/)))) {
           LOG_WARN("failed to init with compaction info", KR(ret));
         } else if (OB_FAIL(tmp_tablet->init_with_mds_sstable(allocator, *old_tablet, flush_scn, mds_param))) {
           LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn), KPC(mds_sstable));
@@ -6172,7 +6173,7 @@ int ObLSTabletService::prepare_scan_table_param(
 
 void ObLSTabletService::dump_diag_info_for_old_row_loss(
     ObDMLRunningCtx &run_ctx,
-    blocksstable::ObDatumRow &datum_row)
+    const blocksstable::ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   ObStoreCtx &store_ctx = run_ctx.store_ctx_;
@@ -7662,13 +7663,14 @@ int ObLSTabletService::ObDmlSplitCtx::prepare_write_dst(
     const ObRelativeTable &relative_table)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!src_tablet_id.is_valid() || !dst_tablet_id.is_valid()) || OB_ISNULL(store_ctx.ls_)) {
+  const share::schema::ObTableSchemaParam *schema_param = relative_table.get_schema_param();
+  if (OB_UNLIKELY(!src_tablet_id.is_valid() || !dst_tablet_id.is_valid()) || OB_ISNULL(store_ctx.ls_) || OB_ISNULL(schema_param)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(src_tablet_id), K(dst_tablet_id));
+    LOG_WARN("invalid arg", K(ret), K(src_tablet_id), K(dst_tablet_id), KP(schema_param));
   } else if (OB_FAIL(store_ctx.ls_->get_tablet_svr()->get_tablet_with_timeout(
       dst_tablet_id, dst_tablet_handle_, store_ctx.timeout_, ObMDSGetTabletMode::READ_READABLE_COMMITED, share::SCN::max_scn()))) {
     LOG_WARN("failed to get tablet", K(ret));
-  } else if (OB_FAIL(dst_relative_table_.init(relative_table.get_schema_param(),
+  } else if (OB_FAIL(dst_relative_table_.init(schema_param,
                                               dst_tablet_handle_.get_obj()->get_tablet_meta().tablet_id_,
                                               relative_table.allow_not_ready()))) {
     LOG_WARN("fail to init dst_relative_table_", K(ret), K(relative_table), K(dst_tablet_handle_.get_obj()->get_tablet_meta()));
@@ -7681,6 +7683,11 @@ int ObLSTabletService::ObDmlSplitCtx::prepare_write_dst(
       true/*need_split_src_table*/,
       false/*need_split_dst_table*/))) {
     LOG_WARN("failed to get relative table read tables", K(ret));
+  } else if (schema_param->get_read_info().need_truncate_filter()
+      && OB_FAIL(dst_relative_table_.prepare_truncate_part_filter(
+        allocator_,
+        store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()))) {
+    LOG_WARN("failed to prepare truncate part filter", K(ret));
   }
   LOG_INFO("prepare write dst", K(ret), K(src_tablet_id), K(dst_tablet_id));
   return ret;
@@ -8266,7 +8273,6 @@ int ObLSTabletService::process_lob_after_update(
   }
   return ret;
 }
-
 
 } // namespace storage
 } // namespace oceanbase

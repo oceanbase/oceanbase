@@ -94,8 +94,8 @@ class ObDDLSQLTransaction;
 class ObTableGroupHelp;
 //class ObFreezeInfoManager;
 class ObSnapshotInfoManager;
+struct ObTruncateInfoService;
 class ObPLDDLService;
-
 class ObDDLService
 {
 public:
@@ -1131,6 +1131,16 @@ private:
   static const int64_t WAIT_ELECT_LEADER_TIMEOUT_US = 120 * 1000 * 1000;  // 120s
   static const int64_t REFRESH_SCHEMA_INTERVAL_US = 500 * 1000;              //500ms
 
+  enum UpdateGlobalIndexOpType
+  {
+    USE_OLD_UPDATE_FUNC = 0, // oracle mode OR old data version
+    WRITE_TRUNCATE_INFO = 1, // new feature after 4.3.5 bp2
+    DROP_AND_CREATE_INDEX = 2, // mysql mode with update global indexes
+    MARK_INDEX_UNUSABLE = 3, // mysql mode without update global indexes
+    MAX_OP_TYPE
+  };
+  const char *op_type_to_str(const UpdateGlobalIndexOpType &op_type);
+
   int calc_partition_object_id_cnt_(
       const ObPartitionSchema &partition_schema,
       const bool gen_subpart_only,
@@ -1168,6 +1178,31 @@ int check_will_be_having_domain_index_operation(
       const uint64_t tenant_data_version,
       obrpc::ObAlterTableRes &res,
       ObIArray<ObDDLTaskRecord> &ddl_tasks);
+  int decide_global_index_suggest_op_type_(
+    const obrpc::ObAlterTableArg &arg,
+    const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
+    const bool is_oracle_mode,
+    const share::schema::ObTableSchema &orig_table_schema,
+    const ObIArray<ObAuxTableMetaInfo> &simple_index_infos,
+    ObSchemaGetterGuard &schema_guard,
+    ObTruncateInfoService &truncate_service,
+    UpdateGlobalIndexOpType &op_type);
+  int decide_global_index_op_type_by_index_(
+    const bool is_oracle_mode,
+    const share::schema::ObTableSchema &new_index_table_schema,
+    ObTruncateInfoService &truncate_service,
+    const UpdateGlobalIndexOpType &suggest_op_type,
+    UpdateGlobalIndexOpType &op_type);
+  int check_could_write_truncate_info_(
+    const obrpc::ObAlterTableArg &arg,
+    const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
+    const share::schema::ObTableSchema &orig_table_schema,
+    const ObIArray<ObAuxTableMetaInfo> &simple_index_infos,
+    ObSchemaGetterGuard &schema_guard,
+    ObTruncateInfoService &truncate_service,
+    bool &check_could_write_truncate_info);
   // this function will discarded later since an index could not drop directly
   int drop_directly_and_create_index_schema_(share::schema::ObSchemaGetterGuard &schema_guard,
                                              const share::schema::ObTableSchema &data_table_schema,

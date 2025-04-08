@@ -468,6 +468,10 @@ struct ObStoreCtx
                     const share::SCN &snapshot_version);
   bool is_uncommitted_data_rollbacked() const;
   void force_print_trace_log();
+  int init_mds_filter(memtable::ObMvccMdsFilter &mds_filter)
+  { return mvcc_acc_ctx_.init_mds_filter(mds_filter); }
+  memtable::ObMvccMdsFilter &get_mds_filter() { return mvcc_acc_ctx_.mds_filter_; }
+  void clear_mds_filter() { mvcc_acc_ctx_.mds_filter_.reset(); }
   int get_all_tables(ObIArray<ObITable *> &iter_tables);
   TO_STRING_KV(KP(this),
                K_(ls_id),

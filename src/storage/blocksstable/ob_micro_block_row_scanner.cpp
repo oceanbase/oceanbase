@@ -16,6 +16,7 @@
 #include "storage/access/ob_block_batched_row_store.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/compaction/ob_compaction_trans_cache.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -741,6 +742,15 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
   if (OB_UNLIKELY(nullptr == reader_ || nullptr == filter || !filter->is_filter_node())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KP(reader_), KPC(filter));
+  } else if (filter->is_truncate_node()) {
+    if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
+        ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+      if (OB_FAIL(decoder_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
+        LOG_WARN("Failed to pushdown truncate scn filter", K(ret));
+      }
+    } else if (OB_FAIL(flat_reader_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
+      LOG_WARN("Failed to execute black pushdown filter", K(ret));
+    }
   } else if (filter->is_sample_node()) {
     if (OB_FAIL(static_cast<ObSampleFilterExecutor *>(filter)->apply_sample_filter(
                 pd_filter_info,
@@ -1623,7 +1633,10 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
         // Case2: Data is uncommitted, so we use the txn state cache or txn
         //        table to decide whether uncommitted txns are readable
         compaction::ObMergeCachedTransState trans_state;
-        if (OB_NOT_NULL(context_->trans_state_mgr_) &&
+        if (OB_NOT_NULL(context_->get_mds_collector())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("meet uncommitted row in mds query", KR(ret), K(flag), KPC(context_->get_mds_collector()));
+        } else if (OB_NOT_NULL(context_->trans_state_mgr_) &&
             OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(
               transaction::ObTransID(row_header->get_trans_id()), tx_sequence, trans_state)) {
           version_fit = trans_state.can_read_;
@@ -1669,6 +1682,10 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
         } else if (trans_version > snapshot_version) {
           // filter multi version row whose trans version is larger than snapshot_version
           version_fit = false;
+          if (OB_NOT_NULL(context_->get_mds_collector())) {
+            context_->get_mds_collector()->exist_new_committed_node_ = true;
+            LOG_TRACE("exist new committed node", KR(ret), K(trans_version), K(snapshot_version), KPC(context_->get_mds_collector()));
+          }
         } else {
           version_fit = true;
         }
@@ -1740,6 +1757,14 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
               LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
               row->storage_datums_[trans_idx].set_int(-trans_version);
             }
+            if (OB_UNLIKELY(0 == version_range_.base_version_ &&
+                            IF_NEED_CHECK_BASE_VERSION_FILTER(context_))) {
+              if (OB_FAIL(context_->check_filtered_by_base_version(*row))) {
+                LOG_DEBUG("check base version filter fail", K(ret));
+              } else if (row->row_flag_.is_not_exist()) {
+                version_fit = false;
+              }
+            }
           }
           if (OB_SUCC(ret)) {
             if (!row->mvcc_row_flag_.is_uncommitted_row()
@@ -1807,8 +1832,11 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row(const bool found_fir
         prev_micro_row_.row_flag_ = row_.row_flag_;
         prev_micro_row_.count_ = row_.count_;
         prev_micro_row_.have_uncommited_row_ = row_.have_uncommited_row_;
-        const int64_t end_cell_pos =
-            row_.row_flag_.is_delete() ? read_info_->get_schema_rowkey_count() : row_.count_;
+        int64_t end_cell_pos = row_.count_;
+        if (row_.row_flag_.is_delete()) {
+          end_cell_pos = OB_INVALID_INDEX != read_info_->get_trans_col_index() ? read_info_->get_schema_rowkey_count() + 1 :
+            read_info_->get_schema_rowkey_count();
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < end_cell_pos; ++i) {
           ObStorageDatum &src_datum = row_.storage_datums_[i];
           ObStorageDatum &dest_datum = prev_micro_row_.storage_datums_[i];
@@ -1824,6 +1852,20 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row(const bool found_fir
       if (row_.row_flag_.is_delete()) {
         for (int64_t i = read_info_->get_schema_rowkey_count(); i < prev_micro_row_.count_; ++i) {
           prev_micro_row_.storage_datums_[i].set_nop();
+        }
+        // in reverse scan if one rowkey covers multiple blocks, the scan order is: old version block -> new version block
+        // so prev_micro_row_ is older and row_ is newer, need set the newer trans version
+        const int64_t trans_idx = read_info_->get_trans_col_index();
+        if (OB_SUCC(ret) && OB_INVALID_INDEX != trans_idx) {
+          if (OB_UNLIKELY(trans_idx < 0 || trans_idx >= row_.count_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected trans info", K(ret), K(trans_idx), K_(row), KPC_(read_info));
+          } else {
+            const ObStorageDatum &src_datum = row_.storage_datums_[trans_idx];
+            ObStorageDatum &dest_datum = prev_micro_row_.storage_datums_[trans_idx];
+            dest_datum.reuse();
+            dest_datum.set_int(src_datum.get_int());
+          }
         }
       } else if (final_result) {
         for (int64_t i = 0; OB_SUCC(ret) && i < row_.count_; ++i) {

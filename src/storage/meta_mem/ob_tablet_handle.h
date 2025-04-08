@@ -100,6 +100,7 @@ public:
   ObTablet *get_tablet() { return tablet_handle_.get_obj(); }
   const ObTabletHandle &get_tablet_handle() { return tablet_handle_; }
   const ObTabletHandle *get_tablet_handle_ptr() const { return &tablet_handle_; }
+  const ObIArray<ObTabletHandle> *get_split_extra_tablet_handles_ptr() const { return split_extra_tablet_handles_; }
   int set_tablet_handle(const ObTabletHandle &tablet_handle);
   int set_transfer_src_tablet_handle(const ObTabletHandle &tablet_handle);
   int add_split_extra_tablet_handle(const ObTabletHandle &tablet_handle);

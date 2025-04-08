@@ -393,19 +393,21 @@ public:
   ObCompactionTableStoreParam(
     const compaction::ObMergeType merge_type,
     const share::SCN clog_checkpoint_scn,
-    const bool need_report);
+    const bool need_report,
+    const bool has_truncate_info);
   ~ObCompactionTableStoreParam() = default;
   bool is_valid() const;
   bool is_valid_with_sstable(const bool have_sstable) const;
   int assign(const ObCompactionTableStoreParam &other, ObArenaAllocator *allocator = nullptr);
   int64_t get_report_scn() const;
   TO_STRING_KV(K_(clog_checkpoint_scn), K_(need_report),
-    "merge_type", merge_type_to_str(merge_type_),  K_(major_ckm_info));
+    "merge_type", merge_type_to_str(merge_type_),  K_(major_ckm_info), K_(has_truncate_info));
 public:
   compaction::ObMergeType merge_type_;
   share::SCN clog_checkpoint_scn_;
   blocksstable::ObMajorChecksumInfo major_ckm_info_;
   bool need_report_;
+  bool has_truncate_info_;
 };
 
 struct UpdateUpperTransParam final

@@ -225,6 +225,7 @@ public:
   template <int N>
   int fill_event_(observer::MdsEvent &mds_event, const char (&event)[N], char *buffer, const int64_t len) const;
   MdsNodeType get_node_type() const;
+  int assign(const UserMdsNode<K, V> &rhs);
 public:// do user action if there has define, in transaction phase point
   bool try_on_redo(const share::SCN &redo_scn) override;
   void on_redo_(const share::SCN &redo_scn);

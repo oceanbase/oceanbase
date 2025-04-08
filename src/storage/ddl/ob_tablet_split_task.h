@@ -483,6 +483,12 @@ public:
       const ObTabletHandle &source_tablet_handle,
       const ObTabletID &dest_tablet_id,
       ObTableHandleV2 &medium_mds_table_handle);
+  static int build_truncate_info_mds_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObLSHandle &ls_handle,
+      const ObTabletHandle &source_tablet_handle,
+      const ObTabletID &dest_tablet_id,
+      ObTableHandleV2 &medium_mds_table_handle);
   static int check_sstables_skip_data_split(
       const ObLSHandle &ls_handle,
       const ObTableStoreIterator &source_table_store_iter,

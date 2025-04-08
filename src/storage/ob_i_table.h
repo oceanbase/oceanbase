@@ -221,25 +221,6 @@ public:
   void set_snapshot_version(int64_t version) { key_.version_range_.snapshot_version_ = version; }
   ObITable::TableType get_table_type() { return key_.table_type_; }
 
-  virtual int exist(
-      ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObITableReadInfo &read_info,
-      const blocksstable::ObDatumRowkey &rowkey,
-      bool &is_exist,
-      bool &has_found);
-  virtual int exist(
-      const ObTableIterParam &param,
-	  ObTableAccessContext &context,
-	  const blocksstable::ObDatumRowkey &rowkey,
-	  bool &is_exist,
-	  bool &has_found);
-
-  virtual int exist(
-      ObRowsInfo &rowsInfo,
-      bool &is_exist,
-      bool &has_found);
-
   virtual int scan(
       const ObTableIterParam &param,
       ObTableAccessContext &context,

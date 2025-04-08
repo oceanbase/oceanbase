@@ -14,6 +14,7 @@
 #include "ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
+#include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/compaction/ob_refresh_tablet_util.h"
@@ -215,8 +216,9 @@ int ObTabletMiniMergeCtx::try_schedule_adaptive_merge(
   bool is_tombstone_scene = (tnode_stat.update_row_count_ + tnode_stat.delete_row_count_) >= adaptive_threshold
                      || tnode_stat.delete_row_count_ > queuing_cfg.total_delete_row_cnt_;
   if (!is_tombstone_scene && queuing_cfg.is_queuing_mode()) {
+    int64_t unused_least_medium_snapshot = 0;
     ObAdaptiveMergePolicy::AdaptiveMergeReason adaptive_merge_reason = ObAdaptiveMergePolicy::NONE;
-    if (OB_TMP_FAIL(ObAdaptiveMergePolicy::get_adaptive_merge_reason(*tablet, adaptive_merge_reason))) {
+    if (OB_TMP_FAIL(ObAdaptiveMergePolicy::get_adaptive_merge_reason(*tablet, adaptive_merge_reason, unused_least_medium_snapshot))) {
       LOG_WARN("failed to get adaptive reason", K(tmp_ret));
     } else if (ObAdaptiveMergePolicy::NONE != adaptive_merge_reason) {
       is_tombstone_scene = true;
@@ -355,11 +357,6 @@ int ObTabletExeMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_tabl
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_tables_by_key(get_merge_table_result))) {
     LOG_WARN("failed to get tables by key", KR(ret), "param", get_dag_param(), KPC(merge_dag_));
-  } else if (get_tablet_id().is_ls_inner_tablet()) {
-    // init compaction filter for minor merge in TxDataTable
-    if (OB_FAIL(prepare_compaction_filter())) {
-      LOG_WARN("failed to prepare compaction filter", KR(ret), "param", get_dag_param());
-    }
   }
   return ret;
 }
@@ -367,8 +364,7 @@ int ObTabletExeMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_tabl
 int ObTabletExeMergeCtx::cal_merge_param()
 {
   int ret = OB_SUCCESS;
-  const bool has_compaction_filter = nullptr != info_collector_.compaction_filter_;
-  if (OB_FAIL(static_param_.cal_minor_merge_param(has_compaction_filter))) {
+  if (OB_FAIL(static_param_.cal_minor_merge_param(has_filter()))) {
     LOG_WARN("failed to cal_major_merge_param", KR(ret));
   } else if (is_minor_merge(static_param_.get_merge_type())) {
     if (OB_FAIL(init_static_param_tx_id())) {
@@ -477,13 +473,15 @@ int ObTabletExeMergeCtx::prepare_compaction_filter()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_UNLIKELY(!get_tablet_id().is_ls_tx_data_tablet())) {
+  if (!get_tablet_id().is_ls_inner_tablet()) {
+    // init compaction filter for minor merge in TxDataTable
+  } else if (OB_UNLIKELY(!get_tablet_id().is_ls_tx_data_tablet())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only tx data tablet can execute minor merge", KR(ret), "param", get_dag_param());
-  } else if (OB_ISNULL(buf = mem_ctx_.alloc(sizeof(ObTransStatusFilter)))) {
+  } else if (OB_ISNULL(buf = mem_ctx_.alloc(sizeof(ObTxDataMinorFilter)))) {
     // trans status filter is not neccesary for tx minor
   } else {
-    ObTransStatusFilter *compaction_filter = new(buf) ObTransStatusFilter();
+    ObTxDataMinorFilter *compaction_filter = new(buf) ObTxDataMinorFilter();
     ObTxTableGuard guard;
     share::SCN recycle_scn = share::SCN::min_scn();
     const ObTabletMergeDagParam &param = get_dag_param();
@@ -499,7 +497,7 @@ int ObTabletExeMergeCtx::prepare_compaction_filter()
     } else if (OB_TMP_FAIL(compaction_filter->init(recycle_scn, ObTxTable::get_filter_col_idx()))) {
       LOG_WARN("failed to get init compaction filter", K(tmp_ret), K(param), K(recycle_scn));
     } else {
-      info_collector_.compaction_filter_ = compaction_filter;
+      filter_ctx_.compaction_filter_ = compaction_filter;
       FLOG_INFO("success to init compaction filter", K(tmp_ret), K(recycle_scn));
     }
 

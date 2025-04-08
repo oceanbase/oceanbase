@@ -1542,7 +1542,8 @@ TEST_F(TestCompactionPolicy, test_build_tablet_for_hybrid_store)
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
 
   ObStorageHATabletBuilderUtil::BatchBuildTabletTablesExtraParam extra_batch_param;
-  ret = ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls, tablet_id, hybrid_major_handle_array, storage_schema, extra_batch_param);
+  ObBuildMajorSSTablesParam major_sstables_param(storage_schema, false/*has_truncate_info*/);
+  ret = ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls, tablet_id, hybrid_major_handle_array, major_sstables_param, extra_batch_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletHandle tablet_handle;

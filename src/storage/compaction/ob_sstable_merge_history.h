@@ -115,9 +115,9 @@ struct ObMergeStaticInfo
     "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
     "base_major_status", co_major_sstable_status_to_str(base_major_status_),
     "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),
-    K_(kept_snapshot_info), K_(participant_table_info),
+    K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str),
     K_(progressive_merge_round), K_(progressive_merge_num), K_(is_fake));
-
+  static const int64_t MDS_FILTER_INFO_LENGTH = 256;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   ObMergeType merge_type_;
@@ -127,6 +127,7 @@ struct ObMergeStaticInfo
   int64_t progressive_merge_num_;
   storage::ObStorageSnapshotInfo kept_snapshot_info_;
   PartTableInfo participant_table_info_;
+  char mds_filter_info_str_[MDS_FILTER_INFO_LENGTH];
   ObMergeLevel merge_level_;
   ObExecMode exec_mode_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
@@ -229,6 +230,7 @@ struct ObSSTableMergeHistory : public ObIDiagnoseInfo
   ObMergeRunningInfo running_info_;
   ObMergeBlockInfo block_info_;
   ObMergeDiagnoseInfo diagnose_info_;
+  lib::ObMutex lock_;
 };
 
 } // namespace compaction

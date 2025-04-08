@@ -14,6 +14,7 @@
 #include "ob_block_row_store.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -171,6 +172,10 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
         nullptr == iter_param.out_cols_project_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
+  } else if (nullptr != context_.truncate_part_filter_
+             && context_.truncate_part_filter_->need_combined_to_pd_filter()
+             && OB_FAIL(context_.truncate_part_filter_->combine_to_filter_tree(pd_filter_info_.filter_))) {
+    LOG_WARN("Failed to combine truncate filter to filter tree", K(ret), KP_(context_.truncate_part_filter));
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
   } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(filter_valid))) {

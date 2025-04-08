@@ -18,8 +18,9 @@
 #include "common/meta_programming/ob_meta_copy.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
-#include "storage/tablet/ob_mds_range_query_iterator.h"
+#include "storage/tablet/ob_mds_row_iterator.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
+#include "storage/tablet/ob_tablet_mds_node_filter.h"
 #include "storage/tablet/ob_tablet_member_wrapper.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/ls/ob_ls_switch_checker.h"
@@ -30,6 +31,8 @@ namespace storage
 {
 class ObTabletCreateDeleteHelper;
 class ObMdsRowIterator;
+template <typename K, typename T>
+class ObMdsRangeQueryIterator;
 
 template <typename T>
 struct MdsDefaultDeepCopyOperation {
@@ -198,20 +201,19 @@ protected:// implemented by ObTablet
       ObTableScanParam &scan_param,
       ObStoreCtx &store_ctx,
       ObMdsRowIterator &iter) const;
+  int get_tablet_handle_from_this(
+    ObTabletHandle &tablet_handle) const;
   template <typename K, typename T>
   int mds_range_query(
       ObTableScanParam &scan_param,
-      ObStoreCtx &store_ctx,
       ObMdsRangeQueryIterator<K, T> &iter) const;
 
   template <typename T>
   int replay(T &&mds,
              mds::MdsCtx &ctx,
              const share::SCN &scn);
-  static int get_tablet_handle_and_base_ptr(const share::ObLSID &ls_id,
-                                          const common::ObTabletID &tablet_id,
-                                          ObTabletHandle &tablet_handle,
-                                          ObITabletMdsInterface *&base_ptr);
+  int get_src_tablet_handle_and_base_ptr_(ObTabletHandle &tablet_handle,
+                                          ObITabletMdsInterface *&base_ptr) const;
   template <typename T, typename OP>
   int cross_ls_get_latest(const ObITabletMdsInterface *another,
                           OP &&read_op,
@@ -219,12 +221,12 @@ protected:// implemented by ObTablet
                           mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
                           share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
                           const int64_t read_seq = 0) const;
-private:
   template <typename Key, typename Value>
   int replay(const Key &key,
              Value &&mds,
              mds::MdsCtx &ctx,
              const share::SCN &scn);
+private:
   template <typename Key, typename Value>
   int replay_remove(const Key &key,
                     mds::MdsCtx &ctx,
@@ -244,7 +246,7 @@ private:
   int obj_to_string_holder_(const T &obj, ObStringHolder &holder) const;
   template <typename T>
   int fill_virtual_info_by_obj_(const T &obj, const mds::NodePosition position, ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
-  template <typename T>
+  template <typename K, typename T>
   int fill_virtual_info_from_mds_sstable(ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
   template <class T, ENABLE_IF_IS_SAME_CLASS(T, ObTabletCreateDeleteMdsUserData)>
   int check_mds_data_complete_(bool &is_complete) const  { is_complete = true; return OB_SUCCESS; } // Only for tablet_Status, which doesn't need data integrity check.
@@ -338,11 +340,6 @@ struct ReadSplitDataPartkeyCompareOp
   int &cmp_ret_;
 };
 
-template <>
-int ObITabletMdsInterface::mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
-    ObTableScanParam &scan_param,
-    ObStoreCtx &store_ctx,
-    ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> &iter) const;
 }
 }
 

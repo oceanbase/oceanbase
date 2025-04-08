@@ -10,6 +10,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_tablet_merge_info.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 
 namespace oceanbase
 {
@@ -121,7 +122,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
     }
   } else if (is_minor_merge(ctx.get_merge_type())) {
     // when this merge is MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
-    ObTransStatusFilter *compaction_filter_ = (ObTransStatusFilter*)ctx.info_collector_.compaction_filter_;
+    ObTxDataMinorFilter *compaction_filter = (ObTxDataMinorFilter*)ctx.filter_ctx_.compaction_filter_;
     ObSSTableMetaHandle sstable_meta_hdl;
     ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(tables_handle.get_table(0));
     if (OB_ISNULL(oldest_tx_data_sstable)) {
@@ -132,13 +133,13 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
     } else {
       param.set_filled_tx_scn(sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn());
 
-      if (OB_NOT_NULL(compaction_filter_)) {
+      if (OB_NOT_NULL(compaction_filter)) {
         // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
         SCN recycled_scn;
-        if (compaction_filter_->get_max_filtered_end_scn() > SCN::min_scn()) {
-          recycled_scn = compaction_filter_->get_max_filtered_end_scn();
+        if (compaction_filter->get_max_filtered_end_scn() > SCN::min_scn()) {
+          recycled_scn = compaction_filter->get_max_filtered_end_scn();
         } else {
-          recycled_scn = compaction_filter_->get_recycle_scn();
+          recycled_scn = compaction_filter->get_recycle_scn();
         }
         if (recycled_scn > param.filled_tx_scn()) {
           param.set_filled_tx_scn(recycled_scn);

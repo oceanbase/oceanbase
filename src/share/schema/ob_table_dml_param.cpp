@@ -218,7 +218,15 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   if (OB_SUCC(ret) && FALSE_IT(mv_mode_.mode_ = schema->get_mv_mode())) {
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(schema->get_column_ids(all_column_ids, false))) {
+  bool need_truncate_filter = !use_cs && nullptr != schema && schema->is_global_index_table();
+  if (OB_FAIL(ret)) {
+  } else if (need_truncate_filter) {
+    if (OB_FAIL(schema->get_mulit_version_rowkey_column_ids(all_column_ids))) {
+      LOG_WARN("fail to get multi version rokwey column", K(ret));
+    } else if (OB_FAIL(schema->get_column_ids_without_rowkey(all_column_ids, false))) {
+      LOG_WARN("fail to get column without rowkey", K(ret));
+    }
+  } else if (OB_FAIL(schema->get_column_ids(all_column_ids, false))) {
     LOG_WARN("fail to get column ids", K(ret));
   }
   int32_t virtual_cols_cnt = 0;
@@ -228,26 +236,33 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     const uint64_t column_id = all_column_ids.at(i).col_id_;
     const ObColumnSchemaV2 *column_schema = NULL;
     ObColumnParam *column = NULL;
-    if (OB_ISNULL(column_schema = schema->get_column_schema(column_id))) {
+    if (OB_FAIL(ObTableParam::alloc_column(allocator_, column))) {
+      LOG_WARN("alloc column failed", K(ret), K(i));
+    } else if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id ||
+               common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id) {
+        column->set_column_id(column_id);
+        column->set_meta_type(all_column_ids.at(i).col_type_);
+        col_index = -1;
+    } else if (OB_ISNULL(column_schema = schema->get_column_schema(column_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("The column is NULL", K(schema->get_table_id()), K(column_id), K(i));
-    } else if (OB_FAIL(ObTableParam::alloc_column(allocator_, column))) {
-      LOG_WARN("alloc column failed", K(ret), K(i));
     } else if(OB_FAIL(ObTableParam::convert_column_schema_to_param(*column_schema, *column))) {
       LOG_WARN("convert failed", K(*column_schema), K(ret), K(i));
-    } else if (OB_FAIL(tmp_cols.push_back(column))) {
-      LOG_WARN("store tmp column param failed", K(ret));
-    } else if (OB_FAIL(tmp_col_descs.push_back(all_column_ids.at(i)))) {
-      LOG_WARN("store tmp column desc failed", K(ret));
     } else if (i < schema_rowkey_cnt) {
       col_index = i;
-    } else if (column_schema->is_virtual_generated_column()) {
+    } else if (nullptr != column_schema && column_schema->is_virtual_generated_column()) {
       col_index = -1;
       virtual_cols_cnt++;
     } else {
-      col_index = i - virtual_cols_cnt;
+      col_index = need_truncate_filter ? i - virtual_cols_cnt - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() :
+                                         i - virtual_cols_cnt;
     }
 
+    if (FAILEDx(tmp_cols.push_back(column))) {
+      LOG_WARN("store tmp column param failed", K(ret));
+    } else if (OB_FAIL(tmp_col_descs.push_back(all_column_ids.at(i)))) {
+      LOG_WARN("store tmp column desc failed", K(ret));
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tmp_cols_index.push_back(col_index))) {
         LOG_WARN("fail to push_back col_index", K(ret));
@@ -270,7 +285,11 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 tmp_col_descs,
                 &tmp_cols_index,
                 &tmp_cols,
-                use_cs ? &tmp_cg_idxs : nullptr))) {
+                use_cs ? &tmp_cg_idxs : nullptr,
+                nullptr/*cols_extend*/,
+                true/*has_all_column_group*/,
+                false/*is_cg_sstable*/,
+                need_truncate_filter))) {
       LOG_WARN("Fail to init read info", K(ret));
     } else if (!col_map_.is_inited()) {
       if (OB_FAIL(col_map_.init(tmp_cols))) {

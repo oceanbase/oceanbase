@@ -1986,32 +1986,6 @@ int ObTabletPersister::load_dump_kv_and_fill_write_info(
   return ret;
 }
 
-int ObTabletPersister::load_medium_info_list_and_write(
-    common::ObArenaAllocator &allocator,
-    const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-    common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,
-    ObMetaDiskAddr &addr,
-    int64_t &total_tablet_meta_size,
-    ObBlockInfoSet::TabletMacroSet &meta_block_id_set)
-{
-  int ret = OB_SUCCESS;
-  ObTabletDumpedMediumInfo *medium_info_list = nullptr;
-
-  if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, complex_addr, medium_info_list))) {
-    LOG_WARN("fail to load medium info list", K(ret), K(complex_addr));
-  } else if (nullptr == medium_info_list) {
-    addr.set_none_addr();
-  } else {
-    if (OB_FAIL(link_write_medium_info_list(medium_info_list, meta_write_ctxs, addr, total_tablet_meta_size, meta_block_id_set))) {
-      LOG_WARN("failed to link write medium info list", K(ret));
-    }
-  }
-
-  ObTabletObjLoadHelper::free(allocator, medium_info_list);
-
-  return ret;
-}
-
 int ObTabletPersister::link_write_medium_info_list(
     const ObTabletDumpedMediumInfo *medium_info_list,
     common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,

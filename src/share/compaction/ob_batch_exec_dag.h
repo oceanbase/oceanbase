@@ -119,7 +119,7 @@ public:
   const PARAM &get_param() const { return param_; }
   void add_collect_cnt(const ObBatchExecInfo &cnt) { collector_.add(cnt, *this); }
   int init_merge_history();
-  INHERIT_TO_STRING_KV("ObBatchExecDag", ObIDag, K_(is_inited), K_(param));
+  INHERIT_TO_STRING_KV("ObBatchExecDag", ObIDag, K_(is_inited), K_(collector), K_(param));
 protected:
   ObBatchExecCollector collector_;
 private:

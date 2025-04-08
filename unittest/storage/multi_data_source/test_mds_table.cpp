@@ -17,7 +17,9 @@
 #include "storage/multi_data_source/mds_table_handler.h"
 #include "src/storage/multi_data_source/mds_table_iterator.ipp"
 #include "storage/tablet/ob_mds_schema_helper.h"
+#include "src/share/scn.h"
 namespace oceanbase {
+using namespace share;
 namespace storage {
 namespace mds {
 void *DefaultAllocator::alloc(const int64_t size) {
@@ -733,11 +735,150 @@ TEST_F(TestMdsTable, test_rvalue_set) {
   }, writer, trans_stat, trans_version));
 }
 
+void write_key_and_data2(
+  const int64_t key,
+  const char *val,
+  const share::SCN version,
+  MdsCtx &ctx,
+  mds::TwoPhaseCommitState state)
+{
+  ExampleUserKey tmp_key(key);
+  ExampleUserData2 data;
+  ASSERT_EQ(OB_SUCCESS, data.assign(MdsAllocator::get_instance(), val));
+  ObString str = data.data_;
+  ASSERT_EQ(OB_SUCCESS, mds_table_.set(tmp_key, data, ctx));
+  ctx.on_redo(version);
+  ctx.before_prepare();
+  if (state == TwoPhaseCommitState::BEFORE_PREPARE) {
+    return;
+  }
+  ctx.on_prepare(version);
+  if (state == TwoPhaseCommitState::ON_PREPARE) {
+    return;
+  }
+  if (state == TwoPhaseCommitState::ON_COMMIT) {
+    ctx.on_commit(version, version);
+  } else if (state == TwoPhaseCommitState::ON_ABORT) {
+    ctx.on_abort(version);
+  } else {
+    ob_abort();
+  }
+}
+
+class ObTestVersionNodeFilter
+{
+public:
+  ObTestVersionNodeFilter(const share::SCN base_version,
+                          const share::SCN snapshot_version,
+                          bool &has_uncommitted_flag,
+                          bool &has_lager_committed_flag)
+    : base_version_(base_version),
+      snapshot_version_(snapshot_version),
+      has_uncommitted_flag_(has_uncommitted_flag),
+      has_lager_committed_flag_(has_lager_committed_flag) {}
+  int operator()(mds::UserMdsNode<ExampleUserKey, ExampleUserData2> &node,
+                 bool &need_skip) {
+    int ret = common::OB_SUCCESS;
+    if (!node.is_decided_()) {
+      if (node.get_prepare_version_() <= snapshot_version_) {
+        ret = OB_EAGAIN;// release row latch and see if status is decided
+      } else {
+        has_uncommitted_flag_ = true;
+        need_skip = true;
+      }
+    } else if (node.is_committed_()) {
+      if (node.get_commit_version_() > snapshot_version_) {
+        has_lager_committed_flag_ = true;
+        need_skip = true;
+      } else if (node.get_commit_version_() <= base_version_) {
+        need_skip = true;
+      } else {
+        need_skip = false;
+      }
+    } else {
+      MDS_LOG(WARN, "aborted node should not seen", K(node));
+    }
+    return ret;
+  }
+private:
+  share::SCN base_version_;
+  share::SCN snapshot_version_;
+  bool &has_uncommitted_flag_;
+  bool &has_lager_committed_flag_;
+};
+
+TEST_F(TestMdsTable, write_multi_version_row)
+{
+  std::vector<MdsCtx*> ctx_vec;
+  for (int64_t idx = 0; idx < 7; ++idx) {
+    ctx_vec.push_back(new MdsCtx(mds::MdsWriter(ObTransID(idx + 1))));
+  }
+  write_key_and_data2(1, "100", mock_scn(100), *ctx_vec[0], mds::TwoPhaseCommitState::ON_COMMIT);
+  write_key_and_data2(1, "200", mock_scn(200), *ctx_vec[1], mds::TwoPhaseCommitState::ON_COMMIT);
+  write_key_and_data2(1, "300", mock_scn(300), *ctx_vec[2], mds::TwoPhaseCommitState::BEFORE_PREPARE);
+  write_key_and_data2(2, "400", mock_scn(400), *ctx_vec[3], mds::TwoPhaseCommitState::ON_PREPARE);
+  write_key_and_data2(3, "100", mock_scn(100), *ctx_vec[4], mds::TwoPhaseCommitState::ON_COMMIT);
+  write_key_and_data2(3, "280", mock_scn(280), *ctx_vec[5], mds::TwoPhaseCommitState::ON_PREPARE);
+  write_key_and_data2(4, "500", mock_scn(500), *ctx_vec[6], mds::TwoPhaseCommitState::ON_PREPARE);
+  std::thread t1([]() {
+    ObMdsUnitRowNodeScanIterator<ExampleUserKey, ExampleUserData2> iter;
+    ExampleUserKey key;
+    UserMdsNode<ExampleUserKey, ExampleUserData2> *p_node = nullptr;
+    bool has_uncommitted_flag = false;
+    bool has_lager_committed_flag = false;
+    ObTestVersionNodeFilter filter(mock_scn(200), mock_scn(300), has_uncommitted_flag, has_lager_committed_flag);
+    ASSERT_EQ(OB_SUCCESS, iter.init(mds_table_, filter, 1_ms));
+    ASSERT_EQ(OB_TIMEOUT, iter.get_next(key, p_node));
+    iter.~ObMdsUnitRowNodeScanIterator();
+    new (&iter) ObMdsUnitRowNodeScanIterator<ExampleUserKey, ExampleUserData2>();
+    ASSERT_EQ(OB_SUCCESS, iter.init(mds_table_, filter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next(key, p_node));
+    ASSERT_EQ(ExampleUserKey(1).value_, key.value_);
+    {
+      MDS_LOG(INFO, "print iter kv", K(key), K(p_node->user_data_.data_.ptr()));
+      ObString tmp_str("300");
+      ASSERT_EQ(0, tmp_str.compare(p_node->user_data_.data_));
+      ASSERT_EQ(true, p_node->is_committed_());
+      ASSERT_EQ(mock_scn(300), p_node->get_commit_version_());
+    }
+
+    ASSERT_EQ(OB_SUCCESS, iter.get_next(key, p_node));
+    ASSERT_EQ(ExampleUserKey(3).value_, key.value_);
+    {
+      MDS_LOG(INFO, "print iter kv", K(key), K(p_node->user_data_.data_.ptr()));
+      ObString tmp_str("280");
+      ASSERT_EQ(0, tmp_str.compare(p_node->user_data_.data_));
+      ASSERT_EQ(true, p_node->is_committed_());
+      ASSERT_EQ(mock_scn(280), p_node->get_commit_version_());
+    }
+    ASSERT_EQ(OB_ITER_END, iter.get_next(key, p_node));
+    ASSERT_EQ(true, has_uncommitted_flag);
+    ASSERT_EQ(false, has_lager_committed_flag);
+  });
+  std::thread t2([&ctx_vec]() {
+    sleep(1);
+    ctx_vec[2]->on_prepare(mock_scn(300));
+    sleep(1);
+    ctx_vec[2]->on_commit(mock_scn(300), mock_scn(300));
+    sleep(1);
+    ctx_vec[3]->on_commit(mock_scn(400), mock_scn(400));
+    sleep(1);
+    ctx_vec[5]->on_commit(mock_scn(280), mock_scn(280));
+    sleep(1);
+    ctx_vec[6]->on_abort(mock_scn(500));
+  });
+  t1.join();
+  t2.join();
+  for (MdsCtx *iter : ctx_vec) {
+    delete iter;
+  }
+}
 }
 }
 
 int main(int argc, char **argv)
 {
+  oceanbase::common::ObClockGenerator::get_instance().init();
   system("rm -rf test_mds_table.log");
   oceanbase::common::ObLogger &logger = oceanbase::common::ObLogger::get_logger();
   logger.set_file_name("test_mds_table.log", false);

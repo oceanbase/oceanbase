@@ -47,7 +47,12 @@ public:
   ObTableIterParam();
   virtual ~ObTableIterParam();
   void reset();
-  bool is_valid() const;
+  OB_INLINE bool is_valid() const
+  {
+    return (OB_INVALID_ID != table_id_ || tablet_id_.is_valid()) // TODO: use tablet id replace table id
+        && OB_NOT_NULL(read_info_) && read_info_->is_valid()
+        && (nullptr == rowkey_read_info_ || rowkey_read_info_->is_valid());
+  }
   int refresh_lob_column_out_status();
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const;
   //temp solution
@@ -110,6 +115,10 @@ public:
   OB_INLINE int64_t get_mview_old_new_col_index() const
   {
     return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->get_mview_old_new_col_index() : common::OB_INVALID_INDEX;
+  }
+  OB_INLINE bool need_truncate_filter() const
+  {
+    return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->need_truncate_filter() : false;
   }
   bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {

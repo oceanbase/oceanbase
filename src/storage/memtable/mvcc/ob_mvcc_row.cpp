@@ -15,6 +15,7 @@
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/access/ob_rows_info.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -221,6 +222,131 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
   common::databuff_print_multi_objs(buf, buf_len, pos, " mtd=", *mtd,
       " seq_no=", seq_no_, " write_epoch=", write_epoch_);
   return pos;
+}
+
+/*
+ * ObMvccRowFilter
+*/
+struct ObMvccRowFilter final {
+public:
+  ObMvccRowFilter(ObMvccMdsFilter &mds_filter)
+      : mds_filter_(mds_filter),
+        datum_row_(),
+        bitmap_(),
+        datum_row_empty_(true),
+        is_inited_(false)
+  {}
+  int init();
+  bool is_inited() const { return is_inited_; }
+  int read_row_and_check(const ObMvccTransNode &node,
+                         bool &complete,
+                         bool &filtered);
+
+private:
+  int read_row_(const ObMvccTransNode &node,
+               bool &final_result);
+  ObMvccMdsFilter &mds_filter_;
+  blocksstable::ObDatumRow datum_row_;
+  ObNopBitMap bitmap_;
+  bool datum_row_empty_;
+  bool is_inited_;
+};
+
+int ObMvccRowFilter::init()
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    TRANS_LOG(WARN, "init twice", KR(ret));
+  } else if (OB_UNLIKELY(!mds_filter_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "input mds filter is invalid", KR(ret), K_(mds_filter));
+  } else {
+    const int64_t column_cnt = mds_filter_.read_info_->get_schema_column_count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    if (OB_FAIL(bitmap_.init(column_cnt, mds_filter_.read_info_->get_rowkey_count()))) {
+      TRANS_LOG(WARN, "failed to init bitmap", KR(ret), K(column_cnt));
+    } else if (OB_FAIL(datum_row_.init(column_cnt))) {
+      TRANS_LOG(WARN, "Failed to init datum row", K(ret), K(column_cnt));
+    } else {
+      is_inited_ = true;
+      datum_row_empty_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObMvccRowFilter::read_row_and_check(
+  const ObMvccTransNode &node,
+  bool &complete,
+  bool &filtered)
+{
+  complete = false;
+  filtered = false;
+
+  int ret = OB_SUCCESS;
+  bool final_result = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(mds_filter), K(node));
+  } else if (DF_DELETE == node.get_dml_flag()) {
+    if (OB_UNLIKELY(!datum_row_empty_)) {
+      ret = OB_INVALID_DATA;
+      TRANS_LOG(WARN, "datum row is not empty when met DELETE node", KR(ret), K_(mds_filter), K(node), K_(datum_row));
+    } else {
+      complete = true;
+      filtered = false;
+    }
+  } else {
+    if (OB_UNLIKELY(!mds_filter_.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter));
+    } else if (OB_FAIL(read_row_(node, final_result))) {
+      TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
+    } else if (final_result) {
+      complete = true;
+    } else if (OB_FAIL(mds_filter_.truncate_part_filter_->check_filter_row_complete(datum_row_, complete))) {
+      TRANS_LOG(WARN, "failed to check filter row complete", KR(ret), K_(datum_row), K(complete));
+    }
+    if (OB_FAIL(ret) || !complete) {
+      ObTaskController::get().allow_next_syslog();
+      TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete)); // DEBUG log, remove later
+    } else if (OB_FAIL(mds_filter_.truncate_part_filter_->filter(datum_row_, filtered, true/*check_filter*/, true/*check_version*/))) {
+      TRANS_LOG(WARN, "failed to check filtered by truncate_filter", KR(ret), K_(datum_row), K_(mds_filter));
+    } else {
+      ObTaskController::get().allow_next_syslog();
+      TRANS_LOG(INFO, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered)); // DEBUG log, remove later
+    }
+  }
+  return ret;
+}
+
+int ObMvccRowFilter::read_row_(
+  const ObMvccTransNode &node,
+  bool &final_result)
+{
+  int ret = OB_SUCCESS;
+  final_result = false;
+  const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(node.buf_);
+  blocksstable::ObRowReader row_reader;
+  if (OB_ISNULL(mtd)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter), K(node), KP(mtd));
+  } else {
+    bool read_finished = false;
+    if (OB_FAIL(row_reader.read_memtable_row(mtd->buf_, mtd->buf_len_, *mds_filter_.read_info_, datum_row_, bitmap_, read_finished))) {
+      TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
+    } else if (!datum_row_empty_) {
+      // no need to set trans version
+    } else if (OB_UNLIKELY(datum_row_.get_column_count() <= mds_filter_.read_info_->get_schema_column_count())) {
+      ret = OB_INVALID_DATA;
+      TRANS_LOG(WARN, "datum row cnt is invalid", K(ret), K(node), K(datum_row_), K(node));
+    } else {
+      datum_row_empty_ = false;
+      datum_row_.storage_datums_[mds_filter_.read_info_->get_schema_rowkey_count()].reuse();
+      datum_row_.storage_datums_[mds_filter_.read_info_->get_schema_rowkey_count()].set_int(-node.trans_version_.get_val_for_tx());
+    }
+  }
+  return ret;
 }
 
 void ObMvccRow::ObMvccRowIndex::reset()
@@ -767,7 +893,10 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   ObStoreRowLockState &lock_state = res.lock_state_;
   blocksstable::ObDmlFlag &lock_dml_flag = res.lock_state_.lock_dml_flag_;
   bool need_retry = true;
-
+  ObMvccRowFilter row_filter(ctx.get_mds_filter());
+  if (ctx.get_mds_filter().is_valid() && OB_FAIL(row_filter.init())) {
+    TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.get_mds_filter()));
+  }
   while (OB_SUCC(ret) && need_retry) {
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so we set node to be the new head
@@ -798,12 +927,23 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
                      .cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
-        // Case 2: the newest node is decided, so we can insert into it
-        can_insert = true;
-        need_insert = true;
-        is_new_locked = true;
-        lock_dml_flag = iter->get_dml_flag();
-        need_retry = false;
+        bool complete = true;
+        bool filtered = false;
+        if (iter->is_committed()
+            && row_filter.is_inited()
+            && OB_FAIL(row_filter.read_row_and_check(*iter, complete, filtered))) {
+          TRANS_LOG(WARN, "failed to check trans node filtered", KR(ret), K(ctx.mvcc_acc_ctx_.mds_filter_), KPC(iter));
+        } else if (!complete) {
+          iter = iter->prev_;
+          need_retry = true;
+        } else {
+          can_insert = true;
+          need_insert = true;
+          is_new_locked = true;
+          lock_dml_flag = filtered ? blocksstable::ObDmlFlag::DF_NOT_EXIST : iter->get_dml_flag();
+          need_retry = false;
+          iter = filtered ? nullptr : iter;
+        }
       } else if (iter->is_aborted()) {
         // Case 3: the newest node is aborted and the node must be unlinked,
         //         so we need look for the next one
@@ -851,22 +991,22 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
 
   if (OB_SUCC(ret)) {
     if (can_insert && need_insert) {
-      if (nullptr != list_head_ &&
+      if (nullptr != iter &&
           OB_FAIL(concurrent_control::check_sequence_set_violation(ctx.mvcc_acc_ctx_.write_flag_,
                                                                    reader_seq_no,
                                                                    writer_tx_id,
                                                                    writer_node.get_dml_flag(),
                                                                    writer_node.get_seq_no(),
-                                                                   list_head_->get_tx_id(),
-                                                                   list_head_->get_dml_flag(),
-                                                                   list_head_->get_seq_no()))) {
+                                                                   iter->get_tx_id(),
+                                                                   iter->get_dml_flag(),
+                                                                   iter->get_seq_no()))) {
         res.is_mvcc_undo_ = true;
         TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
-      } else if (nullptr != list_head_ && FALSE_IT(res.is_checked_ = true)) {
+      } else if (nullptr != iter && FALSE_IT(res.is_checked_ = true)) {
       } else if (OB_FAIL(mvcc_sanity_check_(snapshot_version,
                                             ctx.mvcc_acc_ctx_.write_flag_,
                                             writer_node,
-                                            list_head_))) {
+                                            iter))) {
         res.is_mvcc_undo_ = true;
         TRANS_LOG(WARN, "check double insert failed", K(ret), KPC(this));
       } else {
@@ -1040,7 +1180,10 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
   const ObTransID checker_tx_id = ctx.get_tx_id();
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   bool need_retry = true;
-
+  ObMvccRowFilter row_filter(ctx.mds_filter_);
+  if (ctx.mds_filter_.is_valid() && OB_FAIL(row_filter.init())) {
+    TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.mds_filter_));
+  }
   while (OB_SUCC(ret) && need_retry) {
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so node currently is not be locked
@@ -1060,11 +1203,28 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so node currently is not be locked
-        lock_state.is_locked_ = false;
-        lock_state.trans_version_ = get_max_trans_version();
-        lock_state.lock_trans_id_.reset();
-        lock_state.lock_dml_flag_ = iter->get_dml_flag();
-        need_retry = false;
+        bool complete = true;
+        bool filtered = false;
+        if (iter->is_committed()
+            && row_filter.is_inited()
+            && OB_FAIL(row_filter.read_row_and_check(*iter, complete, filtered))) {
+          TRANS_LOG(WARN, "failed to check trans node filtered", KR(ret), K(ctx.mds_filter_), KPC(iter));
+        } else if (!complete) {
+          iter = iter->prev_;
+          need_retry = true;
+        } else {
+          lock_state.is_locked_ = false;
+          lock_state.lock_trans_id_.reset();
+          need_retry = false;
+          if (filtered) {
+            lock_state.trans_version_.set_min();
+            lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
+            iter = nullptr;
+          } else {
+            lock_state.trans_version_ = get_max_trans_version();
+            lock_state.lock_dml_flag_ = iter->get_dml_flag();
+          }
+        }
       } else if (iter->is_aborted()) {
         iter = iter->prev_;
         need_retry = true;

@@ -298,7 +298,8 @@ DEF_TO_STRING(ObTableScanParam)
        K_(tx_seq_base),
        K_(auto_split_filter_type),
        K_(is_tablet_spliting),
-       K_(need_update_tablet_param));
+       K_(need_update_tablet_param),
+       KPC_(mds_collector));
   J_OBJ_END();
   return pos;
 }

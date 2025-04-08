@@ -44,7 +44,8 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
                                   ObStoreCtx &store_ctx,
                                   const ObITableReadInfo &rowkey_read_info,
                                   ObStorageReserveAllocator &stmt_allocator,
-                                  ObStorageReserveAllocator &allocator)
+                                  ObStorageReserveAllocator &allocator,
+                                  ObTruncatePartitionFilter *truncate_part_filter)
 {
   int ret = OB_SUCCESS;
   const ObTablet *tablet = nullptr;
@@ -55,6 +56,7 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
   } else {
     common::ObQueryFlag query_flag;
     common::ObVersionRange trans_version_range;
+    memtable::ObMvccMdsFilter mds_filter;
     query_flag.read_latest_ = ObQueryFlag::OBSF_MASK_READ_LATEST;
     query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
     if (table.is_storage_index_table()) {
@@ -65,8 +67,11 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
     trans_version_range.base_version_ = 0;
     trans_version_range.multi_version_start_ = 0;
 
+    mds_filter.truncate_part_filter_ = truncate_part_filter;
+    mds_filter.read_info_ = &rowkey_read_info;
+
     if (OB_FAIL(table_access_context_.init(query_flag, store_ctx, allocator, stmt_allocator,
-            trans_version_range, true /*+ for_exist */))) {
+            trans_version_range, &mds_filter, true /*+ for_exist */))) {
       STORAGE_LOG(WARN, "failed to init table access ctx", K(ret));
     } else {
       table_iter_param_.table_id_ = table.get_table_id();
@@ -80,7 +85,6 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
       is_inited_ = true;
     }
   }
-
   return ret;
 }
 
@@ -141,7 +145,7 @@ int ObRowsInfo::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObRowsinfo init twice", K(ret));
-  } else if (OB_FAIL(exist_helper_.init(table, store_ctx, rowkey_read_info, exist_allocator_, scan_mem_allocator_))) {
+  } else if (OB_FAIL(exist_helper_.init(table, store_ctx, rowkey_read_info, exist_allocator_, scan_mem_allocator_, table.get_truncate_part_filter()))) {
     STORAGE_LOG(WARN, "Failed to init exist helper", K(ret));
   } else {
     col_descs_ = &column_descs;

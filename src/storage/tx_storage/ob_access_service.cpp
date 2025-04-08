@@ -772,6 +772,7 @@ int ObAccessService::check_write_allowed_(
     store_ctx.mvcc_acc_ctx_.set_write_flag(dml_param.write_flag_);
     store_ctx.mvcc_acc_ctx_.set_abs_lock_timeout_ts(abs_timeout_ts);
     store_ctx.tablet_stat_.reset();
+    store_ctx.clear_mds_filter();
 
     const int64_t lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());
     const ObTableSchemaParam &schema_param = dml_param.table_param_->get_data_table();

@@ -239,6 +239,7 @@ public:
     NO_INC_DATA = 9,
     // no major sstable / table schema is hidden or invalid index
     DURING_DDL = 10,
+    RECYCLE_TRUNCATE_INFO = 11,
     INVALID_REASON
   };
 
@@ -253,6 +254,7 @@ public:
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_recycle_truncate_info_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
@@ -267,8 +269,9 @@ public:
       storage::ObGetMergeTablesResult &result);
 
   static int get_adaptive_merge_reason(
-      const storage::ObTablet &tablet,
-      AdaptiveMergeReason &reason);
+      storage::ObTablet &tablet,
+      AdaptiveMergeReason &reason,
+      int64_t &least_medium_snapshot);
   static int check_tombstone_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);
@@ -305,6 +308,7 @@ public:
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
   static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
+  static const int64_t RECYCLE_TRUNCATE_INFO_THRESHOLD = 5;
 };
 
 /*

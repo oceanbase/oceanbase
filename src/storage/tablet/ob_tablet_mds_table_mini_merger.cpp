@@ -274,7 +274,7 @@ int ObTabletDumpMds2MiniOperator::operator()(const mds::MdsDumpKV &kv)
     } else if (OB_FAIL(row_store_.put_row_into_queue(cur_row_))) {
       LOG_WARN("fail to put row into queue", K(ret));
     } else {
-      LOG_INFO("mds op succeed to add row", K(ret), K(adapter), K(cur_row_));
+      LOG_INFO("mds op succeed to add row", K(ret), K(adapter), K(cur_row_), K(kv));
     }
   }
 

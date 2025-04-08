@@ -16,16 +16,15 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-using namespace oceanbase::common;
-
 namespace oceanbase
 {
+using namespace common;
+using namespace compaction;
 namespace storage
 {
 ObTabletMediumInfoReader::ObTabletMediumInfoReader()
   : is_inited_(false),
     allocator_("mds_range_iter"),
-    store_ctx_(),
     iter_()
 {
 }
@@ -40,14 +39,13 @@ int ObTabletMediumInfoReader::init(
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_ls_id();
-  const common::ObTabletID &tablet_id = tablet.get_tablet_id();
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_FAIL((tablet.mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
+  } else if (OB_FAIL((tablet.mds_range_query<ObMediumCompactionInfoKey, ObMediumCompactionInfo>(
       scan_param,
-      store_ctx_,
       iter_)))) {
     LOG_WARN("fail to do build query range iter", K(ret), K(ls_id), K(tablet_id), K(scan_param));
   } else {
@@ -58,24 +56,27 @@ int ObTabletMediumInfoReader::init(
 }
 
 int ObTabletMediumInfoReader::get_next_medium_info(
-    common::ObIAllocator &allocator,
-    compaction::ObMediumCompactionInfoKey &key,
-    compaction::ObMediumCompactionInfo &medium_info)
+    ObIAllocator &allocator,
+    ObMediumCompactionInfoKey &key,
+    ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
   key.reset();
   medium_info.reset();
   mds::MdsDumpKV *kv = nullptr;
 
-  if (OB_FAIL(iter_.get_next_mds_kv(allocator_, kv))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K_(is_inited));
+  } else if (OB_FAIL(iter_.get_next_mds_kv(allocator_, kv))) {
     if (OB_ITER_END == ret) {
       LOG_DEBUG("iter end", K(ret));
     } else {
       LOG_WARN("fail to get next mds kv", K(ret));
     }
   } else {
-    const common::ObString &key_str = kv->k_.key_;
-    const common::ObString &node_str = kv->v_.user_data_;
+    const ObString &key_str = kv->k_.key_;
+    const ObString &node_str = kv->v_.user_data_;
     int64_t key_pos = 0;
     int64_t node_pos = 0;
     if (OB_FAIL(key.mds_deserialize(key_str.ptr(), key_str.length(), key_pos))) {
@@ -93,15 +94,15 @@ int ObTabletMediumInfoReader::get_next_medium_info(
 }
 
 int ObTabletMediumInfoReader::get_specified_medium_info(
-    common::ObIAllocator &allocator,
-    const compaction::ObMediumCompactionInfoKey &key,
-    compaction::ObMediumCompactionInfo &medium_info)
+    ObIAllocator &allocator,
+    const ObMediumCompactionInfoKey &key,
+    ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
 
   // TODO(@gaishun.gs): in the future we should use ObTablet::get_snapshot interface
   mds::MdsDumpKV *kv = nullptr;
-  compaction::ObMediumCompactionInfoKey tmp_key;
+  ObMediumCompactionInfoKey tmp_key;
   bool found = false;
   int compare_result = 0;
 
@@ -113,7 +114,7 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
         LOG_WARN("fail to get next mds kv", K(ret));
       }
     } else {
-      const common::ObString &key_str = kv->k_.key_;
+      const ObString &key_str = kv->k_.key_;
       int64_t pos = 0;
       if (OB_FAIL(tmp_key.mds_deserialize(key_str.ptr(), key_str.length(), pos))) {
         LOG_WARN("fail to deserialize key", K(ret));
@@ -125,7 +126,7 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("medium info doest not exist", K(ret), K(tmp_key), K(key));
       } else if (compare_result == 0) {
-        const common::ObString &node_str = kv->v_.user_data_;
+        const ObString &node_str = kv->v_.user_data_;
         pos = 0;
         if (OB_FAIL(medium_info.deserialize(allocator, node_str.ptr(), node_str.length(), pos))) {
           LOG_WARN("fail to deserialize medium info", K(ret));
@@ -146,23 +147,26 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
 int ObTabletMediumInfoReader::get_medium_info_with_merge_version(
     const int64_t merge_version,
     const ObTablet &tablet,
-    common::ObIAllocator &allocator,
-    compaction::ObMediumCompactionInfo *&medium_info)
+    ObIAllocator &allocator,
+    ObMediumCompactionInfo *&medium_info)
 {
   int ret = OB_SUCCESS;
   medium_info = nullptr;
   const share::ObLSID &ls_id = tablet.get_ls_id();
-  const common::ObTabletID &tablet_id = tablet.get_tablet_id();
-  compaction::ObMediumCompactionInfoKey medium_info_key(merge_version);
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
+  ObMediumCompactionInfoKey medium_info_key(merge_version);
   if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info))) {
     LOG_WARN("fail to alloc and new", K(ret));
   } else {
+    ObMdsReadInfoCollector unused_collector;
     SMART_VARS_2((ObTableScanParam, scan_param), (ObTabletMediumInfoReader, medium_info_reader)) {
-      if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(
+      if (OB_FAIL((ObMdsScanParamHelper::build_customized_scan_param<ObMediumCompactionInfoKey, ObMediumCompactionInfo>(
           allocator,
           ls_id,
           tablet_id,
-          scan_param))) {
+          ObMdsScanParamHelper::get_whole_read_version_range(),
+          unused_collector,
+          scan_param)))) {
         LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(medium_info_reader.init(tablet, scan_param))) {
         LOG_WARN("fail to init medium info reader", K(ret));
@@ -184,7 +188,7 @@ int ObTabletMediumInfoReader::get_min_medium_snapshot(
   int ret = OB_SUCCESS;
   min_medium_snapshot = INT64_MAX;
   mds::MdsDumpKV *kv = nullptr;
-  compaction::ObMediumCompactionInfoKey tmp_key;
+  ObMediumCompactionInfoKey tmp_key;
   bool found = false;
 
   while (OB_SUCC(ret) && !found) {
@@ -196,7 +200,7 @@ int ObTabletMediumInfoReader::get_min_medium_snapshot(
         LOG_WARN("fail to get next mds kv", K(ret));
       }
     } else {
-      const common::ObString &key_str = kv->k_.key_;
+      const ObString &key_str = kv->k_.key_;
       int64_t pos = 0;
       if (OB_FAIL(tmp_key.mds_deserialize(key_str.ptr(), key_str.length(), pos))) {
         LOG_WARN("fail to deserialize key", K(ret));
@@ -215,7 +219,7 @@ int ObTabletMediumInfoReader::get_min_medium_snapshot(
 }
 
 int ObTabletMediumInfoReader::get_next_mds_kv(
-    common::ObIAllocator &allocator,
+    ObIAllocator &allocator,
     mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;

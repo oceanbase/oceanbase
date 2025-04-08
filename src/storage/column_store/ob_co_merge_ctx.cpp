@@ -383,7 +383,10 @@ int ObCOTabletMergeCtx::cal_merge_param()
   int ret = OB_SUCCESS;
   bool force_full_merge = false;
   const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = static_param_.co_major_merge_type_;
-  if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type))) {
+  if (OB_UNLIKELY(has_filter())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support compaction filter in co major merge", KR(ret), K_(filter_ctx));
+  } else if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid major merge type", K(ret), K(co_major_merge_type));
   } else if (ObCOMajorMergePolicy::is_build_column_store_merge(co_major_merge_type)) {

@@ -15,7 +15,7 @@
 #include "storage/access/ob_rows_info.h"
 #include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 namespace oceanbase {
 namespace blocksstable {
 using namespace share;
@@ -117,8 +117,9 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     int64_t current;
     row = &row_;
     ObStoreRowLockState *lock_state = nullptr;
-
+    bool filtered_by_truncate = false;
     while (OB_SUCC(ret)) {
+      filtered_by_truncate = false;
       if (OB_FAIL(inner_get_next_row(current, lock_state))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Failed to get next row", K(ret), K_(macro_id), K(is_major_sstable));
@@ -134,11 +135,10 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         } else if (OB_ISNULL(row_header)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("row header is null", K(ret));
-        } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
-          LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else if (row_header->get_row_multi_version_flag().is_uncommitted_row()) {
           ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
           transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
+          ObStoreRowLockState uncommited_lock_state;
           if (!tx_table_guards.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("tx table guard is invalid", KR(ret), K(ctx));
@@ -146,20 +146,38 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                                                               row_header->get_trans_id(),
                                                               tx_sequence,
                                                               sstable_->get_end_scn(),
-                                                              *lock_state))) {
-          } else {
-            if (lock_state->is_lock_decided()) {
-              lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
-            }
+                                                              uncommited_lock_state))) {
+          } else if (FALSE_IT(trans_version = uncommited_lock_state.trans_version_.get_val_for_tx())) {
+          } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
+                     transaction::is_effective_trans_version(trans_version) &&
+                     OB_FAIL(check_truncate_part_filter(current,
+                                                        trans_version,
+                                                        row_header->get_row_multi_version_flag().is_ghost_row(),
+                                                        filtered_by_truncate))) {
+            LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+          } else if (filtered_by_truncate) {
+          } else if (FALSE_IT(*lock_state = uncommited_lock_state)) {
+          } else if (lock_state->is_lock_decided()) {
+            lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
           }
+        } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
+                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, row_header->get_row_multi_version_flag().is_ghost_row(), filtered_by_truncate))) {
+          LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+        } else if (filtered_by_truncate) {
+        } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
+          LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else {
           lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
         }
+      } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
+                 OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, false, filtered_by_truncate))) {
+        LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+      } else if (filtered_by_truncate) {
       } else {
         lock_state->trans_version_ = sstable_->get_end_scn();
         lock_state->lock_dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !filtered_by_truncate) {
         bool need_stop = false;
         if (is_major_sstable) {
           check_row_in_major_sstable(need_stop);
@@ -173,6 +191,30 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
           break;
         }
       }
+    }
+  }
+  return ret;
+}
+
+// TODO if current row is filtered by truncate, it's no need to scan remain data of the same rowkey
+int ObMicroBlockRowLockChecker::check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered)
+{
+  int ret = OB_SUCCESS;
+  fitered = false;
+  if (!is_ghost_row && context_->truncate_part_filter_->is_valid_filter()) {
+    const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
+    if (OB_FAIL(reader_->get_row(current, row_))) {
+      LOG_WARN("failed to get row", K(ret));
+    } else if (transaction::is_effective_trans_version(trans_version)) {
+      row_.storage_datums_[rowkey_cnt].reuse();
+      row_.storage_datums_[rowkey_cnt].set_int(trans_version);
+    }
+    if (FAILEDx(context_->truncate_part_filter_->filter(row_, fitered, true/*check_filter*/, !sstable_->is_major_sstable()))) {
+      LOG_WARN("failed to filter truncated part", K(ret));
+    } else if (OB_UNLIKELY(fitered)) {
+      LOG_DEBUG("[TRUNCATE INFO] filtered by truncated main table partition", K(ret), K(current), K(trans_version), K_(row));
+    } else {
+      LOG_DEBUG("[TRUNCATE INFO] not filtered row", KR(ret), K(row_), KPC(context_->truncate_part_filter_), K(rowkey_cnt));
     }
   }
   return ret;

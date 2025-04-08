@@ -13,9 +13,8 @@
 #define USING_LOG_PREFIX TRANS
 
 #include "storage/memtable/ob_memtable_iterator.h"
-
-
 #include "storage/memtable/ob_row_conflict_handler.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "ob_memtable.h"
 
 namespace oceanbase
@@ -135,6 +134,10 @@ int ObMemtableGetIterator::inner_get_next_row(const ObDatumRow *&row)
     ++rowkey_iter_;
     cur_row_.scan_index_ = 0;
     row = &cur_row_;
+    if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
+                    OB_FAIL(context_->check_filtered_by_base_version(cur_row_)))) {
+      TRANS_LOG(WARN, "check base version filter fail", K(ret));
+    }
   }
   return ret;
 }
@@ -412,6 +415,10 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
       }
       row_.scan_index_ = 0;
       row = &row_;
+      if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
+                      OB_FAIL(context_->check_filtered_by_base_version(row_)))) {
+        TRANS_LOG(WARN, "check base version filter fail", K(ret));
+      }
     }
   }
   return ret;
@@ -525,6 +532,10 @@ int ObMemtableMGetIterator::inner_get_next_row(const ObDatumRow *&row)
       cur_row_.scan_index_ = rowkey_iter_;
       ++rowkey_iter_;
       row = &cur_row_;
+      if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
+                      OB_FAIL(context_->check_filtered_by_base_version(cur_row_)))) {
+        TRANS_LOG(WARN, "check base version filter fail", K(ret));
+      }
     }
   }
   return ret;
@@ -642,6 +653,10 @@ int ObMemtableMScanIterator::get_next_row_for_get(const ObDatumRow *&row)
     } else {
       row_.scan_index_ = cur_range_pos_;
       row = &row_;
+      if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
+                      OB_FAIL(context_->check_filtered_by_base_version(row_)))) {
+        TRANS_LOG(WARN, "check base version filter fail", K(ret));
+      }
       TRANS_LOG(DEBUG, "get_next_row_for_get row val", K(row_), K(row_.scan_index_), K(row_));
     }
   }

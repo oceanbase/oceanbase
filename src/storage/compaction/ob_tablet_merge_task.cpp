@@ -21,6 +21,7 @@
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
+#include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 
 namespace oceanbase
 {
@@ -1075,9 +1076,9 @@ void ObTabletMergeFinishTask::record_tx_data_info(ObTabletMergeCtx &ctx)
 {
   int tmp_ret = OB_SUCCESS;
   if (is_minor_merge(ctx.get_merge_type()) && LS_TX_DATA_TABLET == ctx.get_tablet_id()) {
-    if (OB_NOT_NULL(ctx.info_collector_.compaction_filter_)) {
+    if (OB_NOT_NULL(ctx.filter_ctx_.compaction_filter_)) {
       const SCN recycle_scn =
-          (static_cast<ObTransStatusFilter *>(ctx.info_collector_.compaction_filter_))->get_recycle_scn();
+          (static_cast<ObTxDataMinorFilter *>(ctx.filter_ctx_.compaction_filter_))->get_recycle_scn();
       (void)ctx.get_ls()->get_tx_table()->recycle_tx_data_finish(recycle_scn);
     }
 

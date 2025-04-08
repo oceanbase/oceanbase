@@ -479,6 +479,7 @@ GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");
 
 // compaction 801 - 899
 GLOBAL_ERRSIM_POINT_DEF(801, EN_FORCE_PARALLEL_MINI_MERGE, "used to force set parallel degree for mini merge");
+GLOBAL_ERRSIM_POINT_DEF(802, EN_COMPACTION_SKIP_WRITE_MDS_IN_MEDIUM_CLOG, "");
 
 // compaction 801 - 899
 //LS Migration Related 900 - 1000

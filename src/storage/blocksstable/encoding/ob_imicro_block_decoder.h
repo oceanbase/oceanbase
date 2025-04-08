@@ -41,6 +41,9 @@ public:
   virtual int filter_pushdown_filter(const sql::ObPushdownFilterExecutor *parent,
     sql::ObWhiteFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap) = 0;
+  virtual int filter_pushdown_truncate_filter(const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap) = 0;
   virtual int get_rows(const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params, const bool is_padding_mode,
     const int32_t *row_ids, const char **cell_datas, const int64_t row_cap,

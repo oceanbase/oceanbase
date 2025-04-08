@@ -63,6 +63,8 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int prepare_schema() override;
   virtual int init_tablet_merge_info() override;
   virtual int cal_merge_param() override;
+  virtual int prepare_compaction_filter() override
+  { return alloc_mds_info_compaction_filter(); }
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
   int collect_running_info_in_batch(

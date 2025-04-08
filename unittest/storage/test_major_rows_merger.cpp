@@ -134,7 +134,8 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_param_and_desc());
+  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_desc());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());

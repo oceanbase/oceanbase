@@ -153,6 +153,9 @@ int ObDMLRunningCtx::prepare_relative_table(
       true/*need_split_src_table*/,
       false/*need_split_dst_table*/))) {
     LOG_WARN("failed to get relative table read tables", K(ret));
+  } else if (schema.get_read_info().need_truncate_filter() &&
+      OB_FAIL(relative_table_.prepare_truncate_part_filter(allocator_, read_snapshot.get_val_for_tx()))) {
+    LOG_WARN("failed to prepare truncate part filter", K(ret));
   }
   return ret;
 }

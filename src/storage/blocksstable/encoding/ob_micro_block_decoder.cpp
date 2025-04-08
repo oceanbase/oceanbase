@@ -1945,6 +1945,111 @@ int ObMicroBlockDecoder::filter_black_filter_batch(
   return ret;
 }
 
+int ObMicroBlockDecoder::filter_pushdown_truncate_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+  bool filter_applied = false;
+  if (OB_UNLIKELY(pd_filter_info.start_ < 0 ||
+                  pd_filter_info.start_ + pd_filter_info.count_ > row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_));
+  } else if (OB_UNLIKELY(!filter.is_truncate_filter_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected truncate filter type", K(ret), K(filter));
+  } else if (OB_LIKELY(filter.is_filter_white_node())) {
+    int64_t col_offset = 0;
+    ObColumnDecoder *column_decoder = nullptr;
+    ObTruncateWhiteFilterExecutor *truncate_executor = static_cast<ObTruncateWhiteFilterExecutor*>(&filter);
+    const common::ObIArray<int32_t> &col_idxs = truncate_executor->get_col_idxs();
+    ObTruncateWhiteFilterExecutor::FilterBatchGuard filter_guard(*truncate_executor);
+    if (OB_UNLIKELY(1 != col_idxs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected col idx count for white filter", K(ret), K(col_idxs));
+    } else if (FALSE_IT(col_offset = col_idxs.at(0))) {
+    } else if (OB_UNLIKELY(col_offset < 0 || col_offset >= header_->column_count_)) {
+      ret = OB_INDEX_OUT_OF_RANGE;
+      LOG_WARN("column offset out of range", K(ret), K(header_->column_count_), K(col_offset));
+    } else if (FALSE_IT(column_decoder = decoders_ + col_offset)) {
+    } else if (OB_FAIL(column_decoder->decoder_->pushdown_operator(parent, *column_decoder->ctx_, *truncate_executor,
+        meta_data_, row_index_, pd_filter_info, result_bitmap))) {
+      if (OB_LIKELY(ret == OB_NOT_SUPPORTED)) {
+        LOG_TRACE("[PUSHDOWN] Column specific operator failed, switch to retrograde filter pushdown", K(ret), K(filter));
+        // reuse result bitmap as null objs set
+        result_bitmap.reuse();
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to pushdown truncate operator", K(ret), KPC(truncate_executor));
+      }
+    } else {
+      filter_applied = true;
+      if (OB_UNLIKELY(truncate_executor->need_flip())) {
+        result_bitmap.bit_not();
+      }
+    }
+    LOG_TRACE("[TRUNCATE INFO] micro block black pushdown filter row", K(ret), K(pd_filter_info), K(result_bitmap.popcnt()), K(result_bitmap.size()),
+              KPC(truncate_executor), K(filter));
+  }
+  if (OB_SUCC(ret) && !filter_applied) {
+    ObITruncateFilterExecutor *truncate_executor = nullptr;
+    if (filter.is_filter_black_node()) {
+      truncate_executor = static_cast<ObTruncateBlackFilterExecutor*>(&filter);
+    } else {
+      truncate_executor = static_cast<ObTruncateWhiteFilterExecutor*>(&filter);
+    }
+    ObStorageDatum *datum_buf = truncate_executor->get_tmp_datum_buffer();
+    const common::ObIArray<int32_t> &col_idxs = truncate_executor->get_col_idxs();
+    const int64_t col_count = col_idxs.count();
+    decoder_allocator_.reuse();
+    int64_t row_idx = 0;
+    if (OB_UNLIKELY(col_count <= 0 || nullptr == datum_buf)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected col count", K(ret), K(col_count), KP(datum_buf));
+    }
+    for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+      row_idx = offset + pd_filter_info.start_;
+      if (nullptr != parent && parent->can_skip_filter(offset)) {
+        continue;
+      } else {
+        int64_t row_len = 0;
+        const char *row_data = nullptr;
+        if (OB_FAIL(row_index_->get(row_idx, row_data, row_len))) {
+          LOG_WARN("get row data failed", K(ret), K(index));
+        } else {
+          ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
+          for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
+            ObStorageDatum &datum = datum_buf[i];
+            datum.reuse();
+            if (OB_FAIL(decoders_[col_idxs.at(i)].decode(datum, row_idx, bs, row_data, row_len))) {
+              LOG_WARN("decode cell failed", K(ret), K(row_idx), K(i), K(datum), K(bs), KP(row_data), K(row_len));
+            } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idxs.at(i)))) {
+              if (OB_FAIL(storage::reverse_trans_version_val(datum))) {
+                LOG_WARN("Failed to reverse trans version val", K(ret));
+              }
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        bool filtered = false;
+        if (OB_FAIL(truncate_executor->filter(datum_buf, col_count, filtered))) {
+          LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+        } else if (!filtered) {
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
+          }
+        }
+      }
+    }
+    LOG_TRACE("[TRUNCATE INFO] micro block black pushdown filter row", K(ret), K(pd_filter_info), K(result_bitmap.popcnt()), K(result_bitmap.size()),
+              KPC(truncate_executor), K(filter));
+  }
+  return ret;
+}
+
 int ObMicroBlockDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,

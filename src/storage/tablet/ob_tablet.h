@@ -104,6 +104,7 @@ class ObMacroInfoIterator;
 class ObMdsRowIterator;
 class ObMdsMiniMergeOperator;
 struct ObTabletDirectLoadInsertParam;
+struct ObTruncateInfoArray;
 
 struct ObTableStoreCache
 {
@@ -154,6 +155,7 @@ class ObTablet final : public ObITabletMdsCustomizedInterface
   friend class ObLSTabletService;
   friend class ObTabletPointer;
   friend class ObTabletMediumInfoReader;
+  friend class ObTabletTruncateInfoReader;
   friend class logservice::ObTabletReplayExecutor;
   friend class ObTabletPersister;
   friend class ObTabletPointerMap;
@@ -311,7 +313,17 @@ public:
   int read_medium_info_list(
       common::ObArenaAllocator &allocator,
       const compaction::ObMediumCompactionInfoList *&medium_info_list) const;
-
+  void check_truncate_info_state(
+      const common::ObVersionRange &read_version_range,
+      bool &has_truncate_flag,
+      bool &contain_truncate_info);
+  bool has_truncate_info() const;
+  int read_truncate_info_array(
+      common::ObArenaAllocator &allocator,
+      const common::ObVersionRange &read_version_range,
+      const bool for_access,
+      ObTruncateInfoArray &truncate_info_array);
+  int get_truncate_info_newest_version(int64_t &newest_commit_version, int64_t &count);
   void set_tablet_addr(const ObMetaDiskAddr &tablet_addr);
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }
   void set_next_tablet(ObTablet* tablet) { next_tablet_ = tablet; }
@@ -456,17 +468,6 @@ public:
       share::ObLSID &ls_id,
       common::ObTabletID &tablet_id);
   static int check_transfer_seq_equal(const ObTablet &tablet, const int64_t transfer_seq);
-  int rowkey_exists(
-      ObRelativeTable &relative_table,
-      ObStoreCtx &store_ctx,
-      const ObColDescIArray &col_descs,
-      blocksstable::ObDatumRow &row,
-      bool &exists);
-  int rowkeys_exists(
-      ObStoreCtx &store_ctx,
-      ObRelativeTable &relative_table,
-      ObRowsInfo &rows_info,
-      bool &exists);
 
   // migration section
   // used for migration source generating create tablet rpc argument
@@ -617,7 +618,16 @@ public:
       const share::SCN &scn,
       const ObTabletBindingMdsUserData &ddl_info,
       mds::MdsCtx &ctx);
-
+  int set_truncate_info(
+      const ObTruncateInfoKey &key,
+      const ObTruncateInfo &value,
+      mds::MdsCtx &ctx,
+      const int64_t lock_timeout_us);
+  int replay_set_truncate_info(
+      const share::SCN &scn,
+      const ObTruncateInfoKey &key,
+      const ObTruncateInfo &value,
+      mds::MdsCtx &ctx);
   int set_frozen_for_all_memtables();
 
   // different from the is_valid() function
@@ -709,6 +719,11 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
       ObTableHandleV2 &mds_mini_sstable);
+  int inner_read_truncate_info_array_from_mds(
+      common::ObArenaAllocator &allocator,
+      const common::ObVersionRange &read_version_range,
+      storage::ObTruncateInfoArray &truncate_info_array,
+      ObMdsReadInfoCollector &collector) const;
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -739,15 +754,6 @@ private:
       const int64_t data_max_schema_version,
       const uint64_t table_id);
 
-  int do_rowkey_exists(
-      ObTableIterParam &param,
-      ObTableAccessContext &context,
-      const blocksstable::ObDatumRowkey &rowkey,
-      bool &exists);
-  static int do_rowkeys_exist(
-      ObTableStoreIterator &tables_iter,
-      ObRowsInfo &rows_info,
-      bool &exists);
   static int prepare_memtable(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -1004,6 +1010,7 @@ private:
                                                              // size: 8B, alignment: 8B
   ObTabletStatusCache tablet_status_cache_;                  // size: 24B, alignment: 8B
   ObDDLInfoCache ddl_data_cache_;                            // size: 24B, alignment: 8B
+  ObTruncateInfoCache truncate_info_cache_;                  // size: 8B, alignment: 8B
   ObTableStoreCache table_store_cache_; // no need to serialize, should be initialized after table store is initialized.
                                                              // size: 48B, alignment: 8B
   // whether hold ref cnt

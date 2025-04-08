@@ -56,6 +56,7 @@ const char *ObMultiDataSourcePrinter::to_str_mds_type(const ObTxDataSourceType &
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_PUBLISH_SCN);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_NOTICE_SAFE);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_UPDATE_SCN);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, SYNC_TRUNCATE_INFO);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_MERGE_SCN);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MVIEW_MDS_OP);
 

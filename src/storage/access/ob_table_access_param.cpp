@@ -117,13 +117,6 @@ void ObTableIterParam::reset()
   need_update_tablet_param_ = nullptr;
 }
 
-bool ObTableIterParam::is_valid() const
-{
-  return (OB_INVALID_ID != table_id_ || tablet_id_.is_valid()) // TODO: use tablet id replace table id
-      && OB_NOT_NULL(read_info_) && read_info_->is_valid()
-      && (nullptr == rowkey_read_info_ || rowkey_read_info_->is_valid());
-}
-
 int ObTableIterParam::refresh_lob_column_out_status()
 {
   int ret = OB_SUCCESS;
@@ -296,7 +289,7 @@ int ObTableAccessParam::init(
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.group_by_cols_project_ = &table_param.get_group_by_projector();
-    iter_param_.need_scn_ = scan_param.need_scn_;
+    iter_param_.need_scn_ = scan_param.need_scn_ || OB_INVALID_INDEX != table_param.get_read_info().get_trans_col_index();
     iter_param_.is_for_foreign_check_ = scan_param.is_for_foreign_check_;
     padding_cols_ = &table_param.get_pad_col_projector();
     projector_size_ = scan_param.projector_size_;
@@ -458,6 +451,7 @@ int ObTableAccessParam::init_dml_access_param(
     iter_param_.is_same_schema_column_ =
         iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();
     iter_param_.out_cols_project_ = out_cols_project;
+    iter_param_.need_scn_ = OB_INVALID_INDEX != schema_param.get_read_info().get_trans_col_index();
     for (int64_t i = 0; i < schema_param.get_columns().count(); i++) {
       if (schema_param.get_columns().at(i)->is_virtual_gen_col()) {
         iter_param_.has_virtual_columns_ = true;

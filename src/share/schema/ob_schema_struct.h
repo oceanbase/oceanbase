@@ -36,6 +36,7 @@
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "lib/string/ob_sql_string.h"
 #include "sql/session/ob_local_session_var.h"
+#include "share/schema/ob_list_row_values.h" // ObListRowValues
 #include "share/storage/ob_storage_cache_common.h"
 
 #ifdef __cplusplus
@@ -2439,28 +2440,6 @@ private:
 // If it is at the table level, need not to add it, just use the table level.
 // This level is added. Indicates that the partition level is considered.
 // Then it is to modify the subpartition of a single primary partition without affecting other things
-struct InnerPartListVectorCmp
-{
-public:
-  InnerPartListVectorCmp() : ret_(common::OB_SUCCESS) {}
-public:
-  bool operator()(const common::ObNewRow &left, const common::ObNewRow &right)
-  {
-    bool bool_ret = false;
-    int cmp = 0;
-    if (common::OB_SUCCESS != ret_) {
-      // failed before
-    } else if (common::OB_SUCCESS != (ret_ = common::ObRowUtil::compare_row(left, right, cmp))) {
-      SHARE_SCHEMA_LOG_RET(ERROR, ret_, "l or r is invalid", K(ret_));
-    } else {
-      bool_ret = (cmp < 0);
-    }
-    return bool_ret;
-  }
-  int get_ret() const { return ret_; }
-private:
-  int ret_;
-};
 
 class IRelatedTabletMap
 {
@@ -2519,7 +2498,6 @@ private:
   int64_t part_idx_;
   int64_t subpart_idx_;
 };
-
 
 class ObPartitionUtils;
 class ObBasePartition : public ObSchema
@@ -2594,6 +2572,7 @@ public:
   static bool list_part_func_layout(const ObBasePartition *lhs, const ObBasePartition *rhs);
   static bool range_like_func_less_than(const ObBasePartition *lhs, const ObBasePartition *rhs);
   static bool hash_like_func_less_than(const ObBasePartition *lhs, const ObBasePartition *rhs);
+  // careful, add_list_row only push row, not deep copy objs in row
   int add_list_row(const common::ObNewRow &row) {
     return list_row_values_.push_back(row);
   }
@@ -2609,6 +2588,9 @@ public:
   virtual int64_t get_deep_copy_size() const;
 
   const common::ObIArray<common::ObNewRow>& get_list_row_values() const {
+    return list_row_values_.get_values();
+  }
+  const ObListRowValues& get_list_row_values_struct() const {
     return list_row_values_;
   }
   void reset_high_bound_val() { high_bound_val_.reset(); }
@@ -2651,7 +2633,7 @@ protected:
   common::ObString name_;
   common::ObRowkey high_bound_val_;
   ObSchemaAllocator schema_allocator_;
-  common::ObSEArray<common::ObNewRow, 2> list_row_values_;
+  ObListRowValues list_row_values_;
   enum ObPartitionStatus status_;
   /**
    * @warning: The projector can only be used by the less than interface for partition comparison calculations,
@@ -3083,6 +3065,16 @@ public:
   //            the ret would be OB_UNKNOWN_PARTITION.
   //note this function would only check partition
   int get_partition_by_name(const ObString &name, const ObPartition *&part) const;
+  int get_partition_and_prev_by_name(
+    const ObString &name,
+    const ObPartitionLevel find_part_level,
+    const ObBasePartition *&part,
+    const ObBasePartition *&prev_part) const;
+  // return other partition array except specified name part
+  int get_other_part_by_name(
+    const ObString &name,
+    const ObPartitionLevel find_part_level,
+    ObIArray<ObBasePartition *> &other_part_array) const;
   //@param[in] name: the subpartition name which you want to get subpartition by
   //@param[out] part: the partition that the subpartition get by the name belongs to, when this function could not
   //            find the subpartition by the name, this param would be nullptr

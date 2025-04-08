@@ -170,6 +170,9 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   ObDatumRowkey rowkey;
   bool is_exist = false;
   bool is_found = false;
+  ObStoreRowIterator *store_row_iter = nullptr;
+  const ObDatumRow *get_datum_row = nullptr;
+  int ret = OB_SUCCESS;
 
   datum_row.init(allocator_, full_read_info_.get_request_count());
   ObVersionRange version_range;
@@ -178,17 +181,28 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   version_range.multi_version_start_ = 0;
   prepare_query_param(version_range);
 
+#define GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found) \
+  store_row_iter = nullptr; \
+  get_datum_row = nullptr; \
+  OK(sstable->get(iter_param_, context_, rowkey, store_row_iter)); \
+  ret = store_row_iter->get_next_row(get_datum_row); \
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_ITER_END == ret); \
+  is_found = is_exist = false; \
+  if (OB_ITER_END == ret || get_datum_row->row_flag_.is_not_exist()) { \
+  } else { \
+    is_found = true; \
+    is_exist = !get_datum_row->row_flag_.is_delete(); \
+  } \
+  store_row_iter->~ObStoreRowIterator(); \
+  context_.stmt_allocator_->free(store_row_iter); \
+
   OK(rowkey_iter.get_row(0, row));
   OK(datum_row.from_store_row(*row));
   ASSERT_TRUE(NULL != row);
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-		            context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(false, is_found);
 
@@ -198,11 +212,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = false;
   is_found = false;
-  OK(sstable->exist(iter_param_,
-		            context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(true, is_exist);
   ASSERT_EQ(true, is_found);
 
@@ -212,11 +222,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = false;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(true, is_found);
 
@@ -226,11 +232,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = false;
   is_found = false;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(true, is_exist);
   ASSERT_EQ(true, is_found);
 
@@ -240,11 +242,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(false, is_found);
 
@@ -258,11 +256,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(false, is_found);
 
@@ -272,11 +266,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(true, is_exist);
   ASSERT_EQ(true, is_found);
 
@@ -286,11 +276,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(true, is_found);
 
@@ -300,11 +286,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(true, is_exist);
   ASSERT_EQ(true, is_found);
 
@@ -314,11 +296,7 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(iter_param_,
-                    context_,
-                    rowkey,
-                    is_exist,
-                    is_found));
+  GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(false, is_found);
 }

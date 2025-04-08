@@ -16,6 +16,7 @@
 #include "pl/ob_pl.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_query.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -290,6 +291,11 @@ public:
     } else if (ObStmt::is_ddl_stmt(v.result_.get_stmt_type(), v.result_.has_global_variable())) {
       if (is_ddl_stmt_packet_retry_err(err)) {
         try_packet_retry(v);
+#ifdef ERRSIM
+        if (REACH_THREAD_TIME_INTERVAL(10_s)) {
+          SERVER_EVENT_SYNC_ADD("ddl_errsim", "ddl_retry", KR(err));
+        }
+#endif
       } else {
         v.client_ret_ = err;
         v.retry_type_ = RETRY_TYPE_NONE;

@@ -10534,7 +10534,16 @@ int ObBatchCreateTabletArg::init_create_tablet(
     LOG_WARN("invalid argument", KR(ret), K(id), K(major_frozen_scn));
   } else {
     id_ = id;
-    major_frozen_scn_ = major_frozen_scn;
+    /*
+      To fix issue 2025022400107312907
+      major in new tablet should be larger than last freeze info
+      to disable checksum validation between global index with truncate info and truncated tablet in data table
+    */
+    if (major_frozen_scn.get_val_for_tx() > 1) {
+      major_frozen_scn_ = SCN::scn_inc(major_frozen_scn);
+    } else {
+      major_frozen_scn_ = major_frozen_scn;
+    }
     need_check_tablet_cnt_ = need_check_tablet_cnt;
   }
   return ret;

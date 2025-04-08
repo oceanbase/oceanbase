@@ -418,13 +418,6 @@ private:
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
       common::ObIArray<ObSharedObjectWriteInfo> &write_infos,
       ObMetaDiskAddr &addr);
-  int load_medium_info_list_and_write(
-      common::ObArenaAllocator &allocator,
-      const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-      common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,
-      ObMetaDiskAddr &addr,
-      int64_t &total_tablet_meta_size,
-      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
   int link_write_medium_info_list(
       const ObTabletDumpedMediumInfo *medium_info_list,
       common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,

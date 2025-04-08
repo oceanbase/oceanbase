@@ -358,7 +358,6 @@ int ObTabletTableStore::init(
     } else if (OB_FAIL(major_ckm_info_.assign(major_ckm_info, &allocator))) {
       LOG_WARN("fail to assign major ckm info", K(ret), K(major_ckm_info));
     } else {
-      LOG_INFO("success to assign major ckm info", K(ret), K(major_ckm_info));
       is_ready_for_read_ = false; // can not read temp table store for serialize
       is_inited_ = true;
     }

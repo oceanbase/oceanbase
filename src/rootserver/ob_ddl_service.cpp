@@ -71,6 +71,8 @@
 #include "src/share/ob_vec_index_builder_util.h"
 #include "share/ob_zone_table_operation.h" // for ObZoneTableOperation
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
+#include "rootserver/truncate_info/ob_truncate_info_service.h"
+#include "share/truncate_info/ob_truncate_info_util.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "rootserver/mview/ob_mview_alter_service.h"
@@ -13575,6 +13577,8 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObSchemaGetterGuard schema_guard;
   bool is_oracle_mode = false;
+  UpdateGlobalIndexOpType suggest_op_type = MAX_OP_TYPE;
+  const uint64_t data_table_id = orig_table_schema.get_table_id();
   if (obrpc::ObAlterTableArg::DROP_PARTITION == arg.alter_part_type_
       || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == arg.alter_part_type_
       || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == arg.alter_part_type_
@@ -13589,14 +13593,15 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
     } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
       LOG_WARN("fail to get compat mode", KR(ret), K(tenant_id));
     } else {
-      SMART_VAR(ObTableSchema, new_index_table_schema) {
+      SMART_VARS_2((ObTableSchema, new_index_table_schema), (ObTruncateInfoService, truncate_service, arg, orig_table_schema)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+        const uint64_t index_table_id = simple_index_infos.at(i).table_id_;
         const ObTableSchema *index_table_schema = nullptr;
+        UpdateGlobalIndexOpType op_type = MAX_OP_TYPE;
         new_index_table_schema.reset();
         if (OB_FAIL(schema_guard.get_table_schema(
-                    tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
-          LOG_WARN("get_table_schema failed", K(tenant_id),
-                   "table id", simple_index_infos.at(i).table_id_, K(ret));
+                    tenant_id, index_table_id, index_table_schema))) {
+          LOG_WARN("get_table_schema failed", K(tenant_id), K(index_table_id), K(ret));
         } else if (OB_ISNULL(index_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema should not be null", K(ret));
@@ -13610,33 +13615,45 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
           // do nothing
         } else if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
           LOG_WARN("fail to assign schema", KR(ret));
+        } else if (MAX_OP_TYPE == suggest_op_type && OB_FAIL(decide_global_index_suggest_op_type_(
+                   arg, tenant_id, tenant_data_version, is_oracle_mode, orig_table_schema,
+                   simple_index_infos, schema_guard, truncate_service, suggest_op_type))) { // only init once
+          LOG_WARN("failed to decide global index suggest op type", KR(ret), K(orig_table_schema), K(index_table_id));
+        } else if (OB_FAIL(decide_global_index_op_type_by_index_(is_oracle_mode, new_index_table_schema,
+                  truncate_service, suggest_op_type, op_type))) {
+          LOG_WARN("failed to decide global index op type", KR(ret), K(suggest_op_type), K(data_table_id), K(index_table_id));
+        } else if (OB_UNLIKELY(op_type >= MAX_OP_TYPE || op_type < USE_OLD_UPDATE_FUNC)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected op type", KR(ret), K(op_type), K(data_table_id), K(index_table_id));
+        } else if (WRITE_TRUNCATE_INFO == op_type) {
+          // truncate_service will be inited in func decide_global_index_suggest_op_type_()
+          if (OB_FAIL(truncate_service.execute(trans, ddl_operator, new_index_table_schema))) {
+            LOG_WARN("failed to write truncate info for global index", KR(ret), K(data_table_id), K(index_table_id));
+          }
+        } else if (MARK_INDEX_UNUSABLE == op_type) {
+          if (OB_FAIL(make_index_unusable_(arg.allocator_, trans, ddl_operator, orig_table_schema, *index_table_schema,
+                                           new_index_table_schema, ddl_tasks, res.ddl_res_array_))) {
+            LOG_WARN("fail to make index unusable", KR(ret), K(arg));
+          }
         } else {
-          if (tenant_data_version < DATA_VERSION_4_3_3_0
-              || is_oracle_mode) {
-            if (OB_FAIL(old_update_global_index_schema_(arg, trans, ddl_operator, schema_guard,
-                                                        orig_table_schema, *index_table_schema,
-                                                        new_index_table_schema,tenant_data_version))) {
+          if (USE_OLD_UPDATE_FUNC == op_type) {
+            if (OB_FAIL(old_update_global_index_schema_(
+                        arg, trans, ddl_operator, schema_guard,
+                        orig_table_schema, *index_table_schema,
+                        new_index_table_schema, tenant_data_version))) {
               LOG_WARN("fail to update global index schema", KR(ret), K(arg));
             }
-          } else {
-            ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
-            if (arg.is_update_global_indexes_) {
-              if(OB_FAIL(drop_and_create_index_schema_(arg, schema_guard, trans, ddl_operator, orig_table_schema,
+          } else if (DROP_AND_CREATE_INDEX == op_type) {
+            if (OB_FAIL(drop_and_create_index_schema_(arg, schema_guard, trans, ddl_operator, orig_table_schema,
                                                        *index_table_schema, tenant_data_version, new_index_table_schema,
-                                                       ddl_tasks, ddl_res_array))) {
-                LOG_WARN("fail to drop and create index schema", KR(ret), K(arg));
-              }
-            } else {
-              if (OB_FAIL(make_index_unusable_(arg.allocator_, trans, ddl_operator, orig_table_schema, *index_table_schema,
-                                               new_index_table_schema, ddl_tasks, ddl_res_array))) {
-                LOG_WARN("fail to make index unusable", KR(ret), K(arg));
-              }
+                                                       ddl_tasks, res.ddl_res_array_))) {
+              LOG_WARN("fail to drop and create index schema", KR(ret), K(arg));
             }
-          }
-          if (OB_FAIL(ret)
-              || !arg.is_update_global_indexes_) {
-            // do nothing
           } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected op type", KR(ret), K(op_type));
+          }
+          if (OB_SUCC(ret) && arg.is_update_global_indexes_) {
             ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
             obrpc::ObCreateIndexArg *create_index_arg = nullptr;
             if (OB_FAIL(prepare_create_index_arg_(arg.allocator_, new_index_table_schema,
@@ -13647,8 +13664,173 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
             }
           }
         }
-      }
+      } // for
       }// end smart var
+    }
+  }
+  return ret;
+}
+
+const static char * UpdateGlobalIndexOpStr[] = {
+    "USE_OLD_UPDATE_FUNC",
+    "WRITE_TRUNCATE_INFO",
+    "DROP_AND_CREATE_INDEX",
+    "MARK_INDEX_UNUSABLE"
+};
+
+const char *ObDDLService::op_type_to_str(const UpdateGlobalIndexOpType &op_type)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MAX_OP_TYPE) == ARRAYSIZEOF(UpdateGlobalIndexOpStr), "op type str len is mismatch");
+  const char *str = "";
+  if (op_type >= USE_OLD_UPDATE_FUNC && op_type < MAX_OP_TYPE) {
+    str = UpdateGlobalIndexOpStr[op_type];
+  } else {
+    str = "invalid_op_type";
+  }
+  return str;
+}
+
+int ObDDLService::decide_global_index_suggest_op_type_(
+  const obrpc::ObAlterTableArg &arg,
+  const uint64_t tenant_id,
+  const uint64_t tenant_data_version,
+  const bool is_oracle_mode,
+  const share::schema::ObTableSchema &orig_table_schema,
+  const ObIArray<ObAuxTableMetaInfo> &simple_index_infos,
+  ObSchemaGetterGuard &schema_guard,
+  ObTruncateInfoService &truncate_service,
+  UpdateGlobalIndexOpType &suggest_op_type)
+{
+  int ret = OB_SUCCESS;
+  suggest_op_type = MAX_OP_TYPE;
+  bool check_could_write_truncate_info = false;
+  if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+    suggest_op_type = USE_OLD_UPDATE_FUNC;
+  } else if (arg.is_update_global_indexes_) {
+    if (OB_FAIL(check_could_write_truncate_info_(arg, tenant_id, tenant_data_version,
+        orig_table_schema, simple_index_infos, schema_guard, truncate_service, check_could_write_truncate_info))) {
+      LOG_WARN("failed to check could write truncate info", KR(ret));
+    } else if (check_could_write_truncate_info) {
+      suggest_op_type = WRITE_TRUNCATE_INFO;
+    } else {
+      suggest_op_type = is_oracle_mode ? USE_OLD_UPDATE_FUNC : DROP_AND_CREATE_INDEX;
+    }
+  } else { // arg.is_update_global_indexes_ = false
+    suggest_op_type = is_oracle_mode ? USE_OLD_UPDATE_FUNC : MARK_INDEX_UNUSABLE;
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("decide global inedx op", KR(ret), K(tenant_data_version), K(is_oracle_mode),
+      "suggest_op_type", op_type_to_str(suggest_op_type), K(arg.is_update_global_indexes_));
+  }
+  return ret;
+}
+
+int ObDDLService::decide_global_index_op_type_by_index_(
+    const bool is_oracle_mode,
+    const share::schema::ObTableSchema &index_table_schema,
+    ObTruncateInfoService &truncate_service,
+    const UpdateGlobalIndexOpType &suggest_op_type,
+    UpdateGlobalIndexOpType &op_type)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t index_table_id = index_table_schema.get_table_id();
+  if (WRITE_TRUNCATE_INFO == suggest_op_type) {
+    bool stored_ref_columns = false;
+    bool is_column_store = false;
+    if (OB_FAIL(index_table_schema.get_is_column_store(is_column_store))) {
+      LOG_WARN("failed to get is column store", KR(ret), K(index_table_id));
+    } else if (!is_column_store && OB_FAIL(truncate_service.check_stored_ref_columns_for_index(index_table_schema, stored_ref_columns))) {
+      LOG_WARN("failed to check stored ref columns", KR(ret));
+    } else if (stored_ref_columns) {
+      op_type = WRITE_TRUNCATE_INFO;
+    } else {
+      op_type = is_oracle_mode ? USE_OLD_UPDATE_FUNC : DROP_AND_CREATE_INDEX;
+      LOG_INFO("[TRUNCATE INFO]not stored ref columns in index, can not write truncate info", KR(ret),
+        K(index_table_id), K(op_type));
+    }
+  } else {
+    op_type = suggest_op_type;
+  }
+  return ret;
+}
+
+int ObDDLService::check_could_write_truncate_info_(
+    const obrpc::ObAlterTableArg &arg,
+    const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
+    const share::schema::ObTableSchema &orig_table_schema,
+    const ObIArray<ObAuxTableMetaInfo> &simple_index_infos,
+    ObSchemaGetterGuard &schema_guard,
+    ObTruncateInfoService &truncate_service,
+    bool &check_could_write_truncate_info)
+{
+  int ret = OB_SUCCESS;
+  check_could_write_truncate_info = false;
+  bool enable_preserve_index = false;
+  bool only_ref_columns = false;
+  const ObPartitionOption &part_option = orig_table_schema.get_part_option();
+  const ObPartitionOption &sub_part_option = orig_table_schema.get_sub_part_option();
+  // TODO(lixia.yq) use right DATA_VERSION before merged into master
+  if (tenant_data_version < ObTruncateInfoUtil::TRUNCATE_INFO_CMP_DATA_VERSION || !arg.is_update_global_indexes_) {
+  } else {
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
+      } else if (!tenant_config->_ob_enable_truncate_partition_preserve_global_index) {
+        enable_preserve_index = false;
+        LOG_INFO("_ob_enable_truncate_partition_preserve_global_index is false, need rebuild global index when truncate partition", KR(ret));
+      } else {
+        enable_preserve_index = true;
+      }
+    }
+    if (OB_FAIL(ret) || !enable_preserve_index) {
+    } else if (ObTruncateInfoUtil::could_write_truncate_info_part_type(
+          arg.alter_part_type_,
+          part_option.get_part_func_type(),
+          sub_part_option.get_part_func_type())) {
+      bool is_column_store = false;
+      bool exist_row_store_index = false;
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < simple_index_infos.count(); ++idx) {
+        const ObTableSchema *index_table_schema = nullptr;
+        const uint64_t index_id = simple_index_infos.at(idx).table_id_;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_id, index_table_schema))) {
+          LOG_WARN("get_table_schema failed", K(tenant_id), K(index_id), K(ret));
+        } else if (OB_ISNULL(index_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema should not be null", K(ret));
+        } else if (OB_FAIL(index_table_schema->get_is_column_store(is_column_store))) {
+          LOG_WARN("failed to get is column store", K(tenant_id), K(index_id));
+        } else if (!is_column_store) {
+          exist_row_store_index = true;
+          LOG_TRACE("not support write truncate info for column store global index, exist ", KR(ret), K(index_id));
+          break;
+        }
+      } // for
+      if (OB_FAIL(ret) || !exist_row_store_index) {
+      } else if (OB_ISNULL(sql_proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql proxy is unexpected null", KR(ret), KP_(sql_proxy));
+      } else if (OB_FAIL(truncate_service.init(*sql_proxy_))) {
+        LOG_WARN("failed to init truncate service", KR(ret));
+      } else if (OB_FAIL(truncate_service.check_only_have_ref_columns(arg.alter_part_type_, only_ref_columns))) {
+        LOG_WARN("failed to check only have ref columns", KR(ret));
+      } else if (only_ref_columns) {
+        check_could_write_truncate_info = true;
+        LOG_INFO("write truncate info to update global index", KR(ret), K(part_option), K(sub_part_option),
+          "data_table_id", orig_table_schema.get_table_id());
+      } else {
+        LOG_TRACE("expr part key is not allowed to write truncate info", KR(ret),
+          "data_table_id", orig_table_schema.get_table_id(),
+          "alter_part_type", arg.alter_part_type_,
+          K(only_ref_columns));
+      }
+    } else {
+      LOG_TRACE("part func type is not allowed to write truncate info", KR(ret),
+        "data_table_id", orig_table_schema.get_table_id(),
+        "alter_part_type", arg.alter_part_type_,
+        K(part_option), K(sub_part_option), K(check_could_write_truncate_info));
     }
   }
   return ret;
@@ -14053,6 +14235,7 @@ int ObDDLService::split_global_index_partitions(obrpc::ObAlterTableArg &arg, obr
         ret = is_commit ? temp_ret : ret;
       }
     }
+    DEBUG_SYNC(AFTER_CREATE_SPLIT_TASK);
     if (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(publish_schema(tenant_id))) {

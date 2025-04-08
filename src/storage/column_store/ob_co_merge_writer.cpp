@@ -139,7 +139,7 @@ int ObWriteHelper::init(
                  data_store_desc_, parallel_idx, macro_seq_param,
                  ctx.get_pre_warm_param(),
                  *object_cleaner))) {
-    STORAGE_LOG(WARN, "Failed to set parallel degree to macro start seq",
+    STORAGE_LOG(WARN, "Failed to open macro writer",
                 K(ret), K(parallel_idx), K(data_store_desc_), KPC(object_cleaner));
   } else if (cg_schema.is_all_column_group()) {
     skip_project_ = true;

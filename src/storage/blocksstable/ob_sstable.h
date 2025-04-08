@@ -153,16 +153,6 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
-  virtual int exist(
-      const ObTableIterParam &param,
-	    ObTableAccessContext &context,
-	    const blocksstable::ObDatumRowkey &rowkey,
-	    bool &is_exist,
-	    bool &has_found) override;
-  virtual int exist(
-      ObRowsInfo &rows_info,
-      bool &is_exist,
-      bool &all_rows_found) override;
 
   int scan_macro_block(
       const ObDatumRange &range,
@@ -363,16 +353,6 @@ protected:
   int check_valid_for_reading();
   int add_used_size() const;
   int dec_used_size() const;
-  int build_exist_iterator(
-      const ObTableIterParam &iter_param,
-      const ObDatumRowkey &rowkey,
-      ObTableAccessContext &access_context,
-      ObStoreRowIterator *&iter);
-  int build_multi_exist_iterator(
-      const ObTableIterParam &iter_param,
-      const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
-      ObTableAccessContext &access_context,
-      ObStoreRowIterator *&iter);
     int init_sstable_meta(
         const ObTabletCreateSSTableParam &param,
         common::ObArenaAllocator *allocator);

@@ -822,6 +822,79 @@ int ObMicroBlockReader::filter_pushdown_filter(
   return ret;
 }
 
+int ObMicroBlockReader::filter_pushdown_truncate_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+  allocator_.reuse();
+  if (OB_UNLIKELY(pd_filter_info.start_ < 0 ||
+                  pd_filter_info.start_ + pd_filter_info.count_ > row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_));
+  } else if (OB_UNLIKELY(!filter.is_truncate_filter_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected truncate filter type", K(ret), K(filter));
+  } else {
+    ObITruncateFilterExecutor *truncate_executor = nullptr;
+    if (filter.is_filter_black_node()) {
+      truncate_executor = static_cast<ObTruncateBlackFilterExecutor*>(&filter);
+    } else {
+      truncate_executor = static_cast<ObTruncateWhiteFilterExecutor*>(&filter);
+    }
+    ObStorageDatum *datum_buf = truncate_executor->get_tmp_datum_buffer();
+    const common::ObIArray<int32_t> &col_idxs = truncate_executor->get_col_idxs();
+    const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
+    const int64_t col_count = col_idxs.count();
+    int64_t row_idx = 0;
+    if (OB_UNLIKELY(col_count <= 0 || nullptr == datum_buf)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected col count", K(ret), K(col_count), KP(datum_buf));
+    }
+    for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+      row_idx = offset + pd_filter_info.start_;
+      if (nullptr != parent && parent->can_skip_filter(offset)) {
+        continue;
+      } else {
+        ObStorageDatum tmp_datum; // used for deep copy decimalint
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
+          ObStorageDatum &datum = datum_buf[i];
+          const int64_t col_idx = col_idxs.at(i);
+          const ObObjType obj_type = cols_desc.at(col_idx).col_type_.get_type();
+          const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
+          datum.reuse();
+          if (OB_FAIL(flat_row_reader_.read_column(
+              data_begin_ + index_data_[row_idx],
+              index_data_[row_idx + 1] - index_data_[row_idx],
+              col_idx,
+              tmp_datum))) {
+            LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
+          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idx))) {
+            datum.set_int(-tmp_datum.get_int());
+          } else if (OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
+            LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(tmp_datum), K(obj_type), K(map_type));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        bool filtered = false;
+        if (OB_FAIL(truncate_executor->filter(datum_buf, col_count, filtered))) {
+          LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+        } else if (!filtered) {
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
+          }
+        }
+      }
+    }
+    LOG_TRACE("[TRUNCATE INFO] micro block black pushdown filter row", K(ret), K(result_bitmap.popcnt()), K(result_bitmap.size()),
+              KPC(truncate_executor), K(filter));
+  }
+  return ret;
+}
+
 int ObMicroBlockReader::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,

@@ -54,7 +54,8 @@ private:
 class ObSingleMerge;
 class ObSingleRowGetter
 {
-  typedef common::ObFixedArray<int32_t, common::ObIAllocator> Projector;
+  static const int64_t DEFAULT_PROJECTOR_CNT = 16;
+  typedef common::ObSEArray<int32_t, DEFAULT_PROJECTOR_CNT> Projector;
   const ObQRIterType ITER_TYPE = T_SINGLE_GET;
 public:
   ObSingleRowGetter(common::ObIAllocator &allocator, ObTablet &tablet);

@@ -31,7 +31,7 @@ namespace oceanbase
 {
 namespace storage
 {
-
+ERRSIM_POINT_DEF(EN_DIRECT_LOAD_TASK_PROCESS);
 /******************             ObDDLTableMergeDag             *****************/
 ObDDLTableMergeDag::ObDDLTableMergeDag()
   : ObIDag(ObDagType::DAG_TYPE_DDL_KV_MERGE),
@@ -355,6 +355,11 @@ int ObDDLTableMergeTask::process()
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(merge_param_));
+#ifdef ERRSIM
+  } else if (is_data_direct_load(merge_param_.direct_load_type_) && EN_DIRECT_LOAD_TASK_PROCESS) {
+    ret = OB_EAGAIN;
+    FLOG_INFO("ERRSIM EN_DIRECT_LOAD_TASK_PROCESS", KR(ret));
+#endif
   } else if (OB_FAIL(merge_ddl_kvs(ls_handle, *tablet_handle.get_obj()))) {
     LOG_WARN("fail to merge ddl kvs", K(ret));
   }
@@ -952,7 +957,8 @@ int ObTabletDDLUtil::update_ddl_table_store(
     if (OB_FAIL(table_store_param.init_with_compaction_info(
             ObCompactionTableStoreParam(is_major_sstable ? compaction::MEDIUM_MERGE : compaction::MINOR_MERGE,
                                         share::SCN::min_scn(),
-                                        is_major_sstable /*need_report*/)))) {
+                                        is_major_sstable /*need_report*/,
+                                        false/*has_truncate_info*/)))) {
       /*DDL does not have verification between replicas,
         So using medium merge to force verification between replicas*/
       LOG_WARN("failed to init with compaction info", KR(ret));

@@ -70,6 +70,7 @@ ObMerger::ObMerger(
     merge_helper_(nullptr),
     base_iter_(nullptr),
     trans_state_mgr_(merger_arena_),
+    filter_statistics_(),
     start_time_(ObTimeUtility::current_time()),
     force_flat_format_(false)
 {
@@ -145,7 +146,36 @@ int ObMerger::get_base_iter_curr_macro_block(const blocksstable::ObMacroBlockDes
   return ret;
 }
 
+int ObMerger::try_filter_row(
+    const ObDatumRow &row,
+    ObICompactionFilter::ObFilterRet &filter_ret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(merge_ctx_) && merge_ctx_->has_filter()) {
+    if (OB_FAIL(merge_ctx_->filter(
+        row,
+        filter_ret))) {
+      STORAGE_LOG(WARN, "failed to filter row", K(ret), K(filter_ret));
+    } else if (OB_UNLIKELY(!ObICompactionFilter::is_valid_filter_ret(filter_ret))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get wrong filter ret", K(filter_ret));
+    } else {
+      filter_statistics_.inc(filter_ret);
+    }
+  }
+  return ret;
+}
 
+int ObMerger::close()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(inner_close()) && OB_NOT_NULL(merge_ctx_) && merge_ctx_->has_filter()) {
+    merge_ctx_->collect_filter_statistics(filter_statistics_);
+    FLOG_INFO("[COMPACTION_FILTER] filter statistics after merger closed", KR(ret),
+      "merge_range", merge_param_.merge_range_, K_(filter_statistics));
+  }
+  return ret;
+}
 /*
  *ObPartitionMerger
  */
@@ -159,7 +189,6 @@ ObPartitionMerger::ObPartitionMerger(
     macro_writer_(nullptr),
     minimum_iters_(DEFAULT_ITER_ARRAY_SIZE, ModulePageAllocator(allocator)),
     progressive_merge_helper_(),
-    filter_statistics_(),
     validator_(nullptr)
 {
 }
@@ -274,7 +303,7 @@ int ObPartitionMerger::inner_open_macro_writer(
   return ret;
 }
 
-int ObPartitionMerger::close()
+int ObPartitionMerger::inner_close()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(macro_writer_->close())) {
@@ -450,27 +479,6 @@ int ObPartitionMerger::check_macro_block_op(const ObMacroBlockDesc &macro_desc, 
     STORAGE_LOG(WARN, "failed to check macro operation", K(ret), K(macro_desc));
   }
 
-  return ret;
-}
-
-int ObPartitionMerger::try_filter_row(
-    const ObDatumRow &row,
-    ObICompactionFilter::ObFilterRet &filter_ret)
-{
-  int ret = OB_SUCCESS;
-  if (merge_ctx_->has_filter()) {
-    if (OB_FAIL(merge_ctx_->filter(
-        row,
-        filter_ret))) {
-      STORAGE_LOG(WARN, "failed to filter row", K(ret), K(filter_ret));
-    } else if (OB_UNLIKELY(filter_ret >= ObICompactionFilter::FILTER_RET_MAX
-        || filter_ret < ObICompactionFilter::FILTER_RET_NOT_CHANGE)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "get wrong filter ret", K(filter_ret));
-    } else {
-      filter_statistics_.inc(filter_ret);
-    }
-  }
   return ret;
 }
 

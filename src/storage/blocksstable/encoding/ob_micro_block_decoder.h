@@ -294,6 +294,11 @@ public:
       sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap,
       bool &filter_applied) override;
+  virtual int filter_pushdown_truncate_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap) override;
 
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,

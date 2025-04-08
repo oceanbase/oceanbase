@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_access_context.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -52,6 +53,7 @@ ObTableAccessContext::ObTableAccessContext()
     use_fuse_row_cache_(false),
     need_scn_(false),
     need_release_mview_scan_info_(true),
+    need_release_truncate_part_filter_(true),
     timeout_(0),
     query_flag_(),
     sql_mode_(0),
@@ -77,7 +79,9 @@ ObTableAccessContext::ObTableAccessContext()
     block_row_store_(nullptr),
     sample_filter_(nullptr),
     trans_state_mgr_(nullptr),
-    mview_scan_info_(nullptr)
+    mview_scan_info_(nullptr),
+    truncate_part_filter_(nullptr),
+    mds_collector_(nullptr)
 {
   merge_scn_.set_max();
 }
@@ -100,12 +104,19 @@ ObTableAccessContext::~ObTableAccessContext()
     }
     cg_iter_pool_ = nullptr;
   }
-  ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
-  if (need_release_mview_scan_info_) {
+  if (OB_UNLIKELY(nullptr != sample_filter_)) {
+    ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
+  }
+  if (OB_UNLIKELY(need_release_mview_scan_info_ && nullptr != mview_scan_info_)) {
     release_mview_scan_info(stmt_allocator_, mview_scan_info_);
     need_release_mview_scan_info_ = false;
   } else {
     mview_scan_info_ = nullptr;
+  }
+  if (OB_UNLIKELY(need_release_truncate_part_filter_ && nullptr != truncate_part_filter_)) {
+    ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
+  } else {
+    truncate_part_filter_ = nullptr;
   }
 }
 
@@ -201,9 +212,11 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     table_scan_stat_->reset();
     table_store_stat_.in_row_cache_threshold_ = scan_param.in_row_cache_threshold_;
     trans_version_range_ = trans_version_range;
-    need_scn_ = scan_param.need_scn_;
+    need_scn_ = scan_param.need_scn_ ||
+                (nullptr != scan_param.table_param_ && OB_INVALID_INDEX != scan_param.table_param_->get_read_info().get_trans_col_index());
     range_array_pos_ = &scan_param.range_array_pos_;
     use_fuse_row_cache_ = false;
+    mds_collector_ = scan_param.mds_collector_;
     if(OB_FAIL(build_lob_locator_helper(scan_param, ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
       // new static engine do not need fill scale
@@ -236,6 +249,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
                                ObIAllocator &allocator,
                                ObIAllocator &stmt_allocator,
                                const ObVersionRange &trans_version_range,
+                               memtable::ObMvccMdsFilter *mvcc_mds_filter,
                                const bool for_exist)
 {
   int ret = OB_SUCCESS;
@@ -265,7 +279,16 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     } else if (!micro_block_handle_mgr_.is_valid()
                && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
+    } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
+      need_release_truncate_part_filter_ = false;
+      truncate_part_filter_ = mvcc_mds_filter->truncate_part_filter_;
+      if (OB_FAIL(ctx.init_mds_filter(*mvcc_mds_filter))) {
+        LOG_WARN("failed to init mds filter on StoreCtx", KR(ret), KPC(mvcc_mds_filter));
+      }
     } else {
+      ctx.clear_mds_filter();
+    }
+    if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
   }
@@ -276,6 +299,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
                                ObStoreCtx &ctx,
                                common::ObIAllocator &allocator,
                                const common::ObVersionRange &trans_version_range,
+                               memtable::ObMvccMdsFilter *mvcc_mds_filter,
                                CachedIteratorNode *cached_iter_node)
 {
   int ret = OB_SUCCESS;
@@ -299,7 +323,16 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     if (!micro_block_handle_mgr_.is_valid()
         && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
+    } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
+      need_release_truncate_part_filter_ = false;
+      truncate_part_filter_ = mvcc_mds_filter->truncate_part_filter_;
+      if (OB_FAIL(ctx.init_mds_filter(*mvcc_mds_filter))) {
+        LOG_WARN("failed to init mds filter on StoreCtx", KR(ret), KPC(mvcc_mds_filter));
+      }
     } else {
+      ctx.clear_mds_filter();
+    }
+    if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
   }
@@ -392,11 +425,16 @@ int ObTableAccessContext::init_mview_scan_info(const int64_t multi_version_start
 void ObTableAccessContext::reset()
 {
   reset_lob_locator_helper();
-  if (need_release_mview_scan_info_) {
+  if (OB_UNLIKELY(need_release_mview_scan_info_ && nullptr != mview_scan_info_)) {
     release_mview_scan_info(stmt_allocator_, mview_scan_info_);
     need_release_mview_scan_info_ = false;
   } else {
     mview_scan_info_ = nullptr;
+  }
+  if (OB_UNLIKELY(need_release_truncate_part_filter_ && nullptr != truncate_part_filter_)) {
+    ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
+  } else {
+    truncate_part_filter_ = nullptr;
   }
   cached_iter_node_ = nullptr;
   if (nullptr != stmt_iter_pool_) {
@@ -419,7 +457,10 @@ void ObTableAccessContext::reset()
   tablet_id_.reset();
   query_flag_.reset();
   sql_mode_ = 0;
-  store_ctx_ = NULL;
+  if (NULL != store_ctx_) {
+    store_ctx_->clear_mds_filter();
+    store_ctx_ = NULL;
+  }
   micro_block_handle_mgr_.reset();
   limit_param_ = NULL;
   stmt_allocator_ = NULL;
@@ -437,7 +478,9 @@ void ObTableAccessContext::reset()
   range_array_pos_ = nullptr;
   cg_param_pool_ = nullptr;
   block_row_store_ = nullptr;
-  ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
+  if (OB_UNLIKELY(nullptr != sample_filter_)) {
+    ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
+  }
 }
 
 int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
@@ -464,7 +507,10 @@ void ObTableAccessContext::reuse()
   tablet_id_.reset();
   query_flag_.reset();
   sql_mode_ = 0;
-  store_ctx_ = NULL;
+  if (NULL != store_ctx_) {
+    store_ctx_->clear_mds_filter();
+    store_ctx_ = NULL;
+  }
   limit_param_ = NULL;
   reset_lob_locator_helper();
   if (NULL != scan_mem_) {
@@ -506,6 +552,21 @@ int ObTableAccessContext::alloc_iter_pool(const bool use_column_store)
       LOG_WARN("Failed to alloc row iter pool", K(ret));
     } else {
       cg_iter_pool_ = new(buf) ObStoreRowIterPool<ObICGIterator>(*stmt_allocator_);
+    }
+  }
+  return ret;
+}
+
+int ObTableAccessContext::check_filtered_by_base_version(ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != truncate_part_filter_) {
+    bool filtered = false;
+    if (OB_FAIL(truncate_part_filter_->filter(row, filtered, false/*check_filter*/, true/*check_version*/))) {
+      LOG_WARN("failed to do truncate part filter", K(ret));
+    } else if (filtered) {
+      row.row_flag_.reset();
+      row.row_flag_.set_flag(DF_NOT_EXIST);
     }
   }
   return ret;

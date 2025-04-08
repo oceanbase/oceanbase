@@ -16,7 +16,10 @@
 #define private public
 #include "../ob_row_generate.h"
 #include "test_column_decoder.h"
-
+#include "storage/truncate_info/ob_truncate_info_array.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "share/schema/ob_list_row_values.h"
+#include "storage/ob_truncate_info_helper.h"
 
 namespace oceanbase
 {
@@ -1379,6 +1382,223 @@ TEST_F(TestRawDecoder, cell_decode_to_datum)
       LOG_INFO("Current row: ", K(j), K(col_offset), K(rows[j].storage_datums_[col_offset]), K(datum));
       ASSERT_TRUE(ObDatum::binary_equal(rows[j].storage_datums_[col_offset], datum));
     }
+  }
+}
+
+TEST_F(TestRawDecoder, test_range_truncate_filter_pushdown)
+{
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+
+  int64_t seed0 = 0x0;
+  int64_t seed1 = 0x1;
+  int64_t seed2 = 0x2;
+  int64_t seed3 = 0x3;
+  int64_t seed4 = 0x4;
+  for (int64_t i = 0; i < ROW_CNT - 30; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+  for (int64_t i = ROW_CNT - 30; i < ROW_CNT - 20; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed1, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+  for (int64_t i = ROW_CNT - 20; i < ROW_CNT - 15; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed2, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+  for (int64_t i = ROW_CNT - 15; i < ROW_CNT - 10; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed3, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+  for (int64_t i = ROW_CNT - 10; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed4, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+
+  int64_t seed0_count = ROW_CNT - 30;
+  int64_t seed1_count = 10;
+  int64_t seed2_count = 5;
+  int64_t seed3_count = 5;
+  int64_t seed4_count = 10;
+
+  // 0 --- ROW_CNT-30 --- ROW_CNT-20 --- ROW_CNT-15 --- ROW_CNT-10 --- ROW_CNT
+  // |  seed0   |    seed1    |   seed2      |     seed3     |     seed4    |
+
+  char *buf = NULL;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
+
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
+    if (i >= ROWKEY_CNT && i < read_info_.get_rowkey_count()) {
+      continue;
+    }
+    sql::PushdownFilterInfo pd_filter_info;
+    pd_filter_info.col_capacity_ = full_column_cnt_;
+    pd_filter_info.start_ = 0;
+    pd_filter_info.count_ = decoder.row_count_;
+
+    sql::ObExecContext exec_ctx(allocator_);
+    sql::ObEvalCtx eval_ctx(exec_ctx);
+    sql::ObPushdownExprSpec expr_spec(allocator_);
+    sql::ObPushdownOperator op(eval_ctx, expr_spec);
+    sql::ObTruncateWhiteFilterNode white_filter(allocator_);
+    sql::ObTruncateWhiteFilterExecutor range_filter(allocator_, white_filter, op);
+    range_filter.set_type(TRUNCATE_WHITE_FILTER_EXECUTOR);
+
+    int64_t row_scn = INT64_MAX;
+    ObTruncateInfo range_truncate_info1;
+    TruncateInfoHelper::mock_truncate_info(allocator_, 1, row_scn, row_scn, range_truncate_info1);
+    range_truncate_info1.truncate_part_.part_type_ = ObTruncatePartition::RANGE_PART;
+    range_truncate_info1.truncate_part_.part_op_ = ObTruncatePartition::INCLUDE;
+    int64_t col_idxs[1] = {i};
+
+    ObObj range_begin_obj, range_end_obj;
+    setup_obj(range_begin_obj, i, seed1);
+    setup_obj(range_end_obj, i, seed3);
+    ObRowkey range_begin_rowkey(&range_begin_obj, 1);
+    ObRowkey range_end_rowkey(&range_end_obj, 1);
+    ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, range_begin_rowkey, range_end_rowkey, range_truncate_info1.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, col_idxs, range_truncate_info1.truncate_part_));
+
+    range_filter.set_truncate_item_type(ObTruncateItemType::TRUNCATE_RANGE_RIGHT);
+    white_filter.set_truncate_white_op_type(WHITE_OP_GE);
+    ASSERT_EQ(OB_SUCCESS, range_filter.prepare_truncate_param(ROWKEY_CNT, col_descs_, range_truncate_info1.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, range_filter.prepare_truncate_value(row_scn, range_truncate_info1.truncate_part_));
+
+    ObBitmap result_bitmap(allocator_);
+    result_bitmap.init(ROW_CNT);
+    ASSERT_EQ(0, result_bitmap.popcnt());
+
+    ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_truncate_filter(nullptr, range_filter, pd_filter_info, result_bitmap));
+    ASSERT_EQ(seed3_count + seed4_count, result_bitmap.popcnt());
+
+    result_bitmap.reuse();
+    range_filter.set_truncate_item_type(ObTruncateItemType::TRUNCATE_RANGE_LEFT);
+    white_filter.set_truncate_white_op_type(WHITE_OP_LT);
+    ASSERT_EQ(OB_SUCCESS, range_filter.prepare_truncate_value(row_scn, range_truncate_info1.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_truncate_filter(nullptr, range_filter, pd_filter_info, result_bitmap));
+    ASSERT_EQ(seed0_count, result_bitmap.popcnt());
+
+    result_bitmap.reuse();
+    range_begin_obj.set_min_value();
+    ObTruncateInfo range_truncate_info2;
+    ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, range_begin_rowkey, range_end_rowkey, range_truncate_info2.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, col_idxs, range_truncate_info2.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, range_filter.prepare_truncate_value(row_scn, range_truncate_info2.truncate_part_));
+    ASSERT_TRUE(range_filter.is_filter_always_false());
+  }
+}
+
+TEST_F(TestRawDecoder, test_list_truncate_filter_pushdown)
+{
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+
+  int64_t seed0 = 0x0;
+  int64_t seed1 = 0x1;
+  int64_t seed2 = 0x2;
+  for (int64_t i = 0; i < ROW_CNT - 30; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+  for (int64_t i = ROW_CNT - 30; i < ROW_CNT - 10; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed1, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+  for (int64_t i = ROW_CNT - 10; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed2, row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+
+  int64_t seed0_count = ROW_CNT - 30;
+  int64_t seed1_count = 20;
+  int64_t seed2_count = 10;
+
+  // 0 --- ROW_CNT-30 --- ROW_CNT-10 --- ROW_CNT
+  // |  seed0   |    seed1    |   seed2      |
+
+  char *buf = NULL;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
+    if (i >= ROWKEY_CNT && i < read_info_.get_rowkey_count()) {
+      continue;
+    }
+    sql::PushdownFilterInfo pd_filter_info;
+    pd_filter_info.col_capacity_ = full_column_cnt_;
+    pd_filter_info.start_ = 0;
+    pd_filter_info.count_ = decoder.row_count_;
+
+    sql::ObExecContext exec_ctx(allocator_);
+    sql::ObEvalCtx eval_ctx(exec_ctx);
+    sql::ObPushdownExprSpec expr_spec(allocator_);
+    sql::ObPushdownOperator op(eval_ctx, expr_spec);
+    sql::ObTruncateWhiteFilterNode white_filter(allocator_);
+    sql::ObTruncateWhiteFilterExecutor range_filter(allocator_, white_filter, op);
+    range_filter.set_type(TRUNCATE_WHITE_FILTER_EXECUTOR);
+
+    int64_t row_scn = INT64_MAX;
+    int64_t col_idxs[1] = {i};
+    sql::ObTruncateWhiteFilterExecutor list_filter(allocator_, white_filter, op);
+    list_filter.set_type(TRUNCATE_WHITE_FILTER_EXECUTOR);
+    list_filter.set_truncate_item_type(ObTruncateItemType::TRUNCATE_LIST);
+
+    ObObj list_obj1,list_obj2;
+    setup_obj(list_obj1, i, seed1);
+    setup_obj(list_obj2, i, seed2);
+    ObNewRow list_row1,list_row2;
+    list_row1.assign(&list_obj1, 1);
+    list_row2.assign(&list_obj2, 1);
+    ObListRowValues list_row_values1;
+    ASSERT_EQ(OB_SUCCESS, list_row_values1.push_back(list_row1));
+    ASSERT_EQ(OB_SUCCESS, list_row_values1.push_back(list_row2));
+
+    ObTruncateInfo list_truncate_info;
+    TruncateInfoHelper::mock_truncate_info(allocator_, 1, row_scn, row_scn, list_truncate_info);
+    list_truncate_info.truncate_part_.part_type_ = ObTruncatePartition::LIST_PART;
+    list_truncate_info.truncate_part_.part_op_ = ObTruncatePartition::INCLUDE;
+    ASSERT_EQ(OB_SUCCESS, list_truncate_info.truncate_part_.list_row_values_.init(allocator_, list_row_values1.get_values()));
+    ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, col_idxs, list_truncate_info.truncate_part_));
+
+    ObBitmap result_bitmap(allocator_);
+    result_bitmap.init(ROW_CNT);
+    ASSERT_EQ(0, result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, list_filter.prepare_truncate_param(ROWKEY_CNT, col_descs_, list_truncate_info.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, list_filter.prepare_truncate_value(row_scn, list_truncate_info.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_truncate_filter(nullptr, list_filter, pd_filter_info, result_bitmap));
+    ASSERT_EQ(decoder.row_count_ - (seed1_count + seed2_count), result_bitmap.popcnt());
+
+    result_bitmap.reuse();
+    list_truncate_info.truncate_part_.part_op_ = ObTruncatePartition::EXCEPT;
+    ObObj list_obj0;
+    setup_obj(list_obj0, i, seed0);
+    ObNewRow list_row0;
+    list_row0.assign(&list_obj0, 1);
+    ASSERT_EQ(OB_SUCCESS, list_row_values1.push_back(list_row0));
+    list_truncate_info.truncate_part_.list_row_values_.reset();
+    ASSERT_EQ(OB_SUCCESS, list_truncate_info.truncate_part_.list_row_values_.init(allocator_, list_row_values1.get_values()));
+    ASSERT_EQ(OB_SUCCESS, list_filter.prepare_truncate_value(row_scn, list_truncate_info.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_truncate_filter(nullptr, list_filter, pd_filter_info, result_bitmap));
+    ASSERT_EQ(decoder.row_count_, result_bitmap.popcnt());
+
+    result_bitmap.reuse();
+    list_truncate_info.truncate_part_.part_op_ = ObTruncatePartition::INCLUDE;
+    ObListRowValues list_row_values2;
+    ASSERT_EQ(OB_SUCCESS, list_row_values2.push_back(list_row1));
+    list_truncate_info.truncate_part_.list_row_values_.reset();
+    ASSERT_EQ(OB_SUCCESS, list_truncate_info.truncate_part_.list_row_values_.init(allocator_, list_row_values2.get_values()));
+    ASSERT_EQ(OB_SUCCESS, list_filter.prepare_truncate_value(row_scn, list_truncate_info.truncate_part_));
+    ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_truncate_filter(nullptr, list_filter, pd_filter_info, result_bitmap));
+    ASSERT_EQ(decoder.row_count_ - seed1_count, result_bitmap.popcnt());
   }
 }
 

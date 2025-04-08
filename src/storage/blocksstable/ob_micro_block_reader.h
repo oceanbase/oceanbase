@@ -17,6 +17,7 @@
 #include "ob_micro_block_hash_index.h"
 #include "ob_row_reader.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "sql/engine/basic/ob_truncate_filter_struct.h"
 
 namespace oceanbase
 {
@@ -91,6 +92,11 @@ public:
       int64_t &sql_sequence);
   // Filter interface for filter pushdown
   int filter_pushdown_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap);
+  int filter_pushdown_truncate_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,

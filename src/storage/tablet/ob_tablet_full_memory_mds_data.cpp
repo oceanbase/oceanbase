@@ -156,11 +156,11 @@ int ObTabletFullMemoryMdsData::read_medium_info_list(
   if (OB_UNLIKELY(!medium_info_list_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(medium_info_list_addr));
-  } else if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, medium_info_list_addr, ptr))) {
+  } else if (OB_FAIL(ObTabletMdsData::load_array(allocator, medium_info_list_addr, ptr))) {
     LOG_WARN("failed to load medium info list", K(ret));
   } else if (nullptr == ptr && OB_FAIL(medium_info_list.init_for_first_creation(allocator))) {
     LOG_WARN("failed to init medium info list", K(ret));
-  } else if (nullptr != ptr && OB_FAIL(medium_info_list.assign(*ptr, allocator))) {
+  } else if (nullptr != ptr && OB_FAIL(medium_info_list.assign(allocator, *ptr))) {
     LOG_WARN("failed to copy medium info list", K(ret));
   }
 

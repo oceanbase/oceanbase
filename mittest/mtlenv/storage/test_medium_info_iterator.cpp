@@ -20,6 +20,7 @@
 
 #include "mtlenv/storage/medium_info_common.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
+#include "storage/tablet/ob_mds_cl_range_query_iterator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -34,6 +35,7 @@ class TestMediumInfoIterator : public MediumInfoCommon
 public:
   TestMediumInfoIterator() = default;
   virtual ~TestMediumInfoIterator() = default;
+  ObMdsReadInfoCollector placeholder_collector_;
 };
 
 TEST_F(TestMediumInfoIterator, pure_mds_table)
@@ -49,21 +51,6 @@ TEST_F(TestMediumInfoIterator, pure_mds_table)
   ObTablet *tablet = tablet_handle.get_obj();
   ASSERT_NE(nullptr, tablet);
 
-  {
-    ObTabletCreateDeleteMdsUserData user_data;
-    user_data.tablet_status_ = ObTabletStatus::NORMAL;
-    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 5);
-    user_data.create_commit_scn_ = commit_scn;
-    user_data.create_commit_version_ = 5;
-
-    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(5)));
-    ret = tablet->set_tablet_status(user_data, ctx);
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    ctx.single_log_commit(commit_scn, commit_scn);
-  }
-
   // insert data into mds table
   ret = insert_medium_info(10, 10);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -74,7 +61,6 @@ TEST_F(TestMediumInfoIterator, pure_mds_table)
   common::ObArenaAllocator arena_allocator;
   constexpr uint8_t mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
   ObTableScanParam scan_param;
-  share::SCN read_snapshot = share::SCN::plus(share::SCN::min_scn(), 30);
 
   ret = ObMdsScanParamHelper::build_scan_param(
       arena_allocator,
@@ -85,14 +71,14 @@ TEST_F(TestMediumInfoIterator, pure_mds_table)
       common::ObString()/*udf_key*/,
       false/*is_get*/,
       ObClockGenerator::getClock() + 1_s,
-      read_snapshot,
+      ObVersionRange(0/*base_version*/, 30/*snapshot_version*/),
+      placeholder_collector_,
       scan_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObStoreCtx store_ctx;
   ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> range_query_iter;
   ret = tablet->mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
-      scan_param, store_ctx, range_query_iter);
+      scan_param, range_query_iter);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   mds::MdsDumpKV *kv = nullptr;
@@ -145,21 +131,6 @@ TEST_F(TestMediumInfoIterator, pure_mds_sstable)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *tablet = tablet_handle.get_obj();
 
-  {
-    ObTabletCreateDeleteMdsUserData user_data;
-    user_data.tablet_status_ = ObTabletStatus::NORMAL;
-    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 5);
-    user_data.create_commit_scn_ = commit_scn;
-    user_data.create_commit_version_ = 5;
-
-    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(5)));
-    ret = tablet->set_tablet_status(user_data, ctx);
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    ctx.single_log_commit(commit_scn, commit_scn);
-  }
-
   // insert data into mds table
   ret = insert_medium_info(10, 10);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -192,7 +163,6 @@ TEST_F(TestMediumInfoIterator, pure_mds_sstable)
   common::ObArenaAllocator arena_allocator;
   constexpr uint8_t mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
   ObTableScanParam scan_param;
-  share::SCN read_snapshot = share::SCN::plus(share::SCN::min_scn(), 22);
 
   ret = ObMdsScanParamHelper::build_scan_param(
       arena_allocator,
@@ -203,14 +173,14 @@ TEST_F(TestMediumInfoIterator, pure_mds_sstable)
       common::ObString()/*udf_key*/,
       false/*is_get*/,
       ObClockGenerator::getClock() + 1_s,
-      read_snapshot,
+      ObVersionRange(0/*base_version*/, 22/*snapshot_version*/),
+      placeholder_collector_,
       scan_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObStoreCtx store_ctx;
   ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> range_query_iter;
   ret = tablet->mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
-      scan_param, store_ctx, range_query_iter);
+      scan_param, range_query_iter);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   mds::MdsDumpKV *kv = nullptr;
@@ -268,21 +238,6 @@ TEST_F(TestMediumInfoIterator, data_no_overlap)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *tablet = tablet_handle.get_obj();
 
-  {
-    ObTabletCreateDeleteMdsUserData user_data;
-    user_data.tablet_status_ = ObTabletStatus::NORMAL;
-    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 5);
-    user_data.create_commit_scn_ = commit_scn;
-    user_data.create_commit_version_ = 5;
-
-    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(5)));
-    ret = tablet->set_tablet_status(user_data, ctx);
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    ctx.single_log_commit(commit_scn, commit_scn);
-  }
-
   // insert data into mds table
   ret = insert_medium_info(100, 100);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -320,7 +275,6 @@ TEST_F(TestMediumInfoIterator, data_no_overlap)
   common::ObArenaAllocator arena_allocator;
   constexpr uint8_t mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
   ObTableScanParam scan_param;
-  share::SCN read_snapshot = share::SCN::plus(share::SCN::min_scn(), 444);
   ret = ObMdsScanParamHelper::build_scan_param(
       arena_allocator,
       LS_ID,
@@ -330,14 +284,14 @@ TEST_F(TestMediumInfoIterator, data_no_overlap)
       common::ObString()/*udf_key*/,
       false/*is_get*/,
       ObClockGenerator::getClock() + 1_s,
-      read_snapshot,
+      ObVersionRange(0/*base_version*/, 444/*snapshot_version*/),
+      placeholder_collector_,
       scan_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObStoreCtx store_ctx;
   ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> range_query_iter;
   ret = tablet->mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
-      scan_param, store_ctx, range_query_iter);
+      scan_param, range_query_iter);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   mds::MdsDumpKV *kv = nullptr;
@@ -414,21 +368,6 @@ TEST_F(TestMediumInfoIterator, full_inclusion)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *tablet = tablet_handle.get_obj();
 
-  {
-    ObTabletCreateDeleteMdsUserData user_data;
-    user_data.tablet_status_ = ObTabletStatus::NORMAL;
-    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 5);
-    user_data.create_commit_scn_ = commit_scn;
-    user_data.create_commit_version_ = 5;
-
-    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(5)));
-    ret = tablet->set_tablet_status(user_data, ctx);
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    ctx.single_log_commit(commit_scn, commit_scn);
-  }
-
   // insert data into mds table
   ret = insert_medium_info(10, 10);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -469,7 +408,6 @@ TEST_F(TestMediumInfoIterator, full_inclusion)
   common::ObArenaAllocator arena_allocator;
   constexpr uint8_t mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
   ObTableScanParam scan_param;
-  share::SCN read_snapshot = share::SCN::plus(share::SCN::min_scn(), 60);
   ret = ObMdsScanParamHelper::build_scan_param(
       arena_allocator,
       LS_ID,
@@ -479,14 +417,14 @@ TEST_F(TestMediumInfoIterator, full_inclusion)
       common::ObString()/*udf_key*/,
       false/*is_get*/,
       ObClockGenerator::getClock() + 1_s,
-      read_snapshot,
+      ObVersionRange(0/*base_version*/, 60/*snapshot_version*/),
+      placeholder_collector_,
       scan_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObStoreCtx store_ctx;
   ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> range_query_iter;
   ret = tablet->mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
-      scan_param, store_ctx, range_query_iter);
+      scan_param, range_query_iter);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   mds::MdsDumpKV *kv = nullptr;
@@ -561,7 +499,7 @@ TEST_F(TestMediumInfoIterator, full_inclusion)
 int main(int argc, char **argv)
 {
   system("rm -f test_medium_info_iterator.log*");
-  OB_LOGGER.set_file_name("test_medium_info_iterator.log", true);
+  OB_LOGGER.set_file_name("test_medium_info_iterator.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -27,7 +27,6 @@ namespace oceanbase
 {
 namespace memtable
 {
-
 static const uint8_t NDT_NORMAL = 0x0;
 static const uint8_t NDT_COMPACT = 0x1;
 class ObIMvccCtx;

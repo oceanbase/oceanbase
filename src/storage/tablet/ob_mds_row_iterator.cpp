@@ -59,18 +59,14 @@ int ObMdsRowIterator::init(
     LOG_WARN("not mds query request", K(ret), K(scan_param));
   } else {
     const ObRowkeyReadInfo *rowkey_read_info = ObMdsSchemaHelper::get_instance().get_rowkey_read_info();
-    common::ObVersionRange version_range;
-    version_range.multi_version_start_ = 0;
-    version_range.base_version_ = 0;
-    version_range.snapshot_version_ = scan_param.fb_snapshot_.get_val_for_tx();
 
-    if (OB_UNLIKELY(!version_range.is_valid())) {
+    if (OB_UNLIKELY(!scan_param.read_version_range_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid version range", K(ret), K(version_range));
+      LOG_WARN("invalid version range", K(ret), K(scan_param.read_version_range_));
     } else if (OB_FAIL(access_param_.init(scan_param, nullptr/*tablet_handle*/, rowkey_read_info))) {
       LOG_WARN("fail to init access param", K(ret), K(scan_param));
-    } else if (OB_FAIL(access_ctx_.init(scan_param, store_ctx, version_range, nullptr/*cached_iter_node*/))) {
-      LOG_WARN("fail to init access ctx", K(ret), K(scan_param), K(store_ctx), K(version_range));
+    } else if (OB_FAIL(access_ctx_.init(scan_param, store_ctx, scan_param.read_version_range_, nullptr/*cached_iter_node*/))) {
+      LOG_WARN("fail to init access ctx", K(ret), K(scan_param), K(store_ctx), K(scan_param.read_version_range_));
     } else if (OB_FAIL(init_get_table_param(scan_param, tablet_handle))) {
       LOG_WARN("fail to init get table param", K(ret), K(scan_param));
     } else if (OB_FAIL(table_scan_range_.init(scan_param, false/*is_tablet_spliting*/))) {

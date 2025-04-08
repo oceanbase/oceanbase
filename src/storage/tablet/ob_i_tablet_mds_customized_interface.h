@@ -12,7 +12,7 @@
 
 #ifndef OCEANBASE_STORAGE_TABLET_OB_I_TABLET_MDS_CUSTOMIZED_INTERFACE_H
 #define OCEANBASE_STORAGE_TABLET_OB_I_TABLET_MDS_CUSTOMIZED_INTERFACE_H
-#include "ob_i_tablet_mds_interface.h"
+#include "storage/tablet/ob_i_tablet_mds_interface.h"
 
 namespace oceanbase
 {

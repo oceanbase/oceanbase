@@ -30,7 +30,6 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_micro_block_checksum_helper.cpp
   blocksstable/ob_micro_block_hash_index.cpp
   blocksstable/ob_micro_block_reader.cpp
-  blocksstable/ob_micro_block_row_exister.cpp
   blocksstable/ob_micro_block_row_getter.cpp
   blocksstable/ob_micro_block_row_lock_checker.cpp
   blocksstable/ob_micro_block_row_scanner.cpp
@@ -606,10 +605,8 @@ ob_set_subtarget(ob_storage access
   access/ob_index_sstable_estimator.cpp
   access/ob_index_tree_prefetcher.cpp
   access/ob_sstable_multi_version_row_iterator.cpp
-  access/ob_sstable_row_exister.cpp
   access/ob_sstable_row_getter.cpp
   access/ob_sstable_row_lock_checker.cpp
-  access/ob_sstable_row_multi_exister.cpp
   access/ob_sstable_row_multi_getter.cpp
   access/ob_sstable_row_multi_scanner.cpp
   access/ob_sstable_row_scanner.cpp
@@ -795,6 +792,12 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_schedule_tablet_func.cpp
   compaction/ob_tenant_status_cache.cpp
   compaction/ob_schedule_status_cache.cpp
+  compaction/ob_mds_filter_info.cpp
+)
+
+ob_set_subtarget(ob_storage compaction_filter
+  compaction/filter/ob_tx_data_minor_filter.cpp
+  compaction/filter/ob_mds_info_compaction_filter.cpp
 )
 
 ob_set_subtarget(ob_storage memtable
@@ -845,13 +848,14 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_mds_table_merge_dag.cpp
   multi_data_source/ob_mds_table_merge_dag_param.cpp
   multi_data_source/ob_mds_table_merge_task.cpp
-  multi_data_source/ob_mds_compaction_filter.cpp
+  multi_data_source/ob_mds_minor_compaction_filter.cpp
   multi_data_source/ob_start_transfer_in_mds_ctx.cpp
   multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
   multi_data_source/ob_abort_transfer_in_mds_ctx.cpp
   multi_data_source/ob_tablet_create_mds_ctx.cpp
   multi_data_source/ob_tablet_mds_merge_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
+  multi_data_source/mds_key_serialize_util.cpp
 )
 
 ob_set_subtarget(ob_storage tablelock
@@ -1016,6 +1020,16 @@ ob_set_subtarget(ob_storage tenant_snapshot
   tenant_snapshot/ob_ls_snapshot_mgr.cpp
   tenant_snapshot/ob_ls_snapshot_defs.cpp
   tenant_snapshot/ob_tenant_snapshot_meta_table.cpp
+)
+
+ob_set_subtarget(ob_storage truncate_info
+  truncate_info/ob_truncate_info_array.cpp
+  truncate_info/ob_truncate_info.cpp
+  truncate_info/ob_truncate_info_mds_helper.cpp
+  truncate_info/ob_tablet_truncate_info_reader.cpp
+  truncate_info/ob_truncate_partition_filter.cpp
+  truncate_info/ob_mds_info_distinct_mgr.cpp
+  truncate_info/ob_truncate_info_kv_cache.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

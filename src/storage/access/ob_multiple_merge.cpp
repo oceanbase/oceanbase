@@ -19,6 +19,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "share/ob_partition_split_query.h"
 
 namespace oceanbase
@@ -58,7 +59,8 @@ ObMultipleMerge::ObMultipleMerge()
       stmt_iter_pool_(nullptr),
       out_project_cols_(),
       lob_reader_(),
-      scan_state_(ScanState::NONE)
+      scan_state_(ScanState::NONE),
+      major_table_version_(0)
 {
 }
 
@@ -170,6 +172,9 @@ int ObMultipleMerge::init(
     } else if (OB_ISNULL(skip_bit_ = to_bit_vector(long_life_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc skip bit", K(ret), K(batch_size));
+    } else if (OB_UNLIKELY(access_param_->iter_param_.need_truncate_filter()) &&
+               OB_FAIL(prepare_truncate_filter())) {
+      LOG_WARN("failed to prepare truncate filter", K(ret));
     } else if (OB_FAIL(alloc_row_store(context, param))) {
       LOG_WARN("fail to alloc row store", K(ret));
     } else if (param.iter_param_.is_use_stmt_iter_pool() &&
@@ -202,6 +207,8 @@ int ObMultipleMerge::switch_param(
     STORAGE_LOG(WARN, "Failed to prepare read tables", K(ret), K(*this));
   } else if (OB_FAIL(init_lob_reader(param.iter_param_, context))) {
     STORAGE_LOG(WARN, "Failed to init read tables", K(ret), K(*this));
+  } else if (OB_UNLIKELY(param.iter_param_.need_truncate_filter()) && OB_FAIL(prepare_truncate_filter())) {
+    LOG_WARN("failed to prepare truncate filter", K(ret));
   }
   STORAGE_LOG(TRACE, "switch param", K(ret), KP(this), K(param), K(context), K(get_table_param));
   return ret;
@@ -257,6 +264,8 @@ int ObMultipleMerge::switch_table(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(prepare_read_tables())) {
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
+    } else if (OB_UNLIKELY(param.iter_param_.need_truncate_filter()) && OB_FAIL(prepare_truncate_filter())) {
+      LOG_WARN("failed to prepare truncate filter", K(ret));
     } else if (OB_FAIL(alloc_row_store(context, param))) {
       LOG_WARN("fail to alloc row store", K(ret));
     } else if (OB_ISNULL(skip_bit_ = to_bit_vector(access_ctx_->stmt_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
@@ -288,8 +297,7 @@ int ObMultipleMerge::reset_tables()
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (OB_FAIL(set_base_version())) {
-    STORAGE_LOG(WARN, "fail to set base version", K(ret));
+  } else if (FALSE_IT(set_base_version())) {
   } else if (OB_FAIL(construct_iters())) {
     STORAGE_LOG(WARN, "fail to construct iters", K(ret));
   } else {
@@ -901,6 +909,7 @@ void ObMultipleMerge::reuse()
   }
   lob_reader_.reuse();
   scan_state_ = ScanState::NONE;
+  major_table_version_ = 0;
 }
 
 void ObMultipleMerge::reclaim()
@@ -935,6 +944,9 @@ void ObMultipleMerge::inner_reset()
     }
     skip_bit_ = nullptr;
   }
+  if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->truncate_part_filter_)) {
+    access_ctx_->truncate_part_filter_->uncombined_from_pd_filter();
+  }
   padding_allocator_.reset();
   access_param_ = NULL;
   access_ctx_ = NULL;
@@ -949,6 +961,7 @@ void ObMultipleMerge::inner_reset()
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
   iter_del_row_ = false;
+  major_table_version_ = 0;
 }
 
 void ObMultipleMerge::reset_iter_array(const bool can_reuse)
@@ -1015,8 +1028,7 @@ int ObMultipleMerge::open()
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else if (OB_FAIL(nop_pos_.init(*long_life_allocator_, access_param_->get_max_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Fail to init nop pos, ", K(ret));
-  } else if (OB_FAIL(set_base_version())) {
-    STORAGE_LOG(WARN, "Fail to set base version", K(ret));
+  } else if (FALSE_IT(set_base_version())) {
    } else if (access_param_->iter_param_.is_use_stmt_iter_pool()) {
     if (OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
       LOG_WARN("Failed to init iter pool", K(ret));
@@ -1273,6 +1285,13 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
       LOG_WARN("filter row failed", K(ret));
     }
   }
+  if (OB_SUCC(ret) && !filtered) {
+    ObTruncatePartitionFilter *truncate_filter = access_ctx_->get_truncate_part_filter();
+    if (nullptr != truncate_filter && truncate_filter->is_normal_filter() &&
+        OB_FAIL(truncate_filter->filter(unprojected_row_, filtered))) {
+      LOG_WARN("failed to do truncate filter", K(ret), KPC(truncate_filter));
+    }
+  }
   return ret;
 }
 
@@ -1326,7 +1345,7 @@ const ObTableIterParam * ObMultipleMerge::get_actual_iter_param(const ObITable *
 int ObMultipleMerge::prepare_read_tables(bool refresh)
 {
   int ret = OB_SUCCESS;
-  tables_.reset();
+  tables_.reuse();
   const bool is_mds_query = access_param_->iter_param_.is_mds_query_;
   if (OB_UNLIKELY(NULL == get_table_param_ || !access_param_->is_valid() || NULL == access_ctx_)) {
     ret = OB_NOT_INIT;
@@ -1411,6 +1430,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   read_memtable_only_ = false;
   bool read_released_memtable = false;
   int64_t major_version = -1;
+  major_table_version_ = 0;
   while (OB_SUCC(ret)) {
     ObITable *table_ptr = nullptr;
     bool need_table = true;
@@ -1421,6 +1441,8 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
     } else if (OB_ISNULL(table_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table must not be null", K(ret), K(table_iter));
+    } else if (FALSE_IT(major_table_version_ = table_ptr->is_major_sstable() ? table_ptr->get_snapshot_version() :
+                                                                               major_table_version_)) {
     } else if (nullptr != sample_info && !sample_info->is_no_sample()) {
       need_table = false;
       if (SampleInfo::SAMPLE_ALL_DATA == sample_info->scope_) {
@@ -1503,6 +1525,9 @@ int ObMultipleMerge::refresh_table_on_demand()
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
     } else if (OB_FAIL(reset_tables())) {
       STORAGE_LOG(WARN, "fail to reset tables", K(ret));
+    } else if (OB_UNLIKELY(access_param_->iter_param_.need_truncate_filter()) &&
+               OB_FAIL(prepare_truncate_filter())) {
+      LOG_WARN("failed to prepare truncate filter", K(ret));
     } else if (nullptr != block_row_store_) {
       block_row_store_->reuse();
     }
@@ -1765,20 +1790,12 @@ void ObMultipleMerge::dump_table_statistic_for_4377()
   LOG_ERROR("==================== End table info ====================");
 }
 
-int ObMultipleMerge::set_base_version() const {
-  int ret = OB_SUCCESS;
+void ObMultipleMerge::set_base_version() const {
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (!access_param_->iter_param_.is_skip_scan() &&
-      !access_ctx_->is_mview_query() && is_scan() && tables_.count() > 1) {
-    ObITable *table = nullptr;
-    if (OB_FAIL(tables_.at(0, table))) {
-      STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
-    } else if (table->is_major_sstable()) {
-      access_ctx_->trans_version_range_.base_version_ = table->get_snapshot_version();
-    }
+  if (!access_ctx_->is_mview_query() && is_scan()) {
+    access_ctx_->trans_version_range_.base_version_ = major_table_version_;
   }
-  return ret;
 }
 
 int64_t ObMultipleMerge::generate_read_tables_version() const
@@ -1791,6 +1808,31 @@ bool ObMultipleMerge::check_table_need_read(const ObITable &table, int64_t &majo
 {
   UNUSEDx(table, major_version);
   return true;
+}
+
+int ObMultipleMerge::prepare_truncate_filter()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != access_param_ && nullptr != access_ctx_ &&
+      access_param_->iter_param_.need_truncate_filter() &&
+      tables_.count() > 0) {
+    const bool need_split_src_table = access_param_->iter_param_.is_tablet_spliting();
+    ObVersionRange read_version_range(major_table_version_, access_ctx_->trans_version_range_.snapshot_version_);
+    if (OB_FAIL(ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
+          *get_table_param_->tablet_iter_.get_tablet(),
+          need_split_src_table ? get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr() : nullptr,
+          access_param_->iter_param_.get_read_info()->get_columns_desc(),
+          access_param_->iter_param_.get_read_info()->get_columns(),
+          read_version_range,
+          access_ctx_->stmt_allocator_,
+          access_ctx_->truncate_part_filter_))) {
+      LOG_WARN("Failed to build truncate part filter", K(ret));
+    } else if (OB_UNLIKELY(access_param_->iter_param_.is_use_column_store() && nullptr != access_ctx_->truncate_part_filter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected state, do not support truncate filter in column store", K(ret));
+    }
+  }
+  return ret;
 }
 
 }

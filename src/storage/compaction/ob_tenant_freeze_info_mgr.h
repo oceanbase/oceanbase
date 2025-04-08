@@ -16,7 +16,6 @@
 #include <stdint.h>
 
 #include "lib/allocator/ob_slice_alloc.h"
-#include "lib/hash/ob_hashset.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/task/ob_timer.h"
 #include "share/ob_freeze_info_manager.h"

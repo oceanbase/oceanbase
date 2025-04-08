@@ -15,32 +15,23 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "share/schema/ob_table_param.h"
-#include "share/scn.h"
 namespace oceanbase
 {
 namespace blocksstable
 {
-  struct ObDatumRow;
+struct ObDatumRow;
 }
-namespace storage
-{
-class ObStoreRow;
-}
-
 namespace compaction
 {
 
 class ObICompactionFilter
 {
 public:
-  ObICompactionFilter(bool is_full_merge = true)
-   : is_full_merge_(is_full_merge)
+  ObICompactionFilter()
   {
   }
 
   virtual ~ObICompactionFilter() {}
-  OB_INLINE virtual void reset() { is_full_merge_ = false; }
-
   // for statistics
   enum ObFilterRet
   {
@@ -50,6 +41,7 @@ public:
   };
   const static char *ObFilterRetStr[];
   const static char *get_filter_ret_str(const int64_t idx);
+  static bool is_valid_filter_ret(const ObFilterRet filter_ret);
 
   struct ObFilterStatistics
   {
@@ -61,60 +53,59 @@ public:
     void add(const ObFilterStatistics &other);
     void inc(ObFilterRet filter_ret);
     void reset();
-
     int64_t to_string(char *buf, const int64_t buf_len) const;
-
+    void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
     int64_t row_cnt_[FILTER_RET_MAX];
   };
+
+  enum CompactionFilterType : uint8_t
+  {
+    TX_DATA_MINOR,
+    MDS_MINOR_FILTER_DATA,
+    MDS_MINOR_CROSS_LS,
+    MDS_IN_MEDIUM_INFO,
+    FILTER_TYPE_MAX
+  };
+  const static char *ObFilterTypeStr[];
+  const static char *get_filter_type_str(const int64_t idx);
 
   // need be thread safe
   virtual int filter(
       const blocksstable::ObDatumRow &row,
       ObFilterRet &filter_ret) = 0;
+  virtual CompactionFilterType get_filter_type() const = 0;
 
-  VIRTUAL_TO_STRING_KV(K_(is_full_merge));
-
-  bool is_full_merge_; // be careful!!!! if full_merge=false, can't filter all keys
+  VIRTUAL_TO_STRING_KV("filter_type", get_filter_type_str(get_filter_type()));
 };
 
-class ObTransStatusFilter : public ObICompactionFilter
+struct ObCompactionFilterFactory final
 {
 public:
-  ObTransStatusFilter()
-    : ObICompactionFilter(true),
-      is_inited_(false),
-      filter_val_(),
-      filter_col_idx_(0),
-      max_filtered_end_scn_()
+  template <typename T, typename... Args>
+  static int alloc_compaction_filter(
+    common::ObIAllocator &allocator,
+    ObICompactionFilter *&compaction_filter,
+    Args&... args)
   {
-    filter_val_.set_max();
-    max_filtered_end_scn_.set_min();
+    compaction_filter = nullptr;
+    int ret = OB_SUCCESS;
+    void *buf = nullptr;
+    T *new_filter = nullptr;
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+    } else {
+      new_filter = new (buf) T();
+      if (OB_FAIL(new_filter->init(args...))) {
+        STORAGE_LOG(WARN, "failed to init filter", K(ret));
+        allocator.free(new_filter);
+        new_filter = nullptr;
+      } else {
+        compaction_filter = new_filter;
+      }
+    }
+    return ret;
   }
-  ~ObTransStatusFilter() {}
-  int init(const share::SCN &filter_val, const int64_t filter_col_idx);
-  OB_INLINE virtual void reset() override
-  {
-    ObICompactionFilter::reset();
-    filter_val_.set_max();
-    filter_col_idx_ = 0;
-    max_filtered_end_scn_.set_min();
-    is_inited_ = false;
-  }
-
-  virtual int filter(const blocksstable::ObDatumRow &row, ObFilterRet &filter_ret) override;
-
-  INHERIT_TO_STRING_KV("ObICompactionFilter", ObICompactionFilter, "filter_name", "ObTransStatusFilter", K_(filter_val),
-      K_(filter_col_idx), K_(max_filtered_end_scn));
-
-public:
-  share::SCN get_max_filtered_end_scn() { return max_filtered_end_scn_; }
-  share::SCN get_recycle_scn() { return filter_val_; }
-
-private:
-  bool is_inited_;
-  share::SCN filter_val_;
-  int64_t filter_col_idx_;
-  share::SCN max_filtered_end_scn_;
 };
 
 } // namespace compaction

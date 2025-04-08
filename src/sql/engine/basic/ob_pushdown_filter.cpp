@@ -12,6 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_pushdown_filter.h"
+#include "ob_truncate_filter_struct.h"
+#include "sql/engine/ob_physical_plan.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
@@ -30,7 +34,11 @@ ObPushdownFilterFactory::PDFilterAllocFunc ObPushdownFilterFactory::PD_FILTER_AL
   ObPushdownFilterFactory::alloc<ObPushdownAndFilterNode, AND_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownOrFilterNode, OR_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownDynamicFilterNode, DYNAMIC_FILTER>,
-  ObPushdownFilterFactory::alloc<ObPushdownSampleFilterNode, SAMPLE_FILTER>
+  ObPushdownFilterFactory::alloc<ObPushdownSampleFilterNode, SAMPLE_FILTER>,
+  ObPushdownFilterFactory::alloc<ObTruncateWhiteFilterNode, TRUNCATE_WHITE_FILTER>,
+  ObPushdownFilterFactory::alloc<ObTruncateBlackFilterNode, TRUNCATE_BLACK_FILTER>,
+  ObPushdownFilterFactory::alloc<ObTruncateOrFilterNode, TRUNCATE_OR_FILTER>,
+  ObPushdownFilterFactory::alloc<ObTruncateAndFilterNode, TRUNCATE_AND_FILTER>
 };
 
 ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER_EXECUTOR_ALLOC[PushdownExecutorType::MAX_EXECUTOR_TYPE] =
@@ -41,7 +49,11 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObOrFilterExecutor, ObPushdownOrFilterNode, OR_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObDynamicFilterExecutor, ObPushdownDynamicFilterNode, DYNAMIC_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObHybridSampleFilterExecutor, ObPushdownSampleFilterNode, HYBRID_SAMPLE_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObTrivalSampleFilterExecutor, ObPushdownSampleFilterNode, TRIVAL_SAMPLE_FILTER_EXECUTOR>
+  ObPushdownFilterFactory::alloc<ObTrivalSampleFilterExecutor, ObPushdownSampleFilterNode, TRIVAL_SAMPLE_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObTruncateWhiteFilterExecutor, ObTruncateWhiteFilterNode, TRUNCATE_WHITE_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObTruncateBlackFilterExecutor, ObTruncateBlackFilterNode, TRUNCATE_BLACK_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObTruncateOrFilterExecutor, ObTruncateOrFilterNode, TRUNCATE_OR_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObTruncateAndFilterExecutor, ObTruncateAndFilterNode, TRUNCATE_AND_FILTER_EXECUTOR>
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
@@ -1385,6 +1397,11 @@ int ObPushdownFilterExecutor::execute(
     if (OB_FAIL(do_filter(parent, filter_info, micro_scanner, use_vectorize, *result))) {
       LOG_WARN("Fail to do filter", K(ret));
     }
+  } else if (is_truncate_logic_and_node()) {
+    ObTruncateAndFilterExecutor *truncate_and_filter = static_cast<ObTruncateAndFilterExecutor*>(this);
+    if (OB_FAIL(truncate_and_filter->execute_logic_filter(filter_info, micro_scanner, false, *result))) {
+      LOG_WARN("Failed to inner execute truncate logic filter", K(ret));
+    }
   } else if (is_logic_op_node()) {
     if (OB_UNLIKELY(get_child_count() < 2)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1473,7 +1490,7 @@ void ObPushdownFilterExecutor::clear()
   }
 }
 
-bool ObPushdownFilterExecutor::check_sstable_index_filter()
+bool ObPushdownFilterExecutor::check_filter_determinated()
 {
   bool is_needed_to_do_filter = true;
   if (is_filter_constant()) {
@@ -1491,7 +1508,7 @@ int ObPushdownFilterExecutor::do_filter(
     common::ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
-  bool is_needed_to_do_filter = check_sstable_index_filter();
+  bool is_needed_to_do_filter = check_filter_determinated();
   uint64_t start_time = 0;
   if (parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
     start_time = rdtsc();
@@ -1631,24 +1648,6 @@ int ObPushdownFilterExecutor::build_new_sub_filter_tree(
   return ret;
 }
 
-template<typename T>
-int ObPushdownFilterExecutor::init_array_param(common::ObFixedArray<T, common::ObIAllocator> &param, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (FALSE_IT(param.clear())) {
-  } else if (OB_FAIL(param.reserve(size))) {
-    if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
-      LOG_WARN("Failed to init params", K(ret));
-    } else {
-      param.reset();
-      if (OB_FAIL(param.init(size))) {
-        LOG_WARN("Failed to init params", K(ret), K(size));
-      }
-    }
-  }
-  return ret;
-}
-
 ObPushdownFilterExecutor::ObPushdownFilterExecutor(common::ObIAllocator &alloc,
                                                    ObPushdownOperator &op,
                                                    PushdownExecutorType type)
@@ -1710,9 +1709,9 @@ int ObPushdownFilterExecutor::prepare_skip_filter(bool disable_bypass)
     LOG_WARN("Unexpected null filter bitmap", K(ret));
   } else if (enable_reorder_ && disable_bypass) {
     need_check_row_filter_ = false;
-  } else if (PushdownExecutorType::AND_FILTER_EXECUTOR == type_) {
+  } else if (is_logic_and_node()) {
     need_check_row_filter_ = !filter_bitmap_->is_all_true();
-  } else if (PushdownExecutorType::OR_FILTER_EXECUTOR == type_) {
+  } else if (is_logic_or_node()) {
     need_check_row_filter_ = !filter_bitmap_->is_all_false();
   }
 
@@ -2983,6 +2982,7 @@ void PushdownFilterInfo::reset()
   is_inited_ = false;
   is_pd_filter_ = false;
   is_pd_to_cg_ = false;
+  orig_filter_is_null_ = false;
   start_ = -1;
   count_ = 0;
   col_capacity_ = 0;
@@ -2995,6 +2995,7 @@ void PushdownFilterInfo::reset()
 void PushdownFilterInfo::reuse()
 {
   is_pd_to_cg_ = false;
+  orig_filter_is_null_ = false;
   filter_ = nullptr;
   param_ = nullptr;
   context_ = nullptr;
@@ -3018,7 +3019,7 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
   } else if (OB_UNLIKELY(!iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
-  } else if (nullptr == iter_param.pushdown_filter_) {
+  } else if ((orig_filter_is_null_ = nullptr == iter_param.pushdown_filter_)) {
     // nothing to do without filter exprs
   } else if (OB_ISNULL((buf = alloc.alloc(sizeof(blocksstable::ObStorageDatum) * out_col_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

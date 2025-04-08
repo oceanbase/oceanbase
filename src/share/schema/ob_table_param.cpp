@@ -1000,11 +1000,14 @@ int ObTableParam::construct_columns_and_projector(
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_output_projector;
   ObSEArray<bool, COMMON_COLUMN_NUM> tmp_output_sel_mask;
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_cg_idxs;
+  ObSEArray<uint64_t, COMMON_COLUMN_NUM> truncate_col_ids;
+  const ObIArray<uint64_t> *access_col_ids = &output_column_ids;
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
   bool is_cs = false;
   bool has_all_column_group = false;
+  bool need_truncate_filter = false;
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
 
@@ -1071,11 +1074,42 @@ int ObTableParam::construct_columns_and_projector(
         }
       }
     }
-
+    if (OB_SUCC(ret) && !is_cs && table_schema.is_global_index_table()) {
+      ObSEArray<ObColDesc, COMMON_COLUMN_NUM> non_rowkey_column_ids;
+      if (OB_FAIL(table_schema.get_column_ids_without_rowkey(non_rowkey_column_ids, true))) {
+        LOG_WARN("get column ids failed", K(ret));
+      } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
+        LOG_WARN("fail to push back trans version col to truncate col ids", K(ret));
+      } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID))) {
+        LOG_WARN("fail to push back sql sequence col to truncate col ids", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < non_rowkey_column_ids.count(); ++i) {
+        const uint64_t column_id = non_rowkey_column_ids.at(i).col_id_;
+        const ObColumnSchemaV2 *column_schema = NULL;
+        if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
+        } else if (column_schema->is_user_specified_storing_column()) {
+        } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
+          LOG_WARN("fail to push back non rowkey col id to truncate col ids");
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids.count(); ++i) {
+        const uint64_t column_id = output_column_ids.at(i);
+        if (is_contain(truncate_col_ids, column_id)) {
+        } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
+          LOG_WARN("fail to push back output col id to truncate col ids");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        access_col_ids = &truncate_col_ids;
+        need_truncate_filter = true;
+      }
+    }
     //add other columns
-    for (int32_t i = 0; OB_SUCC(ret) && i < output_column_ids.count(); ++i) {
+    for (int32_t i = 0; OB_SUCC(ret) && i < access_col_ids->count(); ++i) {
       tmp_col_extend.reset();
-      const uint64_t column_id = output_column_ids.at(i);
+      const uint64_t column_id = access_col_ids->at(i);
       const ObColumnSchemaV2 *column_schema = NULL;
       ObColumnParam *column = NULL;
       int32_t col_index = OB_INVALID_INDEX;
@@ -1217,7 +1251,9 @@ int ObTableParam::construct_columns_and_projector(
                                      &tmp_access_cols_param,
                                      is_cs ? &tmp_cg_idxs : nullptr,
                                      &tmp_access_cols_extend,
-                                     has_all_column_group))) {
+                                     has_all_column_group,
+                                     false/*is_cg_sstable*/,
+                                     need_truncate_filter))) {
       LOG_WARN("fail to init main read info", K(ret));
     } else if (OB_FAIL(output_projector_.assign(tmp_output_projector))) {
       LOG_WARN("assign failed", K(ret));
