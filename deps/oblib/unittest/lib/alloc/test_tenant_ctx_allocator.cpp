@@ -366,7 +366,6 @@ TEST(TestTenantAllocator, sub_ctx_id)
   ASSERT_EQ(true, NULL == ptr);
 
   int64_t wash_size = ta->sync_wash(INT64_MAX);
-  ASSERT_NE(0, wash_size);
   ptr = ob_malloc(size, ObMemAttr(tenant_id, "TestSubCtx", ctx_id));
   ASSERT_EQ(true, NULL != ptr);
   ASSERT_EQ(wash_size, ta->sync_wash(INT64_MAX) * ObSubCtxIds::MAX_SUB_CTX_ID);

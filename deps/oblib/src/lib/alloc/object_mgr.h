@@ -32,7 +32,7 @@ namespace lib
 {
 class ObjectMgrV2
 {
-  static const int OBJECT_SET_CNT = 64;
+  static const int OBJECT_SET_CNT = 32;
 public:
   ObjectMgrV2(int parallel, IBlockMgr *blk_mgr);
   AObject *alloc_object(uint64_t size, const ObMemAttr &attr)
