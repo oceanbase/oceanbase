@@ -173,7 +173,7 @@ void TestIndexBlockDataPrepare::prepare_query_param(const bool is_reverse_scan, 
   context_.allocator_ = test_allocator;
   context_.stmt_allocator_ = test_allocator;
   context_.limit_param_ = nullptr;
-  ASSERT_EQ(OB_SUCCESS, context_.micro_block_handle_mgr_.init(false /* disable limit */, context_.table_store_stat_, context_.query_flag_));
+  ASSERT_EQ(OB_SUCCESS, context_.micro_block_handle_mgr_.init(false /* disable limit */, context_.table_store_stat_, context_.table_scan_stat_, context_.query_flag_));
   context_.is_inited_ = true;
 }
 

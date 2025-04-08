@@ -175,31 +175,37 @@ struct ObTSCMonitorInfo
   int64_t* ssstore_read_bytes_;
   int64_t* ssstore_read_row_cnt_;
   int64_t* memstore_read_row_cnt_;
+  uint64_t* block_io_wait_time_us_;
 
   ObTSCMonitorInfo()
     : io_read_bytes_(nullptr),
       ssstore_read_bytes_(nullptr),
       ssstore_read_row_cnt_(nullptr),
-      memstore_read_row_cnt_(nullptr) {}
+      memstore_read_row_cnt_(nullptr),
+      block_io_wait_time_us_(nullptr) {}
 
   ObTSCMonitorInfo(int64_t* io_read_bytes,
                     int64_t* ssstore_read_bytes,
                     int64_t* ssstore_read_row_cnt,
-                    int64_t* memstore_read_row_cnt)
+                    int64_t* memstore_read_row_cnt,
+                    uint64_t* block_io_wait_time_us)
     : io_read_bytes_(io_read_bytes),
       ssstore_read_bytes_(ssstore_read_bytes),
       ssstore_read_row_cnt_(ssstore_read_row_cnt),
-      memstore_read_row_cnt_(memstore_read_row_cnt) {}
+      memstore_read_row_cnt_(memstore_read_row_cnt),
+      block_io_wait_time_us_(block_io_wait_time_us) {}
 
   void init(int64_t* io_read_bytes,
             int64_t* ssstore_read_bytes,
             int64_t* ssstore_read_row_cnt,
-            int64_t* memstore_read_row_cnt)
+            int64_t* memstore_read_row_cnt,
+            uint64_t* block_io_wait_time_us)
   {
     io_read_bytes_ = io_read_bytes;
     ssstore_read_bytes_ = ssstore_read_bytes;
     ssstore_read_row_cnt_ = ssstore_read_row_cnt;
     memstore_read_row_cnt_ = memstore_read_row_cnt;
+    block_io_wait_time_us_ = block_io_wait_time_us;
   }
 
   void add_io_read_bytes(int64_t io_read_bytes) {
@@ -226,6 +232,12 @@ struct ObTSCMonitorInfo
     }
   }
 
+  void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us) {
+    if (OB_NOT_NULL(block_io_wait_time_us_)) {
+      *block_io_wait_time_us_ += block_io_wait_time_us;
+    }
+  }
+
   void reset_stat()
   {
     if (OB_NOT_NULL(io_read_bytes_)) {
@@ -240,6 +252,9 @@ struct ObTSCMonitorInfo
     if (OB_NOT_NULL(memstore_read_row_cnt_)) {
       *memstore_read_row_cnt_ = 0;
     }
+    if (OB_NOT_NULL(block_io_wait_time_us_)) {
+      *block_io_wait_time_us_ += 0;
+    }
   }
 
   DEFINE_TO_STRING(
@@ -247,6 +262,7 @@ struct ObTSCMonitorInfo
     OB_ISNULL(ssstore_read_bytes_) ? J_KV(K(ssstore_read_bytes_)) : J_KV(K(*ssstore_read_bytes_));
     OB_ISNULL(ssstore_read_row_cnt_) ? J_KV(K(ssstore_read_row_cnt_)) : J_KV(K(*ssstore_read_row_cnt_));
     OB_ISNULL(memstore_read_row_cnt_) ? J_KV(K(memstore_read_row_cnt_)) : J_KV(K(*memstore_read_row_cnt_));
+    OB_ISNULL(block_io_wait_time_us_) ? J_KV(K(block_io_wait_time_us_)) : J_KV(K(*block_io_wait_time_us_));
   )
 };
 

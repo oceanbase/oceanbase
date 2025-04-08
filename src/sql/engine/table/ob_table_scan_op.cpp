@@ -1940,7 +1940,8 @@ void ObTableScanOp::init_scan_monitor_info()
   tsc_monitor_info_.init(&(op_monitor_info_.otherstat_1_value_),
                          &(op_monitor_info_.otherstat_2_value_),
                          &(op_monitor_info_.otherstat_3_value_),
-                         &(op_monitor_info_.otherstat_4_value_));
+                         &(op_monitor_info_.otherstat_4_value_),
+                         &(op_monitor_info_.block_time_));
 }
 
 int ObTableScanOp::fill_storage_feedback_info()

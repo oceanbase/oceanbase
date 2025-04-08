@@ -227,6 +227,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
                && OB_FAIL(micro_block_handle_mgr_.init(
                   static_cast<sql::ObStoragePushdownFlag>(scan_param.pd_storage_flag_).is_enable_prefetch_limiting(),
                   table_store_stat_,
+                  table_scan_stat_,
                   query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
     } else if (scan_param.sample_info_.is_row_sample()
@@ -277,7 +278,8 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     if (!for_exist && OB_FAIL(build_lob_locator_helper(ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
     } else if (!micro_block_handle_mgr_.is_valid()
-               && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
+               && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_,
+                  table_scan_stat_,query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
     } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
       need_release_truncate_part_filter_ = false;
@@ -321,7 +323,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     lob_locator_helper_ = nullptr;
     cached_iter_node_ = cached_iter_node;
     if (!micro_block_handle_mgr_.is_valid()
-        && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
+        && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, table_scan_stat_, query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
     } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
       need_release_truncate_part_filter_ = false;
@@ -368,6 +370,7 @@ int ObTableAccessContext::init_for_mview(common::ObIAllocator *allocator, const 
         OB_FAIL(micro_block_handle_mgr_.init(
                 false,
                 table_store_stat_,
+                table_scan_stat_,
                 query_flag_))) {
       LOG_WARN("Failed to init micro block handle mgr", K(ret));
     } else {
