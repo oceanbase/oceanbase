@@ -428,6 +428,8 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Unable to process task due to inactive server in member list",
   "Wait to retry due to the last failure",
   "Wait for learner list to be same",
+  "Unable to process task due to all partitions being locked",
+  "Unable to process task due to partitions being locked or non-existent",
   "Unknow"/*MAX_COMMENT*/
 };
 

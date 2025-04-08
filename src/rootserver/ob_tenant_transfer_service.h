@@ -245,11 +245,16 @@ private:
       const ObIArray<common::ObTabletID> &tablet_ids,
       const int64_t new_tablet_cnt,
       bool &exceed_threshold);
-
+  int64_t calc_transfer_retry_interval_(
+      const share::ObTransferTaskID &current_failed_task_id,
+      int64_t &retry_count,
+      share::ObTransferTaskID &last_failed_task_id);
+  int64_t get_transfer_config_retry_interval_();
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms
   static const int64_t PART_COUNT_IN_A_TRANSFER = 100;
+  static const int64_t MAX_EXPONENTIAL_BACKOFF_COUNTS = 10;
 
   bool is_inited_;
   uint64_t tenant_id_;
