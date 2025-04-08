@@ -1721,7 +1721,7 @@ int ObExternalTableFileManager::create_auto_refresh_job(ObExecContext &ctx, cons
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
 
 }
 }
