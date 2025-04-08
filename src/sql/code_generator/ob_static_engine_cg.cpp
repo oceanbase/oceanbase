@@ -8320,7 +8320,7 @@ int ObStaticEngineCG::generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, con
     LOG_WARN("unexcepted null ptr", K(ret));
   } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan context is null");
+    LOG_WARN("plan context is null", K(ret));
   } else if (OB_FAIL(op.gen_link_stmt_param_infos())) {
     LOG_WARN("failed to generate link stmt", K(ret));
   } else if (OB_FAIL(spec.set_param_infos(op.get_param_infos()))) {
@@ -8390,7 +8390,7 @@ int ObStaticEngineCG::generate_spec(ObLogLinkDml &op, ObLinkDmlSpec &spec, const
     LOG_WARN("unexcepted null ptr", K(ret));
   } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan context is null");
+    LOG_WARN("plan context is null", K(ret));
   } else if (OB_FAIL(op.gen_link_stmt_param_infos())) {
     LOG_WARN("failed to generate link stmt", K(ret));
   } else if (OB_FAIL(spec.set_param_infos(op.get_param_infos()))) {
@@ -9326,7 +9326,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     LOG_WARN("invalid sql_ctx", K(ret));
   } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("plan context is null");
+      LOG_WARN("plan context is null", K(ret));
   } else if (OB_ISNULL(exec_ctx->get_stmt_factory())
              || OB_ISNULL(exec_ctx->get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;

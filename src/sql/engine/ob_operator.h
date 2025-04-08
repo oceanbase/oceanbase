@@ -492,6 +492,10 @@ public:
 
   bool is_operator_end() { return batch_reach_end_ ||  row_reach_end_ ; }
   TO_STRING_KV(K(spec_));
+
+  virtual int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
+  { return OB_SUCCESS; };
+
 protected:
   virtual int do_drain_exch();
   int init_skip_vector();

@@ -549,6 +549,9 @@ public:
          (! ctx_.get_physical_plan_ctx()->get_phy_plan()->has_for_update() )
         );
   }
+
+  int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip) override;
+
 protected:
   // Get GI task then update location_idx and $cur_access_tablet_
   // NOTE: set $iter_end_ if no task found.

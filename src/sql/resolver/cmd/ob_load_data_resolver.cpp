@@ -392,6 +392,33 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
   }
 
   if (OB_SUCC(ret)) {
+    /*14. on_error */
+    const ParseNode *child_node = node->children_[ENUM_OPT_ON_ERROR];
+    if (OB_NOT_NULL(child_node)) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("load data on error is not supported", K(ret));
+      } else if (T_LOG_ERROR_LIMIT == child_node->type_) {
+        load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+        if (OB_UNLIKELY(child_node->num_child_ != 1)
+                  || OB_ISNULL(child_node->children_[0])
+                  || T_INT != child_node->children_[0]->type_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid grand child node", K(ret), K(child_node->num_child_));
+        } else {
+          load_stmt->get_load_arguments().diagnosis_limit_num_ = child_node->children_[0]->value_;
+        }
+      } else if (T_LOG_ERROR_UNLIMITED == child_node->type_) {
+        load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+        load_stmt->get_load_arguments().diagnosis_limit_num_ = -1;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid from spec node", K(ret), K(child_node->type_));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObLoadArgument &load_args = load_stmt->get_load_arguments();
     const ObDirectLoadHint &direct_load_hint = load_stmt->get_hints().get_direct_load_hint();
     if (ObLoadDupActionType::LOAD_STOP_ON_DUP == load_args.dupl_action_ &&

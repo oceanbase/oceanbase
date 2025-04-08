@@ -83,8 +83,8 @@ struct ToStringCastImpl
         SQL_LOG(WARN, "unexpected zf length", K(ret), K(out_scale), K(expr.datum_meta_.scale_));
       } else {
         FloatDoubleToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -127,8 +127,8 @@ struct ToStringCastImpl
         SQL_LOG(WARN, "unexpected zf length", K(ret), K(out_scale), K(expr.datum_meta_.scale_));
       } else {
         IntUIntToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -171,8 +171,8 @@ struct ToStringCastImpl
       };
 
       DateToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -216,8 +216,8 @@ struct ToStringCastImpl
       };
 
       DatetimeToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -280,8 +280,8 @@ struct ToStringCastImpl
         SQL_LOG(WARN, "unexpected zf length", K(ret), K(in_scale), K(out_scale));
       } else {
         DecimalintToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -349,8 +349,8 @@ struct ToStringCastImpl
         SQL_LOG(WARN, "unexpected zf length", K(ret), K(expr.datum_meta_.scale_));
       } else {
         NumberToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -449,8 +449,8 @@ struct ToStringCastImpl
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to blob type");
       } else {
         StringToStringFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }

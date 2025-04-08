@@ -3398,6 +3398,20 @@ int ObTableScanOp::transform_physical_rowid(ObIAllocator &allocator,
   return ret;
 }
 
+int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
+{
+  int ret = OB_SUCCESS;
+  ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
+  if (OB_FAIL(output_->get_diagnosis_info(&diagnosis_manager))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get diagnosis info", K(ret));
+  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip,
+                                            exec_ctx.get_my_session()->get_diagnosis_limit_num()))){
+    LOG_WARN("fail to do diagnosis", K(ret));
+  }
+  return ret;
+}
+
 int ObTableScanOp::check_is_physical_rowid(ObIAllocator &allocator,
                                            ObRowkey &row_key,
                                            bool &is_physical_rowid,

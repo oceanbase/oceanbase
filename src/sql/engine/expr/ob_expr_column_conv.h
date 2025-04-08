@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace sql
 {
+struct ObDiagnosisManager;
 
 class ObBaseExprColumnConv
 {
@@ -167,6 +168,9 @@ public:
                                                    const ObBitVector &skip,
                                                    const EvalBound &bound);
 
+  static int calc_column_name_for_diagnosis(const ObExpr &expr,
+                                            ObEvalCtx &ctx,
+                                            ObDiagnosisManager& diagnosis_manager);
   inline static bool check_is_ascii(ObString &str);
 
   template <PARAM_TC TC>

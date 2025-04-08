@@ -128,6 +128,7 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
     int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
   }
+
   return ret;
 }
 
@@ -193,6 +194,7 @@ int ObCSVTableRowIterator::open_next_file()
         state_.cur_file_name_ = file_url;
         state_.cur_file_id_ = file_id;
         state_.cur_line_number_ = ObCSVTableRowIterator::MIN_EXTERNAL_TABLE_LINE_NUMBER;
+        state_.batch_first_row_line_num_ = ObCSVTableRowIterator::MIN_EXTERNAL_TABLE_LINE_NUMBER;
         state_.skip_lines_ = parser_.get_format().skip_header_lines_;
         state_.line_count_limit_ = INT64_MAX;
       } else {
@@ -200,6 +202,7 @@ int ObCSVTableRowIterator::open_next_file()
         state_.cur_file_name_ = file_url;
         state_.cur_file_id_ = file_id;
         state_.cur_line_number_ = start_line;
+        state_.batch_first_row_line_num_ = start_line;
         state_.skip_lines_ = parser_.get_format().skip_header_lines_ + start_line - 1;
         state_.line_count_limit_ = end_line - start_line + 1;
       }
@@ -317,6 +320,48 @@ void ObCSVTableRowIterator::dump_error_log(ObIArray<ObCSVGeneralParser::LineErrR
   }
 }
 
+int ObCSVTableRowIterator::record_err_for_select_data(int err_ret,
+                                                      const char *message,
+                                                      int64_t limit_num)
+{
+  int ret = OB_SUCCESS;
+  ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+
+  if (OB_NOT_NULL(buffer)) {
+    buffer->append_warning(message, err_ret);
+  }
+  if (limit_num >= 0 && buffer->get_total_warning_count() > limit_num) {
+    ret = OB_REACH_DIAGNOSIS_ERROR_LIMIT;
+  }
+  return ret;
+}
+
+int ObCSVTableRowIterator::handle_error_msgs(
+                                      common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session_info = scan_param_->op_->get_eval_ctx().exec_ctx_.get_my_session();
+  if (session_info->is_diagnosis_enabled()) {
+    for (int i = 0; OB_SUCC(ret) && i < error_msgs.count(); ++i) {
+      ObSqlString err_msg;
+      if (OB_FAIL(err_msg.append_fmt("parse row warning: file_name=%.*s, rownum=%ld, error=%s",
+                      static_cast<int>(state_.cur_file_name_.length()), state_.cur_file_name_.ptr(),
+                      error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_,
+                      common::ob_strerror(error_msgs.at(i).err_code)))) {
+        LOG_WARN("failed to append error message", K(ret));
+      } else if (OB_FAIL(record_err_for_select_data(error_msgs.at(i).err_code,
+                                                    err_msg.ptr(),
+                                                    session_info->get_diagnosis_limit_num()))) {
+        LOG_WARN("failed to record error", K(ret));
+      }
+    }
+  } else {
+    dump_error_log(error_msgs);
+  }
+
+  return ret;
+}
+
 int ObCSVTableRowIterator::get_next_row()
 {
   int ret = OB_SUCCESS;
@@ -397,7 +442,9 @@ int ObCSVTableRowIterator::get_next_row()
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to scan csv", K(ret));
         } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
-          dump_error_log(error_msgs);
+          if (OB_FAIL(handle_error_msgs(error_msgs))) {
+            LOG_WARN("fail to handle error messages", K(ret), K(error_msgs));
+          }
         }
       }
     }
@@ -413,6 +460,7 @@ int ObCSVTableRowIterator::get_next_row()
     }
     state_.line_count_limit_ -= returned_row_cnt;
     state_.cur_line_number_ += returned_row_cnt;
+    state_.batch_first_row_line_num_ = state_.cur_line_number_ - returned_row_cnt;
   }
 
   for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); i++) {
@@ -536,7 +584,9 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to scan csv", K(ret));
           } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
-            dump_error_log(error_msgs);
+            if (OB_FAIL(handle_error_msgs(error_msgs))) {
+              LOG_WARN("fail to handle error messages", K(ret), K(error_msgs));
+            }
           }
         }
       }

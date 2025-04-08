@@ -1088,7 +1088,6 @@ void ObSQLSessionInfo::set_show_warnings_buf(int error_code)
   //    clear err.
   if (OB_SUCCESS != error_code && strlen(warnings_buf_.get_err_msg()) <= 0) {
     warnings_buf_.set_error(ob_errpkt_strerror(error_code, lib::is_oracle_mode()), error_code);
-    warnings_buf_.reset_warning();
   } else if (OB_SUCCESS == error_code) {
     warnings_buf_.reset_err();
   }

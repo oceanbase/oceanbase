@@ -1315,7 +1315,9 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
 {
   int ret = OB_SUCCESS;
   bool has_file_format = false;
-  if (OB_FAIL(format.csv_format_.init_format(ObDataInFileStruct(), 100, CS_TYPE_UTF8MB4_BIN))) {
+  if (OB_FAIL(format.csv_format_.init_format(ObDataInFileStruct(),
+                                            OB_MAX_COLUMN_NUMBER,
+                                            CS_TYPE_UTF8MB4_BIN))) {
     LOG_WARN("failed to init csv format", K(ret));
   }
   // resolve file type and encoding type

@@ -261,6 +261,65 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
   return ret;
 }
 
+int ObInsertResolver::add_column_conv_for_diagnosis(ObInsertStmt *insert_stmt,
+                                                    ObSelectStmt *select_stmt,
+                                                    TableItem* table_item)
+{
+  int ret = OB_SUCCESS;
+  bool is_diagnosis = false;
+
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid session_info_", K(ret));
+  } else {
+    is_diagnosis = session_info_->is_diagnosis_enabled();
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_diagnosis) {
+      if (OB_ISNULL(select_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid select stmt", K(ret), K(select_stmt));
+      } else {
+        ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+        uint64_t table_id = insert_stmt->get_insert_table_info().table_id_;
+
+        if (insert_stmt->get_values_desc().count() != select_items.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected insert target column and select items",
+                  K(ret), K(insert_stmt->get_values_desc()), K(select_items));
+        }
+        for (int64_t i = 0; i < insert_stmt->get_values_desc().count() && OB_SUCC(ret); ++i) {
+          ColumnItem *column_item = NULL;
+          uint64_t column_id = OB_INVALID_ID;
+          const ObColumnRefRawExpr *tbl_col = NULL;
+          if (OB_ISNULL(tbl_col = insert_stmt->get_values_desc().at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid table column", K(ret), K(i), K(insert_stmt->get_values_desc()));
+          } else if (FALSE_IT(column_id = tbl_col->get_column_id())) {
+          } else if (OB_ISNULL(column_item = get_del_upd_stmt()->get_column_item_by_id(table_id,
+                                                                                      column_id))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null column item", K(ret));
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(add_additional_function_according_to_type(
+                                              column_item, select_items.at(i).expr_, T_INSERT_SCOPE,
+                                              ObObjMeta::is_binary(tbl_col->get_data_type(),
+                                                                  tbl_col->get_collation_type())))) {
+              LOG_WARN("failed to build column conv expr", K(ret));
+            }
+          }
+        }
+      }
+    } else {
+      // do nothing
+    }
+  }
+  return ret;
+}
+
 //该函数是用来实现values(c1)功能；
 //insert into test values(1,2) on duplicate key update c2 = values(c1);
 //将values(c1)表达式替换成column_conv()的结果
@@ -634,7 +693,7 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
       LOG_WARN("failed to resolve select stmt in INSERT stmt", K(ret));
     } else if (OB_ISNULL(select_stmt = sub_select_resolver_->get_select_stmt())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid select stmt", K(select_stmt));
+      LOG_WARN("invalid select stmt", K(ret), K(select_stmt));
     } else if (!session_info_->get_ddl_info().is_ddl() &&
                !session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() &&
                 OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt, is_mock_))) {
@@ -647,6 +706,8 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
                                                                         label_se_columns,
                                                                         *select_stmt))) {
       LOG_WARN("add label security columns to select item failed", K(ret));
+    } else if (OB_FAIL(add_column_conv_for_diagnosis(insert_stmt, select_stmt, table_item))) {
+      LOG_WARN("failed to add column conv for diagnosis", K(ret));
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     }

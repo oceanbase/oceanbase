@@ -651,6 +651,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"over", OVER},
   {"old_password", OLD_PASSWORD},
   {"on", ON},
+  {"on_error", ON_ERROR},
   {"one", ONE},
   {"one_shot", ONE_SHOT},
   {"only", ONLY},

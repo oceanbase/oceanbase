@@ -136,7 +136,8 @@ public:
     cur_file_id_(0),
     cur_line_number_(0),
     cur_file_url_(),
-    part_list_val_() {}
+    part_list_val_(),
+    batch_first_row_line_num_(0) {}
 
   virtual void reuse() {
     file_idx_ = 0;
@@ -145,6 +146,7 @@ public:
     cur_line_number_ = 0;
     cur_file_url_.reset();
     part_list_val_.reset();
+    batch_first_row_line_num_ = 0;
   }
   DECLARE_VIRTUAL_TO_STRING;
   int64_t file_idx_;
@@ -153,6 +155,7 @@ public:
   int64_t cur_line_number_;
   ObString cur_file_url_;
   ObNewRow part_list_val_;
+  int64_t batch_first_row_line_num_;
 };
 
 class ObExternalTableRowIterator : public common::ObNewRowIterator {

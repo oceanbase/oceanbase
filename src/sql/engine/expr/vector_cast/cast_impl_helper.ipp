@@ -57,11 +57,15 @@ public:
                                   ArgVec *arg_vec, ResVec *res_vec,
                                   ObBitVector &eval_flags,
                                   const ObBitVector &skip,
-                                  const EvalBound &bound) {
+                                  const EvalBound &bound,
+                                  bool is_diagnosis,
+                                  ObDiagnosisManager& diagnosis_manager) {
     int ret = OB_SUCCESS;
+
     bool no_skip_no_null = bound.get_all_rows_active()
                      && eval_flags.accumulate_bit_cnt(bound) == 0
-                     && !arg_vec->has_null();
+                     && !arg_vec->has_null()
+                     && !is_diagnosis;
     if (no_skip_no_null) {
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = calc(expr, idx);
@@ -78,6 +82,16 @@ public:
         }
         ret = calc(expr, idx);
         eval_flags.set(idx);
+        if (OB_FAIL(ret) && is_diagnosis) {
+          // overwrite ret on diagnosis node
+          if (OB_FAIL(diagnosis_manager.add_warning_info(ret, idx))) {
+            SQL_LOG(WARN, "failed to add warning info", K(ret), K(idx));
+          } else {
+            // set null to avoid accessing invalid data before setting skip
+            // in ObTableScanOp::do_diagnosis
+            res_vec->set_null(idx);
+          }
+        }
       }
     }
     return ret;

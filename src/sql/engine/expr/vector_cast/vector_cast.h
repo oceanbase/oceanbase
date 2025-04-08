@@ -287,6 +287,8 @@ struct VectorCasterUtil
   ObCollationType out_cs_type = expr.datum_meta_.cs_type_;                                  \
   ObScale out_scale = expr.datum_meta_.scale_;                                              \
   ObPrecision out_prec = expr.datum_meta_.precision_;                                       \
+  bool is_diagnosis = ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled();             \
+  ObDiagnosisManager& diagnosis_manager = ctx.exec_ctx_.get_diagnosis_manager();            \
   if (eval_flags.accumulate_bit_cnt(bound) == bound.range_size()) {                         \
   } else
 

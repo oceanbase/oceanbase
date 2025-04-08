@@ -338,7 +338,7 @@ END_P SET_VAR DELIMITER
         PERCENT_RANK PERCENTILE_CONT PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
-        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PRECREATE_TIME
+        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PRECREATE_TIME ON_ERROR
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
@@ -515,7 +515,7 @@ END_P SET_VAR DELIMITER
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
 %type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
-%type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option
+%type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option opt_on_error
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
 %type <node> opt_match_option
@@ -5041,7 +5041,7 @@ load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO T
 relation_factor opt_use_partition opt_compression opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 14,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 15,
                            $2,            /* 0. local */
                            $4,            /* 1. filename */
                            $5,            /* 2. duplicate  */
@@ -5055,16 +5055,17 @@ opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
                            $1,            /* 10. hint */
                            $17,           /* 11. extended option list */
                            $10,           /* 12. compression format */
-                           $9            /* 13. partition */
+                           $9,            /* 13. partition */
+                           NULL           /* 14. on_error */
                            );
 }
 | load_data_with_opt_hint opt_duplicate FROM url_spec
-INTO TABLE relation_factor opt_use_partition opt_field_or_var_spec
+INTO TABLE relation_factor opt_use_partition opt_field_or_var_spec opt_on_error
 {
   if (NULL != $1) {
     dup_string($1, result, @1.first_column, @1.last_column);
   }
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_URL, 14,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_URL, 15,
                            NULL,           /* 0. local */
                            $4,             /* 1. filename */
                            $2,             /* 2. duplicate  */
@@ -5078,8 +5079,32 @@ INTO TABLE relation_factor opt_use_partition opt_field_or_var_spec
                            $1,             /* 10. hint */
                            NULL,           /* 11. extended option list */
                            NULL,           /* 12. compression format */
-                           $8             /* 13. partition */
+                           $8,             /* 13. partition */
+                           $10             /* 14. on_error */
                            );
+}
+;
+
+opt_on_error:
+LOG ERRORS
+{
+  ParseNode *params = NULL;
+  malloc_terminal_node(params, result->malloc_pool_, T_INT);
+  params->value_ = 0;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, params);
+}
+| LOG ERRORS REJECT LIMIT INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, $5);
+}
+| LOG ERRORS REJECT LIMIT UNLIMITED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_UNLIMITED);
+}
+/* empty */
+| {
+  $$ = NULL;
 }
 ;
 
@@ -25399,6 +25424,7 @@ ACCESS_INFO
 |       OJ
 |       OVER
 |       OBCONFIG_URL
+|       ON_ERROR
 |       ONE
 |       ONE_SHOT
 |       ONLY

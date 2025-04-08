@@ -114,6 +114,9 @@ private:
   }
   int try_expand_returning_exprs();
   int check_insert_into_external_table();
+  int add_column_conv_for_diagnosis(ObInsertStmt *insert_stmt,
+                                    ObSelectStmt *select_stmt,
+                                    TableItem* table_item);
   DISALLOW_COPY_AND_ASSIGN(ObInsertResolver);
 private:
   int64_t row_count_;

@@ -17,6 +17,7 @@
 #include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "share/schema/ob_schema_struct.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -141,6 +142,7 @@ public:
       get_next_row_(nullptr),
       get_next_rows_(nullptr),
       first_get_row_(true),
+      is_diagnosis_enabled_(false),
       seq_task_idx_(OB_INVALID_INDEX),
       group_id_idx_(OB_INVALID_INDEX),
       need_prepare_sort_merge_info_(false),
@@ -165,6 +167,12 @@ public:
   bool is_all_local_task() const;
   int rescan_das_task(ObDASScanOp *scan_op);
   bool has_pseudo_part_id_columnref();
+  virtual int get_diagnosis_info(ObDiagnosisManager* diagnosis_manager) override {
+    int ret = OB_SUCCESS;
+    diagnosis_manager->set_cur_line_number(diagnosis_mgr_.get_cur_line_number());
+    diagnosis_manager->set_cur_file_url(diagnosis_mgr_.get_cur_file_url());
+    return ret;
+  };
   /********* DAS REF END *********/
 
 protected:
@@ -230,7 +238,8 @@ private:
   int (ObDASMergeIter::*get_next_row_)();
   int (ObDASMergeIter::*get_next_rows_)(int64_t&, int64_t);
   bool first_get_row_;
-
+  ObDiagnosisManager diagnosis_mgr_;
+  bool is_diagnosis_enabled_;
   /********* SEQUENTIAL MERGE BEGIN *********/
   int64_t seq_task_idx_;
   /********* SEQUENTIAL MERGE END *********/

@@ -899,6 +899,7 @@ int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count, O
     line_number_expr_->set_evaluated_flag(eval_ctx);
   }
   state.cur_line_number_ += read_count;
+  state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;
   return ret;
 }
 

@@ -307,7 +307,6 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
     das_ref_->set_enable_rich_format(merge_param.enable_rich_format_);
     used_for_keep_order_ = merge_param.used_for_keep_order_;
     merge_type_ = used_for_keep_order_ ? SORT_MERGE : SEQUENTIAL_MERGE;
-
     if (group_id_expr_ != nullptr) {
       for (int64_t i = 0; i < output_->count(); i++) {
         if (output_->at(i) == group_id_expr_) {
@@ -341,7 +340,14 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
         part_level_ = table_schema_->get_part_level();
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
+        is_diagnosis_enabled_ = exec_ctx_->get_my_session()->is_diagnosis_enabled();
+      }
+    }
   }
+
   return ret;
 }
 
@@ -812,6 +818,16 @@ int ObDASMergeIter::get_next_seq_row()
         }
         ret = scan_op->get_output_result_iter()->get_next_row();
         scan_op->get_scan_param().need_update_tablet_param_ = false;
+
+        if (OB_SUCC(ret)) {
+          if (is_diagnosis_enabled_) {
+            if (OB_FAIL(scan_op->get_output_result_iter()->get_diagnosis_info(&diagnosis_mgr_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to get diagnosis info", K(ret));
+            }
+          }
+        }
+
         if (OB_SUCC(ret)) {
           got_row = true;
           if (has_pseudo_part_id_columnref()) {
@@ -871,6 +887,16 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
           }
           ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
           scan_op->get_scan_param().need_update_tablet_param_ = false;
+
+          if (OB_SUCC(ret)) {
+            if (is_diagnosis_enabled_) {
+              if (OB_FAIL(scan_op->get_output_result_iter()->get_diagnosis_info(&diagnosis_mgr_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("fail to get diagnosis info", K(ret));
+              }
+            }
+          }
+
           if (OB_ITER_END == ret && count > 0) {
             ret = OB_SUCCESS;
           }

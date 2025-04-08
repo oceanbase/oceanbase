@@ -3692,7 +3692,18 @@ int cast_eval_arg_batch(const ObExpr &expr,
         continue;
       } else if (OB_FAIL(expr.eval(ctx, result))) {
         LOG_WARN("fail to eval one row", K(ret), K(i));
-      } else {
+      }
+      if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+        // overwrite ret on diagnosis node
+        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+          LOG_WARN("failed to add warning info", K(ret), K(i));
+        } else {
+          // set null to avoid accessing invalid data before setting skip
+          // in ObTableScanOp::do_diagnosis
+          result->set_null();
+        }
+      }
+      if (OB_SUCC(ret)) {
         eval_flags.set(i);
       }
     }

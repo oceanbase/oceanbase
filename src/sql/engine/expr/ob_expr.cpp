@@ -16,7 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-
+#include "sql/engine/expr/ob_expr_column_conv.h"
 
 namespace oceanbase
 {
@@ -1376,6 +1376,21 @@ int expr_default_eval_batch_func(const ObExpr &expr,
       evaluated_flags->set(i);
       if (datum[i].is_null()) {
         got_null = true;
+      }
+
+      if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+        // overwrite ret on diagnosis node
+        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+          LOG_WARN("failed to add warning info", K(ret), K(i));
+        } else if (OB_FAIL(ObExprColumnConv::calc_column_name_for_diagnosis(expr, ctx,
+                                                          ctx.exec_ctx_.get_diagnosis_manager()))) {
+          LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
+        } else {
+          // set null to avoid accessing invalid data before setting skip
+          // in ObTableScanOp::do_diagnosis
+          datum[i].set_null();
+          got_null = true;
+        }
       }
     }
   }

@@ -20,9 +20,11 @@
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
 namespace sql {
+
 
 class ObCSVIteratorState : public ObExternalIteratorState
 {
@@ -98,6 +100,14 @@ public:
 
   virtual void reset() override;
 
+  virtual int get_diagnosis_info(ObDiagnosisManager* diagnosis_manager) override
+  {
+    int ret = OB_SUCCESS;
+    diagnosis_manager->set_cur_file_url(state_.cur_file_name_);
+    diagnosis_manager->set_cur_line_number(state_.batch_first_row_line_num_);
+    return ret;
+  }
+
 private:
   int expand_buf();
   int load_next_buf();
@@ -111,6 +121,8 @@ private:
   int skip_lines();
   void release_buf();
   void dump_error_log(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
+  int record_err_for_select_data(int err_ret, const char *message, int64_t limit_num);
+  int handle_error_msgs(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
 private:
   ObCSVIteratorState state_;
   ObBitVector *bit_vector_cache_;

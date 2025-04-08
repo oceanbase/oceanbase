@@ -634,8 +634,14 @@ int ObResultSet::set_mysql_info()
       }
     }
   } else if (stmt::T_LOAD_DATA == get_stmt_type()) {
-    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT, plan_ctx->get_row_matched_count(),
-                              plan_ctx->get_row_deleted_count(), plan_ctx->get_row_duplicated_count(), warning_count_);
+    int64_t warning_cnt = warning_count_;
+    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+    if (OB_NOT_NULL(buffer)) {
+      warning_cnt = buffer->get_total_warning_count();
+    }
+    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT,
+                              plan_ctx->get_row_matched_count(), plan_ctx->get_row_deleted_count(),
+                              plan_ctx->get_row_duplicated_count(), warning_cnt);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));

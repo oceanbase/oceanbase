@@ -94,8 +94,8 @@ struct ToDecimalintCastImpl
 
       OUT_TYPE sf = get_scale_factor<OUT_TYPE>(out_scale);
       StringToDecimalintFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, sf);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -161,8 +161,8 @@ struct ToDecimalintCastImpl
       };
 
       FloatDoubleToDecimalintFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -209,8 +209,8 @@ struct ToDecimalintCastImpl
       };
 
       NumberToDecimalintFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -262,8 +262,8 @@ struct ToDecimalintCastImpl
         SQL_LOG(WARN, "invalid output scale", K(ret), K(out_scale));
       } else {
         DateToDecimalintFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -348,14 +348,14 @@ struct ToDecimalintCastImpl
         } else {
           if (0 == in_scale) {
             DatetimeToDecimalintFn<int64_t> cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tz_info);
-            if (OB_FAIL(CastHelperImpl::batch_cast(
-                            cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+            if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
               SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
             }
           } else {
             DatetimeToDecimalintFn<int128_t> cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tz_info);
-            if (OB_FAIL(CastHelperImpl::batch_cast(
-                            cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+            if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
               SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
             }
           }

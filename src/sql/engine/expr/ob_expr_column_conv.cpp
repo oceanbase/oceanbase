@@ -876,11 +876,59 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
               }
             }
           }
+
+          if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+            // overwrite ret on diagnosis node
+            if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+              LOG_WARN("failed to add warning info", K(ret), K(i));
+            } else {
+              // set null to avoid accessing invalid data before setting skip
+              // in ObTableScanOp::do_diagnosis
+              results[i].set_null();
+            }
+          }
         }
         eval_flags.set(i);
       }
     }
+
+    if (OB_SUCC(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+      if (OB_FAIL(calc_column_name_for_diagnosis(expr, ctx,
+                                                ctx.exec_ctx_.get_diagnosis_manager()))) {
+        LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
+      }
+    }
   }
+  return ret;
+}
+
+int ObExprColumnConv::calc_column_name_for_diagnosis(const ObExpr &expr,
+                                                    ObEvalCtx &ctx,
+                                                    ObDiagnosisManager& diagnosis_manager) {
+  int ret = OB_SUCCESS;
+
+  if (diagnosis_manager.col_names_.count() < diagnosis_manager.rets_.count()) {
+    ObDatum *column_info = NULL;
+    if (ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
+      ObString column_name(column_info->get_string().length(), column_info->get_string().ptr());
+
+      ObString tmp_str;
+      if (OB_FAIL(ob_write_string(diagnosis_manager.allocator_, column_name, tmp_str, true))) {
+        LOG_WARN("failed to write string", K(ret));
+      } else {
+        int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < gap_cnt; i++) {
+          if (OB_FAIL(diagnosis_manager.col_names_.push_back(tmp_str))) {
+            LOG_WARN("failed to push back column name into array", K(ret), K(tmp_str));
+          }
+        }
+      }
+    }
+  } else {
+    // do nothing
+  }
+
   return ret;
 }
 
@@ -1217,6 +1265,15 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
                                                              false, results[i],
                                                              cast_mode, vals[i]))) {
         LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
+      }
+
+      if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+        // overwrite ret on diagnosis node
+        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+          LOG_WARN("failed to add warning info", K(ret), K(i));
+        } else {
+          results[i].set_null();
+        }
       }
     }
     eval_flags.set(i);

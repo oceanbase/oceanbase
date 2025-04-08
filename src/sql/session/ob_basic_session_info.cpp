@@ -102,6 +102,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       tz_info_wrap_(),
       next_tx_read_only_(-1),
       next_tx_isolation_(transaction::ObTxIsolationLevel::INVALID),
+      is_diagnosis_enabled_(false),
+      diagnosis_limit_num_(0),
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
       plan_id_(0),
@@ -457,6 +459,8 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
   enable_mysql_compatible_dates_ = false;
+  is_diagnosis_enabled_ = false;
+  diagnosis_limit_num_ = 0;
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
@@ -4898,6 +4902,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   }
   OB_UNIS_ENCODE(sys_var_config_hash_val_);
   OB_UNIS_ENCODE(enable_mysql_compatible_dates_);
+  OB_UNIS_ENCODE(is_diagnosis_enabled_);
+  OB_UNIS_ENCODE(diagnosis_limit_num_);
   return ret;
 }
 
@@ -5184,6 +5190,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   }
   OB_UNIS_DECODE(sys_var_config_hash_val_);
   OB_UNIS_DECODE(enable_mysql_compatible_dates_);
+  OB_UNIS_DECODE(is_diagnosis_enabled_);
+  OB_UNIS_DECODE(diagnosis_limit_num_);
   return ret;
 }
 
@@ -5469,6 +5477,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               enable_role_ids_);
   OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
   OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
+  OB_UNIS_ADD_LEN(is_diagnosis_enabled_);
+  OB_UNIS_ADD_LEN(diagnosis_limit_num_);
   return len;
 }
 
