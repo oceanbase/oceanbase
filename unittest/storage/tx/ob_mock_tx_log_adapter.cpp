@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "src/storage/tx/ob_tx_log_cb_define.h"
 #include "ob_mock_tx_log_adapter.h"
 
 namespace oceanbase

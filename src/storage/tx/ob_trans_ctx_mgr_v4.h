@@ -21,6 +21,7 @@
 #include "storage/tx/ob_tx_ls_log_writer.h"
 #include "storage/tx/ob_tx_ls_state_mgr.h"
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
+#include "storage/tx/ob_tx_log_cb_mgr.h"
 #include "storage/tablelock/ob_lock_table.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 
@@ -551,6 +552,7 @@ public:
   // Get the trans_service corresponding to this ObLSTxCtxMgr;
   transaction::ObTransService *get_trans_service() { return txs_; }
 
+  ObTxLogCbPoolMgr &get_log_cb_pool_mgr() { return log_cb_pool_mgr_;}
   ObTxRetainCtxMgr &get_retain_ctx_mgr() { return ls_retain_ctx_mgr_; }
 
   // Get the tenant_id corresponding to this ObLSTxCtxMgr;
@@ -674,6 +676,8 @@ private:
   ObTxLSLogWriter ls_log_writer_;
   ObITxLogAdapter *tx_log_adapter_;
   ObLSTxLogAdapter log_adapter_def_;
+
+  ObTxLogCbPoolMgr log_cb_pool_mgr_;
 
   ObTxRetainCtxMgr ls_retain_ctx_mgr_;
 

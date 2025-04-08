@@ -796,6 +796,20 @@ ObTxRetainCtxMgr *ObLSTxService::get_retain_ctx_mgr()
   return retain_ptr;
 }
 
+ObTxLogCbPoolMgr *ObLSTxService::get_log_cb_pool_mgr()
+{
+  ObTxLogCbPoolMgr *log_cb_pool_mgr_ptr = nullptr;
+
+  if (OB_ISNULL(mgr_)) {
+    log_cb_pool_mgr_ptr = nullptr;
+  } else {
+    log_cb_pool_mgr_ptr = &mgr_->get_log_cb_pool_mgr();
+  }
+
+  return log_cb_pool_mgr_ptr;
+}
+
+
 int ObLSTxService::prepare_offline(const int64_t start_ts)
 {
   int ret = OB_SUCCESS;

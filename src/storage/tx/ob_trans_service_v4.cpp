@@ -1161,6 +1161,8 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   }
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(access_started = true)) {
+  } else if (OB_NOT_NULL(tx_ctx) && OB_FAIL(tx_ctx->check_pending_log_overflow(store_ctx.timeout_))) {
+    TRANS_LOG(WARN, "too many pending log in the tx_ctx", K(ret), K(tx), K(store_ctx));
   } else if (OB_FAIL(store_ctx.mvcc_acc_ctx_.init_write(*tx_ctx,
                                                         *tx_ctx->get_memtable_ctx(),
                                                         tx.tx_id_,

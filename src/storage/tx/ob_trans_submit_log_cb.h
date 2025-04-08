@@ -42,6 +42,7 @@ namespace transaction
 {
 class ObTransService;
 class ObPartTransCtx;
+class ObTxLogCbGroup;
 }
 
 namespace transaction
@@ -63,14 +64,22 @@ public:
   palf::LSN get_lsn() const { return lsn_; }
   void set_submit_ts(const int64_t submit_ts) { submit_ts_ = submit_ts; }
   int64_t get_submit_ts() const { return submit_ts_; }
-  TO_STRING_KV(K_(base_ts), K_(log_ts), K_(lsn), K_(submit_ts));
+
+  void set_log_size(const int64_t log_size) { log_size_ = log_size; }
+  int64_t get_log_size() const { return log_size_; }
+
+  TO_STRING_KV(K_(base_ts), K_(log_ts), K_(lsn), K_(submit_ts), K_(log_size));
 protected:
   share::SCN base_ts_;
   share::SCN log_ts_;
   palf::LSN lsn_;
   int64_t submit_ts_;
+
+  int64_t log_size_;
 };
+
 typedef common::ObSEArray<memtable::ObCallbackScope, 1> ObCallbackScopeArray;
+
 class ObTxLogCb : public ObTxBaseLogCb,
                   public common::ObDLinkBase<ObTxLogCb>
 {
@@ -78,16 +87,14 @@ public:
   ObTxLogCb() : extra_cb_(nullptr), need_free_extra_cb_(false), tx_op_array_(nullptr),
   undo_node_(nullptr) { reset(); }
   ~ObTxLogCb() { destroy(); }
-  int init(const share::ObLSID &key,
-           const ObTransID &trans_id,
-           ObTransCtx *ctx,
-           const bool is_dynamic);
+
+  int init(ObTxLogCbGroup * group_ptr);
   void reset();
   void reset_tx_op_array();
   void reuse();
   void destroy() { reset(); }
   ObTxLogType get_last_log_type() const;
-  ObTransCtx *get_ctx() { return ctx_; }
+  // ObTransCtx *get_ctx() { return ctx_; }
   void set_tx_data(ObTxData *tx_data)
   {
     if (OB_ISNULL(tx_data)) {
@@ -110,7 +117,10 @@ public:
   int reserve_callbacks(int cnt) { return callbacks_.reserve(cnt); }
   void set_callbacked() { ATOMIC_STORE(&is_callbacked_, true); }
   bool is_callbacked() const { return ATOMIC_LOAD(&is_callbacked_); }
-  bool is_dynamic() const { return is_dynamic_; }
+  void set_busy() { ATOMIC_STORE(&is_busy_, true); }
+  bool is_busy() const { return ATOMIC_LOAD(&is_busy_); }
+  ObTxLogCbGroup *get_group_ptr() { return group_ptr_; }
+  // bool is_dynamic() const { return is_dynamic_; }
   ObTxCbArgArray &get_cb_arg_array() { return cb_arg_array_; }
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
   bool is_valid() const;
@@ -118,7 +128,7 @@ public:
 public:
   int on_success();
   int on_failure();
-  int64_t get_execute_hint() { return trans_id_.hash(); }
+  // int64_t get_execute_hint() { return trans_id_.hash(); }
   ObTxMDSRange &get_mds_range() { return mds_range_; }
 
   void set_ddl_log_type(const ObTxDirectLoadIncLog::DirectLoadIncLogType ddl_log_type)
@@ -142,30 +152,29 @@ public:
   INHERIT_TO_STRING_KV("ObTxBaseLogCb",
                        ObTxBaseLogCb,
                        KP(this),
-                       K(is_inited_),
-                       K_(trans_id),
-                       K_(ls_id),
-                       KP_(ctx),
+                       K_(is_busy),
                        K_(tx_data_guard),
                        K(is_callbacked_),
-                       K(is_dynamic_),
+                       K(is_busy_),
                        K(mds_range_),
                        K(cb_arg_array_),
                        K(first_part_scn_),
                        KP(extra_cb_),
                        K(need_free_extra_cb_),
-                       K(callbacks_.count()));
+                       K(callbacks_.count()),
+                       KPC(group_ptr_));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
-private:
-  bool is_inited_;
-  share::ObLSID ls_id_;
-  ObTransID trans_id_;
-  ObTransCtx *ctx_;
+
+// private:
+public:
+  ObTxLogCbGroup * group_ptr_;
+  bool is_callbacked_;
+  bool is_busy_;
+
   ObTxDataGuard tx_data_guard_;
   ObCallbackScopeArray callbacks_;
-  bool is_callbacked_;
-  bool is_dynamic_;
+
   ObTxMDSRange mds_range_;
   ObTxCbArgArray cb_arg_array_;
   share::SCN first_part_scn_;

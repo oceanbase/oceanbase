@@ -31,16 +31,17 @@ namespace transaction
 int ObTxLogCb::on_success()
 {
   int ret = OB_SUCCESS;
-  const ObTransID tx_id = trans_id_;
 
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "ObTxLogCb not inited", K(ret));
-  } else if (NULL == ctx_) {
+  if (OB_ISNULL(group_ptr_)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "ctx is null", K(ret), K(tx_id), KP(ctx_));
+    TRANS_LOG(ERROR, "ctx is null", K(ret), KP(group_ptr_));
   } else {
-    ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
+    const int64_t bk_submit_ts = submit_ts_;
+    const int64_t bk_log_size = log_size_;
+    const bool bk_is_reserved = group_ptr_->is_reserved();
+    ObTxLogCbGroup *bk_group_ptr = group_ptr_;
+    ObPartTransCtx *part_ctx = group_ptr_->get_tx_ctx();
+    const ObTransID tx_id = part_ctx->trans_id_;
     while (qcc_tx_id == tx_id) {
       TRANS_LOG(INFO, "qcc debug", KPC(part_ctx), K(tx_id));
       fprintf(stdout, "qcc debug\n");
@@ -48,6 +49,11 @@ int ObTxLogCb::on_success()
     }
     if (OB_FAIL(part_ctx->on_success(this))) {
       TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id));
+    }
+    if (!bk_is_reserved) {
+      ObTxLogCbPool::finish_syncing_with_stat(bk_group_ptr, bk_log_size,
+                                              ObTimeUtility::fast_current_time() - bk_submit_ts,
+                                              bk_submit_ts);
     }
   }
 

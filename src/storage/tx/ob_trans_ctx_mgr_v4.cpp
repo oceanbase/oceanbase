@@ -17,6 +17,8 @@
 #include "ob_trans_functor.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
+#define USING_LOG_PREFIX TRANS
+
 namespace oceanbase
 {
 
@@ -176,6 +178,8 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     TRANS_LOG(WARN, "tx log adapter init error", KR(ret));
   } else if (OB_NOT_NULL(log_adapter) && OB_FALSE_IT(tx_log_adapter_ = log_adapter)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(log_cb_pool_mgr_.init(tenant_id, ls_id))) {
+    TRANS_LOG(WARN, "init log_cb_pool_mgr failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
   } else if (OB_FAIL(ls_log_writer_.init(tenant_id, ls_id, tx_log_adapter_, this))) {
     TRANS_LOG(WARN, "ls_log_writer init fail", KR(ret));
   } else if (OB_FAIL(tx_ls_state_mgr_.init(ls_id))) {
@@ -203,6 +207,7 @@ void ObLSTxCtxMgr::destroy()
 {
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   if (IS_INIT) {
+    log_cb_pool_mgr_.destroy();
     ls_log_writer_.destroy();
     is_inited_ = false;
     TRANS_LOG(INFO, "ObLSTxCtxMgr destroyed", KP(this), K_(ls_id));
@@ -570,6 +575,7 @@ int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(const memtable::ObMemtableSe
 int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   UNUSED(log);
 
   share::SCN tmp_applying_swl_scn;
@@ -609,6 +615,7 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN s
 int ObLSTxCtxMgr::retry_apply_start_working_log()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   share::SCN retry_start_working_ts;
 
@@ -616,6 +623,9 @@ int ObLSTxCtxMgr::retry_apply_start_working_log()
     ret = on_start_working_log_cb_succ(retry_start_working_ts);
   }
 
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
+  }
   return ret;
 }
 
@@ -727,6 +737,7 @@ int ObLSTxCtxMgr::submit_start_working_log_()
 int ObLSTxCtxMgr::switch_to_follower_forcedly()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTimeGuard timeguard("ObLSTxCtxMgr::switch_to_follower_forcedly");
   ObTxCommitCallback *cb_list = NULL;
   {
@@ -750,6 +761,9 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
         tx_ls_state_mgr_.restore_tx_ls_state();
       }
     }
+  }
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
   }
   timeguard.click();
   // run callback out of lock, ignore ret
@@ -799,6 +813,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
 int ObLSTxCtxMgr::switch_to_leader()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   if (OB_FAIL(retry_apply_start_working_log())) {
     TRANS_LOG(WARN, "retry to apply prev start working log failed", K(ret), KPC(this));
@@ -819,6 +834,11 @@ int ObLSTxCtxMgr::switch_to_leader()
       }
     }
   }
+
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.switch_to_leader(get_active_tx_count()))) {
+    TRANS_LOG(WARN, "switch to leader failed in log_cb_pool_mgr", K(ret), K(tmp_ret), K(ls_id_));
+  }
+
   FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_leader", K(ret), KPC(this));
   return ret;
 }
@@ -826,6 +846,7 @@ int ObLSTxCtxMgr::switch_to_leader()
 int ObLSTxCtxMgr::switch_to_follower_gracefully()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTimeGuard timeguard("switch_to_follower_gracefully");
   int64_t start_time = ObTimeUtility::current_time();
   int64_t process_count = 0;
@@ -892,6 +913,11 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       timeguard.click();
     }
   }
+
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(tmp_ret), K(ls_id_), K(log_cb_pool_mgr_));
+  }
+
   (void)process_callback_(cb_list);
   timeguard.click();
   FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_follower_gracefully", K(ret), KPC(this),
