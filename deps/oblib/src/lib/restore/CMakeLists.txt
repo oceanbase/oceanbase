@@ -71,8 +71,8 @@ target_link_directories(obdal PUBLIC ${DEP_3RD_DIR}/usr/local/oceanbase/deps/dev
 target_link_libraries(obdal
   PUBLIC
   libopendal_c.a
+  oblib_base_without_pass
 )
-target_link_libraries(obdal PUBLIC oblib_base_without_pass)
 
 target_link_libraries(restore PUBLIC oss cos_sdk oblib_base s3 obdal)
 
