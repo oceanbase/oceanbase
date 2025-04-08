@@ -3511,10 +3511,12 @@ int ObSql::generate_plan(ParseResult &parse_result,
                                           plan_strs))) {
         LOG_WARN("failed to store sql plan", K(tmp_ret));
       } else {
+        _OB_LOG(INFO, "ddl sql:%.*s", parse_result.input_sql_len_, parse_result.input_sql_);
         LOG_INFO("ddl plan");
         for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < plan_strs.count(); i++) {
-          _OB_LOG(INFO, "%*s", plan_strs.at(i).length(), plan_strs.at(i).ptr());
+          _OB_LOG(INFO, "%.*s", plan_strs.at(i).length(), plan_strs.at(i).ptr());
         }
+        LOG_INFO("ddl stmt:", KPC(stmt));
       }
     }
     END_OPT_TRACE(session_info);
