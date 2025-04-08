@@ -32,7 +32,12 @@ public:
            const int64_t  snapshot_version,
            const common::ObCurTraceId::TraceId &trace_id,
            const ObIArray<ObTabletID> &tablets);
-  int get_next_batch_tablets(int64_t &parallelism, int64_t &new_execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets);
+  int get_next_batch_tablets(const bool is_ddl_retryable,
+                             int64_t &parallelism,
+                             int64_t &new_execution_id,
+                             share::ObLSID &ls_id,
+                             common::ObAddr &leader_addr,
+                             ObIArray<ObTabletID> &tablets);
   int confirm_batch_tablets_status(const int64_t execution_id, const bool finish_status, const share::ObLSID &ls_id, const ObIArray<ObTabletID> &tablets);
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(table_id), K_(ref_data_table_id),
               K_(task_id), K_(parallelism), K_(snapshot_version), K_(trace_id), K_(all_tablets), K_(running_task_ls_ids_before));

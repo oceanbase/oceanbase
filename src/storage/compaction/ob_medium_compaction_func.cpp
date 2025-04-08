@@ -736,9 +736,6 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
   } else if (OB_ISNULL(last_major)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null major sstable", KR(ret), KPC(last_major));
-  } else if (data_version >= DATA_VERSION_4_3_5_0
-          && 0 == last_major->get_data_macro_block_count()) {
-    // empty major, no need to check whether schema changed
   } else if (OB_UNLIKELY(!schema.is_inited())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is not inited", KR(ret), K(schema));
@@ -753,6 +750,10 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
     is_schema_changed = true;
     LOG_INFO("schema changed", K(schema), K(full_stored_col_cnt),
              "col_cnt_in_sstable", tablet.get_last_major_column_count());
+  } else if (GCTX.is_shared_storage_mode()
+          && data_version >= DATA_VERSION_4_3_5_0
+          && 0 == last_major->get_data_macro_block_count()) {
+    // empty major, no need to check whether schema changed
   } else if (ObRowStoreType::DUMMY_ROW_STORE != tablet.get_last_major_latest_row_store_type()
           && tablet.get_last_major_latest_row_store_type() != schema.row_store_type_) {
     is_schema_changed = true;

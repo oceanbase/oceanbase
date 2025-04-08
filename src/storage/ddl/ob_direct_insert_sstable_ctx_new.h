@@ -236,24 +236,6 @@ private:
 DISALLOW_COPY_AND_ASSIGN(ObTenantDirectLoadMgr);
 };
 
-struct ObSSTableIndexItem final
-{
-public:
-  ObSSTableIndexItem()
-    : allocator_(nullptr),
-      index_builder_(nullptr),
-      data_desc_(nullptr)
-  {}
-  ~ObSSTableIndexItem();
-  void reset();
-  bool is_valid () const;
-  TO_STRING_KV(KP_(allocator), KP_(index_builder), KPC_(data_desc));
-public:
-  ObIAllocator *allocator_;
-  blocksstable::ObSSTableIndexBuilder *index_builder_;
-  blocksstable::ObWholeDataStoreDesc *data_desc_;
-};
-
 struct ObTabletDirectLoadBuildCtx final
 {
 public:
@@ -307,7 +289,6 @@ public:
   common::ObArray<ObOptColumnStat*> column_stat_array_; // online column stat result.
   common::ObArray<ObDirectLoadSliceWriter *> sorted_slice_writers_;
   common::ObArray<AggregatedCGInfo> sorted_slices_idx_; //for cg_aggregation
-  common::ObArray<ObSSTableIndexItem> cg_index_builders_;
   bool is_task_end_; // to avoid write commit log/freeze in memory index sstable again
   int64_t task_finish_count_; // reach the parallel slice cnt, means the tablet data finished.
   int64_t task_total_cnt_; // parallelism of the PX.
@@ -443,6 +424,7 @@ protected:
 
   void calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &strat_idx, int64_t &end_idx);
   int fill_aggregated_column_group(
+      const int64_t parallel_idx,
       const int64_t start_idx,
       const int64_t last_idx,
       const ObStorageSchema *storage_schema,
@@ -502,7 +484,6 @@ public:
       const ObTabletDirectLoadInsertParam &build_param);
   int open(const int64_t current_execution_id, share::SCN &start_scn) override; // start
   int close(const int64_t execution_id, const share::SCN &start_scn) override; // end, including write commit log, wait major sstable generates.
-
   int start_nolock(
       const ObITable::TableKey &table_key,
       const share::SCN &start_scn,
@@ -580,6 +561,7 @@ public:
              const ObTabletDirectLoadInsertParam &build_param) override final;
   int open(const int64_t current_execution_id, share::SCN &start_scn) override final;
   int close(const int64_t current_execution_id, const share::SCN &start_scn) override final;
+  int prepare_index_builder_if_need(const ObTableSchema &table_schema) override;
 
   share::SCN get_start_scn() override { return start_scn_.atomic_load(); }
   // unused, for full direct load only

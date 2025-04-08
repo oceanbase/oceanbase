@@ -2708,7 +2708,9 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
 #ifdef OB_BUILD_SHARED_STORAGE
-        } else if (GCTX.is_shared_storage_mode() && FTS_KEY == index_keyname_) {
+        } else if (GCTX.is_shared_storage_mode() &&
+                   FTS_KEY == index_keyname_ &&
+                   tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
@@ -2716,7 +2718,9 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index search index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode() && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)) {
+        } else if (GCTX.is_shared_storage_mode()
+                   && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
+                   && tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
@@ -7287,9 +7291,6 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
       ret = OB_NOT_SUPPORTED;
       SQL_RESV_LOG(WARN, "data_version not support for altering column group", K(ret), K(compat_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3, alter column group");
-    } else if (!is_column_group_supported()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("column group is not enabled", KR(ret));
     } else if (!need_column_group(*table_schema_)) {
       ret = OB_NOT_SUPPORTED;
       SQL_RESV_LOG(WARN, "table don't support alter column group", K(ret));
@@ -7310,9 +7311,6 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
           ret = OB_NOT_SUPPORTED;
           SQL_RESV_LOG(WARN, "alter column group delayed gets unsupported data_version", K(ret), K(compat_version), K(node.num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
-        } else if (GCTX.is_shared_storage_mode()) {
-          ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "alter column group delayed does not support shared storage mode", K(ret));
         } else if (FALSE_IT(delayed_node = node.children_[1])) {
         } else if (OB_ISNULL(delayed_node)) {
           alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = false;

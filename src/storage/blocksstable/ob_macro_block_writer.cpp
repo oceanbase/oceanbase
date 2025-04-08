@@ -490,6 +490,61 @@ int ObMacroBlockWriter::open(
   int ret = OB_SUCCESS;
   ObBlockWriterConcurrentGuard guard(concurrent_lock_);
   reset();
+  if (OB_FAIL(inner_init(
+      data_store_desc,
+      parallel_idx,
+      macro_seq_param,
+      pre_warm_param,
+      true,
+      object_cleaner,
+      callback,
+      validator,
+      device_handle))) {
+    LOG_WARN("failed to inner init macro block writer", K(ret));
+  }
+  return ret;
+}
+
+int ObMacroBlockWriter::open_for_ss_ddl(
+      const ObDataStoreDesc &data_store_desc,
+      const int64_t parallel_idx,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObIMacroBlockFlushCallback *callback)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_ISNULL(callback)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument to open macro writer for ss ddl", K(ret));
+  } else if (OB_FAIL(inner_init(
+      data_store_desc,
+      parallel_idx,
+      macro_seq_param,
+      pre_warm_param,
+      false,
+      object_cleaner,
+      callback,
+      nullptr, /* validator */
+      nullptr /* device handle */))) {
+    LOG_WARN("failed eto inner init macro block writer", K(ret));
+  }
+  return ret;
+}
+
+int ObMacroBlockWriter::inner_init(
+    const ObDataStoreDesc &data_store_desc,
+    const int64_t parallel_idx,
+    const blocksstable::ObMacroSeqParam &macro_seq_param,
+    const share::ObPreWarmerParam &pre_warm_param,
+    const bool cluster_micro_index_on_flush,
+    ObSSTablePrivateObjectCleaner &object_cleaner,
+    ObIMacroBlockFlushCallback *callback,
+    ObIMacroBlockValidator *validator,
+    ObIODevice *device_handle)
+{
+  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!data_store_desc.is_valid() || parallel_idx < 0 ||
                   !macro_seq_param.is_valid() || !pre_warm_param.is_valid() ||
                   (!data_store_desc.is_for_index_or_meta() &&
@@ -565,7 +620,8 @@ int ObMacroBlockWriter::open(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(sstable_index_builder)) {
-      if (OB_FAIL(sstable_index_builder->new_index_builder(builder_, data_store_desc, allocator_, macro_seq_param, pre_warm_param, callback))) {
+      if (OB_FAIL(sstable_index_builder->new_index_builder(
+          builder_, data_store_desc, allocator_, macro_seq_param, pre_warm_param, cluster_micro_index_on_flush, callback))) {
         STORAGE_LOG(WARN, "fail to alloc index builder", K(ret));
       } else if (OB_ISNULL(builder_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2402,7 +2458,9 @@ int ObMacroBlockWriter::init_pre_warmer(const share::ObPreWarmerParam &pre_warm_
   } else if (PRE_WARM_TYPE_NONE == tmp_type) {
     // do nothing
   } else if (MEM_PRE_WARM == tmp_type) {
-    if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
+    if (GCTX.is_shared_storage_mode()) {
+      // no need to pre warm for shared storage mode
+    } else if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
       LOG_WARN("fail to create pre warmer", KR(tmp_ret), K(pre_warm_param));
     }
   } else if (MEM_AND_FILE_PRE_WARM == tmp_type) {
@@ -2411,9 +2469,9 @@ int ObMacroBlockWriter::init_pre_warmer(const share::ObPreWarmerParam &pre_warm_
     if ((ObSSMajorPrewarmLevel::PREWARM_NONE_LEVEL == param->pre_warm_level_)
         || ((ObSSMajorPrewarmLevel::PREWARM_ONLY_META_LEVEL == param->pre_warm_level_)
             && !data_store_desc_->is_for_index())) {
-      if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
-        LOG_WARN("fail to create pre warmer", KR(tmp_ret), K(pre_warm_param));
-      }
+      // if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
+      //   LOG_WARN("fail to create pre warmer", KR(tmp_ret), K(pre_warm_param));
+      // }
     } else if (OB_FAIL(create_pre_warmer(MEM_AND_FILE_PRE_WARM, pre_warm_param))) {
       LOG_WARN("fail to create pre warmer", KR(ret), K(pre_warm_param));
     }
@@ -2441,7 +2499,9 @@ int ObMacroBlockWriter::create_pre_warmer(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data store desc should not be null", K(ret));
   } else if (ObPreWarmerType::MEM_PRE_WARM == pre_warmer_type) {
-    if (data_store_desc_->is_for_index()) {
+    if (GCTX.is_shared_storage_mode()) {
+      pre_warmer_ = nullptr; // do nothing
+    } else if (data_store_desc_->is_for_index()) {
       if (OB_ISNULL(pre_warmer_ = OB_NEWx(ObIndexBlockCachePreWarmer, &allocator_))) {
         int tmp_ret = OB_ALLOCATE_MEMORY_FAILED; // use tmp_ret, allow not pre warm mem block cache
         LOG_WARN("fail to new mem pre warmer", KR(tmp_ret));

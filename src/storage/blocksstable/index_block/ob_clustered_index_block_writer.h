@@ -66,7 +66,12 @@ public:
       const char *macro_buf,
       const int64_t macro_size,
       const ObDataMacroBlockMeta &macro_meta);
+  // Attention: this interface will trigger read I/O
   int rewrite_and_append_clustered_index_micro_block(const ObDataMacroBlockMeta &macro_data);
+  int rewrite_and_append_clustered_index_micro_block(
+      const ObDataMacroBlockMeta &macro_meta,
+      const char *leaf_index_block_buf,
+      const int64_t block_size);
   int close();
 
 private:

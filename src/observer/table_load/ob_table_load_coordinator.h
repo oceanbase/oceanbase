@@ -45,6 +45,7 @@ class ObTableLoadCoordinator
   static const int64_t RESOURCE_OP_WAIT_INTERVAL_US = 5 * 1000LL * 1000LL; // 5s
   static const int64_t SSTABLE_BUFFER_SIZE = 20 * 1024LL;;  // 20KB
   static const int64_t MACROBLOCK_BUFFER_SIZE = 10 * 1024LL * 1024LL;  // 10MB
+  static const int64_t CG_BUFFER_SIZE = 64LL * 1024; // 64K
   static const int64_t MIN_THREAD_COUNT = 2;
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);

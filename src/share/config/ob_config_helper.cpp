@@ -1347,20 +1347,9 @@ bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
 bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
   bool bret = true;
   const ObString tmp_str(t.str());
-  // Note: Shared-Storage mode does not support column store in default. if want to test
-  // column store under shared-storage mode, then need to set tracepoint.
-  bool is_column_store_supported = true;
-  if (GCTX.is_shared_storage_mode()) {
-    int tmp_ret = OB_E(EventTable::EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP) OB_SUCCESS;
-    is_column_store_supported = (tmp_ret != OB_SUCCESS);
-  }
-  if (is_column_store_supported) {
-    bret = ((0 == tmp_str.case_compare("ROW")) ||
-            (0 == tmp_str.case_compare("COLUMN")) ||
-            (0 == tmp_str.case_compare("COMPOUND")));
-  } else {
-    bret = (0 == tmp_str.case_compare("ROW"));
-  }
+  return 0 == tmp_str.case_compare("ROW") ||
+         0 == tmp_str.case_compare("COLUMN") ||
+         0 == tmp_str.case_compare("COMPOUND");
   return bret;
 }
 

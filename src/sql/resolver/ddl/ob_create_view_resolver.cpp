@@ -133,11 +133,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     bool can_expand_star = true;
     uint64_t tenant_data_version = 0;
     if (is_materialized_view) {
-      if (GCTX.is_shared_storage_mode()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("in share storage mode, create materialized view is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "in share storage mode, create materialized view is");
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", KR(ret));
       } else if (tenant_data_version < DATA_VERSION_4_3_0_0){
         ret = OB_NOT_SUPPORTED;

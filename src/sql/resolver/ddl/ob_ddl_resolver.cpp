@@ -13615,10 +13615,6 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexA
   if (OB_UNLIKELY(T_COLUMN_GROUP != cg_node.type_ || cg_node.num_child_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(cg_node.type_), K(cg_node.num_child_));
-  } else if (GCTX.is_shared_storage_mode()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create column store index in shared stroage mode");
-    LOG_WARN("column group is not supported in  shared storag mode yet", K(ret));
   } else {
     const int64_t num_child = cg_node.num_child_;
     // handle all_type column_group & single_type column_group

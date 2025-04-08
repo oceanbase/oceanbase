@@ -706,13 +706,18 @@ int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
   ObTabletHandle tablet_handle;
   ObTableHandleV2 table_handle;
   ObSSTable *sstable = nullptr;
+  bool is_major_sstable = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sstable copy finish task do not init", K(ret));
-  } else if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
-    // sstable is not major or is meta major, skip reuse
-    LOG_INFO("sstable is not major, skip update major sstable reuse info", K(ret), K(copy_ctx_));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // skip reuse macro block in shared storage mode
+    LOG_INFO("skip reuse macro block in shared storage mode");
+  } else if (FALSE_IT(is_major_sstable = ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_))) {
+  } else if (!is_major_sstable) {
+    // sstable is not major, skip reuse
+    LOG_INFO("sstable is not major, skip update major sstable reuse info", K(ret), K(is_major_sstable), "table_key", copy_ctx_.table_key_);
   } else if (OB_ISNULL(copy_ctx_.macro_block_reuse_mgr_)) {
     //do nothing
     LOG_WARN("macro block reuse mgr is null, skip update major sstbale reuse info", K(ret), KP(copy_ctx_.macro_block_reuse_mgr_), K(copy_ctx_));

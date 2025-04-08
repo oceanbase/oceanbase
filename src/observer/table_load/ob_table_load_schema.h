@@ -78,14 +78,16 @@ public:
   void reset();
   int init(uint64_t tenant_id, uint64_t table_id, const int64_t schema_version);
   bool is_valid() const { return is_inited_; }
+  bool is_column_store() const { return cg_cnt_ > 1; }
   TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
-               K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count),
-               K_(store_column_count), K_(collation_type), K_(column_descs), K_(is_inited));
+               K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count), K_(store_column_count),
+               K_(cg_cnt), K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
   int init_cmp_funcs(const common::ObIArray<share::schema::ObColDesc> &column_descs,
                      const bool is_oracle_mode);
   int init_lob_storage(common::ObIArray<share::schema::ObColDesc> &column_descs);
+  int init_column_store(const share::schema::ObTableSchema *table_schema);
   int update_decimal_int_precision(const share::schema::ObTableSchema *table_schema,
                                    common::ObIArray<share::schema::ObColDesc> &cols_desc);
 
@@ -101,7 +103,6 @@ public:
   bool is_table_without_pk_;
   bool is_table_with_hidden_pk_column_;
   share::schema::ObIndexType index_type_;
-  bool is_column_store_;
   bool has_autoinc_column_;
   bool has_identity_column_;
   bool has_lob_rowkey_;
@@ -113,6 +114,7 @@ public:
   int64_t schema_version_;
   uint64_t lob_meta_table_id_;
   int64_t lob_inrow_threshold_;
+  int64_t cg_cnt_;
   common::ObArray<uint64_t> index_table_ids_;
   common::ObArray<int64_t> lob_column_idxs_;
   // if it is a heap table, it contains hidden primary key column

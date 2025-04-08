@@ -377,6 +377,32 @@ int ObTableLoadCoordinator::cal_memory_size(
     bool &task_need_sort)
 {
   int ret = OB_SUCCESS;
+  int64_t part_unsort_memory = 0; // 一个分区写入阶段不排序需要的内存, 用于判断是否排序
+  int64_t min_part_memory = 0; // 一个分区在整个导入过程中至少需要的内存, 用于计算分配的内存大小
+  if (ctx_->schema_.is_table_without_pk_) {
+    // 直接写宏块需要的内存
+    if (!ctx_->schema_.is_column_store() ||
+        ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+      // 行存
+      part_unsort_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
+      min_part_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
+    } else {
+      // 列存
+      part_unsort_memory = ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10; // DDL多cg同时写临时文件的内存
+      min_part_memory = MAX(ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10, MACROBLOCK_BUFFER_SIZE); // DDL多cg同时写临时文件的内存, rescan按cg构造宏块内存
+    }
+  } else {
+    if (!ctx_->schema_.is_column_store() ||
+        ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+      // 行存
+      part_unsort_memory = SSTABLE_BUFFER_SIZE; // 按行写临时文件的内存
+      min_part_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
+    } else {
+      // 列存
+      part_unsort_memory = SSTABLE_BUFFER_SIZE; // 按行写临时文件的内存
+      min_part_memory = MAX(ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10, MACROBLOCK_BUFFER_SIZE); // DDL多cg同时写临时文件的内存, rescan按cg构造宏块内存
+    }
+  }
   if (need_check_need_sort) {
     /*
     先确定主表是否要走排序，对于堆表，sql指定need_sort=true时，如果内存满足不排序，就走不排序流程，只要有一个节点内存不足，整体都要走排序
@@ -392,18 +418,20 @@ int ObTableLoadCoordinator::cal_memory_size(
         thread_count = unit.thread_count_;
       }
       if (ctx_->schema_.is_table_without_pk_) {
-        // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
-        min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * thread_count;
         if (!ctx_->param_.need_sort_) {
           // sql指定need_sort=false，强制不排序
+        } else if (partitions[i] == 1) {
+          // 单分区排序与不排序需要的内存是一样的, 不走排序
         } else {
+          // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
+          min_unsort_memory = part_unsort_memory * partitions[i] * thread_count;
           if (min_unsort_memory > memory_limit) {
             main_need_sort = true;
           }
         }
       } else {
         // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
-        min_unsort_memory = SSTABLE_BUFFER_SIZE * partitions[i] * thread_count;
+        min_unsort_memory = part_unsort_memory * partitions[i] * thread_count;
         if (ctx_->param_.need_sort_) {
           // sql指定need_sort=true，强制走排序
           main_need_sort = true;
@@ -424,26 +452,26 @@ int ObTableLoadCoordinator::cal_memory_size(
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
     ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-    int64_t min_sort_memory = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
+    int64_t min_memory = MIN(min_part_memory *  unit.thread_count_, memory_limit); // 至少需要分配的内存
+    int64_t min_sort_memory = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit); // 排序至少需要分配的内存
     int64_t min_unsort_memory = 0;
     int64_t thread_count = write_session_count;
     // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
     if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
       thread_count = unit.thread_count_;
     }
-    if (ctx_->schema_.is_table_without_pk_) {
-      min_unsort_memory = MIN(MACROBLOCK_BUFFER_SIZE * partitions[i] * thread_count, memory_limit);
-    } else {
-      min_unsort_memory = MIN(MAX(SSTABLE_BUFFER_SIZE * partitions[i] * thread_count, MACROBLOCK_BUFFER_SIZE * thread_count), memory_limit);
-    }
+    min_unsort_memory = MIN(part_unsort_memory * partitions[i] * thread_count, memory_limit); // 不排序最少需要分配的内存
     if (task_need_sort) {
       if (main_need_sort) {
-        unit.memory_size_ = min_sort_memory;
+        // 都排序
+        unit.memory_size_ = MAX(min_sort_memory, min_memory);
       } else {
-        unit.memory_size_ = MAX(min_unsort_memory, min_sort_memory);
+        // 部分排序部分不排序
+        unit.memory_size_ = MAX(MAX(min_unsort_memory, min_sort_memory), min_memory);
       }
     } else {
-      unit.memory_size_ = min_unsort_memory;
+      // 都不排序
+      unit.memory_size_ = MAX(min_memory, min_unsort_memory);
     }
   }
   return ret;

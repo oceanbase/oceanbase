@@ -83,7 +83,16 @@ int ObIndexSSTableBuildTask::process()
   const ObTableSchema *index_schema = nullptr;
   bool need_padding = false;
   bool need_exec_new_inner_sql = true;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::FTS_INDEX_SUBTASK_BUILD_SSTABLE_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim ddl execute building the subtask of fts index failed", KR(ret));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id_));
   } else if (OB_FAIL(schema_guard.check_formal_guard())) {
@@ -146,6 +155,7 @@ int ObIndexSSTableBuildTask::process()
         session_param.ddl_info_.set_is_ddl(true);
         session_param.ddl_info_.set_source_table_hidden(data_schema->is_user_hidden_table());
         session_param.ddl_info_.set_dest_table_hidden(index_schema->is_user_hidden_table());
+        session_param.ddl_info_.set_retryable_ddl(is_retryable_ddl_);
         session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
         session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
         session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
@@ -243,7 +253,8 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         parallelism_,
         is_partitioned_local_index_task_,
         root_service_,
-        inner_sql_exec_addr_);
+        inner_sql_exec_addr_,
+        is_retryable_ddl_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
       task = nullptr;
@@ -261,7 +272,8 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
 ObIndexBuildTask::ObIndexBuildTask()
   : ObDDLTask(ObDDLType::DDL_CREATE_INDEX), index_table_id_(target_object_id_), root_service_(nullptr),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), sstable_complete_ts_(0),
-    check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX), create_index_arg_(), target_cg_cnt_(0)
+    check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX), create_index_arg_(), target_cg_cnt_(0),
+    is_retryable_ddl_(true)
 {
 
 }
@@ -364,7 +376,8 @@ int ObIndexBuildTask::init(
     const int64_t parent_task_id /* = 0 */,
     const uint64_t tenant_data_version,
     const int64_t task_status /* = TaskStatus::PREPARE */,
-    const int64_t snapshot_version /* = 0 */)
+    const int64_t snapshot_version /* = 0 */,
+    const bool is_retryable_ddl /* = true*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -429,6 +442,7 @@ int ObIndexBuildTask::init(
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_version;
+    is_retryable_ddl_ = is_retryable_ddl;
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     }
@@ -908,7 +922,7 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
       ret = OB_SUCCESS; // ingore ret
     }
     if (!is_partitioned_local_index_task) {
-      if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, true/*is ddl retryable*/, data_format_version_, new_execution_id))) {
+      if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, is_retryable_ddl_, data_format_version_, new_execution_id))) {
         LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(task_type_), K(data_format_version_), K(new_execution_id));
       } else {
         ls_leader_addr = create_index_arg_.inner_sql_exec_addr_;
@@ -932,7 +946,8 @@ int ObIndexBuildTask::send_build_single_replica_request(const bool &is_partition
           parallelism,
           is_partitioned_local_index_task,
           root_service_,
-          ls_leader_addr);
+          ls_leader_addr,
+          is_retryable_ddl_);
       if (OB_FAIL(set_sql_exec_addr(ls_leader_addr))) {
         LOG_WARN("failed to set sql execute addr", K(ret), K(ls_leader_addr));
       } else if (OB_FAIL(task.set_nls_format(create_index_arg_.nls_date_format_,
@@ -966,7 +981,7 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (OB_FAIL(tablet_scheduler_.get_next_batch_tablets(parallelism, execution_id, ls_id, leader_addr, tablets))) {
+  } else if (OB_FAIL(tablet_scheduler_.get_next_batch_tablets(is_retryable_ddl_, parallelism, execution_id, ls_id, leader_addr, tablets))) {
     if (OB_UNLIKELY(ret == OB_EAGAIN)) {
       ret = OB_SUCCESS;
     } else if (OB_UNLIKELY(ret == OB_ITER_END)) {
@@ -995,20 +1010,20 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   } else if (OB_SUCCESS == complete_sstable_job_ret_code_) {
     is_end = true;
   } else if (OB_SUCCESS != complete_sstable_job_ret_code_) {
-    ret = complete_sstable_job_ret_code_;
-    LOG_WARN("sstable complete job has failed", K(ret), K(object_id_), K(index_table_id_));
-    if (is_replica_build_need_retry(ret)) {
+    ret_code_ = complete_sstable_job_ret_code_;
+    LOG_WARN("sstable complete job has failed", K(ret_code_), K(object_id_), K(index_table_id_));
+    if (is_replica_build_need_retry(ret_code_) && is_retryable_ddl_) {
       // retry sql job by re-submit
       is_sstable_complete_task_submitted_ = false;
       complete_sstable_job_ret_code_ = INT64_MAX;
-      ret = OB_SUCCESS;
-      LOG_INFO("retry complete sstable job", K(ret), K(object_id_), K(index_table_id_));
+      ret_code_ = OB_SUCCESS;
+      LOG_INFO("retry complete sstable job", K(ret_code_), K(object_id_), K(index_table_id_));
     } else {
       is_end = true;
     }
   }
 
-  if (OB_SUCC(ret) && !is_end) {
+  if (OB_SUCCESS == ret_code_ && !is_end) {
     if (sstable_complete_request_time_ + ObDDLUtil::calc_inner_sql_execute_timeout() < ObTimeUtility::current_time()) {
       is_sstable_complete_task_submitted_ = false;
       sstable_complete_request_time_ = 0;
@@ -1026,13 +1041,13 @@ int ObIndexBuildTask::check_build_local_index_single_replica(bool &is_end)
     // not complete
   } else if (OB_SUCCESS == complete_sstable_job_ret_code_) {
   } else if (OB_SUCCESS != complete_sstable_job_ret_code_) {
-    ret = complete_sstable_job_ret_code_;
-    LOG_WARN("sstable complete job has failed", K(ret), K(object_id_), K(index_table_id_));
-    if (is_replica_build_need_retry(ret)) {
+    ret_code_ = complete_sstable_job_ret_code_;
+    LOG_WARN("sstable complete job has failed", K(ret_code_), K(object_id_), K(index_table_id_));
+    if (is_replica_build_need_retry(ret_code_) && is_retryable_ddl_) {
       // retry sql job by re-submit
       complete_sstable_job_ret_code_ = INT64_MAX;
-      ret = OB_SUCCESS;
-      LOG_INFO("retry complete sstable job", K(ret), K(object_id_), K(index_table_id_));
+      ret_code_ = OB_SUCCESS;
+      LOG_INFO("retry complete sstable job", K(ret_code_), K(object_id_), K(index_table_id_));
     } else {
       is_end = true;
     }
@@ -1937,7 +1952,7 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   } else if (OB_FAIL(create_index_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize create index arg failed", K(ret));
   } else {
-    LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_, target_cg_cnt_);
+    LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_, target_cg_cnt_, is_retryable_ddl_);
   }
   return ret;
 }
@@ -1958,7 +1973,7 @@ int ObIndexBuildTask::deserialize_params_from_message(const uint64_t tenant_id, 
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
     LOG_WARN("deep copy create index arg failed", K(ret));
   } else {
-    LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_, target_cg_cnt_);
+    LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_, target_cg_cnt_, is_retryable_ddl_);
   }
   } // end smart var
   return ret;
@@ -1969,7 +1984,8 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
   return create_index_arg_.get_serialize_size()
       + serialization::encoded_length_i64(check_unique_snapshot_)
       + ObDDLTask::get_serialize_param_size()
-      + serialization::encoded_length_i64(target_cg_cnt_);
+      + serialization::encoded_length_i64(target_cg_cnt_)
+      + serialization::encoded_length_i8(is_retryable_ddl_);
 }
 
 int ObIndexBuildTask::update_mlog_last_purge_scn()

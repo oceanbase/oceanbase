@@ -3550,6 +3550,17 @@ int ObDDLUtil::init_macro_block_seq(const int64_t parallel_idx, blocksstable::Ob
   return ret;
 }
 
+int64_t ObDDLUtil::get_parallel_idx(const blocksstable::ObMacroDataSeq &start_seq)
+{
+  int64_t parallel_idx = start_seq.get_parallel_idx();
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    parallel_idx = start_seq.data_seq_ / compaction::MACRO_STEP_SIZE;
+  }
+#endif
+  return parallel_idx;
+}
+
 bool ObDDLUtil::is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type)
 {
   return (task_type == DDL_MVIEW_COMPLETE_REFRESH && data_format_version >= DATA_VERSION_4_3_1_0);

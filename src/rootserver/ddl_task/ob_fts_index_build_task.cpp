@@ -58,7 +58,8 @@ ObFtsIndexBuildTask::ObFtsIndexBuildTask()
     fts_index_aux_is_trans_end_(false),
     fts_doc_word_aux_is_trans_end_(false),
     create_index_arg_(),
-    dependent_task_result_map_()
+    dependent_task_result_map_(),
+    is_retryable_ddl_(true)
 {
 }
 
@@ -78,7 +79,8 @@ int ObFtsIndexBuildTask::init(
     const uint64_t tenant_data_version,
     const int64_t parent_task_id /* = 0 */,
     const int64_t task_status /* PREPARE */,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const bool is_retryable_ddl)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -152,6 +154,7 @@ int ObFtsIndexBuildTask::init(
     task_version_ = OB_FTS_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_version;
+    is_retryable_ddl_ = is_retryable_ddl;
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(task_status_ = static_cast<ObDDLTaskStatus>(task_status))) {
     } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
@@ -1211,6 +1214,7 @@ int ObFtsIndexBuildTask::serialize_params_to_message(
   int8_t is_doc_rowkey_succ = static_cast<int8_t>(is_doc_rowkey_succ_);
   int8_t is_domain_aux_succ = static_cast<int8_t>(is_domain_aux_succ_);
   int8_t is_fts_doc_word_succ = static_cast<int8_t>(is_fts_doc_word_succ_);
+  int8_t is_retryable_ddl = static_cast<int8_t>(is_retryable_ddl_);
 
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1309,6 +1313,11 @@ int ObFtsIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               is_fts_doc_word_succ))) {
     LOG_WARN("serialize drop fts index task submitted failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_len,
+                                              pos,
+                                              is_retryable_ddl))) {
+    LOG_WARN("serialize is retryable ddl failed", K(ret));
   }
   return ret;
 }
@@ -1331,6 +1340,7 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
   int8_t is_doc_rowkey_succ = false;
   int8_t is_domain_aux_succ = false;
   int8_t is_fts_doc_word_succ = false;
+  int8_t is_retryable_ddl = true;
   obrpc::ObCreateIndexArg tmp_arg;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
                   nullptr == buf ||
@@ -1436,6 +1446,11 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
                                               pos,
                                               &is_fts_doc_word_succ))) {
     LOG_WARN("fail to deserialize fts doc word task succ", K(ret));
+  } else if (OB_FAIL(serialization::decode_i8(buf,
+                                              data_len,
+                                              pos,
+                                              &is_retryable_ddl))) {
+    LOG_WARN("fail to deserialize is retryable ddl", K(ret));
   } else if (!dependent_task_result_map_.created() &&
              OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
                                                        lib::ObLabel("DepTasMap")))) {
@@ -1489,6 +1504,7 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
     is_doc_rowkey_succ_ = is_doc_rowkey_succ;
     is_domain_aux_succ_ = is_domain_aux_succ;
     is_fts_doc_word_succ_ = is_fts_doc_word_succ;
+    is_retryable_ddl_ = is_retryable_ddl;
   }
   return ret;
 }
@@ -1505,6 +1521,7 @@ int64_t ObFtsIndexBuildTask::get_serialize_param_size() const
   int8_t is_doc_rowkey_succ = static_cast<int8_t>(is_doc_rowkey_succ_);
   int8_t is_domain_aux_succ = static_cast<int8_t>(is_domain_aux_succ_);
   int8_t is_fts_doc_word_succ = static_cast<int8_t>(is_fts_doc_word_succ_);
+  int8_t is_retryable_ddl = static_cast<int8_t>(is_retryable_ddl_);
 
   return create_index_arg_.get_serialize_size()
       + ObDDLTask::get_serialize_param_size()
@@ -1525,7 +1542,8 @@ int64_t ObFtsIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i8(is_rowkey_doc_succ)
       + serialization::encoded_length_i8(is_doc_rowkey_succ)
       + serialization::encoded_length_i8(is_domain_aux_succ)
-      + serialization::encoded_length_i8(is_fts_doc_word_succ);
+      + serialization::encoded_length_i8(is_fts_doc_word_succ)
+      + serialization::encoded_length_i8(is_retryable_ddl);
 }
 
 int ObFtsIndexBuildTask::get_task_status(int64_t task_id, uint64_t aux_table_id, bool& is_succ)

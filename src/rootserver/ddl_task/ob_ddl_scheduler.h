@@ -404,7 +404,8 @@ private:
       const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
-      const int64_t snapshot_version = 0);
+      const int64_t snapshot_version = 0,
+      const bool ddl_need_retry_at_executor = false);
   int create_build_fts_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,
@@ -416,7 +417,8 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
-      const int64_t snapshot_version = 0);
+      const int64_t snapshot_version = 0,
+      const bool ddl_need_retry_at_executor = false);
   int create_build_vec_ivf_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,

@@ -418,7 +418,6 @@ ObTableLoadSchema::ObTableLoadSchema()
     is_table_without_pk_(false),
     is_table_with_hidden_pk_column_(false),
     index_type_(ObIndexType::INDEX_TYPE_MAX),
-    is_column_store_(false),
     has_autoinc_column_(false),
     has_identity_column_(false),
     has_lob_rowkey_(false),
@@ -429,6 +428,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     schema_version_(0),
     lob_meta_table_id_(OB_INVALID_ID),
     lob_inrow_threshold_(-1),
+    cg_cnt_(0),
     non_partitioned_tablet_id_vector_(nullptr),
     is_inited_(false)
 {
@@ -455,7 +455,6 @@ void ObTableLoadSchema::reset()
   is_table_without_pk_ = false;
   is_table_with_hidden_pk_column_ = false;
   index_type_ = share::schema::ObIndexType::INDEX_TYPE_MAX;
-  is_column_store_ = false;
   has_autoinc_column_ = false;
   has_identity_column_ = false;
   has_lob_rowkey_ = false;
@@ -466,6 +465,7 @@ void ObTableLoadSchema::reset()
   schema_version_ = 0;
   lob_meta_table_id_ = OB_INVALID_ID;
   lob_inrow_threshold_ = -1;
+  cg_cnt_ = 0;
   index_table_ids_.reset();
   lob_column_idxs_.reset();
   column_descs_.reset();
@@ -515,7 +515,6 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     is_table_without_pk_ = table_schema->is_table_without_pk();
     is_table_with_hidden_pk_column_ = table_schema->is_table_with_hidden_pk_column();
     index_type_ = table_schema->get_index_type();
-    is_column_store_ = (table_schema->get_column_group_count() > 1) ? true :false;
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
     collation_type_ = table_schema->get_collation_type();
@@ -525,6 +524,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       lob_meta_table_id_ = table_schema->get_aux_lob_meta_tid();
     }
     lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
+    cg_cnt_ = table_schema->get_column_group_count();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));

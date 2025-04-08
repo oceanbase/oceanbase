@@ -1487,11 +1487,12 @@ int ObStorageHAUtils::build_major_sstable_reuse_info(
       LOG_WARN("failed to init reuse info mgr", K(ret));
     }
 
-    // when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media
+    // 1. for shared storage mode, we won't build reuse info
+    // 2. when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media
     // (i.e. will scan all sstables' macro block again when tablet restore dag retry)
     // when migrate, we will keep the major sstable already been copied to dest server, so we need to build reuse info for lastest major sstable
     // that already been copied to dest server
-    if (OB_SUCC(ret) && !is_restore) {
+    if (OB_SUCC(ret) && !GCTX.is_shared_storage_mode() && !is_restore) {
       common::ObArray<const ObSSTable *> major_sstables;
       int64_t reuse_info_count = 0;
 

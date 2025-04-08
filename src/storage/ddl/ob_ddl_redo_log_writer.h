@@ -32,6 +32,7 @@ namespace compaction
 namespace blocksstable
 {
 struct ObSSTableMergeRes;
+class ObMacroMetaTempStore;
 }
 
 namespace logservice
@@ -452,7 +453,8 @@ public:
       const int64_t row_id_offset = -1,
       const bool need_delay = false,
       const bool with_cs_replica = false,
-      const bool need_submit_io = true);
+      const bool need_submit_io = true,
+      blocksstable::ObMacroMetaTempStore *macro_meta_store = nullptr);
   void reset();
   int write(
       const blocksstable::ObStorageObjectHandle &macro_handle,
@@ -492,6 +494,7 @@ private:
   bool with_cs_replica_;
   bool need_submit_io_;
   int64_t merge_slice_idx_;
+  blocksstable::ObMacroMetaTempStore *macro_meta_store_;
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE

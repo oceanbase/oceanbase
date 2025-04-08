@@ -46,6 +46,11 @@ class ObPxMultiPartSSTableInsertOp;
 class ObExecContext;
 }
 
+namespace blocksstable
+{
+class ObMacroMetaTempStore;
+}
+
 namespace storage
 {
 class ObTablet;
@@ -1408,8 +1413,18 @@ private:
 class ObCOSliceWriter
 {
 public:
-  ObCOSliceWriter() : is_inited_(false), cg_idx_(-1), cg_schema_(nullptr), data_desc_(),
-  index_builder_(true /*use buffer*/), macro_block_writer_(true /*use buffer*/) {}
+  ObCOSliceWriter()
+    : is_inited_(false),
+      cg_idx_(-1),
+      cg_schema_(nullptr),
+      data_desc_(),
+      index_builder_(true /*use buffer*/),
+      macro_block_writer_(true /*use buffer*/),
+      macro_meta_store_(nullptr),
+      allocator_("COSliceWriter")
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   ~ObCOSliceWriter() {}
   int init(
       const ObStorageSchema *storage_schema,
@@ -1418,18 +1433,20 @@ public:
       const blocksstable::ObMacroDataSeq &start_seq,
       const int64_t row_id_offset,
       const share::SCN &start_scn,
-      const bool with_cs_replica);
+      const bool with_cs_replica,
+      const int64_t parallel_idx);
   void reset();
   int append_row(
       const sql::ObChunkDatumStore::StoredRow *stored_row);
-  int append_batch(const ObIArray<ObIVector *> &vectors, const int64_t batch_size);
+  int append_batch(const blocksstable::ObBatchDatumRows &datum_rows);
   static int project_cg_row(
       const ObStorageColumnGroupSchema &cg_schema,
       const sql::ObChunkDatumStore::StoredRow *stored_row,
       blocksstable::ObDatumRow &cg_row);
   int close();
+  blocksstable::ObBatchDatumRows &get_datum_rows() { return datum_rows_; }
   bool is_inited() { return is_inited_; }
-  TO_STRING_KV(K(is_inited_), K(cg_idx_), KPC(cg_schema_), K(macro_block_writer_), K(data_desc_), K(cg_row_));
+  TO_STRING_KV(K(is_inited_), K(cg_idx_), KPC(cg_schema_), K(macro_block_writer_), K(data_desc_), K(cg_row_), K(datum_rows_));
 private:
   bool is_inited_;
   int64_t cg_idx_;
@@ -1440,6 +1457,8 @@ private:
   storage::ObDDLRedoLogWriterCallback flush_callback_;
   blocksstable::ObDatumRow cg_row_;
   blocksstable::ObBatchDatumRows datum_rows_;
+  blocksstable::ObMacroMetaTempStore *macro_meta_store_;
+  ObArenaAllocator allocator_;
 };
 
 struct ObTabletDirectLoadExecContextId final
@@ -1534,6 +1553,31 @@ public:
   ObBucketLock bucket_lock_;
   hash::ObHashMap<ObTabletDirectLoadBatchSliceKey, ObArray<int64_t/*slices_array_idx*/> *> batch_slice_map_;
   ObConcurrentFIFOAllocator allocator_;
+};
+
+class ObMacroMetaStoreManager
+{
+public:
+  ObMacroMetaStoreManager();
+  ~ObMacroMetaStoreManager();
+  TO_STRING_KV(K(store_items_.count()));
+  int add_macro_meta_store(const int64_t cg_idx, const int64_t parallel_idx, const int64_t dir_id, blocksstable::ObMacroMetaTempStore *&macro_meta_store);
+  int get_sorted_macro_meta_stores(const int64_t cg_idx, ObIArray<blocksstable::ObMacroMetaTempStore *> &macro_meta_stores);
+private:
+  struct StoreItem
+  {
+  public:
+    StoreItem() : macro_meta_store_(nullptr), cg_idx_(-1), parallel_idx_(-1) {}
+    TO_STRING_KV(KP(macro_meta_store_), K(cg_idx_), K(parallel_idx_));
+  public:
+    blocksstable::ObMacroMetaTempStore *macro_meta_store_;
+    int64_t cg_idx_;
+    int64_t parallel_idx_;
+  };
+private:
+  ObArenaAllocator allocator_;
+  lib::ObMutex mutex_;
+  ObArray<StoreItem> store_items_;
 };
 
 }// namespace storage

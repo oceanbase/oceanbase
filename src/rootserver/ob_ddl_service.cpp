@@ -7459,6 +7459,10 @@ int ObDDLService::create_aux_index_task_(
                                &create_index_arg,
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
+    if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
+      param.ddl_need_retry_at_executor_ = share::schema::is_rowkey_doc_aux(create_index_arg.index_type_)
+                                          &&  GCTX.is_shared_storage_mode();
+    }
     param.new_snapshot_version_ = snapshot_version;
     if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
@@ -15616,6 +15620,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 LOG_WARN("fail to push ddl task", KR(ret), K(task_record));
               } else {
                 res.task_id_ = task_record.task_id_;
+                res.ddl_need_retry_at_executor_ = task_record.ddl_need_retry_at_executor_;
                 ObDDLRes ddl_res;
                 ddl_res.tenant_id_ = tenant_id;
                 ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
@@ -16458,12 +16463,13 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObTableSchema new_table_schema;
     const ObTableSchema *orig_table_schema = NULL;
+
     if (OB_FAIL(get_and_check_table_schema(alter_table_arg,
                                            schema_guard,
                                            alter_table_schema,
                                            orig_table_schema))) {
       LOG_WARN("fail to get and check table schema", K(ret));
-    } else if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
+    } else if (FAILEDx(new_table_schema.assign(*orig_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {
       LOG_WARN("fail to mock default cg", K(ret), K(orig_table_schema), K(new_table_schema));

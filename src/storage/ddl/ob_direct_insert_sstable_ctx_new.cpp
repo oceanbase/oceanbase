@@ -1124,45 +1124,13 @@ private:
   int64_t context_id_;
 };
 
-ObSSTableIndexItem::~ObSSTableIndexItem()
-{
-  index_builder_ = nullptr;
-  data_desc_ = nullptr;
-  allocator_ = nullptr;
-}
-
-void ObSSTableIndexItem::reset()
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(allocator_)) {
-    if (OB_NOT_NULL(index_builder_)) {
-      index_builder_->~ObSSTableIndexBuilder();
-      allocator_->free(index_builder_);
-      index_builder_ = nullptr;
-    }
-    if (OB_NOT_NULL(data_desc_)) {
-      data_desc_->~ObWholeDataStoreDesc();
-      allocator_->free(data_desc_);
-      data_desc_ = nullptr;
-    }
-
-    allocator_ = nullptr;
-  }
-}
-
-bool ObSSTableIndexItem::is_valid() const
-{
-  return OB_NOT_NULL(allocator_) && OB_NOT_NULL(data_desc_) && OB_NOT_NULL(index_builder_);
-}
-
 ObTabletDirectLoadBuildCtx::ObTabletDirectLoadBuildCtx()
   : allocator_(), slice_writer_allocator_(), build_param_(), slice_mgr_map_(), data_block_desc_(), index_builder_(nullptr),
-    column_stat_array_(), sorted_slice_writers_(), sorted_slices_idx_(), cg_index_builders_(), is_task_end_(false), task_finish_count_(0), fill_column_group_finish_count_(0),
+    column_stat_array_(), sorted_slice_writers_(), sorted_slices_idx_(), is_task_end_(false), task_finish_count_(0), fill_column_group_finish_count_(0),
     commit_scn_(), schema_allocator_("TDL_schema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), storage_schema_(nullptr)
 {
   column_stat_array_.set_attr(ObMemAttr(MTL_ID(), "TblDL_CSA"));
   sorted_slice_writers_.set_attr(ObMemAttr(MTL_ID(), "TblDL_SSR"));
-  cg_index_builders_.set_attr(ObMemAttr(MTL_ID(), "TblDL_CGIdx"));
   sorted_slices_idx_.set_attr(ObMemAttr(MTL_ID(), "TblDL_IDX"));
 }
 
@@ -1187,10 +1155,6 @@ ObTabletDirectLoadBuildCtx::~ObTabletDirectLoadBuildCtx()
   column_stat_array_.reset();
   sorted_slice_writers_.reset();
   sorted_slices_idx_.reset();
-  for (int64_t i = 0; i < cg_index_builders_.count(); ++i) {
-    cg_index_builders_.at(i).reset();
-  }
-  cg_index_builders_.reset();
 
   if (!slice_mgr_map_.empty()) {
     DestroySliceWriterMapFn destroy_map_fn(&slice_writer_allocator_);
@@ -2329,7 +2293,7 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
       if (OB_ISNULL(cur_writer = OB_NEWx(ObCOSliceWriter, &arena_allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory for co writer failed", K(ret));
-      } else if (OB_FAIL(fill_aggregated_column_group(start_idx, last_idx, sqc_build_ctx_.storage_schema_, cur_writer, fill_cg_finish_count, row_cnt))) {
+      } else if (OB_FAIL(fill_aggregated_column_group(thread_id, start_idx, last_idx, sqc_build_ctx_.storage_schema_, cur_writer, fill_cg_finish_count, row_cnt))) {
         LOG_WARN("fail to fill aggregated cg", K(ret), KPC(cur_writer));
       }
       // free writer anyhow
@@ -2369,6 +2333,7 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
 }
 
 int ObTabletDirectLoadMgr::fill_aggregated_column_group(
+    const int64_t parallel_idx,
     const int64_t start_idx,
     const int64_t last_idx,
     const ObStorageSchema *storage_schema,
@@ -2397,7 +2362,8 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
         } else if (OB_UNLIKELY(first_slice_writer->get_row_offset() < 0)) {
           ret = OB_ERR_SYS;
           LOG_WARN("invalid row offset", K(ret), K(first_slice_writer->get_row_offset()));
-        } else if (OB_FAIL(cur_writer->init(storage_schema, cg_idx, this, first_slice_writer->get_start_seq(), first_slice_writer->get_row_offset(), get_start_scn(), need_process_cs_replica_))) {
+        } else if (OB_FAIL(cur_writer->init(storage_schema, cg_idx, this, first_slice_writer->get_start_seq(),
+                first_slice_writer->get_row_offset(), get_start_scn(), need_process_cs_replica_, parallel_idx))) {
           LOG_WARN("init co ddl writer failed", K(ret), KPC(cur_writer), K(cg_idx), KPC(this));
         } else {
           for (int64_t i = start_idx; OB_SUCC(ret) && i < last_idx; ++i) {
@@ -3660,6 +3626,9 @@ int ObTabletIncDirectLoadMgr::update(
     data_format_version_ = build_param.common_param_.data_format_version_;
     sqc_build_ctx_.reset_slice_ctx_on_demand();
     start_scn_.set_min();
+    if (GCTX.is_shared_storage_mode() && is_incremental_direct_load(direct_load_type_)) {
+      micro_index_clustered_ = false;
+    }
   }
   if (OB_SUCC(ret)) {
     task_cnt_ = build_param.runtime_only_param_.task_cnt_;
@@ -3777,5 +3746,26 @@ int ObTabletIncDirectLoadMgr::commit(const int64_t execution_id, const share::SC
   UNUSEDx(execution_id, commit_scn);
   int ret = OB_SUCCESS;
   is_closed_ = true;
+  return ret;
+}
+
+int ObTabletIncDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTabletDirectLoadMgr::prepare_index_builder_if_need(table_schema))) {
+    LOG_WARN("fail to prepare builder", K(ret));
+  } else {
+    if (GCTX.is_shared_storage_mode()) {
+      ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
+      if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(sqc_build_ctx_.data_block_desc_.get_desc(), object_cleaner))) {
+        LOG_WARN("failed to get cleaner from data store desc", K(ret));
+      } else if (OB_ISNULL(object_cleaner)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        object_cleaner->mark_succeed();
+      }
+    }
+  }
   return ret;
 }

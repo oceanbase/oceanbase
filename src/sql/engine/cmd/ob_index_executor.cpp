@@ -137,6 +137,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     LOG_WARN("Failed to check sync_dll_user", K(ret));
   } else if (!is_sys_index && !is_sync_ddl_user) {
     // 只考虑非系统表和非备份恢复时的索引同步检查
+    bool build_index_need_retry_at_executor = false;
     create_index_arg.index_schema_.set_table_id(res.index_table_id_);
     create_index_arg.index_schema_.set_schema_version(res.schema_version_);
     if (OB_UNLIKELY(OB_INVALID_ID == create_index_arg.index_schema_.get_table_id())) {
@@ -146,7 +147,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
         ret = OB_ERR_ADD_INDEX;
         LOG_WARN("index table id is invalid", KR(ret));
       }
-    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, false/*do not need retry at executor*/, my_session, common_rpc_proxy))) {
+    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
       LOG_WARN("failed to wait ddl finish", K(ret));
     }
   }

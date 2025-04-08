@@ -654,6 +654,10 @@ int ObIndexBuilder::submit_build_index_task(
                              &create_index_arg);
   param.tenant_data_version_ = tenant_data_version;
   param.new_snapshot_version_ = new_fetched_snapshot;
+  if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
+    param.ddl_need_retry_at_executor_ = share::schema::is_fts_or_multivalue_index(create_index_arg.index_type_)
+                                        && GCTX.is_shared_storage_mode();
+  }
   if (OB_UNLIKELY(nullptr == data_schema || nullptr == index_schema || tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is invalid", K(ret), KP(data_schema), KP(index_schema), K(tenant_data_version));
@@ -1428,6 +1432,7 @@ int ObIndexBuilder::do_create_local_index(
         res.index_table_id_ = index_schema.get_table_id();
         res.schema_version_ = index_schema.get_schema_version();
         res.task_id_ = task_record.task_id_;
+        res.ddl_need_retry_at_executor_ = task_record.ddl_need_retry_at_executor_;
       }
 
       if (OB_FAIL(ret)) {

@@ -140,6 +140,7 @@ ob_set_subtarget(ob_storage blocksstable_cs_encoding
 
 ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_agg_row_struct.cpp
+  blocksstable/index_block/ob_macro_meta_temp_store.cpp
   blocksstable/index_block/ob_index_block_aggregator.cpp
   blocksstable/index_block/ob_index_block_builder.cpp
   blocksstable/index_block/ob_index_block_macro_iterator.cpp

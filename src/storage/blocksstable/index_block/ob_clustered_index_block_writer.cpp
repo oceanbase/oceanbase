@@ -321,6 +321,28 @@ int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
   return ret;
 }
 
+int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
+    const ObDataMacroBlockMeta &macro_meta,
+    const char *leaf_index_block_buf,
+    const int64_t block_size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not initializeed", K(ret));
+  } else if (OB_ISNULL(leaf_index_block_buf) || OB_UNLIKELY(block_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(leaf_index_block_buf), K(block_size));
+  } else if (OB_FAIL(decompress_and_make_clustered_index_micro_block(
+      leaf_index_block_buf,
+      block_size,
+      macro_meta.get_macro_id(),
+      macro_meta))) {
+    LOG_WARN("failed to build clustered index micro block", K(ret), K(macro_meta));
+  }
+  return ret;
+}
+
 int ObClusteredIndexBlockWriter::close()
 {
   int ret = OB_SUCCESS;

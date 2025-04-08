@@ -209,7 +209,12 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
   return ret;
 }
 
-int ObDDLTabletScheduler::get_next_batch_tablets(int64_t &parallelism, int64_t &new_execution_id, share::ObLSID &ls_id, common::ObAddr &leader_addr, ObIArray<ObTabletID> &tablets)
+int ObDDLTabletScheduler::get_next_batch_tablets(const bool is_ddl_retryable,
+                                                 int64_t &parallelism,
+                                                 int64_t &new_execution_id,
+                                                 share::ObLSID &ls_id,
+                                                 common::ObAddr &leader_addr,
+                                                 ObIArray<ObTabletID> &tablets)
 {
   int ret = OB_SUCCESS;
   bool need_send_task = false;
@@ -248,7 +253,7 @@ int ObDDLTabletScheduler::get_next_batch_tablets(int64_t &parallelism, int64_t &
     }
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id_));
-  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type, true/*is ddl retryable*/, tenant_data_version, new_execution_id))) {
+  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type, is_ddl_retryable, tenant_data_version, new_execution_id))) {
     LOG_WARN("failed to fetch new execution id", K(ret), K(tenant_id_), K(task_id_), K(new_execution_id));
   } else if (OB_FAIL(get_next_parallelism(parallelism))) {
     LOG_WARN("fail to get next parallelism", K(ret), K(parallelism));

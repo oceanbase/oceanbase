@@ -158,6 +158,13 @@ public:
       ObIMacroBlockFlushCallback *callback = nullptr,
       ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr);
+  int open_for_ss_ddl(
+      const ObDataStoreDesc &data_store_desc,
+      const int64_t parallel_idx,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObIMacroBlockFlushCallback *callback);
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc,
                                  const ObMicroBlockData *micro_block_data);
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr);
@@ -204,6 +211,17 @@ private:
   int append(const ObDataMacroBlockMeta &macro_meta, const ObMicroBlockData *micro_block_data);
   int check_order(const ObDatumRow &row);
   int init_macro_seq_generator(const blocksstable::ObMacroSeqParam &macro_seq_param);
+  int init_hash_index_builder();
+  int inner_init(
+      const ObDataStoreDesc &data_store_desc,
+      const int64_t parallel_idx,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      const bool cluster_micro_index_on_flush,
+      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObIMacroBlockFlushCallback *callback,
+      ObIMacroBlockValidator *validator,
+      ObIODevice *device_handle);
   int append_row_and_hash_index(const ObDatumRow &row);
   int append_batch_to_micro_block(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   int init_pre_agg_util(const ObDataStoreDesc &data_store_desc);

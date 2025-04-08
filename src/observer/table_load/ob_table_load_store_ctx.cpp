@@ -444,11 +444,7 @@ int ObTableLoadStoreCtx::init_sort_param()
   basic_table_data_desc_.reset();
   basic_table_data_desc_.rowkey_column_num_ = 0;
   basic_table_data_desc_.column_count_ = 0;
-  if (!GCTX.is_shared_storage_mode()) {
-    basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SN_DEFAULT_DATA_BLOCK_SIZE;
-  } else {
-    basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SS_DEFAULT_DATA_BLOCK_SIZE;
-  }
+  basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::DEFAULT_DATA_BLOCK_SIZE;
   basic_table_data_desc_.sstable_index_block_size_ =
     ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
   basic_table_data_desc_.sstable_data_block_size_ = ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
@@ -503,6 +499,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
     static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
+    static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =
@@ -551,7 +548,16 @@ int ObTableLoadStoreCtx::init_write_ctx()
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
         } else if (data_store_table_ctx_->schema_->is_table_without_pk_) {
-          const int64_t bucket_cnt = wa_mem_limit / (thread_cnt_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+          int64_t part_mem_size = 0;
+          if (!data_store_table_ctx_->schema_->is_column_store() ||
+              ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+            // 行存
+            part_mem_size = MACRO_BLOCK_WRITER_MEM_SIZE;
+          } else {
+            // 列存
+            part_mem_size = data_store_table_ctx_->schema_->cg_cnt_ * cg_chunk_mem_limit * 10;
+          }
+          const int64_t bucket_cnt = MAX(1, wa_mem_limit / (thread_cnt_ * part_mem_size));
           if (part_cnt <= bucket_cnt || !ctx_->param_.need_sort_) {
             // 堆表快速写入
             write_ctx_.is_fast_heap_table_ = true;
@@ -560,9 +566,9 @@ int ObTableLoadStoreCtx::init_write_ctx()
             write_ctx_.is_multiple_mode_ = true;
           }
         } else {
-          int64_t bucket_cnt = wa_mem_limit / thread_cnt_ /
-                               (write_ctx_.table_data_desc_.sstable_index_block_size_ +
-                                write_ctx_.table_data_desc_.sstable_data_block_size_);
+          const int64_t part_mem_size = write_ctx_.table_data_desc_.sstable_index_block_size_ +
+                                        write_ctx_.table_data_desc_.sstable_data_block_size_;
+          const int64_t bucket_cnt = MAX(1, wa_mem_limit / (thread_cnt_ * part_mem_size));
           write_ctx_.is_multiple_mode_ = (ctx_->param_.need_sort_ || part_cnt > bucket_cnt);
         }
         break;

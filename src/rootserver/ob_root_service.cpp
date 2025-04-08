@@ -3431,13 +3431,6 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           if ((simple_table_schema->get_table_type() == SYSTEM_VIEW && GCONF.enable_sys_table_ddl)
                      || simple_table_schema->get_table_type() == USER_VIEW
                      || simple_table_schema->get_table_type() == MATERIALIZED_VIEW) {
-            if (GCTX.is_shared_storage_mode() && simple_table_schema->get_table_type() == MATERIALIZED_VIEW) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("in share storage mode, create materialized view is not supported", KR(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "in share storage mode, create materialized view is");
-            } else {
-              ret = OB_SUCCESS;
-            }
           } else if (simple_table_schema->get_table_type() == SYSTEM_VIEW) {
             ret = OB_OP_NOT_ALLOW;
             LOG_WARN("not allowed to replace sys view when enable_sys_table_ddl is false", KR(ret), KPC(simple_table_schema));
