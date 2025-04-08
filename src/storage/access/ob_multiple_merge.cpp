@@ -909,7 +909,6 @@ void ObMultipleMerge::reuse()
   }
   lob_reader_.reuse();
   scan_state_ = ScanState::NONE;
-  major_table_version_ = 0;
 }
 
 void ObMultipleMerge::reclaim()
@@ -1394,7 +1393,7 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
       }
     }
   }
-  LOG_DEBUG("prepare read tables", K(ret), K(refresh), K_(get_table_param), K_(tables));
+  LOG_DEBUG("prepare read tables", K(ret), K(refresh), K_(get_table_param), K_(tables), K_(major_table_version));
   return ret;
 }
 
@@ -1533,7 +1532,7 @@ int ObMultipleMerge::refresh_table_on_demand()
     }
     if (OB_SUCC(ret)) {
       STORAGE_LOG(INFO, "table need to be refresh", "table_id", access_param_->iter_param_.table_id_,
-          K(*access_param_), K(curr_scan_index_), K(scan_state_));
+          K(*access_param_), K(curr_scan_index_), K(scan_state_), K_(major_table_version));
     }
   }
   return ret;
@@ -1793,8 +1792,9 @@ void ObMultipleMerge::dump_table_statistic_for_4377()
 void ObMultipleMerge::set_base_version() const {
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (!access_ctx_->is_mview_query() && is_scan()) {
+  if (!access_ctx_->is_mview_query()) {
     access_ctx_->trans_version_range_.base_version_ = major_table_version_;
+    LOG_DEBUG("set base version", K_(access_ctx_->trans_version_range));
   }
 }
 

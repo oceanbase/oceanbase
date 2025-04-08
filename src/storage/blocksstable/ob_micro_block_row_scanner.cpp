@@ -1296,9 +1296,8 @@ int ObMultiVersionMicroBlockRowScanner::open(
     } else if (OB_NOT_NULL(sstable_)
         && !block_data.get_micro_header()->contain_uncommitted_rows()
         && block_data.get_micro_header()->max_merged_trans_version_ <= context_->trans_version_range_.snapshot_version_
+        && context_->trans_version_range_.base_version_ > 0
         && block_data.get_micro_header()->min_merged_trans_version_ > context_->trans_version_range_.base_version_) {
-      // read_row_direct_flag_ can only be effective when read base version is zero
-      // since we have no idea about the accurate base version of the macro block
       read_row_direct_flag_ = true;
       can_ignore_multi_version_ = flat_reader_->single_version_rows()
                                   && is_last_multi_version_row_
