@@ -13,7 +13,12 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "ob_transform_win_magic.h"
 #include "ob_transform_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/schema/ob_table_schema.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/ob_sql_context.h"
+#include "sql/rewrite/ob_stmt_comparer.h"
+#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_equal_analysis.h"
 
 using namespace oceanbase::sql;
@@ -1509,6 +1514,13 @@ int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt,
                                                                      table_in_roll_up))) {
       LOG_WARN("failed to replace table info in semi infos", K(ret));
     }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(main_stmt, transed_view_table, drill_down_table))) {
+    LOG_WARN("failed to replace table info in semi infos", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(main_stmt, transed_view_table, roll_up_table))) {
+    LOG_WARN("failed to replace table info in semi infos", K(ret));
   }
 
   if (OB_FAIL(ret)) {
