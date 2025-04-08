@@ -1395,6 +1395,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMapKeys::eval_map_keys,                                        /* 845 */
   ObExprMapValues::eval_map_values,                                    /* 846 */
   ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
+  NULL, // ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,/* 848 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
