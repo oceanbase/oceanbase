@@ -1001,30 +1001,30 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select 1, round(1.1) from dual);
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t1  |0       |3           |
-================================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |0       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
       access([t1.a], [t1.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MAX ; MIN)always false
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select max(a) from t2);
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t1  |0       |3           |
-================================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |0       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
       access([t1.a], [t1.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MAX ; MIN)always false
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select group_concat(a, b) from t2 group by a);
 Query Plan
 =================================================
@@ -1048,17 +1048,17 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2);
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t1  |0       |3           |
-================================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |0       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
       access([t1.a], [t1.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MAX ; MIN)always false
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a);
 Query Plan
 =================================================

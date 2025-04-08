@@ -3411,7 +3411,7 @@ int ObTransformUtils::check_select_item_match_index(const ObDMLStmt *root_stmt,
 }
 
 // output index_ids contains: table_ref_id, mock rowid index id and other index id
-int ObTransformUtils::get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
+int ObTransformUtils::get_valid_index_id(ObSqlSchemaGuard *schema_guard,
                                          const ObDMLStmt *stmt,
                                          const TableItem *table_item,
                                          ObIArray<uint64_t> &index_ids)
@@ -3566,7 +3566,7 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
     LOG_WARN("failed to get_table_item", K(ret), K(table_item));
   } else if (!table_item->is_basic_table()) {
     // do nothing
-  } else if (OB_FAIL(get_vaild_index_id(schema_guard, stmt, table_item, index_ids))) {
+  } else if (OB_FAIL(get_valid_index_id(schema_guard, stmt, table_item, index_ids))) {
     LOG_WARN("fail to get vaild index id", K(ret), K(table_item->ref_id_));
   } else {
     ObSEArray<uint64_t, 8> index_cols;
@@ -3731,6 +3731,26 @@ int ObTransformUtils::classify_scalar_query_ref(ObRawExpr *expr,
                                                        non_scalar_query_refs)))) {
         LOG_WARN("failed to extract query ref expr", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_query_ref_stmts(const ObIArray<ObRawExpr*> &exprs,
+                                              ObIArray<ObSelectStmt *> &subquery_stmts,
+                                              const bool with_nested)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObQueryRefRawExpr*, 4> subqueries;
+  if (OB_FAIL(extract_query_ref_expr(exprs, subqueries, with_nested))) {
+    LOG_WARN("failed to extract query ref exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < subqueries.count(); ++i) {
+    if (OB_ISNULL(subqueries.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery expr is null", K(ret), K(i));
+    } else if (OB_FAIL(subquery_stmts.push_back(subqueries.at(i)->get_ref_stmt()))) {
+      LOG_WARN("failed to extract query ref exprs", K(ret));
     }
   }
   return ret;
@@ -7870,7 +7890,7 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
   return ret;
 }
 
-int ObTransformUtils::remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
+int ObTransformUtils::remove_const_exprs(const ObIArray<ObRawExpr *> &input_exprs,
                                          ObIArray<ObRawExpr *> &output_exprs)
 {
   int ret = OB_SUCCESS;
@@ -15425,8 +15445,7 @@ int ObTransformUtils::cartesian_tables_pre_split(ObSelectStmt *subquery,
     // collect connected tables
     ObSqlBitSet<> visited;
     all_connected_tables.reuse();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i)
-    {
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       TableItem *table1, *table2;
       ObSEArray<TableItem*, 4> connected_tables;
       if (visited.has_member(i)) {
@@ -15465,6 +15484,79 @@ int ObTransformUtils::cartesian_tables_pre_split(ObSelectStmt *subquery,
   return ret;
 }
 
+/**
+ * @brief ObTransformUtils::cartesian_tables_pre_split
+ * Try to split tables into multiple connected tables. Tables in the same group
+ * of connected_tables are connected by conditions.
+ */
+int ObTransformUtils::cartesian_tables_pre_split(const ObIArray<TableItem*> &table_items,
+                                                 const ObIArray<ObRawExpr*> &conditions,
+                                                 ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables)
+{
+  int ret = OB_SUCCESS;
+  const int64_t N = table_items.count();
+  UnionFind uf(N);
+  if (OB_FAIL(uf.init())) {
+    LOG_WARN("fail to initialize union find", K(ret));
+  }
+  // connect tables according to conditions
+  for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
+    ObRawExpr *cond = conditions.at(i);
+    ObSEArray<uint64_t, 4> cond_table_ids;
+    if (OB_ISNULL(cond)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (cond->has_flag(CNT_ROWNUM)
+                || cond->has_flag(CNT_SUB_QUERY)) {
+      //do nothing
+    } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond,
+                                                          cond_table_ids))) {
+      LOG_WARN("fail to extract table ids", K(ret));
+    } else if (OB_FAIL(connect_tables(cond_table_ids, table_items, uf))) {
+      LOG_WARN("fail to connect tables", K(ret));
+    }
+  }
+
+  // collect connected tables
+  ObSqlBitSet<> visited;
+  all_connected_tables.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    TableItem *table1, *table2;
+    ObSEArray<TableItem*, 4> connected_tables;
+    if (visited.has_member(i)) {
+      // do nothing
+    } else if (OB_FAIL(visited.add_member(i))) {
+      LOG_WARN("add bit set member failed", K(ret), K(i));
+    } else if (OB_ISNULL(table1 = table_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get table item", K(ret), K(i));
+    } else if (OB_FAIL(connected_tables.push_back(table1))) {
+      LOG_WARN("fail to push back table item", K(ret));
+    } else {
+      for (int64_t j = i + 1; OB_SUCC(ret) && j < N; ++j) {
+        bool is_connected = false;
+        if (visited.has_member(j)) {
+          // do nothing
+        } else if (OB_FAIL(uf.is_connected(i, j, is_connected))) {
+          LOG_WARN("failed to check is connected", K(ret), K(i), K(j));
+        } else if (!is_connected) {
+          // do nothing
+        } else if (OB_FAIL(visited.add_member(j))) {
+          LOG_WARN("add bit set member failed", K(ret), K(j));
+        } else if (OB_ISNULL(table2 = table_items.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get table item", K(ret), K(j));
+        } else if (OB_FAIL(connected_tables.push_back(table2))) {
+          LOG_WARN("fail to push back table item", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(all_connected_tables.push_back(connected_tables))) {
+        LOG_WARN("fail to push back connected tables", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObTransformUtils::do_split_cartesian_tables(ObTransformerCtx *ctx,
                                                 ObDMLStmt *stmt,

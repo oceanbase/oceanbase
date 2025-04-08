@@ -1736,6 +1736,9 @@ public:
                                     bool nested) const;
   int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
                              bool &contain_dist_das) const;
+
+  inline bool can_re_parallel() { return !is_distributed() && !is_match_all() && 1 < get_available_parallel() && !get_is_at_most_one_row(); }
+
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;

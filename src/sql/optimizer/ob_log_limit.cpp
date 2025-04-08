@@ -73,8 +73,7 @@ int ObLogLimit::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
                          || parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(ret), K(param), K(percent_expr_), K(offset_expr_));
-  } else if (!is_calc_found_rows_ &&
-             OB_FAIL(get_limit_offset_value(percent_expr_, limit_expr_, offset_expr_,
+  } else if (OB_FAIL(get_limit_offset_value(percent_expr_, limit_expr_, offset_expr_,
                                             limit_percent, limit_count, offset_count))) {
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
@@ -105,6 +104,9 @@ int ObLogLimit::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
       double child_card = 0.0;
       double child_cost = 0.0;
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+      if (is_calc_found_rows_) {
+        param.need_row_count_ = -1;
+      }
       if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
         LOG_WARN("failed to re-est cost", K(ret));
       } else {

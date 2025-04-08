@@ -608,7 +608,26 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     if (func.contain_enum_set_values_) {
       uint64_t enum_set_enable_list = 0;
       if (ctx_->exec_ctx_->support_enum_set_type_subschema(*ctx_->session_info_)) {
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_DISTINCT);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_GROUPBY);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_WINFUNC);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_ORDERBY);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_LIMIT);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_SUBQUERY);
+        ObTransformRule::add_trans_type(enum_set_enable_list, FASTMINMAX);
         ObTransformRule::add_trans_type(enum_set_enable_list, ELIMINATE_OJ);
+        ObTransformRule::add_trans_type(enum_set_enable_list, VIEW_MERGE);
+        ObTransformRule::add_trans_type(enum_set_enable_list, WHERE_SQ_PULL_UP);
+        ObTransformRule::add_trans_type(enum_set_enable_list, QUERY_PUSH_DOWN);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SIMPLIFY_SET);
+        ObTransformRule::add_trans_type(enum_set_enable_list, PROJECTION_PRUNING);
+        ObTransformRule::add_trans_type(enum_set_enable_list, AGGR_SUBQUERY);
+        ObTransformRule::add_trans_type(enum_set_enable_list, PREDICATE_MOVE_AROUND);
+        ObTransformRule::add_trans_type(enum_set_enable_list, JOIN_LIMIT_PUSHDOWN);
+        ObTransformRule::add_trans_type(enum_set_enable_list, COUNT_TO_EXISTS);
+        ObTransformRule::add_trans_type(enum_set_enable_list, CONDITIONAL_AGGR_COALESCE);
+        ObTransformRule::add_trans_type(enum_set_enable_list, SEMI_TO_INNER);
+        ObTransformRule::add_trans_type(enum_set_enable_list, DISTINCT_AGGREGATE);
       }
       disable_list |= (~enum_set_enable_list);
     }

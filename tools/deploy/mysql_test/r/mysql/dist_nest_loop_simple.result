@@ -1564,29 +1564,28 @@ Outputs & filters:
       range_key([b.c1], [b.c2], [b.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain  select /*+use_nl(c)*/ * from t5 as a left join t6 as b on a.c1 = b.c1 and a.c3 = b.c3 left join t4 as c on b.c1=c.c1 and b.c3 = c.c3 limit 100;
 Query Plan
-===================================================================================
-|ID|OPERATOR                                       |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------------
-|0 |LIMIT                                          |        |1       |30          |
-|1 |└─PX COORDINATOR                               |        |1       |30          |
-|2 |  └─EXCHANGE OUT DISTR                         |:EX10002|1       |29          |
-|3 |    └─LIMIT                                    |        |1       |24          |
-|4 |      └─HASH RIGHT OUTER JOIN                  |        |1       |24          |
-|5 |        ├─PX PARTITION ITERATOR                |        |1       |7           |
-|6 |        │ └─TABLE FULL SCAN                    |c       |1       |7           |
-|7 |        └─HASH OUTER JOIN                      |        |1       |18          |
-|8 |          ├─EXCHANGE IN DISTR                  |        |1       |11          |
-|9 |          │ └─EXCHANGE OUT DISTR (PKEY)        |:EX10001|1       |10          |
-|10|          │   └─SUBPLAN SCAN                   |VIEW1   |1       |9           |
-|11|          │     └─LIMIT                        |        |1       |9           |
-|12|          │       └─EXCHANGE IN DISTR          |        |1       |9           |
-|13|          │         └─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
-|14|          │           └─LIMIT                  |        |1       |7           |
-|15|          │             └─PX PARTITION ITERATOR|        |1       |7           |
-|16|          │               └─TABLE FULL SCAN    |a       |1       |7           |
-|17|          └─PX PARTITION ITERATOR              |        |1       |7           |
-|18|            └─TABLE FULL SCAN                  |b       |1       |7           |
-===================================================================================
+=================================================================================
+|ID|OPERATOR                                     |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------------
+|0 |LIMIT                                        |        |1       |30          |
+|1 |└─PX COORDINATOR                             |        |1       |30          |
+|2 |  └─EXCHANGE OUT DISTR                       |:EX10002|1       |29          |
+|3 |    └─LIMIT                                  |        |1       |24          |
+|4 |      └─HASH OUTER JOIN                      |        |1       |24          |
+|5 |        ├─EXCHANGE IN DISTR                  |        |1       |11          |
+|6 |        │ └─EXCHANGE OUT DISTR (PKEY)        |:EX10001|1       |10          |
+|7 |        │   └─SUBPLAN SCAN                   |VIEW1   |1       |9           |
+|8 |        │     └─LIMIT                        |        |1       |9           |
+|9 |        │       └─EXCHANGE IN DISTR          |        |1       |9           |
+|10|        │         └─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
+|11|        │           └─LIMIT                  |        |1       |7           |
+|12|        │             └─PX PARTITION ITERATOR|        |1       |7           |
+|13|        │               └─TABLE FULL SCAN    |a       |1       |7           |
+|14|        └─PX PARTITION ITERATOR              |        |1       |14          |
+|15|          └─HASH RIGHT OUTER JOIN            |        |1       |14          |
+|16|            ├─TABLE FULL SCAN                |c       |1       |7           |
+|17|            └─TABLE FULL SCAN                |b       |1       |7           |
+=================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
@@ -1597,36 +1596,34 @@ Outputs & filters:
   3 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       limit(100), offset(nil)
   4 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      equal_conds([b.c1 = c.c1], [b.c3 = c.c3]), other_conds(nil)
-  5 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      affinitize, partition wise, force partition granule
-  6 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      access([c.c1], [c.c2], [c.c3], [c.c4]), partitions(p0sp[0-2])
-      is_index_back=false, is_global_index=false, 
-      range_key([c.c1], [c.c2], [c.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  7 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       equal_conds([VIEW1.a.c1 = b.c1], [VIEW1.a.c3 = b.c3]), other_conds(nil)
-  8 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
-  9 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
+  5 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
+  6 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
       (#keys=1, [VIEW1.a.c3]), is_single, dop=1
- 10 - output([VIEW1.a.c1], [VIEW1.a.c3], [VIEW1.a.c2], [VIEW1.a.c4]), filter(nil), rowset=16
+  7 - output([VIEW1.a.c1], [VIEW1.a.c3], [VIEW1.a.c2], [VIEW1.a.c4]), filter(nil), rowset=16
       access([VIEW1.a.c1], [VIEW1.a.c3], [VIEW1.a.c2], [VIEW1.a.c4])
+  8 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
+      limit(100), offset(nil)
+  9 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
+ 10 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
+      dop=1
  11 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
       limit(100), offset(nil)
- 12 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
- 13 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
-      dop=1
- 14 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
-      limit(100), offset(nil)
- 15 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+ 12 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
       force partition granule
- 16 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+ 13 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
       access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
       limit(100), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
- 17 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+ 14 - output([b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
- 18 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+ 15 - output([b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+      equal_conds([b.c1 = c.c1], [b.c3 = c.c3]), other_conds(nil)
+ 16 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+      access([c.c1], [c.c2], [c.c3], [c.c4]), partitions(p0sp[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([c.c1], [c.c2], [c.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 17 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([b.c1], [b.c2], [b.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true

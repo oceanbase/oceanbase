@@ -647,6 +647,7 @@ int ObTransformMVRewrite::check_join_compatibility(MvRewriteHelper &helper,
     ObSEArray<ObSEArray<ObRawExpr*,4>, 8> query_baserel_filters;
     ObSEArray<ObRelIds, 8> bushy_tree_infos;
     ObSEArray<ObRawExpr*, 4> new_or_quals;
+    ObSEArray<ObRawExpr*, 1> fake_push_subq_exprs;
     ObSEArray<TableDependInfo, 1> fake_depend_info; // WARNING query should not have depend info
     ObConflictDetectorGenerator generator(*ctx_->allocator_,
                                           *ctx_->expr_factory_,
@@ -655,6 +656,7 @@ int ObTransformMVRewrite::check_join_compatibility(MvRewriteHelper &helper,
                                           true,  /* should_deduce_conds */
                                           false, /* should_pushdown_const_filters */
                                           fake_depend_info,
+                                          fake_push_subq_exprs,
                                           bushy_tree_infos,
                                           new_or_quals);
     STOP_OPT_TRACE;

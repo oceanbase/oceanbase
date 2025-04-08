@@ -57,6 +57,134 @@ int OptSelectivityCtx::get_ambient_card(const uint64_t table_id, double &table_a
   return ret;
 }
 
+int OptSelectivityCtx::ExprDeduceInfo::assign(const ExprDeduceInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(antecedent_.assign(other.antecedent_)) ||
+      OB_FAIL(consequence_.assign(other.consequence_))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
+}
+
+int OptSelectivityCtx::ExprDeduceInfo::add_antecedent(ObIArray<ObRawExpr *> &exprs)
+{
+  return ObOptimizerUtil::append_exprs_no_dup(antecedent_, exprs);
+}
+
+int OptSelectivityCtx::ExprDeduceInfo::add_consequence(ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i ++) {
+    if (ObOptimizerUtil::find_equal_expr(antecedent_, exprs.at(i))) {
+      // do nothing
+    } else if (OB_FAIL(consequence_.push_back(exprs.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int OptSelectivityCtx::init_deduce_infos(AccessPath *path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(path) || OB_ISNULL(path->parent_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    const ObIArray<ObJoinOrder::DeducedExprInfo> &prefix_deduce_info = path->parent_->get_deduce_info();
+    ExprDeduceInfo *deduce_info = NULL;
+    /**
+     * all range filters => real range filters => precise range filters
+     * e.g. for index (c1,c2) and filters `c1 = 1`, `(c2,c3) in ((1,1), (2,2))`
+     *      precise range filters: `c1 = 1`
+     *      unprecise range filters : `(c2,c3) in ((1,1), (2,2))`
+     *      real range filters: `c1 = 1` and `c2 in (1,2)`
+     *      deduce infos:
+     *      `c1 = 1 and (c2,c3) in ((1,1), (2,2))` => `c1 = 1 and c2 in (1,2)` => `c1 = 1`
+     */
+    if (OB_SUCC(ret) && !path->est_cost_info_.real_range_exprs_.empty() &&
+        (!path->est_cost_info_.prefix_filters_.empty() || !path->est_cost_info_.pushdown_prefix_filters_.empty())) {
+      if (OB_ISNULL(deduce_info = deduce_infos_.alloc_place_holder())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failted to allocated", K(ret));
+      } else if (OB_FAIL(deduce_info->add_antecedent(path->est_cost_info_.precise_range_filters_)) ||
+                 OB_FAIL(deduce_info->add_antecedent(path->est_cost_info_.unprecise_range_filters_))) {
+        LOG_WARN("failed to add antecedent", K(ret));
+      } else if (OB_FAIL(deduce_info->add_consequence(path->est_cost_info_.prefix_filters_)) ||
+                 OB_FAIL(deduce_info->add_consequence(path->est_cost_info_.pushdown_prefix_filters_))) {
+        LOG_WARN("failed to add consequence", K(ret));
+      } else if (OB_UNLIKELY(deduce_info->antecedent_.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected deduce info", K(ret), K(path->est_cost_info_));
+        deduce_infos_.pop_back();
+      } else if (deduce_info->consequence_.empty()) {
+        deduce_infos_.pop_back();
+      } else {
+        LOG_TRACE("succeed to add deduce info for selectivity calculation", KPC(deduce_info));
+        OPT_TRACE("succeed to add deduce info for selectivity calculation");
+        OPT_TRACE_BEGIN_SECTION;
+        OPT_TRACE("antecedent:", deduce_info->antecedent_);
+        OPT_TRACE("consequence:", deduce_info->consequence_);
+        OPT_TRACE_END_SECTION;
+      }
+    }
+    if (OB_SUCC(ret) && !path->est_cost_info_.real_range_exprs_.empty() &&
+        !path->est_cost_info_.precise_range_filters_.empty()) {
+      if (OB_ISNULL(deduce_info = deduce_infos_.alloc_place_holder())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failted to allocated", K(ret));
+      } else if (OB_FAIL(deduce_info->add_antecedent(path->est_cost_info_.real_range_exprs_))) {
+        LOG_WARN("failed to add antecedent", K(ret));
+      } else if (OB_FAIL(deduce_info->add_consequence(path->est_cost_info_.precise_range_filters_))) {
+        LOG_WARN("failed to add consequence", K(ret));
+      } else if (OB_UNLIKELY(deduce_info->antecedent_.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected deduce info", K(ret), K(path->est_cost_info_));
+        deduce_infos_.pop_back();
+      } else if (deduce_info->consequence_.empty()) {
+        deduce_infos_.pop_back();
+      } else {
+        LOG_TRACE("succeed to add deduce info for selectivity calculation", KPC(deduce_info));
+        OPT_TRACE("succeed to add deduce info for selectivity calculation");
+        OPT_TRACE_BEGIN_SECTION;
+        OPT_TRACE("antecedent:", deduce_info->antecedent_);
+        OPT_TRACE("consequence:", deduce_info->consequence_);
+        OPT_TRACE_END_SECTION;
+      }
+    }
+
+    /**
+     * deduce info given by string prefix index
+     * e.g. for index (c1(2)) and filters `c1 = '12345'`
+     *      deduce info : `c1 = '12345'` => `substr(c1, 1, 2) = '12'`
+     */
+    for (int64_t i = 0; OB_SUCC(ret) && i < prefix_deduce_info.count(); i ++) {
+      const ObRawExpr *from_expr = prefix_deduce_info.at(i).deduced_from_expr_;
+      const ObRawExpr *to_expr = prefix_deduce_info.at(i).deduced_expr_;
+      if (OB_ISNULL(deduce_info = deduce_infos_.alloc_place_holder())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failted to allocated", K(ret));
+      } else if (OB_ISNULL(from_expr) || OB_ISNULL(to_expr) ||
+                 OB_UNLIKELY(from_expr->same_as(*to_expr))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected deduce info", KPC(from_expr), KPC(to_expr));
+      } else if (OB_FAIL(deduce_info->antecedent_.push_back(prefix_deduce_info.at(i).deduced_from_expr_)) ||
+                 OB_FAIL(deduce_info->consequence_.push_back(prefix_deduce_info.at(i).deduced_expr_))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        LOG_TRACE("succeed to add deduce info for selectivity calculation", KPC(deduce_info));
+        OPT_TRACE("succeed to add deduce info for selectivity calculation");
+        OPT_TRACE_BEGIN_SECTION;
+        OPT_TRACE("antecedent:", deduce_info->antecedent_);
+        OPT_TRACE("consequence:", deduce_info->consequence_);
+        OPT_TRACE_END_SECTION;
+      }
+    }
+  }
+  return ret;
+}
+
 ObEstCorrelationModel &ObIndependentModel::get_model()
 {
   static ObIndependentModel model;
@@ -942,7 +1070,7 @@ double OptTableMetas::get_base_rows(const uint64_t table_id) const
 int ObOptSelectivity::calculate_conditional_selectivity(const OptTableMetas &table_metas,
                                                         const OptSelectivityCtx &ctx,
                                                         common::ObIArray<ObRawExpr *> &total_filters,
-                                                        common::ObIArray<ObRawExpr *> &append_filters,
+                                                        const common::ObIArray<ObRawExpr *> &append_filters,
                                                         double &total_sel,
                                                         double &conditional_sel,
                                                         ObIArray<ObExprSelPair> &all_predicate_sel)
@@ -1032,7 +1160,7 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
 
 int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
                                             const OptSelectivityCtx &ctx,
-                                            const ObIArray<ObRawExpr*> &predicates,
+                                            const ObIArray<ObRawExpr*> &input_predicates,
                                             double &selectivity,
                                             ObIArray<ObExprSelPair> &all_predicate_sel)
 {
@@ -1040,12 +1168,28 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
   selectivity = 1.0;
   ObSEArray<ObSelEstimator *, 4> sel_estimators;
   ObSEArray<double, 4> selectivities;
+  ObSEArray<ObRawExpr *, 4> predicates;
   ObSelEstimatorFactory factory;
   if (OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(predicates, input_predicates))) {
+    LOG_WARN("failed to assign", K(ret));
   } else {
     factory.get_allocator().set_tenant_id(ctx.get_session_info()->get_effective_tenant_id());
+  }
+  // remove redundant predicates
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx.get_deduce_infos().count(); i ++) {
+    const ObIArray<ObRawExpr *> &antecedent = ctx.get_deduce_infos().at(i).antecedent_;
+    const ObIArray<ObRawExpr *> &consequence = ctx.get_deduce_infos().at(i).consequence_;
+    if (OB_SUCCESS != (OB_E(EventTable::EN_CHECK_OPERATOR_OUTPUT_ROWS) OB_SUCCESS) &&
+        OB_UNLIKELY(ObOptimizerUtil::overlap_exprs(antecedent, consequence))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("antecedent should not overlap consequence", K(ctx.get_deduce_infos().at(i)));
+    } else if (ObOptimizerUtil::subset_exprs(antecedent, predicates) &&
+        OB_FAIL(ObOptimizerUtil::except_exprs(predicates, consequence, predicates))) {
+      LOG_WARN("failed to except exprs", K(ret));
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
     const ObRawExpr *qual = predicates.at(i);
@@ -1379,7 +1523,7 @@ int ObOptSelectivity::add_valid_ds_qual(const ObRawExpr *qual,
   bool no_use = false;
   if (OB_FAIL(quals.push_back(const_cast<ObRawExpr*>(qual)))) {
     LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_use_filters(quals, no_use))) {
+  } else if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_be_applied_to_filters(quals, no_use))) {
     LOG_WARN("failed to check ds can use filters", K(ret));
   } else if (no_use) {
     //do nothing
@@ -3363,6 +3507,8 @@ int ObOptSelectivity::check_is_special_distinct_expr(const OptSelectivityCtx &ct
     } else if (OB_FAIL(ObObjCaster::is_cast_monotonic(param_expr->get_data_type(), expr->get_data_type(), is_special))) {
       LOG_WARN("check cast monotonic error", KPC(expr), K(ret));
     }
+  } else if (T_FUN_SYS_CALC_UROWID == expr->get_expr_type()) {
+    is_special = true;
   }
   return ret;
 }
@@ -3470,6 +3616,9 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
   } else if (T_FUN_SYS_DAY_NAME == expr->get_expr_type()) {
     special_ndv = 7;
     param_expr = expr->get_param_expr(0);
+  } else if (T_FUN_SYS_CALC_UROWID == expr->get_expr_type()) {
+    special_ndv = origin_rows;
+    need_refine_by_param_expr = false;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected special expr", KPC(expr));
@@ -4257,7 +4406,7 @@ int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
 //              ctx.get_join_type() != RIGHT_OUTER_JOIN &&
 //              ctx.get_join_type() != FULL_OUTER_JOIN) {
 //     //now dynamic sampling just for inner join and outer join
-//   } else if (ObAccessPathEstimation::check_ds_can_use_filters(predicates, tmp_raw_exprs, no_use)) {
+//   } else if (ObAccessPathEstimation::check_ds_can_be_applied_to_filters(predicates, tmp_raw_exprs, no_use)) {
 //     LOG_WARN("failed to check ds can use filters", K(ret));
 //   } else if (no_use || predicates.empty()) {
 //     //do nothing

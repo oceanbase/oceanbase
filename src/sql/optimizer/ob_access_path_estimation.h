@@ -136,6 +136,11 @@ private:
     return ret;
   }
 
+  static bool need_ds_basic_stat(const OptTableMeta &table_meta)
+  {
+    return (!table_meta.use_opt_stat() || table_meta.is_opt_stat_expired()) && !table_meta.is_stat_locked();
+  }
+
   static int get_valid_est_methods(ObOptimizerContext &ctx,
                                    common::ObIArray<AccessPath*> &paths,
                                    const ObIArray<ObRawExpr*> &filter_exprs,
@@ -369,6 +374,11 @@ private:
   static int estimate_path_rowcount_by_dynamic_sampling(const uint64_t table_id,
                                                         ObIArray<AccessPath *> &paths,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
+  static int process_non_ds_filters(const OptTableMetas &table_metas,
+                                    const OptSelectivityCtx &ctx,
+                                    const ObDSResultItem &result_item,
+                                    double &selectivity,
+                                    ObIArray<ObExprSelPair> &all_predicate_sel);
   static int classify_paths(common::ObIArray<AccessPath *> &paths,
                             common::ObIArray<AccessPath *> &normal_paths,
                             common::ObIArray<AccessPath *> &geo_paths,

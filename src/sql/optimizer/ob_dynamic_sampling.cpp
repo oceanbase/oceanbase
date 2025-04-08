@@ -22,6 +22,26 @@ using namespace oceanbase::sql;
 namespace oceanbase {
 namespace common {
 
+int ObDSResultItem::append_exprs(const ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i ++) {
+    bool invalid = false;
+    if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_be_applied_to_filter(exprs.at(i), invalid))) {
+      LOG_WARN("failed to check ds can use filter", K(ret));
+    } else if (invalid) {
+      if (OB_FAIL(non_ds_exprs_.push_back(exprs.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    } else {
+      if (OB_FAIL(exprs_.push_back(exprs.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 template<class T>
 int ObDynamicSampling::add_ds_stat_item(const T &item)
 {
@@ -62,12 +82,15 @@ int ObDynamicSampling::add_ds_result_cache(ObIArray<ObDSResultItem> &ds_result_i
 {
   int ret = OB_SUCCESS;
   int64_t logical_idx = -1;
+  ObQueryCtx *query_ctx = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
     if (OB_ISNULL(ctx_->get_opt_stat_manager()) ||
         OB_UNLIKELY(ds_result_items.at(i).stat_handle_.stat_ != NULL &&
-                    ds_result_items.at(i).stat_ != NULL)) {
+                    ds_result_items.at(i).stat_ != NULL) ||
+        OB_ISNULL(query_ctx = ctx_->get_query_ctx()) ||
+        OB_ISNULL(ctx_->get_session_info())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(ds_result_items.at(i)));
+      LOG_WARN("get unexpected error", K(ret), K(ctx_->get_opt_stat_manager()), K(ctx_->get_query_ctx()), K(ctx_->get_session_info()), K(ds_result_items.at(i)));
     } else if (ds_result_items.at(i).stat_handle_.stat_ != NULL) {//stat from cache
       if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_BASIC_STAT) {
         logical_idx = i;
@@ -84,6 +107,19 @@ int ObDynamicSampling::add_ds_result_cache(ObIArray<ObDSResultItem> &ds_result_i
           LOG_WARN("failed to assign stat handle", K(ret));
         } else {
           ds_result_items.at(i).stat_ = NULL;
+        }
+      } else if (allow_cache_ds_result_to_sql_ctx () &&
+                 ds_result_items.at(i).type_ != ObDSResultItemType::OB_DS_BASIC_STAT) {
+        if (!query_ctx->filter_ds_stat_cache_.created() &&
+            OB_FAIL(query_ctx->filter_ds_stat_cache_.create(
+                20, "OptDSCache", ObModIds::OB_HASH_NODE, ctx_->get_session_info()->get_effective_tenant_id()))) {
+          LOG_WARN("failed to create ds cache map", K(ret));
+        } else if (OB_FAIL(query_ctx->filter_ds_stat_cache_.set_refactored(ds_result_items.at(i).stat_key_,
+                                                                           *ds_result_items.at(i).stat_,
+                                                                           /*overwrite*/1))) {
+          LOG_WARN("failed to add ds stat cache", K(ret));
+        } else {
+          ds_result_items.at(i).stat_handle_.stat_ = ds_result_items.at(i).stat_;
         }
       } else if (OB_FAIL(ctx_->get_opt_stat_manager()->add_ds_stat_cache(ds_result_items.at(i).stat_key_,
                                                                          *ds_result_items.at(i).stat_,
@@ -107,21 +143,29 @@ int ObDynamicSampling::get_ds_stat_items(const ObDSTableParam &param,
                                          ObIArray<ObDSResultItem> &ds_result_items)
 {
   int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(ctx_->get_opt_stat_manager()) ||
       OB_ISNULL(ctx_->get_session_info()) ||
-      OB_ISNULL(ctx_->get_exec_ctx())) {
+      OB_ISNULL(ctx_->get_exec_ctx()) ||
+      OB_ISNULL(query_ctx = ctx_->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx_->get_opt_stat_manager()),
                                     K(ctx_->get_session_info()), K(ctx_->get_exec_ctx()));
   } else {
     int64_t ds_column_cnt = 0;
     bool need_dml_info = false;
+    bool all_hit_cache = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
       ObOptDSStat::Key &key = ds_result_items.at(i).stat_key_;
       ObOptDSStatHandle &handle = ds_result_items.at(i).stat_handle_;
       if (OB_FAIL(construct_ds_stat_key(param, ds_result_items.at(i).type_,
                                         ds_result_items.at(i).exprs_, key))) {
         LOG_WARN("failed to construct ds stat key", K(ret));
+      } else if (allow_cache_ds_result_to_sql_ctx () &&
+                 ds_result_items.at(i).type_ != ObDSResultItemType::OB_DS_BASIC_STAT) {
+        if (query_ctx->filter_ds_stat_cache_.created()) {
+          handle.stat_ = query_ctx->filter_ds_stat_cache_.get(key);
+        }
       } else if (OB_FAIL(ctx_->get_opt_stat_manager()->get_ds_stat(key, handle))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("get ds stat failed", K(ret), K(key), K(param));
@@ -142,12 +186,14 @@ int ObDynamicSampling::get_ds_stat_items(const ObDSTableParam &param,
       } else {
         need_dml_info |= param.degree_ > handle.stat_->get_ds_degree();
       }
+      all_hit_cache &= (handle.stat_ != NULL);
     }
     if (OB_SUCC(ret)) {
-      if (need_dml_info) {
+      if (!all_hit_cache || need_dml_info) {
         int64_t cur_modified_dml_cnt = 0;
         double stale_percent_threshold = OPT_DEFAULT_STALE_PERCENT;
-        if (OB_FAIL(get_table_dml_info(param.tenant_id_, param.table_id_,
+        if (need_dml_info &&
+            OB_FAIL(get_table_dml_info(param.tenant_id_, param.table_id_,
                                        cur_modified_dml_cnt, stale_percent_threshold))) {
           LOG_WARN("failed to get table dml info", K(ret));
         } else if (OB_FAIL(add_ds_stat_items_by_dml_info(param,
@@ -172,9 +218,11 @@ int ObDynamicSampling::add_ds_stat_items_by_dml_info(const ObDSTableParam &param
   int ret = OB_SUCCESS;
   int64_t ds_column_cnt = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
-    bool need_add = ds_result_items.at(i).stat_handle_.stat_ == NULL;
-    bool need_process_col = ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_BASIC_STAT;
-    if (!need_add) {
+    bool hit_cache = ds_result_items.at(i).stat_handle_.stat_ != NULL;
+    bool is_basic_stat = ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_BASIC_STAT;
+    bool need_process_col = is_basic_stat;
+    bool need_add = false;
+    if (hit_cache && is_basic_stat) {
       int64_t origin_modified_count = ds_result_items.at(i).stat_handle_.stat_->get_dml_cnt();
       int64_t inc_modified_cnt = cur_modified_dml_cnt - origin_modified_count;
       origin_modified_count = origin_modified_count < 1 ? 1 : origin_modified_count;
@@ -192,19 +240,21 @@ int ObDynamicSampling::add_ds_stat_items_by_dml_info(const ObDSTableParam &param
           param.degree_ <= ds_result_items.at(i).stat_handle_.stat_->get_ds_degree()) {
         const_cast<ObOptDSStat*>(ds_result_items.at(i).stat_handle_.stat_)->set_stat_expired_time(
                          ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
-      } else if (inc_ratio <= stale_percent_threshold && ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_BASIC_STAT &&
+      } else if (inc_ratio <= stale_percent_threshold && is_basic_stat &&
                  OB_FAIL(ds_result_items.at(i).stat_handle_.stat_->deep_copy(allocator_, ds_result_items.at(i).stat_))) {
         LOG_WARN("failed to deep copy", K(ret));
       } else {
         ds_result_items.at(i).stat_handle_.reset();
         need_add = true;
       }
+    } else {
+      need_add = !hit_cache;
     }
     if (OB_SUCC(ret) && need_process_col) {
       for (int64_t j = 0; j < ds_result_items.at(i).exprs_.count(); ++j) {
         if (ds_result_items.at(i).exprs_.at(j) != NULL &&
             ds_result_items.at(i).exprs_.at(j)->is_column_ref_expr() &&
-            ObColumnStatParam::is_valid_opt_col_type(ds_result_items.at(i).exprs_.at(j)->get_data_type())) {
+            ObDynamicSamplingUtils::is_valid_ds_col_type(ds_result_items.at(i).exprs_.at(j)->get_data_type())) {
           ++ ds_column_cnt;
         }
       }
@@ -320,7 +370,7 @@ int ObDynamicSampling::add_ds_col_stat_item(const ObDSTableParam &param,
           }
         }
         if (!found_it) {
-          if (!ObColumnStatParam::is_valid_opt_col_type(col_expr->get_data_type())) {
+          if (!ObDynamicSamplingUtils::is_valid_ds_col_type(col_expr->get_data_type())) {
             //do nothing, only ds fulfill with column stats type.
           } else if (OB_FAIL(add_ds_stat_item(ObDSStatItem(&result_item,
                                                            tmp_str,
@@ -1292,7 +1342,7 @@ bool ObDynamicSampling::all_ds_col_stats_are_gathered(const ObDSTableParam &para
       }
     }
     if (!found_it && column_exprs.at(i) != NULL && column_exprs.at(i)->is_column_ref_expr() &&
-        ObColumnStatParam::is_valid_opt_col_type(column_exprs.at(i)->get_data_type())) {
+        ObDynamicSamplingUtils::is_valid_ds_col_type(column_exprs.at(i)->get_data_type())) {
       ++ ds_column_cnt;
       res = false;
     }
@@ -1342,6 +1392,11 @@ int ObDynamicSampling::add_table_clause(ObSqlString &table_str)
     table_clause_ = table_str.string();
   }
   return ret;
+}
+
+bool ObDynamicSampling::allow_cache_ds_result_to_sql_ctx () const {
+  return OB_NOT_NULL(ctx_) && OB_NOT_NULL(ctx_->get_query_ctx()) &&
+         ctx_->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
 }
 
 int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
@@ -1441,7 +1496,7 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
   return ret;
 }
 
-int ObDynamicSamplingUtils::check_ds_can_use_filters(const ObIArray<ObRawExpr*> &filters,
+int ObDynamicSamplingUtils::check_ds_can_be_applied_to_filters(const ObIArray<ObRawExpr*> &filters,
                                                      bool &no_use)
 {
   int ret = OB_SUCCESS;
@@ -1451,14 +1506,14 @@ int ObDynamicSamplingUtils::check_ds_can_use_filters(const ObIArray<ObRawExpr*> 
     if (OB_ISNULL(filters.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(filters.at(i)));
-    } else if (OB_FAIL(check_ds_can_use_filter(filters.at(i), no_use, total_expr_cnt))) {
+    } else if (OB_FAIL(check_ds_can_be_applied_to_filter(filters.at(i), no_use, total_expr_cnt))) {
       LOG_WARN("failed to check ds can use filter", K(ret));
     }
   }
   return ret;
 }
 
-int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
+int ObDynamicSamplingUtils::check_ds_can_be_applied_to_filter(const ObRawExpr *filter,
                                                     bool &no_use,
                                                     int64_t &total_expr_cnt)
 {
@@ -1496,10 +1551,7 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
   } else if (filter->is_column_ref_expr()) {
     //Dynamic Sampling of columns with LOB-related types is prohibited, as projecting such type columns is particularly slow.
     //bug:
-    if (!ObColumnStatParam::is_valid_opt_col_type(filter->get_data_type())) {
-      no_use = true;
-    } else if (ob_obj_type_class(filter->get_data_type()) == ColumnTypeClass::ObTextTC &&
-               filter->get_data_type() != ObTinyTextType) {
+    if (!ObDynamicSamplingUtils::is_valid_ds_col_type(filter->get_data_type())) {
       no_use = true;
     }
   } else {/*do nothing*/}
@@ -1507,12 +1559,19 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
     ++ total_expr_cnt;
     no_use = total_expr_cnt > OB_DS_MAX_FILTER_EXPR_COUNT;
     for (int64_t i = 0; !no_use && OB_SUCC(ret) && i < filter->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(check_ds_can_use_filter(filter->get_param_expr(i), no_use, total_expr_cnt)))) {
+      if (OB_FAIL(SMART_CALL(check_ds_can_be_applied_to_filter(filter->get_param_expr(i), no_use, total_expr_cnt)))) {
         LOG_WARN("failed to check ds can use filter", K(ret));
       }
     }
   }
   return ret;
+}
+
+int ObDynamicSamplingUtils::check_ds_can_be_applied_to_filter(const ObRawExpr *filter,
+                                                    bool &no_use)
+{
+  int64_t dummy = 0;
+  return check_ds_can_be_applied_to_filter(filter, no_use, dummy);
 }
 
 int ObDynamicSamplingUtils::get_ds_table_part_info(ObOptimizerContext &ctx,
@@ -1711,6 +1770,18 @@ bool ObDynamicSamplingUtils::is_ds_virtual_table(const int64_t table_id)
           table_id == share::OB_ALL_VIRTUAL_DATA_TYPE_ORA_TID ||
           table_id == share::OB_ALL_VIRTUAL_TENANT_INFO_ORA_TID ||
           table_id == share::OB_TENANT_VIRTUAL_COLLATION_ORA_TID);
+}
+
+bool ObDynamicSamplingUtils::is_valid_ds_col_type(const ObObjType type)
+{
+  bool bret = true;
+  if (!ObColumnStatParam::is_valid_opt_col_type(type)) {
+    bret = false;
+  } else if (ob_obj_type_class(type) == ColumnTypeClass::ObTextTC &&
+             type != ObTinyTextType) {
+    bret = false;
+  }
+  return bret;
 }
 
 //following function used to dynamic sampling join in the future.

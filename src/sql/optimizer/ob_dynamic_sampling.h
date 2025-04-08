@@ -112,6 +112,7 @@ struct ObDSResultItem
     type_(OB_DS_INVALID_STAT),
     index_id_(OB_INVALID_ID),
     exprs_(),
+    non_ds_exprs_(),
     stat_key_(),
     stat_handle_(),
     stat_(NULL)
@@ -120,6 +121,7 @@ struct ObDSResultItem
     type_(type),
     index_id_(index_id),
     exprs_(),
+    non_ds_exprs_(),
     stat_key_(),
     stat_handle_(),
     stat_(NULL)
@@ -151,12 +153,16 @@ struct ObDSResultItem
   TO_STRING_KV(K(type_),
                K(index_id_),
                K(exprs_),
+               K(non_ds_exprs_),
                K(stat_key_),
                KPC(stat_handle_.stat_),
                KPC(stat_));
+  int append_exprs(const ObIArray<ObRawExpr *> &exprs);
+
   ObDSResultItemType type_;
   uint64_t index_id_;
   ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> exprs_;
+  ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> non_ds_exprs_;
   ObOptDSStat::Key stat_key_;
   ObOptDSStatHandle stat_handle_;
   ObOptDSStat *stat_;
@@ -348,6 +354,7 @@ private:
                       bool is_no_backslash_escapes,
                       transaction::ObTxDesc *tx_desc);
   int add_table_clause(ObSqlString &table_str);
+  bool allow_cache_ds_result_to_sql_ctx () const;
 
 private:
   ObOptimizerContext *ctx_;
@@ -393,8 +400,15 @@ public:
                                 ObDSTableParam &ds_table_param,
                                 bool &specify_ds);
 
-  static int check_ds_can_use_filters(const ObIArray<ObRawExpr*> &filters,
+  static int check_ds_can_be_applied_to_filters(const ObIArray<ObRawExpr*> &filters,
                                       bool &no_use);
+
+  static int check_ds_can_be_applied_to_filter(const ObRawExpr *filter,
+                                     bool &no_use,
+                                     int64_t &total_expr_cnt);
+
+  static int check_ds_can_be_applied_to_filter(const ObRawExpr *filter,
+                                     bool &no_use);
 
   static const ObDSResultItem *get_ds_result_item(ObDSResultItemType type,
                                                   uint64_t index_id,
@@ -418,10 +432,9 @@ public:
                                        const common::ObIArray<int64_t> &used_part_id,
                                        const common::ObIArray<ObDSFailTabInfo> &failed_list);
 
+  static bool is_valid_ds_col_type(const ObObjType type);
+
 private:
-  static int check_ds_can_use_filter(const ObRawExpr *filter,
-                                     bool &no_use,
-                                     int64_t &total_expr_cnt);
 
   static int get_ds_table_part_info(ObOptimizerContext &ctx,
                                     const uint64_t ref_table_id,

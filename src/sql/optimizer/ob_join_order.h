@@ -2262,8 +2262,6 @@ struct NullAwareAntiJoinInfo {
                           const bool has_non_nl_path,
                           const bool has_equal_cond);
 
-    int create_plan_for_inner_path(Path *path);
-
     int create_subplan_filter_for_join_path(Path *path,
                                             ObIArray<ObRawExpr*> &subquery_filters);
 
@@ -2566,6 +2564,8 @@ struct NullAwareAntiJoinInfo {
     ObIArray<double> &get_ambient_card() { return ambient_card_; }
     const ObIArray<double> &get_ambient_card() const { return ambient_card_; }
 
+    const ObIArray<DeducedExprInfo> &get_deduce_info() const { return deduced_exprs_info_; }
+
     int64_t get_name(char *buf, const int64_t buf_len)
     {
       int64_t pos = 0;
@@ -2596,6 +2596,8 @@ struct NullAwareAntiJoinInfo {
                            const common::ObIArray<ObRawExpr*> *range_exprs,
                            const common::ObIArray<ObRawExpr*> *unprecise_range_exprs,
                            PathHelper &helper);
+
+    int classify_path_filters(PathHelper &helper);
 
     int set_nl_filters(JoinPath *join_path,
                        const Path *right_path,
@@ -2754,19 +2756,31 @@ struct NullAwareAntiJoinInfo {
                                            ObIArray<AccessPath *> &access_paths);
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
+    int create_plan_for_path_with_subq(Path *path);
+    int create_plan_tree_from_access_paths(ObIArray<AccessPath*> &access_paths);
     int fill_filters(const common::ObIArray<ObRawExpr *> &all_filters,
                      const ObQueryRangeProvider* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
                      const DomainIndexAccessInfo &tr_idx_info,
                      bool &is_nl_with_extended_range,
-                     bool is_link = false,
-                     bool use_skip_scan = false);
+                     bool is_link,
+                     bool use_skip_scan,
+                     const int64_t index_prefix);
 
     int can_extract_unprecise_range(const uint64_t table_id,
                                     const ObRawExpr *filter,
                                     const ObIArray<uint64_t> &prefix_column_ids,
                                     const ObIArray<ObRawExpr*> &unprecise_exprs,
                                     bool &can_extract);
+
+    int can_extract_unprecise_range_v2(const uint64_t table_id,
+                                       const ObRawExpr *filter,
+                                       const ObIArray<uint64_t> &prefix_column_ids,
+                                       const ObIArray<ObRawExpr*> &unprecise_exprs,
+                                       bool &can_extract,
+                                       bool &is_dynamic,
+                                       bool is_top_filter = true,
+                                       ObIArray<uint64_t> *equal_column_ids = NULL);
 
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
                                           const bool is_inner_path,

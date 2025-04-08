@@ -2454,7 +2454,15 @@ int ObLogTableScan::print_range_annotation(char *buf,
     }
 
     if (OB_SUCC(ret)) {
-      if (!range_conds_.empty()) {
+      if (OB_NOT_NULL(est_cost_info_) && !est_cost_info_->real_range_exprs_.empty()) {
+        const ObIArray<ObRawExpr*> &range_cond = est_cost_info_->real_range_exprs_;
+        if (OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("BUF_PRINTF fails", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+          LOG_WARN("BUF_PRINTF fails", K(ret));
+        }
+        EXPLAIN_PRINT_EXPRS(range_cond, type);
+      } else if (!range_conds_.empty()) {
         //print range condition
         const ObIArray<ObRawExpr*> &range_cond = range_conds_;
         if (OB_FAIL(BUF_PRINTF(", "))) {

@@ -1371,15 +1371,6 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
   //一对多的关系,那么!f1的关系是多对一的关系，而query range的抽取规则是一一映射的关系，任何一个属于集合A的元素
   //a都能唯一确定出一个值b在集合B中使表达式成立，因此第四种情况也是能够通过抽取规则抽取的
   //其它情况下的f1也都是一一映射关系，集合A=集合B，因此也能够使用抽取规则
-  if (T_OP_NSEQ == cmp_type && ObNullType == data_type) {
-    bret = true;
-  }
-  if (bret && T_OP_NSEQ != cmp_type && ObNullType == data_type) {
-    //pk cmp null
-    bret = false;
-    //视作恒false处理
-    always_true = false;
-  }
   if (bret && T_OP_LIKE == cmp_type) {
     //只对string like string的形式进行抽取
     if ((! col_type.is_string_or_lob_locator_type())

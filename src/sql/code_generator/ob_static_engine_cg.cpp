@@ -7380,26 +7380,19 @@ int ObStaticEngineCG::generate_spec(
     } else {
       ObFixedArray<ObExpr *, ObIAllocator> cache_vec(phy_plan_->get_allocator());
       for (int64_t child_idx = 1; OB_SUCC(ret) && child_idx < spec.get_child_cnt(); ++child_idx) {
-        SubPlanInfo *sp_info = nullptr;
-        ObLogicalOperator *curr_child = nullptr;
-        if (OB_ISNULL(curr_child = op.get_child(child_idx))
-              || OB_ISNULL(curr_child->get_stmt())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get subplan filter child", K(child_idx), K(ret));
-        } else if (OB_FAIL(op.get_plan()->get_subplan(curr_child->get_stmt(), sp_info))) {
-          LOG_WARN("failed to get subplan info for this child", K(ret), K(child_idx));
-        } else if (OB_ISNULL(sp_info) || OB_ISNULL(sp_info->init_expr_)) {
+        const ObQueryRefRawExpr *subquery_expr = NULL;
+        if (OB_ISNULL(subquery_expr = op.get_subquery_expr(child_idx - 1))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sp info is invalid", K(ret), K(sp_info));
+          LOG_WARN("get unexpected null subquery expr", K(ret), K(child_idx));
         } else {
           cache_vec.reset();
-          if (OB_FAIL(cache_vec.init(sp_info->init_expr_->get_param_count()))) {
+          if (OB_FAIL(cache_vec.init(subquery_expr->get_param_count()))) {
             LOG_WARN("failed to init tmp_vec", K(ret));
-          } else if (!sp_info->init_expr_->is_deterministic()) {
+          } else if (!subquery_expr->is_deterministic()) {
             is_all_subquery_deterministic = false;
           }
-          for (int64_t j = 0; OB_SUCC(ret) && j < sp_info->init_expr_->get_param_count(); ++j) {
-            ObExecParamRawExpr *exec_param = sp_info->init_expr_->get_exec_param(j);
+          for (int64_t j = 0; OB_SUCC(ret) && j < subquery_expr->get_param_count(); ++j) {
+            const ObExecParamRawExpr *exec_param = subquery_expr->get_exec_param(j);
             ObExpr *rt_expr = nullptr;
             CK(nullptr != exec_param);
             //OX(rt_expr = ObStaticEngineExprCG::get_rt_expr(*param_expr));

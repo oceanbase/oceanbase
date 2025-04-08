@@ -3415,7 +3415,11 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       }
       case T_FUN_SYS_CALC_UROWID: {
         ObColumnRefRawExpr *sub_pk_expr = NULL;
-        if (OB_UNLIKELY(expr->get_param_count() < 2)
+        if (expr->get_param_count() == 1 && OB_NOT_NULL(expr->get_param_expr(0)) &&
+            expr->get_param_expr(0)->is_column_ref_expr()) {
+          // CALC_UROWID(sub_pk_expr)
+          sub_pk_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+        } else if (OB_UNLIKELY(expr->get_param_count() < 2)
             || OB_ISNULL(expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param of expr to type", K(ret), KPC(expr));

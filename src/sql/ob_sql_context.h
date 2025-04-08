@@ -27,6 +27,7 @@
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/monitor/ob_sql_stat_record.h"
+#include "share/stat/ob_opt_ds_stat_cache.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
@@ -843,6 +844,7 @@ public:
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
     ori_question_marks_count_ = 0;
+    filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
   }
 
@@ -956,6 +958,7 @@ public:
   bool injected_random_status_;
   ObRandom rand_gen_;
   int64_t ori_question_marks_count_;
+  common::hash::ObHashMap<ObOptDSStat::Key, ObOptDSStat, common::hash::NoPthreadDefendMode> filter_ds_stat_cache_;
   union {
     int8_t type_demotion_flag_;
     struct {

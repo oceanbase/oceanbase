@@ -396,7 +396,7 @@ int ObLogExchange::compute_op_parallel_and_server_info()
     } else { /*do nothing*/ }
   } else if (is_pq_local()) {
     set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
-    set_available_parallel(child->get_parallel());
+    set_available_parallel(child->get_available_parallel());
     set_server_cnt(1);
     static_cast<ObLogExchange*>(child)->set_in_server_cnt(1);
     get_server_list().reuse();
@@ -429,8 +429,10 @@ int ObLogExchange::compute_op_parallel_and_server_info()
         LOG_WARN("get unexpected exchange above match all sharding", K(ret));
       } else if (child->is_single()) {
         set_parallel(child->get_available_parallel());
+        set_available_parallel(child->get_available_parallel());
       } else {
         set_parallel(child->get_parallel());
+        set_available_parallel(child->get_available_parallel());
       }
     }
   }

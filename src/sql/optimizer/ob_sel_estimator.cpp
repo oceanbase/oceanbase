@@ -1790,6 +1790,7 @@ int ObBoolOpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
   int ret = OB_SUCCESS;
   estimator = NULL;
   ObBoolOpSelEstimator *bool_estimator = NULL;
+  ObSEArray<ObRawExpr *, 4> exprs;
   if (T_OP_NOT != expr.get_expr_type() &&
       T_OP_AND != expr.get_expr_type() &&
       T_OP_OR != expr.get_expr_type() &&
@@ -1807,8 +1808,12 @@ int ObBoolOpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
       if (OB_ISNULL(child_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null expr", K(ret));
+      } else if (ObOptimizerUtil::find_equal_expr(exprs, child_expr)) {
+        // do nothing
       } else if (OB_FAIL(SMART_CALL(factory.create_estimator(ctx, child_expr, child_estimator)))) {
         LOG_WARN("failed to create estimator", KPC(child_expr));
+      } else if (OB_FAIL(exprs.push_back(const_cast<ObRawExpr *>(child_expr)))) {
+        LOG_WARN("failed to push back", K(ret));
       } else {
         if (T_OP_AND == expr.get_expr_type()) {
           if (OB_FAIL(append_estimators(bool_estimator->child_estimators_, child_estimator))) {
@@ -3341,7 +3346,7 @@ int ObUniformRangeSelEstimator::get_sel(const OptTableMetas &table_metas,
     if (is_not_op_) {
       selectivity = 1 - selectivity;
     }
-    selectivity = std::max(selectivity, 1.0 / ndv);
+    selectivity = std::max(selectivity, 1.0 / std::max(1.0, ndv));
     selectivity *= not_null_sel;
   }
   LOG_DEBUG("succeed to calculate uniform range sel",

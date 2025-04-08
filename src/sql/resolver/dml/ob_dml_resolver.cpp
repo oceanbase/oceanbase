@@ -8594,17 +8594,39 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode &node, ObIArray<Ob
 {
   int ret = OB_SUCCESS;
   ObRawExpr *expr = NULL;
+  const ParseNode *merged_node = &node;
   // where condition will be canonicalized, all continous AND will be merged
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("dml resolve not init", K_(params_.expr_factory), K_(session_info));
-  } else if (node.type_ != T_OP_AND) {
+  } else if (T_OP_AND == node.type_) {
+    // here we only try to merge inlists for top-level AND node
+    // other AND/OR node will be processed in do_recursive_resolve()
+    ObExprResolveContext ctx(*params_.expr_factory_,
+                             session_info_->get_timezone_info(),
+                             OB_NAME_CASE_INVALID);
+    ctx.param_list_ = params_.param_list_;
+    ctx.current_scope_ = current_scope_;
+    ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
+    ctx.session_info_ = session_info_;
+    ctx.secondary_namespace_ = params_.secondary_namespace_;
+    ctx.query_ctx_ = params_.query_ctx_;
+    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
+    if (OB_FAIL(ObInListResolver::try_merge_inlists(ctx, true, &node, merged_node))) {
+      LOG_WARN("fail to merge inlist", K(ret));
+    } else if (OB_ISNULL(merged_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null node", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (merged_node->type_ != T_OP_AND) {
     ObExprResolveContext ctx(*params_.expr_factory_, session_info_->get_timezone_info(),
                              OB_NAME_CASE_INVALID);
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.query_ctx_ = params_.query_ctx_;
     ctx.session_info_ = params_.session_info_;
-    if (OB_FAIL(resolve_sql_expr(node, expr))) {
+    if (OB_FAIL(resolve_sql_expr(*merged_node, expr))) {
       LOG_WARN("resolve sql expr failed", K(ret));
     } else if (OB_FAIL(expr->formalize(session_info_))) {
       LOG_WARN("failed to formalize expr", K(ret));
@@ -8613,8 +8635,8 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode &node, ObIArray<Ob
       LOG_WARN("fail to flatten_expr", K(ret));
     }
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < node.num_child_; i++) {
-      if (OB_FAIL(SMART_CALL(resolve_and_split_sql_expr(*(node.children_[i]), and_exprs)))) {
+    for (int i = 0; OB_SUCC(ret) && i < merged_node->num_child_; i++) {
+      if (OB_FAIL(SMART_CALL(resolve_and_split_sql_expr(*(merged_node->children_[i]), and_exprs)))) {
         LOG_WARN("resolve and split sql expr failed", K(ret), K(i));
       }
     }
@@ -15827,7 +15849,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_USE_HASH_SET:
     case T_NO_USE_HASH_SET:
     case T_USE_DISTRIBUTED_DML:
-    case T_NO_USE_DISTRIBUTED_DML: {
+    case T_NO_USE_DISTRIBUTED_DML:
+    case T_PUSH_SUBQ:
+    case T_NO_PUSH_SUBQ: {
       if (OB_FAIL(resolve_normal_optimize_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve normal optimize hint.", K(ret));
       }

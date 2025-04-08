@@ -404,6 +404,7 @@ extern int check_mem_status();
 extern int try_check_mem_status(int64_t check_try_times);
 
 int get_deep_copy_size(const ParseNode *node, int64_t *size);
+int deep_copy_parse_node_base(void *malloc_pool, const ParseNode *src_node, ParseNode *dst_node);
 int deep_copy_parse_node(void *malloc_pool, const ParseNode *src, ParseNode *dst);
 
 /// convert x'42ab' to binary string

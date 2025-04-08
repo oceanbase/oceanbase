@@ -673,10 +673,11 @@ int ObOptEstCost::stat_estimate_partition_batch_rowcount(const ObCostTableScanIn
   return ret;
 }
 
-int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_info,
-                                               ObIArray<ObExprSelPair> &all_predicate_sel)
+int ObOptEstCost::calculate_filter_selectivity(AccessPath &path)
 {
   int ret = OB_SUCCESS;
+  ObCostTableScanInfo &est_cost_info = path.est_cost_info_;
+  ObIArray<ObExprSelPair> &all_predicate_sel = path.parent_->get_plan()->get_predicate_selectivities();
   ObSEArray<ObRawExpr *, 8> apply_filters;
   double total_sel = 1.0;
   if (OB_ISNULL(est_cost_info.table_metas_) || OB_ISNULL(est_cost_info.sel_ctx_) ||
@@ -684,6 +685,8 @@ int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_inf
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null point error", K(est_cost_info.table_metas_), K(est_cost_info.sel_ctx_), K(ret));
   } else if (FALSE_IT(est_cost_info.sel_ctx_->init_op_ctx(NULL, est_cost_info.table_meta_info_->table_row_count_))) {
+  } else if (OB_FAIL(est_cost_info.sel_ctx_->init_deduce_infos(&path))) {
+    LOG_WARN("failed to init deduce info", K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(*est_cost_info.table_metas_,
                                                                          *est_cost_info.sel_ctx_,
                                                                          apply_filters,
@@ -725,6 +728,7 @@ int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_inf
                                                                          all_predicate_sel))) {
     LOG_WARN("failed to calculate prefix filter sel", K(est_cost_info.table_filters_));
   } else {
+    est_cost_info.sel_ctx_->clear();
     LOG_TRACE("table filter info", K(est_cost_info.ref_table_id_), K(est_cost_info.index_id_),
         K(est_cost_info.prefix_filters_), K(est_cost_info.pushdown_prefix_filters_),
         K(est_cost_info.postfix_filters_), K(est_cost_info.table_filters_),

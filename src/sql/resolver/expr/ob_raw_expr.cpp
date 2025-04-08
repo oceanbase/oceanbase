@@ -1938,6 +1938,15 @@ ObRawExpr *&ObQueryRefRawExpr::get_param_expr(int64_t index)
   }
 }
 
+const ObExecParamRawExpr *ObQueryRefRawExpr::get_exec_param(int64_t index) const
+{
+  if (index >= 0 && index < exec_params_.count()) {
+    return exec_params_.at(index);
+  } else {
+    return NULL;
+  }
+}
+
 ObExecParamRawExpr *ObQueryRefRawExpr::get_exec_param(int64_t index)
 {
   if (index >= 0 && index < exec_params_.count()) {
@@ -4932,6 +4941,11 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       && (T_FUN_SYS_REMOVE_CONST == get_expr_type() || T_FUN_SYS_WRAPPER_INNER == get_expr_type())) {
     CK(1 == get_param_count());
     OZ(get_param_expr(0)->get_name(buf, buf_len, pos, type));
+  } else if (T_FUN_SYS_CALC_UROWID == get_expr_type() && 1 == get_param_count()) {
+    // mocked rowid expr by query range
+    if (OB_FAIL(BUF_PRINTF("ROWID"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
   } else {
     if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
         OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {

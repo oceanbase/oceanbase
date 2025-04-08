@@ -714,10 +714,8 @@ int ObLogicalOperator::compute_op_parallel_and_server_info()
     LOG_WARN("failed to assign server list", K(ret));
   } else {
     set_parallel(child->get_parallel());
+    set_available_parallel(child->get_available_parallel());
     set_server_cnt(child->get_server_cnt());
-    if (is_single()) {
-      set_available_parallel(child->get_available_parallel());
-    }
   }
   return ret;
 }
@@ -759,10 +757,8 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
     LOG_WARN("failed to assign server list", K(ret));
   } else {
     set_parallel(max_parallel_child->get_parallel());
+    set_available_parallel(max_available_parallel);
     set_server_cnt(max_parallel_child->get_server_cnt());
-    if (is_single()) {
-      set_available_parallel(max_available_parallel);
-    }
   }
   return ret;
 }
@@ -778,6 +774,7 @@ int ObLogicalOperator::set_parallel_and_server_info_for_match_all()
     LOG_WARN("failed to push back server list", K(ret));
   } else {
     set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
+    set_available_parallel(ObGlobalHint::DEFAULT_PARALLEL);
     set_op_parallel_rule(OpParallelRule::OP_DAS_DOP);
     set_server_cnt(1);
   }
@@ -1128,7 +1125,7 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
   } else if (OB_FAIL(check_need_parallel_valid(parallel))) {
     LOG_WARN("failed to check need parallel valid", K(ret));
   } else if (OB_FAIL(SMART_CALL(do_re_est_cost(param, card, op_cost, cost)))) {
-    LOG_WARN("failed to do re est operator", K(ret));
+    LOG_WARN("failed to do re est operator", K(ret), K(card), K(cost), K(op_cost), K(get_name()));
   } else if (OB_FAIL(check_contain_false_startup_filter(contain_false_filter))) {
     LOG_WARN("failed to check startup filter", K(ret));
   } else if (contain_false_filter && FALSE_IT(card = 0.0)) {
@@ -1146,6 +1143,15 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
     }
     if (is_dml_operator() && static_cast<ObDelUpdLogPlan*>(get_plan())->use_pdml()) {
       static_cast<ObDelUpdLogPlan*>(get_plan())->set_max_dml_parallel(parallel);
+    }
+  }
+  if (OB_SUCC(ret) &&
+      OB_SUCCESS != (OB_E(EventTable::EN_CHECK_OPERATOR_OUTPUT_ROWS) OB_SUCCESS)) {
+    if (OB_UNLIKELY(!std::isfinite(cost_)) || OB_UNLIKELY(cost_ < 0) ||
+        OB_UNLIKELY(!std::isfinite(op_cost_)) || OB_UNLIKELY(op_cost_ < 0) ||
+        OB_UNLIKELY(!std::isfinite(card_)) || OB_UNLIKELY(card_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected cost/cardinality", K_(cost), K_(op_cost), K_(card), K(get_name()));
     }
   }
   return ret;
@@ -4377,6 +4383,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
       gi_op->set_card(get_card());
       gi_op->set_width(get_width());
       gi_op->set_parallel(get_parallel());
+      gi_op->set_available_parallel(get_available_parallel());
       gi_op->set_partition_count(ctx.partition_count_);
       gi_op->set_hash_part(ctx.hash_part_);
       gi_op->set_tablet_size(ctx.tablet_size_ > 0 ? ctx.tablet_size_ : OB_DEFAULT_TABLET_SIZE);
@@ -6288,7 +6295,7 @@ int ObLogicalOperator::pick_out_startup_filters()
     if (OB_ISNULL(qual)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (qual->is_static_const_expr()) {
+    } else if (qual->is_const_expr()) {
       if (OB_FAIL(startup_exprs_.push_back(qual))) {
         LOG_WARN("add filter expr failed", K(i), K(ret));
       } else { /* Do nothing */ }

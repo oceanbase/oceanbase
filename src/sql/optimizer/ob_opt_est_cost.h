@@ -26,6 +26,7 @@ struct JoinFilterInfo;
 class OptTableMetas;
 class OptSelectivityCtx;
 class ObOptimizerContext;
+class AccessPath;
 
 class ObOptEstCost
 {
@@ -242,8 +243,7 @@ public:
                                                     const ObIArray<ObNewRange> &scan_ranges,
                                                     double &row_count);
 
-  static int calculate_filter_selectivity(ObCostTableScanInfo &est_cost_info,
-                                          common::ObIArray<ObExprSelPair> &all_predicate_sel);
+  static int calculate_filter_selectivity(AccessPath &path);
 
   static int stat_estimate_single_range_rc(const ObCostTableScanInfo &est_cost_info,
                                            const ObNewRange &range,

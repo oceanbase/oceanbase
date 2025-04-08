@@ -50,6 +50,10 @@ public:
   {
     return append(exec_params_, exec_params);
   }
+  inline const ObQueryRefRawExpr* get_subquery_expr(int64_t idx) const
+  {
+    return (idx >= 0 && idx < subquery_exprs_.count()) ? subquery_exprs_.at(idx) : NULL;
+  }
   /**
    *  Get the exec params
    */
@@ -149,6 +153,8 @@ private:
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+  int print_push_subq_outline(PlanText &plan_text);
+  int print_push_subq_used_hint(PlanText &plan_text);
 
 protected:
   DistAlgo dist_algo_;

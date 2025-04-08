@@ -608,15 +608,25 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_OP_AND:
       case T_OP_OR: {
         ObOpRawExpr *m_expr = NULL;
-        if (OB_FAIL(process_node_with_children(node, node->num_child_, m_expr, is_root_expr))) {
-          LOG_WARN("fail to process node with children", K(ret), K(node));
-        } else if (OB_ISNULL(ctx_.session_info_)) {
+        const ParseNode *merged_node = NULL;
+        if (OB_FAIL(ObInListResolver::try_merge_inlists(ctx_, is_root_expr, node, merged_node))) {
+          LOG_WARN("fail to merge inlist", K(ret));
+        } else if (OB_ISNULL(merged_node)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session_info_ is NULL", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::try_add_bool_expr(m_expr, ctx_.expr_factory_))) {
-          LOG_WARN("try_add_bool_expr for add or expr failed", K(ret));
-        } else {
-          expr = m_expr;
+          LOG_WARN("unexpected null node", K(ret));
+        } else if (T_OP_AND == merged_node->type_ || T_OP_OR == merged_node->type_) {
+          if (OB_FAIL(process_node_with_children(merged_node, merged_node->num_child_, m_expr, is_root_expr))) {
+            LOG_WARN("fail to process node with children", K(ret), K(merged_node));
+          } else if (OB_ISNULL(ctx_.session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session_info_ is NULL", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::try_add_bool_expr(m_expr, ctx_.expr_factory_))) {
+            LOG_WARN("try_add_bool_expr for add or expr failed", K(ret));
+          } else {
+            expr = m_expr;
+          }
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(merged_node, expr)))) {  // inlist merge eliminated AND/OR
+          LOG_WARN("fail to process node", K(ret), K(merged_node));
         }
         break;
       }

@@ -17,6 +17,8 @@
 #include "sql/rewrite/ob_range_graph_generator.h"
 #include "sql/rewrite/ob_range_generator.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/optimizer/ob_opt_est_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase {
 using namespace common;
@@ -338,6 +340,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const bool ignore_calc_failure,
                           const int64_t index_prefix,
                           const ColumnIdInfoMap *geo_column_id_map,
+                          const bool force_no_link,
                           const ObTableSchema *index_schema)
 {
   int ret = OB_SUCCESS;
@@ -367,6 +370,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     index_prefix_ = index_prefix;
     geo_column_id_map_ = geo_column_id_map;
     is_geo_range_ = geo_column_id_map != NULL;
+    force_no_link_ = force_no_link;
     if (OB_NOT_NULL(index_schema) &&
         index_schema->is_unique_index() &&
         index_schema->get_index_column_num() > 0) {
@@ -615,6 +619,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const ColumnIdInfoMap *geo_column_id_map /* = NULL*/)
 {
   int ret = OB_SUCCESS;
+  bool force_no_link = false;
   ObQueryRangeCtx ctx(exec_ctx);
   ObRawExprFactory expr_factory(allocator_);
   if (OB_ISNULL(exec_ctx)) {
@@ -625,7 +630,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
-                              geo_column_id_map, index_schema))) {
+                              geo_column_id_map, force_no_link, index_schema))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -1123,6 +1128,606 @@ int64_t ObPreRangeGraph::set_total_range_sizes(uint64_t* total_range_sizes, int6
 int ObPreRangeGraph::get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const
 {
   return total_range_sizes.assign(total_range_sizes_);
+}
+
+int ObPreRangeGraph::get_range_exprs(ObRawExprFactory &expr_factory,
+                                     const ObIArray<ColumnItem> &range_columns,
+                                     const ObIArray<ObRawExpr*> &root_exprs,
+                                     ObIArray<ObRawExpr*> &range_exprs,
+                                     ObExecContext *exec_ctx,
+                                     ObQueryCtx *query_ctx,
+                                     const ParamStore *params,
+                                     const int64_t index_prefix /* =-1*/)
+{
+  int ret = OB_SUCCESS;
+  ExprConstrantArray *expr_constraints = nullptr;
+  const bool phy_rowid_for_table_loc = false;
+  const bool ignore_calc_failure = true;
+  const ColumnIdInfoMap *geo_column_id_map = nullptr;
+  const ObTableSchema *index_schema = nullptr;
+  bool force_no_link = true;
+  ObQueryRangeCtx ctx(exec_ctx);
+  if (OB_FAIL(fill_column_metas(range_columns))) {
+    LOG_WARN("failed to fill column metas");
+  } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
+                              params, &expr_factory,
+                              phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
+                              geo_column_id_map, force_no_link, index_schema))) {
+    LOG_WARN("failed to init query range context");
+  } else {
+    ObExprRangeConverter converter(allocator_, ctx);
+    ObRangeGraphGenerator graph_generator(allocator_, ctx, this, range_columns.count());
+    if (OB_FAIL(graph_generator.generate_range_graph(root_exprs, converter))) {
+      LOG_WARN("failed to generate range graph");
+    } else if (OB_FAIL(get_range_exprs_by_graph(ctx, expr_factory, range_columns, range_exprs))) {
+      LOG_WARN("Failed to get range exprs by graph");
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_exprs.count(); i ++) {
+      if (OB_ISNULL(range_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(range_exprs));
+      } else if (OB_FAIL(range_exprs.at(i)->formalize(exec_ctx->get_my_session()))) {
+        LOG_WARN("failed to formalize", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::get_range_exprs_by_graph(ObQueryRangeCtx &ctx,
+                                              ObRawExprFactory &expr_factory,
+                                              const ObIArray<ColumnItem> &range_columns,
+                                              ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> or_exprs;
+  hash::ObHashMap<int64_t, ObRangeExprDesc*> expr_map;
+  ExprDescList *expr_desc_lists = nullptr;
+  bool *equals = nullptr;
+
+  if (OB_ISNULL(node_head_) || OB_UNLIKELY(contain_geo_filters_)) {
+    // do nothing
+  } else if (node_head_->always_true_) {
+    // do nothing
+  } else if (node_head_->always_false_) {
+    ObRawExpr *const_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(&expr_factory, const_expr, false))) {
+      LOG_WARN("failed to build expr", K(ret));
+    } else if (OB_FAIL(exprs.push_back(const_expr))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  } else if (OB_FAIL(expr_map.create(node_count_, "RangeExprMap", "RangeExprMap"))) {
+    LOG_WARN("fail to init hashmap", K(node_count_));
+  } else if (OB_ISNULL(expr_desc_lists = static_cast<ExprDescList*>(allocator_.alloc(sizeof(ExprDescList) * range_columns.count())))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for tmp expr list");
+  } else if (OB_ISNULL(equals = static_cast<bool*>(allocator_.alloc(sizeof(bool) * range_columns.count())))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory to equals array");
+  } else {
+    for (int64_t i = 0; i < range_columns.count(); ++i) {
+      new(expr_desc_lists + i)ExprDescList();
+    }
+    MEMSET(equals, 0, sizeof(bool) * range_columns.count());
+    if (OB_FAIL(recursive_generate_range_node_expr(ctx, expr_factory, expr_map, range_columns, node_head_, expr_desc_lists, equals, or_exprs))) {
+      LOG_WARN("failed to recursive generate range node expr");
+    } else if (or_exprs.empty()) {
+      // do nothing
+    } else if (or_exprs.count() == 1) {
+      ObRawExpr* top_expr = or_exprs.at(0);
+      if (T_OP_AND == top_expr->get_expr_type()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < top_expr->get_param_count(); ++i) {
+          if (OB_FAIL(exprs.push_back(top_expr->get_param_expr(i)))) {
+            LOG_WARN("failed to push back and exprs");
+          }
+        }
+      } else if (OB_FAIL(exprs.push_back(top_expr))) {
+        LOG_WARN("failed to push back and exprs");
+      }
+    } else {
+      ObOpRawExpr *or_expr = nullptr;
+      if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {
+        LOG_WARN("failed to create a new expr", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < or_exprs.count(); ++i) {
+        if (OB_FAIL(or_expr->add_param_expr(or_exprs.at(i)))) {
+          LOG_WARN("failed to set params for like expr", KPC(or_expr));
+        }
+      }
+      if (FAILEDx(exprs.push_back(or_expr))) {
+        LOG_WARN("failed to push back and exprs");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::recursive_generate_range_node_expr(ObQueryRangeCtx &ctx,
+                                                        ObRawExprFactory &expr_factory,
+                                                        common::hash::ObHashMap<int64_t, ObRangeExprDesc*> &expr_map,
+                                                        const ObIArray<ColumnItem> &range_columns,
+                                                        ObRangeNode *node,
+                                                        ExprDescList *expr_desc_lists,
+                                                        bool *equals,
+                                                        ObIArray<ObRawExpr*> &or_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 8> new_idx;
+  for (ObRangeNode* cur_node = node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
+    int64_t cur_node_offset = cur_node->min_offset_ == -1 ? 0 : cur_node->min_offset_;
+    ObRawExpr *expr = nullptr;
+    bool need_create = false;
+    ObRangeExprDesc *expr_desc;
+
+    for (int64_t j = 0; j < new_idx.count(); ++j) {
+      equals[new_idx.at(j)] = false;
+    }
+    new_idx.reset();
+
+    if (OB_FAIL(expr_map.get_refactored(cur_node->node_id_, expr_desc))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        ret = OB_SUCCESS;
+        need_create = true;
+      } else {
+        LOG_WARN("failed to get from expr map", K(cur_node->node_id_));
+      }
+    }
+    if (OB_SUCC(ret) && need_create) {
+      if (OB_FAIL(range_node_to_expr(ctx, expr_factory, range_columns, cur_node, expr))) {
+        LOG_WARN("failed to convert range node to expr");
+      } else if (OB_ISNULL(expr_desc = static_cast<ObRangeExprDesc*>(allocator_.alloc(sizeof(ObRangeExprDesc))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for range expr desc");
+      } else {
+        expr_desc = new(expr_desc) ObRangeExprDesc(expr, cur_node->min_offset_, cur_node->max_offset_);
+        if (OB_FAIL(expr_map.set_refactored(cur_node->node_id_, expr_desc))) {
+          LOG_WARN("failed to set expr map");
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (cur_node->min_offset_ >= 0 &&
+               !cur_node->is_not_in_node_ &&
+               !cur_node->is_domain_node_ &&
+      OB_FAIL(ObRangeGraphGenerator::get_new_equal_idx(cur_node, equals, new_idx))) {
+      LOG_WARN("failed to get new idx");
+    } else if (OB_UNLIKELY(!expr_desc_lists[cur_node_offset].add_last(expr_desc))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to add last to dlist");
+    } else if (cur_node->and_next_ != nullptr &&
+               (equals[cur_node_offset] ||
+                cur_node->min_offset_ < 0 ||
+                cur_node->and_next_->min_offset_ == cur_node->min_offset_)) {
+      if (OB_FAIL(SMART_CALL(recursive_generate_range_node_expr(ctx, expr_factory, expr_map, range_columns,
+                                                                cur_node->and_next_, expr_desc_lists, equals,
+                                                                or_exprs)))) {
+        LOG_WARN("failed to recursive generate range node expr");
+      }
+    } else {
+      ObSEArray<ObRawExpr*, 4> and_exprs;
+      bool and_next = true;
+      int64_t max_offset = -1;
+      for (int64_t i = 0; OB_SUCC(ret) && and_next && i < range_columns.count(); ++i) {
+        DLIST_FOREACH_X(cur_expr_desc, expr_desc_lists[i], (OB_SUCC(ret) && and_next)) {
+          if (cur_expr_desc->min_offset_ > max_offset +1) {
+            and_next = false;
+          } else if (OB_FAIL(and_exprs.push_back(cur_expr_desc->expr_))) {
+            LOG_WARN("failed to push back expr");
+          } else if (cur_expr_desc->max_offset_ > max_offset) {
+            max_offset = cur_expr_desc->max_offset_;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(and_exprs.empty())) {
+        // do nothing
+        ObConstRawExpr *int_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory, ObIntType, 1, int_expr))) {
+          LOG_WARN("failed to build const int expr");
+        } else if (OB_FAIL(or_exprs.push_back(int_expr))) {
+          LOG_WARN("failed to push back and exprs");
+        }
+      } else if (and_exprs.count() == 1) {
+        if (OB_FAIL(or_exprs.push_back(and_exprs.at(0)))) {
+          LOG_WARN("failed to push back and exprs");
+        }
+      } else {
+        ObOpRawExpr *and_expr = nullptr;
+        if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, and_expr))) {
+          LOG_WARN("failed to create a new expr", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < and_exprs.count(); ++i) {
+          if (OB_FAIL(and_expr->add_param_expr(and_exprs.at(i)))) {
+            LOG_WARN("failed to set params for like expr", KPC(and_expr));
+          }
+        }
+        if (FAILEDx(or_exprs.push_back(and_expr))) {
+          LOG_WARN("failed to push back and exprs");
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      expr_desc_lists[cur_node_offset].remove_last();
+    }
+  }
+
+  // reset equal flag in current range node
+  if (OB_SUCC(ret)) {
+    for (int64_t j = 0; j < new_idx.count(); ++j) {
+      equals[new_idx.at(j)] = false;
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
+                                        ObRawExprFactory &expr_factory,
+                                        const ObIArray<ColumnItem> &range_columns,
+                                        ObRangeNode *node,
+                                        ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *column_expr = nullptr;
+  if (OB_ISNULL(node) || node->always_true_ || node->always_false_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range node", KPC(node));
+  } else if (node->is_not_in_node_) {
+    ObRawExpr *column_expr = nullptr;
+    if (OB_FAIL(get_node_column_expr(node, range_columns, column_expr))) {
+      LOG_WARN("failed to get node column expr");
+    } else {
+      ObOpRawExpr *not_in_expr = nullptr;
+      int64_t in_list_idx = -(node->start_keys_[node->min_offset_] + 1);
+      InParam* in_param = range_map_.in_params_.at(in_list_idx);
+      ObOpRawExpr *row_in_expr = nullptr;
+      if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_in_expr))) {
+        LOG_WARN("fail to create equal expr");
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < in_param->count(); ++i) {
+        int64_t in_val_idx = in_param->at(i);
+        ObRawExpr *in_val_expr = range_map_.expr_final_infos_.at(in_val_idx).related_raw_expr_;
+        if (OB_FAIL(row_in_expr->add_param_expr(in_val_expr))) {
+          LOG_WARN("failed to push back in val expr");
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(create_op_expr(expr_factory, T_OP_NOT_IN, expr, column_expr, row_in_expr))) {
+        LOG_WARN("failed to create op expr");
+      }
+    }
+  } else if (node->contain_in_) {
+    bool is_rowid = node->is_rowid_node_;
+    ObOpRawExpr *in_list_expr = nullptr;
+    if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, in_list_expr))) {
+      LOG_WARN("fail to create equal expr");
+    } else if (is_rowid && OB_FAIL(create_rowid_expr(expr_factory, range_columns, column_expr))) {
+      LOG_WARN("faled to create rowid expr");
+    } else if (node->min_offset_ == node->max_offset_) {
+      if (!is_rowid && OB_FAIL(get_node_column_expr(node, range_columns, column_expr))) {
+        LOG_WARN("failed to get node column expr");
+      } else {
+        int64_t in_list_idx = -(node->start_keys_[node->min_offset_] + 1);
+        InParam* in_param = range_map_.in_params_.at(in_list_idx);
+        for (int64_t i = 0; OB_SUCC(ret) && i < in_param->count(); ++i) {
+          int64_t in_val_idx = in_param->at(i);
+          ObRawExpr *in_val_expr = range_map_.expr_final_infos_.at(in_val_idx).related_raw_expr_;
+          if (OB_FAIL(in_list_expr->add_param_expr(in_val_expr))) {
+            LOG_WARN("failed to push back in val expr");
+          }
+        }
+      }
+    } else {
+      ObSEArray<InParam*,4> in_params;
+      int64_t in_count = 0;
+      if (OB_FAIL(!is_rowid && get_node_row_column_expr(node, range_columns, expr_factory, column_expr))) {
+        LOG_WARN("failed to get node row column expr");
+      }
+      for (int64_t i = node->min_offset_; OB_SUCC(ret) && i <= node->max_offset_; ++i) {
+        int64_t in_list_idx = -(node->start_keys_[i] + 1);
+        InParam* in_param = range_map_.in_params_.at(in_list_idx);
+        if (OB_FAIL(in_params.push_back(in_param))) {
+          LOG_WARN("failed to push back in param");
+        } else {
+          in_count = in_param->count();
+        }
+      }
+      if (is_rowid) {
+        InParam* in_param = in_params.at(0);
+        for (int64_t i = 0; OB_SUCC(ret) && i < in_count; ++i) {
+          int64_t in_val_idx = in_param->at(i);
+          ObRawExpr *in_val_expr = range_map_.expr_final_infos_.at(in_val_idx).related_raw_expr_;
+          if (OB_FAIL(in_list_expr->add_param_expr(in_val_expr))) {
+            LOG_WARN("failed to add param expr");
+          }
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < in_count; ++i) {
+          ObOpRawExpr *row_expr = nullptr;
+          if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_expr))) {
+            LOG_WARN("fail to create equal expr");
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < in_params.count(); ++j) {
+            int64_t in_val_idx = in_params.at(j)->at(i);
+            ObRawExpr *in_val_expr = range_map_.expr_final_infos_.at(in_val_idx).related_raw_expr_;
+            if (OB_FAIL(row_expr->add_param_expr(in_val_expr))) {
+              LOG_WARN("failed to push back in val expr");
+            }
+          }
+          if (FAILEDx(in_list_expr->add_param_expr(row_expr))) {
+            LOG_WARN("failed to add param expr");
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(create_op_expr(expr_factory, T_OP_IN, expr, column_expr, in_list_expr))) {
+        LOG_WARN("failed to create op expr");
+      }
+    }
+  } else if (node->is_domain_node_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("geo node to expr not support");
+  } else if (node->is_like_node_) {
+    ObRawExpr *column_expr = nullptr;
+    int64_t val_idx = node->start_keys_[node->min_offset_];
+    ObRawExpr *decode_like_expr = range_map_.expr_final_infos_.at(val_idx).related_raw_expr_;
+    ObRawExpr *pattern_expr = nullptr;
+    ObRawExpr *escape_expr = nullptr;
+    if (OB_ISNULL(decode_like_expr) ||
+        OB_ISNULL(pattern_expr = decode_like_expr->get_param_expr(0)) ||
+        OB_ISNULL(escape_expr = decode_like_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null expr", KPC(decode_like_expr));
+    } else if (OB_FAIL(get_node_column_expr(node, range_columns, column_expr))) {
+      LOG_WARN("failed to get node column expr");
+    } else {
+      bool create_like = false;
+      bool is_start_with = false;
+      bool all_is_percent_sign = false;
+      if (!pattern_expr->is_static_const_expr() || !escape_expr->is_static_const_expr()) {
+        create_like = true;
+      } else if (OB_FAIL(ObOptEstUtils::if_expr_start_with_patten_sign(ctx.params_,
+                                                                       pattern_expr,
+                                                                       escape_expr,
+                                                                       ctx.exec_ctx_,
+                                                                       allocator_,
+                                                                       is_start_with,
+                                                                       all_is_percent_sign))) {
+        LOG_WARN("failed to check if expr start with percent sign", K(ret));
+      } else {
+        create_like = !is_start_with && !all_is_percent_sign;
+      }
+      if (OB_SUCC(ret)) {
+        if (create_like) {
+          if (OB_FAIL(create_op_expr(expr_factory, T_OP_LIKE, expr,
+                                     column_expr, pattern_expr, escape_expr))) {
+            LOG_WARN("failed to create op expr");
+          }
+        } else {
+          if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(expr_factory, column_expr, true, expr))) {
+            LOG_WARN("failed to build is null expr");
+          }
+        }
+      }
+    }
+  } else if (-1 == node->min_offset_) {
+    // const expr
+    if (node->min_offset_ != node->max_offset_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected range node", KPC(node));
+    } else {
+      ObRawExpr *const_expr = nullptr;
+      int64_t val_idx = node->start_keys_[0];
+      ObRawExpr *decode_const_expr = range_map_.expr_final_infos_.at(val_idx).related_raw_expr_;
+      if (OB_ISNULL(decode_const_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null expr", KPC(decode_const_expr));
+      } else {
+        expr = decode_const_expr->get_param_expr(0);
+      }
+    }
+  } else if (node->min_offset_ == node->max_offset_) {
+    // simple condition
+    bool is_rowid = node->is_rowid_node_;
+    ObRawExpr *value_expr = nullptr;
+    if (!is_rowid && OB_FAIL(get_node_column_expr(node, range_columns, column_expr))) {
+      LOG_WARN("failed to get node column expr");
+    } else if (is_rowid && OB_FAIL(create_rowid_expr(expr_factory, range_columns, column_expr))) {
+      LOG_WARN("faled to create rowid expr");
+    } else {
+      int64_t start_val_idx = node->start_keys_[node->min_offset_];
+      int64_t end_val_idx = node->end_keys_[node->min_offset_];
+      ObItemType op_type = T_OP_EQ;
+      if (start_val_idx == end_val_idx) {
+        if (start_val_idx == OB_RANGE_NULL_VALUE) {
+          // col is null
+          op_type = T_OP_IS;
+          if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(expr_factory, column_expr, false, expr))) {
+            LOG_WARN("failed to build is null expr");
+          }
+        } else {
+          value_expr = range_map_.expr_final_infos_.at(start_val_idx).related_raw_expr_;
+        }
+      } else if (start_val_idx < OB_RANGE_EXTEND_VALUE && end_val_idx >= OB_RANGE_EXTEND_VALUE) {
+        op_type = T_OP_GT;
+        value_expr = range_map_.expr_final_infos_.at(start_val_idx).related_raw_expr_;
+        if ((node->max_offset_ + 1 == node->column_cnt_ && node->include_start_) ||
+            (node->max_offset_ + 1 < node->column_cnt_ &&
+             node->start_keys_[node->max_offset_ + 1] == OB_RANGE_MIN_VALUE)) {
+          op_type = T_OP_GE;
+        }
+      } else if (start_val_idx >= OB_RANGE_EXTEND_VALUE && end_val_idx < OB_RANGE_EXTEND_VALUE) {
+        op_type = T_OP_LT;
+        value_expr = range_map_.expr_final_infos_.at(end_val_idx).related_raw_expr_;
+        if ((node->max_offset_ + 1 == node->column_cnt_ && node->include_end_) ||
+            (node->max_offset_ + 1 < node->column_cnt_ &&
+             node->end_keys_[node->max_offset_ + 1] == OB_RANGE_MAX_VALUE)) {
+          op_type = T_OP_LE;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected range node", KPC(node));
+      }
+
+      if (OB_SUCC(ret) && T_OP_IS != op_type) {
+        if (OB_FAIL(create_op_expr(expr_factory, op_type, expr, column_expr, value_expr))) {
+          LOG_WARN("failed to create op expr");
+        }
+      }
+    }
+  } else {
+    // row condition
+    bool is_rowid = node->is_rowid_node_;
+    ObOpRawExpr *row_value_expr = nullptr;
+    ObRawExpr *rowid_value_expr = nullptr;
+    if (!is_rowid && OB_FAIL(get_node_row_column_expr(node, range_columns, expr_factory, column_expr))) {
+      LOG_WARN("failed to get node row column expr");
+    } else if (is_rowid && OB_FAIL(create_rowid_expr(expr_factory, range_columns, column_expr))) {
+      LOG_WARN("faled to create rowid expr");
+    } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_value_expr))) {
+      LOG_WARN("fail to create equal expr");
+    } else {
+      ObItemType op_type = T_OP_EQ;
+      int64_t start_val_idx = node->start_keys_[node->min_offset_];
+      int64_t end_val_idx = node->end_keys_[node->min_offset_];
+      if (start_val_idx == end_val_idx) {
+        // do nothing
+      } else if (start_val_idx < OB_RANGE_EXTEND_VALUE && end_val_idx >= OB_RANGE_EXTEND_VALUE) {
+        op_type = T_OP_GT;
+        if ((node->max_offset_ + 1 == node->column_cnt_ && node->include_start_) ||
+            (node->max_offset_ + 1 < node->column_cnt_ &&
+             node->start_keys_[node->max_offset_ + 1] == OB_RANGE_MIN_VALUE)) {
+          op_type = T_OP_GE;
+        }
+      } else if (start_val_idx >= OB_RANGE_EXTEND_VALUE && end_val_idx < OB_RANGE_EXTEND_VALUE) {
+        op_type = T_OP_LT;
+        if ((node->max_offset_ + 1 == node->column_cnt_ && node->include_end_) ||
+            (node->max_offset_ + 1 < node->column_cnt_ &&
+             node->end_keys_[node->max_offset_ + 1] == OB_RANGE_MAX_VALUE)) {
+          op_type = T_OP_LE;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected range node", KPC(node));
+      }
+      if (is_rowid) {
+        int64_t val_idx = (T_OP_LT == op_type || T_OP_LE == op_type) ? node->end_keys_[node->min_offset_] : node->start_keys_[node->min_offset_];
+        ObRawExpr *value_expr = range_map_.expr_final_infos_.at(val_idx).related_raw_expr_;
+        rowid_value_expr = value_expr;
+      } else {
+        for (int64_t i = node->min_offset_; OB_SUCC(ret) && i <= node->max_offset_; ++i) {
+          int64_t val_idx = (T_OP_LT == op_type || T_OP_LE == op_type) ? node->end_keys_[i] : node->start_keys_[i];
+          ObRawExpr *value_expr = range_map_.expr_final_infos_.at(val_idx).related_raw_expr_;
+          if (OB_FAIL(row_value_expr->add_param_expr(value_expr))) {
+            LOG_WARN("failed to add params for op expr", KPC(value_expr));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (is_rowid) {
+          if (OB_FAIL(create_op_expr(expr_factory, op_type, expr, column_expr, rowid_value_expr))) {
+            LOG_WARN("failed to create op expr");
+          }
+        } else if (OB_FAIL(create_op_expr(expr_factory, op_type, expr, column_expr, row_value_expr))) {
+          LOG_WARN("failed to create op expr");
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::get_node_column_expr(ObRangeNode *node,
+                                          const ObIArray<ColumnItem> &range_columns,
+                                          ObRawExpr* &column_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(node->min_offset_ != node->max_offset_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range node", KPC(node));
+  } else {
+    int64_t column_idx = node->min_offset_;
+    if (OB_UNLIKELY(column_idx < 0 || column_idx >= range_columns.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected column idx", K(column_idx), K(range_columns));
+    } else {
+      column_expr = range_columns.at(column_idx).expr_;
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::get_node_row_column_expr(ObRangeNode *node,
+                                              const ObIArray<ColumnItem> &range_columns,
+                                              ObRawExprFactory &expr_factory,
+                                              ObRawExpr* &column_expr)
+{
+  int ret = OB_SUCCESS;
+  int64_t min_column_idx = node->min_offset_;
+  int64_t max_column_idx = node->max_offset_;
+  ObOpRawExpr *row_column_expr = nullptr;
+  if (min_column_idx < 0 || min_column_idx >= max_column_idx || max_column_idx >= range_columns.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected column idx", K(min_column_idx), K(max_column_idx), K(range_columns));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_column_expr))) {
+    LOG_WARN("fail to create equal expr");
+  }
+  for (int64_t i = min_column_idx; OB_SUCC(ret) && i <= max_column_idx; ++i) {
+    if (OB_FAIL(row_column_expr->add_param_expr(range_columns.at(i).expr_))) {
+      LOG_WARN("failed to add params for op expr", KPC(range_columns.at(i).expr_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    column_expr = row_column_expr;
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::create_rowid_expr(ObRawExprFactory &expr_factory,
+                                       const ObIArray<ColumnItem> &range_columns,
+                                       ObRawExpr *&rowid_expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *calc_urowid_expr = nullptr;
+  // mocked rowid exprs, only used by selectivity estimation !!!
+  if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_CALC_UROWID, calc_urowid_expr))) {
+    LOG_WARN("faled to create rowid expr");
+  } else if (OB_ISNULL(calc_urowid_expr) || OB_UNLIKELY(range_columns.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(range_columns));
+  } else if (OB_FAIL(calc_urowid_expr->add_param_expr(range_columns.at(0).expr_))) {
+    LOG_WARN("failed to add params for op expr", KPC(range_columns.at(0).expr_));
+  } else {
+    calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID));
+    rowid_expr = calc_urowid_expr;
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::create_op_expr(ObRawExprFactory &expr_factory,
+                                    ObItemType op_type,
+                                    ObRawExpr *&op_expr,
+                                    ObRawExpr *column_expr,
+                                    ObRawExpr *value_expr,
+                                    ObRawExpr *extra_value_expr /* = nullptr*/)
+{
+  int ret = OB_SUCCESS;
+  ObOpRawExpr* tmp_expr = nullptr;
+  if (OB_FAIL(expr_factory.create_raw_expr(op_type, tmp_expr))) {
+    LOG_WARN("failed to create a new expr", K(op_type));
+  } else if (OB_FAIL(tmp_expr->add_param_expr(column_expr)) ||
+             OB_FAIL(tmp_expr->add_param_expr(value_expr))) {
+    LOG_WARN("failed to add param for op expr", KPC(column_expr), KPC(value_expr));
+  } else if (extra_value_expr != nullptr && OB_FAIL(tmp_expr->add_param_expr(extra_value_expr))) {
+    LOG_WARN("failed to add extra for op expr", KPC(extra_value_expr));
+  } else {
+    op_expr = tmp_expr;
+  }
+  return ret;
 }
 
 } // namespace sql

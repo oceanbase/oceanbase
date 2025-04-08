@@ -75,6 +75,10 @@ int ObPredicateDeduce::check_deduce_validity(ObRawExpr *cond, bool &is_valid)
     is_valid = false;
   } else if (left_expr == right_expr || left_expr->same_as(*right_expr)) {
     is_valid = false;
+  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_expr->get_result_type(),
+                                                                   right_expr->get_result_type(),
+                                                                   is_valid))) {
+    LOG_WARN("failed to check equal transitive", K(ret));
   }
   return ret;
 }

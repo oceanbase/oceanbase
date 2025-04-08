@@ -725,7 +725,7 @@ int ObExprRangeConverter::convert_between_expr(const ObRawExpr *expr,
     LOG_WARN("failed tp get basic range node", K(ret));
   } else if (OB_FAIL(range_nodes.push_back(tmp_node))) {
     LOG_WARN("failed to push back range node");
-  } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
+  } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, ctx_, range_node))) {
     LOG_WARN("failed to and range nodes");
   } else {
     ctx_.cur_is_precise_ = first_is_precise && ctx_.cur_is_precise_;
@@ -1497,6 +1497,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
             LOG_WARN("failed to fill range node for basic cmp");
           } else {
             range_node->contain_in_ = true;
+            range_node->is_rowid_node_ = true;
             range_node->in_param_count_ = all_valid_exprs.count();
           }
         }
@@ -1559,6 +1560,7 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
       } else {
         range_node->contain_in_ = true;
         range_node->is_phy_rowid_ = true;
+        range_node->is_rowid_node_ = true;
         range_node->in_param_count_ = val_idxs.count();
       }
     }
@@ -1634,7 +1636,7 @@ int ObExprRangeConverter::convert_not_in_expr(const ObRawExpr *expr, int64_t exp
       }
     }
     if (OB_SUCC(ret) && !and_range_nodes.empty()) {
-      if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(and_range_nodes, ctx_.column_cnt_, range_node))) {
+      if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(and_range_nodes, ctx_, range_node))) {
         LOG_WARN("failed to or range nodes");
       } else {
         ctx_.cur_is_precise_ = is_precise;
@@ -2066,6 +2068,7 @@ int ObExprRangeConverter::fill_range_node_for_like(const int64_t key_idx,
   OB_ASSERT(key_idx < ctx_.column_cnt_);
   range_node.min_offset_ = key_idx;
   range_node.max_offset_ = key_idx;
+  range_node.is_like_node_ = true;
   bool need_set_flag = (key_idx == ctx_.column_cnt_ - 1);
   for (int64_t i = 0; i < key_idx; ++i) {
     range_node.start_keys_[i] = OB_RANGE_EMPTY_VALUE;
@@ -2219,6 +2222,8 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
         LOG_WARN("failed to alloc common range node");
       } else if (OB_FAIL(fill_range_node_for_basic_row_cmp(cmp_type, key_idxs, val_idxs, *range_node))) {
         LOG_WARN("failed to get normal row cmp keypart");
+      } else {
+        range_node->is_rowid_node_ = true;
       }
     }
   } else {
@@ -2251,6 +2256,7 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
       LOG_WARN("failed to get normal row cmp keypart");
     } else {
       range_node->is_phy_rowid_ = true;
+      range_node->is_rowid_node_ = true;
     }
   }
 
@@ -2472,7 +2478,7 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
   } else if (OB_FAIL(range_nodes.push_back(is_null_node))) {
     LOG_WARN("failed to push back or range nodes", K(ret));
   } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes,
-                                                            ctx_.column_cnt_,
+                                                            ctx_,
                                                             null_and_node))) {
     LOG_WARN("failed to and range nodes");
   } else if (OB_FALSE_IT(range_nodes.reuse())) {
@@ -2940,7 +2946,7 @@ int ObExprRangeConverter::gen_implicit_cast_range(const ObColumnRefRawExpr *colu
       LOG_WARN("failed to get basic range node", K(ret));
     } else if (OB_FAIL(range_nodes.push_back(end_range))) {
       LOG_WARN("failed to push back and range node", K(ret));
-    } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
+    } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, ctx_, range_node))) {
       LOG_WARN("failed to and range nodes");
     } else if (OB_FAIL(set_extract_implicit_is_precise(*column_expr,
                                                        *const_expr,
@@ -3334,7 +3340,7 @@ int ObExprRangeConverter::gen_row_implicit_cast_range(const ObIArray<const ObCol
         LOG_WARN("failed to push back array", K(ret));
       } else if (OB_FAIL(range_nodes.push_back(end_range))) {
         LOG_WARN("failed to push back array", K(ret));
-      } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
+      } else if (OB_FAIL(ObRangeGraphGenerator::and_range_nodes(range_nodes, ctx_, range_node))) {
         LOG_WARN("failed to and range nodes");
       } else if (!cur_is_precise) {
         ctx_.cur_is_precise_ = false;

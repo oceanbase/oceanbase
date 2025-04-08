@@ -290,12 +290,15 @@ struct ObCostTableScanInfo
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> index_access_column_items_; // all the access columns
 
-  //这几个filter的分类参考OptimizerUtil::classify_filters()
+  //这几个filter的分类参考ObJoinOrder::fill_filters()
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> prefix_filters_; // filters match index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_prefix_filters_; // filters match index prefix along pushed down filter
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> postfix_filters_; // filters evaluated before index back, but not index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;  // filters evaluated after index back
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> precise_range_filters_; // precise range filters in origin filters
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> unprecise_range_filters_; // unprecise range filters in origin filters
 
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> access_columns_;
 
@@ -781,6 +784,7 @@ public:
                                    double &cost);
 
   double cost_quals(double rows, const ObIArray<ObRawExpr *> &quals, bool need_scale = true);
+  int cost_one_qual(const ObRawExpr *qual, double &cost);
 
   double cost_hash(double rows, const ObIArray<ObRawExpr *> &hash_exprs);
 

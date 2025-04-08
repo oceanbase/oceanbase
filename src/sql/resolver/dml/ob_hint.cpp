@@ -1331,6 +1331,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_DISTINCT_PUSHDOWN: return T_DISTINCT_PUSHDOWN;
     case T_NO_USE_HASH_SET: return T_USE_HASH_SET;
     case T_NO_USE_DISTRIBUTED_DML:    return T_USE_DISTRIBUTED_DML;
+    case T_NO_PUSH_SUBQ:         return T_PUSH_SUBQ;
     default:                    return type;
   }
 }
@@ -1412,6 +1413,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PQ_DISTINCT_HINT:  return "PQ_DISTINCT";
     case T_INDEX_ASC_HINT:    return "INDEX_ASC";
     case T_INDEX_DESC_HINT:   return "INDEX_DESC";
+    case T_PUSH_SUBQ:         return is_enable_hint ? "PUSH_SUBQ" : "NO_PUSH_SUBQ";
     default:                    return NULL;
   }
 }

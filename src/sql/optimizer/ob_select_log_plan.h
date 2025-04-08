@@ -220,24 +220,33 @@ private:
                                     const ObIArray<ObRawExpr*> &distinct_exprs,
                                     ObIArray<CandidatePlan> &distinct_plans);
 
+  int check_need_merge_distinct_plan(const ObLogicalOperator *top,
+                                     const ObIArray<ObRawExpr*> &ori_distinct_exprs,
+                                     bool can_ignore_merge_plan,
+                                     bool &need_sort,
+                                     int64_t &prefix_pos,
+                                     ObIArray<OrderItem> &sort_keys,
+                                     ObIArray<ObRawExpr*> &new_distinct_exprs,
+                                     bool &ignore_merge_plan);
+
   int get_distribute_distinct_method(ObLogicalOperator *top,
-                                const GroupingOpHelper &distinct_helper,
-                                const ObIArray<ObRawExpr*> &reduce_exprs,
-                                uint64_t &distinct_dist_methods);
+                                     const GroupingOpHelper &distinct_helper,
+                                     const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     bool is_merge_without_sort,
+                                     uint64_t &distinct_dist_methods);
 
   int create_hash_distinct_plan(ObLogicalOperator *&top,
                                 const GroupingOpHelper &distinct_helper,
-                                const ObIArray<ObRawExpr*> &reduce_exprs,
                                 const ObIArray<ObRawExpr*> &distinct_exprs,
                                 const DistAlgo algo);
 
   int create_merge_distinct_plan(ObLogicalOperator *&top,
                                  const GroupingOpHelper &distinct_helper,
-                                 const ObIArray<ObRawExpr*> &reduce_exprs,
                                  const ObIArray<ObRawExpr*> &distinct_exprs,
-                                 const DistAlgo algo,
-                                 bool &ignore_plan,
-                                 bool can_ignore_merge_plan = false);
+                                 bool need_sort,
+                                 int64_t prefix_pos,
+                                 ObIArray<OrderItem> &sort_keys,
+                                 const DistAlgo algo);
 
   int allocate_distinct_as_top(ObLogicalOperator *&top,
                                const AggregateAlgo algo,
@@ -454,6 +463,7 @@ private:
 
   int check_need_pushdown_set_distinct(ObLogicalOperator *&child,
                                        const ObIArray<ObRawExpr*> &set_keys,
+                                       bool is_set_op_parallel,
                                        bool &is_valid);
 
   int allocate_pushdown_set_distinct_as_top(ObLogicalOperator *&child,
