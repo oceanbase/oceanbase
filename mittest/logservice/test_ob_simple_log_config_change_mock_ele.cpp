@@ -294,6 +294,8 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
     block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
+    // wait until all logs have been submitted
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.get_max_lsn(), leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
 
     // 2. remove D
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(common::ObMember(d_addr, 1), 3, CONFIG_CHANGE_TIMEOUT));
@@ -403,7 +405,8 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
     block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
     block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    sleep(1);
+    // wait until all logs have been submitted
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.get_max_lsn(), leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
     EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
     // 3. remove C
