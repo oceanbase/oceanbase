@@ -27,6 +27,8 @@
 #include "tools/ob_admin/shared_storage_tool/ob_admin_shared_storage_tool_executor.h"
 #endif
 #include "deps/oblib/src/lib/alloc/malloc_hook.h"
+#include "tools/ob_admin/sql_tool/ob_admin_uncompress_plan_executor.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
 
@@ -159,6 +161,8 @@ int main(int argc, char *argv[])
       executor = new ObAdminTestIODeviceExecutor();
     } else if (0 == strcmp("io_driver_quality", argv[1])) {
       executor = new ObAdminObjectStorageDriverQualityExecutor();
+    } else if (0 == strcmp("uncompress_plan", argv[1])) {
+      executor = new ObAdminUncompressPlanExecutor();
     } else if (0 == strncmp("-h", argv[1], 2) || 0 == strncmp("-S", argv[1], 2)) {
       executor = new ObAdminServerExecutor();
     } else {

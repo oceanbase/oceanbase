@@ -84,6 +84,7 @@ add_executable(ob_admin
   log_tool/ob_admin_log_tool_executor.cpp
   ${ob_admin_tde_files}
   ${ob_admin_shared_storage_files}
+  sql_tool/ob_admin_uncompress_plan_executor.cpp
   )
 
 else()
@@ -161,6 +162,7 @@ add_executable(ob_admin
   log_tool/ob_admin_log_tool_executor.cpp
   ${ob_admin_tde_files}
   ${ob_admin_shared_storage_files}
+  sql_tool/ob_admin_uncompress_plan_executor.cpp
   )
 
 endif()
