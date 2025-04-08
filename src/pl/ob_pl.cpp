@@ -54,6 +54,7 @@
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "sql/dblink/ob_tm_service.h"
 #include "pl/ob_pl_allocator.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -75,95 +76,110 @@ namespace pl
 ERRSIM_POINT_DEF(OBPLCONTEXT_INIT);
 #endif // ERRSIM
 
+template <typename T, T *p>
+struct ObPLSPIWrapper;
+
+template <typename Ret, typename ...Args, Ret(*func)(Args...)>
+struct ObPLSPIWrapper<Ret(Args...), func>
+{
+  static Ret impl(Args ...args)
+  {
+    static_assert(std::is_same<Ret, int>::value, "SMART_CALL only support int return type");
+    return SMART_CALL(func(args...));
+  }
+};
+
 int ObPL::init(common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   jit::ObLLVMHelper::initialize();
 
+#define WRAP_SPI_CALL(func) (void*)(ObPLSPIWrapper<decltype(func), func>::impl)
+
   jit::ObLLVMHelper::add_symbol(ObString("spi_calc_expr_at_idx"),
-                                (void*)(sql::ObSPIService::spi_calc_expr_at_idx));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_calc_expr_at_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_calc_package_expr"),
-                                (void*)(sql::ObSPIService::spi_calc_package_expr));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_calc_package_expr));
   jit::ObLLVMHelper::add_symbol(ObString("spi_set_variable_to_expr"),
-                                (void*)(sql::ObSPIService::spi_set_variable_to_expr));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_set_variable_to_expr));
   jit::ObLLVMHelper::add_symbol(ObString("spi_query_into_expr_idx"),
-                                (void*)(sql::ObSPIService::spi_query_into_expr_idx));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_query_into_expr_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_autonomous_trans"),
-                                (void*)(sql::ObSPIService::spi_check_autonomous_trans));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_check_autonomous_trans));
   jit::ObLLVMHelper::add_symbol(ObString("spi_execute_with_expr_idx"),
-                                (void*)(sql::ObSPIService::spi_execute_with_expr_idx));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_execute_with_expr_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_execute_immediate"),
-                                (void*)(sql::ObSPIService::spi_execute_immediate));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_execute_immediate));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_init"),
-                                (void*)(sql::ObSPIService::spi_cursor_init));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_init));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_open_with_param_idx"),
-                                (void*)(sql::ObSPIService::spi_cursor_open_with_param_idx));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_open_with_param_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_dynamic_open"),
-                                (void*)(sql::ObSPIService::spi_dynamic_open));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_dynamic_open));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_fetch"),
-                                (void*)(sql::ObSPIService::spi_cursor_fetch));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_fetch));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_close"),
-                                (void*)(sql::ObSPIService::spi_cursor_close));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cursor_close));
   jit::ObLLVMHelper::add_symbol(ObString("spi_extend_collection"),
-                                (void*)(sql::ObSPIService::spi_extend_collection));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_extend_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_delete_collection"),
-                                (void*)(sql::ObSPIService::spi_delete_collection));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_delete_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_trim_collection"),
-                                (void*)(sql::ObSPIService::spi_trim_collection));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_trim_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_raise_application_error"),
-                                (void*)(sql::ObSPIService::spi_raise_application_error));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_raise_application_error));
   jit::ObLLVMHelper::add_symbol(ObString("spi_process_resignal"),
-                                (void*)(sql::ObSPIService::spi_process_resignal));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_process_resignal));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_collection"),
-                                (void*)(sql::ObSPIService::spi_destruct_collection));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_destruct_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_reset_composite"),
-                                (void*)(sql::ObSPIService::spi_reset_composite));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_reset_composite));
   jit::ObLLVMHelper::add_symbol(ObString("spi_copy_datum"),
-                                (void*)(sql::ObSPIService::spi_copy_datum));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_copy_datum));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cast_enum_set_to_string"),
-                                (void*)(sql::ObSPIService::spi_cast_enum_set_to_string));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cast_enum_set_to_string));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
-                                (void*)(sql::ObSPIService::spi_destruct_obj));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_destruct_obj));
   jit::ObLLVMHelper::add_symbol(ObString("spi_sub_nestedtable"),
-                                (void*)(sql::ObSPIService::spi_sub_nestedtable));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_sub_nestedtable));
   jit::ObLLVMHelper::add_symbol(ObString("spi_alloc_complex_var"),
-                                (void*)(sql::ObSPIService::spi_alloc_complex_var));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_alloc_complex_var));
   jit::ObLLVMHelper::add_symbol(ObString("spi_construct_collection"),
-                                (void*)(sql::ObSPIService::spi_construct_collection));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_construct_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_clear_diagnostic_area"),
-                                (void*)(sql::ObSPIService::spi_clear_diagnostic_area));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_clear_diagnostic_area));
   jit::ObLLVMHelper::add_symbol(ObString("spi_end_trans"),
-                                (void*)(sql::ObSPIService::spi_end_trans));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_end_trans));
   jit::ObLLVMHelper::add_symbol(ObString("spi_update_location"),
-                                (void*)(sql::ObSPIService::spi_update_location));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_update_location));
   jit::ObLLVMHelper::add_symbol(ObString("spi_set_pl_exception_code"),
-                                (void*)(sql::ObSPIService::spi_set_pl_exception_code));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_set_pl_exception_code));
   jit::ObLLVMHelper::add_symbol(ObString("spi_get_pl_exception_code"),
-                                (void*)(sql::ObSPIService::spi_get_pl_exception_code));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_get_pl_exception_code));
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_early_exit"),
-                                (void*)(sql::ObSPIService::spi_check_early_exit));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_check_early_exit));
   jit::ObLLVMHelper::add_symbol(ObString("spi_convert_objparam"),
-                                (void*)(sql::ObSPIService::spi_convert_objparam));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_convert_objparam));
   jit::ObLLVMHelper::add_symbol(ObString("spi_pipe_row_to_result"),
-                                (void*)(sql::ObSPIService::spi_pipe_row_to_result));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_pipe_row_to_result));
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_exception_handler_legal"),
-                               (void*)(sql::ObSPIService::spi_check_exception_handler_legal));
+                               WRAP_SPI_CALL(sql::ObSPIService::spi_check_exception_handler_legal));
   jit::ObLLVMHelper::add_symbol(ObString("spi_interface_impl"),
-                                (void*)(sql::ObSPIService::spi_interface_impl));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_interface_impl));
   jit::ObLLVMHelper::add_symbol(ObString("spi_process_nocopy_params"),
-                                (void*)(sql::ObSPIService::spi_process_nocopy_params));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_process_nocopy_params));
   jit::ObLLVMHelper::add_symbol(ObString("spi_update_package_change_info"),
-                                (void*)(sql::ObSPIService::spi_update_package_change_info));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_update_package_change_info));
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_composite_not_null"),
-                                (void*)(sql::ObSPIService::spi_check_composite_not_null));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_check_composite_not_null));
   jit::ObLLVMHelper::add_symbol(ObString("pl_execute"),
-                                (void*)(ObPL::execute_proc));
+                                WRAP_SPI_CALL(ObPL::execute_proc));
   jit::ObLLVMHelper::add_symbol(ObString("set_user_type_var"),
-                                (void*)(ObPL::set_user_type_var));
+                                WRAP_SPI_CALL(ObPL::set_user_type_var));
   jit::ObLLVMHelper::add_symbol(ObString("set_implicit_cursor_in_forall"),
-                                (void*)(ObPL::set_implicit_cursor_in_forall));
+                                WRAP_SPI_CALL(ObPL::set_implicit_cursor_in_forall));
   jit::ObLLVMHelper::add_symbol(ObString("unset_implicit_cursor_in_forall"),
-                                (void*)(ObPL::unset_implicit_cursor_in_forall));
+                                WRAP_SPI_CALL(ObPL::unset_implicit_cursor_in_forall));
 
   jit::ObLLVMHelper::add_symbol(ObString("eh_create_exception"),
                                 (void*)(ObPLEH::eh_create_exception));
@@ -178,7 +194,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(ObPLEH::eh_personality));
 #endif
   jit::ObLLVMHelper::add_symbol(ObString("eh_convert_exception"),
-                                (void*)(ObPLEH::eh_convert_exception));
+                                WRAP_SPI_CALL(ObPLEH::eh_convert_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_classify_exception"),
                                 (void*)(ObPLEH::eh_classify_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_debug_int64"),
@@ -198,23 +214,24 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   jit::ObLLVMHelper::add_symbol(ObString("eh_debug_objparam"),
                                 (void*)(ObPLEH::eh_debug_objparam));
   jit::ObLLVMHelper::add_symbol(ObString("spi_add_ref_cursor_refcount"),
-                                (void*)(sql::ObSPIService::spi_add_ref_cursor_refcount));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_add_ref_cursor_refcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_handle_ref_cursor_refcount"),
-                                (void*)(sql::ObSPIService::spi_handle_ref_cursor_refcount));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_handle_ref_cursor_refcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_before_record"),
-                                (void*)(sql::ObSPIService::spi_pl_profiler_before_record));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_pl_profiler_before_record));
   jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_after_record"),
-                                (void*)(sql::ObSPIService::spi_pl_profiler_after_record));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_pl_profiler_after_record));
   jit::ObLLVMHelper::add_symbol(ObString("spi_opaque_assign_null"),
-                                (void*)(sql::ObSPIService::spi_opaque_assign_null));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_opaque_assign_null));
   jit::ObLLVMHelper::add_symbol(ObString("spi_init_composite"),
-                                (void*)(sql::ObSPIService::spi_init_composite));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_init_composite));
   jit::ObLLVMHelper::add_symbol(ObString("spi_get_parent_allocator"),
-                                (void*)(sql::ObSPIService::spi_get_parent_allocator));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_get_parent_allocator));
   jit::ObLLVMHelper::add_symbol(ObString("spi_get_current_expr_allocator"),
-                                (void*)(sql::ObSPIService::spi_get_current_expr_allocator));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_get_current_expr_allocator));
   jit::ObLLVMHelper::add_symbol(ObString("spi_adjust_error_trace"),
-                                (void*)(sql::ObSPIService::spi_adjust_error_trace));
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_adjust_error_trace));
+#undef WRAP_SPI_CALL
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
