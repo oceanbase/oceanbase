@@ -1848,13 +1848,22 @@ int ObDDLRedefinitionTask::sync_part_stats_info_accross_tenant(common::ObMySQLTr
         int64_t target_partition_id = 0;
         target_part_stat->set_table_id(target_object_id_);
         target_part_stat->set_last_analyzed(0);
+        bool is_hidden_partition = false;
+        /* The auto split feature will create hidden partition(an intermediate state), so part_stats may contain hidden and normal partition stats.
+         * Recover table will not restore the hidden partition, hidden partition don't have a corresponding partition in the target table, so we skip
+         * partition statistics synchronization for hidden partition.
+         * And src_partition_ids which get from data_table_schema only have normal partition. */
         if (OB_FAIL(part_ids_map.get_refactored(src_partition_id, target_partition_id))) {
           if (OB_HASH_NOT_EXIST == ret) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("target partition not found", K(ret), K_(dst_tenant_id), K_(target_object_id), K(src_partition_id));
+            is_hidden_partition = true;
+            ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to get part_ids_map", K(ret));
           }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (is_hidden_partition) {
+          LOG_INFO("skip partition statistics synchronization for hidden partition", K_(dst_tenant_id), K(part_stat), K(is_hidden_partition));
         } else if (FALSE_IT(target_part_stat->set_partition_id(target_partition_id))) {
         } else if (OB_FAIL(target_part_stats.push_back(target_part_stat))) {
           LOG_WARN("failed to push back partition stat", K(ret));
