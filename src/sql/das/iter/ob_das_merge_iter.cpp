@@ -608,54 +608,21 @@ int ObDASMergeIter::update_pseudo_parittion_id(const ObDASTabletLoc *tablet_loc,
 
   if (OB_SUCC(ret)) {
     if (is_vectorized_) {
-      ObDatum *datums = expr->locate_datums_for_update(*eval_ctx_, max_size_);
-      if (is_null) {
-        for (int64_t i = 0; i < max_size_; i++) {
-          datums[i].set_null();
-        }
+      if (das_ref_->enable_rich_format_ &&
+          OB_FAIL(expr->init_vector(*eval_ctx_, VectorFormat::VEC_UNIFORM, max_size_))) {
+        LOG_WARN("init vector failed", K(ret));
       } else {
-        if (calc_type == PseudoCalcType::PSEUDO_PART_ID) {
-          if (lib::is_oracle_mode()) {
-            ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
-            number::ObNumber res_nmb;
-            if (OB_FAIL(res_nmb.from(output_id, tmp_alloc_g.get_allocator()))) {
-              LOG_WARN("get number from arg failed", K(ret));
-            } else {
-              for (int64_t i = 0; i < max_size_; i++) {
-                datums[i].set_number(res_nmb);
-              }
-            }
-          } else {
-            for (int64_t i = 0; i < max_size_; i++) {
-              datums[i].set_int(output_id);
-            }
+        ObDatum *datums = expr->locate_datums_for_update(*eval_ctx_, max_size_);
+        if (is_null) {
+          for (int64_t i = 0; i < max_size_; i++) {
+            datums[i].set_null();
           }
-        } else if (calc_type == PseudoCalcType::PSEUDO_PART_NAME) {
-          ObString partition_name;
-          if (OB_FAIL(get_name_by_partition_id(output_id, partition_name, is_sub_partition))) {
-            LOG_WARN("failed to get_name_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
-          } else {
-            // deep copy str
-            char *buf = expr->get_str_res_mem(*eval_ctx_, partition_name.length());
-            if (OB_ISNULL(buf)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("allocate memory failed", K(ret), K(partition_name.length()));
-            } else {
-              MEMCPY(buf, partition_name.ptr(), partition_name.length());
-              for (int64_t i = 0; i < max_size_; i++) {
-                datums[i].set_string(buf, partition_name.length());
-              }
-            }
-          }
-        } else if (calc_type == PseudoCalcType::PSEUDO_PART_INDEX) {
-          int64_t paritition_index;
-          if (OB_FAIL(get_index_by_partition_id(output_id, paritition_index, is_sub_partition))) {
-            LOG_WARN("failed to get_index_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
-          } else {
+        } else {
+          if (calc_type == PseudoCalcType::PSEUDO_PART_ID) {
             if (lib::is_oracle_mode()) {
-              number::ObNumber res_nmb;
               ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
-              if (OB_FAIL(res_nmb.from(paritition_index, tmp_alloc_g.get_allocator()))) {
+              number::ObNumber res_nmb;
+              if (OB_FAIL(res_nmb.from(output_id, tmp_alloc_g.get_allocator()))) {
                 LOG_WARN("get number from arg failed", K(ret));
               } else {
                 for (int64_t i = 0; i < max_size_; i++) {
@@ -664,7 +631,45 @@ int ObDASMergeIter::update_pseudo_parittion_id(const ObDASTabletLoc *tablet_loc,
               }
             } else {
               for (int64_t i = 0; i < max_size_; i++) {
-                datums[i].set_int(paritition_index);
+                datums[i].set_int(output_id);
+              }
+            }
+          } else if (calc_type == PseudoCalcType::PSEUDO_PART_NAME) {
+            ObString partition_name;
+            if (OB_FAIL(get_name_by_partition_id(output_id, partition_name, is_sub_partition))) {
+              LOG_WARN("failed to get_name_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
+            } else {
+              // deep copy str
+              char *buf = expr->get_str_res_mem(*eval_ctx_, partition_name.length());
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("allocate memory failed", K(ret), K(partition_name.length()));
+              } else {
+                MEMCPY(buf, partition_name.ptr(), partition_name.length());
+                for (int64_t i = 0; i < max_size_; i++) {
+                  datums[i].set_string(buf, partition_name.length());
+                }
+              }
+            }
+          } else if (calc_type == PseudoCalcType::PSEUDO_PART_INDEX) {
+            int64_t paritition_index;
+            if (OB_FAIL(get_index_by_partition_id(output_id, paritition_index, is_sub_partition))) {
+              LOG_WARN("failed to get_index_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
+            } else {
+              if (lib::is_oracle_mode()) {
+                number::ObNumber res_nmb;
+                ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
+                if (OB_FAIL(res_nmb.from(paritition_index, tmp_alloc_g.get_allocator()))) {
+                  LOG_WARN("get number from arg failed", K(ret));
+                } else {
+                  for (int64_t i = 0; i < max_size_; i++) {
+                    datums[i].set_number(res_nmb);
+                  }
+                }
+              } else {
+                for (int64_t i = 0; i < max_size_; i++) {
+                  datums[i].set_int(paritition_index);
+                }
               }
             }
           }
