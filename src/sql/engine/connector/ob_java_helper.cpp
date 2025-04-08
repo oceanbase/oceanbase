@@ -20,6 +20,7 @@
 #include "share/config/ob_server_config.h"
 
 #include "ob_java_helper.h"
+#include "ob_jar_version_def.h"
 #include "share/ob_errno.h"
 
 GETJNIENV getJNIEnv = NULL;
@@ -589,6 +590,75 @@ int JVMFunctionHelper::init_jni_env() {
   return ret;
 }
 
+int JVMFunctionHelper::check_jni_exception_(JNIEnv *env) {
+  int ret = OB_SUCCESS;
+  jthrowable thr = env->ExceptionOccurred();
+  if (!OB_ISNULL(thr)) {
+    ret = OB_JNI_JAVA_EXCEPTION_ERROR;
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    env->DeleteLocalRef(thr);
+  }
+  return ret;
+}
+
+bool JVMFunctionHelper::is_valid_loaded_jars_() {
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  uint64_t data_version = 0;
+  uint64_t real_jar_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+  } else {
+    jclass cls = jni_env_->FindClass(JAR_VERSION_CLASS);
+    if (OB_FAIL(check_jni_exception_(jni_env_))) {
+      LOG_WARN("failed to find jar version class", K(ret));
+    } else if (OB_ISNULL(cls)) {
+      ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
+      LOG_WARN("unable to find version class", K(ret));
+    } else {
+      jmethodID call_version_id =
+          jni_env_->GetStaticMethodID(cls, "getJarVersion", "()J");
+      if (OB_FAIL(check_jni_exception_(jni_env_))) {
+        LOG_WARN("failed to find call version method", K(ret));
+      } else if (OB_ISNULL(call_version_id)) {
+        ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
+        LOG_WARN("unable to find call version method", K(ret));
+      } else {
+        jlong jar_version = jni_env_->CallStaticLongMethod(cls, call_version_id);
+        if (OB_FAIL(check_jni_exception_(jni_env_))) {
+          LOG_WARN("failed to find get version", K(ret));
+        } else {
+          real_jar_version = static_cast<uint64_t>(jar_version);
+        }
+      }
+      jni_env_->DeleteLocalRef(cls);
+    }
+  }
+
+  // Note!!!
+  // Current jar version should be matched to jar version
+  // which is in "tools/upgrade/deps_compat.yml".
+  if (OB_FAIL(ret)) {
+    /* do nothing */
+  } else if (OB_LIKELY(DATA_VERSION_4_3_5_2 <= data_version)) {
+    if (OB_LIKELY(JAR_VERSION_101 == real_jar_version)) {
+      is_valid = true;
+    } else {
+      LOG_WARN("current jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
+    }
+  } else if (OB_LIKELY(DATA_VERSION_4_3_5_1 <= data_version)) {
+    if (OB_LIKELY(JAR_VERSION_100 == real_jar_version)) {
+      is_valid = true;
+    } else {
+      LOG_WARN("current jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
+    }
+  }
+  LOG_TRACE("check jar version in detail", K(ret), K(real_jar_version),
+            K(data_version), K(is_valid));
+  return is_valid;
+}
+
 int JVMFunctionHelper::init_classes()
 {
   int ret = OB_SUCCESS;
@@ -629,6 +699,11 @@ int JVMFunctionHelper::do_init_() {
   } else if (OB_FAIL(init_classes())) {
     LOG_WARN("failed to init useful classes", K(ret));
   } else { /* do nothing */}
+
+  if (OB_UNLIKELY(!is_valid_loaded_jars_())) {
+    LOG_WARN("current env loaded with unexpected jar version", K(ret));
+  }
+
   return ret;
 }
 
