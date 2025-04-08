@@ -887,6 +887,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   FLTSpanGuard(pl_compile);
   bool saved_trigger_flag = session_info_.is_for_trigger_package();
   ObString source;
+  ObString copy_exec_env;
 
   int64_t compile_start = ObTimeUtility::current_time();
 
@@ -902,7 +903,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     OZ (package_ast.get_compile_flag().add_invoker_right());
   }
   if (OB_SUCC(ret)) {
-    ObString copy_exec_env;
     OZ (ob_write_string(package.get_allocator(), package_info.get_exec_env(), copy_exec_env));
     OZ (package.get_exec_env().init(copy_exec_env));
   }
@@ -963,7 +963,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   }
 
   bool is_from_disk = false;
-  OZ (generate_package(package_info.get_exec_env(), package_ast, package, is_from_disk));
+  OZ (generate_package(copy_exec_env, package_ast, package, is_from_disk));
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
