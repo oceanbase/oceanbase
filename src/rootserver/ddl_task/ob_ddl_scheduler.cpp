@@ -1226,6 +1226,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         break;
       case DDL_DROP_FTS_INDEX:
       case DDL_DROP_MULVALUE_INDEX:
+      case DDL_DROP_VEC_SPIV_INDEX:
         drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_fts_index_task(proxy,
                                                param.src_table_schema_,
@@ -2212,6 +2213,8 @@ int ObDDLScheduler::create_drop_fts_index_task(
   common::ObString doc_rowkey_name;
   // multivalue index may run here, need calc index type first
   bool is_fts_index = false;
+  bool is_multivalue_index = false;
+  bool is_vec_spiv_index = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2219,6 +2222,8 @@ int ObDDLScheduler::create_drop_fts_index_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg), KP(GCTX.sql_proxy_));
   } else if (FALSE_IT(is_fts_index = (index_schema->is_fts_index_aux() || drop_index_arg->is_parent_task_dropping_fts_index_))) {
+  } else if (FALSE_IT(is_multivalue_index = (index_schema->is_multivalue_index_aux() || drop_index_arg->is_parent_task_dropping_multivalue_index_))) {
+  } else if (FALSE_IT(is_vec_spiv_index = index_schema->is_vec_spiv_index_aux())) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
@@ -2264,7 +2269,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
     const ObFTSDDLChildTaskInfo fts_doc_word(fts_doc_word_name, doc_word_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo rowkey_doc(rowkey_doc_name, rowkey_doc_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo doc_rowkey(doc_rowkey_name, doc_rowkey_table_id, 0/*task_id*/);
-    const ObDDLType ddl_type = is_fts_index ? DDL_DROP_FTS_INDEX : DDL_DROP_MULVALUE_INDEX;
+    const ObDDLType ddl_type = is_fts_index ? DDL_DROP_FTS_INDEX : (is_vec_spiv_index ? DDL_DROP_VEC_SPIV_INDEX : DDL_DROP_MULVALUE_INDEX);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
                                 task_id,
@@ -3071,6 +3076,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
         break;
       case ObDDLType::DDL_DROP_FTS_INDEX:
       case ObDDLType::DDL_DROP_MULVALUE_INDEX:
+      case ObDDLType::DDL_DROP_VEC_SPIV_INDEX:
         ret = schedule_drop_fts_index_task(record);
         break;
       case ObDDLType::DDL_REBUILD_INDEX:

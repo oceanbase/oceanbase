@@ -1129,7 +1129,8 @@ private:
   int get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
                              GroupConcatExtraResult *&extra,
                              ObDatum &concat_result,
-                             ObRbOperation calc_op);
+                             ObRbOperation calc_op,
+                             bool is_cardinality = false);
   int get_array_agg_result(const ObAggrInfo &aggr_info,
                            GroupConcatExtraResult *&extra,
                            ObDatum &concat_result);
@@ -1259,6 +1260,8 @@ public:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG:
       case T_FUNC_SYS_ARRAY_AGG:
+      case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+      case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
       {
         need_id = true;
         break;
@@ -1416,6 +1419,8 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
     case T_FUNC_SYS_ARRAY_AGG:
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
     {
       need_extra = true;
       break;

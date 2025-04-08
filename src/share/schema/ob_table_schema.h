@@ -1153,6 +1153,8 @@ public:
   inline bool is_vec_ivfpq_index() const;
   inline bool is_vec_ivfsq8_index() const;
   inline bool is_vec_ivfflat_index() const;
+  inline bool is_vec_spiv_index() const;
+  inline bool is_vec_spiv_index_aux() const;
   inline bool is_vec_ivfflat_centroid_index() const;
   inline bool is_vec_ivfflat_cid_vector_index() const;
   inline bool is_vec_ivfflat_rowkey_cid_index() const;
@@ -1168,6 +1170,7 @@ public:
   inline bool is_vec_rowkey_vid_type() const;
   inline bool is_vec_vid_rowkey_type() const;
   inline bool is_vec_delta_buffer_type() const;
+  inline bool is_vec_dim_docid_value_type() const;
   inline bool is_vec_index_id_type() const;
   inline bool is_vec_index_snapshot_data_type() const;
   inline bool is_fts_index() const;
@@ -1747,6 +1750,7 @@ public:
   int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
   int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
 
+  int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
   int get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid = false) const;
   // get columns for building rowid
@@ -2052,6 +2056,7 @@ public:
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   int get_rowkey_doc_tid(uint64_t &index_table_id) const;
+  int get_docid_col_id(uint64_t &docid_col_id) const;
   int get_rowkey_vid_tid(uint64_t &index_table_id) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
@@ -2465,6 +2470,16 @@ inline bool ObSimpleTableSchemaV2::is_vec_domain_index() const
   return share::schema::is_vec_domain_index(index_type_);
 }
 
+inline bool ObSimpleTableSchemaV2::is_vec_spiv_index() const
+{
+  return share::schema::is_vec_spiv_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_spiv_index_aux() const
+{
+  return share::schema::is_vec_spiv_index_aux(index_type_);
+}
+
 inline bool ObSimpleTableSchemaV2::is_built_in_vec_index() const
 {
   return share::schema::is_built_in_vec_index(index_type_);
@@ -2543,6 +2558,11 @@ inline bool ObSimpleTableSchemaV2::is_vec_vid_rowkey_type() const
 inline bool ObSimpleTableSchemaV2::is_vec_delta_buffer_type() const
 {
   return share::schema::is_vec_delta_buffer_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_dim_docid_value_type() const
+{
+  return share::schema::is_vec_dim_docid_value_type(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_vec_index_id_type() const
@@ -2634,7 +2654,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_vec_ivfsq8_meta_index(index_type) ||
          share::schema::is_vec_ivfflat_centroid_index(index_type) ||
          share::schema::is_vec_ivfpq_centroid_index(index_type) ||
-         share::schema::is_vec_ivfsq8_centroid_index(index_type);
+         share::schema::is_vec_ivfsq8_centroid_index(index_type) ||
+         share::schema::is_vec_dim_docid_value_type(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const

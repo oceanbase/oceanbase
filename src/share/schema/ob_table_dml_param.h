@@ -92,6 +92,7 @@ public:
   OB_INLINE bool is_vector_index_snapshot() const { return share::schema::is_vec_index_snapshot_data_type(index_type_); }
   OB_INLINE bool is_index_local_storage() const { return share::schema::is_index_local_storage(index_type_); }
   OB_INLINE bool is_vector_index() const { return share::schema::is_vec_index(index_type_); }
+  OB_INLINE bool is_sparse_vector_index() const { return share::schema::is_vec_spiv_index(index_type_); }
   OB_INLINE bool is_ivf_vector_index() const { return share::schema::is_vec_ivf_index(index_type_); }
   OB_INLINE bool is_no_need_update_vector_index() const
   {

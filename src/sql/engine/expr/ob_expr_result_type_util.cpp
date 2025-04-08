@@ -1009,5 +1009,84 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
   return ret;
 }
 
+int ObExprResultTypeUtil::get_collection_calc_type(ObExecContext *exec_ctx,
+                                                   const ObExprResType &type1,
+                                                   const ObExprResType & type2,
+                                                   ObExprResType &calc_type)
+{
+  int ret = OB_SUCCESS;
+  const ObSqlCollectionInfo *l_coll_info = NULL;
+  const ObSqlCollectionInfo *r_coll_info = NULL;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_info_by_subschema_id(exec_ctx, type1.get_subschema_id(), l_coll_info))) {
+    LOG_WARN("failed to get left coll type", K(ret), K(type1.get_subschema_id()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_info_by_subschema_id(exec_ctx, type2.get_subschema_id(), r_coll_info))) {
+    LOG_WARN("failed to get right coll type", K(ret), K(type2.get_subschema_id()));
+  } else if (!l_coll_info->has_same_super_type(*r_coll_info)) {
+    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+    LOG_WARN("nested type is mismatch", K(ret));
+  } else if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+             || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+             || l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE
+             || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+    uint16_t subschema_id;
+    ObObjMeta key_meta;
+    ObObjMeta value_meta;
+    ObExprResType key_calc_type;
+    ObExprResType value_calc_type;
+    const ObCollectionMapType *l_map_type = dynamic_cast<const ObCollectionMapType*>(l_coll_info->collection_meta_);
+    const ObCollectionMapType *r_map_type = dynamic_cast<const ObCollectionMapType*>(r_coll_info->collection_meta_);
+    if (OB_ISNULL(l_map_type) || OB_ISNULL(r_map_type)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("map type is null", K(ret));
+    } else {
+      uint32_t key_depth = 0;
+      uint32_t value_depth = 0;
+      ObDataType l_map_key_type = l_map_type->get_key_meta(key_depth);
+      ObDataType r_map_key_type = r_map_type->get_key_meta(key_depth);
+      ObDataType l_map_value_type = l_map_type->get_basic_meta(value_depth);
+      ObDataType r_map_value_type = r_map_type->get_basic_meta(value_depth);
+      if (OB_FAIL(get_array_calc_type(exec_ctx, l_map_key_type, r_map_key_type,
+                                             key_depth, key_calc_type, key_meta))) {
+        LOG_WARN("failed to get key calc type", K(ret));
+      } else if (OB_FAIL(get_array_calc_type(exec_ctx, l_map_value_type, r_map_value_type,
+                                             value_depth, value_calc_type, value_meta))) {
+        LOG_WARN("failed to get value calc type", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::deduce_map_subschema_id(exec_ctx, key_calc_type.get_subschema_id(), value_calc_type.get_subschema_id(), subschema_id))) {
+        LOG_WARN("failed to deduce map subschema id", K(ret));
+      } else {
+        calc_type.set_collection(subschema_id);
+      }
+    }
+  } else if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE || r_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+    // cast to vec
+    if (l_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+      calc_type.set_collection(type1.get_subschema_id());
+    } else {
+      calc_type.set_collection(type2.get_subschema_id());
+    }
+  } else {
+    uint32_t depth = 0;
+    ObDataType coll_elem1_type = l_coll_info->get_basic_meta(depth);
+    ObDataType coll_elem2_type = r_coll_info->get_basic_meta(depth);
+    ObObjMeta element_meta;
+    if (coll_elem1_type.get_obj_type() == coll_elem2_type.get_obj_type() &&
+               coll_elem1_type.get_obj_type() == ObVarcharType) {
+      // use subschema_id whose length is greater
+      if (coll_elem1_type.get_length() > coll_elem2_type.get_length()) {
+        calc_type.set_collection(type1.get_subschema_id());
+      } else {
+        calc_type.set_collection(type2.get_subschema_id());
+      }
+    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type, coll_elem2_type,
+                                           depth, calc_type, element_meta))) {
+      LOG_WARN("failed to get array calc type", K(ret));
+    }
+  }
+  return ret;
+}
+
 } /* sql */
 } /* oceanbase */

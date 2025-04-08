@@ -26,6 +26,12 @@ using namespace share::schema;
 using namespace sql;
 namespace share
 {
+
+bool ObIndexBuilderUtil::is_do_create_dense_vec_index(const ObIndexType index_type)
+{
+  return share::schema::is_vec_index(index_type) && !share::schema::is_built_in_vec_spiv_index(index_type);
+}
+
 void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &column)
 {
   if ((column.is_generated_column() &&
@@ -405,6 +411,20 @@ int ObIndexBuilderUtil::set_index_table_columns(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected index type", K(ret), K(arg.index_type_));
       }
+    } else if (is_vec_spiv_index(arg.index_type_)) {
+      if (is_doc_rowkey_aux(arg.index_type_)) {
+        if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_doc_rowkey_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("failed to set doc rowkey table", K(ret));
+        }
+      } else if (is_rowkey_doc_aux(arg.index_type_)) {
+        if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_rowkey_doc_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("failed to set rowkey doc table", K(ret));
+        }
+      } else if (is_vec_dim_docid_value_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_ivf_table_columns(arg, data_schema, index_schema))) {
+          LOG_WARN("fail to set spiv table columns", K(ret), K(arg.index_type_));
+        }
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index type", K(ret), K(arg.index_type_));
@@ -758,11 +778,11 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
     } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(1)))) {
       LOG_WARN("push back mbr column to gen columns failed", K(ret));
     }
-  } else if (is_vec_index(arg.index_type_)) {
+  } else if (ObIndexBuilderUtil::is_do_create_dense_vec_index(arg.index_type_)) {
     if (OB_FAIL(ObVecIndexBuilderUtil::check_vec_index_allowed(data_schema))) {
       LOG_WARN("fail to check vector index allowed", K(ret));
     } else if (OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(arg, data_schema, allocator, gen_columns))) {
-      LOG_WARN("failed to adjust vec index args", K(ret));
+      LOG_WARN("failed to adjust vec index args", K(ret), K(arg.index_type_));
     }
   } else if (is_fts_index(arg.index_type_)) {
     if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, allocator, gen_columns))) {

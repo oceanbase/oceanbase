@@ -105,6 +105,11 @@ public:
   static int check_supportability_for_building_index(
         const ObTableSchema *data_schema,
         const obrpc::ObCreateIndexArg *index_arg);
+  static int generate_doc_id_column(
+        const obrpc::ObCreateIndexArg *index_arg,
+        const uint64_t col_id,
+        ObTableSchema &data_schema, // not const since will add column to data schema
+        ObColumnSchemaV2 *&doc_id_col);
 private:
   static int check_ft_cols(
       const obrpc::ObCreateIndexArg *index_arg,
@@ -119,11 +124,6 @@ private:
       const ObIArray<const ObColumnSchemaV2 *> &fts_cols,
       const int index_column_cnt,
       ObIAllocator &allocator);
-  static int generate_doc_id_column(
-      const obrpc::ObCreateIndexArg *index_arg,
-      const uint64_t col_id,
-      ObTableSchema &data_schema, // not const since will add column to data schema
-      ObColumnSchemaV2 *&doc_id_col);
   static int generate_word_segment_column(
       const obrpc::ObCreateIndexArg *index_arg,
       const uint64_t col_id,

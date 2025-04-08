@@ -139,6 +139,10 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
         column.add_column_flag(GENERATED_VEC_KEY_COLUMN_FLAG);
       } else if (T_FUN_SYS_VEC_DATA == root_expr_type) {
         column.add_column_flag(GENERATED_VEC_DATA_COLUMN_FLAG);
+      } else if (T_FUN_SYS_SPIV_DIM == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_SPIV_DIM_COLUMN_FLAG);
+      } else if (T_FUN_SYS_SPIV_VALUE == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG);
       } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
         column.add_column_flag(GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG);
       } else if (T_FUN_SYS_WORD_COUNT == root_expr_type) {
@@ -256,7 +260,24 @@ bool ObSchemaUtils::is_vec_index_column(const uint64_t flag)
       || is_vec_ivf_pq_center_id_column(flag)
       || is_vec_ivf_pq_center_ids_column(flag)
       || is_vec_ivf_meta_id_column(flag)
-      || is_vec_ivf_meta_vector_column(flag);
+      || is_vec_ivf_meta_vector_column(flag)
+      || is_vec_spiv_dim_column(flag)
+      || is_vec_spiv_value_column(flag);
+}
+
+bool ObSchemaUtils::is_vec_spiv_dim_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SPIV_DIM_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_spiv_value_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_spiv_vec_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SPIV_VEC_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_vec_ivf_center_id_column(const uint64_t flag)

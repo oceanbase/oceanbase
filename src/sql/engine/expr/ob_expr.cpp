@@ -1193,7 +1193,7 @@ void ObExpr::reset_attrs_datums(ObEvalCtx &ctx) const
 int ObExpr::nested_cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObBitVector *skip) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObArrayExprUtils::transform_array_to_uniform(ctx, *this, size, skip))) {
+  if (OB_FAIL(ObArrayExprUtils::transform_coll_to_uniform(ctx, *this, size, skip))) {
     SQL_LOG(WARN, "failed to cast array to uniform", K(ret), K(size));
   }
   return ret;

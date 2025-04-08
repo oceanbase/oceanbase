@@ -168,7 +168,7 @@ int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tm
       LOG_WARN("failed to set lambda para", K(ret), K(i));
     } else if (OB_FAIL(lambda_expr->eval(ctx, datum))) {
       LOG_WARN("failed to eval args", K(ret));
-    } else if (lambda_arr->is_nested_array()) {
+    } else if (lambda_arr->get_format() == Nested_Array) {
       ObArrayNested *nested_arr = dynamic_cast<ObArrayNested *>(lambda_arr);
       uint16_t elem_subid = lambda_expr->obj_meta_.get_subschema_id();
       if (OB_UNLIKELY(OB_ISNULL(nested_arr))) {
@@ -185,7 +185,7 @@ int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tm
         LOG_WARN("failed to push back value", K(ret));
       }
     } else {
-      const ObCollectionBasicType *elem_type = dynamic_cast<const ObCollectionBasicType *>(lambda_arr->get_array_type()->element_type_);
+      const ObCollectionBasicType *elem_type = dynamic_cast<const ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(lambda_arr->get_array_type())->element_type_);
       if (OB_UNLIKELY(OB_ISNULL(elem_type))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter array collection element type is null", K(ret));
@@ -471,11 +471,17 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
     is_null_res = true;
   }
   for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
+    ObCollectionTypeBase *coll_type = NULL;
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("invalid data type", K(ret), K(types_stack[i].get_type()));
+    } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, types_stack[i].get_subschema_id(), coll_type))) {
+      LOG_WARN("failed to get array type by subschema id", K(ret), K(types_stack[i].get_subschema_id()));
+    } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
     }
   }
 

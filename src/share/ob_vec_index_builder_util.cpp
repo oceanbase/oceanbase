@@ -14,6 +14,7 @@
 #include "ob_vec_index_builder_util.h"
 #include "ob_index_builder_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -42,11 +43,14 @@ const char * ObVecIndexBuilderUtil::IVF_PQ_CODE_TABLE_NAME_SUFFIX = "_ivf_pq_cod
 const char * ObVecIndexBuilderUtil::IVF_PQ_ROWKEY_CID_TABLE_NAME_SUFFIX = "_ivf_pq_rowkey_cid";
 const char * ObVecIndexBuilderUtil::IVF_PQ_CENTER_IDS_COL_TYPE_NAME = "ARRAY(VARBINARY)";
 
+// spiv
+const char * ObVecIndexBuilderUtil::SPIV_DIM_DOCID_VALUE_TABLE_NAME_SUFFIX = "";
 
 int ObVecIndexBuilderUtil::append_vec_args(
     const sql::ObPartitionResolveResult &resolve_result,
     const obrpc::ObCreateIndexArg &index_arg,
     bool &vec_common_aux_table_exist,
+    bool &fts_common_aux_table_exist,
     ObIArray<sql::ObPartitionResolveResult> &resolve_results,
     ObIArray<ObCreateIndexArg> &index_arg_list,
     ObIAllocator *allocator,
@@ -74,6 +78,11 @@ int ObVecIndexBuilderUtil::append_vec_args(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec ivf index before 4.3.5.1 is");
     LOG_WARN("vec ivf index is not supported before 4.3.5.1", K(ret), K(tenant_version));
+  } else if (share::schema::is_vec_spiv_index(index_arg.index_type_) &&
+             tenant_version < DATA_VERSION_4_3_5_2) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vec index before 4.3.5.2 is");
+    LOG_WARN("sparse vec index is not supported before 4.3.5.2", K(ret), K(tenant_version));
   } else {
     if (index_arg.index_type_ == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL &&
         OB_FAIL(ObVecIndexBuilderUtil::append_vec_hnsw_args(resolve_result,
@@ -105,6 +114,14 @@ int ObVecIndexBuilderUtil::append_vec_args(
                                                             index_arg_list,
                                                             allocator))) {
       LOG_WARN("fail to append vec ivfpq args", K(ret));
+    } else if (index_arg.index_type_ == INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL &&
+        OB_FAIL(ObVecIndexBuilderUtil::append_vec_spiv_args(resolve_result,
+                                                           index_arg,
+                                                           fts_common_aux_table_exist,
+                                                           resolve_results,
+                                                           index_arg_list,
+                                                           allocator))) {
+      LOG_WARN("fail to append vec spiv args", K(ret));
     }
   }
   LOG_DEBUG("finish append vec index args", K(index_arg), K(index_arg_list));
@@ -164,6 +181,53 @@ int ObVecIndexBuilderUtil::append_vec_hnsw_args(
   LOG_DEBUG("finish append vec index args", K(index_arg), K(index_arg_list));
   return ret;
 }
+
+int ObVecIndexBuilderUtil::append_vec_spiv_args(
+  const sql::ObPartitionResolveResult &resolve_result,
+  const obrpc::ObCreateIndexArg &index_arg,
+  bool &common_aux_table_exist,
+  ObIArray<sql::ObPartitionResolveResult> &resolve_results,
+  ObIArray<ObCreateIndexArg> &index_arg_list,
+  ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (!common_aux_table_exist) {
+    const int64_t num_vec_args = 3;
+    // append domain table first
+    if (OB_FAIL(append_vec_dim_docid_value_arg(index_arg, allocator, index_arg_list))) {
+      LOG_WARN("failed to append vec dim_docid_value_table arg", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(index_arg, allocator, index_arg_list))) {
+      LOG_WARN("failed to append rowkey_docid arg", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(index_arg, allocator, index_arg_list))) {
+      LOG_WARN("failed to append docid_rowkey arg", K(ret));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < num_vec_args; ++i) {
+      if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+        LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      common_aux_table_exist = true;
+    }
+  } else {
+    const int64_t num_vec_args = 1;
+    if (OB_FAIL(append_vec_dim_docid_value_arg(index_arg, allocator, index_arg_list))) {
+      LOG_WARN("failed to append vec dim_docid_value_table arg", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < num_vec_args; ++i) {
+      if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+        LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
+      }
+    }
+  }
+  LOG_DEBUG("finish append vec index args", K(index_arg), K(index_arg_list));
+  return ret;
+}
+
 
 int ObVecIndexBuilderUtil::append_vec_ivfflat_args(
     const sql::ObPartitionResolveResult &resolve_result,
@@ -372,6 +436,30 @@ int ObVecIndexBuilderUtil::append_vec_delta_buffer_arg(
   return ret;
 }
 
+int ObVecIndexBuilderUtil::append_vec_dim_docid_value_arg(
+    const obrpc::ObCreateIndexArg &index_arg,
+    ObIAllocator *allocator,
+    ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
+{
+  int ret = OB_SUCCESS;
+  ObCreateIndexArg vec_dim_docid_value_arg;
+  ObString domain_index_name = index_arg.index_name_;
+  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+  } else if (OB_FAIL(vec_dim_docid_value_arg.assign(index_arg))) {
+    LOG_WARN("failed to assign to vec dim docid value arg", K(ret));
+  } else if (FALSE_IT(vec_dim_docid_value_arg.index_type_ = INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL)) {
+  } else if (OB_FAIL(generate_vec_index_name(allocator,
+                                            vec_dim_docid_value_arg.index_type_,
+                                            domain_index_name,
+                                            vec_dim_docid_value_arg.index_name_))) {
+    LOG_WARN("failed to generate vec index name", K(ret));
+  } else if (OB_FAIL(index_arg_list.push_back(vec_dim_docid_value_arg))) {
+    LOG_WARN("failed to push back vec dim docid value arg", K(ret));
+  }
+  return ret;
+}
 
 int ObVecIndexBuilderUtil::append_vec_index_id_arg(
     const obrpc::ObCreateIndexArg &index_arg,
@@ -434,6 +522,29 @@ int ObVecIndexBuilderUtil::check_vec_index_allowed(
   } else if (data_schema.is_partitioned_table() && data_schema.is_table_without_pk()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on partition table without primary key");
+  }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::generate_vec_spiv_index_name(
+  const share::schema::ObIndexType type,
+  const ObString &index_name,
+  char *name_buf,
+  int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(name_buf)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to generate vec spiv index name", K(ret));
+  } else if (share::schema::is_vec_dim_docid_value_type(type) &&
+             OB_FAIL(databuff_printf(name_buf,
+                                     OB_MAX_TABLE_NAME_LENGTH,
+                                     pos,
+                                     "%.*s%s",
+                                     index_name.length(),
+                                     index_name.ptr(),
+                                     SPIV_DIM_DOCID_VALUE_TABLE_NAME_SUFFIX))) {
+    LOG_WARN("failed to print", K(ret));
   }
   return ret;
 }
@@ -634,6 +745,10 @@ int ObVecIndexBuilderUtil::generate_vec_index_name(
       if (OB_FAIL(generate_vec_hnsw_index_name(type, index_name, name_buf, pos))) {
         LOG_WARN("fail to generate vec ivf index name", K(ret), K(type));
       }
+    } else if (share::schema::is_vec_spiv_index(type)) {
+      if (OB_FAIL(generate_vec_spiv_index_name(type, index_name, name_buf, pos))) {
+        LOG_WARN("fail to generate vec spiv index name", K(ret), K(type));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index type", K(ret), K(type));
@@ -697,7 +812,7 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
     ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
-  if (!data_schema.is_valid() || !share::schema::is_vec_ivf_index(arg.index_type_)) {
+  if (!data_schema.is_valid() || (!share::schema::is_vec_ivf_index(arg.index_type_) && !share::schema::is_vec_spiv_index(arg.index_type_)) ) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(data_schema), K(arg.index_type_));
   } else if (OB_FAIL(check_ivf_store_column_count(arg))) {
@@ -1251,6 +1366,10 @@ int ObVecIndexBuilderUtil::adjust_vec_args(
     if (OB_FAIL(adjust_vec_ivfpq_args(index_arg, data_schema, allocator, gen_columns))) {
       LOG_WARN("fail to adjust vec hnsw args", K(ret));
     }
+  } else if (share::schema::is_vec_spiv_index(index_type)) {
+    if (OB_FAIL(adjust_vec_spiv_args(index_arg, data_schema, allocator, gen_columns))) {
+      LOG_WARN("fail to adjust vec spiv args", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to adjust vec args", K(ret), K(index_type));
@@ -1457,6 +1576,96 @@ int ObVecIndexBuilderUtil::adjust_vec_hnsw_args(
       }
     }
   }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::adjust_vec_spiv_args(
+  obrpc::ObCreateIndexArg &index_arg,
+  ObTableSchema &data_schema, // not const since will add column to data schema
+  ObIAllocator &allocator,
+  ObIArray<ObColumnSchemaV2 *> &gen_columns)
+{
+  int ret = OB_SUCCESS;
+  const ObIndexType &index_type = index_arg.index_type_;
+  uint64_t dim_col_id = OB_INVALID_ID;
+  uint64_t docid_col_id = OB_INVALID_ID;
+  uint64_t value_col_id = OB_INVALID_ID;
+  const ObColumnSchemaV2 *existing_docid_col = nullptr;
+  const ObColumnSchemaV2 *sparse_vec_col = nullptr;
+
+  ObArray<const ObColumnSchemaV2 *> tmp_cols;
+  uint64_t available_col_id = 0;
+  bool is_rowkey_docid = false;
+  bool is_docid_rowkey = false;
+  bool is_dim_docid_value = false;
+
+  if (!data_schema.is_valid() || !share::schema::is_vec_spiv_index(index_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(data_schema), K(index_type));
+  } else if (FALSE_IT(available_col_id = data_schema.get_max_used_column_id() + 1)) {
+  } else if (FALSE_IT(is_rowkey_docid = share::schema::is_rowkey_doc_aux(index_type))) {
+  } else if (FALSE_IT(is_docid_rowkey = share::schema::is_doc_rowkey_aux(index_type))) {
+  } else if (FALSE_IT(is_dim_docid_value = share::schema::is_vec_dim_docid_value_type(index_type))) {
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_doc_id_col(data_schema, existing_docid_col))) {
+    LOG_WARN("failed to get docid col", K(ret));
+  } else if (OB_FAIL(get_vec_spiv_col(data_schema, &index_arg, sparse_vec_col))) {
+    LOG_WARN("failed to get sparse vector index col", K(ret));
+  } else {
+    ObColumnSchemaV2 *generated_dim_col = nullptr;
+    ObColumnSchemaV2 *generated_docid_col = nullptr;
+    ObColumnSchemaV2 *generated_value_col = nullptr;
+
+    if (OB_ISNULL(existing_docid_col)) {
+      docid_col_id = available_col_id++;
+      if (OB_FAIL(ObFtsIndexBuilderUtil::generate_doc_id_column(&index_arg, docid_col_id, data_schema, generated_docid_col))) {
+        LOG_WARN("failed to generate docid column", K(ret));
+      } else if (OB_FAIL(gen_columns.push_back(generated_docid_col))) {
+        LOG_WARN("failed to push back docid column", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (is_dim_docid_value) {
+      dim_col_id = available_col_id++;
+      if (OB_FAIL(generate_spiv_dim_column(&index_arg, dim_col_id, data_schema, generated_dim_col))) {
+        LOG_WARN("failed to generate spiv dim column", K(ret));
+      } else if (OB_FAIL(gen_columns.push_back(generated_dim_col))) {
+        LOG_WARN("failed to push spiv value column", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        value_col_id = available_col_id++;
+        if (OB_FAIL(generate_spiv_value_column(&index_arg, value_col_id, data_schema, generated_value_col))) {
+          LOG_WARN("failed to generate spiv value column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_value_col))) {
+          LOG_WARN("failed to push spiv value column", K(ret));
+        }
+      }
+    }
+
+    // generate index_arg
+    if (OB_FAIL(ret)) {
+    } else if (is_rowkey_docid || is_docid_rowkey) {
+      if (OB_FAIL(push_back_gen_col(tmp_cols, existing_docid_col, generated_docid_col))) {
+        LOG_WARN("failed to push back docic column", K(ret));
+      } else if (OB_FAIL(adjust_vec_spiv_arg(&index_arg, data_schema, allocator, tmp_cols))) {
+        LOG_WARN("failed to append sparse vec index arg", K(ret));
+      }
+    } else if (is_dim_docid_value) {
+      if (OB_FAIL(push_back_gen_col(tmp_cols, nullptr, generated_dim_col))) {
+        LOG_WARN("failed to push back dim column", K(ret));
+      } else if (OB_FAIL(push_back_gen_col(tmp_cols, existing_docid_col, generated_docid_col))) {
+        LOG_WARN("failed to push back docid column", K(ret));
+      } else if (OB_FAIL(push_back_gen_col(tmp_cols, nullptr, generated_value_col))) {
+        LOG_WARN("failed to push back value column", K(ret));
+      } else if (OB_FAIL(push_back_gen_col(tmp_cols, sparse_vec_col, nullptr))) {
+        LOG_WARN("failed to push back sparse vec column");
+      } else if (OB_FAIL(adjust_vec_spiv_arg(&index_arg, data_schema, allocator, tmp_cols))) {
+        LOG_WARN("failed to append sparse vec index arg", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1904,6 +2113,31 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfpq_args(
   return ret;
 }
 
+int ObVecIndexBuilderUtil::get_spiv_column_cnt(
+    const ObIndexType index_type,
+    const int64_t main_table_rowkey_size,
+    int64_t &total_column_cnt,
+    int64_t &index_column_cnt)
+{
+  int ret = OB_SUCCESS;
+
+  if (share::schema::is_vec_dim_docid_value_type(index_type)) {
+    total_column_cnt = 3;                           /* 没有冗余主表主键，共3列 */
+    index_column_cnt = 2;                           /* 只有2列索引列 */
+  } else if (share::schema::is_doc_rowkey_aux(index_type)) {
+    total_column_cnt = main_table_rowkey_size + 1;  /* 除主表主键外，索引辅助表列数为1*/
+    index_column_cnt = 1;        /* 索引辅助表非主键列数量为1 */
+  } else if (share::schema::is_rowkey_doc_aux(index_type)) {
+    total_column_cnt = main_table_rowkey_size + 1;  /* 除主表主键外，索引辅助表列数为1 */
+    index_column_cnt = main_table_rowkey_size;        /* 索引辅助表非主键列数量为1 */
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index type", K(ret), K(index_type));
+  }
+
+  return ret;
+}
+
 int ObVecIndexBuilderUtil::get_ivf_column_cnt(
     const ObIndexType index_type,
     const int64_t main_table_rowkey_size,
@@ -1938,6 +2172,93 @@ int ObVecIndexBuilderUtil::get_ivf_column_cnt(
   }
   LOG_DEBUG("finish get_ivf_column_cnt", K(ret),
     K(index_type), K(total_column_cnt), K(index_column_cnt), K(main_table_rowkey_size));
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::adjust_vec_spiv_arg(
+  ObCreateIndexArg *index_arg,
+  const ObTableSchema &data_schema,
+  ObIAllocator &allocator,
+  const ObIArray<const ObColumnSchemaV2 *> &vec_cols)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_arg) ||
+      !share::schema::is_vec_spiv_index(index_arg->index_type_) ||
+      !data_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema));
+  } else {
+    const ObIndexType &index_type = index_arg->index_type_;
+    const bool is_rowkey_docid = share::schema::is_rowkey_doc_aux(index_arg->index_type_);
+    const bool is_docid_rowkey = share::schema::is_doc_rowkey_aux(index_arg->index_type_);
+    const bool is_dim_docid_value = share::schema::is_vec_dim_docid_value_type(index_arg->index_type_);
+
+    if ((is_rowkey_docid && vec_cols.count() != 1) ||
+        (is_docid_rowkey && vec_cols.count() != 1) ||
+        (is_dim_docid_value && vec_cols.count() != 4)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vec cols count not expected", K(ret), K(index_type), K(vec_cols));
+    } else {
+      index_arg->index_columns_.reuse();
+      index_arg->store_columns_.reuse();
+      if (is_rowkey_docid) {
+        // 1. add rowkey column to arg->index_columns
+        const ObRowkeyInfo &rowkey_info = data_schema.get_rowkey_info();
+        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+          ObColumnSortItem rowkey_column;
+          const ObColumnSchemaV2 *rowkey_col = NULL;
+          uint64_t column_id = OB_INVALID_ID;
+          if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+            LOG_WARN("get_column_id failed", "index", i, K(ret));
+          } else if (NULL == (rowkey_col = data_schema.get_column_schema(column_id))) {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_WARN("get_column_schema failed", "table_id",
+                data_schema.get_table_id(), K(column_id), K(ret));
+          } else if (OB_FAIL(ob_write_string(allocator,
+                                             rowkey_col->get_column_name_str(),
+                                             rowkey_column.column_name_))) {
+            //to keep the memory lifetime of column_name consistent with index_arg
+            LOG_WARN("deep copy column name failed", K(ret));
+          } else if (OB_FAIL(index_arg->index_columns_.push_back(rowkey_column))) {
+            LOG_WARN("failed to push back rowkey column", K(ret));
+          }
+        }
+        // 2. add docid column to arg->store_columns
+        const ObColumnSchemaV2 *docid_col = vec_cols.at(0);
+        ObString docid_col_name;
+        if (FAILEDx(ob_write_string(allocator, docid_col->get_column_name_str(), docid_col_name))) {
+          LOG_WARN("fail to deep copy docid column name", K(ret));
+        } else if (OB_FAIL(index_arg->store_columns_.push_back(docid_col_name))) {
+          LOG_WARN("failed to push back docid column", K(ret));
+        }
+      } else if (is_docid_rowkey) {
+        // add docid column to index_columns
+        ObColumnSortItem docid_column;
+        const ObColumnSchemaV2 *docid_col = vec_cols.at(0);
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(docid_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("vec col is null", K(ret));
+        } else if (OB_FAIL(ob_write_string(allocator,
+                                           docid_col->get_column_name_str(),
+                                           docid_column.column_name_))) {
+          //to keep the memory lifetime of column_name consistent with index_arg
+          LOG_WARN("deep copy column name failed", K(ret));
+        } else if (OB_FAIL(index_arg->index_columns_.push_back(docid_column))) {
+          LOG_WARN("failed to push back docid column", K(ret));
+        }
+      } else if (is_dim_docid_value) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(inner_adjust_vec_arg(index_arg,
+                                                vec_cols,
+                                                OB_VEC_DIM_DOCID_VALUE_TABLE_INDEX_COL_CNT,
+                                                &allocator))) {
+          LOG_WARN("failed to inner_adjust_vec_arg", K(ret));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -2123,7 +2444,8 @@ int ObVecIndexBuilderUtil::inner_adjust_vec_arg(
   if (OB_ISNULL(vec_arg) || OB_ISNULL(allocator) ||
      (!share::schema::is_vec_delta_buffer_type(vec_arg->index_type_) &&
       !share::schema::is_vec_index_id_type(vec_arg->index_type_) &&
-      !share::schema::is_vec_index_snapshot_data_type(vec_arg->index_type_))) {
+      !share::schema::is_vec_index_snapshot_data_type(vec_arg->index_type_) &&
+      !share::schema::is_vec_dim_docid_value_type(vec_arg->index_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), KPC(vec_arg), KP(allocator));
   } else if ((share::schema::is_vec_delta_buffer_type(vec_arg->index_type_) ||
@@ -2133,6 +2455,9 @@ int ObVecIndexBuilderUtil::inner_adjust_vec_arg(
     LOG_WARN("invalid argument", K(ret), K(vec_cols.count()), K(index_column_cnt));
   } else if (share::schema::is_vec_index_snapshot_data_type(vec_arg->index_type_) &&
              vec_cols.count() != index_column_cnt + 3) {  // index_rowkey_column_cnt + common_col_cnt , snapshot_data 的非主键列为3
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(vec_cols.count()), K(index_column_cnt));
+  } else if (share::schema::is_vec_dim_docid_value_type(vec_arg->index_type_) && vec_cols.count() != index_column_cnt + 2) {  // index_rowkey_column_cnt + common_col_cnt, dim_docid_value的非主键列为2
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(vec_cols.count()), K(index_column_cnt));
   } else {
@@ -2622,6 +2947,194 @@ int ObVecIndexBuilderUtil::generate_type_column(
               LOG_WARN("generate type column failed", K(ret), KP(type_col));
             } else {
               LOG_INFO("succeed to generate type column", KCSTRING(col_name_buf), K(col_id), K(data_schema));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::generate_spiv_dim_column(
+    const ObCreateIndexArg *index_arg,
+    const uint64_t col_id,
+    ObTableSchema &data_schema,
+    ObColumnSchemaV2 *&spiv_dim_col)
+{
+  int ret = OB_SUCCESS;
+  spiv_dim_col = nullptr;
+  char col_name_buf[OB_MAX_COLUMN_NAME_LENGTH] = {'\0'};
+  int64_t name_pos = 0;
+  bool col_exists = false;
+  if (OB_ISNULL(index_arg)
+      || !share::schema::is_vec_index(index_arg->index_type_)
+      || !data_schema.is_valid()
+      || col_id == OB_INVALID_ID ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema), K(col_id));
+  } else if (OB_FAIL(construct_spiv_col_name(index_arg, data_schema, col_name_buf, OB_MAX_COLUMN_NAME_LENGTH, name_pos, true))) {
+    LOG_WARN("failed to construct spiv dim col name", K(ret));
+  } else if (OB_FAIL(check_vec_gen_col(data_schema, col_id, col_name_buf, name_pos, col_exists))) {
+    LOG_WARN("check vec gen col failed", K(ret));
+  } else if (!col_exists) {
+    ObColumnSchemaV2 column_schema;
+    SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], vec_expr_def) {
+      ObArray<ObString> extend_type_info;
+      MEMSET(vec_expr_def, 0, sizeof(vec_expr_def));
+      int64_t def_pos = 0;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, "SPIV_DIM("))) {
+        LOG_WARN("print generate expr definition prefix failed", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
+        const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
+        ObColumnSchemaV2 *col_schema = nullptr;
+        if (column_name.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column name is empty", K(ret), K(column_name));
+        } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
+          ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+          LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
+              column_name.ptr());
+        } else if (OB_FAIL(column_schema.add_cascaded_column_id(col_schema->get_column_id()))) {
+          LOG_WARN("add cascaded column to generated column failed", K(ret));
+        } else if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos,
+                                            "`%s`, ",
+                                            col_schema->get_column_name()))) {
+          LOG_WARN("print column name to buffer failed", K(ret));
+        } else if (OB_FAIL(extend_type_info.assign(col_schema->get_extended_type_info()))) {
+          LOG_WARN("fail to assign extend type info");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        def_pos -= 2; // remove last ", "
+        if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, ")"))) {
+          LOG_WARN("print generate expr definition suffix failed", K(ret));
+        } else {
+          ObObj default_value;
+          default_value.set_varchar(vec_expr_def, static_cast<int32_t>(def_pos));
+          column_schema.set_rowkey_position(0); //非主键列
+          column_schema.set_index_position(0); //非索引列
+          column_schema.set_tbl_part_key_pos(0); //非partition key
+          column_schema.set_tenant_id(data_schema.get_tenant_id());
+          column_schema.set_table_id(data_schema.get_table_id());
+          column_schema.set_column_id(col_id);
+          column_schema.add_column_flag(GENERATED_VEC_SPIV_DIM_COLUMN_FLAG);
+          column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+          column_schema.set_is_hidden(true);
+          column_schema.set_data_type(ObUInt32Type);
+          column_schema.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          column_schema.set_prev_column_id(UINT64_MAX);
+          column_schema.set_next_column_id(UINT64_MAX);
+          if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
+            LOG_WARN("set column name failed", K(ret));
+          } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
+            LOG_WARN("set orig default value failed", K(ret));
+          } else if (OB_FAIL(column_schema.set_cur_default_value(default_value, column_schema.is_default_expr_v2_column()))) {
+            LOG_WARN("set current default value failed", K(ret));
+          } else if (OB_FAIL(data_schema.add_column(column_schema))) {
+            LOG_WARN("add column schema to data table failed", K(ret));
+          } else {
+            spiv_dim_col = data_schema.get_column_schema(column_schema.get_column_id());
+            if (OB_ISNULL(spiv_dim_col)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("generate spiv dim column failed", K(ret), KP(spiv_dim_col));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::generate_spiv_value_column(
+    const ObCreateIndexArg *index_arg,
+    const uint64_t col_id,
+    ObTableSchema &data_schema,
+    ObColumnSchemaV2 *&spiv_value_col)
+{
+  int ret = OB_SUCCESS;
+  spiv_value_col = nullptr;
+  char col_name_buf[OB_MAX_COLUMN_NAME_LENGTH] = {'\0'};
+  int64_t name_pos = 0;
+  bool col_exists = false;
+  if (OB_ISNULL(index_arg)
+      || !share::schema::is_vec_index(index_arg->index_type_)
+      || !data_schema.is_valid()
+      || col_id == OB_INVALID_ID ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema), K(col_id));
+  } else if (OB_FAIL(construct_spiv_col_name(index_arg, data_schema, col_name_buf, OB_MAX_COLUMN_NAME_LENGTH, name_pos, false))) {
+    LOG_WARN("failed to construct spiv value col name", K(ret));
+  } else if (OB_FAIL(check_vec_gen_col(data_schema, col_id, col_name_buf, name_pos, col_exists))) {
+    LOG_WARN("check vec gen col failed", K(ret));
+  } else if (!col_exists) {
+    ObColumnSchemaV2 column_schema;
+    SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], vec_expr_def) {
+      ObArray<ObString> extend_type_info;
+      MEMSET(vec_expr_def, 0, sizeof(vec_expr_def));
+      int64_t def_pos = 0;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, "SPIV_VALUE("))) {
+        LOG_WARN("print generate expr definition prefix failed", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
+        const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
+        ObColumnSchemaV2 *col_schema = nullptr;
+        if (column_name.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column name is empty", K(ret), K(column_name));
+        } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
+          ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+          LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
+              column_name.ptr());
+        } else if (OB_FAIL(column_schema.add_cascaded_column_id(col_schema->get_column_id()))) {
+          LOG_WARN("add cascaded column to generated column failed", K(ret));
+        } else if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos,
+                                          "`%s`, ",
+                                          col_schema->get_column_name()))) {
+          LOG_WARN("print column name to buffer failed", K(ret));
+        } else if (OB_FAIL(extend_type_info.assign(col_schema->get_extended_type_info()))) {
+          LOG_WARN("fail to assign extend type info");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        def_pos -= 2; // remove last ", "
+        if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, ")"))) {
+          LOG_WARN("print generate expr definition suffix failed", K(ret));
+        } else {
+          ObObj default_value;
+          default_value.set_varchar(vec_expr_def, static_cast<int32_t>(def_pos));
+          column_schema.set_rowkey_position(0); //非主键列
+          column_schema.set_index_position(0); //非索引列
+          column_schema.set_tbl_part_key_pos(0); //非partition key
+          column_schema.set_tenant_id(data_schema.get_tenant_id());
+          column_schema.set_table_id(data_schema.get_table_id());
+          column_schema.set_column_id(col_id);
+          column_schema.add_column_flag(GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG);
+          column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+          column_schema.set_is_hidden(true);
+          column_schema.set_data_type(ObFloatType);
+          column_schema.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          column_schema.set_prev_column_id(UINT64_MAX);
+          column_schema.set_next_column_id(UINT64_MAX);
+          if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
+            LOG_WARN("set column name failed", K(ret));
+          } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
+            LOG_WARN("set orig default value failed", K(ret));
+          } else if (OB_FAIL(column_schema.set_cur_default_value(default_value, column_schema.is_default_expr_v2_column()))) {
+            LOG_WARN("set current default value failed", K(ret));
+          } else if (OB_FAIL(data_schema.add_column(column_schema))) {
+            LOG_WARN("add column schema to data table failed", K(ret));
+          } else {
+            spiv_value_col = data_schema.get_column_schema(column_schema.get_column_id());
+            if (OB_ISNULL(spiv_value_col)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("generate spiv value column failed", K(ret), KP(spiv_value_col));
             }
           }
         }
@@ -3238,6 +3751,59 @@ int ObVecIndexBuilderUtil::construct_type_col_name(
   return ret;
 }
 
+int ObVecIndexBuilderUtil::construct_spiv_col_name(
+    const ObCreateIndexArg *index_arg,
+    const ObTableSchema &data_schema,
+    char *col_name_buf,
+    const int64_t buf_len,
+    int64_t &name_pos,
+    bool is_dim_col)
+{
+  int ret = OB_SUCCESS;
+  name_pos = 0;
+  if (OB_ISNULL(index_arg) ||
+      !share::schema::is_vec_index(index_arg->index_type_) ||
+      !data_schema.is_valid() ||
+      OB_ISNULL(col_name_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret),
+      KPC(index_arg), K(data_schema), K(col_name_buf));
+  } else {
+    MEMSET(col_name_buf, 0, buf_len);
+
+    if (is_dim_col) {
+      if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos, OB_VEC_SPIV_DIM_COLUMN_NAME_PREFIX))) {
+        LOG_WARN("print generate column prefix name failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos, OB_VEC_SPIV_VALUE_COLUMN_NAME_PREFIX))) {
+        LOG_WARN("print generate column prefix name failed", K(ret));
+      }
+    }
+
+    const ObColumnSchemaV2 *col_schema = NULL;
+    // 这里的index_arg->index_columns_表示的是向量索引列，构造辅助表列名时，需要加上索引列id
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
+      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
+      if (column_name.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column name is empty", K(ret), K(column_name));
+      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
+                      column_name.ptr());
+      } else if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos,
+                                        "_%ld",
+                                        col_schema->get_column_id()))) {
+        LOG_WARN("print column id to buffer failed", K(ret), K(col_schema->get_column_id()));
+      }
+    }
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+      LOG_WARN("fail to printf current time", K(ret));
+    }
+  }
+  return ret;
+}
 
 int ObVecIndexBuilderUtil::construct_vector_col_name(
     const ObCreateIndexArg *index_arg,
@@ -3450,6 +4016,32 @@ int ObVecIndexBuilderUtil::check_vec_cols(
       LOG_USER_ERROR(OB_ERR_BAD_VEC_INDEX_COLUMN, column_name.length(), column_name.ptr());
     } else {
       col_schema->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
+    }
+  }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::get_vec_spiv_col(
+  const ObTableSchema &data_schema,
+  const obrpc::ObCreateIndexArg *index_arg,
+  const ObColumnSchemaV2 *&sparse_vec_col)
+{
+  int ret = OB_SUCCESS;
+  schema::ColumnReferenceSet index_col_set;
+  if (!data_schema.is_valid() || OB_ISNULL(index_arg)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(data_schema), KPC(index_arg));
+  } else if (index_arg->index_columns_.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only support one column for sparse vector index", K(ret), K(index_arg->index_columns_.count()));
+  } else {
+    const ObString &column_name = index_arg->index_columns_.at(0).column_name_;
+    if (column_name.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column name is empty", K(ret), K(column_name));
+    } else if (OB_ISNULL(sparse_vec_col = data_schema.get_column_schema(column_name))) {
+      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
     }
   }
   return ret;

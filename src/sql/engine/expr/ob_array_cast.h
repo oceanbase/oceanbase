@@ -18,6 +18,7 @@
 #include "lib/udt/ob_array_binary.h"
 #include "lib/udt/ob_array_nested.h"
 #include "lib/udt/ob_vector_type.h"
+#include "lib/udt/ob_map_type.h"
 #include "share/object/ob_obj_cast.h"
 #include "deps/oblib/src/lib/json_type/ob_json_tree.h"
 
@@ -37,8 +38,8 @@ class ObArrayTypeCast
 public:
   ObArrayTypeCast() {};
   virtual ~ObArrayTypeCast() {};
-  virtual int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                   ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0) = 0;
+  virtual int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *src_coll_type,
+                   ObIArrayType *&dst, const ObCollectionTypeBase *dst_coll_type, ObCastMode mode = 0) = 0;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObArrayTypeCast);
 };
@@ -46,38 +47,51 @@ private:
 class ObArrayFixedSizeCast : public ObArrayTypeCast
 {
 public:
-  int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
+  int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *src_coll_type,
+           ObIArrayType *&dst, const ObCollectionTypeBase *dst_coll_type, ObCastMode mode = 0);
 };
 
 class ObVectorDataCast : public ObArrayTypeCast
 {
 public:
-  int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
+  int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *src_coll_type,
+           ObIArrayType *&dst, const ObCollectionTypeBase *dst_coll_type, ObCastMode mode = 0);
   uint32_t dim_cnt_;
 };
 
 class ObArrayBinaryCast : public ObArrayTypeCast
 {
 public:
-  int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
+  int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *src_coll_type,
+           ObIArrayType *&dst, const ObCollectionTypeBase *dst_coll_type, ObCastMode mode = 0);
 };
 
 class ObArrayNestedCast : public ObArrayTypeCast
 {
 public :
-int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-         ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
+int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *src_coll_type,
+         ObIArrayType *&dst, const ObCollectionTypeBase *dst_coll_type, ObCastMode mode = 0);
 }
 ;
 
-
+class ObMapCast : public ObArrayTypeCast
+{
+public :
+int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *src_coll_type,
+         ObIArrayType *&dst, const ObCollectionTypeBase *dst_coll_type, ObCastMode mode = 0);
+}
+;
 
 class ObArrayCastUtils
 {
 public:
+  static int string_cast_map(
+      common::ObIAllocator &alloc,
+      ObString &arr_text,
+      ObIArrayType *&dst,
+      const ObCollectionMapType *dst_map_type,
+      ObCastMode cast_mode,
+      const bool is_sparse_vector = false);
   static int string_cast_vector(common::ObIAllocator &alloc, ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
   static int string_cast(common::ObIAllocator &alloc, ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
   static int cast_get_element(ObIArrayType *src, const ObCollectionBasicType *elem_type, uint32_t idx, ObObj &src_elem);

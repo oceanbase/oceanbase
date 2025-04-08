@@ -26,6 +26,86 @@
 
 namespace oceanbase {
 namespace share {
+struct ObDocidScoreItem
+{
+  ObDocidScoreItem() = default;
+  ObDocidScoreItem(ObString docid, double score): docid_(docid), score_(score) {}
+  ~ObDocidScoreItem() = default;
+  ObString docid_;
+  double score_;
+  TO_STRING_KV(K_(docid), K_(score));
+};
+struct ObDocidScoreItemCmp
+{
+public:
+  bool operator() (const ObDocidScoreItem &a, const ObDocidScoreItem &b)
+  {
+    return a.score_ < b.score_;
+  }
+
+  int get_error_code() { return common::OB_SUCCESS; }
+};
+
+struct ObRowkeyScoreItem
+{
+  ObRowkeyScoreItem() = default;
+  ObRowkeyScoreItem(ObRowkey *rowkey, double score): rowkey_(rowkey), score_(score) {}
+  ~ObRowkeyScoreItem() = default;
+  ObRowkey *rowkey_;
+  double score_;
+  TO_STRING_KV(KP_(rowkey), K_(score));
+};
+
+struct ObRowkeyScoreItemCmp
+{
+public:
+  bool operator() (const ObRowkeyScoreItem &a, const ObRowkeyScoreItem &b)
+  {
+    return a.score_ < b.score_;
+  }
+
+  int get_error_code() { return common::OB_SUCCESS; }
+};
+template <typename T,
+          typename CompareFunctor>
+class ObSPIVFixedSizeHeap {
+public:
+  ObSPIVFixedSizeHeap(int64_t limit_size, ObIAllocator &allocator, CompareFunctor cmp):
+                                                                          limit_size_(limit_size),
+                                                                          allocator_(allocator),
+                                                                          cmp_(cmp),
+                                                                          heap_(cmp, &allocator_)
+                                                                          {}
+
+  ~ObSPIVFixedSizeHeap() = default;
+  int push(T &item)
+  {
+    int ret = OB_SUCCESS;
+
+    if (heap_.count() < limit_size_) {
+      if (OB_FAIL(heap_.push(item))) {
+        SHARE_LOG(WARN, "failed to push heap", K(ret));
+      }
+    } else if (cmp_(item, heap_.top())) {
+      if (OB_FAIL(heap_.pop())) {
+        SHARE_LOG(WARN, "failed to pop heap", K(ret));
+      } else if (OB_FAIL(heap_.push(item))) {
+        SHARE_LOG(WARN, "failed to push heap", K(ret));
+      }
+    }
+
+    return ret;
+  }
+  int pop() { return heap_.pop(); }
+  int64_t count() { return heap_.count(); }
+  T& top() { return heap_.top(); }
+  bool empty() { return heap_.empty(); }
+private:
+  int64_t limit_size_;
+  ObArenaAllocator allocator_;
+  CompareFunctor cmp_;
+  ObBinaryHeap<T, CompareFunctor, 16> heap_;
+};
 class ObVectorNormalize final
 {
 public:

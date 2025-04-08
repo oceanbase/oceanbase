@@ -496,6 +496,14 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_ARRAY";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_OB_MAP:
+      sc_type = "MYSQL_TYPE_OB_MAP";
+      break;
+
+    case oceanbase::obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR:
+      sc_type = "MYSQL_TYPE_OB_SPARSE_VECTOR";
+      break;
+
     case oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL:
       sc_type = "MYSQL_TYPE_NEWDECIMAL";
       break;
@@ -638,7 +646,9 @@ bool is_roaringbitmap_type(const int ctype)
 bool is_collection_type(const int ctype)
 {
   return (ctype == oceanbase::obmysql::MYSQL_TYPE_OB_ARRAY
-          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_VECTOR);
+          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_VECTOR
+          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_MAP)
+          || ctype == oceanbase::obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR;
 }
 
 double get_delay_sec(const int64_t tstamp_ns)

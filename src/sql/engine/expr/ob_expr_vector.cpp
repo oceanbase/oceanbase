@@ -19,6 +19,17 @@ namespace oceanbase
 {
 namespace sql
 {
+
+ObExprVectorDistance::SparseVectorDisFunc::FuncPtrType ObExprVectorDistance::SparseVectorDisFunc::spiv_distance_funcs[] =
+{
+  nullptr, // cosine_distance
+  ObSparseVectorIpDistance::spiv_ip_distance_func,
+  nullptr, // l2_distance
+  nullptr, // l1_distance
+  nullptr, // l2_square
+  nullptr,
+};
+
 ObExprVector::ObExprVector(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
@@ -26,7 +37,6 @@ ObExprVector::ObExprVector(ObIAllocator &alloc,
                          int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
 {
 }
-
 // [a,b,c,...] is array type, there is no dim_cnt_ in ObCollectionArrayType
 int ObExprVector::calc_result_type2(
     ObExprResType &type,
@@ -36,7 +46,7 @@ int ObExprVector::calc_result_type2(
 {
   int ret = OB_SUCCESS;
   uint16_t unused_id = UINT16_MAX;
-  if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type1, type2, type_ctx, unused_id))) {
+  if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type_, type1, type2, type_ctx, unused_id))) {
     LOG_WARN("failed to calc cast type", K(ret), K(type1));
   } else {
     type.set_type(ObDoubleType);
@@ -127,6 +137,7 @@ int ObExprVectorDistance::calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   ObIArrayType *arr_l = NULL;
   ObIArrayType *arr_r = NULL;
   bool contain_null = false;
+  double distance = 0.0;
   if (dis_type < ObVecDisType::COSINE || dis_type >= ObVecDisType::MAX_TYPE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect distance type", K(ret), K(dis_type));
@@ -139,31 +150,50 @@ int ObExprVectorDistance::calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   } else if (OB_ISNULL(arr_l) || OB_ISNULL(arr_r)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(arr_l), K(arr_r));
-  } else if (OB_UNLIKELY(arr_l->size() != arr_r->size())) {
-    ret = OB_ERR_INVALID_VECTOR_DIM;
-    LOG_WARN("check array validty failed", K(ret), K(arr_l->size()), K(arr_r->size()));
-  } else if (arr_l->contain_null() || arr_r->contain_null()) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("array with null can't calculate vector distance", K(ret));
-  } else {
-    double distance = 0.0;
-    const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
-    const float *data_r = reinterpret_cast<const float*>(arr_r->get_data());
-    const uint32_t size = arr_l->size();
-    if (DisFunc<float>::distance_funcs[dis_type] == nullptr) {
+  } else if ((arr_l->get_array_type()->is_sparse_vector_type() && !arr_r->get_array_type()->is_sparse_vector_type())
+             || (!arr_l->get_array_type()->is_sparse_vector_type() && arr_r->get_array_type()->is_sparse_vector_type())) {
+    LOG_WARN("calc distance for sparse vector and other type is not supported", K(ret));
+  } else if (arr_l->get_array_type()->is_sparse_vector_type() && arr_r->get_array_type()->is_sparse_vector_type()) {
+    const ObMapType *spv_l = dynamic_cast<const ObMapType *>(arr_l);
+    const ObMapType *spv_r = dynamic_cast<const ObMapType *>(arr_r);
+    if (OB_ISNULL(spv_l) || OB_ISNULL(spv_r)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sparse vector type cast failed", K(ret));
+    } else if (dis_type != ObVecDisType::DOT) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support", K(ret), K(dis_type));
-    } else if (OB_FAIL(DisFunc<float>::distance_funcs[dis_type](data_l, data_r, size, distance))) {
-      if (OB_ERR_NULL_VALUE == ret) {
-        res_datum.set_null();
-        ret = OB_SUCCESS; // ignore
-      } else {
-        LOG_WARN("failed to calc distance", K(ret), K(dis_type));
-      }
+      LOG_WARN("sparse vector not support", K(ret), K(dis_type));
+    } else if (OB_FAIL(SparseVectorDisFunc::spiv_distance_funcs[dis_type](spv_l, spv_r, distance))) {
+      LOG_WARN("sparse vector failed to calc distance", K(ret), K(dis_type));
     } else {
       res_datum.set_double(distance);
     }
+  } else {
+    if (OB_UNLIKELY(arr_l->size() != arr_r->size())) {
+      ret = OB_ERR_INVALID_VECTOR_DIM;
+      LOG_WARN("check array validty failed", K(ret), K(arr_l->size()), K(arr_r->size()));
+    } else if (arr_l->contain_null() || arr_r->contain_null()) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("array with null can't calculate vector distance", K(ret));
+    } else {
+      const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
+      const float *data_r = reinterpret_cast<const float*>(arr_r->get_data());
+      const uint32_t size = arr_l->size();
+      if (DisFunc<float>::distance_funcs[dis_type] == nullptr) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support", K(ret), K(dis_type));
+      } else if (OB_FAIL(DisFunc<float>::distance_funcs[dis_type](data_l, data_r, size, distance))) {
+        if (OB_ERR_NULL_VALUE == ret) {
+          res_datum.set_null();
+          ret = OB_SUCCESS; // ignore
+        } else {
+          LOG_WARN("failed to calc distance", K(ret), K(dis_type));
+        }
+      } else {
+        res_datum.set_double(distance);
+      }
+    }
   }
+
   return ret;
 }
 

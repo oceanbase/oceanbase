@@ -67,6 +67,23 @@ int ObVectorF32Data::print_element(ObStringBuffer &format_str,
   return ret;
 }
 
+int ObVectorF32Data::print_element_at(ObStringBuffer &format_str, uint32_t idx) const
+{
+  int ret = OB_SUCCESS;
+  int buf_size = FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE;
+  if (OB_UNLIKELY(idx >= length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected idx", K(ret), K(idx), K(length_));
+  } else {
+    char *start = format_str.ptr() + format_str.length();
+    uint64_t len = ob_gcvt(data_[idx], ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT, buf_size, start, NULL);
+    if (OB_FAIL(format_str.set_length(format_str.length() + len))) {
+      OB_LOG(WARN, "fail to set format_str len", K(ret), K(format_str.length()), K(len));
+    }
+  }
+  return ret;
+}
+
 int ObVectorF32Data::clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only) const
 {
   int ret = OB_SUCCESS;
@@ -144,6 +161,21 @@ int ObVectorU8Data::print_element(ObStringBuffer &format_str,
       if (OB_FAIL(format_str.append(ffi.ptr(), ffi.length()))) {
         OB_LOG(WARN, "fail to append format int", K(ret), KP(ffi.ptr()));
       }
+    }
+  }
+  return ret;
+}
+
+int ObVectorU8Data::print_element_at(ObStringBuffer &format_str, uint32_t idx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(idx >= length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected idx", K(ret), K(idx), K(length_));
+  } else {
+    ObFastFormatInt ffi(data_[idx]);
+    if (OB_FAIL(format_str.append(ffi.ptr(), ffi.length()))) {
+      OB_LOG(WARN, "fail to append format int", K(ret), KP(ffi.ptr()));
     }
   }
   return ret;

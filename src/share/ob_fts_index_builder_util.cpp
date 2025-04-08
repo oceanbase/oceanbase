@@ -61,16 +61,19 @@ int ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(
 {
   int ret = OB_SUCCESS;
   ObCreateIndexArg fts_rowkey_doc_arg;
-  if (OB_ISNULL(allocator) ||
-      !(is_fts_index(index_arg.index_type_) || is_multivalue_index(index_arg.index_type_))) {
+  if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+  } else if (!(is_fts_index(index_arg.index_type_) ||
+               is_multivalue_index(index_arg.index_type_) ||
+               is_vec_spiv_index(index_arg.index_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index type", K(ret), K(index_arg.index_type_));
   } else if (OB_FAIL(fts_rowkey_doc_arg.assign(index_arg))) {
     LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
   } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_name_.reset())) {
   } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_properties_.reset())) {
-  } else if (FALSE_IT(fts_rowkey_doc_arg.index_type_ =
-                        INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
+  } else if (FALSE_IT(fts_rowkey_doc_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
   } else if (OB_FAIL(generate_fts_aux_index_name(fts_rowkey_doc_arg, allocator))) {
     LOG_WARN("failed to generate fts aux index name", K(ret));
   } else if (OB_FAIL(index_arg_list.push_back(fts_rowkey_doc_arg))) {
@@ -87,18 +90,22 @@ int ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(
   int ret = OB_SUCCESS;
   ObCreateIndexArg fts_doc_rowkey_arg;
   // NOTE index_arg.index_type_ is fts doc rowkey
-  if (OB_ISNULL(allocator) ||
-      !(is_fts_index(index_arg.index_type_) ||
-        is_multivalue_index(index_arg.index_type_))) {
+  if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+  } else if (!(is_fts_index(index_arg.index_type_) ||
+               is_multivalue_index(index_arg.index_type_) ||
+               is_vec_spiv_index(index_arg.index_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index type", K(ret), K(index_arg.index_type_));
   } else if (OB_FAIL(fts_doc_rowkey_arg.assign(index_arg))) {
     LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
   } else {
     fts_doc_rowkey_arg.index_option_.parser_name_.reset();
     fts_doc_rowkey_arg.index_option_.parser_properties_.reset();
     if (is_local_fts_index(index_arg.index_type_) ||
-        is_local_multivalue_index(index_arg.index_type_)) {
+        is_local_multivalue_index(index_arg.index_type_) ||
+        is_local_vec_spiv_index(index_arg.index_type_)) {
       fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
     } else if (is_global_fts_index(index_arg.index_type_)) {
       fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL;
@@ -931,10 +938,12 @@ int ObFtsIndexBuilderUtil::generate_doc_id_column(
   char col_name_buf[OB_MAX_COLUMN_NAME_LENGTH] = {'\0'};
   int64_t name_pos = 0;
   bool col_exists = false;
-  if (OB_ISNULL(index_arg) ||
-      (!share::schema::is_fts_index(index_arg->index_type_) && !is_multivalue_index(index_arg->index_type_)) ||
-      !data_schema.is_valid() ||
-      col_id == OB_INVALID_ID) {
+  if (OB_ISNULL(index_arg)
+      ||(!share::schema::is_fts_index(index_arg->index_type_)
+          && !is_multivalue_index(index_arg->index_type_)
+          && !is_vec_spiv_index(index_arg->index_type_))
+      || !data_schema.is_valid()
+      || col_id == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema), K(col_id));
   } else if (OB_FAIL(construct_doc_id_col_name(col_name_buf,

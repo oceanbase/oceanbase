@@ -135,6 +135,11 @@ private:
                              ObDASBaseCtDef *&root_ctdef);
   int generate_vec_idx_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int calc_enable_use_simplified_scan(const ObLogTableScan &op, const ExprFixedArray &result_outputs, ObDASBaseCtDef *root_ctdef);
+  int generate_vec_spiv_aux_idx_tbl_ctdef(const ObLogTableScan &op,
+                                    ObDASScanCtDef *&spiv_scan_ctdef,
+                                    ObDASScanCtDef *&rowkey_docid_ctdef,
+                                    ObDASScanCtDef *&aux_data_ctdef,
+                                    ObStoragePushdownFlag& pushdown_flag);
   int generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
                                     ObDASScanCtDef *&first_aux_ctdef,
                                     ObDASScanCtDef *&second_aux_ctdef,
@@ -156,7 +161,8 @@ private:
                                             ObIArray<uint64_t> &output_cids);
   int extract_rowkey_doc_access_columns(const ObLogTableScan &op,
                                         const ObDASScanCtDef &scan_ctdef,
-                                        ObIArray<ObRawExpr*> &access_exprs);
+                                        ObIArray<ObRawExpr*> &access_exprs,
+                                        ObRowkeyIdExprType type);
   int extract_rowkey_doc_output_columns_ids(const share::schema::ObTableSchema &schema,
                                             const ObLogTableScan &op,
                                             const ObDASScanCtDef &scan_ctdef,
@@ -190,6 +196,9 @@ private:
                                                   const bool need_output_rowkey,
                                                   ObIArray<uint64_t> &output_cids,
                                                   ObRowkeyIdExprType type);
+  int extract_vector_spiv_das_output_column_ids(const ObLogTableScan &op,
+                                                const ObDASScanCtDef &scan_ctdef,
+                                                ObIArray<uint64_t> &output_cids);
   int extract_vector_hnsw_das_output_column_ids(const ObLogTableScan &op,
                                                 const ObDASScanCtDef &scan_ctdef,
                                                 ObIArray<uint64_t> &output_cids);

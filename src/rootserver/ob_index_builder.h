@@ -78,6 +78,15 @@ public:
                       const bool global_index_without_column_info,
                       const bool generate_id,
                       share::schema::ObTableSchema &index_schema);
+  bool is_drop_dense_vec_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
+  bool is_drop_with_docid_index_task(const obrpc::ObDropIndexArg &arg, const share::schema::ObTableSchema &index_schema);
+  int check_drop_with_docid_indexs_ith_valid(
+      const obrpc::ObDropIndexArg &arg,
+      const share::schema::ObTableSchema &index_schema,
+      const int64_t schema_count,
+      int64_t &aux_rowkey_doc_ith,
+      int64_t &aux_doc_rowkey_ith,
+      int64_t &aux_doc_word_ith);
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &data_schema,
@@ -148,8 +157,7 @@ private:
       int64_t &aux_doc_word_ith,
       int64_t &aux_rowkey_doc_ith,
       int64_t &domain_index_ith,
-      int64_t &aux_doc_rowkey_ith,
-      int64_t &aux_multivalue_ith);
+      int64_t &aux_doc_rowkey_ith);
   int set_basic_infos(const obrpc::ObCreateIndexArg &arg,
                       const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &schema);

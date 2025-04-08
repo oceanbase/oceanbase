@@ -7418,7 +7418,7 @@ int ObDDLService::create_aux_index(
                                                                         gen_columns))) {
       LOG_WARN("fail to adjust create index args", K(ret), K(create_index_arg));
     } else if (!create_index_arg.is_rebuild_index_
-              && share::schema::is_vec_index(create_index_arg.index_type_)
+              && ObIndexBuilderUtil::is_do_create_dense_vec_index(create_index_arg.index_type_)
               && OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(create_index_arg,
                                                                 nonconst_data_schema,
                                                                 allocator,
@@ -8947,6 +8947,14 @@ int ObDDLService::rename_dropping_index_name(
        index_table_schema->get_table_id(), false, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
        trans, new_index_schemas))) {
       LOG_WARN("fail to get dropping fts aux table schema", K(ret), K(data_table_id), K(index_table_schema));
+    } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
+      LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
+    }
+  } else if (!drop_index_arg.is_inner_ && index_table_schema->is_vec_spiv_index_aux()) {
+    if (OB_FAIL(get_dropping_domain_index_invisiable_aux_table_schema(index_table_schema->get_tenant_id(), data_table_id,
+       index_table_schema->get_table_id(), false, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
+       trans, new_index_schemas))) {
+      LOG_WARN("fail to get dropping spiv aux table schema", K(ret), K(data_table_id), K(index_table_schema));
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
       LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
     }
@@ -11616,7 +11624,8 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                        new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "BLOB, TEXT column can't have a default value!", K(default_value), K(ret));
                   } else if (ob_is_json_tc(new_column_schema.get_data_type())
-                             || ob_is_geometry_tc(new_column_schema.get_data_type())) {
+                             || ob_is_geometry_tc(new_column_schema.get_data_type())
+                             || ob_is_collection_sql_type(new_column_schema.get_data_type())) {
                     // cannot alter json column to any default value
                     // text column also cannot be alter to null in mysql
                     ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
@@ -12180,7 +12189,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                        new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "BLOB, TEXT column can't have a default value!", K(default_value), K(ret));
                   } else if (ob_is_json_tc(new_column_schema.get_data_type())
-                             || ob_is_geometry_tc(new_column_schema.get_data_type())) {
+                             || ob_is_geometry_tc(new_column_schema.get_data_type())
+                             || ob_is_collection_sql_type(new_column_schema.get_data_type())) {
                     // cannot alter json column to any default value
                     // text column also cannot be alter to null in mysql
                     ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
@@ -38856,7 +38866,8 @@ int ObDDLService::check_fts_index_conflict(const uint64_t tenant_id, const uint6
       if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_FTS_INDEX
           || cur_record.ddl_type_ == ObDDLType::DDL_DROP_FTS_INDEX
           || cur_record.ddl_type_ == ObDDLType::DDL_CREATE_MULTIVALUE_INDEX
-          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX) {
+          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_SPIV_INDEX) {
         LOG_INFO("cur_record.ddl_type is: ", K(cur_record.ddl_type_));
         ret = OB_EAGAIN;
         LOG_WARN("fts index is building, will retry later", K(ret), K(table_id), K(cur_record));

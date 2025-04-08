@@ -810,6 +810,9 @@
 #define N_VEC_KEY "vec_key"
 #define N_VEC_DATA "vec_data"
 
+#define N_SPIV_DIM "spiv_dim"
+#define N_SPIV_VALUE "spiv_value"
+
 #define N_VEC_IVF_CENTER_ID "vec_ivf_center_id"
 #define N_VEC_IVF_CENTER_VECTOR "vec_ivf_center_vector"
 #define N_VEC_IVF_SQ8_DATA_VECTOR "vec_ivf_sq8_data_vector"
@@ -1156,6 +1159,12 @@
 #define N_ARRAY_POSITION                    "array_position"
 #define N_ARRAY_SLICE                       "array_slice"
 #define N_ARRAY_RANGE                       "array_range"
+#define N_ARRAY_EXCEPT                      "array_except"
+#define N_ARRAY_INTERSECT                   "array_intersect"
+#define N_ARRAY_UNION                       "array_union"
+#define N_MAP                               "map"
+#define N_MAP_KEYS                          "map_keys"
+#define N_MAP_VALUES                        "map_values"
 
 // for lock function
 #define N_GET_LOCK                          "get_lock"
@@ -1206,6 +1215,8 @@
 #define N_RB_BUILD_AGG                      "rb_build_agg"
 #define N_RB_OR_AGG                         "rb_or_agg"
 #define N_RB_AND_AGG                        "rb_and_agg"
+#define N_RB_OR_CARDINALITY_AGG             "rb_or_cardinality_agg"
+#define N_RB_AND_CARDINALITY_AGG            "rb_and_cardinality_agg"
 #define N_RB_CARDINALITY                    "rb_cardinality"
 #define N_RB_AND_CARDINALITY                "rb_and_cardinality"
 #define N_RB_OR_CARDINALITY                 "rb_or_cardinality"
@@ -1243,6 +1254,8 @@
 #define N_URL_ENCODE                        "url_encode"
 #define N_URL_DECODE                        "url_decode"
 #define N_KEYVALUE                          "keyvalue"
+#define N_RB_TO_ARRAY                       "rb_to_array"
+#define N_RB_CONTAINS                       "rb_contains"
 #define N_INNER_INFO_COLS_COLUMN_DEF_PRINTER "inner_info_cols_column_def_printer"
 #define N_INNER_INFO_COLS_CHAR_LEN_PRINTER "inner_info_cols_char_len_printer"
 #define N_INNER_INFO_COLS_CHAR_NAME_PRINTER "inner_info_cols_char_name_printer"

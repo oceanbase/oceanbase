@@ -835,7 +835,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_FUN_SYS_CUR_TIME:
       case T_FUN_SYS_UTC_TIME:
       case T_FUN_SYS_SYSDATE:
-      case T_FUN_SYS_ARRAY: {
+      case T_FUN_SYS_ARRAY:
+      case T_FUN_SYS_MAP: {
         resolve_res.is_literal_ = false;
         ObObjParam first;
         ObDefaultValueRes first_res(first);
@@ -6444,26 +6445,28 @@ int ObDDLResolver::verify_hbase_table_part_keys(const ObIArray<ObString> &part_k
 int ObDDLResolver::resolve_collection_column(const ParseNode *type_node, ObColumnSchemaV2 &column)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObString> type_info_array;
+  ObStringBuffer buf(allocator_);
+  uint64_t tenant_data_version = 0;
+  const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint8_t depth = 0;
   if (OB_ISNULL(type_node)
-      || OB_UNLIKELY(type_node->num_child_ != 1)
       || OB_ISNULL(allocator_)
       || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type node is NULL", K(ret), K(type_node), K(session_info_));
-  } else if (OB_ISNULL(type_node->children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is NULL", K(ret));
-  } else {
-    ObArray<ObString> type_info_array;
-    ObStringBuffer buf(allocator_);
-    uint8_t depth = 0;
-    if (OB_FAIL(ObResolverUtils::resolve_collection_type_info(*type_node, buf, depth))) {
-      LOG_WARN("failed to resolve collection type info", K(ret));
-    } else if (OB_FAIL(type_info_array.push_back(buf.string()))) {
-      LOG_WARN("fail to push back type info", K(ret));
-    } else if (OB_FAIL(column.set_extended_type_info(type_info_array))) {
-      LOG_WARN("set enum or set info failed", K(ret));
-    }
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_3_3_0 ) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.3, array type not supported", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, array type");
+  } else if (OB_FAIL(ObResolverUtils::resolve_collection_type_info(tenant_data_version, *type_node, buf, depth))) {
+    LOG_WARN("failed to resolve collection type info", K(ret));
+  } else if (OB_FAIL(type_info_array.push_back(buf.string()))) {
+    LOG_WARN("fail to push back type info", K(ret));
+  } else if (OB_FAIL(column.set_extended_type_info(type_info_array))) {
+    LOG_WARN("set enum or set info failed", K(ret));
   }
   return ret;
 }
@@ -7893,68 +7896,80 @@ int ObDDLResolver::resolve_vec_index_constraint(
     ParseNode *node)
 {
   int ret = OB_SUCCESS;
-  if (!column_schema.is_valid()) {
+
+  bool is_vec_index = (index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY));
+  if (!is_vec_index) {
+    // do nothing
+  } else if (!column_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argumnet", K(ret), K(column_schema));
+  } else if (column_schema.is_generated_column()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vector index column is generate column is not supported", K(ret), K(column_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using generate column as vector index column is");
   } else {
-    bool is_vec_index = (index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY));
     uint64_t tenant_id = column_schema.get_tenant_id();
-    bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
     uint64_t tenant_data_version = 0;
-    const int64_t MAX_DIM_LIMITED = 4096;
-    int64_t dim = 0;
-    if (!is_vec_index) {
-      // do nothing
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-      LOG_WARN("get tenant data version failed", K(ret));
-    } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
-    } else if (!is_collection_column) {
+    bool is_sparse_vec_col = false;
+
+    bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
+    if (!is_collection_column) {
       ret = OB_ERR_BAD_VEC_INDEX_COLUMN;
       LOG_USER_ERROR(OB_ERR_BAD_VEC_INDEX_COLUMN,
           column_schema.get_column_name_str().length(),
           column_schema.get_column_name_str().ptr());
       LOG_WARN("vector index can only be built on vector column", K(ret), K(column_schema));
-    } else if (column_schema.is_generated_column()) {
+    } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema.get_extended_type_info(), is_sparse_vec_col))) {
+      LOG_WARN("fail to check is sparse vec col", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (!is_sparse_vec_col && tenant_data_version < DATA_VERSION_4_3_3_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("vector index column is generate column is not supported", K(ret), K(column_schema));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using generate column as vector index column is");
-    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(column_schema.get_extended_type_info(), dim))) {
-      LOG_WARN("fail to get vector dim", K(ret), K(column_schema));
-    } else if (dim > MAX_DIM_LIMITED) {
+      LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
+    } else if (is_sparse_vec_col && tenant_data_version < DATA_VERSION_4_3_5_2) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("vector index dim larger than 4096 is not supported", K(ret), K(tenant_data_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim larger than 4096 is");
+      LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector index not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, sparse vector index");
     } else {
-      index_keyname_ = VEC_KEY;
-      ParseNode *option_node = NULL;
-      bool has_set_params = false;
-      if (OB_ISNULL(node)) {
+      const int64_t MAX_DIM_LIMITED = 4096;
+      int64_t dim = 0;
+
+      if (!is_sparse_vec_col && OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(column_schema.get_extended_type_info(), dim))) {
+        LOG_WARN("fail to get vector dim", K(ret), K(column_schema));
+      } else if (!is_sparse_vec_col && dim > MAX_DIM_LIMITED) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
-      } else if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
-        ret = OB_NOT_SUPPORTED;
-        SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
-      } else if (OB_ISNULL(node->children_)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
+        LOG_WARN("vector index dim larger than 4096 is not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim larger than 4096 is");
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
-          if (OB_ISNULL(option_node = node->children_[i])) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
-          } else if (option_node->type_ != T_VEC_INDEX_PARAMS) {
-          } else {
-            has_set_params = true;
+        index_keyname_ = VEC_KEY;
+        ParseNode *option_node = NULL;
+        bool has_set_params = false;
+        if (OB_ISNULL(node)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
+        } else if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
+        } else if (OB_ISNULL(node->children_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+            if (OB_ISNULL(option_node = node->children_[i])) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
+            } else if (option_node->type_ != T_VEC_INDEX_PARAMS) {
+            } else {
+              has_set_params = true;
+            }
           }
         }
-      }
-      if (OB_SUCC(ret) && has_set_params) {
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
+        if (OB_SUCC(ret) && has_set_params) {
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set is");
+        }
       }
     }
   }

@@ -3744,7 +3744,7 @@ int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
   } else {
-    if (index_schema.is_vec_index()) {
+    if (ObVecIndexBuildTask::is_rebuild_dense_vec_index_task(index_schema)) {
       ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
       if (OB_FAIL(check_rebuild_vec_index_task_exist(tenant_id, data_table_id, index_table_id, proxy, allocator, has_index_task))) {
         LOG_WARN("fail to check rebuild vec index task", K(ret), K(data_table_id), K(index_table_id));

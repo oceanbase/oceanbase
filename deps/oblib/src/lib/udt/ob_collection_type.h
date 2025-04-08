@@ -28,6 +28,7 @@ enum ObNestedType {
   OB_VECTOR_TYPE = 2,
   OB_MAP_TYPE = 3,
   OB_SPARSE_VECTOR_TYPE = 4,
+  OB_MAX_NESTED_TYPE
 };
 
 class ObCollectionTypeBase {
@@ -37,9 +38,11 @@ public:
 
   virtual int deep_copy(ObIAllocator &allocator, ObCollectionTypeBase *&dst) const = 0;
   virtual const ObDataType &get_basic_meta(uint32_t &depth) const = 0;
-  uint16_t get_compatiable_type_id() const { return type_id_ == OB_VECTOR_TYPE ? OB_ARRAY_TYPE : type_id_; }
+  uint16_t get_compatiable_type_id() const { return type_id_ == OB_VECTOR_TYPE ? OB_ARRAY_TYPE : (type_id_ == OB_SPARSE_VECTOR_TYPE ? OB_MAP_TYPE : type_id_); }
   bool is_vector_type() { return type_id_ == OB_VECTOR_TYPE; }
-  uint16_t type_id_; // array/vector/map
+  bool is_sparse_vector_type() { return type_id_ == OB_SPARSE_VECTOR_TYPE; }
+  bool is_sparse_vector_type() const { return type_id_ == OB_SPARSE_VECTOR_TYPE; }
+  uint16_t type_id_; // array/vector/map/sparsevector
 };
 
 class ObCollectionArrayType : public ObCollectionTypeBase
@@ -60,6 +63,25 @@ public:
   ObIAllocator &allocator_;
   uint32_t dim_cnt_; // vector dimension
   ObCollectionTypeBase *element_type_;
+};
+
+class ObCollectionMapType : public ObCollectionTypeBase
+{
+public:
+  ObCollectionMapType(ObIAllocator &allocator) : allocator_(allocator), key_type_(nullptr), value_type_(nullptr) {}
+  virtual ~ObCollectionMapType() {}
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_serialize_size() const;
+  int deep_copy(ObIAllocator &allocator, ObCollectionTypeBase *&dst) const;
+  bool has_same_super_type(const ObCollectionMapType &other) const;
+  const ObDataType &get_key_meta(uint32_t &depth) const { depth = 0; return key_type_->get_basic_meta(depth);}
+  const ObDataType &get_basic_meta(uint32_t &depth) const { depth = 0; return value_type_->get_basic_meta(depth);}
+  TO_STRING_KV(KPC_(key_type), KPC_(value_type));
+
+  ObIAllocator &allocator_;
+  ObCollectionTypeBase *key_type_;
+  ObCollectionTypeBase *value_type_;
 };
 
 class ObCollectionBasicType : public ObCollectionTypeBase
@@ -100,8 +122,9 @@ public:
   ObString get_def_string() const {return ObString(name_len_, name_def_);}
   int64_t get_signature() const { return get_def_string().hash(); }
   int get_child_def_string(ObString &child_def) const;
+  int get_map_attr_def_string(ObIAllocator &allocator, ObString &def, bool is_values = false) const;
   int deep_copy(ObIAllocator &allocator, ObSqlCollectionInfo *&dst) const;
-  int create_meta_info_by_name(const std::string &name, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth);
+  int set_element_meta(const std::string &name, ObCollectionBasicType *meta_info);
   int set_element_meta_info(const std::string &name, uint8_t meta_attr_idx, ObCollectionBasicType *meta_info);
   int set_element_meta_unsigned(ObCollectionBasicType *meta_info);
   static int collection_type_deserialize(ObIAllocator &allocator, const char* buf, const int64_t data_len, int64_t& pos,
@@ -109,6 +132,15 @@ public:
   bool has_same_super_type(const ObSqlCollectionInfo &other) const;
   const ObDataType &get_basic_meta(uint32_t &depth) const { depth = 0; return collection_meta_->get_basic_meta(depth); }
   int parse_type_info();
+  int parse_collection_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth);
+  int parse_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, bool is_root = false);
+  int parse_vec_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint32_t &dim);
+
+  int parse_map_element_info(std::string type_info,
+                             ObCollectionTypeBase *&key_meta_info,
+                             ObCollectionTypeBase *&value_meta_info,
+                             uint8_t &arr_depth);
+  int parse_sparse_vector_element_info(ObCollectionTypeBase *&key_meta_info, ObCollectionTypeBase *&value_meta_info);
   TO_STRING_KV(K(ObString(name_len_, name_def_)));
 
 private:

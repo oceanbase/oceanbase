@@ -12142,6 +12142,14 @@ int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
     } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
       LOG_WARN("failed to append main table id", K(ret));
     }
+  } else if (vc_info.is_spiv_scan()) {
+    if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, vc_info.get_aux_table_id(VEC_FIRST_AUX_TBL_IDX)))) {
+      LOG_WARN("failed to append dim docid value table id", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_rowkey_doc_table_id()))) {
+      LOG_WARN("failed to append dim docid value table id", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+      LOG_WARN("failed to append main table id", K(ret));
+    }
   } else {
     if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, vc_info.get_aux_table_id(VEC_FIRST_AUX_TBL_IDX)))) {
       LOG_WARN("failed to append index id table id", K(ret));
@@ -15393,6 +15401,10 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
         if (OB_FAIL(prepare_ivf_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan))) {
           LOG_WARN("fail to init hnsw aux index table info", K(ret));
         }
+      } else if (vc_info.is_spiv_scan()) {
+        if (OB_FAIL(prepare_spiv_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan))) {
+          LOG_WARN("fail to init spiv aux index table info", K(ret));
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected vec scan type", K(ret));
@@ -15401,7 +15413,46 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
   }
   return ret;
 }
+int ObLogPlan::prepare_spiv_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                              const ObTableSchema &table_schema,
+                                              const uint64_t& vec_col_id,
+                                              ObLogTableScan *table_scan)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(table_scan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointers", K(ret), KP(schema_guard), KP(table_scan));
+  } else {
+    uint64_t dim_docid_value_tid = OB_INVALID_ID;
+    uint64_t docid_rowkey_tid = OB_INVALID_ID;
+    uint64_t rowkey_docid_tid = OB_INVALID_ID;
 
+    ObVecIndexInfo &vc_info = table_scan->get_vector_index_info();
+    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
+                                                        table_schema,
+                                                        INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL,
+                                                        vec_col_id,
+                                                        dim_docid_value_tid))) {
+      LOG_WARN("fail to get spec vector dim docid value table id", K(ret), K(vec_col_id), K(table_schema));
+    /* do not change push order, should be same as ObVectorAuxTableIdx */
+    } else if (OB_FAIL(vc_info.aux_table_id_.push_back(dim_docid_value_tid))) {
+      LOG_WARN("fail to push back aux table id", K(ret), K(dim_docid_value_tid), K(vc_info.aux_table_id_.count()));
+    } else if (OB_FAIL(table_schema.get_doc_id_rowkey_tid(docid_rowkey_tid))) {
+      LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
+    } else if (OB_FAIL(vc_info.aux_table_id_.push_back(docid_rowkey_tid))) {
+      LOG_WARN("fail to push back aux table id", K(ret), K(docid_rowkey_tid), K(vc_info.aux_table_id_.count()));
+    } else if (OB_FAIL(table_schema.get_rowkey_doc_id_tid(rowkey_docid_tid))) {
+      LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
+    } else if (OB_FAIL(vc_info.aux_table_id_.push_back(rowkey_docid_tid))) {
+      LOG_WARN("fail to push back aux table id", K(ret), K(rowkey_docid_tid), K(vc_info.aux_table_id_.count()));
+    } else {
+      table_scan->set_doc_id_index_table_id(docid_rowkey_tid);
+      table_scan->set_rowkey_doc_table_id(rowkey_docid_tid);
+      table_scan->set_index_back(true);
+    }
+  }
+  return ret;
+}
 int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                               const ObTableSchema &table_schema,
                                               const uint64_t& vec_col_id,

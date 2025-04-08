@@ -41,7 +41,10 @@ int ObVectorIndexUtil::parser_params_from_string(
     LOG_WARN("unexpected vector index param, is empty", K(ret));
   } else if (OB_FAIL(split_on(tmp_param_str, ',', tmp_param_strs))) {
     LOG_WARN("fail to split func expr", K(ret), K(tmp_param_str));
-  } else if (tmp_param_strs.count() < 2) {  // at lease two params(distance, type) should be set
+  } else if (index_type != ObVectorIndexType::VIT_SPIV_INDEX && tmp_param_strs.count() < 2) {  // at lease two params(distance, type) should be set
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected vector index param count", K(tmp_param_strs.count()));
+  } else if (index_type == ObVectorIndexType::VIT_SPIV_INDEX && tmp_param_strs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected vector index param count", K(tmp_param_strs.count()));
   } else {
@@ -161,6 +164,9 @@ int ObVectorIndexUtil::parser_params_from_string(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected vector index param name", K(ret), K(new_param_name));
         }
+        if (index_type == ObVectorIndexType::VIT_SPIV_INDEX) {
+          param.type_ = ObVectorIndexAlgorithmType::VIAT_SPIV;
+        }
       }
     }
     if (OB_SUCC(ret) && set_default) {  // if vector param is not set, use default
@@ -187,6 +193,7 @@ int ObVectorIndexUtil::parser_params_from_string(
         if (param.lib_ == ObVectorIndexAlgorithmLib::VIAL_MAX) {
           param.lib_ = ObVectorIndexAlgorithmLib::VIAL_OB;
         }
+      } else if (index_type == ObVectorIndexType::VIT_SPIV_INDEX) {
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support vector index type", K(ret), K(index_type));
@@ -421,6 +428,8 @@ int ObVectorIndexUtil::check_distance_algorithm_match(
             index_type = ObVectorIndexType::VIT_IVF_INDEX;
           } else if (index_schema->is_vec_hnsw_index()) {
             index_type = ObVectorIndexType::VIT_HNSW_INDEX;
+          } else if (index_schema->is_vec_spiv_index()) {
+            index_type = ObVectorIndexType::VIT_SPIV_INDEX;
           }
           if (OB_FAIL(parser_params_from_string(index_schema->get_index_params(), index_type, index_param))) {
             LOG_WARN("fail to parser params from string", K(ret), K(index_schema->get_index_params()));
@@ -734,7 +743,7 @@ int ObVectorIndexUtil::get_vector_dim_from_extend_type_info(const ObIArray<ObStr
   } else {
     ObString extend_type_info_str = extend_type_info.at(0);
     ObString spilt_str = extend_type_info_str.split_on('(').trim();
-    if (0 == spilt_str.compare("ARRAY")) {
+    if (0 == spilt_str.compare("ARRAY") || 0 == spilt_str.compare("MAP")) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unexpected column type", K(ret), K(spilt_str));
     } else if (0 != spilt_str.compare("VECTOR")) {
@@ -745,6 +754,29 @@ int ObVectorIndexUtil::get_vector_dim_from_extend_type_info(const ObIArray<ObStr
       dim = std::atoi(spilt_str.ptr());
     }
   }
+  return ret;
+}
+
+/*
+  目前只支持单列向量索引。
+ */
+ int ObVectorIndexUtil::is_sparse_vec_col(const ObIArray<ObString> &extend_type_info, bool &is_sparse_vec_col)
+ {
+  int ret = OB_SUCCESS;
+  is_sparse_vec_col = false;
+
+  if (extend_type_info.count() != 1) {
+    // sparse vector index columns currently only support single column vector indexes.
+    // When building the vector column of the auxiliary table, only one column of extend_type_info is assigned.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unexpected extend type info, current only support one column vector index",
+      K(ret), K(extend_type_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on more than one column is");
+  } else {
+    ObString str = extend_type_info.at(0);
+    is_sparse_vec_col = (0 == str.compare("SPARSEVECTOR"));
+  }
+
   return ret;
 }
 
@@ -891,6 +923,10 @@ int ObVectorIndexUtil::get_vector_index_tid(
       } else if (index_table_schema->is_vec_rowkey_vid_type() || index_table_schema->is_vec_vid_rowkey_type()) {
         // rowkey_vid and vid_rowkey is shared, only one, just return
         tid = simple_index_infos.at(i).table_id_;
+      } else if (index_table_schema->is_doc_id_rowkey() || index_table_schema->is_rowkey_doc_id()) {
+        tid = simple_index_infos.at(i).table_id_;
+      } else if (is_local_vec_spiv_index(index_type)) {
+        tid = simple_index_infos.at(i).table_id_;
       } else if (is_local_vec_ivf_index(index_type)) {
         // when rebuild ivf index, simple_index_infos inclue both new/old index info, we should know by schema version
         // so do not use tid == OB_INVALID_ID as a condition to stop the for loop
@@ -1012,11 +1048,20 @@ int ObVectorIndexUtil::check_vec_index_param(
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set index params empty is");
   } else {
     int64_t vector_dim = 0;
+    bool is_sparse_vec_col = false;
     const ObColumnSchemaV2 *col_schema = nullptr;
     if(OB_ISNULL(col_schema = tbl_schema.get_column_schema(vec_column_name))){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null column schema", K(ret), KP(col_schema));
-    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(col_schema->get_extended_type_info(), vector_dim))) {
+    } else if (!col_schema->is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argumnet", K(ret), KP(col_schema));
+    } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(col_schema->get_extended_type_info(), is_sparse_vec_col))) {
+      LOG_WARN("fail to check is sparse vec col", K(ret));
+    }
+
+    if (OB_FAIL(ret)){
+    } else if (!is_sparse_vec_col && OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(col_schema->get_extended_type_info(), vector_dim))) {
       LOG_WARN("fail to get vector dim", K(ret), K(col_schema));
     } else {
       tmp_str.assign_ptr(index_param_str, index_param_length);
@@ -1025,7 +1070,7 @@ int ObVectorIndexUtil::check_vec_index_param(
         LOG_ERROR("children can't be null", K(ret));
       } else if (OB_FAIL(ObVectorIndexUtil::insert_index_param_str(tmp_str, allocator, index_params))) {
         LOG_WARN("write string failed", K(ret), K(tmp_str), K(index_params));
-      } else if (OB_FAIL(check_index_param(option_node, allocator, vector_dim, index_params, vec_index_type))) {
+      } else if (OB_FAIL(check_index_param(option_node, allocator, vector_dim, is_sparse_vec_col, index_params, vec_index_type))) {
         LOG_WARN("fail to check vector index definition", K(ret));
       } else if (share::schema::is_vec_hnsw_index(vec_index_type)) {
         bool is_vector_memory_valid = false;
@@ -1043,6 +1088,8 @@ int ObVectorIndexUtil::check_vec_index_param(
           LOG_WARN("create ivf index on column with outrow lob data not supported", K(ret), K(vector_dim), K(lob_inrow_threshold));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on column with outrow lob data is");
         }
+      } else if (share::schema::is_vec_spiv_index(vec_index_type)) {
+        // do nothing
       }
     }
   }
@@ -1179,7 +1226,8 @@ int ObVectorIndexUtil::get_vector_index_param(
 
 int ObVectorIndexUtil::check_index_param(
     const ParseNode *option_node, common::ObIAllocator &allocator,
-    const int64_t vector_dim, ObString &index_params,  ObIndexType &out_index_type)
+    const int64_t vector_dim, const bool is_sparse_vec,
+    ObString &index_params,  ObIndexType &out_index_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(option_node)) {
@@ -1191,11 +1239,11 @@ int ObVectorIndexUtil::check_index_param(
   } else if (OB_ISNULL(option_node->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("option_node child is null", K(ret), KP(option_node->children_[0]));
-  } else if (vector_dim <= 0) {
+  } else if (!is_sparse_vec && vector_dim <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected vector dim", K(ret), K(vector_dim));
   } else {
-    if (option_node->num_child_ < 4 || option_node->num_child_ % 2 !=  0) {  // at least distance and type should be set
+    if (!is_sparse_vec && (option_node->num_child_ < 4 || option_node->num_child_ % 2 !=  0)) {  // at least distance and type should be set
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("invalid vector param num", K(ret), K(option_node->num_child_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set distance and type is");
@@ -1213,7 +1261,7 @@ int ObVectorIndexUtil::check_index_param(
     int64_t sample_per_nlist_value = 0;
     int64_t nlist_value = 0;
 
-    bool distance_is_set = false;       // ivf/hnsw
+    bool distance_is_set = false;       // ivf/hnsw/spiv
     bool lib_is_set = false;            // ivf/hnsw
     bool type_hnsw_is_set = false;      // ivf/hnsw
     bool m_is_set = false;              // ivf/hnsw
@@ -1282,7 +1330,13 @@ int ObVectorIndexUtil::check_index_param(
           if (new_parser_name == "INNER_PRODUCT" ||
               new_parser_name == "L2" ||
               new_parser_name == "COSINE") {
-            distance_is_set = true;
+            if (is_sparse_vec && new_parser_name != "INNER_PRODUCT") {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support sparse vector index distance algorithm", K(ret), K(new_parser_name));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type of sparse vector index distance algorithm is");
+            } else {
+              distance_is_set = true;
+            }
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support vector index distance algorithm", K(ret), K(new_parser_name));
@@ -1357,7 +1411,8 @@ int ObVectorIndexUtil::check_index_param(
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (!is_sparse_vec) {
       bool ivf_is_set = type_ivf_sq8_is_set || type_ivf_pq_is_set || type_ivf_flat_is_set;
       bool hnsw_is_set = type_hnsw_is_set;
       if (!distance_is_set || !(ivf_is_set || hnsw_is_set)) {
@@ -1472,9 +1527,33 @@ int ObVectorIndexUtil::check_index_param(
           }
         }
       }
+    } else if (is_sparse_vec) {
+      if (!distance_is_set) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("sparce vector index distance algorithm need to be set 'INNER_PRODUCT'", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparce vector index distance algorithm need to be set 'INNER_PRODUCT'");
+      } else {
+        if (lib_is_set
+            || type_hnsw_is_set
+            || m_is_set
+            || ef_construction_is_set
+            || ef_search_is_set
+            || nlist_is_set
+            || sample_per_nlist_is_set
+            || type_ivf_flat_is_set
+            || type_ivf_sq8_is_set
+            || type_ivf_pq_is_set) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("sparce vector index only support to set distance algorithm", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparce vector index only support to set distance algorithm");
+        }
+      }
     }
+
     out_index_type = INDEX_TYPE_MAX;
     if (OB_FAIL(ret)) {
+    } else if (is_sparse_vec) {
+      out_index_type = INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
     } else if (type_hnsw_is_set) {
       out_index_type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
     } else if (type_ivf_flat_is_set) {
@@ -2292,6 +2371,11 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
   bool ivf_third_table_is_valid = false;
   bool ivf_forth_table_is_valid = true;
 
+  bool is_spiv = false;
+  bool spiv_dim_docid_value_is_valid = false;
+  bool spiv_rowkey_docid_is_valid = false;
+  bool spiv_docid_rowkey_is_valid = false;
+
   is_valid = false;
 
   if (index_column_name.empty() ||
@@ -2360,11 +2444,24 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
           } else if (index_schema->is_vec_ivfsq8_rowkey_cid_index() || index_schema->is_vec_ivfpq_rowkey_cid_index()) {
             ivf_forth_table_is_valid = index_schema->can_read_index() || !index_schema->is_index_visible();
           }
+        } else if (index_schema->is_vec_spiv_index()) {
+          if (index_schema->is_vec_spiv_index_aux()) {
+            if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
+              // skip
+            } else {
+              is_spiv = true;
+              spiv_dim_docid_value_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+            }
+          } else if (index_schema->is_rowkey_doc_id()) {
+            spiv_rowkey_docid_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+          } else if (index_schema->is_doc_id_rowkey()) {
+            spiv_docid_rowkey_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+          }
         }
       }
 
       if(OB_FAIL(ret)){
-      } else if (is_hnsw && is_ivf) {
+      } else if ((is_hnsw && (is_ivf || is_spiv)) || (is_ivf && (is_hnsw || is_spiv))) {
         ret = OB_ERR_UNDEFINED;
         LOG_WARN("only one vector index can be created on a vector column.", K(ret),
                   K(index_column_name), K(data_table_id), K(tenant_id), K(database_id));
@@ -2390,6 +2487,15 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
                   K(ivf_third_table_is_valid),
                   K(ivf_forth_table_is_valid));
         }
+      } else if (is_spiv) {
+        if (spiv_dim_docid_value_is_valid && spiv_rowkey_docid_is_valid && spiv_docid_rowkey_is_valid) {
+          is_valid = true;
+        } else {
+          LOG_WARN("spiv index is not all valid",
+                    K(spiv_dim_docid_value_is_valid),
+                    K(spiv_rowkey_docid_is_valid),
+                    K(spiv_docid_rowkey_is_valid));
+        }
       }
     }
   }
@@ -2412,6 +2518,24 @@ int ObVectorIndexUtil::get_vector_index_column_name(
     // skip none vector index
   } else if (index_table_schema.is_vec_rowkey_vid_type() || index_table_schema.is_vec_vid_rowkey_type()) {
     // skip rowkey_vid and vid_rowkey table
+  } else if (index_table_schema.is_rowkey_doc_id() || index_table_schema.is_doc_id_rowkey()) {
+    // skip rowkey_docid and docid_rowkey
+  } else if (index_table_schema.is_vec_spiv_index_aux()) {
+    uint64_t col_id;
+    const ObColumnSchemaV2 *column = NULL;
+    ObString col_name;
+    if (OB_FAIL(index_table_schema.get_sparse_vec_index_column_id(col_id))) {
+      LOG_WARN("failed to get sparse vector col id", K(ret));
+    } else if (OB_ISNULL(column = index_table_schema.get_column_schema(col_id))) {
+       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected cascaded column", K(ret));
+    } else if (OB_FALSE_IT(col_name = column->get_column_name())) {
+    } else if (OB_FAIL(col_names.push_back(col_name))) {
+      LOG_WARN("fail to push back col names", K(ret), K(col_name));
+    } else {
+      has_get_column_name = true;
+      LOG_DEBUG("success to get vector index col name", K(ret), K(col_name));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !has_get_column_name && i < index_table_schema.get_column_count(); i++) {
       const ObColumnSchemaV2 *col_schema = nullptr;
@@ -2427,9 +2551,11 @@ int ObVectorIndexUtil::get_vector_index_column_name(
         if (OB_ISNULL(ori_col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected ori column", K(ret), K(col_schema->get_column_id()), K(data_table_schema));
-        } else if (!ori_col_schema->is_vec_hnsw_vector_column() && !ori_col_schema->is_vec_ivf_center_vector_column()) {
-          // only need vec_vector column, here skip other column
-        } else if (OB_FAIL(ori_col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
+        }
+        // else if (!ori_col_schema->is_vec_hnsw_vector_column() && !ori_col_schema->is_vec_ivf_center_vector_column() && !ori_col_schema->is_vec_spiv_vec_column()) {
+        //   // only need vec_vector column, here skip other column
+        // }
+        else if (OB_FAIL(ori_col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
           LOG_WARN("failed to get cascaded column ids", K(ret));
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && !has_get_column_name && j < cascaded_column_ids.count(); ++j) {

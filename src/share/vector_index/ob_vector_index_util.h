@@ -281,6 +281,9 @@ public:
       const ObTableSchema &data_table_schema,
       const int64_t col_id, // index col id
       ObIndexType &index_type);
+  static int is_sparse_vec_col(
+      const ObIArray<ObString> &extend_type_info,
+      bool &is_sparse_vec_col);
   static int get_vector_dim_from_extend_type_info(
       const ObIArray<ObString> &extend_type_info,
       int64_t &dim);
@@ -405,6 +408,7 @@ private:
       const ParseNode *option_node,
       common::ObIAllocator &allocator,
       const int64_t vector_dim,
+      const bool is_sparse_vec,
       ObString &index_params,
       ObIndexType &out_index_type);
   static int generate_hnsw_switch_index_names(

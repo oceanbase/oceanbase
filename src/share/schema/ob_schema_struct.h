@@ -164,6 +164,9 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_IVF_META_VECTOR_COLUMN_FLAG (INT64_C(1) << 47)
 #define GENERATED_VEC_IVF_PQ_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 48)
 #define GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG (INT64_C(1) << 49)
+#define GENERATED_VEC_SPIV_DIM_COLUMN_FLAG (INT64_C(1) << 50)
+#define GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG (INT64_C(1) << 51)
+#define GENERATED_VEC_SPIV_VEC_COLUMN_FLAG (INT64_C(1) << 52)
 #define MOCK_COLUMN_FLAG (INT64_C(1) << 50)
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
@@ -398,12 +401,14 @@ enum ObIndexType
   INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL = 40,
   // heap table primary key index
   INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
+  // sparse vector inverted index
+  INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL = 42,
 
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 42,
+  INDEX_TYPE_MAX = 43,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);
@@ -755,6 +760,11 @@ inline bool is_vec_vid_rowkey_type(const ObIndexType index_type)
   return index_type == INDEX_TYPE_VEC_VID_ROWKEY_LOCAL;
 }
 
+inline bool is_vec_dim_docid_value_type(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
+}
+
 inline bool is_vec_delta_buffer_type(const ObIndexType index_type)
 {
   return index_type == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
@@ -891,6 +901,30 @@ inline bool is_local_vec_hnsw_index(const ObIndexType index_type)
          is_vec_index_snapshot_data_type(index_type);
 }
 
+inline bool is_doc_rowkey_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_rowkey_doc_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL;
+}
+
+inline bool is_local_vec_spiv_index(const ObIndexType index_type)
+{
+  return is_rowkey_doc_aux(index_type) ||
+         is_doc_rowkey_aux(index_type) ||
+         is_vec_dim_docid_value_type(index_type);
+}
+
+inline bool is_vec_spiv_index(const ObIndexType index_type)
+{
+  return is_local_vec_spiv_index(index_type);
+}
+
 inline bool is_vec_hnsw_index(const ObIndexType index_type)
 {
   return is_local_vec_hnsw_index(index_type);
@@ -899,7 +933,8 @@ inline bool is_vec_hnsw_index(const ObIndexType index_type)
 inline bool is_local_vec_index(const ObIndexType index_type)
 {
   return is_local_vec_hnsw_index(index_type) ||
-         is_local_vec_ivf_index(index_type);
+         is_local_vec_ivf_index(index_type) ||
+         is_local_vec_spiv_index(index_type);
 }
 
 inline bool is_local_fts_index(const ObIndexType index_type)
@@ -932,18 +967,6 @@ inline bool is_local_multivalue_index(const ObIndexType index_type)
          index_type == INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
 }
 
-inline bool is_doc_rowkey_aux(const ObIndexType index_type)
-{
-  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
-         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL ||
-         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
-}
-
-inline bool is_rowkey_doc_aux(const ObIndexType index_type)
-{
-  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL;
-}
-
 inline bool is_fts_index_aux(const ObIndexType index_type)
 {
   return index_type == INDEX_TYPE_FTS_INDEX_LOCAL ||
@@ -962,6 +985,11 @@ inline bool is_multivalue_index_aux(const ObIndexType index_type)
 {
   return index_type == INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ||
          index_type == INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+}
+
+inline bool is_vec_spiv_index_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
 }
 
 inline bool is_built_in_multivalue_index(const ObIndexType index_type)
@@ -1017,10 +1045,17 @@ inline bool is_built_in_vec_hnsw_index(const ObIndexType index_type)
          is_vec_index_snapshot_data_type(index_type);
 }
 
+inline bool is_built_in_vec_spiv_index(const ObIndexType index_type)
+{
+  return is_rowkey_doc_aux(index_type) ||
+         is_doc_rowkey_aux(index_type);
+}
+
 inline bool is_built_in_vec_index(const ObIndexType index_type)
 {
   return is_built_in_vec_hnsw_index(index_type) ||
-         is_built_in_vec_ivf_index(index_type);
+         is_built_in_vec_ivf_index(index_type) ||
+         is_built_in_vec_spiv_index(index_type);
 }
 
 inline bool is_vec_domain_index(const ObIndexType index_type)
@@ -1028,7 +1063,8 @@ inline bool is_vec_domain_index(const ObIndexType index_type)
   return is_vec_delta_buffer_type(index_type) ||
          is_vec_ivfflat_centroid_index(index_type) ||
          is_vec_ivfsq8_centroid_index(index_type) ||
-         is_vec_ivfpq_centroid_index(index_type);
+         is_vec_ivfpq_centroid_index(index_type) ||
+         is_vec_dim_docid_value_type(index_type);
 }
 
 inline bool is_vec_index(const ObIndexType index_type)

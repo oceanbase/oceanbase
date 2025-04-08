@@ -141,6 +141,7 @@ public:
       has_escape_(true),
       has_lob_(false),
       has_json_(false),
+      has_coll_(false),
       print_params_(),
       escape_printer_(),
       do_partition_(false),
@@ -448,6 +449,7 @@ private:
   bool has_escape_;
   bool has_lob_;
   bool has_json_;
+  bool has_coll_;
   common::ObObjPrintParams print_params_;
   ObEscapePrinter escape_printer_;
   bool do_partition_;

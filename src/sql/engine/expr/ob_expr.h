@@ -119,6 +119,8 @@ public:
   }
   OB_INLINE common::ObObjType get_type() const { return type_; }
   OB_INLINE uint16_t get_subschema_id() const { return static_cast<uint16_t>(cs_type_); }
+  // ObCollectionSQLType reused cs_type as part of sub schema id, always return CS_TYPE_BINARY.
+  OB_INLINE ObCollationType get_cs_type() const { return type_ == ObCollectionSQLType ? CS_TYPE_BINARY : cs_type_; }
 };
 
 // Expression evaluate result info

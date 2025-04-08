@@ -1589,6 +1589,10 @@ void ObVecIdxExtraInfo::set_vec_algorithm_by_index_type(ObIndexType index_type)
       algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
       break;
     }
+    case ObIndexType::INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL: {
+      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_SPIV;
+      break;
+    }
     default: {
       algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_MAX;
       break;

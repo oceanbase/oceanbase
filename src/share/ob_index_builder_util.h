@@ -46,6 +46,7 @@ class ObColumnSchemaV2;
 class ObIndexBuilderUtil
 {
 public:
+  static bool is_do_create_dense_vec_index(const ObIndexType index_type);
   static int adjust_expr_index_args(
       obrpc::ObCreateIndexArg &arg,
       share::schema::ObTableSchema &data_schema,

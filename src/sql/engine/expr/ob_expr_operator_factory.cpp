@@ -436,6 +436,8 @@
 #include "sql/engine/expr/ob_expr_vec_scn.h"
 #include "sql/engine/expr/ob_expr_vec_key.h"
 #include "sql/engine/expr/ob_expr_vec_data.h"
+#include "sql/engine/expr/ob_expr_spiv_dim.h"
+#include "sql/engine/expr/ob_expr_spiv_value.h"
 #include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 #include "sql/engine/expr/ob_expr_rb_build_empty.h"
@@ -498,6 +500,13 @@
 #include "sql/engine/expr/ob_expr_array_position.h"
 #include "sql/engine/expr/ob_expr_array_slice.h"
 #include "sql/engine/expr/ob_expr_inner_info_cols_printer.h"
+#include "sql/engine/expr/ob_expr_array_except.h"
+#include "sql/engine/expr/ob_expr_array_intersect.h"
+#include "sql/engine/expr/ob_expr_array_union.h"
+#include "sql/engine/expr/ob_expr_map.h"
+#include "sql/engine/expr/ob_expr_rb_to_array.h"
+#include "sql/engine/expr/ob_expr_rb_contains.h"
+#include "sql/engine/expr/ob_expr_map_keys.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1144,6 +1153,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprArray);
     REG_OP(ObExprDemoteCast);
     REG_OP(ObExprRangePlacement);
+    REG_OP(ObExprMap);
     /* vector index */
     REG_OP(ObExprVecIVFCenterID);
     REG_OP(ObExprVecIVFCenterVector);
@@ -1160,6 +1170,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVecScn);
     REG_OP(ObExprVecKey);
     REG_OP(ObExprVecData);
+    REG_OP(ObExprSpivDim);
+    REG_OP(ObExprSpivValue);
     REG_OP(ObExprVectorL2Distance);
     REG_OP(ObExprVectorCosineDistance);
     REG_OP(ObExprVectorIPDistance);
@@ -1193,6 +1205,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbFromString);
     REG_OP(ObExprRbSelect);
     REG_OP(ObExprRbBuild);
+    REG_OP(ObExprRbToArray);
+    REG_OP(ObExprRbContains);
     REG_OP(ObExprGetPath);
     REG_OP(ObExprGTIDSubset);
     REG_OP(ObExprGTIDSubtract);
@@ -1242,12 +1256,17 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprArrayPosition);
     REG_OP(ObExprArraySlice);
     REG_OP(ObExprArrayRange);
+    REG_OP(ObExprArrayExcept);
+    REG_OP(ObExprArrayIntersect);
+    REG_OP(ObExprArrayUnion);
     REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
     REG_OP(ObExprCalcOdpsSize);
     REG_OP(ObExprToPinyin);
     REG_OP(ObExprURLEncode);
     REG_OP(ObExprURLDecode);
     REG_OP(ObExprKeyValue);
+    REG_OP(ObExprMapKeys);
+    REG_OP(ObExprMapValues);
     REG_OP(ObExprInnerInfoColsColumnDefPrinter);
     REG_OP(ObExprInnerInfoColsCharLenPrinter);
     REG_OP(ObExprInnerInfoColsCharNamePrinter);
@@ -1740,6 +1759,10 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       alias_name = ObString::make_string(N_VEC_KEY);
     } else if (0 == origin_name.case_compare("VEC_DATA")) {
       alias_name = ObString::make_string(N_VEC_DATA);
+    } else if (0 == origin_name.case_compare("SPIV_DIM")) {
+      alias_name = ObString::make_string(N_SPIV_DIM);
+    } else if (0 == origin_name.case_compare("SPIV_VALUE")) {
+      alias_name = ObString::make_string(N_SPIV_VALUE);
     } else if (0 == origin_name.case_compare("DOC_ID")) {
       alias_name = ObString::make_string(N_DOC_ID);
     } else if (0 == origin_name.case_compare("ws")) {

@@ -455,7 +455,10 @@ public:
 
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
   OB_INLINE ObCollationLevel get_collation_level() const {
-    return static_cast<ObCollationLevel>(cs_level_ & 0x0F);
+    // ObUserDefinedSQLType and ObCollectionSQLType reused cs_level as part of sub schema id,
+    // therefore always return CS_LEVEL_EXPLICIT.
+    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_LEVEL_EXPLICIT:
+              static_cast<ObCollationLevel>(cs_level_ & 0x0F);
   }
   OB_INLINE ObCollationType get_collation_type() const {
     // ObUserDefinedSQLType reused cs_type as part of sub schema id,

@@ -118,6 +118,8 @@ private:
   int set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type, bool &need_add_cast);
   int set_asmvt_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
   int set_rb_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
+  int set_rb_calc_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
+  int set_rb_cardinality_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
   int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   int set_agg_min_max_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type,
@@ -265,41 +267,44 @@ int ObRawExprDeduceType::add_attr_exprs(const ObCollectionTypeBase *coll_meta, R
       SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
     } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
       SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
+    } else if (arr_meta->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+      const ObCollectionBasicType *elem_type = static_cast<const ObCollectionBasicType*>(arr_meta->element_type_);
+      if (!is_fixed_length(elem_type->basic_meta_.get_obj_type())) {
+        if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                     expr_type, ArrayAttr::ATTR_OFFSETS,
+                                                     attr_expr))) {
+          SQL_RESV_LOG(WARN, "failed to create offset attr expr", K(ret));
+        } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+          SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                          expr_type, ArrayAttr::ATTR_DATA,
+                                                          attr_expr))) {
+        SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
+      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+        SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
+      }
     } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_OFFSETS,
-                                                 attr_expr))) {
+                                                  expr_type, ArrayAttr::ATTR_OFFSETS,
+                                                  attr_expr))) {
       SQL_RESV_LOG(WARN, "failed to create offset attr expr", K(ret));
     } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
       SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
     } else if (OB_FAIL(add_attr_exprs(arr_meta->element_type_, expr))) {
       SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
     }
-  } else if (coll_meta->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-    ObColumnRefRawExpr *attr_expr = NULL;
-    const ObCollectionBasicType *elem_type = static_cast<const ObCollectionBasicType*>(coll_meta);
-    if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_NULL_BITMAP,
-                                                 attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-    } else if (!is_fixed_length(elem_type->basic_meta_.get_obj_type())) {
-      if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_OFFSETS,
-                                                 attr_expr))) {
-        SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
-      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-        SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-      }
+  } else if (coll_meta->type_id_ == ObNestedType::OB_MAP_TYPE || coll_meta->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+    const ObCollectionMapType *map_meta = static_cast<const ObCollectionMapType*>(coll_meta);
+    if (OB_FAIL(add_attr_exprs(map_meta->key_type_, expr))) {
+      SQL_RESV_LOG(WARN, "failed to add key attr expr", K(ret));
+    } else if (OB_FAIL(add_attr_exprs(map_meta->value_type_, expr))) {
+      SQL_RESV_LOG(WARN, "failed to add value attr expr", K(ret));
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                        expr_type, ArrayAttr::ATTR_DATA,
-                                                        attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "unexpected meta type", K(ret), K(coll_meta->type_id_));
   }
   return ret;
 }
@@ -339,7 +344,10 @@ int ObRawExprDeduceType::construct_collecton_attr_expr(RawExprType &expr)
     coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
     ObCollectionTypeBase *coll_meta = coll_info->collection_meta_;
     ObColumnRefRawExpr *attr_expr = NULL;
-    if (coll_meta->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_meta->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    if (coll_meta->type_id_ != ObNestedType::OB_ARRAY_TYPE
+        && coll_meta->type_id_ != ObNestedType::OB_VECTOR_TYPE
+        && coll_meta->type_id_ != ObNestedType::OB_MAP_TYPE
+        && coll_meta->type_id_ != ObNestedType::OB_SPARSE_VECTOR_TYPE) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "unexpected meta type", K(ret), K(coll_meta->type_id_));
     } else if (OB_ISNULL(coll_meta)) {
@@ -347,12 +355,12 @@ int ObRawExprDeduceType::construct_collecton_attr_expr(RawExprType &expr)
       SQL_RESV_LOG(WARN, "subschema is null", K(ret));
     } else if (need_construct_attrs) {
       if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                          T_REF_COLUMN, ArrayAttr::ATTR_LENGTH,
-                                                          attr_expr))) {
+                                                   T_REF_COLUMN, ArrayAttr::ATTR_LENGTH,
+                                                   attr_expr))) {
         SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
       } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
         SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-      } else if (OB_FAIL(add_attr_exprs(reinterpret_cast<ObCollectionArrayType *>(coll_meta)->element_type_, expr))) {
+      } else if (OB_FAIL(add_attr_exprs(coll_meta, expr))) {
         SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
       }
     }

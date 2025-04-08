@@ -6065,6 +6065,9 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         } else if (!lib::is_oracle_mode() && ob_is_geometry_tc(alter_column_schema.get_data_type())) {
           ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
           SQL_RESV_LOG(WARN, "GEOMETRY can't set default value!", K(ret));
+        }else if (!lib::is_oracle_mode() && ob_is_collection_sql_type(alter_column_schema.get_data_type())) {
+          ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+          SQL_RESV_LOG(WARN, "COLLECTION can't set default value!", K(ret));
         } else if (OB_FAIL(resolve_default_value(default_node, resolve_res))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }

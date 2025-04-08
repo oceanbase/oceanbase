@@ -150,6 +150,8 @@ public:
   common::ObTabletID cid_vec_tablet_id_;
   common::ObTabletID rowkey_cid_tablet_id_;
   common::ObTabletID special_aux_tablet_id_;
+    // for spiv
+  common::ObTabletID dim_docid_value_tablet_id_;
   /* used by vector index */
 
   void reset()

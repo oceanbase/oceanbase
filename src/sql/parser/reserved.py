@@ -1027,6 +1027,7 @@ class SqlKeywords:
          LOCKS
          LOGFILE
          LOGS
+         MAP
          MASTER
          MASTER_AUTO_POSITION
          MASTER_CONNECT_RETRY
@@ -1169,6 +1170,7 @@ class SqlKeywords:
          SONAME
          SOUNDS
          SOURCE
+         SPARSEVECTOR
          SQL_AFTER_GTIDS
          SQL_AFTER_MTS_GAPS
          SQL_BEFORE_GTIDS

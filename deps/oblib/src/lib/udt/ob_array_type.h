@@ -85,33 +85,33 @@ public:
   virtual int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const = 0;
   virtual int print_element(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true,
                             ObString delimiter = ObString(","), bool has_null_str = true, ObString null_str = ObString("NULL")) const = 0;
+  virtual int print_element_at(ObStringBuffer &format_str, uint32_t idx) const = 0;
   virtual int32_t get_raw_binary_len() = 0;
   virtual int get_raw_binary(char *res_buf, int64_t buf_len) = 0;
   // without length_
   virtual int32_t get_data_binary_len() = 0;
   virtual int get_data_binary(char *res_buf, int64_t buf_len) = 0;
   virtual int init(ObString &raw_data) = 0;
+  virtual int init(uint32_t length, ObString &data_binary) = 0;
   virtual int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true) = 0;
   virtual int init() = 0; // init array with self data_container
   virtual void set_scale(ObScale scale) = 0;  // only for decimalint array
   virtual ArrayFormat get_format() const = 0;
-  virtual bool is_nested_array() const = 0;
   virtual uint32_t size() const = 0;
   virtual uint32_t cardinality() const = 0;
-  virtual int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const = 0;
+  virtual int check_validity(const ObCollectionTypeBase &coll_type, const ObIArrayType &array) const = 0;
   virtual bool is_null(uint32_t idx) const = 0; // check if the idx-th element is null or not, idx validity is guaranteed by caller
   virtual int push_null() = 0;
   virtual bool contain_null() const = 0;
   virtual int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len = 1) = 0;
   int insert_from(const ObIArrayType &src) { return insert_from(src, 0, src.size()); }
-  virtual int insert_elem_from(const ObIArrayType &src, uint32_t idx) = 0;
   virtual int32_t get_element_type() const = 0;
-  virtual const ObCollectionArrayType *get_array_type() const = 0;
+  virtual const ObCollectionTypeBase *get_array_type() const = 0;
   virtual char *get_data() const = 0;
   virtual uint32_t *get_offsets() const = 0;
   virtual uint8_t *get_nullbitmap() const = 0;
   virtual void set_element_type(int32_t type) = 0;
-  virtual void set_array_type(const ObCollectionArrayType *array_type) = 0;
+  virtual void set_array_type(const ObCollectionTypeBase *array_type) = 0;
   virtual int elem_at(uint32_t idx, ObObj &elem_obj) const = 0;
   virtual int at(uint32_t idx, ObIArrayType &dest) const = 0;
   virtual void clear() = 0;
@@ -129,6 +129,9 @@ public:
   virtual bool operator ==(const ObIArrayType &other) const = 0;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const = 0;
   virtual int distinct(ObIAllocator &alloc, ObIArrayType *&output) const = 0;
+  virtual int except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayType *&output) const = 0;
+  virtual int unionize(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt) = 0;
+  virtual int intersect(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt) = 0;
 };
 
 template<typename T>
@@ -150,11 +153,10 @@ public :
     return bret;
   }
   virtual ArrayFormat get_format() const = 0;
-  virtual bool is_nested_array() const { return get_format() == Nested_Array; }
   int32_t get_element_type() const { return element_type_; }
-  const ObCollectionArrayType *get_array_type() const { return array_type_; }
+  const ObCollectionTypeBase *get_array_type() const { return array_type_; }
   void set_element_type(int32_t type) { element_type_ = type; }
-  void set_array_type(const ObCollectionArrayType *array_type) { array_type_ = array_type; }
+  void set_array_type(const ObCollectionTypeBase *array_type) { array_type_ = static_cast<const ObCollectionArrayType *>(array_type); }
   uint8_t *get_nullbitmap() const { return null_bitmaps_;}
   // make sure idx is less than length_
   bool is_null(uint32_t idx) const { return OB_ISNULL(null_bitmaps_) ? false : null_bitmaps_[idx] > 0; }
@@ -218,8 +220,6 @@ public :
     }
     return ret;
   }
-  int insert_elem_from(const ObIArrayType &src, uint32_t idx) { return insert_from(src, idx, 1); }
-
   bool operator ==(const ObIArrayType &other) const
   {
     bool b_ret = false;
@@ -245,6 +245,7 @@ public:
   ObArrayTypeObjFactory() {};
   virtual ~ObArrayTypeObjFactory() {};
   static int construct(common::ObIAllocator &alloc, const ObCollectionTypeBase  &array_meta, ObIArrayType *&arr_obj, bool read_only = false);
+  static int construct_basic_elem(common::ObIAllocator &alloc, const ObCollectionBasicType &array_meta, ObIArrayType *&arr_obj, bool read_only = false);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObArrayTypeObjFactory);
 };

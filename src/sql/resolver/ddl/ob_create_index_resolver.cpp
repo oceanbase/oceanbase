@@ -202,10 +202,19 @@ int ObCreateIndexResolver::resolve_index_column_node(
           const ObColumnSchemaV2 *column_schema = NULL;
           if (is_oracle_mode()) { // oracle mode is not support vector column yet
           } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
-            if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
+            if (ob_is_collection_sql_type(column_schema->get_data_type())) {
+              bool is_sparse_vec_col = false;
+              if (index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
+              } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema->get_extended_type_info(), is_sparse_vec_col))) {
+                LOG_WARN("fail to check is sparse vec col", K(ret));
+              } else if (is_sparse_vec_col) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("build sparse vector index afterward not supported", K(ret), K(index_keyname_));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "build sparse vector index afterward is");
+              }
             }
           }
         }

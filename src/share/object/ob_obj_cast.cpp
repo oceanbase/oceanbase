@@ -11272,12 +11272,23 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
       if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
         LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
-      } else if (dst_coll_info->collection_meta_->is_vector_type()) {
+      } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
           LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
         }
-      } else if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
-        LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+      } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+          LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+        }
+      } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
+                 || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+        bool is_sparse_vector = dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
+        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_info->collection_meta_), cast_mode, is_sparse_vector))) {
+          LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected coll type", K(ret), K(dst_coll_info->collection_meta_->type_id_));
       }
 
       if (OB_FAIL(ret)) {

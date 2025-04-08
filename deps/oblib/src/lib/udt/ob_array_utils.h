@@ -17,6 +17,7 @@
 #include "ob_array_fixed_size.h"
 #include "ob_array_binary.h"
 #include "ob_array_nested.h"
+#include "ob_map_type.h"
 #include "lib/udt/ob_vector_type.h"
 #include "src/share/vector/ob_vector_base.h"
 

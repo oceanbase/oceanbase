@@ -384,6 +384,9 @@ int ObSelectIntoOp::init_env_common()
     LOG_WARN("failed to calc basic url and set device handle", K(ret));
   } else if (OB_FAIL(check_has_lob_or_json())) {
     LOG_WARN("failed to check has lob", K(ret));
+  } else if (has_coll_ && MY_SPEC.into_type_ == T_INTO_VARIABLES) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "select array/map into variables");
   } else if (do_partition_
              && OB_FAIL(partition_map_.create(128, ObLabel("SelectInto"), ObLabel("SelectInto"), MTL_ID()))) {
     LOG_WARN("failed to create hashmap", K(ret));
@@ -5322,15 +5325,16 @@ int ObSelectIntoOp::check_has_lob_or_json()
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObExpr*> &select_exprs = MY_SPEC.select_exprs_;
-  for (int64_t i = 0; OB_SUCC(ret) && (!has_lob_ || !has_json_) && i < select_exprs.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && (!has_lob_ || !has_json_ || !has_coll_) && i < select_exprs.count(); ++i) {
     if (OB_ISNULL(select_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select expr is unexpected null", K(ret));
     } else if (ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())) {
       has_lob_ = true;
-    } else if (ob_is_json_tc(select_exprs.at(i)->obj_meta_.get_type()) ||
-               ob_is_collection_sql_type(select_exprs.at(i)->obj_meta_.get_type())) {
+    } else if (ob_is_json_tc(select_exprs.at(i)->obj_meta_.get_type())) {
       has_json_ = true;
+    } else if (ob_is_collection_sql_type(select_exprs.at(i)->obj_meta_.get_type())) {
+      has_coll_ = true;
     }
   }
   return ret;
@@ -5344,7 +5348,7 @@ int ObSelectIntoOp::create_shared_buffer_for_data_writer()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate buffer", K(ret), K(shared_buf_len_));
   }
-  if (OB_SUCC(ret) && has_json_ && has_escape_) {
+  if (OB_SUCC(ret) && (has_json_ || has_coll_) && has_escape_) {
     json_buf_len_ = OB_MALLOC_MIDDLE_BLOCK_SIZE;
     if (OB_ISNULL(json_buf_ = static_cast<char*>(ctx_.get_allocator().alloc(json_buf_len_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -66,6 +66,13 @@ int ObExprRbBuild::calc_result_type1(ObExprResType &type,
   } else if (arr_meta.type_ != ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
+  } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collection info is null", K(ret));
+  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE
+             && coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_info->collection_meta_->type_id_));
   } else {
     ObDataType data_type;
     uint32_t depth = 0;

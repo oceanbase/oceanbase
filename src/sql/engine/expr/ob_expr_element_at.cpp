@@ -46,6 +46,7 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   ObSQLSessionInfo *session = NULL;
   ObExecContext *exec_ctx = NULL;
   ObSubSchemaValue arr_meta;
+  ObCollectionTypeBase *coll_type = NULL;
   // Set cast mode for %count parameter, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
 
@@ -60,6 +61,11 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
   } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(type1.get_subschema_id(), arr_meta))) {
     LOG_WARN("failed to get elem meta.", K(ret), K(type1.get_subschema_id()));
   } else if (type2.is_null()) {
@@ -116,7 +122,7 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     res.set_null();
   } else if (src_arr->is_null(idx)) {
     res.set_null();
-  } else if (src_arr->is_nested_array()) {
+  } else if (src_arr->get_format() == Nested_Array) {
     uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
     ObString child_arr_str;
     if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
@@ -173,7 +179,7 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
         res_datum.at(j)->set_null();
       } else if (src_arr->is_null(idx)) {
         res_datum.at(j)->set_null();
-      } else if (src_arr->is_nested_array()) {
+      } else if (src_arr->get_format() == Nested_Array) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
         if (OB_NOT_NULL(child_arr) && OB_FALSE_IT(child_arr->clear())) {
@@ -263,7 +269,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-      } else if (src_arr->is_nested_array()) {
+      } else if (src_arr->get_format() == Nested_Array) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
         if (OB_NOT_NULL(child_arr) && OB_FALSE_IT(child_arr->clear())) {

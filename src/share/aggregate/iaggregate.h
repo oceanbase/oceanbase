@@ -81,7 +81,9 @@ inline bool has_extra_info(ObAggrInfo &info)
   case T_FUNC_SYS_ARRAY_AGG:
   case T_FUN_HYBRID_HIST:
   case T_FUN_TOP_FRE_HIST:
-  case T_FUN_AGG_UDF: {
+  case T_FUN_AGG_UDF:
+  case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+  case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
     has = true;
     break;
   }

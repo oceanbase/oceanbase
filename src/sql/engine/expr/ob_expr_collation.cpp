@@ -60,7 +60,7 @@ int calc_charset_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
-    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.get_cs_type();
     ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
     if (CHARSET_INVALID == charset_type) {
       ret = OB_ERR_UNEXPECTED;
@@ -134,7 +134,7 @@ int calc_collation_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
-    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    const ObCollationType &cs_type = expr.args_[0]->datum_meta_.get_cs_type();
     ObString collation = ObCharset::collation_name(cs_type);
     res_datum.set_string(collation);
   }

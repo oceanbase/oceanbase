@@ -92,6 +92,8 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_spatial_scan_iter.cpp
   das/iter/ob_das_hnsw_scan_iter.cpp
   das/iter/ob_das_ivf_scan_iter.cpp
+  das/iter/ob_das_spiv_merge_iter.cpp
+  das/iter/ob_das_spiv_scan_iter.cpp
   das/iter/ob_das_domain_id_merge_iter.cpp
   das/iter/ob_das_vec_scan_utils.cpp
 )
@@ -872,6 +874,15 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_position.cpp
   engine/expr/ob_expr_array_slice.cpp
   engine/expr/ob_expr_inner_info_cols_printer.cpp
+  engine/expr/ob_expr_array_except.cpp
+  engine/expr/ob_expr_array_union.cpp
+  engine/expr/ob_expr_array_intersect.cpp
+  engine/expr/ob_expr_map.cpp
+  engine/expr/ob_expr_map_keys.cpp
+  engine/expr/ob_expr_spiv_dim.cpp
+  engine/expr/ob_expr_spiv_value.cpp
+  engine/expr/ob_expr_rb_to_array.cpp
+  engine/expr/ob_expr_rb_contains.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE

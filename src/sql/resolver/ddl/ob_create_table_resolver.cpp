@@ -2533,7 +2533,7 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
           LOG_WARN("tenant is not user tenant vector index not supported", K(ret), K(tenant_id));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
         } else {
-          type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL; // 需要考虑ivf和hnsw这两种模式，其中ivf索引又分成ivfflat，ivfsq8，ivfpq三类
+          type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL; // 需要考虑ivf、hnsw、spiv这三种模式，其中ivf索引又分成ivfflat，ivfsq8，ivfpq三类
         }
       } else if (FTS_KEY == index_keyname_) {
         if (tenant_data_version < DATA_VERSION_4_3_1_0) {
@@ -3310,6 +3310,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_args(resolve_result,
                                                               create_index_arg,
                                                               have_generate_vec_arg_,
+                                                              have_generate_fts_arg_,
                                                               resolve_results,
                                                               index_arg_list,
                                                               allocator_,

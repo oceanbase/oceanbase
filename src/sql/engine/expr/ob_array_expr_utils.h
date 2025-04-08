@@ -31,11 +31,13 @@ struct ObVectorCastInfo
 {
   ObVectorCastInfo()
     : is_vector_(false),
+      is_sparse_vector_(false),
       need_cast_(false),
       subschema_id_(UINT16_MAX),
       dim_cnt_(0)
   {}
   bool is_vector_;
+  bool is_sparse_vector_;
   bool need_cast_;
   uint16_t subschema_id_;
   uint16_t dim_cnt_;
@@ -86,15 +88,18 @@ public:
   }
   static int deduce_array_element_type(ObExecContext *exec_ctx, ObExprResType* types_stack, int64_t param_num, ObDataType &elem_type);
   static int deduce_nested_array_subschema_id(ObExecContext *exec_ctx,  ObDataType &elem_type, uint16_t &subschema_id);
+  static int deduce_map_subschema_id(ObExecContext *exec_ctx, uint16_t key_subid, uint16_t value_subid, uint16_t &subschema_id);
   static int deduce_array_type(ObExecContext *exec_ctx, ObExprResType &type1, ObExprResType &type2,uint16_t &subschema_id);
   static int check_array_type_compatibility(ObExecContext *exec_ctx, uint16_t l_subid, uint16_t r_subid, bool &is_compatiable);
+  static int get_coll_info_by_subschema_id(ObExecContext*exec_ctx, uint16_t subid, const ObSqlCollectionInfo *&coll_info);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObObjType &obj_type, uint32_t &depth, bool &is_vec);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObDataType &elem_type, uint32_t &depth, bool &is_vec);
   static int dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObString &array_data, const int64_t row_idx);
   static int dispatch_array_attrs_inner(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx, bool is_shallow = true);
   static int batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, int64_t begin, int64_t batch_size, const uint16_t *selector = NULL);
-  static int transform_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const int64_t batch_size, const ObBitVector *skip);
+  static int transform_coll_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const int64_t batch_size, const ObBitVector *skip);
   static int get_array_type_by_subschema_id(ObEvalCtx &ctx, const uint16_t subschema_id, ObCollectionArrayType *&arr_type);
+  static int get_coll_type_by_subschema_id(ObExecContext *exec_ctx, const uint16_t subschema_id, ObCollectionTypeBase *&coll_type);
   static int construct_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, ObIArrayType *&res, bool read_only = true);
   static int calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &ctx, const int64_t batch_idx, int64_t &size);
   static int get_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, const ObString &raw_data, ObIArrayType *&res);
@@ -108,6 +113,8 @@ public:
                                 const int64_t col_offset, const uint64_t row_idx, int64_t &cell_len, const int64_t *remain_size = nullptr);
   static int assemble_array_attrs(ObEvalCtx &ctx, const ObExpr &expr, int64_t row_idx, ObIArrayType *arr_obj);
   static void set_expr_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx);
+  static int add_elem_to_array(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &alloc,
+                               ObCollectionArrayType *value_type,  ObIArrayType *value_arr, int args_idx);
   static int add_elem_to_nested_array(ObIAllocator &tmp_allocator, ObEvalCtx &ctx, uint16_t subschema_id,
                                       const ObDatum &datum, ObArrayNested *nest_array);
   static int assign_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const ObExpr &dst_expr, int64_t row_idx);
@@ -138,9 +145,10 @@ public:
                              ObIAllocator &allocator,
                              ObIArrayType *&result);
   static int calc_cast_type(ObExprResType &type, common::ObExprTypeCtx &type_ctx, const bool only_vector = false);
-  static int calc_cast_type2(ObExprResType &type1, ObExprResType &type2, common::ObExprTypeCtx &type_ctx, uint16_t &res_subschema_id,
+  static int calc_cast_type2(const ObExprOperatorType &expr_type, ObExprResType &type1, ObExprResType &type2, common::ObExprTypeCtx &type_ctx, uint16_t &res_subschema_id,
                              const bool only_vector = false);
   static int collect_vector_cast_info(ObExprResType &type, ObExecContext &exec_ctx, ObVectorCastInfo &info);
+  static bool is_sparse_vector_supported(const ObExprOperatorType &type) { return type == T_FUN_SYS_INNER_PRODUCT || type == T_FUN_SYS_NEGATIVE_INNER_PRODUCT; };
 
   // update inplace
   static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res = nullptr, bool negative = false);
@@ -153,6 +161,10 @@ public:
 
   template<typename T>
   static int raw_check_minus(const T &res, const T &l, const T &r);
+  static int construct_map(ObIAllocator &allocator, ObIArrayType *src_key_arr, ObIArrayType *src_value_arr, ObMapType *dst_map);
+  template <typename T>
+  static int calc_fixed_size_key_index(ObIArrayType *src_key_arr, uint32_t *idx_arr, uint32_t &idx_count);
+  static int calc_string_key_index(ObIArrayType *src_key_arr, uint32_t *idx_arr, uint32_t &idx_count);
 
 private:
   static const char* DEFAULT_CAST_TYPE_NAME;

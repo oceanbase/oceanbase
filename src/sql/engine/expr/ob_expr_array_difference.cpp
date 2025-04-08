@@ -46,6 +46,7 @@ int ObExprArrayDifference::calc_result_type1(ObExprResType &type,
   uint32_t depth = 0;
   bool is_vec = false;
   ObObjType coll_calc_type = ObMaxType;
+  ObCollectionTypeBase *coll_type = NULL;
   ObExprResType calc_type;
   bool is_null_res = false;
 
@@ -60,6 +61,11 @@ int ObExprArrayDifference::calc_result_type1(ObExprResType &type,
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
   } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1.get_subschema_id(), src_elem_type, depth, is_vec))) {
     LOG_WARN("failed to get array element type", K(ret));
   } else if (depth != 1) {
@@ -105,7 +111,7 @@ int ObExprArrayDifference::calc_difference(ObIArrayType *src_arr, ObIArrayType *
   int ret = OB_SUCCESS;
   ObObj this_elem;
   ObObj last_elem;
-  ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(src_arr->get_array_type()->element_type_);
+  ObCollectionBasicType *elem_type = dynamic_cast<ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(src_arr->get_array_type())->element_type_);
   ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
 
   for (int64_t i = 0; i < src_arr->size() && OB_SUCC(ret); i++) {

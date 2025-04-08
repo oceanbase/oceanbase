@@ -127,22 +127,18 @@ int ObArrayUtil::convert_collection_bin_to_string(const ObString &collection_bin
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("collection meta is null", K(ret), K(collection_type_name));
     } else {
-      ObCollectionArrayType *arr_type = nullptr;
-      ObIArrayType *arr_obj = nullptr;
+      ObIArrayType *coll_obj = nullptr;
       ObStringBuffer buf(&allocator);
-      if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(type_info_parse.collection_meta_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("collection meta is null", K(ret), K(collection_type_name));
-      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(allocator, *arr_type, arr_obj, true))) {
+      if (OB_FAIL(ObArrayTypeObjFactory::construct(allocator, *type_info_parse.collection_meta_, coll_obj, true))) {
         LOG_WARN("construct array obj failed", K(ret),  K(type_info_parse));
-      } else if (OB_ISNULL(arr_obj)) {
+      } else if (OB_ISNULL(coll_obj)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("arr_obj is null", K(ret), K(collection_type_name));
       } else {
         ObString raw_binary = collection_bin;
-        if (OB_FAIL(arr_obj->init(raw_binary))) {
+        if (OB_FAIL(coll_obj->init(raw_binary))) {
           LOG_WARN("failed to init array", K(ret));
-        } else if (OB_FAIL(arr_obj->print(buf))) {
+        } else if (OB_FAIL(coll_obj->print(buf))) {
           LOG_WARN("failed to format array", K(ret));
         } else {
           res_str.assign_ptr(buf.ptr(), buf.length());
@@ -153,7 +149,7 @@ int ObArrayUtil::convert_collection_bin_to_string(const ObString &collection_bin
   return ret;
 }
 
-// determine a collection type is vector or array
+// determine a collection type is vector, array or map
 int ObArrayUtil::get_mysql_type(const common::ObIArray<common::ObString> &extended_type_info,
                                 obmysql::EMySQLFieldType &type)
 {
@@ -178,6 +174,10 @@ int ObArrayUtil::get_mysql_type(const common::ObIArray<common::ObString> &extend
         type = obmysql::MYSQL_TYPE_OB_ARRAY;
       } else if (detail_type == OB_VECTOR_TYPE) {
         type = obmysql::MYSQL_TYPE_OB_VECTOR;
+      } else if (detail_type == OB_MAP_TYPE) {
+        type = obmysql::MYSQL_TYPE_OB_MAP;
+      } else if (detail_type == OB_SPARSE_VECTOR_TYPE) {
+        type = obmysql::MYSQL_TYPE_OB_SPARSE_VECTOR;
       } else {
         ret = OB_ERR_UNEXPECTED;
         OB_LOG(WARN, "unexpected collection type", K(ret), K(detail_type));

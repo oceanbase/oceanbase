@@ -954,6 +954,7 @@ typedef enum ObItemType
   T_FUN_SYS_CHECK_CATALOG_ACCESS = 1916,
   T_FUN_SYS_SPIV_DIM = 1917,  // sparse vector index
   T_FUN_SYS_SPIV_VALUE = 1918,
+
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
@@ -2972,6 +2973,8 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_SYS_RB_BUILD_AGG ||\
                          (op) == T_FUN_SYS_RB_OR_AGG ||\
                          (op) == T_FUN_SYS_RB_AND_AGG ||\
+                         (op) == T_FUN_SYS_RB_OR_CARDINALITY_AGG ||\
+                         (op) == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||\
                          (op) == T_FUNC_SYS_ARRAY_AGG ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)

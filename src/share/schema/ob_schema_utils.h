@@ -93,6 +93,10 @@ public:
   static bool is_vec_hnsw_scn_column(const uint64_t flag);
   static bool is_vec_hnsw_key_column(const uint64_t flag);
   static bool is_vec_hnsw_data_column(const uint64_t flag);
+  static bool is_vec_spiv_dim_column(const uint64_t flag);
+  static bool is_vec_spiv_value_column(const uint64_t flag);
+  static bool is_vec_spiv_vec_column(const uint64_t flag);
+
   static bool is_fulltext_column(const uint64_t flag);
   static bool is_doc_id_column(const uint64_t flag);
   static bool is_word_segment_column(const uint64_t flag);

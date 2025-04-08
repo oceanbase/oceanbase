@@ -11453,16 +11453,12 @@ CAST_FUNC_NAME(collection, collection)
       ObString blob_data = child_res->get_string();
       const ObSqlCollectionInfo *src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(src_meta.value_);
       const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
-      ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_);
-      // to do : nested array
-      ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-      ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
-      // to do : nested array
-      ObCollectionBasicType *dst_elem_type = static_cast<ObCollectionBasicType *>(dst_arr_type->element_type_);
-      ObIArrayType *arr_src = NULL;
-      ObIArrayType *arr_dst = NULL;
-      ObArrayTypeCast *arr_cast = NULL;
+      ObCollectionTypeBase *src_coll_type = src_coll_info->collection_meta_;
+      ObCollectionTypeBase *dst_coll_type = dst_coll_info->collection_meta_;
+      ObIArrayType *src_coll_obj = NULL;
+      ObIArrayType *dst_coll_obj = NULL;
       ObString res_str;
+      ObArrayTypeCast *arr_cast = NULL;
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator,
@@ -11471,26 +11467,20 @@ CAST_FUNC_NAME(collection, collection)
                                                             true,
                                                             blob_data))) {
         LOG_WARN("fail to get real data.", K(ret), K(blob_data));
-      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *arr_type, arr_src, true))) {
-        LOG_WARN("construct array obj failed", K(ret), K(src_coll_info));
-      } else if (OB_FAIL(arr_src->init(blob_data))) {
-        LOG_WARN("failed to init array", K(ret));
-      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
-        LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
-      } else if (OB_FAIL(ObArrayTypeCastFactory::alloc(temp_allocator, *arr_type,
-                                                       *dst_arr_type, arr_cast))) {
-        LOG_WARN("alloc array cast failed", K(ret), K(src_coll_info));
-      } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type, expr.extra_))) {
+      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *src_coll_type, src_coll_obj, true))) {
+        LOG_WARN("construct collection obj failed", K(ret), K(src_coll_info));
+      } else if (OB_FAIL(src_coll_obj->init(blob_data))) {
+        LOG_WARN("failed to init collection", K(ret));
+      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_coll_type, dst_coll_obj))) {
+        LOG_WARN("construct collection obj failed", K(ret), K(dst_coll_type));
+      } else if (OB_FAIL(ObArrayTypeCastFactory::alloc(temp_allocator, *src_coll_type, *dst_coll_type, arr_cast))) {
+        LOG_WARN("alloc collection cast failed", K(ret), K(src_coll_info));
+      } else if (OB_FAIL(arr_cast->cast(temp_allocator, src_coll_obj, src_coll_type,
+                                        dst_coll_obj, dst_coll_type, expr.extra_))) {
         LOG_WARN("array element cast failed", K(ret), K(*src_coll_info), K(*dst_coll_info));
-        if (ret == OB_ERR_INVALID_VECTOR_DIM) {
-          LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_src->size());
-        }
-      } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
-        LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
-        if (ret == OB_ERR_INVALID_VECTOR_DIM) {
-          LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
-        }
-      } else if (OB_FAIL(ObArrayExprUtils::set_array_res(arr_dst, arr_dst->get_raw_binary_len(), expr, ctx, res_str))) {
+      } else if (OB_FAIL(dst_coll_obj->check_validity(*dst_coll_type, *dst_coll_obj))) {
+        LOG_WARN("check array validity failed", K(ret), K(dst_coll_info));
+      } else if (OB_FAIL(ObArrayExprUtils::set_array_res(dst_coll_obj, dst_coll_obj->get_raw_binary_len(), expr, ctx, res_str))) {
         LOG_WARN("get array binary string failed", K(ret), K(src_coll_info));
       } else {
         res_datum.set_string(res_str);
@@ -11515,25 +11505,35 @@ CAST_FUNC_NAME(string, collection)
       ObIArrayType *arr_dst = NULL;
       ObString res_str;
       const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
-      ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
+      ObCollectionTypeBase *dst_coll_type = dst_coll_info->collection_meta_;
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
                   expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
-      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
+      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_coll_type, arr_dst))) {
         LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
-      } else if (dst_coll_info->collection_meta_->is_vector_type()) {
-        if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+      } else if (dst_coll_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, static_cast<ObCollectionArrayType *>(dst_coll_type)->element_type_))) {
           LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
         }
-      } else if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
-        LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+      } else if (dst_coll_type->type_id_== ObNestedType::OB_ARRAY_TYPE) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, static_cast<ObCollectionArrayType *>(dst_coll_type)->element_type_))) {
+          LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+        }
+      } else if (dst_coll_type->type_id_ == ObNestedType::OB_MAP_TYPE || dst_coll_type->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+        bool is_sparse_vector = dst_coll_type->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
+        if (OB_FAIL(ObArrayCastUtils::string_cast_map(temp_allocator, in_str, arr_dst, static_cast<ObCollectionMapType *>(dst_coll_type), expr.extra_, is_sparse_vector))) {
+          LOG_WARN("map cast failed", K(ret), K(dst_coll_info));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected coll type", K(ret), K(dst_coll_type->type_id_));
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
+      } else if (OB_FAIL(arr_dst->check_validity(*dst_coll_type, *arr_dst))) {
         LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
         if (ret == OB_ERR_INVALID_VECTOR_DIM) {
-          LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
+          LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(static_cast<ObCollectionArrayType *>(dst_coll_type)->dim_cnt_), arr_dst->size());
         }
       } else if (OB_FAIL(ObArrayExprUtils::set_array_res(arr_dst, arr_dst->get_raw_binary_len(), expr, ctx, res_str))) {
         LOG_WARN("get array binary string failed", K(ret), K(dst_coll_info));

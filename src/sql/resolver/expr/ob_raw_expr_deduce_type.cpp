@@ -94,9 +94,15 @@ int ObRawExprDeduceType::visit(ObVarRawExpr &expr)
       bool is_vec = false;
       ObDataType coll_elem_type;
       uint16_t subschema_id = ref_expr->get_result_type().get_subschema_id();
+      ObCollectionTypeBase *coll_type = NULL;
       if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("exec_ctx should not be NULL", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, subschema_id, coll_type))) {
+        LOG_WARN("failed to get array type by subschema id", K(ret), K(subschema_id));
+      } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
       } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, subschema_id, coll_elem_type, depth, is_vec))) {
         LOG_WARN("failed to get array element type", K(ret));
       } else if (depth > 1) {
@@ -1640,11 +1646,23 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
-      case T_FUN_SYS_RB_BUILD_AGG:
-      case T_FUN_SYS_RB_OR_AGG:
-      case T_FUN_SYS_RB_AND_AGG: {
+      case T_FUN_SYS_RB_BUILD_AGG: {
         if (OB_FAIL(set_rb_result_type(expr, result_type))) {
           LOG_WARN("set rb_agg result type failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_SYS_RB_OR_AGG:
+      case T_FUN_SYS_RB_AND_AGG: {
+        if (OB_FAIL(set_rb_calc_result_type(expr, result_type))) {
+          LOG_WARN("set rb_agg result type failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+      case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+        if (OB_FAIL(set_rb_cardinality_result_type(expr, result_type))) {
+          LOG_WARN("set rb_cardinality_agg result type failed", K(ret));
         }
         break;
       }
@@ -3748,6 +3766,51 @@ int ObRawExprDeduceType::set_rb_result_type(ObAggFunRawExpr &expr,
     result_type.set_collation_level(CS_LEVEL_IMPLICIT);
     result_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObRoaringBitmapType]);
     expr.set_result_type(result_type);
+  }
+  return ret;
+}
+
+int ObRawExprDeduceType::set_rb_calc_result_type(ObAggFunRawExpr &expr,
+                                               ObExprResType& result_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(expr.get_real_param_count() != 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()), K(expr.get_real_param_count()), K(expr));
+  } else {
+    ObObjType type1 = expr.get_param_expr(0)->get_result_type().get_type();
+    if (!(type1 == ObHexStringType || type1 == ObRoaringBitmapType || ob_is_null(type1))) {
+      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+      LOG_WARN("invalid roaringbitmap data type provided.", K(ret), K(type1));
+    } else {
+      result_type.set_type(ObRoaringBitmapType);
+      result_type.set_collation_type(CS_TYPE_BINARY);
+      result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      result_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObRoaringBitmapType]);
+      expr.set_result_type(result_type);
+    }
+  }
+  return ret;
+}
+
+int ObRawExprDeduceType::set_rb_cardinality_result_type(ObAggFunRawExpr &expr,
+                                                        ObExprResType& result_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(expr.get_real_param_count() != 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()), K(expr.get_real_param_count()), K(expr));
+  } else {
+    ObObjType type1 = expr.get_param_expr(0)->get_result_type().get_type();
+    if (!(type1 == ObHexStringType || type1 == ObRoaringBitmapType || ob_is_null(type1))) {
+      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+      LOG_WARN("invalid roaringbitmap data type provided.", K(ret), K(type1));
+    } else {
+      result_type.set_uint64();
+      result_type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].scale_);
+      result_type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].precision_);
+      expr.set_result_type(result_type);
+    }
   }
   return ret;
 }

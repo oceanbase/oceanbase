@@ -611,7 +611,7 @@ int ObDomainDMLIterator::create_domain_dml_iterator(
     void *buf = nullptr;
     if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObMultivalueDMLIterator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate fulltext dml iterator memory", K(ret), KP(buf));
+      LOG_WARN("fail to allocate multivalue dml iterator memory", K(ret), KP(buf));
     } else {
       ObMultivalueDMLIterator *iter = new (buf) ObMultivalueDMLIterator(param.allocator_, param.row_projector_,
                                                                         param.write_iter_, param.das_ctdef_,
@@ -619,15 +619,28 @@ int ObDomainDMLIterator::create_domain_dml_iterator(
       domain_iter = static_cast<ObDomainDMLIterator *>(iter);
     }
   } else if (param.das_ctdef_->table_param_.get_data_table().is_vector_index()) {
-    void *buf = nullptr;
-    if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObVecIndexDMLIterator)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate fulltext dml iterator memory", K(ret), KP(buf));
+    if (param.das_ctdef_->table_param_.get_data_table().is_sparse_vector_index()) {
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObSparseVecIndexDMLIterator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate sparse vector idnex dml iterator memory", K(ret), KP(buf));
+      } else {
+        ObSparseVecIndexDMLIterator *iter = new (buf) ObSparseVecIndexDMLIterator(param.allocator_, param.row_projector_,
+                                                                                  param.write_iter_, param.das_ctdef_,
+                                                                                  param.main_ctdef_);
+        domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+      }
     } else {
-      ObVecIndexDMLIterator *iter = new (buf) ObVecIndexDMLIterator(param.allocator_, param.row_projector_,
-                                                                    param.write_iter_, param.das_ctdef_,
-                                                                    param.main_ctdef_);
-      domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+      void *buf = nullptr;
+      if (OB_ISNULL(buf = param.allocator_.alloc(sizeof(ObVecIndexDMLIterator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate vector index dml iterator memory", K(ret), KP(buf));
+      } else {
+        ObVecIndexDMLIterator *iter = new (buf) ObVecIndexDMLIterator(param.allocator_, param.row_projector_,
+                                                                      param.write_iter_, param.das_ctdef_,
+                                                                      param.main_ctdef_);
+        domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+      }
     }
   } else {
     ret = OB_NOT_SUPPORTED;

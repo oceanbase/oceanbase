@@ -292,6 +292,11 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_vec_hnsw_scn_column() const { return ObSchemaUtils::is_vec_hnsw_scn_column(column_flags_); }
   inline bool is_vec_hnsw_key_column() const { return ObSchemaUtils::is_vec_hnsw_key_column(column_flags_); }
   inline bool is_vec_hnsw_data_column() const { return ObSchemaUtils::is_vec_hnsw_data_column(column_flags_); }
+
+  inline bool is_vec_spiv_dim_column() const { return ObSchemaUtils::is_vec_spiv_dim_column(column_flags_); }
+  inline bool is_vec_spiv_value_column() const { return ObSchemaUtils::is_vec_spiv_value_column(column_flags_); }
+  inline bool is_vec_spiv_vec_column() const { return ObSchemaUtils::is_vec_spiv_vec_column(column_flags_); }
+
   inline bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
   inline bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
   inline bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }

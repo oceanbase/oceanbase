@@ -54,14 +54,20 @@ int ObExprArrayDistinct::calc_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+  ObCollectionTypeBase *coll_type = NULL;
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
-  } else if ((!ob_is_collection_sql_type(type1.get_type()) && !type1.is_null())) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("invalid param type", K(ret), K(type1.get_type()));
   } else if (type1.is_null()) {
     type.set_null();
+  } else if (!ob_is_collection_sql_type(type1.get_type())) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid param type", K(ret), K(type1.get_type()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
   } else {
     type.set_collection(type1.get_subschema_id());
   }

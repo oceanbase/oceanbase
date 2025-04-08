@@ -63,6 +63,10 @@ int ObExprArrayExtreme::calc_result_type1(ObExprResType &type,
   } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObSqlCollectionInfo is null", K(ret));
+  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE
+             && coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_info->collection_meta_->type_id_ ));
   } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObCollectionArrayType is null", K(ret));
@@ -88,10 +92,10 @@ int ObExprArrayExtreme::calc_extreme(ObIArrayType* src_arr, ObObj &res_obj, bool
   ObCollectionBasicType *elem_type = NULL;
   res_obj.set_null();
 
-  if (OB_ISNULL(elem_type = static_cast<ObCollectionBasicType *>(src_arr->get_array_type()->element_type_))) {
+  if (OB_ISNULL(elem_type = dynamic_cast<ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(src_arr->get_array_type())->element_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("source array collection element type is null", K(ret));
-  } else if (src_arr->is_nested_array()) {
+  } else if (src_arr->get_format() == Nested_Array) {
     // TODO: support array of array
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "array_max with nested array");

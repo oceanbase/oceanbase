@@ -65,8 +65,23 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
     if (type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
       ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
       ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+      ObCollectionTypeBase *coll_type1 = NULL;
+      ObCollectionTypeBase *coll_type2 = NULL;
       ObExprResType coll_calc_type = type;
-      if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec ctx is null", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type1))) {
+        LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+      } else if (coll_type1->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type1->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid collection type", K(ret), K(coll_type1->type_id_));
+      } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), coll_type2))) {
+        LOG_WARN("failed to get array type by subschema id", K(ret), K(type2.get_subschema_id()));
+      } else if (coll_type2->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type2->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid collection type", K(ret), K(coll_type2->type_id_));
+      } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
         LOG_WARN("failed to check array compatibilty", K(ret));
       } else {
         type1.set_calc_meta(coll_calc_type);
@@ -76,7 +91,7 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
     } else {
       // only support vector/array/varchar - vector/array/varchar now // array and varchar need cast to array(float)
       uint16_t res_subschema_id = UINT16_MAX;
-      if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type1, type2, type_ctx, res_subschema_id))) {
+      if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type_, type1, type2, type_ctx, res_subschema_id))) {
         LOG_WARN("failed to calc cast type", K(ret), K(type1));
       } else if (UINT16_MAX == res_subschema_id) {
         ret = OB_ERR_UNEXPECTED;

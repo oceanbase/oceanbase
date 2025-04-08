@@ -9448,6 +9448,25 @@ int ObTableSchema::get_vec_index_column_id(uint64_t &with_cascaded_info_column_i
   return ret;
 }
 
+int ObTableSchema::get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const
+{
+  int ret = OB_SUCCESS;
+  sparse_vec_col_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == sparse_vec_col_id && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_collection()) {
+      sparse_vec_col_id = column_schema->get_column_id();
+    }
+  }
+  if (OB_FAIL(ret) || OB_INVALID_ID == sparse_vec_col_id) {
+    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
+  }
+  return ret;
+}
+
 int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid) const
 {
   int ret = OB_SUCCESS;
@@ -9464,6 +9483,25 @@ int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid
     }
   }
   if (OB_FAIL(ret) || OB_INVALID_ID == vec_id_col_id) {
+    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
+  }
+  return ret;
+}
+
+int ObTableSchema::get_docid_col_id(uint64_t &docid_col_id) const
+{
+  int ret = OB_SUCCESS;
+  docid_col_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == docid_col_id && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_doc_id_column()) {
+      docid_col_id = column_schema->get_column_id();
+    }
+  }
+  if (OB_FAIL(ret) || OB_INVALID_ID == docid_col_id) {
     ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
   }
   return ret;

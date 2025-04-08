@@ -199,6 +199,11 @@ int ObVecIndexBuildTask::init(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
+bool ObVecIndexBuildTask::is_rebuild_dense_vec_index_task(const share::schema::ObTableSchema &index_schema)
+{
+  return index_schema.is_vec_index() && !index_schema.is_vec_spiv_index();
+}
+
 int ObVecIndexBuildTask::process()
 {
   int ret = OB_SUCCESS;

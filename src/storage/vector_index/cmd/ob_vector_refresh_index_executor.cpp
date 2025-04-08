@@ -785,6 +785,10 @@ int ObVectorRefreshIndexExecutor::resolve_refresh_arg(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("refresh ivf index is not support", K(ret), K(domain_table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh ivf index is");
+  } else if (domain_table_schema->is_vec_spiv_index()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("refresh sparse vector index is not support", K(ret), K(domain_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh sparse vector index is");
   } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schemas are null", K(ret), KP(index_id_table_schema));
@@ -859,10 +863,13 @@ int ObVectorRefreshIndexExecutor::resolve_rebuild_arg(
 #endif
   {
     LOG_WARN("fail to resolve and check table valid", KR(ret), K(arg));
-  } else if (OB_ISNULL(base_table_schema) ||
-             OB_ISNULL(domain_table_schema)) {
+  } else if (OB_ISNULL(base_table_schema) || OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schemas are null", K(ret), KP(base_table_schema), KP(domain_table_schema));
+  } else if (domain_table_schema->is_vec_spiv_index()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rebuild sparse vector index is not support", K(ret), K(domain_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild sparse vector index is");
   } else if (domain_table_schema->is_vec_hnsw_index() && OB_ISNULL(index_id_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schemas are null", K(ret), KP(index_id_table_schema));

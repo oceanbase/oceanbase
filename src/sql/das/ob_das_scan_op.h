@@ -387,6 +387,10 @@ public:
       common::ObTabletID &snapshot_tid,
       common::ObTabletID &com_aux_vec_tid,
       common::ObTabletID &rowkey_vid_tid);
+  int get_spiv_ir_tablet_ids(
+      common::ObTabletID &vec_row_tid,
+      common::ObTabletID &dim_docid_value_tid,
+      common::ObTabletID &rowkey_doc_tid);
   int get_index_merge_tablet_ids(common::ObIArray<common::ObTabletID> &index_merge_tablet_ids);
   int get_func_lookup_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }

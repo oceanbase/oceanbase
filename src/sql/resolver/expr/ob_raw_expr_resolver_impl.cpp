@@ -852,7 +852,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG:
-      case T_FUNC_SYS_ARRAY_AGG: {
+      case T_FUNC_SYS_ARRAY_AGG:
+      case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+      case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -1295,7 +1297,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_POLYGON:
       case T_FUN_SYS_MULTIPOLYGON:
       case T_FUN_SYS_GEOMCOLLECTION:
-      case T_FUN_SYS_ARRAY: {
+      case T_FUN_SYS_ARRAY:
+      case T_FUN_SYS_MAP: {
         OZ (process_geo_func_node(node, expr));
         break;
       }
@@ -3495,6 +3498,10 @@ int ObRawExprResolverImpl::set_geo_func_name(ObSysFunRawExpr *func_expr,
         OX(func_expr->set_func_name(N_ARRAY));
         break;
       }
+      case T_FUN_SYS_MAP: {
+        OX(func_expr->set_func_name(N_MAP));
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid geometry function", K(ret), K(func_type));
@@ -5291,7 +5298,9 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
       } // end for
     } else if (T_FUN_SYS_RB_BUILD_AGG == node->type_
                 || T_FUN_SYS_RB_OR_AGG == node->type_
-                || T_FUN_SYS_RB_AND_AGG == node->type_) {
+                || T_FUN_SYS_RB_AND_AGG == node->type_
+                || T_FUN_SYS_RB_AND_CARDINALITY_AGG == node->type_
+                || T_FUN_SYS_RB_OR_CARDINALITY_AGG == node->type_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         sub_expr = NULL;
         if (OB_ISNULL(node->children_[i])) {

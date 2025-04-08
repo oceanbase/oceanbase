@@ -194,6 +194,19 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
           }
         }
       }
+    } else if (schema->is_vec_dim_docid_value_type()) {
+      if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
+        LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
+        const ObColumnSchemaV2 *column_schema = schema->get_column_schema_by_idx(i);
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
+        } else if (column_schema->is_doc_id_column()) {
+          doc_id_col_id_ = column_schema->get_column_id();
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {

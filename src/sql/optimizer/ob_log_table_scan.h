@@ -106,6 +106,14 @@ enum ObVectorAuxTableIdx
   VEC_MAX_AUX_TBL_IDX = 4
 };
 
+enum ObVectorSPIVColumnIdx
+{
+  // for SPIV
+  SPIV_AUX_DOCID_COL = 0, // docid col in dim_docid_value table
+  SPIV_AUX_VALUE_COL = 1, // value col in dim_docid_value table
+  SPIV_MAX_COL_CNT = 2
+};
+
 enum ObVectorHNSWColumnIdx
 {
   // for HNSW
@@ -226,6 +234,7 @@ struct ObVecIndexInfo
   ObVectorIndexAlgorithmType get_vec_algorithm_type() const { return algorithm_type_; }
   bool is_vec_aux_table_id(uint64_t tid) const;
   inline bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
+  inline bool is_spiv_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_SPIV; }
   inline bool is_ivf_vec_scan() const
   {
     return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
@@ -237,7 +246,7 @@ struct ObVecIndexInfo
   inline bool is_ivf_pq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
   inline bool is_pre_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   inline bool is_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
-  inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan();}
+  inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan() || is_spiv_scan();}
   uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
   ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
   int check_vec_aux_column_is_all_inited(bool& is_all_null) const;
@@ -815,6 +824,14 @@ public:
   inline bool need_rowkey_doc_expr() const { return is_tsc_with_domain_id() || has_func_lookup(); }
   int prepare_hnsw_vector_access_exprs();
   int prepare_ivf_vector_access_exprs();
+  int prepare_spiv_vector_access_exprs();
+  int prepare_spiv_dim_docid_value_tbl_access_exprs(const ObTableSchema *dim_docid_value_tbl,
+                                                    const ObTableSchema *table_schema,
+                                                    ObRawExprFactory *expr_factory,
+                                                    TableItem *table_item,
+                                                    ObColumnRefRawExpr *&aux_docid_column,
+                                                    ObColumnRefRawExpr *&aux_value_column,
+                                                    ObColumnRefRawExpr *&vec_data_column);
   int add_rowkey_access_exprs(const ObTableSchema *table_schema,
                               ObSqlSchemaGuard *schema_guard,
                               ObRawExprFactory *expr_factory,
@@ -881,7 +898,7 @@ public:
                                             ObColumnRefRawExpr *&snapshot_key_column,
                                             ObColumnRefRawExpr *&snapshot_data_column);
   int prepare_hnsw_index_id_col();
-  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan() || has_merge_fts_index(); }
+  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan() || has_merge_fts_index() || is_spiv_vec_scan(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline void set_rowkey_vid_tid(const uint64_t rowkey_vid_tid) { rowkey_vid_tid_ = rowkey_vid_tid;}
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
@@ -904,8 +921,9 @@ public:
   inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
   inline bool is_ivf_vec_scan() const {return vector_index_info_.is_ivf_vec_scan();}
   inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
-  inline bool is_primary_vec_idx_scan() const { return is_pre_vec_idx_scan() && ref_table_id_ == index_table_id_; }
-  inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }
+  inline bool is_spiv_vec_scan() const {return vector_index_info_.is_spiv_scan();}
+  inline bool is_primary_vec_idx_scan() const { return is_pre_vec_idx_scan() && (is_hnsw_vec_scan() || is_spiv_vec_scan()) && ref_table_id_ == index_table_id_; }
+  inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_;}
   inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   inline bool is_post_vec_idx_scan() const { return is_index_scan() && vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
   inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
@@ -970,7 +988,7 @@ private: // member functions
   int allocate_group_id_expr();
   int extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs);
   int get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
-  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
+  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_hnsw_scan = false);
   int extract_text_retrieval_access_expr(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &exprs);
   int get_text_retrieval_calc_exprs(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &all_exprs);
   int prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_info);
@@ -989,7 +1007,7 @@ private: // member functions
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
-  int prepare_rowkey_vid_dep_exprs();
+  int prepare_rowkey_vid_dep_exprs(const bool is_rowkey_docid = false);
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id

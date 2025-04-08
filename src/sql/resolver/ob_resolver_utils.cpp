@@ -355,40 +355,68 @@ inline bool ObResolverUtils::is_collection_support_type(const ObObjType type)
           type == ObVarcharType || type == ObCollectionSQLType);
 }
 
-int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth, bool is_vector_child)
+int ObResolverUtils::resolve_collection_type_info(const uint64_t tenant_data_version, const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
   const uint8_t OB_ARRAY_MAX_NESTED_LEVEL = 6; /* constistent with pg*/
-  bool is_vector = (type_node.type_ == T_COLLECTION && type_node.int32_values_[0] == 1);
   if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("check stack overflow failed", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
-  } else if (type_node.type_ == T_COLLECTION && ++depth > OB_ARRAY_MAX_NESTED_LEVEL) {
+  } else if (type_node.type_ != T_COLLECTION) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type_node type", K(ret), K(type_node.type_));
+  } else if (++depth > OB_ARRAY_MAX_NESTED_LEVEL) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported array depth", K(ret), K(depth));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "ARRAY DEPTH exceeds the maximum allowed(6)");
-  } else if (!is_collection_support_type(static_cast<ObObjType>(type_node.type_))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported element type", K(ret), K(type_node.type_));
-  } else if (type_node.int32_values_[1]/*is binary*/ && (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported binary", K(ret), K(type_node.type_));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
-  } else if (is_vector) {
-    // vector type
-    if (OB_FAIL(buf.append("VECTOR"))) {
-      LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  } else if (type_node.int32_values_[0] == 0) {
+    // array type
+    if (OB_FAIL(ObResolverUtils::resolve_array_type_info(tenant_data_version, type_node, buf, depth))) {
+      LOG_WARN("failed to resolve array type info", K(ret));
     }
-  } else if (!is_vector_child && OB_FAIL(buf.append(ob_sql_type_str(static_cast<ObObjType>(type_node.type_))))) {
-    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  } else if (type_node.int32_values_[0] == 1) {
+    // vector type
+    if (OB_FAIL(ObResolverUtils::resolve_vector_type_info(type_node, buf, depth))) {
+      LOG_WARN("failed to resolve array type info", K(ret));
+    }
+  } else if (type_node.int32_values_[0] == 2) {
+    // map type
+    if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.3.5.2, map type not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, map type");
+    } else if (OB_FAIL(ObResolverUtils::resolve_map_type_info(tenant_data_version, type_node, buf, depth))) {
+      LOG_WARN("failed to resolve map type info", K(ret));
+    }
+  } else if (type_node.int32_values_[0] == 3) {
+    // sparse vector type
+    if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector type not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, map type");
+    } else if (OB_FAIL(ObResolverUtils::resolve_sparse_vector_type_info(type_node, buf, depth))) {
+      LOG_WARN("failed to resolve sparse vector type info", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid collection type", K(ret), K(type_node.int32_values_[0]));
   }
+  return ret;
+}
 
+int ObResolverUtils::resolve_basic_type_info(const ParseNode &type_node, ObStringBuffer &buf)
+{
+  int ret = OB_SUCCESS;
   const int MAX_LEN = 128;
   char tmp[MAX_LEN] = {0};
-  if (OB_FAIL(ret)) {
+  if (!is_collection_support_type(static_cast<ObObjType>(type_node.type_))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported element type", K(ret), K(type_node.type_));
+  } else if (OB_FAIL(buf.append(ob_sql_type_str(static_cast<ObObjType>(type_node.type_))))) {
+    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
   } else if (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR
             || type_node.type_ == T_DATETIME || type_node.type_ == T_TIMESTAMP
             || type_node.type_ == T_TIME || type_node.type_ == T_BIT) {
@@ -397,24 +425,16 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     int32_t length = is_bit ? type_node.int16_values_[0]
                               : (is_char ? type_node.int32_values_[0] : type_node.int16_values_[1]);
     int64_t pos = 0;
-    if (is_char && (length <= -1 || length > OB_MAX_VARCHAR_LENGTH / 4)) {
+    if (is_char && type_node.int32_values_[1]/*is binary*/) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported binary", K(ret), K(type_node.type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
+    } else if (is_char && (length <= -1 || length > OB_MAX_VARCHAR_LENGTH / 4)) {
       ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
       LOG_WARN("data length is invalid", K(ret), K(length));
       LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_VARCHAR_LENGTH / 4));
     } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
       LOG_WARN("failed to convert len to string", K(ret), K(length));
-    } else if (OB_FAIL(buf.append(tmp, pos))) {
-      LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
-    }
-  } else if (type_node.type_ == T_INT && is_vector_child) {
-    // vector dimension
-    int64_t pos = 0;
-    if (type_node.value_ <= 0 || type_node.value_ > 16000) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported vector column dim range", K(ret), K(type_node.value_));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column dim less or equal to zero or larger than 16000 is");
-    } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "%ld", type_node.value_))) {
-      LOG_WARN("failed to convert len to string", K(ret));
     } else if (OB_FAIL(buf.append(tmp, pos))) {
       LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
     }
@@ -425,14 +445,146 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     } else if (OB_FAIL(buf.append(tmp, pos))) {
       LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
     }
-  } else if (type_node.type_ == T_COLLECTION && OB_FAIL(buf.append("("))) {
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_array_type_info(const uint64_t tenant_data_version, const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (OB_UNLIKELY(type_node.num_child_ != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type node", K(ret), K(type_node.num_child_));
+  } else if (OB_ISNULL(type_node.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is NULL", K(ret));
+  } else if (OB_FAIL(buf.append("ARRAY"))) {
+    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  } else if (OB_FAIL(buf.append("("))) {
     LOG_WARN("failed to append left bracket", K(ret), K(type_node.type_));
-  } else if (type_node.type_ == T_COLLECTION && OB_NOT_NULL(type_node.children_[0])
-             && OB_FAIL(resolve_collection_type_info(*type_node.children_[0], buf, depth, is_vector))) {
-    LOG_WARN("failed to resolve sub type info", K(ret), K(type_node.type_));
+  } else if (type_node.children_[0]->type_ == T_COLLECTION
+             && (type_node.children_[0]->int32_values_[0] == 2 || type_node.children_[0]->int32_values_[0] == 3)) {
+    // currently not support nested map
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("the map value cannot be collection type", K(ret));
+  } else if (type_node.children_[0]->type_ == T_COLLECTION
+             && OB_FAIL(resolve_collection_type_info(tenant_data_version, *type_node.children_[0], buf, depth))) {
+      LOG_WARN("failed to resolve collection type info", K(ret));
+  } else if (type_node.children_[0]->type_ != T_COLLECTION
+             && OB_FAIL(resolve_basic_type_info(*type_node.children_[0], buf))) {
+    LOG_WARN("failed to resolve collection basic type info", K(ret));
+  } else if (OB_FAIL(buf.append(")"))) {
+    LOG_WARN("failed to append right bracket", K(ret), K(type_node.type_));
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_vector_type_info(const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  const int MAX_LEN = 128;
+  char tmp[MAX_LEN] = {0};
+  int64_t pos = 0;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (OB_UNLIKELY(type_node.num_child_ != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type node", K(ret), K(type_node.num_child_));
+  } else if (OB_ISNULL(type_node.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is NULL", K(ret));
+  } else if (type_node.children_[0]->type_ != T_INT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid vector dimension node", K(ret), K(type_node.children_[0]->type_));
+  } else if (OB_FAIL(buf.append("VECTOR"))) {
+    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  } else if (OB_FAIL(buf.append("("))) {
+    LOG_WARN("failed to append left bracket", K(ret), K(type_node.type_));
+  } else if (type_node.children_[0]->value_ <= 0 || type_node.children_[0]->value_ > 16000) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported vector column dim range", K(ret), K(type_node.children_[0]->value_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column dim less or equal to zero or larger than 16000 is");
+  } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "%ld", type_node.children_[0]->value_))) {
+    LOG_WARN("failed to convert len to string", K(ret));
+  } else if (OB_FAIL(buf.append(tmp, pos))) {
+    LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
   } else if (type_node.type_ == T_COLLECTION && OB_FAIL(buf.append(")"))) {
     LOG_WARN("failed to append right bracket", K(ret), K(type_node.type_));
   }
+  return ret;
+}
+
+int ObResolverUtils::resolve_map_type_info(const uint64_t tenant_data_version, const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (OB_UNLIKELY(type_node.num_child_ != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type node", K(ret), K(type_node.num_child_));
+  } else if (OB_ISNULL(type_node.children_[0]) || OB_ISNULL(type_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is NULL", K(ret));
+  } else if (OB_FAIL(buf.append("MAP"))) {
+    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  } else if (OB_FAIL(buf.append("("))) {
+    LOG_WARN("failed to append left bracket", K(ret), K(type_node.type_));
+  } else if (type_node.children_[0]->type_ == T_COLLECTION) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("the map key cannot be collection type", K(ret), K(type_node.children_[0]->type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "map key in colloction type is");
+  } else if (OB_FAIL(resolve_basic_type_info(*type_node.children_[0], buf))) {
+    LOG_WARN("failed to resolve collection basic type info", K(ret));
+  } else if (OB_FAIL(buf.append(","))) {
+    LOG_WARN("failed to append comma", K(ret), K(type_node.type_));
+  } else if (type_node.children_[1]->type_ == T_COLLECTION
+             && (type_node.children_[1]->int32_values_[0] == 2 || type_node.children_[1]->int32_values_[0] == 3)) {
+    // currently not support nested map
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("the map value cannot be collection type", K(ret), K(type_node.children_[1]->type_));
+  } else if (type_node.children_[1]->type_ == T_COLLECTION
+             && OB_FAIL(resolve_collection_type_info(tenant_data_version, *type_node.children_[1], buf, depth))) {
+      LOG_WARN("failed to resolve collection type info", K(ret));
+  } else if (type_node.children_[1]->type_ != T_COLLECTION
+             && OB_FAIL(resolve_basic_type_info(*type_node.children_[1], buf))) {
+    LOG_WARN("failed to resolve collection basic type info", K(ret));
+  } else if (OB_FAIL(buf.append(")"))) {
+    LOG_WARN("failed to append right bracket", K(ret), K(type_node.type_));
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_sparse_vector_type_info(const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (OB_UNLIKELY(type_node.num_child_ != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type node", K(ret), K(type_node.num_child_));
+  } else if (OB_FAIL(buf.append("SPARSEVECTOR"))) {
+    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  }
+
   return ret;
 }
 

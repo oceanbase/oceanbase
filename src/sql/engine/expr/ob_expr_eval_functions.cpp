@@ -364,6 +364,8 @@
 #include "ob_expr_vec_vid.h"
 #include "ob_expr_vec_data.h"
 #include "ob_expr_vec_type.h"
+#include "ob_expr_spiv_dim.h"
+#include "ob_expr_spiv_value.h"
 #include "ob_expr_vector.h"
 #include "ob_expr_func_ceil.h"
 #include "ob_expr_topn_filter.h"
@@ -437,6 +439,13 @@
 #include "ob_expr_bool.h"
 #include "ob_expr_not_between.h"
 #include "ob_expr_inner_info_cols_printer.h"
+#include "ob_expr_array_except.h"
+#include "ob_expr_array_intersect.h"
+#include "ob_expr_array_union.h"
+#include "ob_expr_map.h"
+#include "ob_expr_rb_to_array.h"
+#include "ob_expr_rb_contains.h"
+#include "ob_expr_map_keys.h"
 
 namespace oceanbase
 {
@@ -1361,9 +1370,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */
   ObExprIsNot::json_is_not_false,                                     /* 821 */
   ObExprIsNot::json_is_not_true,                                      /* 822 */
-  NULL, // ObExprArrayExcept::eval_array_except,                      /* 823 */
-  NULL, // ObExprArrayIntersect::eval_array_intersect,                /* 824 */
-  NULL, // ObExprArrayUnion::eval_array_union,                        /* 825 */
+  ObExprArrayExcept::eval_array_except,                               /* 823 */
+  ObExprArrayIntersect::eval_array_intersect,                         /* 824 */
+  ObExprArrayUnion::eval_array_union,                                 /* 825 */
   NULL, // ObExprArrayReplace::eval_array_replace,                    /* 826 */
   NULL, // ObExprArrayPopfront::eval_array_popfront,                  /* 827 */
   NULL, // ObExprCurrentCatalog::eval_current_catalog,                /* 828 */
@@ -1377,15 +1386,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type,      /* 836 */
   NULL, // ObExprRbOrCardinalityAggregate::eval_rb_or_cardinality_aggregate, /* 837 */
   NULL, // ObExprRbAndCardinalityAggregate::eval_rb_and_cardinality_aggregate, /* 838 */
-  NULL, // ObExprRbToArray::eval_rb_to_array, /* 839 */
-  NULL, // ObExprRbContains::eval_rb_contains, /* 840 */
+  ObExprRbToArray::eval_rb_to_array,                                   /* 839 */
+  ObExprRbContains::eval_rb_contains,                                  /* 840 */
   NULL, // ObExprCurrentCatalog::eval_current_catalog,                 /* 841 */
   NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
-  NULL, // ObExprMap::eval_map,                                        /* 843 */
-  NULL, // ObExprSpivValue::generate_spiv_value,                       /* 844 */
-  NULL, // ObExprMapKeys::eval_map_keys,                               /* 845 */
-  NULL, // ObExprMapValues::eval_map_values,                           /* 846 */
-  NULL, // ObExprSpivDim::generate_spiv_dim,                           /* 847 */
+  ObExprMap::eval_map,                                                 /* 843 */
+  ObExprSpivValue::generate_spiv_value,                                /* 844 */
+  ObExprMapKeys::eval_map_keys,                                        /* 845 */
+  ObExprMapValues::eval_map_values,                                    /* 846 */
+  ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1562,9 +1571,9 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayPosition::eval_array_position_batch,                     /* 170*/
   ObExprURLEncode::eval_url_encode_batch,                             /* 171 */
   ObExprURLDecode::eval_url_decode_batch,                             /* 172 */
-  NULL, // ObExprArrayExcept::eval_array_except_batch,                /* 173 */
-  NULL, // ObExprArrayIntersect::eval_array_intersect_batch,          /* 174 */
-  NULL, // ObExprArrayUnion::eval_array_union_batch,                  /* 175 */
+  ObExprArrayExcept::eval_array_except_batch,                         /* 173 */
+  ObExprArrayIntersect::eval_array_intersect_batch,                   /* 174 */
+  ObExprArrayUnion::eval_array_union_batch,                           /* 175 */
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
   NULL, // ObExprUDF::eval_udf_batch                                  /* 178 */
@@ -1773,9 +1782,9 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprBool::calc_vector_bool_expr,                            /* 199 */
   ObExprNotBetween::eval_not_between_vector,                    /* 200 */
   ObExprNot::eval_not_vector,                                   /* 201 */
-  NULL, // ObExprArrayExcept::eval_array_except_vector,                  /* 202 */
-  NULL, // ObExprArrayIntersect::eval_array_intersect_vector,            /* 203 */
-  NULL, // ObExprArrayUnion::eval_array_union_vector,                    /* 204 */
+  ObExprArrayExcept::eval_array_except_vector,                  /* 202 */
+  ObExprArrayIntersect::eval_array_intersect_vector,            /* 203 */
+  ObExprArrayUnion::eval_array_union_vector,                    /* 204 */
   NULL, // ObExprArrayReplace::eval_array_replace_vector,                /* 205 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_vector,              /* 206 */
   ObExprColumnConv::column_convert_vector,                               /* 207 */
@@ -1788,10 +1797,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprFindInSet::calc_find_in_set_vector,                              /* 214 */
   NULL, // ObExprSubstringIndex::eval_substring_index_vector,            /* 215 */
   NULL, // ObExprConcatWs::calc_concat_ws_expr_vector,                   /* 216 */
-  NULL, // ObExprMapKeys::eval_map_keys_vector,                          /* 217 */
-  NULL, // ObExprMapValues::eval_map_values_vector,                      /* 218 */
-  NULL, // ObExprRbToArray::eval_rb_to_array_vector,                     /* 219 */
-  NULL, // ObExprRbContains::eval_rb_contains_vector,                    /* 220 */
+  ObExprMapKeys::eval_map_keys_vector,                                   /* 217 */
+  ObExprMapValues::eval_map_values_vector,                               /* 218 */
+  ObExprRbToArray::eval_rb_to_array_vector,                              /* 219 */
+  ObExprRbContains::eval_rb_contains_vector,                             /* 220 */
   NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
 };
 

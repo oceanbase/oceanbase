@@ -70,6 +70,7 @@ public:
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
 
 public:
+  static bool is_rebuild_dense_vec_index_task(const share::schema::ObTableSchema &index_schema);
   void set_rowkey_vid_aux_table_id(const uint64_t id) { rowkey_vid_aux_table_id_ = id; }
   void set_vid_rowkey_aux_table_id(const uint64_t id) { vid_rowkey_aux_table_id_ = id; }
   void set_delta_buffer_table_id(const uint64_t id) { delta_buffer_table_id_ = id; }

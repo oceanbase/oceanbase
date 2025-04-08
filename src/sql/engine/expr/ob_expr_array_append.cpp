@@ -305,7 +305,7 @@ int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx 
                                          ObIArrayType *val_arr, ObIArrayType *res_arr)
 {
   int ret = OB_SUCCESS;
-  if (res_arr->is_nested_array()) {
+  if (res_arr->get_format() == Nested_Array) {
     if (val_datum->is_null()) {
       if (OB_FAIL(res_arr->push_null())) {
         LOG_WARN("failed to push back null value", K(ret));
@@ -319,7 +319,7 @@ int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx 
       }
     }
   } else {
-    ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(res_arr->get_array_type()->element_type_);
+    ObCollectionBasicType *elem_type = dynamic_cast<ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(res_arr->get_array_type())->element_type_);
     if (OB_FAIL(ObArrayUtil::append(*res_arr, elem_type->basic_meta_.get_obj_type(), val_datum))) {
       LOG_WARN("failed to append array value", K(ret));
     }
@@ -333,7 +333,7 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
                                                 ObIArrayType *val_arr, ObIArrayType *res_arr)
 {
   int ret = OB_SUCCESS;
-  if (res_arr->is_nested_array()) {
+  if (res_arr->get_format() == Nested_Array) {
     if (val_vec->is_null(idx)) {
       if (OB_FAIL(res_arr->push_null())) {
         LOG_WARN("failed to push back null value", K(ret));
@@ -353,7 +353,7 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
       }
     }
   } else {
-    ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(res_arr->get_array_type()->element_type_);
+    ObCollectionBasicType *elem_type = dynamic_cast<ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(res_arr->get_array_type())->element_type_);
     ObDatum val_datum;
     if (val_vec->is_null(idx)) {
       val_datum.set_null();

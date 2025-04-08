@@ -692,6 +692,7 @@ ob_set_subtarget(ob_share vector_type
   vector_type/ob_vector_l1_distance.cpp
   vector_type/ob_vector_norm.cpp
   vector_type/ob_vector_common_util.cpp
+  vector_type/ob_sparse_vector_ip_distance.cpp
 )
 
 ob_set_subtarget(ob_share domain_id

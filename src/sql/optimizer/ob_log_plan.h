@@ -1541,6 +1541,10 @@ public:
                                     const ObTableSchema &table_schema,
                                     const uint64_t& vec_col_id,
                                     ObLogTableScan *table_scan);
+  int prepare_spiv_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                    const ObTableSchema &table_schema,
+                                    const uint64_t& vec_col_id,
+                                    ObLogTableScan *table_scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
   int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                     ObRawExpr *topn_expr,

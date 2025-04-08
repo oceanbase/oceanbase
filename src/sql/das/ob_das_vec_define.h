@@ -57,6 +57,12 @@ public:
   int64_t get_ivf_sq_meta_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX ; }
   int64_t get_ivf_pq_id_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
 
+  // SPIV
+  int64_t get_spiv_scan_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
+  int64_t get_spiv_rowkey_docid_tbl_idx() const { return ObVecAuxTableIdx::SECOND_VEC_AUX_TBL_IDX; }
+  int64_t get_spiv_aux_data_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
+
+
   const ObDASBaseCtDef *get_inv_idx_scan_ctdef() const
   {
     const  ObDASBaseCtDef *idx_scan_ctdef = nullptr;

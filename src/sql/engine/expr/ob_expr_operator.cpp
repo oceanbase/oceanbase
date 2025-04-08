@@ -1754,18 +1754,21 @@ int ObExprOperator::aggregate_collection_sql_type(
     ObExecContext *exec_ctx = session->get_cur_exec_ctx();
     bool first = true;
     for (int64_t i = 0; i < param_num && OB_SUCC(ret); ++i) {
-      if (ob_is_collection_sql_type(types[i].get_type())) {
-        if (first) {
-          // choose the first collection subschema id now
-          type.set_subschema_id(types[i].get_subschema_id());
-          first = false;
+      if (ob_is_null(types[i].get_type())) {
+        // do nothing
+      } else if (!ob_is_collection_sql_type(types[i].get_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid type for op", K(ret), K(types[i].get_type()));
+      } else if (first) {
+        // choose the first collection subschema id now
+        type.set_subschema_id(types[i].get_subschema_id());
+        first = false;
+      } else {
+        ObExprResType coll_calc_type;
+        if (OB_FAIL(ObExprResultTypeUtil::get_collection_calc_type(exec_ctx, type, types[i], coll_calc_type))) {
+          LOG_WARN("failed to get collection calc type", K(ret));
         } else {
-          ObExprResType coll_calc_type;
-          if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type, types[i], coll_calc_type))) {
-            LOG_WARN("failed to check array compatibilty", K(ret));
-          } else {
-            type.set_subschema_id(coll_calc_type.get_subschema_id());
-          }
+          type.set_subschema_id(coll_calc_type.get_subschema_id());
         }
       }
     }
@@ -2774,7 +2777,7 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
           ObExprResType coll_calc_type = type;
           ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
           ObExecContext *exec_ctx = session->get_cur_exec_ctx();
-          if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+          if (OB_FAIL(ObExprResultTypeUtil::get_collection_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
             LOG_WARN("failed to check array compatibilty", K(ret));
           } else {
             type1.set_calc_meta(coll_calc_type);
