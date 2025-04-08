@@ -1600,14 +1600,33 @@ int ObDASIterUtils::create_domain_lookup_sub_tree(ObTableScanParam &scan_param,
       doc_id_lookup_iter = lookup_iter;
     }
   }
-
   if (OB_SUCC(ret)) {
-    ObDASCacheLookupIter *lookup_iter = nullptr;
-    if (OB_FAIL(create_cache_lookup_sub_tree(scan_param, alloc, table_lookup_ctdef, table_lookup_rtdef, trans_desc, snapshot, doc_id_lookup_iter, related_tablet_ids,
-                                             lookup_iter, main_lookup_keep_order))) {
-      LOG_WARN("failed to create cache lookup sub tree", K(ret));
+    //  disallow to delete this. The code is uesd by the old version binary.
+    if (table_lookup_ctdef->op_type_ == DAS_OP_TABLE_LOOKUP) {
+      if (main_lookup_keep_order) {
+        table_lookup_rtdef->get_lookup_scan_rtdef()->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+      }
+
+      int64_t batch_row_count = ObDASLookupIterParam::LOCAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT;
+      if (scan_param.table_param_->is_fts_index()) {
+        ObEvalCtx *eval_ctx = table_lookup_rtdef->get_lookup_scan_rtdef()->eval_ctx_;
+        batch_row_count = eval_ctx->is_vectorized() ? eval_ctx->max_batch_size_ : 1;
+      }
+
+      if (OB_FAIL(create_local_lookup_sub_tree(scan_param, alloc, table_lookup_ctdef->get_rowkey_scan_ctdef(), table_lookup_rtdef->get_rowkey_scan_rtdef(),
+                                               table_lookup_ctdef->get_lookup_scan_ctdef(), table_lookup_rtdef->get_lookup_scan_rtdef(), table_lookup_ctdef,
+                                               table_lookup_rtdef, related_tablet_ids, trans_desc, snapshot, related_tablet_ids.lookup_tablet_id_, doc_id_lookup_iter,
+                                              domain_lookup_result, batch_row_count))) {
+        LOG_WARN("failed to create local lookup sub tree", K(ret));
+      }
     } else {
-      domain_lookup_result = lookup_iter;
+      ObDASCacheLookupIter *lookup_iter = nullptr;
+      if (OB_FAIL(create_cache_lookup_sub_tree(scan_param, alloc, table_lookup_ctdef, table_lookup_rtdef, trans_desc, snapshot, doc_id_lookup_iter, related_tablet_ids,
+                                               lookup_iter, main_lookup_keep_order))) {
+        LOG_WARN("failed to create cache lookup sub tree", K(ret));
+      } else {
+        domain_lookup_result = lookup_iter;
+      }
     }
   }
 
@@ -1730,7 +1749,6 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
       if (OB_FAIL(create_das_iter(alloc, docid_rowkey_table_param, docid_rowkey_table_iter))) {
         LOG_WARN("failed to create doc id table iter", K(ret));
       } else {
-        // ObDASLocalLookupIterParam doc_id_lookup_param;
         ObDASCacheLookupIterParam doc_id_lookup_param;
         doc_id_lookup_param.max_size_ = aux_lookup_rtdef->eval_ctx_->is_vectorized()
            ? aux_lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
