@@ -24,6 +24,7 @@
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_sequence_sql_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/ob_dynamic_partition_manager.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 
@@ -927,6 +928,19 @@ int ObCreateTableHelper::generate_table_schema_()
   // check auto_partition validity
   if (FAILEDx(new_table.check_validity_for_auto_partition())) {
     LOG_WARN("fail to check auto partition setting", KR(ret), K(new_table), K(arg_));
+  }
+
+  if (OB_SUCC(ret) && !new_table.get_dynamic_partition_policy().empty()) {
+    bool is_supported = false;
+    if (compat_version < DATA_VERSION_4_3_5_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dynamic partition less than 4.3.5.2 not support", KR(ret), K(compat_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition less than 4.3.5.2");
+    } else if (OB_FAIL(ObDynamicPartitionManager::check_is_supported(new_table))) {
+      LOG_WARN("fail to check dynamic partition is supported", KR(ret), K(new_table));
+    } else if (OB_FAIL(ObDynamicPartitionManager::check_is_valid(new_table))) {
+      LOG_WARN("fail to check dynamic partition is valid", KR(ret), K(new_table));
+    }
   }
 
   if (FAILEDx(new_tables_.push_back(new_table))) {

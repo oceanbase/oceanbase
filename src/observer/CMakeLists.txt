@@ -533,6 +533,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_kv_group_commit_info.cpp
   virtual_table/ob_all_virtual_plugin_info.cpp
   virtual_table/ob_all_virtual_cs_replica_tablet_stats.cpp
+  virtual_table/ob_all_virtual_dynamic_partition_table.cpp
 )
 
 ob_server_add_target(ob_server)

@@ -20,6 +20,7 @@
 #include "share/ob_fts_index_builder_util.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
+#include "share/ob_dynamic_partition_manager.h"
 
 namespace oceanbase
 {
@@ -2058,6 +2059,12 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
 
   if (OB_SUCC(ret) && !strict_compat_ && !is_oracle_mode && !is_index_tbl) {
     if (OB_FAIL(print_table_definition_lob_params(table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
+    }
+  }
+
+  if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && table_schema.with_dynamic_partition_policy()) {
+    if (OB_FAIL(print_dynamic_partition_policy(table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
     }
   }
@@ -6473,6 +6480,26 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaPrinter::print_dynamic_partition_policy(
+  const ObTableSchema &table_schema,
+  char* buf,
+  const int64_t& buf_len,
+  int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+
+  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "DYNAMIC_PARTITION_POLICY = ("))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to do databuff printf", KR(ret));
+  } else if (OB_FAIL(ObDynamicPartitionManager::print_dynamic_partition_policy(table_schema, buf, buf_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print dynamic partition policy", KR(ret), K(table_schema));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ") "))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to do databuff printf", KR(ret));
+  }
+
   return ret;
 }
 

@@ -1276,6 +1276,12 @@ public:
     const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
     return heap_case || fts_case || vec_case || multivalue_case;
   }
+  inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
+  {
+    with_dynamic_partition_policy_ = with_dynamic_partition_policy;
+  }
+  virtual inline bool with_dynamic_partition_policy() const { return with_dynamic_partition_policy_; }
+
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   uint64_t tenant_id_;
@@ -1322,6 +1328,7 @@ protected:
 
   // storage cache policy type
   storage::ObStorageCachePolicyType storage_cache_policy_type_;
+  bool with_dynamic_partition_policy_; // do not persist to disk
 };
 
 class ObTableSchema : public ObSimpleTableSchemaV2
@@ -2137,6 +2144,20 @@ public:
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
   }
+  inline int set_dynamic_partition_policy(const common::ObString &dynamic_partition_policy)
+  {
+    return deep_copy_str(dynamic_partition_policy, dynamic_partition_policy_);
+  }
+  inline const common::ObString& get_dynamic_partition_policy() const
+  {
+    return dynamic_partition_policy_;
+  }
+  virtual inline bool with_dynamic_partition_policy() const override
+  {
+    return !dynamic_partition_policy_.empty();
+  }
+  int get_part_key_column_type(const int64_t index, ObObjType &type) const;
+  int get_part_key_column_name(const int64_t index, ObString &name) const;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:

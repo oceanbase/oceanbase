@@ -32,6 +32,7 @@
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
+#include "share/ob_scheduled_manage_dynamic_partition.h"
 
 namespace oceanbase
 {
@@ -5953,6 +5954,8 @@ int ObDDLOperator::init_tenant_schemas(
     LOG_WARN("insert default databases failed,", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_optimizer_stats_info(sys_variable, tenant_id, trans))) {
     LOG_WARN("failed to init tenant optimizer stats info", K(tenant_id), K(ret));
+  } else if (OB_FAIL(init_tenant_scheduled_job(sys_variable, tenant_id, trans))) {
+    LOG_WARN("init tenant scheduled job failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(init_tenant_spm_configure(tenant_id, trans))) {
     LOG_WARN("failed to init tenant spm configure", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_profile(tenant_id, sys_variable, trans))) {
@@ -11414,6 +11417,23 @@ int ObDDLOperator::alter_target_sequence_start_with(const ObSequenceSchema &sequ
     LOG_ERROR("schema_service_impl must not null", K(ret));
   } else if (OB_FAIL(schema_service_impl->get_sequence_sql_service().alter_sequence_start_with(sequence_schema, trans))) {
     LOG_WARN("fail to alter sequence start with", K(ret), K(sequence_schema));
+  }
+  return ret;
+}
+
+int ObDDLOperator::init_tenant_scheduled_job(
+  const ObSysVariableSchema &sys_variable,
+  const uint64_t tenant_id,
+  ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    // do nothing
+  } else if (OB_FAIL(ObScheduledManageDynamicPartition::create_jobs(
+                     sys_variable,
+                     tenant_id,
+                     trans))) {
+    LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
   }
   return ret;
 }

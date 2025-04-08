@@ -3091,6 +3091,8 @@ int ObTableSqlService::gen_table_dml(
         "" : table.get_kv_attributes().ptr();
     ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
     const ObString parser_properties = table.get_parser_property_str().empty() ? empty_str : table.get_parser_property_str();
+    const char *dynamic_partition_policy = table.get_dynamic_partition_policy().empty() ?
+        "" : table.get_dynamic_partition_policy().ptr();
     ObString local_session_var;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
     if (OB_FAIL(check_table_options(table))) {
@@ -3245,6 +3247,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("parser_properties", ObHexEscapeSqlStr(parser_properties))))
         || (data_version >= DATA_VERSION_4_3_5_1
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
+        || (data_version >= DATA_VERSION_4_3_5_2
+            && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3312,6 +3316,8 @@ int ObTableSqlService::gen_table_options_dml(
         "" : table.get_kv_attributes().ptr();
     ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
     const ObString parser_properties = table.get_parser_property_str().empty() ? empty_str : table.get_parser_property_str();
+    const char *dynamic_partition_policy = table.get_dynamic_partition_policy().empty() ?
+        "" : table.get_dynamic_partition_policy().ptr();
 
     if (OB_FAIL(check_table_options(table))) {
       LOG_WARN("fail to check table option", K(ret), K(table));
@@ -3420,6 +3426,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("parser_properties", ObHexEscapeSqlStr(parser_properties))))
         || (data_version >= DATA_VERSION_4_3_5_1
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
+        || (data_version >= DATA_VERSION_4_3_5_2
+            && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3443,6 +3451,8 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
   const ObPartitionOption &part_option = new_table_schema.get_part_option();
   uint64_t data_version = 0;
   ObString local_session_var;
+  const char *dynamic_partition_policy = new_table_schema.get_dynamic_partition_policy().empty() ?
+        "" : new_table_schema.get_dynamic_partition_policy().ptr();
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   if (OB_FAIL(check_ddl_allowed(new_table_schema))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(new_table_schema));
@@ -3500,7 +3510,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || (data_version >= DATA_VERSION_4_3_0_0
           && OB_FAIL(dml.add_column("max_used_column_group_id", new_table_schema.get_max_used_column_group_id())))
       || (data_version >= DATA_VERSION_4_3_3_0
-          && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))) {
+          && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
+      || (data_version >= DATA_VERSION_4_3_5_2
+          && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))) {
             LOG_WARN("add column failed", K(ret));
   } else {
     if (new_table_schema.is_interval_part()) {

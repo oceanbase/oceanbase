@@ -16,6 +16,8 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
 #include "ob_dbms_scheduler_mysql.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
+#include "share/ob_scheduled_manage_dynamic_partition.h"
+
 namespace oceanbase
 {
 
@@ -106,6 +108,7 @@ int ObDBMSSchedulerMysql::set_attribute(
   int64_t affected_rows = 0;
   uint64_t tenant_id = OB_INVALID_ID;
   bool is_stat_window_attr = false;
+  bool is_dynamic_partition_attr = false;
   const int64_t now = ObTimeUtility::current_time();
   CK (OB_LIKELY(3 == params.count()));
   OZ (dml.add_gmt_modified(now));
@@ -124,6 +127,18 @@ int ObDBMSSchedulerMysql::set_attribute(
       LOG_WARN("failed to is stats maintenance window attr", K(ret), K(params.at(0).get_string()),
                                         K(params.at(1).get_string()), K(params.at(2).get_string()));
     } else if (is_stat_window_attr) {
+      OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+      OZ (execute_sql(ctx, sql, affected_rows));
+      CK (1 == affected_rows || 2 == affected_rows);
+    } else if (OB_FAIL(ObScheduledManageDynamicPartition::set_attribute(ctx.get_my_session(),
+                                                                        params.at(0).get_string(),
+                                                                        params.at(1).get_string(),
+                                                                        params.at(2).get_string(),
+                                                                        is_dynamic_partition_attr,
+                                                                        dml))) {
+      LOG_WARN("failed to set attribute for scheduled manage dynamic partition", KR(ret),
+        K(params.at(0).get_string()), K(params.at(1).get_string()), K(params.at(2).get_string()));
+    } else if (is_dynamic_partition_attr) {
       OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
       OZ (execute_sql(ctx, sql, affected_rows));
       CK (1 == affected_rows || 2 == affected_rows);

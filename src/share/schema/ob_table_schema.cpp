@@ -199,6 +199,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       is_force_view_ = other.is_force_view_;
       truncate_version_ = other.truncate_version_;
       storage_cache_policy_type_ = other.storage_cache_policy_type_;
+      with_dynamic_partition_policy_ = other.with_dynamic_partition_policy_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -337,6 +338,7 @@ void ObSimpleTableSchemaV2::reset()
   encrypt_key_.reset();
   master_key_id_ = OB_INVALID_ID;
   truncate_version_ = OB_INVALID_VERSION;
+  with_dynamic_partition_policy_ = false;
   ObPartitionSchema::reset();
   storage_cache_policy_type_ = ObStorageCachePolicyType::MAX_POLICY;
 }
@@ -977,7 +979,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(is_force_view),
     K_(truncate_version),
     K_(duplicate_read_consistency),
-    K_(storage_cache_policy_type)
+    K_(storage_cache_policy_type),
+    K_(with_dynamic_partition_policy)
 );
   J_OBJ_END();
 
@@ -1917,6 +1920,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
   }
   if (OB_SUCC(ret)) {
     semistruct_encoding_type_ = src_schema.semistruct_encoding_type_;
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.dynamic_partition_policy_, dynamic_partition_policy_))) {
+    LOG_WARN("fail to deep copy dynamic partition policy string", KR(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -7126,7 +7133,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(exec_env),
     K_(storage_cache_policy),
     K_(merge_engine_type),
-    K_(semistruct_encoding_type));
+    K_(semistruct_encoding_type),
+    K_(dynamic_partition_policy));
   J_OBJ_END();
 
   return pos;
@@ -9654,6 +9662,38 @@ int ObTableSchema::check_has_hnsw_vector_index(ObSchemaGetterGuard &schema_guard
       has_vector_index = true;
       break;
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_part_key_column_type(const int64_t index, ObObjType &type) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t col_id = OB_INVALID_ID;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (OB_FAIL(partition_key_info_.get_column_id(index, col_id))) {
+    LOG_WARN("fail to get column id", KR(ret), K(index));
+  } else if (OB_ISNULL(column_schema = get_column_schema(col_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column schema is null", KR(ret), K(col_id));
+  } else {
+    type = column_schema->get_data_type();
+  }
+  return ret;
+}
+
+int ObTableSchema::get_part_key_column_name(const int64_t index, ObString &name) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t col_id = OB_INVALID_ID;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  if (OB_FAIL(partition_key_info_.get_column_id(index, col_id))) {
+    LOG_WARN("fail to get column id", KR(ret), K(index));
+  } else if (OB_ISNULL(column_schema = get_column_schema(col_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column schema is null", KR(ret), K(col_id));
+  } else {
+    name = column_schema->get_column_name_str();
   }
   return ret;
 }

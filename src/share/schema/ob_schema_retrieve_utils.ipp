@@ -1543,6 +1543,12 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         SHARE_SCHEMA_LOG(WARN, "fail to deserialize mview_session_var", K(ret));
       }
     }
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, dynamic_partition_policy, table_schema, true, ignore_column_error, "");
+    if (OB_SUCC(ret)) {
+      bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
+      table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
+    }
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -4572,6 +4578,15 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         table_schema.set_storage_cache_policy_type(policy_type);
       }
     }
+
+    ObString dynamic_partition_policy;
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+      result, "dynamic_partition_policy", dynamic_partition_policy, true, ignore_column_error, "");
+    if (OB_SUCC(ret)) {
+      bool with_dynamic_partition_policy = !dynamic_partition_policy.empty();
+      table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
+    }
+
   }
   return ret;
 }

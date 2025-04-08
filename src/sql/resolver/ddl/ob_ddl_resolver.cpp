@@ -24,6 +24,7 @@
 #include "share/ob_vec_index_builder_util.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/resolver/ddl/ob_fts_parser_resolver.h"
+#include "share/ob_dynamic_partition_manager.h"
 namespace oceanbase
 {
 using namespace common;
@@ -108,7 +109,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     mv_refresh_dop_(0),
     vec_column_name_(),
     vec_index_type_(INDEX_TYPE_MAX),
-    enable_macro_block_bloom_filter_(false)
+    enable_macro_block_bloom_filter_(false),
+    dynamic_partition_policy_()
 {
   table_mode_.reset();
 }
@@ -3161,6 +3163,40 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_DYNAMIC_PARTITION_POLICY: {
+        uint64_t compat_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+          SQL_RESV_LOG(WARN, "get min data_version failed", K(ret), K(tenant_id));
+        } else if (compat_version < DATA_VERSION_4_3_5_2) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "dynamic partition policy less than 4.3.5.2 not support", KR(ret), K(compat_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition policy less than 4.3.5.2");
+        } else if (is_index_option) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "index option should not specify dynamic partition policy", KR(ret));
+        } else if (OB_ISNULL(option_node->children_)
+                   || 0 == option_node->num_child_
+                   || OB_ISNULL(option_node->str_value_)) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "invalid dynamic partition policy arg", KR(ret), "num_child", option_node->num_child_);
+        } else {
+          ObString tmp_str;
+          tmp_str.assign_ptr(const_cast<char *>(option_node->str_value_),
+                             static_cast<int32_t>(option_node->str_len_));
+          if (OB_FAIL(ob_write_string(*allocator_, tmp_str, dynamic_partition_policy_))) {
+            SQL_RESV_LOG(WARN, "write string failed", KR(ret));
+          } else if (OB_FAIL(ObDynamicPartitionManager::format_dynamic_partition_policy_str(*allocator_, dynamic_partition_policy_, dynamic_partition_policy_))) {
+            SQL_RESV_LOG(WARN, "fail to format dynamic partition policy str", KR(ret));
+          } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()
+                     && OB_FAIL(ObDynamicPartitionManager::fill_default_value(*allocator_, dynamic_partition_policy_, dynamic_partition_policy_))) {
+            SQL_RESV_LOG(WARN, "fail to fill default value", KR(ret), K_(dynamic_partition_policy));
+          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
+                     && OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::DYNAMIC_PARTITION_POLICY))) {
+            SQL_RESV_LOG(WARN, "failed to add member to bitset", KR(ret));
+          }
+        }
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_UNEXPECTED;
@@ -5672,6 +5708,7 @@ void ObDDLResolver::reset() {
   index_params_.reset();
   mv_refresh_dop_ = 0;
   enable_macro_block_bloom_filter_ = false;
+  dynamic_partition_policy_.reset();
 }
 
 void ObDDLResolver::reset_index()

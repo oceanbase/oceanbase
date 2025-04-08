@@ -11203,6 +11203,54 @@ DESCRIPTION	varchar(65535)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLUGINS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_DYNAMIC_PARTITION_TABLES;
+Field	Type	Null	Key	Default	Extra
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+TABLE_ID	bigint(20)	NO		NULL	
+MAX_HIGH_BOUND_VAL	varchar(4096)	YES		NULL	
+ENABLE	varchar(4096)	NO			
+TIME_UNIT	varchar(4096)	NO			
+PRECREATE_TIME	varchar(4096)	NO			
+EXPIRE_TIME	varchar(4096)	NO			
+TIME_ZONE	varchar(4096)	NO			
+BIGINT_PRECISION	varchar(4096)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DYNAMIC_PARTITION_TABLES limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_DYNAMIC_PARTITION_TABLES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+TABLE_ID	bigint(20)	NO		NULL	
+MAX_HIGH_BOUND_VAL	varchar(4096)	NO			
+ENABLE	varchar(4096)	NO			
+TIME_UNIT	varchar(4096)	NO			
+PRECREATE_TIME	varchar(4096)	NO			
+EXPIRE_TIME	varchar(4096)	NO			
+TIME_ZONE	varchar(4096)	NO			
+BIGINT_PRECISION	varchar(4096)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_DYNAMIC_PARTITION_TABLES limit 1);
+cnt
+1
+desc oceanbase.V$OB_DYNAMIC_PARTITION_TABLES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TENANT_SCHEMA_VERSION	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO		NULL	
+TABLE_NAME	varchar(256)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+MAX_HIGH_BOUND_VAL	varchar(4096)	NO		NULL	
+ENABLE	varchar(1024)	NO		NULL	
+TIME_UNIT	varchar(1024)	NO		NULL	
+PRECREATE_TIME	varchar(1024)	NO		NULL	
+EXPIRE_TIME	varchar(1024)	NO		NULL	
+TIME_ZONE	varchar(1024)	NO		NULL	
+BIGINT_PRECISION	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_DYNAMIC_PARTITION_TABLES limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

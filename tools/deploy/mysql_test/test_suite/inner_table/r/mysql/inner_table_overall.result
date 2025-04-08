@@ -818,6 +818,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12514	__all_virtual_ddl_diagnose_info	2	201001	1
 12515	__all_virtual_plugin_info	2	201001	1
 12523	__all_virtual_pl_recompile_objinfo	2	201001	1
+12536	__all_virtual_dynamic_partition_table	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1345,6 +1346,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21634	CDB_OB_CS_REPLICA_STATS	1	201001	1
 21635	GV$OB_PLUGINS	1	201001	1
 21636	V$OB_PLUGINS	1	201001	1
+21655	DBA_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
+21656	CDB_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
+21657	V$OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

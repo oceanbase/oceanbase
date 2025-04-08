@@ -81,6 +81,7 @@
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
+#include "pl/sys_package/ob_dbms_partition.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -864,6 +865,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED_VA, "DBMS_DDL_CREATE_WRAPPED_VA", (ObDbmsDDL::create_wrapped))
 #endif
   // end of dbms_ddl
+
+  // start of dbms_partition
+  INTERFACE_DEF(INTERFACE_DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION, "DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION", (ObDBMSPartition::manage_dynamic_partition))
+  // end of dbms_partition
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

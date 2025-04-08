@@ -15983,7 +15983,29 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12535: __all_virtual_mview_running_job
 
-# 12536: __all_virtual_dynamic_partition_table
+def_table_schema(
+  owner             = 'zhaoziqian.zzq',
+  table_name        = '__all_virtual_dynamic_partition_table',
+  table_id          = '12536',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [],
+  in_tenant_space   = True,
+  normal_columns    = [
+    ('tenant_id', 'int'),
+    ('tenant_schema_version', 'int'),
+    ('database_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+    ('table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+    ('table_id', 'int'),
+    ('max_high_bound_val', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('enable', 'varchar:1024'),
+    ('time_unit', 'varchar:1024'),
+    ('precreate_time', 'varchar:1024'),
+    ('expire_time', 'varchar:1024'),
+    ('time_zone', 'varchar:1024'),
+    ('bigint_precision', 'varchar:1024'),
+  ],
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16529,10 +16551,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15503', all_def_ke
 # 15504: __tenant_virtual_show_create_catalog
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status
-
 # 15507: __all_virtual_mview_running_job
 # 15508: __all_mview_dep
-# 15509: __all_virtual_dynamic_partition_table
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -41204,9 +41225,139 @@ def_table_schema(
 # 21653: CDB_MVIEW_RUNNING_JOBS
 # 21654: DBA_MVIEW_DEPS
 
-# 21655: DBA_OB_DYNAMIC_PARTITION_TABLES
-# 21656: CDB_OB_DYNAMIC_PARTITION_TABLES
-# 21657: V$OB_DYNAMIC_PARTITION_TABLES
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'DBA_OB_DYNAMIC_PARTITION_TABLES',
+  table_id        = '21655',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    D.DATABASE_NAME AS DATABASE_NAME,
+    A.TABLE_NAME AS TABLE_NAME,
+    A.TABLE_ID AS TABLE_ID,
+    B.HIGH_BOUND_VAL AS MAX_HIGH_BOUND_VAL,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 1), '=', -1) AS ENABLE,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 2), '=', -1) AS TIME_UNIT,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 3), '=', -1) AS PRECREATE_TIME,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 4), '=', -1) AS EXPIRE_TIME,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 5), '=', -1) AS TIME_ZONE,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 6), '=', -1) AS BIGINT_PRECISION
+  FROM
+    oceanbase.__all_table A
+  JOIN
+    oceanbase.__all_part B
+  ON
+    A.TABLE_ID = B.TABLE_ID
+  JOIN
+    (
+      SELECT
+        TABLE_ID,
+        MAX(PART_IDX) AS MAX_PART_IDX
+      FROM oceanbase.__all_part
+      GROUP BY
+        TABLE_ID
+    ) C
+  ON
+    B.TABLE_ID = C.TABLE_ID
+    AND
+    B.PART_IDX = C.MAX_PART_IDX
+  JOIN
+    oceanbase.__all_database D
+  ON
+    A.DATABASE_ID = D.DATABASE_ID
+  WHERE
+    A.DYNAMIC_PARTITION_POLICY != ''
+    AND D.DATABASE_NAME != '__recyclebin'
+    AND D.IN_RECYCLEBIN = 0;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'CDB_OB_DYNAMIC_PARTITION_TABLES',
+  table_id        = '21656',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    A.TENANT_ID AS TENANT_ID,
+    C.DATABASE_NAME AS DATABASE_NAME,
+    A.TABLE_NAME AS TABLE_NAME,
+    A.TABLE_ID AS TABLE_ID,
+    B.HIGH_BOUND_VAL AS MAX_HIGH_BOUND_VAL,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 1), '=', -1) AS ENABLE,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 2), '=', -1) AS TIME_UNIT,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 3), '=', -1) AS PRECREATE_TIME,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 4), '=', -1) AS EXPIRE_TIME,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 5), '=', -1) AS TIME_ZONE,
+    SUBSTRING_INDEX(SUBSTRING_INDEX(A.DYNAMIC_PARTITION_POLICY, ',', 6), '=', -1) AS BIGINT_PRECISION
+  FROM
+    oceanbase.__all_virtual_table A
+  JOIN
+    oceanbase.__all_virtual_database C
+  ON
+    A.TENANT_ID = C.TENANT_ID
+  AND
+    A.DATABASE_ID = C.DATABASE_ID
+  JOIN
+  (
+    SELECT
+      TENANT_ID,
+      TABLE_ID,
+      PART_IDX,
+      HIGH_BOUND_VAL,
+      ROW_NUMBER() OVER (
+        PARTITION BY TENANT_ID, TABLE_ID
+        ORDER BY PART_IDX DESC
+      ) AS rn
+    FROM
+      oceanbase.__all_virtual_part
+  ) B
+  ON
+    A.TENANT_ID = B.TENANT_ID
+  AND
+    A.TABLE_ID = B.TABLE_ID
+  AND
+    B.rn = 1
+  WHERE
+    A.DYNAMIC_PARTITION_POLICY != ''
+    AND C.DATABASE_NAME != '__recyclebin'
+    AND C.IN_RECYCLEBIN = 0;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'V$OB_DYNAMIC_PARTITION_TABLES',
+  table_id        = '21657',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    TENANT_ID,
+    TENANT_SCHEMA_VERSION,
+    DATABASE_NAME,
+    TABLE_NAME,
+    TABLE_ID,
+    MAX_HIGH_BOUND_VAL,
+    ENABLE,
+    TIME_UNIT,
+    PRECREATE_TIME,
+    EXPIRE_TIME,
+    TIME_ZONE,
+    BIGINT_PRECISION
+  FROM oceanbase.__all_virtual_dynamic_partition_table;
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -62865,7 +63016,77 @@ def_table_schema(
 
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
-# 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
+
+def_table_schema(
+  owner           = 'zhaoziqian.zzq',
+  table_name      = 'DBA_OB_DYNAMIC_PARTITION_TABLES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25310',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  WITH
+    A AS (
+      SELECT
+        TENANT_ID,
+        TABLE_ID,
+        DATABASE_ID,
+        TABLE_NAME,
+        DYNAMIC_PARTITION_POLICY,
+        REGEXP_SUBSTR(DYNAMIC_PARTITION_POLICY, '[^,]+', 1, 1) AS part1,
+        REGEXP_SUBSTR(DYNAMIC_PARTITION_POLICY, '[^,]+', 1, 2) AS part2,
+        REGEXP_SUBSTR(DYNAMIC_PARTITION_POLICY, '[^,]+', 1, 3) AS part3,
+        REGEXP_SUBSTR(DYNAMIC_PARTITION_POLICY, '[^,]+', 1, 4) AS part4,
+        REGEXP_SUBSTR(DYNAMIC_PARTITION_POLICY, '[^,]+', 1, 5) AS part5,
+        REGEXP_SUBSTR(DYNAMIC_PARTITION_POLICY, '[^,]+', 1, 6) AS part6
+      FROM
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+      WHERE
+        DYNAMIC_PARTITION_POLICY IS NOT NULL
+        AND TENANT_ID = EFFECTIVE_TENANT_ID()
+    ),
+    B AS (
+      SELECT
+        TABLE_ID,
+        PART_IDX,
+        HIGH_BOUND_VAL,
+        ROW_NUMBER() OVER (PARTITION BY TABLE_ID ORDER BY PART_IDX DESC) AS rn
+      FROM
+        SYS.ALL_VIRTUAL_PART_REAL_AGENT
+      WHERE
+        TENANT_ID = EFFECTIVE_TENANT_ID()
+    )
+  SELECT
+    C.DATABASE_NAME,
+    A.TABLE_NAME,
+    A.TABLE_ID,
+    B.HIGH_BOUND_VAL AS MAX_HIGH_BOUND_VAL,
+    SUBSTR(A.part1, INSTR(A.part1, '=') + 1) AS ENABLE,
+    SUBSTR(A.part2, INSTR(A.part2, '=') + 1) AS TIME_UNIT,
+    SUBSTR(A.part3, INSTR(A.part3, '=') + 1) AS PRECREATE_TIME,
+    SUBSTR(A.part4, INSTR(A.part4, '=') + 1) AS EXPIRE_TIME,
+    SUBSTR(A.part5, INSTR(A.part5, '=') + 1) AS TIME_ZONE,
+    SUBSTR(A.part6, INSTR(A.part6, '=') + 1) AS BIGINT_PRECISION
+  FROM
+    A
+  JOIN
+    B
+  ON
+    A.TABLE_ID = B.TABLE_ID
+    AND B.rn = 1
+  JOIN
+    SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C
+  ON
+    A.DATABASE_ID = C.DATABASE_ID
+    AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND C.DATABASE_NAME != '__recyclebin'
+    AND C.IN_RECYCLEBIN = 0;
+""".replace("\n", " ")
+)
 
 #
 # 余留位置（此行之前占位）
@@ -74205,7 +74426,35 @@ def_table_schema(
 
 # 28272: GV$OB_SQL_CCL_STATUS
 # 28273: V$OB_SQL_CCL_STATUS
-# 28274: V$OB_DYNAMIC_PARTITION_TABLES
+
+def_table_schema(
+  owner = 'zhaoziqian.zzq',
+  table_name      = 'V$OB_DYNAMIC_PARTITION_TABLES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28274',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    TENANT_ID,
+    TENANT_SCHEMA_VERSION,
+    DATABASE_NAME,
+    TABLE_NAME,
+    TABLE_ID,
+    MAX_HIGH_BOUND_VAL,
+    ENABLE,
+    TIME_UNIT,
+    PRECREATE_TIME,
+    EXPIRE_TIME,
+    TIME_ZONE,
+    BIGINT_PRECISION
+  FROM SYS.ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE;
+""".replace("\n", " "),
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

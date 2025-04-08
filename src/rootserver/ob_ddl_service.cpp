@@ -77,7 +77,7 @@
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "rootserver/mview/ob_mview_alter_service.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
-
+#include "share/ob_dynamic_partition_manager.h"
 
 namespace oceanbase
 {
@@ -1435,6 +1435,19 @@ int ObDDLService::generate_schema(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema.check_validity_for_auto_partition())) {
     LOG_WARN("fail to check auto partition setting", KR(ret), K(schema), K(arg));
+  }
+
+  if (OB_SUCC(ret) && !schema.get_dynamic_partition_policy().empty()) {
+    bool is_supported = false;
+    if (compat_version < DATA_VERSION_4_3_5_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dynamic partition less than 4.3.5.2 not support", KR(ret), K(compat_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition less than 4.3.5.2");
+    } else if (OB_FAIL(ObDynamicPartitionManager::check_is_supported(schema))) {
+      LOG_WARN("fail to check dynamic partition is supported", KR(ret), K(schema));
+    } else if (OB_FAIL(ObDynamicPartitionManager::check_is_valid(schema))) {
+      LOG_WARN("fail to check dynamic partition policy is valid", KR(ret), K(schema));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -3360,6 +3373,31 @@ int ObDDLService::set_raw_table_options(
           } else {
             new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
             need_update_index_table = true;
+          }
+          break;
+        }
+        case ObAlterTableArg::DYNAMIC_PARTITION_POLICY: {
+          uint64_t compat_version = 0;
+          ObArenaAllocator allocator;
+          bool is_supported = false;
+          bool is_legal = false;
+          const ObString &orig_policy_str = new_table_schema.get_dynamic_partition_policy();
+          const ObString &alter_policy_str = alter_table_schema.get_dynamic_partition_policy();
+          ObString new_policy_str;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_3_5_2) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("dynamic partition less than 4.3.5.2 not support", KR(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition less than 4.3.5.2");
+          } else if (OB_FAIL(ObDynamicPartitionManager::update_dynamic_partition_policy_str(allocator, orig_policy_str, alter_policy_str, new_policy_str))) {
+            LOG_WARN("fail to update dynamic partition policy str", KR(ret), K(orig_policy_str), K(alter_policy_str));
+          } else if (OB_FAIL(new_table_schema.set_dynamic_partition_policy(new_policy_str))) {
+            LOG_WARN("fail to set dynamic partition policy", KR(ret), K(new_policy_str));
+          } else if (OB_FAIL(ObDynamicPartitionManager::check_is_supported(new_table_schema))) {
+            LOG_WARN("fail to check dynamic partition is supported", KR(ret), K(new_table_schema));
+          } else if (OB_FAIL(ObDynamicPartitionManager::check_is_valid(new_table_schema))) {
+            LOG_WARN("fail to check dynamic partition policy is valid", KR(ret), K(new_table_schema));
           }
           break;
         }
@@ -23045,6 +23083,8 @@ int ObDDLService::check_hidden_table_constraint_exist(
 int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_SWAP_ORIG_AND_HIDDEN_TABLE_STATE);
+
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
   if (OB_FAIL(check_inner_stat())) {

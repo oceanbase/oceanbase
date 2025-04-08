@@ -11063,3 +11063,21 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_pl_recompile_objinfo limit 1;
+desc oceanbase.__all_virtual_dynamic_partition_table;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+tenant_schema_version	bigint(20)	NO		NULL	
+database_name	varchar(128)	NO		NULL	
+table_name	varchar(256)	NO		NULL	
+table_id	bigint(20)	NO		NULL	
+max_high_bound_val	varchar(4096)	NO		NULL	
+enable	varchar(1024)	NO		NULL	
+time_unit	varchar(1024)	NO		NULL	
+precreate_time	varchar(1024)	NO		NULL	
+expire_time	varchar(1024)	NO		NULL	
+time_zone	varchar(1024)	NO		NULL	
+bigint_precision	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dynamic_partition_table;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dynamic_partition_table limit 1;
