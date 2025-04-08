@@ -1631,12 +1631,16 @@ int ObPL::execute(ObExecContext &ctx,
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
-            } else if (pl.is_top_call()
-                       && pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+            } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
               ObObjParam &cursor_param = pl.get_params().at(i);
-              const ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(cursor_param.get_ext());
+              const ObPLCursorInfo *cursor = NULL;
+              if (!routine.get_in_args().has_member(i)) { //pure out param and formal param does not point to the same cursorInfo
+                OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
+                OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1)); //we need to dec refcount after out param assign to actual param
+              }
+              OX (cursor = reinterpret_cast<ObPLCursorInfo *>(cursor_param.get_ext()));
               OX (params->at(i) = cursor_param);
-              if (OB_NOT_NULL(cursor)) {
+              if (pl.is_top_call() && OB_NOT_NULL(cursor)) {
                 uint64_t compat_version = 0;
                 bool null_value_for_closed_cursor = false;
                 CK (OB_NOT_NULL(ctx.get_my_session()));
@@ -3343,7 +3347,7 @@ int ObPLExecState::final(int ret)
                                         func_.get_routine_id(),
                                         i, cursor, param, loc);
       if (OB_SUCCESS == tmp_ret && NULL != cursor) {
-        if (0 >= cursor->get_ref_count() && (cursor->is_session_cursor() || cursor->is_ref_by_refcursor())) {
+        if (0 == cursor->get_ref_count() && (cursor->is_session_cursor() || cursor->is_ref_by_refcursor())) {
           // when refcount is 0. should use session close cursor
           ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
           tmp_ret = session->close_cursor(cursor->get_id());

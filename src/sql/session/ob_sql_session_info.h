@@ -1139,6 +1139,17 @@ public:
   int add_cursor(pl::ObPLCursorInfo *cursor);
   int close_cursor(pl::ObPLCursorInfo *&cursor);
   int close_cursor(int64_t cursor_id);
+  inline void inc_session_cursor() {
+    if (lib::is_diagnose_info_enabled()) {
+      EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
+      EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+    }
+  };
+  inline void dec_session_cursor() {
+    if (lib::is_diagnose_info_enabled()) {
+      EVENT_DEC(SQL_OPEN_CURSORS_CURRENT);
+    }
+  };
   int make_cursor(pl::ObPLCursorInfo *&cursor);
   int add_non_session_cursor(pl::ObPLCursorInfo *cursor);
   void del_non_session_cursor(pl::ObPLCursorInfo *cursor);

@@ -1572,10 +1572,7 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
       } else {
         cursor->set_id(id);
         add_cursor_success = true;
-        if (lib::is_diagnose_info_enabled()) {
-          EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
-          EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
-        }
+        inc_session_cursor();
         LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_server_sid()));
       }
     }
@@ -1626,9 +1623,6 @@ int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
     cursor->~ObPLCursorInfo();
     get_cursor_allocator().free(cursor);
     cursor = NULL;
-    if (lib::is_diagnose_info_enabled()) {
-      EVENT_DEC(SQL_OPEN_CURSORS_CURRENT);
-    }
   }
   return ret;
 }
@@ -1725,9 +1719,6 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
   OZ (pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor), cursor_id);
   OV (OB_NOT_NULL(cursor), OB_ERR_UNEXPECTED, cursor_id);
   OV (OB_NOT_NULL(dbms_cursor = static_cast<ObDbmsCursorInfo *>(cursor)), OB_ERR_UNEXPECTED, cursor_id);
-  if (OB_SUCC(ret) && lib::is_diagnose_info_enabled()) {
-    EVENT_DEC(SQL_OPEN_CURSORS_CURRENT);
-  }
   // dbms cursor应该先执行spi接口关闭，再执行session接口删除。
   OV (!cursor->isopen(), OB_ERR_UNEXPECTED, cursor_id);
   OX (cursor->reset());
