@@ -422,6 +422,7 @@ public:
   ObTenantIOManager();
   ~ObTenantIOManager();
   int init(const uint64_t tenant_id, const ObTenantIOConfig &io_config, ObIOScheduler *io_scheduler);
+  int init_io_config();
   void destroy();
   int start();
   void stop();

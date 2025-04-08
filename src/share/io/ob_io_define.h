@@ -51,7 +51,7 @@ class ObObjectDevice;
 static constexpr int64_t CLOCK_IDLE_THRESHOLD_US = 100 * 1000L;  // 100ms
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L;        // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L;     // 5min
-static constexpr int64_t GROUP_START_NUM = 3L;
+static constexpr int64_t GROUP_START_NUM = 1L;
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_US = 5000L * 1000L;  // 5s
 static constexpr int64_t MAX_DETECT_READ_WARN_TIMES = 10L;
 static constexpr int64_t MAX_DETECT_READ_ERROR_TIMES = 100L;
@@ -770,7 +770,8 @@ public:
   int64_t memory_limit_;
   int64_t callback_thread_count_;
   UnitConfig unit_config_;
-  ObSEArray<GroupConfig, GROUP_START_NUM * 3> group_configs_;
+  typedef ObSEArray<GroupConfig, GROUP_START_NUM * (static_cast<uint64_t>(ObIOMode::MAX_MODE) + 1)> ObIOGroupConfigArray;
+  ObIOGroupConfigArray group_configs_;
   bool group_config_change_;
   bool enable_io_tracer_;
   int64_t object_storage_io_timeout_ms_;

@@ -17,6 +17,7 @@
 #include "lib/container/ob_heap.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
+#include "lib/lock/ob_drw_lock.h"
 
 namespace oceanbase
 {
@@ -95,6 +96,7 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
+  DRWLock group_clocks_lock_;
   ObSEArray<ObMClock, GROUP_START_NUM> group_clocks_;
   ObAtomIOClock unit_clocks_[static_cast<int>(ObIOMode::MAX_MODE) + 1];
   ObTenantIOConfig io_config_;

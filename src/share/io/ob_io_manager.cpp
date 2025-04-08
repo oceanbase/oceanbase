@@ -1595,6 +1595,9 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init group map failed", K(ret));
   } else if (OB_FAIL(io_config_.deep_copy(io_config))) {
     LOG_WARN("copy io config failed", K(ret), K(io_config_));
+  } else if(OB_FAIL(io_config_.group_configs_.reserve(16L * IO_MODE_CNT))) {
+    //rerserve space for 16 groups to avoid concurrency problem
+    LOG_WARN("reserve group configs failed", K(ret));
   } else if (OB_FAIL(qsched_.init(tenant_id, io_config))) {
     LOG_WARN("init qsched failed", K(ret), K(io_config));
   } else {
@@ -2470,10 +2473,10 @@ int ObTenantIOManager::print_io_status()
     bool need_print_io_config = false;
     io_usage_.calculate_io_usage();
     io_sys_usage_.calculate_io_usage();
-    const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &info = io_usage_.get_io_usage();
-    const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &sys_info = io_sys_usage_.get_io_usage();
-    ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> &failed_req_info = io_usage_.get_failed_req_usage();
-    ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> &sys_failed_req_info = io_sys_usage_.get_failed_req_usage();
+    const ObIOUsageInfoArray &info = io_usage_.get_io_usage();
+    const ObIOUsageInfoArray &sys_info = io_sys_usage_.get_io_usage();
+    ObIOFailedReqInfoArray &failed_req_info = io_usage_.get_failed_req_usage();
+    ObIOFailedReqInfoArray &sys_failed_req_info = io_sys_usage_.get_failed_req_usage();
     const ObIOMemStat &sys_mem_stat = io_mem_stats_.get_sys_mem_stat();
     const ObIOMemStat &mem_stat = io_mem_stats_.get_mem_stat();
     const int64_t MODE_COUNT = static_cast<int64_t>(ObIOMode::MAX_MODE) + 1;
