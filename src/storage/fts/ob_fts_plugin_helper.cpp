@@ -12,14 +12,15 @@
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
-#include "share/ob_force_print_log.h"
-#include "src/sql/engine/expr/ob_expr_operator.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_fts_stop_word.h"
-#include "storage/fts/ob_fts_parser_property.h"
-#include "storage/fts/dict/ob_ft_dict_hub.h"
+
+#include "lib/json_type/ob_json_tree.h"
 #include "plugin/interface/ob_plugin_ftparser_intf.h"
 #include "plugin/sys/ob_plugin_helper.h"
+#include "share/ob_force_print_log.h"
+#include "storage/fts/dict/ob_ft_dict_hub.h"
+#include "storage/fts/ob_fts_parser_property.h"
+#include "storage/fts/ob_fts_stop_word.h"
 
 using namespace oceanbase::plugin;
 
@@ -244,6 +245,9 @@ int ObFTParseHelper::segment(
     param.ngram_token_size_ = property.ngram_token_size_;
     param.ik_param_.mode_
         = (property.ik_mode_smart_ ? ObFTIKParam::Mode::SMART : ObFTIKParam::Mode::MAX_WORD);
+    param.min_ngram_size_ = property.min_ngram_token_size_;
+    param.max_ngram_size_ = property.max_ngram_token_size_;
+
     if (OB_FAIL(parser_desc->segment(&param, iter))) {
       LOG_WARN("fail to segment", K(ret), K(param));
     } else if (OB_ISNULL(iter)) {

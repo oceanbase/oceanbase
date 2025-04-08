@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 OceanBase
+ * Copyright (c) 2025 OceanBase
  * OceanBase is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -10,11 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/fts/utils/ob_ft_ngram_impl.h"
-#define USING_LOG_PREFIX STORAGE_FTS
+#include "storage/fts/ob_ngram2_ft_parser.h"
 
-#include "ob_ngram_ft_parser.h"
+#include "lib/charset/ob_ctype.h"
 #include "storage/fts/ob_fts_struct.h"
+#include "storage/fts/utils/ob_ft_ngram_impl.h"
+
+#define USING_LOG_PREFIX STORAGE_FTS
 
 using namespace oceanbase::common;
 using namespace oceanbase::plugin;
@@ -23,39 +25,32 @@ namespace oceanbase
 {
 namespace storage
 {
+ObNgram2FTParser::ObNgram2FTParser() : ngram_impl_(), is_inited_(false) {}
 
-#define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
+ObNgram2FTParser::~ObNgram2FTParser() { reset(); }
 
-ObNgramFTParser::ObNgramFTParser() : ngram_impl_(), is_inited_(false) {}
-
-ObNgramFTParser::~ObNgramFTParser()
-{
-  reset();
-}
-
-void ObNgramFTParser::reset()
+void ObNgram2FTParser::reset()
 {
   ngram_impl_.reset();
   is_inited_ = false;
 }
 
-int ObNgramFTParser::init(ObFTParserParam *param)
+int ObNgram2FTParser::init(ObFTParserParam *param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), KPC(param), KPC(this));
-  } else if (OB_ISNULL(param)
-      || OB_ISNULL(param->cs_)
-      || OB_ISNULL(param->fulltext_)
-      || OB_UNLIKELY(0 >= param->ft_length_)) {
+  } else if (OB_ISNULL(param) || OB_ISNULL(param->cs_) || OB_ISNULL(param->fulltext_)
+             || OB_UNLIKELY(0 >= param->ft_length_
+                            || OB_UNLIKELY(param->max_ngram_size_ < param->min_ngram_size_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(param));
   } else if (OB_FAIL(ngram_impl_.init(param->cs_,
                                       param->fulltext_,
                                       param->ft_length_,
-                                      param->ngram_token_size_,
-                                      param->ngram_token_size_))) {
+                                      param->min_ngram_size_,
+                                      param->max_ngram_size_))) {
     LOG_WARN("fail to init ngram impl", K(ret), KPC(param));
   } else {
     is_inited_ = true;
@@ -66,11 +61,10 @@ int ObNgramFTParser::init(ObFTParserParam *param)
   return ret;
 }
 
-int ObNgramFTParser::get_next_token(
-    const char *&word,
-    int64_t &word_len,
-    int64_t &char_len,
-    int64_t &word_freq)
+int ObNgram2FTParser::get_next_token(const char *&word,
+                                     int64_t &word_len,
+                                     int64_t &char_len,
+                                     int64_t &word_freq)
 {
   int ret = OB_SUCCESS;
   word = nullptr;
@@ -89,26 +83,21 @@ int ObNgramFTParser::get_next_token(
   return ret;
 }
 
-ObNgramFTParserDesc::ObNgramFTParserDesc()
-  : is_inited_(false)
-{
-}
+ObNgram2FTParserDesc::ObNgram2FTParserDesc() : is_inited_(false) {}
 
-int ObNgramFTParserDesc::init(ObPluginParam *param)
+int ObNgram2FTParserDesc::init(ObPluginParam *param)
 {
   is_inited_ = true;
   return OB_SUCCESS;
 }
 
-int ObNgramFTParserDesc::deinit(ObPluginParam *param)
+int ObNgram2FTParserDesc::deinit(ObPluginParam *param)
 {
   reset();
   return OB_SUCCESS;
 }
 
-int ObNgramFTParserDesc::segment(
-    ObFTParserParam *param,
-    ObITokenIterator *&iter) const
+int ObNgram2FTParserDesc::segment(ObFTParserParam *param, ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -118,11 +107,11 @@ int ObNgramFTParserDesc::segment(
   } else if (OB_ISNULL(param) || OB_ISNULL(param->fulltext_) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(param));
-  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObNgramFTParser)))) {
+  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObNgram2FTParser)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate ngram ft parser", K(ret));
   } else {
-    ObNgramFTParser *parser = new (buf) ObNgramFTParser();
+    ObNgram2FTParser *parser = new (buf) ObNgram2FTParser();
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("fail to init ngram fulltext parser", K(ret), KPC(param));
       param->allocator_->free(parser);
@@ -133,9 +122,7 @@ int ObNgramFTParserDesc::segment(
   return ret;
 }
 
-void ObNgramFTParserDesc::free_token_iter(
-    ObFTParserParam *param,
-    ObITokenIterator *&iter) const
+void ObNgram2FTParserDesc::free_token_iter(ObFTParserParam *param, ObITokenIterator *&iter) const
 {
   if (OB_NOT_NULL(iter)) {
     abort_unless(nullptr != param);
@@ -145,7 +132,7 @@ void ObNgramFTParserDesc::free_token_iter(
   }
 }
 
-int ObNgramFTParserDesc::get_add_word_flag(ObAddWordFlag &flag) const
+int ObNgram2FTParserDesc::get_add_word_flag(ObAddWordFlag &flag) const
 {
   int ret = OB_SUCCESS;
   flag.set_casedown();

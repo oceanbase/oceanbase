@@ -30,6 +30,7 @@
 #include "storage/fts/ik/ob_ik_char_util.h"
 #include "storage/fts/ik/ob_ik_token.h"
 #include "storage/fts/ob_ik_ft_parser.h"
+#include "storage/fts/utils/ob_ft_ngram_impl.h"
 
 #include <alloca.h>
 #include <chrono>

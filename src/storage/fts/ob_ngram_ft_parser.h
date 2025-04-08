@@ -16,6 +16,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "plugin/interface/ob_plugin_ftparser_intf.h"
+#include "storage/fts/utils/ob_ft_ngram_impl.h"
 
 namespace oceanbase
 {
@@ -36,14 +37,10 @@ public:
       int64_t &char_len,
       int64_t &word_freq) override;
 
-  VIRTUAL_TO_STRING_KV(KP_(cs), KP_(start), KP_(next), KP_(end), K_(c_nums), K_(ngram_token_size), K_(is_inited));
+  VIRTUAL_TO_STRING_KV(K_(is_inited));
+
 private:
-  const ObCharsetInfo *cs_;
-  const char *start_;
-  const char *next_;
-  const char *end_;
-  int64_t c_nums_;
-  int64_t ngram_token_size_;
+  ObFTNgramImpl ngram_impl_;
   bool is_inited_;
 private:
   DISABLE_COPY_ASSIGN(ObNgramFTParser);

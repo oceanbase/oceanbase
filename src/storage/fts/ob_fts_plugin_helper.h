@@ -40,11 +40,12 @@ class ObStopWordChecker;
 class ObFTDictHub;
 class ObAddWord;
 
-#define FTS_BUILD_IN_PARSER_LIST               \
-  FT_PARSER_TYPE(FTP_SPACE, space)             \
-  FT_PARSER_TYPE(FTP_NGRAM, ngram)             \
-  FT_PARSER_TYPE(FTP_BENG, beng)               \
-  FT_PARSER_TYPE(FTP_IK, ik)
+#define FTS_BUILD_IN_PARSER_LIST                                                                   \
+  FT_PARSER_TYPE(FTP_SPACE, space)                                                                 \
+  FT_PARSER_TYPE(FTP_NGRAM, ngram)                                                                 \
+  FT_PARSER_TYPE(FTP_BENG, beng)                                                                   \
+  FT_PARSER_TYPE(FTP_IK, ik)                                                                       \
+  FT_PARSER_TYPE(FTP_NGRAM2, ngram2)
 
 class ObFTParser final
 {

@@ -95,7 +95,13 @@ class ObFTParserParam final : public ObFTParserParamExport
 public:
   static const int64_t NGRAM_TOKEN_SIZE = 2;
 public:
-  ObFTParserParam() = default;
+  ObFTParserParam()
+      : ObFTParserParamExport(),
+        ngram_token_size_(NGRAM_TOKEN_SIZE),
+        min_ngram_size_(NGRAM_TOKEN_SIZE),
+        max_ngram_size_(NGRAM_TOKEN_SIZE)
+  {
+  }
   virtual ~ObFTParserParam() { reset(); }
 
   inline void reset()
@@ -112,7 +118,9 @@ public:
 
   // ik parser params
   ObFTIKParam ik_param_;
-  int64_t ngram_token_size_ = NGRAM_TOKEN_SIZE;
+  int64_t ngram_token_size_;
+  int64_t min_ngram_size_;
+  int64_t max_ngram_size_;
 };
 
 class ObITokenIterator

@@ -194,6 +194,39 @@ int ObFTParserResolverHelper::resolve_fts_index_parser_properties(
         }
         break;
       }
+      case T_PARSER_MIN_NGRAM_SIZE: {
+        if (OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("option_node child is nullptr", K(ret));
+        } else if (OB_UNLIKELY(!property.is_valid_min_ngram_token_size(node->children_[0]->value_))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MIN_NGRAM_SIZE_SCOPE_STR);
+          LOG_WARN("invalid min ngram token size",
+                   K(ObString(ObFTSLiteral::MIN_NGRAM_SIZE_SCOPE_STR)),
+                   K(ret),
+                   K(node->children_[0]->value_));
+        } else if (OB_FAIL(property.config_set_min_ngram_token_size(node->children_[0]->value_))) {
+          LOG_WARN("fail to set min ngram token size", K(ret));
+        }
+        break;
+      }
+      case T_PARSER_MAX_NGRAM_SIZE: {
+        if (OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("option_node child is nullptr", K(ret));
+        } else if (OB_UNLIKELY(
+                       !property.is_valid_max_ngram_token_size(node->children_[0]->value_))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MAX_NGRAM_SIZE_SCOPE_STR);
+          LOG_WARN("invalid max ngram token size",
+                   K(ObString(ObFTSLiteral::MAX_NGRAM_SIZE_SCOPE_STR)),
+                   K(ret),
+                   K(node->children_[0]->value_));
+        } else if (OB_FAIL(property.config_set_max_ngram_token_size(node->children_[0]->value_))) {
+          LOG_WARN("fail to set max ngram token size", K(ret));
+        }
+        break;
+      }
 
       default: {
         ret = OB_INVALID_ARGUMENT;

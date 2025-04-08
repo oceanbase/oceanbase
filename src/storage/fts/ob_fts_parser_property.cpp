@@ -21,12 +21,8 @@
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
-#include "storage/fts/ob_beng_ft_parser.h"
 #include "storage/fts/ob_fts_literal.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_ik_ft_parser.h"
-#include "storage/fts/ob_ngram_ft_parser.h"
-#include "storage/fts/ob_whitespace_ft_parser.h"
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
@@ -182,6 +178,48 @@ int ObFTParserJsonProps::config_set_ik_mode(const ObString &ik_mode)
   } else if (OB_FAIL(root_->object_add(ObString(ObFTSLiteral::CONFIG_NAME_IK_MODE),
                                        ik_mode_node))) {
     LOG_WARN("Fail to add ik_mode", K(ret));
+  }
+  return ret;
+}
+
+int ObFTParserJsonProps::config_set_min_ngram_token_size(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ObJsonInt *ngram_token_size = nullptr;
+  if (!IS_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Props not init", K(ret));
+  } else if (OB_ISNULL(ngram_token_size = OB_NEWx(ObJsonInt, &allocator_, size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to new ObJsonInt", K(ret));
+  } else if (!is_valid_min_ngram_token_size(size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", KCSTRING(ObFTSLiteral::MIN_NGRAM_SIZE_SCOPE_STR), K(ret));
+  } else if (OB_FAIL(root_->object_add(ObString(ObFTSLiteral::CONFIG_NAME_MIN_NGRAM_SIZE),
+                                       ngram_token_size))) {
+    LOG_WARN("Fail to add min_ngram_size", K(ret));
+  } else {
+  }
+  return ret;
+}
+
+int ObFTParserJsonProps::config_set_max_ngram_token_size(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ObJsonInt *ngram_token_size = nullptr;
+  if (!IS_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Props not init", K(ret));
+  } else if (OB_ISNULL(ngram_token_size = OB_NEWx(ObJsonInt, &allocator_, size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to new ObJsonInt", K(ret));
+  } else if (!is_valid_max_ngram_token_size(size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", KCSTRING(ObFTSLiteral::MAX_NGRAM_SIZE_SCOPE_STR), K(ret));
+  } else if (OB_FAIL(root_->object_add(ObString(ObFTSLiteral::CONFIG_NAME_MAX_NGRAM_SIZE),
+                                       ngram_token_size))) {
+    LOG_WARN("Fail to add max_ngram_size", K(ret));
+  } else {
   }
   return ret;
 }
@@ -407,6 +445,56 @@ int ObFTParserJsonProps::config_get_ik_mode(ObString &ik_mode) const
   return ret;
 }
 
+int ObFTParserJsonProps::config_get_min_ngram_token_size(int64_t &size) const
+{
+  int ret = OB_SUCCESS;
+  if (!IS_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ObIJsonBase *value = nullptr;
+    if (OB_FAIL(
+            root_->get_object_value(ObString(ObFTSLiteral::CONFIG_NAME_MIN_NGRAM_SIZE), value))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+      } else {
+        LOG_WARN("Fail to get min_ngram_token_size", K(ret));
+      }
+    } else if (OB_ISNULL(value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value is null", K(ret));
+    } else if (value->json_type() != ObJsonNodeType::J_INT) {
+      LOG_WARN("value is not int", K(ret));
+    } else {
+      size = value->get_int();
+    }
+  }
+  return ret;
+}
+
+int ObFTParserJsonProps::config_get_max_ngram_token_size(int64_t &size) const
+{
+  int ret = OB_SUCCESS;
+  if (!IS_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ObIJsonBase *value = nullptr;
+    if (OB_FAIL(
+            root_->get_object_value(ObString(ObFTSLiteral::CONFIG_NAME_MAX_NGRAM_SIZE), value))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+      } else {
+        LOG_WARN("Fail to get min_ngram_token_size", K(ret));
+      }
+    } else if (OB_ISNULL(value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value is null", K(ret));
+    } else if (value->json_type() != ObJsonNodeType::J_INT) {
+      LOG_WARN("value is not int", K(ret));
+    } else {
+      size = value->get_int();
+    }
+  }
+  return ret;
+}
+
 int ObFTParserJsonProps::check_unsupported_config(const char **config_array,
                                                   int32_t config_count,
                                                   bool &has_unsupported) const
@@ -420,7 +508,7 @@ int ObFTParserJsonProps::check_unsupported_config(const char **config_array,
     } else {
       bool is_supported = false;
       for (int32_t j = 0; OB_SUCC(ret) && j < config_count && !is_supported; ++j) {
-        if (ObString(config_array[j]) == key) {
+        if (0 == (ObString(config_array[j]).case_compare(key))) {
           is_supported = true;
         }
       }
@@ -465,6 +553,10 @@ int ObFTParserJsonProps::rebuild_props_for_ddl(const ObString &parser_name,
       }
     } else if (parser.is_beng()) {
       if (OB_FAIL(beng_rebuild_props_for_ddl(log_to_user))) {
+        LOG_WARN("fail to rebuild props for ddl", K(ret));
+      }
+    } else if (parser.is_ngram2()) {
+      if (OB_FAIL(ngram2_rebuild_props_for_ddl(log_to_user))) {
         LOG_WARN("fail to rebuild props for ddl", K(ret));
       }
     } else if (OB_FAIL(plugin_rebuild_props_for_ddl(log_to_user))) {
@@ -705,7 +797,8 @@ int ObFTParserJsonProps::beng_rebuild_props_for_ddl(const bool log_to_user)
 
     if (OB_FAIL(config_get_min_token_size(min_token_size))) {
       if (OB_SEARCH_NOT_FOUND == ret) {
-        if (OB_FAIL(config_set_min_token_size(ObFTSLiteral::FT_DEFAULT_MIN_TOKEN_SIZE))) {
+        min_token_size = ObFTSLiteral::FT_DEFAULT_MIN_TOKEN_SIZE;
+        if (OB_FAIL(config_set_min_token_size(min_token_size))) {
           LOG_WARN("Failed to set default dict table", K(ret));
         }
       }
@@ -721,7 +814,8 @@ int ObFTParserJsonProps::beng_rebuild_props_for_ddl(const bool log_to_user)
       // do nothing
     } else if (OB_FAIL(config_get_max_token_size(max_token_size))) {
       if (OB_SEARCH_NOT_FOUND == ret) {
-        if (OB_FAIL(config_set_max_token_size(ObFTSLiteral::FT_DEFAULT_MAX_TOKEN_SIZE))) {
+        max_token_size = ObFTSLiteral::FT_DEFAULT_MAX_TOKEN_SIZE;
+        if (OB_FAIL(config_set_max_token_size(max_token_size))) {
           LOG_WARN("Failed to set default dict table", K(ret));
         }
       }
@@ -731,11 +825,83 @@ int ObFTParserJsonProps::beng_rebuild_props_for_ddl(const bool log_to_user)
       if (log_to_user) {
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MAX_TOKEN_SIZE_SCOPE_STR);
       }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (min_token_size > max_token_size) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid token size", K(ret), K(min_token_size), K(max_token_size));
       if (log_to_user) {
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MIN_MAX_TOKEN_SIZE_SCOPE_STR);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFTParserJsonProps::ngram2_rebuild_props_for_ddl(const bool log_to_user)
+{
+  int ret = OB_SUCCESS;
+
+  static const char *supported[] = {
+      ObFTSLiteral::CONFIG_NAME_MIN_NGRAM_SIZE,
+      ObFTSLiteral::CONFIG_NAME_MAX_NGRAM_SIZE,
+  };
+
+  bool has_unsupported = false;
+  if (OB_FAIL(check_unsupported_config(supported, ARRAYSIZEOF(supported), has_unsupported))) {
+    LOG_WARN("Failed to check unsupported config", K(ret));
+  } else if (has_unsupported) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Unsupported config", K(ret));
+    if (log_to_user) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ngram2 config");
+    }
+  };
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    int64_t min_ngram_size = 0;
+    int64_t max_ngram_size = 0;
+
+    if (OB_FAIL(config_get_min_ngram_token_size(min_ngram_size))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        min_ngram_size = ObFTSLiteral::FT_DEFAULT_MIN_NGRAM_SIZE;
+        if (OB_FAIL(config_set_min_ngram_token_size(min_ngram_size))) {
+          LOG_WARN("Failed to set default min ngram token size", K(ret));
+        }
+      }
+    } else if (!is_valid_min_ngram_token_size(min_ngram_size)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid min ngram token size", K(ret), K(min_ngram_size));
+      if (log_to_user) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MIN_NGRAM_SIZE_SCOPE_STR);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(config_get_max_ngram_token_size(max_ngram_size))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        max_ngram_size = ObFTSLiteral::FT_DEFAULT_MAX_NGRAM_SIZE;
+        if (OB_FAIL(config_set_max_ngram_token_size(max_ngram_size))) {
+          LOG_WARN("Failed to set default max ngram token size", K(ret));
+        }
+      }
+    } else if (!is_valid_max_ngram_token_size(max_ngram_size)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid max ngram token size", K(ret), K(max_ngram_size));
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (min_ngram_size > max_ngram_size) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid token size", K(ret), K(min_ngram_size), K(max_ngram_size));
+      if (log_to_user) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::NGRAM_MIN_MAX_TOKEN_SIZE_SCOPE_STR);
       }
     }
   }
@@ -849,7 +1015,12 @@ int ObFTParserJsonProps::show_parser_properties(const ObFTParserJsonProps &prope
       }
     } else {
       __FT_PARSER_PROPERTY_SHOW_COMMA(need_comma);
-      if (FAILEDx(databuff_printf(buf, buf_len, pos, "min_token_size=%ld", min_token_size))) {
+      if (FAILEDx(databuff_printf(buf,
+                                  buf_len,
+                                  pos,
+                                  "%s=%ld",
+                                  ObFTSLiteral::CONFIG_NAME_MIN_TOKEN_SIZE,
+                                  min_token_size))) {
         LOG_WARN("fail to printf min_token_size", K(ret), K(buf_len), K(pos), K(min_token_size));
       }
     }
@@ -863,7 +1034,12 @@ int ObFTParserJsonProps::show_parser_properties(const ObFTParserJsonProps &prope
       }
     } else {
       __FT_PARSER_PROPERTY_SHOW_COMMA(need_comma);
-      if (FAILEDx(databuff_printf(buf, buf_len, pos, "max_token_size=%ld", max_token_size))) {
+      if (FAILEDx(databuff_printf(buf,
+                                  buf_len,
+                                  pos,
+                                  "%s=%ld",
+                                  ObFTSLiteral::CONFIG_NAME_MAX_TOKEN_SIZE,
+                                  max_token_size))) {
         LOG_WARN("fail to printf max_token_size", K(ret), K(buf_len), K(pos), K(max_token_size));
       }
     }
@@ -877,7 +1053,12 @@ int ObFTParserJsonProps::show_parser_properties(const ObFTParserJsonProps &prope
       }
     } else {
       __FT_PARSER_PROPERTY_SHOW_COMMA(need_comma);
-      if (FAILEDx(databuff_printf(buf, buf_len, pos, "ik_mode=\"%s\"", ik_mode.ptr()))) {
+      if (FAILEDx(databuff_printf(buf,
+                                  buf_len,
+                                  pos,
+                                  "%s=\"%s\"",
+                                  ObFTSLiteral::CONFIG_NAME_IK_MODE,
+                                  ik_mode.ptr()))) {
         LOG_WARN("fail to printf ik mode", K(ret), K(buf_len), K(pos), K(ik_mode));
       }
     }
@@ -891,12 +1072,53 @@ int ObFTParserJsonProps::show_parser_properties(const ObFTParserJsonProps &prope
       }
     } else {
       __FT_PARSER_PROPERTY_SHOW_COMMA(need_comma);
-      if (FAILEDx(databuff_printf(buf, buf_len, pos, "ngram_token_size=%ld", ngram_token_size))) {
+      if (FAILEDx(databuff_printf(buf,
+                                  buf_len,
+                                  pos,
+                                  "%s=%ld",
+                                  ObFTSLiteral::CONFIG_NAME_NGRAM_TOKEN_SIZE,
+                                  ngram_token_size))) {
         LOG_WARN("fail to printf ngram_token_size",
                  K(ret),
                  K(buf_len),
                  K(pos),
                  K(ngram_token_size));
+      }
+    }
+
+    int64_t min_ngram_token_size = 0;
+    if (FAILEDx(properties.config_get_min_ngram_token_size(min_ngram_token_size))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("Fail to get min_ngram_token_size", K(ret));
+      }
+    } else {
+      __FT_PARSER_PROPERTY_SHOW_COMMA(need_comma);
+      if (FAILEDx(databuff_printf(buf,
+                                  buf_len,
+                                  pos,
+                                  "%s=%ld",
+                                  ObFTSLiteral::CONFIG_NAME_MIN_NGRAM_SIZE,
+                                  min_ngram_token_size))) {
+      }
+    }
+
+    int64_t max_ngram_token_size = 0;
+    if (FAILEDx(properties.config_get_max_ngram_token_size(max_ngram_token_size))) {
+      if (OB_SEARCH_NOT_FOUND == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("Fail to get max_ngram_token_size", K(ret));
+      }
+    } else {
+      __FT_PARSER_PROPERTY_SHOW_COMMA(need_comma);
+      if (FAILEDx(databuff_printf(buf,
+                                  buf_len,
+                                  pos,
+                                  "%s=%ld",
+                                  ObFTSLiteral::CONFIG_NAME_MAX_NGRAM_SIZE,
+                                  max_ngram_token_size))) {
       }
     }
 
@@ -967,6 +1189,15 @@ int ObFTParserProperty::parse_for_parser_helper(const ObFTParser &parser, const 
       } else if (OB_FAIL(props.config_get_max_token_size(max_token_size_))) {
         LOG_WARN("fail to get max_token_size", K(ret));
       }
+    } else if (parser.is_ngram2()) {
+      if (json_str.empty()) {
+        min_ngram_token_size_ = ObFTSLiteral::FT_DEFAULT_MIN_NGRAM_SIZE;
+        max_ngram_token_size_ = ObFTSLiteral::FT_DEFAULT_MAX_NGRAM_SIZE;
+      } else if (OB_FAIL(props.config_get_min_ngram_token_size(min_ngram_token_size_))) {
+        LOG_WARN("fail to get min_ngram_token_size", K(ret));
+      } else if (OB_FAIL(props.config_get_max_ngram_token_size(max_ngram_token_size_))) {
+        LOG_WARN("fail to get max_ngram_token_size", K(ret));
+      }
     }
   }
   return ret;
@@ -975,8 +1206,13 @@ int ObFTParserProperty::parse_for_parser_helper(const ObFTParser &parser, const 
 ObFTParserProperty::ObFTParserProperty()
     : min_token_size_(ObFTSLiteral::FT_DEFAULT_MIN_TOKEN_SIZE),
       max_token_size_(ObFTSLiteral::FT_DEFAULT_MAX_TOKEN_SIZE),
-      ngram_token_size_(ObFTSLiteral::FT_DEFAULT_NGRAM_TOKEN_SIZE), ik_mode_smart_(true),
-      stopword_table_(), dict_table_(), quantifier_table_()
+      ngram_token_size_(ObFTSLiteral::FT_DEFAULT_NGRAM_TOKEN_SIZE),
+      ik_mode_smart_(true),
+      stopword_table_(),
+      dict_table_(),
+      quantifier_table_(),
+      min_ngram_token_size_(ObFTSLiteral::FT_DEFAULT_MIN_NGRAM_SIZE),
+      max_ngram_token_size_(ObFTSLiteral::FT_DEFAULT_MAX_NGRAM_SIZE)
 {
 }
 
