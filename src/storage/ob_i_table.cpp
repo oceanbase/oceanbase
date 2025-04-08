@@ -75,7 +75,11 @@ const char* ObITable::table_type_name_[] =
   "DDL_MEM_MINI_SSTABLE",
   "MDS_MINI",
   "MDS_MINOR",
-  "MICRO_MINI_SSTABLE"
+  "MICRO_MINI_SSTABLE",
+  "INC_MAJOR_SSTABLE",
+  "INC_COLUMN_ORIENTED_SSTABLE",
+  "INC_NORMAL_COLUMN_GROUP_SSTABLE",
+  "INC_ROWKEY_COLUMN_GROUP_SSTABLE"
 };
 
 uint64_t ObITable::TableKey::hash() const

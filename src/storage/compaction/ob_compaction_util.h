@@ -32,6 +32,7 @@ enum ObMergeType : uint8_t
   MDS_MINOR_MERGE,
   BATCH_EXEC, // for ObBatchExecDag
   CONVERT_CO_MAJOR_MERGE, // convert row store major into columnar store cg sstables
+  INC_MAJOR_MERGE,
   // add new merge type here
   // fix merge_type_to_str & ObPartitionMergePolicy::get_merge_tables
   MERGE_TYPE_MAX

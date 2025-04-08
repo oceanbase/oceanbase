@@ -49,6 +49,7 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::not_support_merge_type,
       ObPartitionMergePolicy::get_convert_co_major_merge_tables,
       ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type,
     };
 
 int ObPartitionMergePolicy::get_medium_merge_tables(

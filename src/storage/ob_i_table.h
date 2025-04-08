@@ -110,6 +110,10 @@ public:
     MDS_MINI_SSTABLE = 26,
     MDS_MINOR_SSTABLE = 27,
     MICRO_MINI_SSTABLE = 28,
+    INC_MAJOR_SSTABLE = 29,
+    INC_COLUMN_ORIENTED_SSTABLE = 30,
+    INC_NORMAL_COLUMN_GROUP_SSTABLE = 31,
+    INC_ROWKEY_COLUMN_GROUP_SSTABLE = 32,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
