@@ -2218,13 +2218,11 @@ int ObPlanCacheValue::need_check_schema_version(ObPlanCacheCtx &pc_ctx,
                   || is_contain_synonym()
                   || is_contain_tmp_tbl()
                   || is_contain_sys_pl_object()
-                  || contain_sys_name_table_
-                  || pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag());
+                  || contain_sys_name_table_);
     if (need_check && REACH_TIME_INTERVAL(10000000)) { //10s间隔打印
       LOG_INFO("need check schema", K(new_schema_version), K(cached_tenant_schema_version),
                K(is_contain_synonym()), K(contain_sys_name_table_), K(is_contain_tmp_tbl()),
-               K(is_contain_sys_pl_object()), K(pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag()),
-               K(need_check), K(constructed_sql_));
+               K(is_contain_sys_pl_object()), K(need_check), K(constructed_sql_));
     }
   }
   return ret;
