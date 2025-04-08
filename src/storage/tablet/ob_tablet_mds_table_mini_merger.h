@@ -143,7 +143,8 @@ public:
   static int generate_mds_mini_sstable(
       const ObTablet &tablet,
       common::ObArenaAllocator &allocator,
-      ObTableHandleV2 &table_handle);
+      ObTableHandleV2 &table_handle,
+      bool &has_tablet_status);
 };
 
 

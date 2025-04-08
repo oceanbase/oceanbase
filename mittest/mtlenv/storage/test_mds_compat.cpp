@@ -434,9 +434,10 @@ TEST_F(TestMdsCompat, compat)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // convert to mds sstable
+  bool has_tablet_status = false;
   ObArenaAllocator allocator;
   ObTableHandleV2 table_handle;
-  ret = ObMdsDataCompatHelper::generate_mds_mini_sstable(*tablet_handle.get_obj(), allocator, table_handle);
+  ret = ObMdsDataCompatHelper::generate_mds_mini_sstable(*tablet_handle.get_obj(), allocator, table_handle, has_tablet_status);
   ASSERT_EQ(OB_SUCCESS, ret);
   blocksstable::ObSSTable *sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, table_handle.get_sstable(sstable));

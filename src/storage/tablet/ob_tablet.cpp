@@ -1829,6 +1829,7 @@ int ObTablet::init_with_mds_sstable(
 
 int ObTablet::init_for_compat(
     common::ObArenaAllocator &allocator,
+    const bool has_tablet_status,
     const ObTablet &old_tablet,
     ObTableHandleV2 &mds_mini_sstable)
 {
@@ -1849,8 +1850,8 @@ int ObTablet::init_for_compat(
         "ls_id", old_tablet.get_ls_id(), "tablet_id", old_tablet.get_tablet_id(), K(mds_mini_sstable));
     }
   } else {
-    if (OB_FAIL(inner_init_compat_normal_tablet(allocator, old_tablet, mds_mini_sstable))) {
-      LOG_WARN("fail to compat normal tablet", K(ret),
+    if (OB_FAIL(inner_init_compat_normal_tablet(allocator, has_tablet_status, old_tablet, mds_mini_sstable))) {
+      LOG_WARN("fail to compat normal tablet", K(ret), K(has_tablet_status),
         "ls_id", old_tablet.get_ls_id(), "tablet_id", old_tablet.get_tablet_id(), K(mds_mini_sstable));
     }
   }
@@ -1914,6 +1915,7 @@ int ObTablet::inner_init_compat_empty_shell(
 
 int ObTablet::inner_init_compat_normal_tablet(
     common::ObArenaAllocator &allocator,
+    const bool has_tablet_status,
     const ObTablet &old_tablet,
     ObTableHandleV2 &mds_mini_sstable)
 {
@@ -1967,7 +1969,7 @@ int ObTablet::inner_init_compat_normal_tablet(
     tablet_meta_.last_persisted_committed_tablet_status_.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
   } else if (!old_tablet.is_ls_inner_tablet()) {
     if (mds_mini_sstable.is_valid()) {
-      if (CLICK_FAIL(update_tablet_status_from_sstable(true/*expect_persist_status*/))) {
+      if (CLICK_FAIL(update_tablet_status_from_sstable(has_tablet_status))) {
         LOG_WARN("fail to update tablet status from sstable", K(ret));
       }
     } else {  // !mds_mini_sstable.is_valid(), (mds_data of old_version_tablet had not been persisted).

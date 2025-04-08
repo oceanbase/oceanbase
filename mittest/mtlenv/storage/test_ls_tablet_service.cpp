@@ -1140,7 +1140,7 @@ TEST_F(TestLSTabletService, test_empty_shell_mds_compat)
   ObArenaAllocator compat_allocator;
   ObTableHandleV2 empty_mds_sstable_hdl;
   ObTablet upgrade_tablet;
-  ret = upgrade_tablet.init_for_compat(compat_allocator, empty_shell_tablet, empty_mds_sstable_hdl);
+  ret = upgrade_tablet.init_for_compat(compat_allocator, true, empty_shell_tablet, empty_mds_sstable_hdl);
   // mds data is null
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
@@ -1155,7 +1155,7 @@ TEST_F(TestLSTabletService, test_empty_shell_mds_compat)
   // compat to new format
   upgrade_tablet.assign_pointer_handle(empty_shell_tablet.get_pointer_handle());
   upgrade_tablet.log_handler_ = empty_shell_tablet.log_handler_;
-  ret = upgrade_tablet.init_for_compat(compat_allocator, empty_shell_tablet, empty_mds_sstable_hdl);
+  ret = upgrade_tablet.init_for_compat(compat_allocator, true, empty_shell_tablet, empty_mds_sstable_hdl);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(ObTablet::VERSION_V4 == upgrade_tablet.version_);
   ASSERT_TRUE(nullptr == upgrade_tablet.mds_data_);

@@ -526,7 +526,8 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
 int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     const ObTablet &tablet,
     common::ObArenaAllocator &allocator,
-    ObTableHandleV2 &table_handle)
+    ObTableHandleV2 &table_handle,
+    bool &has_tablet_status)
 {
   int ret = OB_SUCCESS;
   TIMEGUARD_INIT(STORAGE, 10_ms);
@@ -568,7 +569,8 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
         } else if (CLICK_FAIL(mds_mini_merger.generate_mds_mini_sstable(allocator, table_handle))) {
           LOG_WARN("fail to generate mds mini sstable with mini merger", K(ret), K(mds_mini_merger));
         } else {
-          LOG_INFO("succeed to generate mds mini sstable for compat", K(ret), K(ls_id), K(tablet_id), K(data));
+          has_tablet_status = !data.tablet_status_committed_kv_.v_.user_data_.empty() ? true : false;
+          LOG_INFO("succeed to generate mds mini sstable for compat", K(ret), K(ls_id), K(tablet_id), K(has_tablet_status), K(data));
         }
       }
     }

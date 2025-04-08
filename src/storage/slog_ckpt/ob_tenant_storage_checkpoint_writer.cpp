@@ -507,10 +507,11 @@ int ObTenantStorageCheckpointWriter::handle_old_version_tablet_for_compat(
     ObTabletHandle &new_tablet_handle)
 {
   int ret = OB_SUCCESS;
+  bool has_tablet_status = false;
   ObTablet *new_tablet = nullptr;
   ObTableHandleV2 mds_mini_sstable;
 
-  if (OB_FAIL(ObMdsDataCompatHelper::generate_mds_mini_sstable(old_tablet, allocator, mds_mini_sstable))) {
+  if (OB_FAIL(ObMdsDataCompatHelper::generate_mds_mini_sstable(old_tablet, allocator, mds_mini_sstable, has_tablet_status))) {
     if (OB_NO_NEED_UPDATE == ret) {
       ret = OB_SUCCESS;
     } else if (OB_EMPTY_RESULT == ret) {
@@ -525,10 +526,10 @@ int ObTenantStorageCheckpointWriter::handle_old_version_tablet_for_compat(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(tablet_key, allocator, new_tablet_handle))) {
     LOG_WARN("fail to create tmp tablet", K(ret), K(tablet_key));
   } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
-  } else if (OB_FAIL(new_tablet->init_for_compat(allocator, old_tablet, mds_mini_sstable))) {
+  } else if (OB_FAIL(new_tablet->init_for_compat(allocator, has_tablet_status, old_tablet, mds_mini_sstable))) {
     LOG_WARN("fail to init tablet", K(ret), K(tablet_key));
   } else {
-    LOG_INFO("succeed to handle mds data for tablet", K(ret), K(tablet_key), K(mds_mini_sstable));
+    LOG_INFO("succeed to handle mds data for tablet", K(ret), K(tablet_key), K(has_tablet_status), K(mds_mini_sstable));
   }
 
   return ret;

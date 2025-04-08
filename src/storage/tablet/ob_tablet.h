@@ -277,6 +277,7 @@ public:
   // init for compat
   int init_for_compat(
       common::ObArenaAllocator &allocator,
+      const bool has_tablet_status,
       const ObTablet &old_tablet,
       ObTableHandleV2 &mds_mini_sstable);
 
@@ -713,6 +714,7 @@ private:
 
   int inner_init_compat_normal_tablet(
       common::ObArenaAllocator &allocator,
+      const bool has_tablet_status,
       const ObTablet &old_tablet,
       ObTableHandleV2 &mds_mini_sstable);
   int inner_init_compat_empty_shell(
