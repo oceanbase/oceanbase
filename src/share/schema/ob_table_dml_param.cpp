@@ -52,7 +52,8 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_index_param_(),
     vec_dim_(0),
     vec_vector_col_id_(OB_INVALID_ID),
-    mv_mode_()
+    mv_mode_(),
+    is_delete_insert_(false)
 {
 }
 
@@ -92,6 +93,7 @@ void ObTableSchemaParam::reset()
   vec_dim_ = 0;
   vec_vector_col_id_ = OB_INVALID_ID;
   mv_mode_.reset();
+  is_delete_insert_ = false;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -583,6 +585,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   if (FAILEDx(fts_parser_properties_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize fts parser properties", K(ret));
   }
+  OB_UNIS_ENCODE(is_delete_insert_);
   return ret;
 }
 
@@ -722,6 +725,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
       LOG_WARN("fail to copy fts parser properties", K(ret), K(tmp_properties));
     }
   }
+  OB_UNIS_DECODE(is_delete_insert_);
   return ret;
 }
 
@@ -774,6 +778,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(vec_dim_);
   OB_UNIS_ADD_LEN(vec_vector_col_id_);
   len += fts_parser_properties_.get_serialize_size();
+  OB_UNIS_ADD_LEN(is_delete_insert_);
   return len;
 }
 
