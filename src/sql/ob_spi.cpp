@@ -2290,7 +2290,18 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
         OX (pl_type.set_type_from(user_type->get_type_from()));
-      } else {
+      } else if (columns->at(i).type_.is_null_oracle()) {
+        ObDataType data_type;
+        ObCollationType collation_type = session.get_nls_collation();
+        ObCharsetType charset_type = ObCharset::charset_type_by_coll(collation_type);
+        data_type.set_obj_type(ObVarcharType);
+        data_type.set_charset_type(charset_type);
+        data_type.set_collation_type(collation_type);
+        data_type.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+        data_type.set_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE);
+        data_type.set_length_semantics(LS_BYTE);
+        pl_type.set_data_type(data_type);
+      }else {
         ObDataType data_type;
         data_type.set_meta_type(columns->at(i).type_.get_meta());
         data_type.set_accuracy(columns->at(i).accuracy_);

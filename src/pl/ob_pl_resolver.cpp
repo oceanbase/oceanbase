@@ -8369,8 +8369,9 @@ int ObPLResolver::resolve_cursor_formal_param(
         LOG_WARN("name node or type node is null", K(name_node), K(type_node));
       } else {
         ObRawExpr *default_expr = NULL;
+        ObPLExternTypeInfo extern_type_info;
         param_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
-        if (OB_FAIL(resolve_sp_data_type(type_node, param_name, func, param_type))) {
+        if (OB_FAIL(resolve_sp_data_type(type_node, param_name, func, param_type, &extern_type_info))) {
           LOG_WARN("resolve data type failed", K(ret), K(param_name));
         } else if (MODE_IN != param_node->value_) {
           ret = OB_INVALID_ARGUMENT;
