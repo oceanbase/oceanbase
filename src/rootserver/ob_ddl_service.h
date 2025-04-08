@@ -1340,6 +1340,7 @@ int check_will_be_having_domain_index_operation(
     const AlterTableSchema &alter_table_schema,
     bool &need_add_progressive_round);
   int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
+                                               const uint64_t tenant_data_version,
                                                bool &is_add_not_null_col,
                                                bool &need_modify) const;
   bool need_check_constraint_validity(const obrpc::ObAlterTableArg &alter_table_arg) const;
@@ -1609,6 +1610,7 @@ int check_will_be_having_domain_index_operation(
   int check_alter_table_constraint(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
+      const uint64_t tenant_data_version,
       share::ObDDLType &ddl_type);
   int check_can_alter_table_constraints(
     const obrpc::ObAlterTableArg::AlterConstraintType op_type,
@@ -2622,6 +2624,14 @@ private:
   int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
                                                ObTableSchema &new_table_schema);
 
+  int check_can_change_cst_column_name(const obrpc::ObAlterTableArg &alter_table_arg,
+                                       const ObTableSchema &orig_table_schema,
+                                       const uint64_t tenant_data_version,
+                                       bool &can_modify_column_name_and_constraint);
+
+  int check_can_add_cst_on_two_column(const obrpc::ObAlterTableArg &alter_table_arg,
+                                      const uint64_t tenant_data_version,
+                                      bool &can_add_cst_on_two_column) const;
 
 private:
   bool inited_;

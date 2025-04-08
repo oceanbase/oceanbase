@@ -2375,6 +2375,12 @@ public:
   bool is_auto_split_partition() const {
     return alter_part_type_ == AUTO_SPLIT_PARTITION;
   }
+  bool is_only_alter_column() const {
+    return is_alter_columns_ && foreign_key_checks_
+            && !is_alter_indexs_ && !is_alter_options_ && !is_alter_partitions_
+            && !is_inner_ && !is_update_global_indexes_ && !is_convert_to_character_
+            && !skip_sys_table_check_ && !need_rebuild_trigger_ && !is_add_to_scheduler_;
+  }
   ObAlterTableArg &operator=(const ObAlterTableArg &other) = delete;
   ObAlterTableArg(const ObAlterTableArg &other) = delete;
   virtual bool is_allow_when_disable_ddl() const;

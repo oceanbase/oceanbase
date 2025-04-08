@@ -21,6 +21,7 @@
 #include "storage/ddl/ob_ddl_lock.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
+#include "rootserver/ob_split_partition_helper.h"
 
 namespace oceanbase
 {
@@ -2036,17 +2037,21 @@ int ObIndexBuilder::set_global_index_auto_partition_infos(const share::schema::O
   int ret = OB_SUCCESS;
   const ObPartitionOption& index_part_option = schema.get_part_option();
   ObPartitionFuncType part_type = PARTITION_FUNC_TYPE_MAX;
+  const uint64_t tenant_id = data_schema.get_tenant_id();
+  const int64_t data_auto_part_size = data_schema.get_part_option().get_auto_part_size();
+  bool enable_auto_split = true;
+  int64_t auto_part_size = -1;
   if (OB_UNLIKELY(!data_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(data_schema), KR(ret));
   } else if (OB_UNLIKELY(!schema.is_global_index_table())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index type", K(schema), KR(ret));
-  } else if (data_schema.is_auto_partitioned_table()) {
-    // for global index, auto_part could be true only if it is valid for auto-partitioning
-    // and its data table enables auto-partitioning
-    bool enable_auto_split = true;
-    const int64_t auto_part_size = data_schema.get_part_option().get_auto_part_size();
+  } else if (!(schema.is_global_normal_index_table() || schema.is_global_unique_index_table())) {
+    // not supported global index type
+  } else if (OB_FAIL(ObSplitPartitionHelper::check_enable_global_index_auto_split(data_schema, enable_auto_split, auto_part_size))) {
+    LOG_WARN("failed to check enable auto split global index", K(ret));
+  } else if (enable_auto_split) {
     if (schema.get_part_level() == PARTITION_LEVEL_ZERO) {
       if (OB_UNLIKELY(!index_part_option.get_part_func_expr_str().empty())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2091,7 +2096,7 @@ int ObIndexBuilder::set_global_index_auto_partition_infos(const share::schema::O
     if (OB_FAIL(ret)) {
     } else if (!enable_auto_split) {
       schema.forbid_auto_partition();
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), data_version))) {
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
     } else if (data_version < DATA_VERSION_4_3_4_0){
       ret = OB_NOT_SUPPORTED;

@@ -61,6 +61,7 @@ public:
       obrpc::ObFreezeSplitSrcTabletRes &res,
       const int64_t abs_timeout_us);
   static int get_split_src_tablet_id_if_any(const share::schema::ObTableSchema &table_schema, ObTabletID &tablet_id);
+  static int check_enable_global_index_auto_split(const share::schema::ObTableSchema &data_table_schema, bool &enable_auto_split, int64_t &auto_part_size);
 
 private:
   static int prepare_start_args_(

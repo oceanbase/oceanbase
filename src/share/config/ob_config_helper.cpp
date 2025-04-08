@@ -1662,5 +1662,15 @@ bool ObConfigAutoSplitTabletSizeChecker::check(const ObConfigItem &t) const
   return is_valid && !GCTX.is_shared_storage_mode();
 }
 
+bool ObConfigGlobalIndexAutoSplitPolicyChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("DISTRIBUTED")
+          || 0 == tmp_str.case_compare("ALL")
+          || 0 == tmp_str.case_compare("OFF"));
+  return bret;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

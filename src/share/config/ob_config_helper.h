@@ -1123,6 +1123,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAutoSplitTabletSizeChecker);
 };
 
+class ObConfigGlobalIndexAutoSplitPolicyChecker : public ObConfigChecker
+{
+public:
+  ObConfigGlobalIndexAutoSplitPolicyChecker() {}
+  virtual ~ObConfigGlobalIndexAutoSplitPolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigGlobalIndexAutoSplitPolicyChecker);
+};
+
 
 } // namespace common
 } // namespace oceanbase

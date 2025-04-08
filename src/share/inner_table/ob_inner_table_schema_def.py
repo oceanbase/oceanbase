@@ -32282,14 +32282,14 @@ def_table_schema(
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
     CAST(CASE WHEN f.update_action = 1 THEN 'RESTRICT'
               WHEN f.update_action = 2 THEN 'CASCADE'
-              WHEN f.update_action = 3 THEN 'SET_NULL'
-              WHEN f.update_action = 4 THEN 'NO_ACTION'
+              WHEN f.update_action = 3 THEN 'SET NULL'
+              WHEN f.update_action = 4 THEN 'NO ACTION'
               WHEN f.update_action = 5 THEN 'SET_DEFAULT'
          ELSE NULL END AS CHAR(64)) AS UPDATE_RULE,
     CAST(CASE WHEN f.delete_action = 1 THEN 'RESTRICT'
               WHEN f.delete_action = 2 THEN 'CASCADE'
-              WHEN f.delete_action = 3 THEN 'SET_NULL'
-              WHEN f.delete_action = 4 THEN 'NO_ACTION'
+              WHEN f.delete_action = 3 THEN 'SET NULL'
+              WHEN f.delete_action = 4 THEN 'NO ACTION'
               WHEN f.delete_action = 5 THEN 'SET_DEFAULT'
          ELSE NULL END AS CHAR(64)) AS DELETE_RULE,
     CAST(ct.table_name AS CHAR(256)) AS TABLE_NAME,
@@ -32320,14 +32320,14 @@ def_table_schema(
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
     CAST(CASE WHEN f.update_action = 1 THEN 'RESTRICT'
               WHEN f.update_action = 2 THEN 'CASCADE'
-              WHEN f.update_action = 3 THEN 'SET_NULL'
-              WHEN f.update_action = 4 THEN 'NO_ACTION'
+              WHEN f.update_action = 3 THEN 'SET NULL'
+              WHEN f.update_action = 4 THEN 'NO ACTION'
               WHEN f.update_action = 5 THEN 'SET_DEFAULT'
          ELSE NULL END AS CHAR(64)) AS UPDATE_RULE,
     CAST(CASE WHEN f.delete_action = 1 THEN 'RESTRICT'
               WHEN f.delete_action = 2 THEN 'CASCADE'
-              WHEN f.delete_action = 3 THEN 'SET_NULL'
-              WHEN f.delete_action = 4 THEN 'NO_ACTION'
+              WHEN f.delete_action = 3 THEN 'SET NULL'
+              WHEN f.delete_action = 4 THEN 'NO ACTION'
               WHEN f.delete_action = 5 THEN 'SET_DEFAULT'
          ELSE NULL END AS CHAR(64)) AS DELETE_RULE,
     CAST(ct.table_name AS CHAR(256)) AS TABLE_NAME,
@@ -32355,14 +32355,14 @@ def_table_schema(
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
     CAST(CASE WHEN f.update_action = 1 THEN 'RESTRICT'
               WHEN f.update_action = 2 THEN 'CASCADE'
-              WHEN f.update_action = 3 THEN 'SET_NULL'
-              WHEN f.update_action = 4 THEN 'NO_ACTION'
+              WHEN f.update_action = 3 THEN 'SET NULL'
+              WHEN f.update_action = 4 THEN 'NO ACTION'
               WHEN f.update_action = 5 THEN 'SET_DEFAULT'
          ELSE NULL END AS CHAR(64)) AS UPDATE_RULE,
     CAST(CASE WHEN f.delete_action = 1 THEN 'RESTRICT'
               WHEN f.delete_action = 2 THEN 'CASCADE'
-              WHEN f.delete_action = 3 THEN 'SET_NULL'
-              WHEN f.delete_action = 4 THEN 'NO_ACTION'
+              WHEN f.delete_action = 3 THEN 'SET NULL'
+              WHEN f.delete_action = 4 THEN 'NO ACTION'
               WHEN f.delete_action = 5 THEN 'SET_DEFAULT'
          ELSE NULL END AS CHAR(64)) AS DELETE_RULE,
     CAST(ct.table_name AS CHAR(256)) AS TABLE_NAME,

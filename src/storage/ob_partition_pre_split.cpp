@@ -16,6 +16,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_index_builder_util.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
+#include "rootserver/ob_split_partition_helper.h"
 
 
 namespace oceanbase
@@ -276,6 +277,8 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
   schema::ObSchemaGetterGuard schema_guard;
   schema_guard.set_session_id(session_id);
   uint64_t current_data_version = 0;
+  bool enable_auto_split = false;
+  int64_t auto_part_size = -1;
   if (tenant_id == OB_INVALID_TENANT_ID || database_name.empty() || table_name.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[PRE_SPLIT] unexpected database name or table name", K(tenant_id), K(database_name), K(table_name));
@@ -291,10 +294,9 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("[PRE_SPLIT] table not exist", K(ret), KP(data_table_schema));
-  } else if (!data_table_schema->is_auto_partitioned_table() ||
-              data_table_schema->is_mysql_tmp_table()) {
-    LOG_INFO("[PRE_SPLIT] not support auto split table type", K(ret), K(data_table_schema));
-  } else {
+  } else if (OB_FAIL(ObSplitPartitionHelper::check_enable_global_index_auto_split(*data_table_schema, enable_auto_split, auto_part_size))) {
+    LOG_WARN("failed to check enable auto split global index", K(ret));
+  } else if (enable_auto_split) {
     // alter table add global index
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); ++i) {
       ObIndexArg *index_arg = index_arg_list.at(i);
@@ -310,7 +312,7 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
             LOG_WARN("[PRE_SPLIT] fail to set index table columns", K(ret));
           } else if (OB_FAIL(check_table_can_do_pre_split(index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
-          } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, index_schema))) {
+          } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, auto_part_size, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to get new index table split range", K(ret), K(tenant_id), K(database_name));
           } else {
             LOG_DEBUG("[PRE_SPLIT] success pre split index schema", K(index_schema));
@@ -350,7 +352,7 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
   } else if (current_data_version < DATA_VERSION_4_3_4_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("current data version less than 4.4.0.0 is not support", K(ret), K(current_data_version));
-  } else if (!data_table_schema.is_auto_partitioned_table()) {
+  } else if (!ori_table_schema.is_auto_partitioned_table()) {
     // skip // not auto split partition table
     ret = OB_NOT_SUPPORTED;
     LOG_DEBUG("[PRE_SPLIT] table is not auto part table, no need to pre split", K(ret));
@@ -371,7 +373,7 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
     ObTableSchema ori_index_table_schema;
     if (OB_FAIL(ori_index_table_schema.assign(new_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret), K(new_table_schema));
-    } else if (OB_FAIL(do_pre_split_global_index(db_name, data_table_schema, ori_index_table_schema, new_table_schema))) {
+    } else if (OB_FAIL(do_pre_split_global_index(db_name, data_table_schema, ori_index_table_schema, new_table_schema.get_part_option().get_auto_part_size(), new_table_schema))) {
       LOG_WARN("fail to do pre split global index", K(ret),
         K(db_name), K(data_table_schema), K(ori_index_table_schema), K(new_table_schema));
     }
@@ -405,6 +407,7 @@ int ObPartitionPreSplit::do_pre_split_global_index(
     const ObString &db_name,
     const ObTableSchema &data_table_schema,
     const ObTableSchema &ori_index_schema,
+    const int64_t auto_part_size,
     ObTableSchema &new_index_schema)
 {
   int ret = OB_SUCCESS;
@@ -414,7 +417,7 @@ int ObPartitionPreSplit::do_pre_split_global_index(
   int64_t physical_size = 0;
   int64_t data_table_physical_size = 0;
   int64_t split_num = 0;
-  int64_t split_size = new_index_schema.get_part_option().get_auto_part_size();
+  int64_t split_size = auto_part_size;
   const int64_t tenant_id = new_index_schema.get_tenant_id();
   const bool need_generate_part_name = true;
 #ifdef ERRSIM
@@ -509,7 +512,7 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
   const ObPartitionOption &part_option = table_schema.get_part_option();
   const bool is_user_table = table_schema.is_user_table();
   const bool is_global_index_table =
-    table_schema.is_global_local_index_table() || table_schema.is_global_index_table();
+    table_schema.is_global_normal_index_table() || table_schema.is_global_unique_index_table();
 
   if (OB_UNLIKELY(table_schema.is_table_without_pk())) {
     ret = OB_NOT_SUPPORTED;

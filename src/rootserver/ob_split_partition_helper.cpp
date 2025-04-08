@@ -14,6 +14,7 @@
 
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_split_partition_helper.h"
+#include "rootserver/ob_tenant_balance_service.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -273,6 +274,47 @@ int ObSplitPartitionHelper::get_split_src_tablet_id_if_any(
         }
       }
       break;
+    }
+  }
+  return ret;
+}
+
+int ObSplitPartitionHelper::check_enable_global_index_auto_split(
+    const share::schema::ObTableSchema &data_table_schema,
+    bool &enable_auto_split,
+    int64_t &auto_part_size)
+{
+  int ret = OB_SUCCESS;
+  enable_auto_split = false;
+  auto_part_size = -1;
+  if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table() || GCTX.is_shared_storage_mode()) {
+    // not supported table type
+  } else if (data_table_schema.is_auto_partitioned_table()) {
+    enable_auto_split = true;
+    auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
+  } else {
+    const uint64_t tenant_id = data_table_schema.get_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      const ObString policy_str(tenant_config->global_index_auto_split_policy.str());
+      if (0 == policy_str.case_compare("DISTRIBUTED")) {
+        int64_t primary_zone_num = 0;
+        int64_t unit_group_num = 0;
+        ObArray<share::ObSimpleUnitGroup> unit_group_array;
+        if (OB_FAIL(rootserver::ObTenantBalanceService::gather_stat_primary_zone_num_and_units(
+                tenant_id, primary_zone_num, unit_group_array))) {
+          LOG_WARN("failed to gather stat of primary zone and unit", KR(ret), K(tenant_id));
+        } else if (primary_zone_num > 1 || unit_group_array.count() > 1) {
+          enable_auto_split = true;
+        }
+      } else if (0 == policy_str.case_compare("ALL")) {
+        enable_auto_split = true;
+      }
+      if (OB_SUCC(ret) && enable_auto_split) {
+        const int64_t data_auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
+        auto_part_size = data_table_schema.get_part_option().is_valid_auto_part_size() ? data_auto_part_size : tenant_config->auto_split_tablet_size;
+        LOG_INFO("enable global index auto split by tenant config", K(auto_part_size), K(data_auto_part_size), K(policy_str));
+      }
     }
   }
   return ret;

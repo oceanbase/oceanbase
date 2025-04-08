@@ -132,6 +132,7 @@ external_kms_info
 freeze_trigger_percentage
 fuse_row_cache_priority
 global_background_cpu_quota
+global_index_auto_split_policy
 ha_high_thread_score
 ha_low_thread_score
 ha_mid_thread_score

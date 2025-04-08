@@ -5812,9 +5812,83 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
   return ret;
 }
 
+
+int ObDDLService::check_can_change_cst_column_name(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    const ObTableSchema &orig_table_schema,
+    const uint64_t tenant_data_version,
+    bool &can_change_cst_column_name)
+{
+  int ret = OB_SUCCESS;
+  can_change_cst_column_name = false;
+  const share::schema::AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+
+  if (DATA_VERSION_4_3_5_2 <= tenant_data_version
+   &&  ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
+   && alter_table_arg.is_only_alter_column()
+   && 1 == alter_table_schema.get_constraint_count()) {
+    ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
+    if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("constraint iter is null", K(ret));
+    } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
+      can_change_cst_column_name = true;
+      ObTableSchema::const_column_iterator iter_begin = alter_table_schema.column_begin();
+      ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
+      const uint64_t col_id = *((*iter)->cst_col_begin());
+      AlterColumnSchema *alter_column_schema = nullptr;
+      for(; OB_SUCC(ret) && can_change_cst_column_name && iter_begin != iter_end; iter_begin++) {
+        const ObColumnSchemaV2 *col_schema = nullptr;
+        if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*iter_begin))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter is NULL", K(ret));
+        } else if (OB_ISNULL(col_schema = orig_table_schema.get_column_schema(alter_column_schema->get_column_id()))) {
+        } else if (col_schema->get_column_name_str() != alter_column_schema->get_column_name_str() && col_schema->get_column_id() != col_id) {
+          // ensures that the column being renamed and the column to which the constraint is added are the same.
+          can_change_cst_column_name = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_can_add_cst_on_two_column(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version,
+    bool &can_add_cst_on_two_column) const {
+  int ret = OB_SUCCESS;
+  can_add_cst_on_two_column = false;
+  const share::schema::AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+
+  if (DATA_VERSION_4_3_5_2 <= tenant_data_version
+  && ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
+  && alter_table_arg.is_only_alter_column()
+  && 2 == alter_table_schema.get_constraint_count()
+  && 2 == alter_table_schema.get_column_count()) {
+    can_add_cst_on_two_column = true;
+    ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
+    for (; OB_SUCC(ret) && can_add_cst_on_two_column && iter != alter_table_schema.constraint_end(); iter++) {
+      if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("constraint iter is null", K(ret));
+      } else if (CONSTRAINT_TYPE_NOT_NULL != (*iter)->get_constraint_type()) {
+        can_add_cst_on_two_column = false;
+      } else if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
+      } else if (OB_INVALID_ID == *(*iter)->cst_col_begin()) {
+        can_add_cst_on_two_column = false;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::check_alter_table_constraint(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const ObTableSchema &orig_table_schema,
+    const uint64_t tenant_data_version,
     share::ObDDLType &ddl_type)
 {
   int ret = OB_SUCCESS;
@@ -5823,6 +5897,8 @@ int ObDDLService::check_alter_table_constraint(
   bool change_cst_column_name = false;
   bool is_alter_decimal_int_offline = false;
   bool is_column_group_store = false;
+  bool can_change_cst_column_name = false;
+  bool can_add_cst_on_two_column = false;
   switch(type) {
     case obrpc::ObAlterTableArg::ADD_CONSTRAINT:
     case obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE: {
@@ -5830,8 +5906,12 @@ int ObDDLService::check_alter_table_constraint(
                                                   alter_table_arg.alter_table_schema_,
                                                   change_cst_column_name))) {
         LOG_WARN("failed to check change cst column name", K(ret));
+      } else if (change_cst_column_name && OB_FAIL(check_can_change_cst_column_name(alter_table_arg, orig_table_schema, tenant_data_version, can_change_cst_column_name))) {
+        LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg), K(orig_table_schema));
       } else if ((ObDDLType::DDL_TABLE_REDEFINITION == ddl_type || ObDDLType::DDL_MODIFY_COLUMN == ddl_type)
                   && !change_cst_column_name) {
+        ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+      } else if (can_change_cst_column_name) {
         ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
       } else if (is_long_running_ddl(ddl_type)) {
         // if modify auto_increment and constraint together, treat it as normal modify column
@@ -5839,6 +5919,11 @@ int ObDDLService::check_alter_table_constraint(
       } else if (change_cst_column_name) {
         ddl_type = ObDDLType::DDL_CHANGE_COLUMN_NAME;
         ret = OB_NOT_SUPPORTED;
+      } else if (alter_table_arg.alter_table_schema_.get_constraint_count() > 1
+              && OB_FAIL(check_can_add_cst_on_two_column(alter_table_arg, tenant_data_version, can_add_cst_on_two_column))) {
+        LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg));
+      } else if (can_add_cst_on_two_column) {
+        ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
       } else {
         ddl_type = ObDDLType::DDL_NORMAL_TYPE;
       }
@@ -14751,7 +14836,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_ = CST_FK_NO_VALIDATE;
       }
     } else if (OB_FAIL(need_modify_not_null_constraint_validate(
-              alter_table_arg, is_add_not_null_col, need_modify_notnull_validate))) {
+              alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
       LOG_WARN("check need modify not null constraint validate failed", K(ret));
     } else if (need_modify_notnull_validate) {
       alter_table_arg.ddl_stmt_str_ = empty_stmt;
@@ -15538,7 +15623,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             bool need_modify_notnull_validate = false;
             bool is_add_not_null_col = false;
             if (OB_FAIL(need_modify_not_null_constraint_validate(
-                  const_alter_table_arg, is_add_not_null_col, need_modify_notnull_validate))) {
+                  const_alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
             } else {
               ObDDLTaskRecord task_record;
               ObTableLockOwnerID owner_id;
@@ -15791,7 +15876,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
 
     if (OB_SUCC(ret) && alter_table_arg.alter_constraint_type_!= obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION
-        && OB_FAIL(check_alter_table_constraint(alter_table_arg, *orig_table_schema, ddl_type))) {
+        && OB_FAIL(check_alter_table_constraint(alter_table_arg, *orig_table_schema, tenant_data_version, ddl_type))) {
       LOG_WARN("fail to check alter table constraint", K(ret), K(alter_table_arg), K(ddl_type));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_convert_to_character_
@@ -16398,22 +16483,34 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         bool need_modify_notnull_validate = false;
         bool is_add_not_null_col = false;
         if (OB_FAIL(need_modify_not_null_constraint_validate(
-            alter_table_arg, is_add_not_null_col, need_modify_notnull_validate))) {
+            alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
           LOG_WARN("check need modify not null constraint validate failed", K(ret));
         } else if (need_modify_notnull_validate) {
-          ObConstraint *cst = *alter_table_schema.constraint_begin_for_non_const_iter();
-          const uint64_t col_id = *(cst->cst_col_begin());
-          ObColumnSchemaV2 *col_schema = NULL;
-          for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_schema.get_column_count(); i++) {
-            if (alter_table_schema.get_column_schema_by_idx(i)->get_column_id() == col_id) {
-              col_schema = alter_table_schema.get_column_schema_by_idx(i);
+          ObTableSchema::constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin_for_non_const_iter();
+          ObTableSchema::constraint_iterator it_end = alter_table_arg.alter_table_schema_.constraint_end_for_non_const_iter();
+          for (; OB_SUCC(ret) && iter != it_end; iter++) {
+            if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column schema not found", K(ret), K(alter_table_arg.alter_table_schema_));
+            } else {
+              const uint64_t col_id = *((*iter)->cst_col_begin());
+              ObColumnSchemaV2 *col_schema = NULL;
+              for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_schema.get_column_count(); i++) {
+                if (OB_ISNULL(alter_table_schema.get_column_schema_by_idx(i))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("column schema not found", K(ret), K(alter_table_arg));
+                } else if (alter_table_schema.get_column_schema_by_idx(i)->get_column_id() == col_id) {
+                  col_schema = alter_table_schema.get_column_schema_by_idx(i);
+                }
+              }
+              if OB_FAIL(ret) {
+              } else if (OB_ISNULL(col_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("column schema not found", K(ret), K(alter_table_arg));
+              } else {
+                col_schema->del_column_flag(NOT_NULL_VALIDATE_FLAG);
+              }
             }
-          }
-          if (OB_ISNULL(col_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column schema not found", K(ret), K(alter_table_arg));
-          } else {
-            col_schema->del_column_flag(NOT_NULL_VALIDATE_FLAG);
           }
         }
       }
@@ -36549,12 +36646,14 @@ int ObDDLService::check_has_multi_autoinc(ObTableSchema &table_schema)
 // check whether it's modify column not null or modify constraint state, which need send two rpc.
 int ObDDLService::need_modify_not_null_constraint_validate(
   const obrpc::ObAlterTableArg &alter_table_arg,
+  const uint64_t tenant_data_version,
   bool &is_add_not_null_col,
   bool &need_modify) const
 {
   int ret = OB_SUCCESS;
   need_modify = false;
   is_add_not_null_col = false;
+  bool can_add_cst_on_two_column = false;
   ObSchemaGetterGuard schema_guard;
   schema_guard.set_session_id(alter_table_arg.session_id_);
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
@@ -36613,13 +36712,19 @@ int ObDDLService::need_modify_not_null_constraint_validate(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
         } else if (OB_UNLIKELY(OB_INVALID_ID != *(*iter)->cst_col_begin())) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("modify not null column is not allowed with other DDL", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
+          if (OB_FAIL(check_can_add_cst_on_two_column(alter_table_arg, tenant_data_version, can_add_cst_on_two_column))) {
+            LOG_WARN("failed to check can add cst on two column", K(ret), K(alter_table_arg));
+          } else if (can_add_cst_on_two_column) {
+            need_modify = true;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("modify not null column is not allowed with other DDL", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
+          }
         }
       }
     }
-    is_add_not_null_col = true;
+    is_add_not_null_col = can_add_cst_on_two_column ? false : true;
   }
   return ret;
 }

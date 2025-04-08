@@ -5104,6 +5104,7 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
   bool has_prefix_idx_col_deps = false;
   bool is_tbl_part_key = false;
   bool is_column_in_fk = is_column_in_foreign_key(src_schema.get_column_id());
+  uint64_t data_version = 0;
   if (OB_FAIL(check_is_exactly_same_type(src_schema, dst_schema, is_same))) {
     LOG_WARN("failed to check is exactly same type", K(ret));
   } else if (is_same) {
@@ -5131,8 +5132,17 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
     && OB_FAIL(check_prefix_index_columns_depend(src_schema, schema_guard, has_prefix_idx_col_deps))) {
     LOG_WARN("check prefix index columns cascaded failed", K(ret));
   } else if (has_prefix_idx_col_deps) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the prefix index column depends on");
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
+    } else if (DATA_VERSION_4_3_5_2 <= data_version
+     && ObCharType == src_schema.get_data_type()
+     && ObVarcharType == dst_schema.get_data_type()
+     && src_schema.get_data_length() == dst_schema.get_data_length()) {
+      // now we can support alter predix index column type char -> varchar
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the prefix index column depends on");
+    }
   } else if ((src_schema.is_string_type() || src_schema.is_enum_or_set())
             && (src_schema.get_collation_type() != dst_schema.get_collation_type()
             || src_schema.get_charset_type() != dst_schema.get_charset_type())

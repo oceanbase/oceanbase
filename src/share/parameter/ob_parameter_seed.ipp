@@ -2101,6 +2101,14 @@ DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common
         "Note that the modification of this config will not affect the created auto-partitioned table."
         "Range: [128M, +∞)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "DISTRIBUTED",
+         common::ObConfigGlobalIndexAutoSplitPolicyChecker,
+         "if the auto-partition clause is not used"
+         "this config judge whether to enable auto-partition for creating global index."\
+         "DISTRIBUTED: enable auto-partition for creating global index if tenant has multiple nodes, e.g., multiple primary zones or multiple units;"\
+         "ALL: enable auto-partition for creating all global index;"\
+         "OFF: disable auto-partition for creating all global index.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
         "specifies transform how much const params in IN list to values table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
