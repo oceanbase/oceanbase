@@ -212,7 +212,7 @@ do { \
       (name) = ObString(empty_pos - keyword_pos, keyword_pos);\
     } \
     else { \
-      (name) = ObString(strlen(keyword_pos) - 1, keyword_pos); \
+      (name) = ObString(strlen(keyword_pos), keyword_pos); \
     } \
   } \
 } while(0)
@@ -427,10 +427,13 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(common::ObMySQLPro
                       && ref_obj_type <= static_cast<int64_t>(share::schema::ObObjectType::MAX_TYPE));
                   if (OB_SUCC(ret) && is_pl_object_type(static_cast<share::schema::ObObjectType>(dep_obj_type))) {
                     ObPLRecompileInfo tmp_tuple(dep_obj_id);
-                    if (OB_SUCC(ddl_drop_obj_map.get_refactored(ref_obj_id, dropped_ref_obj)
-                        && ref_obj_type != static_cast<int64_t>(share::schema::ObObjectType::SYNONYM))) {
+                    int tmp_ret = ddl_drop_obj_map.get_refactored(ref_obj_id, dropped_ref_obj);
+                    if (OB_SUCCESS == tmp_ret && ref_obj_type != static_cast<int64_t>(share::schema::ObObjectType::SYNONYM)) {
                       OX (tmp_tuple.ref_obj_name_ = dropped_ref_obj.first);
                       OX (tmp_tuple.schema_version_ = dropped_ref_obj.second);
+                    } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+                    } else {
+                      ret = OB_SUCCESS == ret ? tmp_ret : ret;
                     }
                     OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
                   }
@@ -467,7 +470,7 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(common::ObMySQLPro
                                           Dummy.length(),
                                           Dummy.ptr(),
                                           cur_max_schema_version));
-          OZ (sql_proxy->write(tenant_id, query_inner_sql.ptr(), affected_rows));
+          OZ (sql_proxy->write(tenant_id, query_inner_sql.ptr(), affected_rows), query_inner_sql);
           OX (max_schema_version = cur_max_schema_version);
           LOG_INFO("[PLRECOMPILE]: Insert into __all_pl_recompile_objinfo", K(ret), K(affected_rows),
                         K(dep_objs), K(query_inner_sql), K(max_schema_version));
@@ -543,7 +546,8 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
             EXTRACT_INT_FIELD_MYSQL(*result, "KEY_ID", key_id, int64_t);
             if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id)) {
               key_id = share::schema::ObTriggerInfo::get_package_trigger_id(key_id);
-            } else if (share::schema::ObUDTObjectType::is_object_id(key_id)) {
+            } else if (share::schema::ObUDTObjectType::is_object_id(key_id) &&
+                    (key_id & common::OB_MOCK_PACKAGE_BODY_ID_MASK) != 0) {
               uint64_t coll_type = 0;
               coll_type = share::schema::ObUDTObjectType::clear_object_id_mask(key_id);
               OZ (find_udt_id(sql_proxy, tenant_id, coll_type, key_id));
