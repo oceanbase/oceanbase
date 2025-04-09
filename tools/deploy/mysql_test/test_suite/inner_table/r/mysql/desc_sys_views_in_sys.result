@@ -6333,6 +6333,7 @@ PRIV_REFERENCES	varchar(3)	NO
 PRIV_CREATE_ROLE	varchar(3)	NO			
 PRIV_DROP_ROLE	varchar(3)	NO			
 PRIV_TRIGGER	varchar(3)	NO			
+PRIV_LOCK_TABLE	varchar(3)	NO			
 PRIV_ENCRYPT	varchar(3)	NO			
 PRIV_DECRYPT	varchar(3)	NO			
 PRIV_CREATE_CATALOG	varchar(3)	NO			
@@ -6392,6 +6393,7 @@ PRIV_REFERENCES	varchar(3)	NO
 PRIV_CREATE_ROLE	varchar(3)	NO			
 PRIV_DROP_ROLE	varchar(3)	NO			
 PRIV_TRIGGER	varchar(3)	NO			
+PRIV_LOCK_TABLE	varchar(3)	NO			
 PRIV_ENCRYPT	varchar(3)	NO			
 PRIV_DECRYPT	varchar(3)	NO			
 PRIV_CREATE_CATALOG	varchar(3)	NO			
@@ -6422,6 +6424,7 @@ PRIV_ALTER_ROUTINE	varchar(3)	NO
 PRIV_CREATE_ROUTINE	varchar(3)	NO			
 PRIV_REFERENCES	varchar(3)	NO			
 PRIV_TRIGGER	varchar(3)	NO			
+PRIV_LOCK_TABLE	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1);
 cnt
 1
@@ -6449,6 +6452,7 @@ PRIV_ALTER_ROUTINE	varchar(3)	NO
 PRIV_CREATE_ROUTINE	varchar(3)	NO			
 PRIV_REFERENCES	varchar(3)	NO			
 PRIV_TRIGGER	varchar(3)	NO			
+PRIV_LOCK_TABLE	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_DATABASE_PRIVILEGE limit 1);
 cnt
 1

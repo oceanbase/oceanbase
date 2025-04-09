@@ -950,6 +950,26 @@ int ObPartTransCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return ret;
 }
 
+int ObPartTransCtx::iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (is_exiting_) {
+    // do nothing
+    // we just consider the active trans
+  } else if (OB_FAIL(mt_ctx_.iterate_tx_lock_priority_list(iter))) {
+    TRANS_LOG(WARN, "iter tx obj lock op failed", K(ret));
+  } else {
+    // do nothing
+    // should not set iterator is ready here,
+    // because it may iterate other tx_ctx then
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::iterate_tx_lock_stat(ObTxLockStatIterator &iter)
 {
   int ret = OB_SUCCESS;
@@ -3334,6 +3354,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   ObRedoLogSubmitHelper helper;
   ObTableLockPrioOpArray prio_op_array;
   if (OB_FAIL(submit_redo_if_parallel_logging_())) {
+    TRANS_LOG(WARN, "submit redo failed", KR(ret));
   } else if (OB_FAIL(init_log_block_(log_block))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
   } else if (OB_FAIL(submit_multi_data_source_(log_block))) {
@@ -3347,6 +3368,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   } else if (OB_FAIL(reuse_log_block_(log_block))) {
     TRANS_LOG(WARN, "reuse log block failed", KR(ret), K(*this));
   } else {
+    // get table lock priority info of this trans
+    (void)mt_ctx_.get_prio_op_array(prio_op_array);
     ObTxActiveInfoLog active_info_log(exec_info_.scheduler_, exec_info_.trans_type_, session_id_,
                                       associated_session_id_,
                                       trace_info_.get_app_trace_id(),
@@ -5574,6 +5597,10 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
     last_op_sn_ = log.get_last_op_sn();
     first_scn_ = log.get_first_seq_no();
     last_scn_ = log.get_last_seq_no();
+    // for table lock priority array
+    // ignore the result
+    const tablelock::ObTableLockPrioOpArray &prio_op_array = log.get_prio_op_array();
+    (void)mt_ctx_.prepare_prio_op_list(prio_op_array);
 
     exec_info_.max_submitted_seq_no_.inc_update(log.get_max_submitted_seq_no());
     exec_info_.serial_final_seq_no_ = log.get_serial_final_seq_no();

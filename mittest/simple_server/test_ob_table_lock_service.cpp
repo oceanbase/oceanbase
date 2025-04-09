@@ -333,8 +333,8 @@ TEST_F(ObTableLockServiceTest, lock_table)
 {
   LOG_INFO("ObTableLockServiceTest::lock_table");
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner(0, 2));
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
   share::ObTenantSwitchGuard tenant_guard;
@@ -426,8 +426,8 @@ TEST_F(ObTableLockServiceTest, lock_part)
   uint64_t table_id = 0;
   ObSEArray<ObObjectID, 1> part_ids;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner(0, 2));
   ObLockPartitionRequest lock_arg;
   ObUnLockPartitionRequest unlock_arg;
 
@@ -539,8 +539,8 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   // 2.1 unlock tablet of one part table
   // 2.2 unlock tablet of multi part table
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner(0, 2));
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
   share::ObTenantSwitchGuard tenant_guard;
@@ -650,7 +650,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
   ObTableLockOwnerID in_trans_owner(ObTableLockOwnerID::default_owner());
-  ObTableLockOwnerID out_trans_owner(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID out_trans_owner(ObTableLockOwnerID::get_owner(0, 1));
   ObLockTableRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
@@ -732,8 +732,8 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   ObTransService *txs = nullptr;
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner(0, 2));
   ObTableLockOwnerID in_trans_owner(ObTableLockOwnerID::default_owner());
   ObLockTableRequest lock_arg;
 
@@ -890,7 +890,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   uint64_t obj_id1 = 1010;
   ObTableLockMode lock_mode1 = SHARE;
   ObTableLockOwnerID OWNER_ONE;
-  OWNER_ONE.convert_from_value(1);
+  OWNER_ONE.convert_from_value(static_cast<ObLockOwnerType>(0), 1);
   ObLockObjsRequest lock_arg;
   ObLockID lock_id;
 
@@ -972,8 +972,8 @@ TEST_F(ObTableLockServiceTest, replace_lock_table_from_x_to_rx)
   ObTableLockMode ori_lock_mode = EXCLUSIVE;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObLockTableRequest lock_arg;
   ObUnLockTableRequest unlock_arg;
   int64_t stmt_timeout_ts = -1;
@@ -1136,8 +1136,8 @@ TEST_F(ObTableLockServiceTest, replace_lock_table_from_rx_to_x)
   ObTableLockMode ori_lock_mode = ROW_EXCLUSIVE;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObLockTableRequest lock_arg;
   ObUnLockTableRequest unlock_arg;
   int64_t stmt_timeout_ts = -1;
@@ -1293,8 +1293,8 @@ TEST_F(ObTableLockServiceTest, replace_lock_table_from_x_to_s)
   ObTableLockMode ori_lock_mode = EXCLUSIVE;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = SHARE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObLockTableRequest lock_arg;
   ObUnLockTableRequest unlock_arg;
   int64_t stmt_timeout_ts = -1;
@@ -1456,8 +1456,8 @@ TEST_F(ObTableLockServiceTest, replace_lock_part)
   ObTableLockMode ori_lock_mode = EXCLUSIVE;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = ROW_SHARE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObLockPartitionRequest lock_arg;
   ObUnLockPartitionRequest unlock_arg;
   int64_t stmt_timeout_ts = -1;
@@ -1605,8 +1605,8 @@ TEST_F(ObTableLockServiceTest, replace_lock_obj)
   ObTableLockMode ori_lock_mode = EXCLUSIVE;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = ROW_SHARE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObLockObjsRequest lock_arg;
   ObUnLockObjsRequest unlock_arg;
   int64_t stmt_timeout_ts = -1;
@@ -1735,8 +1735,8 @@ TEST_F(ObTableLockServiceTest, replace_lock_and_unlock_concurrency)
   ObTableLockMode ori_lock_mode = EXCLUSIVE;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = SHARE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObLockTableRequest lock_arg;
   ObUnLockTableRequest unlock_arg;
   int64_t stmt_timeout_ts = -1;
@@ -1894,9 +1894,9 @@ TEST_F(ObTableLockServiceTest, replace_all_locks)
   uint64_t table_id = 0;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = SHARE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
-  ObTableLockOwnerID owner_three(ObTableLockOwnerID::get_owner_by_value(3));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
+  ObTableLockOwnerID owner_three(ObTableLockOwnerID::get_owner(0, 3));
   ObTableLockMode lock_mode_one = ROW_SHARE;
   ObTableLockMode lock_mode_two = ROW_EXCLUSIVE;
   ObLockTableRequest lock_arg;
@@ -2070,8 +2070,8 @@ TEST_F(ObTableLockServiceTest, replace_all_locks_with_dml_locks)
   uint64_t table_id = 0;
   ObTableLockMode check_lock_mode = EXCLUSIVE;
   ObTableLockMode new_lock_mode = SHARE;
-  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
-  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner(0, 1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner(0, 2));
   ObTableLockMode lock_mode_one = ROW_SHARE;
   ObTableLockMode lock_mode_two = ROW_EXCLUSIVE;
   ObLockTableRequest lock_arg;
@@ -2227,7 +2227,7 @@ TEST_F(ObTableLockServiceTest, retry_out_trans_with_4038)
   lock_id1.set(ObLockOBJType::OBJ_TYPE_COMMON_OBJ, obj_id1);
   lock_id2.set(ObLockOBJType::OBJ_TYPE_COMMON_OBJ, obj_id2);
 
-  ObTableLockOwnerID owner(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID owner(ObTableLockOwnerID::get_owner(0, 1));
   ObTableLockMode lock_mode = EXCLUSIVE;
 
   ObLockObjsRequest lock_arg1;

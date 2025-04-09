@@ -649,6 +649,7 @@ public:
   static int all_mview_dep_schema(share::schema::ObTableSchema &table_schema);
   static int all_scheduler_job_run_detail_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_spm_evo_result_schema(share::schema::ObTableSchema &table_schema);
+  static int all_detect_lock_info_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_type_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_type_attr_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_coll_type_schema(share::schema::ObTableSchema &table_schema);
@@ -2835,6 +2836,7 @@ public:
   static int all_mview_dep_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_scheduler_job_run_detail_v2_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_spm_evo_result_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_detect_lock_info_v2_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_type_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_type_attr_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_coll_type_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3164,6 +3166,7 @@ public:
   static int all_mview_dep_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_scheduler_job_run_detail_v2_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_spm_evo_result_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_detect_lock_info_v2_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_type_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_type_attr_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_pkg_coll_type_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3731,6 +3734,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_mview_dep_schema,
   ObInnerTableSchema::all_scheduler_job_run_detail_v2_schema,
   ObInnerTableSchema::all_spm_evo_result_schema,
+  ObInnerTableSchema::all_detect_lock_info_v2_schema,
   ObInnerTableSchema::all_pkg_type_schema,
   ObInnerTableSchema::all_pkg_type_attr_schema,
   ObInnerTableSchema::all_pkg_coll_type_schema,
@@ -6136,6 +6140,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MVIEW_DEP_TID,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID,
   OB_ALL_SPM_EVO_RESULT_TID,
+  OB_ALL_DETECT_LOCK_INFO_V2_TID,
   OB_ALL_PKG_TYPE_TID,
   OB_ALL_PKG_TYPE_ATTR_TID,
   OB_ALL_PKG_COLL_TYPE_TID,
@@ -8125,6 +8130,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MVIEW_DEP_AUX_LOB_META_TID,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_AUX_LOB_META_TID,
   OB_ALL_SPM_EVO_RESULT_AUX_LOB_META_TID,
+  OB_ALL_DETECT_LOCK_INFO_V2_AUX_LOB_META_TID,
   OB_ALL_PKG_TYPE_AUX_LOB_META_TID,
   OB_ALL_PKG_TYPE_ATTR_AUX_LOB_META_TID,
   OB_ALL_PKG_COLL_TYPE_AUX_LOB_META_TID,
@@ -8428,6 +8434,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MVIEW_DEP_AUX_LOB_PIECE_TID,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_AUX_LOB_PIECE_TID,
   OB_ALL_SPM_EVO_RESULT_AUX_LOB_PIECE_TID,
+  OB_ALL_DETECT_LOCK_INFO_V2_AUX_LOB_PIECE_TID,
   OB_ALL_PKG_TYPE_AUX_LOB_PIECE_TID,
   OB_ALL_PKG_TYPE_ATTR_AUX_LOB_PIECE_TID,
   OB_ALL_PKG_COLL_TYPE_AUX_LOB_PIECE_TID,
@@ -9093,6 +9100,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MVIEW_DEP_TNAME,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME,
   OB_ALL_SPM_EVO_RESULT_TNAME,
+  OB_ALL_DETECT_LOCK_INFO_V2_TNAME,
   OB_ALL_PKG_TYPE_TNAME,
   OB_ALL_PKG_TYPE_ATTR_TNAME,
   OB_ALL_PKG_COLL_TYPE_TNAME,
@@ -11082,6 +11090,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MVIEW_DEP_AUX_LOB_META_TNAME,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_AUX_LOB_META_TNAME,
   OB_ALL_SPM_EVO_RESULT_AUX_LOB_META_TNAME,
+  OB_ALL_DETECT_LOCK_INFO_V2_AUX_LOB_META_TNAME,
   OB_ALL_PKG_TYPE_AUX_LOB_META_TNAME,
   OB_ALL_PKG_TYPE_ATTR_AUX_LOB_META_TNAME,
   OB_ALL_PKG_COLL_TYPE_AUX_LOB_META_TNAME,
@@ -11385,6 +11394,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MVIEW_DEP_AUX_LOB_PIECE_TNAME,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_AUX_LOB_PIECE_TNAME,
   OB_ALL_SPM_EVO_RESULT_AUX_LOB_PIECE_TNAME,
+  OB_ALL_DETECT_LOCK_INFO_V2_AUX_LOB_PIECE_TNAME,
   OB_ALL_PKG_TYPE_AUX_LOB_PIECE_TNAME,
   OB_ALL_PKG_TYPE_ATTR_AUX_LOB_PIECE_TNAME,
   OB_ALL_PKG_COLL_TYPE_AUX_LOB_PIECE_TNAME,
@@ -14465,6 +14475,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_DETECT_LOCK_INFO_V2_TID,
+    OB_ALL_DETECT_LOCK_INFO_V2_AUX_LOB_META_TID,
+    OB_ALL_DETECT_LOCK_INFO_V2_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_detect_lock_info_v2_aux_lob_meta_schema,
+    ObInnerTableSchema::all_detect_lock_info_v2_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_PKG_TYPE_TID,
     OB_ALL_PKG_TYPE_AUX_LOB_META_TID,
     OB_ALL_PKG_TYPE_AUX_LOB_PIECE_TID,
@@ -14629,12 +14647,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 326;
+const int64_t OB_SYS_TABLE_COUNT = 327;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 914;
 const int64_t OB_SYS_VIEW_COUNT = 1046;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2291;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2292;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2294;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2295;
 
 } // end namespace share
 } // end namespace oceanbase

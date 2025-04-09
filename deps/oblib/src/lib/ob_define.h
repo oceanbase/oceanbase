@@ -1691,19 +1691,22 @@ OB_INLINE bool is_not_virtual_tenant_id(const uint64_t tenant_id)
   return !is_virtual_tenant_id(tenant_id);
 }
 
+bool is_valid_tenant_id(const uint64_t tenant_id);
 const uint64_t META_TENANT_MASK = (uint64_t)0x1;
 OB_INLINE bool is_meta_tenant(const uint64_t tenant_id)
 {
   return !is_sys_tenant(tenant_id)
          && !is_virtual_tenant_id(tenant_id)
-         && 1 == (tenant_id & META_TENANT_MASK);
+         && 1 == (tenant_id & META_TENANT_MASK)
+         && is_valid_tenant_id(tenant_id);
 }
 
 OB_INLINE bool is_user_tenant(const uint64_t tenant_id)
 {
   return !is_sys_tenant(tenant_id)
          && !is_virtual_tenant_id(tenant_id)
-         && 0 == (tenant_id & META_TENANT_MASK);
+         && 0 == (tenant_id & META_TENANT_MASK)
+         && is_valid_tenant_id(tenant_id);
 }
 
 OB_INLINE uint64_t gen_user_tenant_id(const uint64_t tenant_id)

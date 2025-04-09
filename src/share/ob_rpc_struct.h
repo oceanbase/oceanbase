@@ -85,6 +85,7 @@
 #include "storage/ddl/ob_ddl_struct.h" // storage::DDLFinishLogInfo
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
 #include "share/ob_service_name_proxy.h"
+#include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "share/ob_heartbeat_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h" // storage::ObSSMicroCacheStat
@@ -1699,7 +1700,7 @@ struct ObRenameTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObRenameTableArg():
+  ObRenameTableArg() :
       ObDDLArg(),
       tenant_id_(common::OB_INVALID_ID),
       rename_table_items_(),

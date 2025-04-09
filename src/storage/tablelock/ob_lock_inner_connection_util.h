@@ -78,7 +78,9 @@ public:
       const uint64_t table_id,
       const ObTableLockMode lock_mode,
       const int64_t timeout_us,
-      observer::ObInnerSQLConnection *conn);
+      observer::ObInnerSQLConnection *conn,
+      const ObTableLockOwnerID owner_id = ObTableLockOwnerID::default_owner(),
+      const ObTableLockPriority lock_priority = ObTableLockPriority::NORMAL);
   static int lock_table(
       const uint64_t tenant_id,
       const ObLockTableRequest &arg,

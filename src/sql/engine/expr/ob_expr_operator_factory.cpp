@@ -512,6 +512,8 @@
 
 
 
+#include "sql/engine/expr/ob_expr_lock_func.h"
+
 using namespace oceanbase::common;
 namespace oceanbase
 {
@@ -1126,7 +1128,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAlignDate4Cmp);
     REG_OP(ObExprJsonQuery);
     REG_OP(ObExprBM25);
-
     REG_OP(ObExprGetLock);
     REG_OP(ObExprIsFreeLock);
     REG_OP(ObExprIsUsedLock);

@@ -11,12 +11,16 @@
  */
 
 #include "sql/resolver/ddl/ob_rename_table_stmt.h"
+#include "storage/tablelock/ob_lock_executor.h"
+#include "share/ob_table_lock_compat_versions.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
 
 using namespace share::schema;
 using namespace common;
+using namespace transaction::tablelock;
 
 
 namespace sql
@@ -59,6 +63,31 @@ int ObRenameTableStmt::get_rename_table_table_ids(
   return ret;
 }
 
+int ObRenameTableStmt::set_lock_priority(sql::ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session->get_effective_tenant_id();
+  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "tenant config invalid, can not do rename", K(ret), K(tenant_id));
+  } else if (tenant_config->enable_lock_priority) {
+    if (is_rename_cluster_version(min_cluster_version)) {
+      if (!ObLockExecutor::proxy_is_support(session)) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "is in proxy_mode and not support rename", K(ret), KPC(session));
+      } else {
+        rename_table_arg_.lock_priority_ = ObTableLockPriority::HIGH1;
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "the cluster version is not support rename", K(ret),
+                   K(min_cluster_version));
+    }
+  }
+  return ret;
+}
 
 } //namespace sql
 }

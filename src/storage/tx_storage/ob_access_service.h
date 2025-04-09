@@ -105,6 +105,9 @@ public:
       const share::ObLSID &ls_id,
       transaction::ObTxDesc &tx_desc,
       const transaction::tablelock::ObReplaceLockParam &lock_param);
+  int add_lock_into_queue(const share::ObLSID &ls_id,
+                          transaction::ObTxDesc &tx_desc,
+                          const transaction::tablelock::ObLockParam &param);
   // ObITabletScan interface
   virtual int table_scan(
       ObVTableScanParam &vparam,

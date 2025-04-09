@@ -1106,6 +1106,11 @@ int ObMemtableCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return lock_mem_ctx_.iterate_tx_obj_lock_op(iter);
 }
 
+int ObMemtableCtx::iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const
+{
+  return lock_mem_ctx_.iterate_tx_lock_priority_list(iter);
+}
+
 int ObMemtableCtx::add_lock_record(const tablelock::ObTableLockOp &lock_op)
 {
   int ret = OB_SUCCESS;
@@ -1335,6 +1340,74 @@ void ObMemtableCtx::convert_checksum_for_commit_log(const ObIArray<uint64_t> &ar
 void ObMemtableCtx::check_all_redo_flushed()
 {
   trans_mgr_.check_all_redo_flushed();
+}
+
+int ObMemtableCtx::add_priority_record(
+    const tablelock::ObTableLockPrioArg &arg,
+    const tablelock::ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  ObMemCtxLockPrioOpLinkNode *prio_op_node = NULL;
+  if (OB_UNLIKELY(!lock_op.is_valid())
+      || OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(lock_op), K(arg));
+  } else if (OB_FAIL(lock_mem_ctx_.add_priority_record(arg, lock_op, prio_op_node))) {
+    TRANS_LOG(WARN, "add priority record at memtable failed", K(ret), K(arg),
+        K(lock_op), K(*this));
+  }
+  if (OB_FAIL(ret) && prio_op_node != NULL) {
+    lock_mem_ctx_.remove_priority_record(prio_op_node);
+  }
+  return ret;
+}
+
+int ObMemtableCtx::get_prio_op_array(
+    transaction::tablelock::ObTableLockPrioOpArray &prio_op_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_mem_ctx_.get_priority_array(prio_op_array))) {
+    TRANS_LOG(WARN, "add priority record at memtable failed", K(ret), K(prio_op_array), K(*this));
+  }
+  return ret;
+}
+
+int ObMemtableCtx::remove_priority_record(const tablelock::ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!lock_op.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(lock_op));
+  } else {
+    lock_mem_ctx_.remove_priority_record(lock_op);
+  }
+  return ret;
+}
+
+int ObMemtableCtx::prepare_prio_op_list(
+    const transaction::tablelock::ObTableLockPrioOpArray &prio_op_array)
+{
+  int ret = OB_SUCCESS;
+  ObMemCtxLockPrioOpLinkNode *prio_op_node = NULL;
+  // step 1, remove expired priority list
+  if (OB_FAIL(lock_mem_ctx_.clear_priority_list())) {
+    TRANS_LOG(WARN, "clear priority list failed", K(ret));
+  }
+  // step 2, install priority array
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < prio_op_array.count(); i++) {
+      prio_op_node = NULL;
+      const ObTableLockPrioArg arg(prio_op_array.at(i).priority_);
+      if (OB_FAIL(lock_mem_ctx_.prepare_priority_task(arg, prio_op_array.at(i).lock_op_,
+              prio_op_node))) {
+        TRANS_LOG(WARN, "add priority record at memtable failed", K(ret), K(prio_op_array),
+            K(*this));
+      }
+    }
+  }
+  return ret;
 }
 
 }

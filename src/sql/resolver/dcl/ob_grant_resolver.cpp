@@ -15,6 +15,7 @@
 
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -1340,6 +1341,11 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or 4_3_3_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant references/create role/drop role/trigger");
+          } else if (!transaction::tablelock::is_mysql_lock_table_data_version(compat_version)
+                     && (priv_set & OB_PRIV_LOCK_TABLE)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support this data version", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant lock tables privilege");
           } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)
                      && ((priv_set & OB_PRIV_ENCRYPT) != 0 || (priv_set & OB_PRIV_DECRYPT) != 0)) {
             ret = OB_NOT_SUPPORTED;

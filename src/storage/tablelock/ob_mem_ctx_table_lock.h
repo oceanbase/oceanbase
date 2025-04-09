@@ -79,6 +79,7 @@ public:
       is_killed_(false),
       max_durable_scn_(),
       memtable_handle_(),
+      priority_list_(),
       add_lock_latch_() {}
   ObLockMemCtx() = delete;
   ~ObLockMemCtx() { reset(); }
@@ -116,6 +117,7 @@ public:
       const ObLockID &lock_id,
       const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
+  int iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const;
   int clear_table_lock(
       const bool is_committed,
       const share::SCN &commit_version,
@@ -130,6 +132,20 @@ public:
   // used to check whether the tx is killed by deadlock detector.
   bool is_killed() const
   { return is_killed_; }
+  int add_priority_record(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op,
+      ObMemCtxLockPrioOpLinkNode *&prio_op_node);
+  int prepare_priority_task(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op,
+      ObMemCtxLockPrioOpLinkNode *&prio_op_node);
+  void remove_priority_record(
+      ObMemCtxLockPrioOpLinkNode *prio_op);
+  void remove_priority_record(
+      const ObTableLockOp &lock_op);
+  int get_priority_array(ObTableLockPrioOpArray &prio_op_array);
+  int clear_priority_list();
 
   ObOBJLockCallback *create_table_lock_callback(memtable::ObIMvccCtx &ctx, ObLockMemtable *memtable);
 
@@ -165,6 +181,8 @@ private:
   void *alloc_table_lock_callback_();
   void free_lock_link_node_(void *ptr);
   void free_table_lock_callback_(memtable::ObITransCallback *cb);
+  void *alloc_prio_link_node_();
+  void free_prio_link_node_(void *ptr);
 private:
   memtable::ObMemtableCtx &host_;
   // protect the lock_list_
@@ -177,6 +195,8 @@ private:
   share::SCN max_durable_scn_;
   // the lock memtable pointer point to LS lock table's memtable.
   storage::ObTableHandleV2 memtable_handle_;
+  // the priority list of this tx.
+  ObPrioLockNodeList priority_list_;
 protected:
   // serialze multiple thread try add lock for same transaction
   ObSpinLock add_lock_latch_;

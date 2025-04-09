@@ -71,6 +71,8 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "SHUTDOWN";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_RELOAD_SHIFT] =
                                                    "RELOAD";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_LOCK_TABLE_SHIFT] =
+                                                   "LOCK TABLES";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_REFERENCES_SHIFT] =
                                                    "REFERENCES";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROLE_SHIFT] =

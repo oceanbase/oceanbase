@@ -875,6 +875,7 @@ ob_set_subtarget(ob_storage multi_data_source
 )
 
 ob_set_subtarget(ob_storage tablelock
+  tablelock/ob_lock_executor.cpp
   tablelock/ob_lock_func_executor.cpp
   tablelock/ob_lock_memtable.cpp
   tablelock/ob_lock_memtable_mgr.cpp
@@ -882,6 +883,7 @@ ob_set_subtarget(ob_storage tablelock
   tablelock/ob_lock_table.cpp
   tablelock/ob_lock_utils.cpp
   tablelock/ob_mem_ctx_table_lock.cpp
+  tablelock/ob_mysql_lock_table_executor.cpp
   tablelock/ob_obj_lock.cpp
   tablelock/ob_table_lock_callback.cpp
   tablelock/ob_table_lock_common.cpp

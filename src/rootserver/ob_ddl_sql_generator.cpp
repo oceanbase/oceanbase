@@ -112,6 +112,8 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "SHUTDOWN"; break;
     case OB_PRIV_RELOAD:
       name = "RELOAD"; break;
+    case OB_PRIV_LOCK_TABLE:
+      name = "LOCK TABLES"; break;
     case OB_PRIV_CREATE_ROLE:
       name = "CREATE ROLE"; break;
     case OB_PRIV_DROP_ROLE:

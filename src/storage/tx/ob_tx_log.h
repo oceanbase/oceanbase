@@ -28,6 +28,7 @@
 #include "logservice/palf/lsn.h"
 #include "share/scn.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "storage/tablelock/ob_table_lock_common.h"
 //#include <cstdint>
 
 #define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF

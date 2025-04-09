@@ -14,11 +14,14 @@
 #include "sql/engine/cmd/ob_lock_table_executor.h"
 #include "sql/resolver/ddl/ob_lock_table_stmt.h"
 #include "sql/engine/ob_exec_context.h"
+#include "storage/tablelock/ob_mysql_lock_table_executor.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 namespace oceanbase
 {
 using namespace common;
 using namespace share::schema;
+using namespace transaction::tablelock;
 namespace sql
 {
 
@@ -26,13 +29,27 @@ int ObLockTableExecutor::execute(ObExecContext &ctx,
                                  ObLockTableStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    LOG_DEBUG("mysql mode do nothing");
+    ret = execute_mysql_(ctx, stmt);
+  } else if (OB_FAIL(execute_oracle_(ctx, stmt))) {
+    LOG_WARN("execute oracle lock table failed", K(ret));
+  }
+  return ret;
+}
+
+int ObLockTableExecutor::execute_oracle_(ObExecContext &ctx,
+                                         ObLockTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
-  if (OB_ISNULL(session)) {
+  if (is_mysql_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should be oracle mode", K(ret));
+  } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret), K(session));
-  } else if (is_mysql_mode()) {
-    LOG_DEBUG("mysql mode do nothing");
   } else {
     const common::ObIArray<TableItem *> &table_items = stmt.get_table_items();
     if (OB_UNLIKELY(table_items.empty())) {
@@ -83,6 +100,51 @@ int ObLockTableExecutor::execute(ObExecContext &ctx,
       }
     }
   }
+  return ret;
+}
+
+int ObLockTableExecutor::execute_mysql_(ObExecContext &ctx,
+                                        ObLockTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret));
+  } else if (!is_mysql_lock_table_data_version(data_version)) {
+    // ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support for this data version", K(data_version));
+  } else {
+    // only execute normally after enable lock_priority configuration, otherwise
+    // it will directly throw OB_SUCCESS, which is an empty implementation
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (!tenant_config.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      // if tenant config is invalid, this config will be set as false
+      LOG_WARN("tenant config is invalid");
+    } else if (tenant_config->enable_lock_priority) {
+      switch(stmt.get_lock_stmt_type()) {
+      case ObLockTableStmt::MYSQL_LOCK_TABLE_STMT: {
+        ObMySQLLockTableExecutor executor;
+        if (OB_FAIL(executor.execute(ctx, stmt.get_mysql_lock_list()))) {
+          LOG_WARN("lock table failed", K(ret));
+        }
+        break;
+      }
+      case ObLockTableStmt::MYSQL_UNLOCK_TABLE_STMT: {
+        ObMySQLUnlockTableExecutor executor;
+        if (OB_FAIL(executor.execute(ctx))) {
+          LOG_WARN("unlock table failed", K(ret));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown lock statement type", K(ret), K(stmt.get_lock_stmt_type()));
+      }
+      }
+    }
+  }
+  LOG_DEBUG("execute mysql lock table", K(ctx), K(stmt));
   return ret;
 }
 

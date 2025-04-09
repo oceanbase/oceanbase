@@ -71,6 +71,7 @@
 #include "src/share/ob_vec_index_builder_util.h"
 #include "share/ob_zone_table_operation.h" // for ObZoneTableOperation
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
+#include "share/ob_table_lock_compat_versions.h"
 #include "rootserver/truncate_info/ob_truncate_info_service.h"
 #include "share/truncate_info/ob_truncate_info_util.h"
 #include "share/schema/ob_mview_info.h"
@@ -86,6 +87,7 @@ using namespace share;
 using namespace obrpc;
 using namespace storage;
 using namespace palf;
+using namespace transaction::tablelock;
 namespace rootserver
 {
 
@@ -897,6 +899,37 @@ int ObDDLService::generate_object_id_for_partition_schemas(
         LOG_WARN("fail to generate object_id for partition schema", KR(ret));
       }
     } // end for
+  }
+  return ret;
+}
+
+int ObDDLService::get_lock_argument_for_rename_(
+    const uint32_t client_session_id,
+    const int64_t client_session_create_ts,
+    const ObTableLockPriority lock_priority,
+    int64_t &timeout_us,
+    ObTableLockOwnerID &owner_id)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  timeout_us = 0;
+  owner_id.set_default();  // if lock_priority is disabled, just use default owner_id
+  if (lock_priority != ObTableLockPriority::NORMAL) {
+    timeout_us = (THIS_WORKER.is_timeout_ts_valid() ?
+                  THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout);
+    // allow rename if the lock is hold by the same session.
+    if (is_rename_cluster_version(min_cluster_version)) {
+      if (OB_FAIL(owner_id.convert_from_client_sessid(client_session_id,
+                                                      client_session_create_ts))) {
+        LOG_WARN("get lock owner failed", K(ret), K(client_session_id),
+                K(client_session_create_ts));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("the cluster version is not support rename", K(ret),
+              K(min_cluster_version));
+    }
   }
   return ret;
 }
@@ -7359,14 +7392,15 @@ int ObDDLService::lock_tablets(ObMySQLTransaction &trans,
 }
 
 int ObDDLService::lock_table(ObMySQLTransaction &trans,
-                             const ObSimpleTableSchemaV2 &table_schema)
+                             const ObSimpleTableSchemaV2 &table_schema,
+                             const ObTableLockOwnerID owner_id,
+                             const ObTableLockPriority lock_priority,
+                             const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
 
   const uint64_t table_id = table_schema.get_table_id();
   const int64_t tenant_id = table_schema.get_tenant_id();
-  const int64_t timeout = 0;
-
   observer::ObInnerSQLConnection *conn = NULL;
   // skip those type table for lock table
   if (!table_schema.has_tablet()
@@ -7378,12 +7412,15 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("conn_ is NULL", KR(ret));
   } else {
-    LOG_INFO("lock table", KR(ret), K(table_id), K(tenant_id), KPC(conn));
+    LOG_INFO("lock table", KR(ret), K(table_id), K(tenant_id), K(owner_id),
+             K(lock_priority), K(timeout_us), KPC(conn));
     if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id,
                                                       table_id,
                                                       EXCLUSIVE,
-                                                      timeout,
-                                                      conn))) {
+                                                      timeout_us,
+                                                      conn,
+                                                      owner_id,
+                                                      lock_priority))) {
       LOG_WARN("lock dest table failed", KR(ret), K(table_schema));
     }
   }
@@ -15208,6 +15245,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       }
 
       ObDDLSQLTransaction trans(schema_service_);
+      ObTableLockOwnerID owner_id;
+      int64_t timeout_us = 0;
       bool is_rename_and_need_table_lock =
           alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME) && // is rename table;
           orig_table_schema->is_user_table() && // only user table
@@ -15225,8 +15264,19 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                     orig_table_schema->get_table_id(),
                                                                     ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
+      } else if (is_rename_and_need_table_lock
+                 && OB_FAIL(get_lock_argument_for_rename_(alter_table_arg.client_session_id_,
+                                                          alter_table_arg.client_session_create_ts_,
+                                                          alter_table_arg.lock_priority_,
+                                                          timeout_us,
+                                                          owner_id))) {
+        LOG_WARN("get lock owner failed", K(ret), K(alter_table_arg));
       } else if (is_rename_and_need_table_lock &&
-                 OB_FAIL(lock_table(trans, *orig_table_schema))) {
+                 OB_FAIL(lock_table(trans,
+                                    *orig_table_schema,
+                                    owner_id,
+                                    alter_table_arg.lock_priority_,
+                                    timeout_us))) {
         LOG_WARN("failed to get the table_lock of origin table schema for rename op", K(ret), KPC(orig_table_schema));
       } else {
         ObArray<ObTableSchema> global_idx_schema_array;
@@ -15275,7 +15325,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 trans))) {
           LOG_WARN("failed to add rw defense for table", K(ret), K(new_table_schema));
         }
-        if (OB_SUCC(ret) && !alter_table_schema.alter_option_bitset_.is_empty()) {
+        if (OB_SUCC(ret)
+            && !alter_table_schema.alter_option_bitset_.is_empty()
+            && !is_rename_and_need_table_lock) {
           const bool require_strict_binary_format = share::ObDDLUtil::use_idempotent_mode(tenant_data_version) && alter_table_arg.need_progressive_merge();
           if (OB_FAIL(ObDDLLock::lock_for_common_ddl_in_trans(*orig_table_schema, require_strict_binary_format, trans))) {
             LOG_WARN("failed to lock ddl", K(ret));
@@ -19461,6 +19513,8 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObSchemaGetterGuard schema_guard;
     const uint64_t tenant_id = rename_table_arg.tenant_id_;
+    ObTableLockOwnerID owner_id;
+    int64_t timeout_us = 0;
     bool is_oracle_mode = false;
     bool sequence_exist = false;
     RenameOracleObjectType rename_oracle_obj_type = RENAME_TYPE_INVALID;
@@ -19778,8 +19832,19 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                                       from_table_schema->is_user_table() &&
                                       ((MOCK_DATA_VERSION_4_2_3_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) /* ([4.2.3, 4.3.0)) */
                                         || DATA_VERSION_4_3_2_0 <= tenant_data_version  /* [4.3.2, ~) */ ))) {
+              } else if (need_table_lock_and_defense
+                         && OB_FAIL(get_lock_argument_for_rename_(rename_table_arg.client_session_id_,
+                                                                  rename_table_arg.client_session_create_ts_,
+                                                                  rename_table_arg.lock_priority_,
+                                                                  timeout_us,
+                                                                  owner_id))) {
+                LOG_WARN("get lock owner failed", K(ret), K(rename_table_arg));
               } else if (need_table_lock_and_defense &&
-                         OB_FAIL(lock_table(trans, *from_table_schema))) {
+                         OB_FAIL(lock_table(trans,
+                                            *from_table_schema,
+                                            owner_id,
+                                            rename_table_arg.lock_priority_,
+                                            timeout_us))) {
                 LOG_WARN("lock table failed", K(ret), K(from_table_schema->get_table_id()));
               }
 
@@ -23597,10 +23662,10 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, alter_table_arg.task_id_))) {
             LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
           } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
-                                                        orig_table_schema->get_table_id(),
-                                                        nullptr/*hidden_tablet_ids_alone*/,
-                                                        owner_id,
-                                                        trans))) {
+                                                               orig_table_schema->get_table_id(),
+                                                               nullptr/*hidden_tablet_ids_alone*/,
+                                                               owner_id,
+                                                               trans))) {
             LOG_WARN("failed to unlock ddl", K(ret));
           }
         }
@@ -24820,10 +24885,10 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
               }
             }
           } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
-                                                              orig_table_schema->get_table_id(),
-                                                              nullptr/*hidden_tablet_ids_alone*/,
-                                                              owner_id,
-                                                              trans))) {
+                                                               orig_table_schema->get_table_id(),
+                                                               nullptr/*hidden_tablet_ids_alone*/,
+                                                               owner_id,
+                                                               trans))) {
             LOG_WARN("failed to unlock ddl", K(ret));
           }
         }
@@ -29027,8 +29092,9 @@ int ObDDLService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &a
 
   if (OB_SUCC(ret)) {
     ObTableLockOwnerID owner_id;
-    owner_id.convert_from_value(arg.task_id_);
-    if (OB_FAIL(src_data_tablet_id.push_back(arg.src_table_tablet_id_))) {
+    if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, arg.task_id_))) {
+      LOG_WARN("get lock owner id failed");
+    } else if (OB_FAIL(src_data_tablet_id.push_back(arg.src_table_tablet_id_))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(ObDDLLock::unlock_for_split_partition(*splitting_table_schemas.at(0), src_data_tablet_id, arg.dest_tablet_ids_, owner_id, trans))) {
       LOG_WARN("failed to unlock for split partition", K(ret));
@@ -33033,6 +33099,12 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or DATA_VERSION_4_3_3_0", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke references/create role/drop role/trigger");
+    } else if (!is_mysql_lock_table_data_version(compat_version)
+              && !is_ora_mode
+              && (0 != (priv_set & OB_PRIV_LOCK_TABLE))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("lock tables privilege is not supported this data version", K(ret), K(compat_version), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke lock tables privilege");
     } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)
                && !is_ora_mode
                && (0 != (priv_set & OB_PRIV_ENCRYPT) ||
@@ -33543,6 +33615,12 @@ int ObDDLService::revoke_database(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or DATA_VERSION_4_3_3_0", K(ret), K(priv_set));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke references/trigger");
+  } else if (!is_mysql_lock_table_data_version(compat_version)
+             && !is_ora_mode
+             && (0 != (priv_set & OB_PRIV_LOCK_TABLE))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("lock tables privilege is not supported this data version", K(ret), K(compat_version), K(priv_set));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke lock tables privilege");
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else {

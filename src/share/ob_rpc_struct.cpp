@@ -23,6 +23,7 @@ using namespace share::schema;
 using namespace share;
 using namespace storage;
 using namespace transaction;
+using namespace transaction::tablelock;
 namespace obrpc
 {
 OB_SERIALIZE_MEMBER(Bool, v_);

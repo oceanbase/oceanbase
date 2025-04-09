@@ -109,7 +109,7 @@ int TestTenantTransferService::gen_mock_data(const ObTransferTaskID task_id, con
   ObLSID src_ls(1001);
   ObLSID dest_ls(1);
   ObTableLockOwnerID owner_id;
-  owner_id.convert_from_value(999);
+  owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 999);
   share::SCN start_scn;
   share::SCN finish_scn;
   start_scn.convert_for_inner_table_field(1666844202200632);

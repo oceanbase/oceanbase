@@ -97,7 +97,7 @@ int TestTransferHandler::gen_mock_data(const ObTransferTaskID task_id, const ObT
   ObTableLockOwnerID owner_id;
   start_scn.convert_for_inner_table_field(1666844202200632);
   finish_scn.convert_for_inner_table_field(1666844202208490);
-  owner_id.convert_from_value(999);
+  owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 999);
   ObCurTraceId::TraceId trace_id;
   trace_id.init(GCONF.self_addr_);
   uint64_t data_version = 0;

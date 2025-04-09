@@ -43,6 +43,7 @@
 #include "sql/resolver/ddl/ob_create_synonym_stmt.h"
 #include "sql/resolver/ddl/ob_drop_synonym_stmt.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
+#include "sql/resolver/ddl/ob_lock_table_stmt.h"
 #include "sql/resolver/ddl/ob_alter_routine_stmt.h"
 #include "sql/resolver/ddl/ob_drop_routine_stmt.h"
 #include "sql/resolver/ddl/ob_trigger_stmt.h"
@@ -3236,6 +3237,57 @@ int get_restore_point_priv(
     need_priv.priv_set_ = OB_PRIV_SELECT;
     need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
     ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
+int get_lock_table_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  ObNeedPriv need_priv;
+  bool need_check = false;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (OB_UNLIKELY(stmt::T_LOCK_TABLE != basic_stmt->get_stmt_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                                                           ObCompatFeatureType::MYSQL_LOCK_TABLES_PRIV_ENHANCE,
+                                                           need_check))) {
+    LOG_WARN("failed to get priv need check", K(ret));
+  } else if (lib::is_mysql_mode() && need_check) {
+    const ObLockTableStmt *stmt = static_cast<const ObLockTableStmt*>(basic_stmt);
+    int64_t table_size = stmt->get_table_size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
+      const TableItem *table_item = stmt->get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null");
+      } else if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
+                                                                  table_item->database_name_))) {
+        LOG_WARN("Can not do this operation on the database", K(session_priv),
+                 K(ret), "stmt_type", stmt->get_stmt_type());
+      } else {
+        need_priv.db_ = table_item->database_name_;
+        need_priv.priv_set_ = OB_PRIV_LOCK_TABLE;
+        need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+
+        if (OB_SUCC(ret)) {
+          need_priv.db_ = table_item->database_name_;
+          need_priv.table_ = table_item->table_name_;
+          need_priv.is_sys_table_ = table_item->is_system_table_;
+          need_priv.is_for_update_ = table_item->for_update_;
+          need_priv.priv_set_ = OB_PRIV_SELECT;
+          need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+          ADD_NEED_PRIV(need_priv);
+        }
+      }
+    }
   }
   return ret;
 }

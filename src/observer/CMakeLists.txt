@@ -106,6 +106,7 @@ ob_set_subtarget(ob_server mysql
   mysql/ob_feedback_proxy_utils.cpp
   mysql/ob_dl_queue.cpp
   mysql/ob_construct_queue.cpp
+  mysql/ob_feedback_proxy_utils.cpp
 )
 
 ob_set_subtarget(ob_server net

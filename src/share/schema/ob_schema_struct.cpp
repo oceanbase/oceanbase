@@ -8536,6 +8536,9 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_TRIGGER) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" TRIGGER,");
   }
+  if ((priv_set_ & OB_PRIV_LOCK_TABLE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" LOCK TABLES,");
+  }
   if ((priv_set_ & OB_PRIV_ENCRYPT) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" ENCRYPT,");
   }

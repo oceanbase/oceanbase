@@ -702,8 +702,8 @@ stmt:
       $$->value_ = result->question_mark_ctx_.count_;
     }
   }
-  | create_mview_stmt        { $$ = $1; check_question_mark($$, result); }
-  | create_tenant_stmt      { $$ = $1; check_question_mark($$, result); }
+  | create_mview_stmt          { $$ = $1; check_question_mark($$, result); }
+  | create_tenant_stmt         { $$ = $1; check_question_mark($$, result); }
   | create_standby_tenant_stmt { $$ = $1; check_question_mark($$, result); }
   | alter_tenant_stmt       { $$ = $1; check_question_mark($$, result); }
   | drop_tenant_stmt        { $$ = $1; check_question_mark($$, result); }
@@ -17065,7 +17065,6 @@ LOCK_
 /*****************************************************************************
  *
  *	lock tables grammar
- *  banliu.zyd: 只进行空实现
  *
  *****************************************************************************/
 
@@ -17074,14 +17073,16 @@ lock_tables_stmt:
 LOCK_ table_or_tables lock_table_list
 {
   (void)$2;
-  (void)$3;
-  malloc_terminal_node($$, result->malloc_pool_, T_LOCK_TABLE);
+  ParseNode *lock_node_list = NULL;
+  merge_nodes(lock_node_list, result, T_MYSQL_LOCK_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOCK_TABLE, 1, lock_node_list);
 }
 ;
 
 unlock_tables_stmt:
-UNLOCK TABLES
+UNLOCK table_or_tables
 {
+  (void)$2;
   malloc_terminal_node($$, result->malloc_pool_, T_LOCK_TABLE);
 }
 ;
@@ -17089,50 +17090,51 @@ UNLOCK TABLES
 lock_table_list:
 lock_table
 {
-  (void)$$;
-  (void)$1;
+  $$ = $1;
 }
 | lock_table_list ',' lock_table
 {
-  (void)$$;
-  (void)$1;
-  (void)$3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
 
 lock_table:
 relation_factor lock_type
 {
-  (void)$$;
-  (void)$1;
-  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_LOCK_NODE, 2, $1, $2);
 }
 |
-relation_factor opt_as relation_name lock_type
+relation_factor AS relation_name lock_type
 {
-  (void)$$;
-  (void)$1;
   (void)$2;
-  (void)$3;
-  (void)$4;
+  ParseNode *lock_table = NULL;
+  malloc_non_terminal_node(lock_table, result->malloc_pool_, T_ALIAS, 5, $1, $3, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_LOCK_NODE, 2, lock_table, $4);
 }
 ;
 
 lock_type:
 READ opt_local
 {
-  (void)$$;
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 2;
+
   (void)$2;
 }
 |
 WRITE
 {
-  (void)$$;
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 1;
 }
 |
 LOW_PRIORITY WRITE
 {
-  (void)$$;
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 1;
 }
 ;
 
@@ -17917,6 +17919,11 @@ role_with_host
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_RELOAD;
+}
+| LOCK_ TABLES
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_LOCK_TABLE;
 }
 | REFERENCES
 {

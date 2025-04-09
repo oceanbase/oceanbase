@@ -281,6 +281,10 @@ int ObBatchLockTaskP::process()
         ret = BATCH_PROCESS(arg_, pre_check_lock, result_);
         break;
       }
+      case ObTableLockTaskType::ADD_LOCK_INTO_QUEUE: {
+        ret = BATCH_PROCESS(arg_, add_lock_into_queue, result_);
+        break;
+      }
       case ObTableLockTaskType::LOCK_TABLE:
       case ObTableLockTaskType::LOCK_PARTITION:
       case ObTableLockTaskType::LOCK_SUBPARTITION:
@@ -487,10 +491,7 @@ int ObOutTransLockTableP::process()
 {
   int ret = OB_SUCCESS;
   ObTableLockService *table_lock_service = MTL(ObTableLockService *);
-  if (OB_FAIL(table_lock_service->lock_table(arg_.table_id_,
-                                            arg_.lock_mode_,
-                                            arg_.lock_owner_,
-                                            arg_.timeout_us_))) {
+  if (OB_FAIL(table_lock_service->lock_table(arg_.table_id_, arg_.lock_mode_, arg_.lock_owner_, arg_.timeout_us_))) {
     LOG_WARN("lock_table failed", K(ret), K(arg_));
   }
   return ret;

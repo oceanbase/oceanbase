@@ -287,6 +287,15 @@ public:
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
 
   void set_flushed_scn(const share::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
+  int add_priority_task(const ObLockParam &param,
+                        ObStoreCtx &ctx,
+                        ObTableLockOp &lock_op);
+  int prepare_priority_task(const ObTableLockPrioArg &arg,
+                            const ObTableLockOp &lock_op);
+  int remove_priority_task(const ObTableLockPrioArg &arg,
+                           const ObTableLockOp &op_info);
+  int switch_to_leader();
+  int switch_to_follower();
 
   void enable_check_tablet_status(const bool need_check);
 

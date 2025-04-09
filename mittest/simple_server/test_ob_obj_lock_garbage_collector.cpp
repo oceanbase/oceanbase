@@ -319,8 +319,8 @@ TEST_F(ObOBJLockGCBeforeRestartTest, obj_lock_gc_with_tablelock_service)
   ObTableLockMode lock_mode = EXCLUSIVE;
   share::ObTenantSwitchGuard tenant_guard;
   bool has_obj_lock;
-  OWNER_ONE.convert_from_value(1);
-  OWNER_TWO.convert_from_value(2);
+  OWNER_ONE.convert_from_value(static_cast<ObLockOwnerType>(0), 1);
+  OWNER_TWO.convert_from_value(static_cast<ObLockOwnerType>(0), 2);
 
   ret = tenant_guard.switch_to(OB_SYS_TENANT_ID);
   ASSERT_EQ(OB_SUCCESS, ret);

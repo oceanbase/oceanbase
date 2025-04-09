@@ -1168,6 +1168,7 @@ TEST_F(TestLockMemtable, test_lock_retry_lock_conflict)
   ObTableLockOp lock_second = DEFAULT_OUT_TRANS_LOCK_OP;
   lock_second.lock_mode_ = DEFAULT_CONFLICT_LOCK_MODE; // X
   lock_second.owner_id_ = CONFLICT_OWNER_ID; // owner 1
+  lock_second.create_trans_id_ = TRANS_ID2;
 
   MyTxCtx default_ctx;
   ObStoreCtx store_ctx;

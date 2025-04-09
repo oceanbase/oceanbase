@@ -2346,7 +2346,9 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(enable_lock_priority, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable lock priority, which, when activated, gives certain DDL operations the highest table lock precedence.",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(default_load_mode, OB_TENANT_PARAMETER, "DISABLED",
                      common::ObDefaultLoadModeChecker,
                      "Specifies default load data path."

@@ -1091,7 +1091,11 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                    const ObTabletIDArray &tablet_ids);
   // lock table, unlock when ddl trans end
   int lock_table(ObMySQLTransaction &trans,
-                 const ObSimpleTableSchemaV2 &table_schema);
+                 const ObSimpleTableSchemaV2 &table_schema,
+                 const transaction::tablelock::ObTableLockOwnerID owner_id = ObTableLockOwnerID::default_owner(),
+                 const transaction::tablelock::ObTableLockPriority lock_priority
+                 = transaction::tablelock::ObTableLockPriority::NORMAL,
+                 const int64_t timeout_us = 0);
   // lock mview object, unlock when ddl trans end
   // Must before locking the container table
   int lock_mview(ObMySQLTransaction &trans, const ObSimpleTableSchemaV2 &table_schema);
@@ -1141,6 +1145,12 @@ private:
   };
   const char *op_type_to_str(const UpdateGlobalIndexOpType &op_type);
 
+  int get_lock_argument_for_rename_(
+      const uint32_t client_session_id,
+      const int64_t client_session_create_ts,
+      const transaction::tablelock::ObTableLockPriority lock_priority,
+      int64_t &timeout_us,
+      transaction::tablelock::ObTableLockOwnerID &owner_id);
   int calc_partition_object_id_cnt_(
       const ObPartitionSchema &partition_schema,
       const bool gen_subpart_only,

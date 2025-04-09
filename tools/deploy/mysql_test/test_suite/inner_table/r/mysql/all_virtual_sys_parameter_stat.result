@@ -106,6 +106,7 @@ enable_ddl
 enable_early_lock_release
 enable_global_background_resource_isolation
 enable_kv_ttl
+enable_lock_priority
 enable_major_freeze
 enable_monotonic_weak_read
 enable_ob_error_msg_style

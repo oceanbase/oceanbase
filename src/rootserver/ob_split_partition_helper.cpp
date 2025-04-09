@@ -378,7 +378,8 @@ int ObSplitPartitionHelper::prepare_start_args_(
     LOG_WARN("failed to push back src data tablet id", K(ret));
   } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
-  } else if (OB_FALSE_IT(owner_id.convert_from_value(task_id))) {
+  } else if (OB_FALSE_IT(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                     task_id))) {
   } else if (OB_FAIL(ObDDLLock::lock_for_split_partition(*upd_table_schemas.at(0), nullptr/*ls_id*/, &src_data_tablet_id, dst_tablet_ids.at(0), owner_id, trans))) {
     LOG_WARN("failed to lock for split src partition", K(ret), K(src_tablet_ids), K(task_id));
   } else if (OB_FAIL(ObTabletToLSTableOperator::batch_get_ls(trans, tenant_id, src_tablet_ids, ls_ids))) {
@@ -915,8 +916,10 @@ int ObSplitPartitionHelper::start_dst_(
 
   // lock dst partition
   ObTableLockOwnerID owner_id;
-  owner_id.convert_from_value(task_id);
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 task_id))) {
+    LOG_WARN("get owner id failed", K(ret), K(task_id));
   } else if (OB_FAIL(ObDDLLock::lock_for_split_partition(*inc_table_schemas.at(0), &ls_id, nullptr/*src_tablet_ids*/, dst_tablet_ids.at(0), owner_id, trans))) {
     LOG_WARN("failed to lock for split src partition", K(ret), K(dst_tablet_ids), K(task_id));
   }

@@ -614,7 +614,6 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_xml_sequence.cpp
   engine/expr/ob_expr_existsnode_xml.cpp
   engine/expr/ob_expr_sql_udt_utils.cpp
-  engine/expr/ob_expr_temp_table_ssid.cpp
   engine/expr/ob_expr_collection_construct.cpp
   engine/expr/ob_expr_sql_udt_construct.cpp
   engine/expr/ob_expr_priv_attribute_access.cpp
@@ -1401,6 +1400,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_explain_stmt.cpp
   resolver/ddl/ob_flashback_resolver.cpp
   resolver/ddl/ob_lock_table_resolver.cpp
+  resolver/ddl/ob_lock_table_stmt.cpp
   resolver/ddl/ob_lock_tenant_resolver.cpp
   resolver/ddl/ob_lock_tenant_stmt.cpp
   resolver/ddl/ob_modify_tenant_resolver.cpp

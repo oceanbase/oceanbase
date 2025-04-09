@@ -1073,6 +1073,7 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_CREATE_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_ROLE; }
     if ((user.get_priv_set() & OB_PRIV_DROP_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_DROP_ROLE; }
     if ((user.get_priv_set() & OB_PRIV_TRIGGER) != 0) { priv_others |= OB_PRIV_OTHERS_TRIGGER; }
+    if ((user.get_priv_set() & OB_PRIV_LOCK_TABLE) != 0) { priv_others |= OB_PRIV_OTHERS_LOCK_TABLE; }
     if ((user.get_priv_set() & OB_PRIV_ENCRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_ENCRYPT; }
     if ((user.get_priv_set() & OB_PRIV_DECRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_DECRYPT; }
     if ((user.get_priv_set() & OB_PRIV_CREATE_CATALOG) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_CATALOG; }
@@ -1172,6 +1173,6 @@ int ObUserSqlService::update_user_schema_version(
   return ret;
 }
 
-} //end of schema
-} //end of share
-} //end of oceanbase
+} // end of schema
+} // end of share
+} // end of oceanbase

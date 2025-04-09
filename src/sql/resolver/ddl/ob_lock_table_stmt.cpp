@@ -10,30 +10,24 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCRANBASE_SQL_ENGINE_CMD_OB_LOCK_TABLE_EXECUTOR_
-#define OCRANBASE_SQL_ENGINE_CMD_OB_LOCK_TABLE_EXECUTOR_
-
-#include "share/ob_define.h"
+#define USING_LOG_PREFIX SQL_RESV
+#include "ob_lock_table_stmt.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-
-class ObExecContext;
-class ObLockTableStmt;
-class ObLockTableExecutor
+int ObLockTableStmt::add_mysql_lock_node(const ObMySQLLockNode &node)
 {
-public:
-  ObLockTableExecutor() {}
-  virtual ~ObLockTableExecutor() {}
-  int execute(ObExecContext &ctx, ObLockTableStmt &stmt);
-private:
-  int execute_oracle_(ObExecContext &ctx, ObLockTableStmt &stmt);
-  int execute_mysql_(ObExecContext &ctx, ObLockTableStmt &stmt);
-  DISALLOW_COPY_AND_ASSIGN(ObLockTableExecutor);
-};
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!node.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lock node invalid", K(ret), K(node));
+  } else if (OB_FAIL(mysql_lock_list_.push_back(node))) {
+    LOG_WARN("add mysql lock node failed", K(ret), K(node));
+  }
+  return ret;
+}
 
-} //sql
+} // sql
 } // oceanbase
-#endif

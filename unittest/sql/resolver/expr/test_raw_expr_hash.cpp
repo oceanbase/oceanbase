@@ -13,8 +13,8 @@
 
 
 #include <gtest/gtest.h>
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #define private public
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "observer/ob_server.h"
 #undef private
 #define USING_LOG_PREFIX SQL_OPTIMIZER
@@ -79,6 +79,7 @@ TEST_F(TestRawExprToStr, basic)
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
+  session.effective_tenant_id_ = 1;
   ctx.session_info_ = &session;
   OBSERVER.init_version();
 

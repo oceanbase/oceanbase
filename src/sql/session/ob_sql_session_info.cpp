@@ -388,6 +388,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   need_send_feedback_proxy_info_ = false;
   is_lock_session_ = false;
   job_info_ = nullptr;
+  need_send_feedback_proxy_info_ = false;
+  is_lock_session_ = false;
   failover_mode_ = false;
   service_name_.reset();
   executing_sql_stat_record_.reset();

@@ -43,7 +43,8 @@ private:
   int get_next_ls();
   int get_next_tx_ctx(transaction::ObPartTransCtx *&tx_ctx);
   int get_next_lock_id(ObLockID &lock_id);
-  int get_next_lock_op(transaction::tablelock::ObTableLockOp &lock_op);
+  int get_next_lock_op(transaction::tablelock::ObTableLockOp &lock_op,
+                       transaction::tablelock::ObTableLockPriority &priority);
   int get_next_lock_op_iter();
   int get_next_lock_op_iter_from_tx_ctx();
   int get_next_lock_op_iter_from_lock_memtable();
@@ -78,6 +79,7 @@ private:
   common::ObAddr addr_;
   int64_t ls_id_;
   ObLS *ls_;
+  transaction::ObPartTransCtx *tx_ctx_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
   // the tx_ctx of a ls
   transaction::ObLSTxCtxIterator ls_tx_ctx_iter_;
@@ -85,8 +87,11 @@ private:
   ObLockIDIterator obj_lock_iter_;
   // the lock op of a obj lock
   ObLockOpIterator lock_op_iter_;
+  // the priority op
+  ObPrioOpIterator prio_op_iter_;
   // whether iterate tx or not now.
   bool is_iter_tx_;
+  bool is_iter_priority_list_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char lock_id_buf_[common::MAX_LOCK_ID_BUF_LENGTH];
   char lock_mode_buf_[common::MAX_LOCK_MODE_BUF_LENGTH];
@@ -94,6 +99,7 @@ private:
   char lock_op_type_buf_[common::MAX_LOCK_OP_TYPE_BUF_LENGTH];
   char lock_op_status_buf_[common::MAX_LOCK_OP_STATUS_BUF_LENGTH];
   char lock_op_extra_info_[common::MAX_LOCK_OP_EXTRA_INFO_LENGTH];
+  char lock_op_priority_buf_[common::MAX_LOCK_OP_PRIORITY_BUF_LENGTH];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualObjLock);
 };

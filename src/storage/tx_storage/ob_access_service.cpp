@@ -305,6 +305,43 @@ int ObAccessService::replace_obj_lock(
   return ret;
 }
 
+int ObAccessService::add_lock_into_queue(const share::ObLSID &ls_id,
+                                         transaction::ObTxDesc &tx_desc,
+                                         const transaction::tablelock::ObLockParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObStoreCtxGuard ctx_guard;
+  ObLS *ls = nullptr;
+  transaction::ObTxReadSnapshot snapshot;
+  snapshot.init_none_read();
+  concurrent_control::ObWriteFlag write_flag;
+  write_flag.set_is_table_lock();
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ob access service is not running.", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())
+             || OB_UNLIKELY(!tx_desc.is_valid())
+             || OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tx_desc), K(param));
+  } else if (OB_FAIL(get_write_store_ctx_guard_(ls_id,
+                                                param.expired_time_, /*timeout*/
+                                                tx_desc,
+                                                snapshot,
+                                                0, /*branch_id*/
+                                                write_flag,
+                                                ctx_guard))) {
+    LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls should not be null", K(ret), KP(ls));
+  } else {
+    ret = ls->add_lock_into_queue(ctx_guard.get_store_ctx(), param);
+  }
+  return ret;
+}
+
 int ObAccessService::table_scan(
     ObVTableScanParam &vparam,
     ObNewRowIterator *&result)

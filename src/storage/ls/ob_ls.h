@@ -695,6 +695,7 @@ public:
   // no paired lock op.
   // int check_and_clear_obj_lock(const bool force_compact)
   DELEGATE_WITH_RET(lock_table_, check_and_clear_obj_lock, int);
+  DELEGATE_WITH_RET(lock_table_, add_lock_into_queue, int);
 
   // set the member_list of log_service
   // @param [in] member_list, the member list to be set.

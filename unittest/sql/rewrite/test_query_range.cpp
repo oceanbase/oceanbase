@@ -51,6 +51,7 @@ public:
     ctx.connection_charset_ = CHARSET_UTF8MB4;
     ctx.param_list_ = params;
     ObSQLSessionInfo session;
+    session.effective_tenant_id_ = 1;
     ctx.session_info_ = &session;
 
     EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
@@ -129,6 +130,7 @@ public:
     ctx.dest_collation_ = con_type;
     ctx.param_list_ = &params;
     ObSQLSessionInfo session;
+    session.effective_tenant_id_ = 1;
     ctx.session_info_ = &session;
 
     EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());

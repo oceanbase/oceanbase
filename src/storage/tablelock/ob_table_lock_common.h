@@ -34,13 +34,7 @@ namespace transaction
 {
 namespace tablelock
 {
-struct ObObjLockPriorityTaskID
-{
-    explicit ObObjLockPriorityTaskID(const int64_t trans_id_value)
-          : trans_id_value_(trans_id_value) {}
-      TO_STRING_KV(K_(trans_id_value));
-        int64_t trans_id_value_;
-};
+class ObTableLockOwnerID;
 
 enum class ObTableLockPriority : int8_t
 {
@@ -171,6 +165,45 @@ bool request_lock(ObTableLockMode curr_lock,
   }
 }
 
+// check whether the first lock mode is equal to or greater than the second
+// rule: EXCLUSIVE > SHARE > ROW_SHARE > NO_LOCK
+// rule: EXCLUSIVE > ROW_EXCLUSIVE >= ROW_SHARE > NO_LOCK
+static inline
+bool is_equal_or_greater_lock_mode(
+    const ObTableLockMode first,
+    const ObTableLockMode second)
+{
+  bool ret_bool = false;
+  if (!is_lock_mode_valid(first) || !is_lock_mode_valid(second)) {
+    ret_bool = false;
+  } else if (second == NO_LOCK) {
+    ret_bool = true;
+  } else if (first & EXCLUSIVE) {
+    ret_bool = true;
+  } else if (first & SHARE) {
+    if ((second & EXCLUSIVE) || (second & ROW_EXCLUSIVE)) {
+      // return false
+    } else {
+      ret_bool = true;
+    }
+  } else if (first & ROW_EXCLUSIVE) {
+    if ((second & SHARE) || (second & EXCLUSIVE)) {
+      // return false
+    } else {
+      ret_bool = true;
+    }
+  } else if (first & ROW_SHARE) {
+    if ((second & SHARE)
+        || (second & EXCLUSIVE)
+        || (second & ROW_EXCLUSIVE)) {
+      // return false
+    } else {
+      ret_bool = true;
+    }
+  }
+  return ret_bool;
+}
+
 enum ObTableLockOpType : char
 {
   UNKNOWN_TYPE = 0,
@@ -265,6 +298,33 @@ int lock_obj_type_to_string(const ObLockOBJType obj_type,
 {
   int ret = OB_SUCCESS;
   strncpy(str, get_name(obj_type), str_len);
+  return ret;
+}
+
+static inline int lock_priority_to_string(const ObTableLockPriority priority, char *str, const int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  switch (priority) {
+  case ObTableLockPriority::LOW: {
+    strncpy(str, "LOW", str_len);
+    break;
+  }
+  case ObTableLockPriority::NORMAL: {
+    strncpy(str, "NORMAL", str_len);
+    break;
+  }
+  case ObTableLockPriority::HIGH1: {
+    strncpy(str, "HIGH1", str_len);
+    break;
+  }
+  case ObTableLockPriority::HIGH2: {
+    strncpy(str, "HIGH2", str_len);
+    break;
+  }
+  default: {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  }
   return ret;
 }
 
@@ -371,83 +431,146 @@ bool is_lock_owner_type_valid(const ObLockOwnerType &type)
   return (type < ObLockOwnerType::MAX_OWNER_TYPE);
 }
 
-class ObNewTableLockOwnerID
-{
-public:
-  static const int64_t MAGIC_NUM = -0xABC;
-};
-
 class ObTableLockOwnerID
 {
 public:
+  static const int64_t MAGIC_NUM = -0xABC;
   static const int64_t INVALID_ID = -1;
   static const int64_t INVALID_RAW_OWNER_ID = ((1L << 54) - 1);
   static const int64_t CLIENT_SESS_CREATE_TS_BIT = 22;
   static const int64_t CLIENT_SESS_CREATE_TS_MASK = (1L << CLIENT_SESS_CREATE_TS_BIT) - 1;
   static const int64_t CLIENT_SESS_ID_BIT = 32;
   static const int64_t CLIENT_SESS_ID_MASK = (1L << CLIENT_SESS_ID_BIT) - 1;
-  static const int64_t MAX_VALID_RAW_OWNER_ID = INVALID_RAW_OWNER_ID - 1;
 
-  ObTableLockOwnerID() : pack_(INVALID_ID) {}
-  ObTableLockOwnerID(const ObTableLockOwnerID &other) : pack_(other.pack_) {}
+  ObTableLockOwnerID() :
+    type_(static_cast<unsigned char>(ObLockOwnerType::INVALID_OWNER_TYPE)),
+    id_(INVALID_ID) {}
+  ObTableLockOwnerID(const ObTableLockOwnerID &other) :
+    type_(other.type_), id_(other.id_)
+  { hash_value_ = inner_hash(); }
+  ObTableLockOwnerID(unsigned char type, int64_t id) :
+    type_(type), id_(id)
+  { hash_value_ = inner_hash(); }
   ~ObTableLockOwnerID() { reset(); }
 public:
-  int64_t raw_value() const { return pack_; }
+  int get_ddl_owner_id(int64_t &id) const;
   int64_t id() const { return id_; }
-  bool is_session_id_owner() const { return type_ == static_cast<unsigned char>(ObLockOwnerType::SESS_ID_OWNER_TYPE); }
-
-
-  void reset() { pack_ = INVALID_ID; }
+  unsigned char type() const { return type_; }
+  bool is_session_id_owner() const
+  { return type_ == static_cast<unsigned char>(ObLockOwnerType::SESS_ID_OWNER_TYPE); }
+  bool is_default() const
+  { return 0 == type_ && 0 == id_; }
+  void reset()
+  {
+    type_ = static_cast<unsigned char>(ObLockOwnerType::INVALID_OWNER_TYPE);
+    id_ = INVALID_ID;
+  }
   bool is_valid() const
   {
-    return (INVALID_ID != pack_ &&
-            static_cast<int64_t>(ObLockOwnerType::INVALID_OWNER_TYPE) != type_ &&
-            INVALID_RAW_OWNER_ID != id_);
+    return (INVALID_ID != id_ &&
+            is_lock_owner_type_valid(static_cast<ObLockOwnerType>(type_)));
   }
   static ObTableLockOwnerID default_owner();
-  static ObTableLockOwnerID get_owner_by_value(const int64_t packet_id);
+  static ObTableLockOwnerID get_owner(const unsigned char type,
+                                      const int64_t id);
   void set_default()
-  { pack_ = 0; }
-  // without check whether it is valid.
-  int convert_from_value(const int64_t packed_id);
+  { type_ = 0; id_ = 0; hash_value_ = inner_hash(); }
   // check valid.
-  int convert_from_value(const ObLockOwnerType owner_type, const int64_t raw_owner_id);
-  int convert_from_client_sessid(const uint32_t client_sessid, const uint64_t client_sess_create_ts);
+  void convert_from_value_ignore_ret(const unsigned char owner_type,
+                                     const int64_t id);
+  int convert_from_value(const ObLockOwnerType owner_type,
+                         const int64_t id);
+  int convert_from_client_sessid(const uint32_t client_sessid,
+                                 const uint64_t client_sess_create_ts);
   int convert_to_sessid(uint32_t &sessid) const;
   // assignment
   ObTableLockOwnerID &operator=(const ObTableLockOwnerID &other)
-  { pack_ = other.pack_; return *this; }
+  {
+    type_ = other.type_; id_ = other.id_;
+    hash_value_ = inner_hash();
+    return *this;
+  }
 
   // compare operator
   bool operator == (const ObTableLockOwnerID &other) const
-  { return pack_ == other.pack_; }
+  { return type_ == other.type_ && id_ == other.id_; }
   bool operator >  (const ObTableLockOwnerID &other) const
-  { return pack_ > other.pack_; }
+  {
+    return (type_ > other.type_
+            || (type_ == other.type_ && id_ > other.id_));
+  }
   bool operator != (const ObTableLockOwnerID &other) const
-  { return pack_ != other.pack_; }
+  { return type_ != other.type_ || id_ != other.id_; }
   bool operator <  (const ObTableLockOwnerID &other) const
-  { return pack_ < other.pack_; }
+  {
+    return (type_ < other.type_
+            || (type_ == other.type_ && id_ < other.id_));
+  }
   bool operator <= (const ObTableLockOwnerID &other) const
-  { return pack_ <= other.pack_; }
+  {
+    return (type_ <= other.type_
+            || (type_ == other.type_ && id_ <= other.id_));
+  }
   bool operator >= (const ObTableLockOwnerID &other) const
-  { return pack_ >= other.pack_; }
+  {
+    return (type_ >= other.type_
+            || (type_ == other.type_ && id_ >= other.id_));
+  }
   int compare(const ObTableLockOwnerID &other) const
   {
-   if (pack_ == other.pack_) {
-     return 0;
-   } else if (pack_ < other.pack_) {
-     return -1;
-   } else {
-     return 1;
-   }
+    if (type_ == other.type_ && id_ == other.id_) {
+      return 0;
+    } else if (type_ < other.type_
+               || (type_ == other.type_ && id_ < other.id_)) {
+      return -1;
+    } else {
+      return 1;
+    }
   }
 
   uint64_t hash() const
-  { return pack_; }
+  { return hash_value_; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+  uint64_t inner_hash() const
+  {
+    uint64_t hash_val = 0;
+    hash_val = murmurhash(&type_, sizeof(type_), hash_val);
+    hash_val = murmurhash(&id_, sizeof(id_), hash_val);
+    return hash_val;
+  }
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(pack), K_(type),
-               "type_name", get_name(static_cast<ObLockOwnerType>(type_)),
-               K_(id), K_(reserved), K_(valid_flag));
+  TO_STRING_KV("type_name", get_name(static_cast<ObLockOwnerType>(type_)), K_(id), K_(hash_value));
+
+private:
+  int get_data_version_(uint64_t &data_version) const;
+private:
+  unsigned char type_;
+  int64_t id_;
+  uint64_t hash_value_;
+};
+
+class ObOldLockOwner
+{
+  friend class ObTableLockOwnerID;
+public:
+  static const int64_t INVALID_ID = -1;
+  ObOldLockOwner() : pack_(INVALID_ID) {}
+  ObOldLockOwner(const ObTableLockOwnerID &owner_id)
+  {
+    pack_ = 0;
+    id_ = owner_id.id();
+    type_ = owner_id.type();
+  }
+  ~ObOldLockOwner() { pack_ = INVALID_ID; }
+public:
+  int64_t raw_value() const { return pack_; }
+  // without check whether it is valid.
+  int convert_from_value(const int64_t packed_id);
+  int64_t id() const { return id_; }
+  int64_t type() const { return type_; }
+
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  TO_STRING_KV(K_(pack), K_(type), K_(id), K_(reserved), K_(valid_flag));
 private:
   union {
     struct {
@@ -633,6 +756,17 @@ public:
   ObTableLockPriority priority_;
 };
 
+struct ObObjLockPriorityTaskID
+{
+  explicit ObObjLockPriorityTaskID(
+      const int64_t trans_id_value, const ObTableLockOwnerID &owner_id)
+    : trans_id_value_(trans_id_value), owner_id_(owner_id) {}
+  bool is_valid() const { return trans_id_value_ > 0 && owner_id_.is_valid(); }
+  TO_STRING_KV(K_(trans_id_value), K_(owner_id));
+  int64_t trans_id_value_;
+  ObTableLockOwnerID owner_id_;
+};
+
 static inline
 bool is_need_retry_unlock_error(int err)
 {
@@ -650,6 +784,8 @@ struct ObSimpleIteratorModIds
 typedef common::ObSimpleIterator<ObLockID, ObSimpleIteratorModIds::OB_OBJ_LOCK_MAP, 16> ObLockIDIterator;
 // Is used to store and traverse all lock op
 typedef common::ObSimpleIterator<ObTableLockOp, ObSimpleIteratorModIds::OB_OBJ_LOCK, 16> ObLockOpIterator;
+// Is used to store and traverse all priority op
+typedef common::ObSimpleIterator<ObTableLockPrioOp, ObSimpleIteratorModIds::OB_OBJ_LOCK, 16> ObPrioOpIterator;
 
 // the threshold of timeout interval which will enable the deadlock avoid.
 static const int64_t MIN_DEADLOCK_AVOID_TIMEOUT_US = 60 * 1000 * 1000; // 1 min
