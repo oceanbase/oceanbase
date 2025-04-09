@@ -2562,7 +2562,7 @@ int ObTransformMVRewrite::generate_rewrite_stmt_contain_mode(MvRewriteHelper &he
     LOG_WARN("failed to adjust mv item", K(ret));
   } else if (OB_FAIL(helper.query_stmt_->update_column_item_rel_id())) {
     LOG_WARN("failed to update column item rel id", K(ret));
-  } else if (OB_FAIL(helper.query_stmt_->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(helper.query_stmt_->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   } else {
     OPT_TRACE("generate rewrite stmt use", helper.mv_info_.mv_schema_->get_table_name(), ":", helper.query_stmt_);
@@ -3038,6 +3038,7 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   ObDMLStmt *ori_stmt = &helper.ori_stmt_;
   ObSelectStmt *rewrite_stmt = helper.query_stmt_;
   is_expected = false;
+  bool partial_cost_check = false;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)
       || OB_ISNULL(parent_stmts_) || OB_ISNULL(ori_stmt) || OB_ISNULL(rewrite_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3057,8 +3058,11 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   } else if (!is_match_index) {
     is_expected = false;
     OPT_TRACE("condition does not match index, can not rewrite");
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*parent_stmts_, ori_stmt, true,
+                                                                        partial_cost_check))) {
+    LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(*parent_stmts_, ori_stmt, rewrite_stmt,
-                                      !need_check_cost, false, accepted))) {
+                                      !need_check_cost, false, accepted, partial_cost_check))) {
     LOG_WARN("failed to accept transform", K(ret));
   } else if (!accepted) {
     is_expected = false;
@@ -3203,7 +3207,7 @@ bool ObTransformMVRewrite::MvRewriteCheckCtx::compare_const(const ObConstRawExpr
       ObPCConstParamInfo const_param_info;
       if (OB_FAIL(const_param_info.const_idx_.push_back(unkonwn_expr.get_value().get_unknown()))) {
         LOG_WARN("failed to push back element", K(ret));
-      } else if (OB_FAIL(const_param_info.const_params_.push_back(unkonwn_expr.get_result_type().get_param()))) {
+      } else if (OB_FAIL(const_param_info.const_params_.push_back(unkonwn_expr.get_param()))) {
         LOG_WARN("failed to psuh back param const value", K(ret));
       } else if (OB_FAIL(const_param_info_.push_back(const_param_info))) {
         LOG_WARN("failed to push back const param info", K(ret));

@@ -263,6 +263,8 @@ int ObRawExprResolverImpl::process_node_with_children(const ParseNode *node,
     SQL_RESV_LOG(WARN, "invalid argument", K(node), K(children_num));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, raw_expr))) {
     SQL_RESV_LOG(WARN, "fail to create raw expr", K(ret));
+  } else if (OB_FAIL(raw_expr->init_param_exprs(children_num))) {
+    SQL_RESV_LOG(WARN, "fail to init param exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < children_num; i++) {
       ObRawExpr *sub_expr = NULL;

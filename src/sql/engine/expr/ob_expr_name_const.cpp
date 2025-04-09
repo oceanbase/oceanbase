@@ -60,7 +60,7 @@ int ObExprNameConst::calc_result_type2(ObExprResType &type,
         if (OB_ISNULL(value_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(value_expr));
-        } else if ((T_FUN_SYS_CAST == value_expr->get_expr_type()) && CM_IS_IMPLICIT_CAST(value_expr->get_extra())) {
+        } else if ((T_FUN_SYS_CAST == value_expr->get_expr_type()) && CM_IS_IMPLICIT_CAST(value_expr->get_cast_mode())) {
           //for cases like -'1'
           if (OB_ISNULL(value_expr->get_param_expr(0))) {
             ret = OB_ERR_UNEXPECTED;

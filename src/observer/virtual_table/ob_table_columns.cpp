@@ -966,7 +966,7 @@ int ObTableColumns::deduce_column_attributes(
 
   if (OB_SUCC(ret)) {
     //TODO(yts): should get types_info from expr, wait for yyy
-    const ObExprResType &result_type = select_item.expr_->get_result_type();
+    const ObRawExprResType &result_type = select_item.expr_->get_result_type();
     ObLength char_len = result_type.get_length();
     const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
@@ -1001,21 +1001,12 @@ int ObTableColumns::deduce_column_attributes(
       sub_type = result_type.get_subschema_id();
     } else if ((result_type.get_udt_id() == T_OBJ_XML) || (result_type.get_udt_id() == T_OBJ_SDO_GEOMETRY)) {
       sub_type = result_type.get_udt_id();
-    } else if (result_type.is_collection_sql_type()) {
-      if (OB_NOT_NULL(session->get_cur_exec_ctx())) {
-        int tmp_ret = OB_SUCCESS;
-        const ObSqlCollectionInfo *coll_info = NULL;
-        uint16_t subschema_id = select_item.expr_->get_result_type().get_subschema_id();
-        ObSubSchemaValue value;
-        if (OB_SUCCESS != (tmp_ret = session->get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-          LOG_WARN("failed to get subschema ctx", K(tmp_ret));
-        } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
-        } else if (OB_SUCCESS != (tmp_ret = extend_type_info.push_back(coll_info->get_def_string()))) {
-          LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
-        }
+    } else if (result_type.is_enum_or_set() || result_type.is_collection_sql_type()) {
+      if (OB_FAIL(ObRawExprUtils::extract_extended_type_info(select_item.expr_,
+                                                             session,
+                                                             extend_type_info))) {
+        LOG_WARN("failed to extract extended type info", K(ret));
       }
-    } else if (result_type.is_enum_or_set() && OB_FAIL(extend_type_info.assign(select_item.expr_->get_enum_set_values()))) {
-      LOG_WARN("failed to assign enum values", K(ret));
     }
     if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
@@ -1128,6 +1119,8 @@ int ObTableColumns::deduce_column_attributes(
     column_attributes.result_type_ = select_item.expr_->get_result_type();
     column_attributes.is_hidden_ = 0;
     column_attributes.is_string_lob_ = is_string_lob;
+    OZ (ObRawExprUtils::extract_enum_set_collation(select_item.expr_->get_result_type(),
+                                                   session, column_attributes.result_type_));
     //TODO:
     //ObObj default;
     //view_column.set_cur_default_value(default);

@@ -89,7 +89,7 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to do transform dblink read", K(ret));
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
-  } else if (OB_FAIL(do_after_transform(stmt))) {
+  } else if (OB_FAIL(do_after_transform(stmt, ctx_->session_info_))) {
     LOG_WARN("failed deal after transform", K(ret));
   } else {
     print_trans_stat();
@@ -289,7 +289,7 @@ int ObTransformerImpl::do_transform(ObDMLStmt *&stmt)
 // do somthing after transform postprocess:
 //    1. add pre calc constraints.
 //    2. add trans happened hints
-int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt)
+int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt, const ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
@@ -308,6 +308,8 @@ int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt)
     LOG_WARN("failed to adjust global depency", K(ret));
   } else if (OB_FAIL(verify_all_stmt_exprs(stmt))) {
     LOG_WARN("failed to verify all stmt exprs", K(ret));
+  } else if (OB_FAIL(verify_all_expr_types(stmt, session))) {
+    LOG_WARN("failed to verify all expr types", K(ret));
   }
   return ret;
 }
@@ -476,7 +478,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
         LOG_WARN("failed to formalize subquery exprs", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt expr", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
         need_next_iteration = true;
@@ -1050,7 +1052,8 @@ int ObTransformerImpl::add_all_rowkey_columns_to_stmt(const ObTableSchema &table
     } else if (OB_ISNULL(column_schema = (table_schema.get_column_schema(column_id)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column schema", K(column_id), K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *column_schema, rowkey))) {
+    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *column_schema,
+                                                         ctx_->session_info_, rowkey))) {
       LOG_WARN("build column expr failed", K(ret));
     } else if (OB_ISNULL(rowkey)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1063,13 +1066,13 @@ int ObTransformerImpl::add_all_rowkey_columns_to_stmt(const ObTableSchema &table
       if (!table_item.alias_name_.empty()) {
         rowkey->set_table_alias_name();
       }
+      column_item.expr_ = rowkey;
       column_item.table_id_ = rowkey->get_table_id();
       column_item.column_id_ = rowkey->get_column_id();
       column_item.base_tid_ = table_item.ref_id_;
       column_item.base_cid_ = rowkey->get_column_id();
       column_item.column_name_ = rowkey->get_column_name();
       column_item.set_default_value(column_schema->get_cur_default_value());
-      column_item.expr_ = rowkey;
       if (OB_FAIL(stmt.add_column_item(column_item))) {
         LOG_WARN("add column item to stmt failed", K(ret));
       } else if (OB_FAIL(column_items.push_back(column_item))) {
@@ -1110,5 +1113,109 @@ int ObTransformerImpl::add_trans_happended_hints(ObQueryCtx &query_ctx,
   return ret;
 }
 
+int ObTransformerImpl::verify_all_expr_types(ObDMLStmt *stmt, const ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> relation_exprs;
+  int64_t tmp_ret = (OB_E(EventTable::EN_CHECK_EXPR_FORMALIZE) OB_SUCCESS);
+  bool check_expr_type = OB_SUCCESS != tmp_ret;
+  bool report_error = check_expr_type && (OB_ERR_UNEXPECTED == tmp_ret);
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+      ObRawExpr *expr = relation_exprs.at(i);
+      ObSEArray<ObRawExprResType, 4> origin_types;
+      ObSEArray<ObRawExprResType, 4> formalize_types;
+      bool has_diff_type = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (check_expr_type && OB_FAIL(ObRawExprUtils::get_all_expr_types(expr, origin_types))) {
+        LOG_WARN("failed to get all expr types", K(ret));
+      } else if (OB_FAIL(expr->formalize(session))) {
+        LOG_WARN("formalize expr failed", K(ret));
+      } else if (check_expr_type && OB_FAIL(ObRawExprUtils::get_all_expr_types(expr, formalize_types))) {
+        LOG_WARN("failed to get all expr types", K(ret));
+      } else if (check_expr_type) {
+        if (origin_types.count() != formalize_types.count()) {
+          has_diff_type = true;
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && !has_diff_type && j < origin_types.count(); ++j) {
+          if (origin_types.at(j).get_obj_meta() != formalize_types.at(j).get_obj_meta()) {
+            // jinmao TODO: origin_types.at(j).get_result_flag() != formalize_types.at(j).get_result_flag()
+            has_diff_type = true;
+          } else if (ob_is_int_tc(origin_types.at(j).get_type()) ||
+                     ob_is_uint_tc(origin_types.at(j).get_type()) ||
+                     ob_is_double_tc(origin_types.at(j).get_type()) ||
+                     ob_is_float_tc(origin_types.at(j).get_type()) ||
+                     ob_is_datetime_tc(origin_types.at(j).get_type()) ||
+                     ob_is_date_tc(origin_types.at(j).get_type()) ||
+                     ob_is_time_tc(origin_types.at(j).get_type()) ||
+                     ob_is_year_tc(origin_types.at(j).get_type()) ||
+                     ob_is_time_tc(origin_types.at(j).get_type())) {
+            // do nothing
+            // precision/scale of these types are not crucial to calculation process (only affect output length)
+          } else if (ob_is_number_tc(origin_types.at(j).get_type()) ||
+                     ob_is_decimal_int_tc(origin_types.at(j).get_type()) ||
+                     ob_is_bit_tc(origin_types.at(j).get_type())) {
+            has_diff_type = origin_types.at(j).get_scale() != formalize_types.at(j).get_scale() ||
+                            origin_types.at(j).get_precision() != formalize_types.at(j).get_precision();
+          } else if (ob_is_string_or_lob_type(origin_types.at(j).get_type()) ||
+                     ob_is_raw_tc(origin_types.at(j).get_type())) {
+            // we do not check `length` here, because length from multiple derivations can be different in some scenarios.
+            // do nothing
+          } else {
+            has_diff_type = origin_types.at(j).get_accuracy() != formalize_types.at(j).get_accuracy();
+          }
+        }
+        if (OB_SUCC(ret) && has_diff_type) {
+          if (report_error) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("expr type is not the same after formalize", KPC(expr), K(origin_types), K(formalize_types), K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "expr types not well deduced after transform");
+          } else {
+            LOG_WARN("expr type is not the same after formalize", KPC(expr), K(origin_types), K(formalize_types), K(ret));
+            LOG_USER_WARN(OB_NOT_SUPPORTED, "expr types not well deduced after transform");
+          }
+        }
+      }
+    }
+  }
+  // check subqueries
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
+    ObQueryRefRawExpr *query_ref = stmt->get_subquery_exprs().at(i);
+    ObSelectStmt *subquery = NULL;
+    if (OB_ISNULL(query_ref)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query ref is null", K(ret));
+    } else if (OB_ISNULL(subquery = query_ref->get_ref_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(verify_all_expr_types(subquery, session)))) {
+      LOG_WARN("failed to verify all expr types", K(ret));
+    }
+  }
+  // check generated tables and temp tables
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+    const TableItem *table_item = stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (table_item->is_generated_table() || table_item->is_lateral_table() || table_item->is_temp_table()) {
+      ObSelectStmt *subquery = NULL;
+      if (OB_ISNULL(subquery = table_item->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subquery is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(verify_all_expr_types(subquery, session)))) {
+        LOG_WARN("failed to verify all expr types", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 }
 }

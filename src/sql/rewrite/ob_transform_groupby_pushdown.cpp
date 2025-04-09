@@ -79,6 +79,7 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_join(
   bool is_valid = false;
   bool is_happened = false;
   ObTryTransHelper try_trans_helper;
+  bool partial_cost_check = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -107,9 +108,12 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_join(
     LOG_TRACE("is not happened");
   } else if (OB_FAIL(get_tables_from_params(*stmt, params, trans_tables))) {
     LOG_WARN("get tables failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
+                                                                        partial_cost_check))) {
+    LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                       NULL != myhint && myhint->is_enable_hint(), false,
-                                      trans_happened, &push_down_ctx))) {
+                                      trans_happened, partial_cost_check, &push_down_ctx))) {
     LOG_WARN("failed to accept transform", K(ret));
   } else if (!trans_happened) {
     //do nothing
@@ -146,6 +150,7 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_union(
   ObSelectStmt *trans_stmt = NULL;
   bool is_happened = false;
   trans_happened = false;
+  bool partial_cost_check = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -175,9 +180,12 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_union(
   } else {
     if (trans_stmt == stmt) {
       trans_happened = true;
+    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
+                                                                          partial_cost_check))) {
+      LOG_WARN("failed to check partial cost eval validity", K(ret));
     } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                  NULL != myhint && myhint->is_enable_hint(),
-                                 false, trans_happened, NULL /*TODO*/ ))) {
+                                 false, trans_happened, partial_cost_check, NULL /*TODO*/ ))) {
       LOG_WARN("failed to accept transform", K(ret));
     }
   }
@@ -659,7 +667,7 @@ int ObTransformGroupByPushdown::transform_basic_child_stmt(
       /* do nothing */
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt info", K(ret));
   }
   return ret;
@@ -700,7 +708,7 @@ int ObTransformGroupByPushdown::transform_non_basic_child_stmt(
       LOG_WARN("failed to create select item", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt info", K(ret));
   }
   return ret;
@@ -710,9 +718,6 @@ int ObTransformGroupByPushdown::transform_union_stmt(
     ObSelectStmt *union_stmt,
     ObIArray<ObSelectStmt *> &child_stmts) {
   int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt *, 2> left_childs;
-  ObSEArray<ObSelectStmt *, 2> right_childs;
-  ObSEArray<ObExprResType, 2> res_type;
   // check ctx
   if (OB_ISNULL(union_stmt) || OB_UNLIKELY(child_stmts.count() < 2) ||
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
@@ -727,7 +732,7 @@ int ObTransformGroupByPushdown::transform_union_stmt(
     // and triggers a rewrite, the name of this UNION statement would vanish,
     // meaning during an EXPLAIN, the name of the view would not be displayed.
     LOG_WARN("failed to get set target list", K(ret));
-  } else if (OB_FAIL(union_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(union_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize union_stmt info", K(ret));
   }
   return ret;
@@ -1064,7 +1069,7 @@ int ObTransformGroupByPushdown::replace_aggr_and_aggr_col_exprs(
   } else if (OB_FAIL(ObTransformUtils::replace_exprs(
                  old_aggr_exprs, new_aggr_exprs, stmt->get_aggr_items()))) {
     LOG_WARN("failed to replace aggr items", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt info", K(ret));
   }
   return ret;
@@ -2191,7 +2196,7 @@ int ObTransformGroupByPushdown::transform_groupby_push_down(ObSelectStmt *stmt,
       LOG_WARN("failed to rebuild table hashes", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item relation id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt info", K(ret));
     } else if (OB_FAIL(stmt->get_table_rel_ids(new_table_items, push_down_ctx.new_table_relids_))) {
       LOG_WARN("failed to get table rel ids", K(ret));

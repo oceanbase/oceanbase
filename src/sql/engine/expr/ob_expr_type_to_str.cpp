@@ -55,10 +55,10 @@ int ObExprTypeToStr::calc_result_type2(ObExprResType &type,
   UNUSED(type_ctx);
   UNUSED(type2);
   int ret = OB_SUCCESS;
-  if (get_raw_expr()->get_extra() == 0) {
+  if (get_raw_expr()->get_dst_type() == 0) {
     type.set_type(ObVarcharType);
   } else {
-    ObObjType dst_type = static_cast<ObObjType>(get_raw_expr()->get_extra());
+    ObObjType dst_type = static_cast<ObObjType>(get_raw_expr()->get_dst_type());
     if (!ob_is_large_text(dst_type) && dst_type != ObCharType) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid dst type", K(ret), K(dst_type));

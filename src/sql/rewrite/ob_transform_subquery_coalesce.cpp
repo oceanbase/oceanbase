@@ -75,6 +75,7 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
       rule_based_equal_infos.reset();
       cost_based_equal_infos.reset();
       bool rule_based_trans_happened = false;
+      bool partial_cost_check = false;
       if (OB_FAIL(try_trans_helper.fill_helper(stmt->get_query_ctx()))) {
         LOG_WARN("failed to fill try trans helper", K(ret));
       } else if (OB_FAIL(transform_diff_exprs(stmt, trans_stmt,
@@ -86,7 +87,11 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
         LOG_WARN("failed to append equal infos", K(ret));
       } else if (OB_ISNULL(trans_stmt)) {
         // do nothing
-      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, false, false, is_happened))) {
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
+                                                                            partial_cost_check))) {
+        LOG_WARN("failed to check partial cost eval validity", K(ret));
+      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, false, false,
+                                          is_happened, partial_cost_check))) {
         LOG_WARN("failed to accept transform", K(ret), KPC(trans_stmt));
       } else if (!is_happened) {
         // do nothing
@@ -909,7 +914,7 @@ int ObTransformSubqueryCoalesce::coalesce_diff_any_all_exprs(ObDMLStmt *stmt,
           LOG_WARN("the new any all expr is invalid", K(ret));
         } else if (OB_FAIL(stmt->pull_all_expr_relation_id())) {
           LOG_WARN("failed to form pull up expr id and level", K(ret));
-        } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+        } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
           LOG_WARN("formalize stmt failed", K(ret));
         } else {
           /*do nothing */
@@ -1238,7 +1243,7 @@ int ObTransformSubqueryCoalesce::create_and_expr(const ObIArray<ObRawExpr *> &pa
   } else if (OB_ISNULL(and_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("and expr is null", K(ret));
-  } else if (OB_FAIL(and_expr->get_param_exprs().assign(params))) {
+  } else if (OB_FAIL(and_expr->set_param_exprs(params))) {
     LOG_WARN("failed to assign params", K(ret));
   } else {
     ret_expr = and_expr;
@@ -1711,8 +1716,8 @@ int ObTransformSubqueryCoalesce::get_subquery_assign_exprs(ObIArray<ObRawExpr*> 
     } else if (alias_exprs.count() > 1 || query_ref_exprs.count() > 1) {
       //disable subquery coalescing in this scenes
       is_valid = false;
-    } else if ((query_ref_exprs.count() == 1 && query_ref_exprs.at(0)->get_ref_count() > 1) ||
-               (alias_exprs.count() == 1 && alias_exprs.at(0)->get_ref_count() > 1)) {
+    } else if ((query_ref_exprs.count() == 1 && query_ref_exprs.at(0)->is_shared_reference()) ||
+               (alias_exprs.count() == 1 && alias_exprs.at(0)->is_shared_reference())) {
       is_valid = false;
     }
     for (int64_t j = 0; OB_SUCC(ret) && is_valid && j < query_ref_exprs.count(); ++j) {
@@ -2084,7 +2089,7 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
   ObArray<ObExecParamRawExpr *> all_params;
   ObSEArray<ObRawExpr*, 4> old_exprs;
   ObSEArray<ObRawExpr*, 4> new_exprs;
-  if (OB_ISNULL(upd_stmt) || OB_ISNULL(helper) || OB_ISNULL(coalesce_query)) {
+  if (OB_ISNULL(upd_stmt) || OB_ISNULL(helper) || OB_ISNULL(coalesce_query) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
   } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_REF_QUERY, coalesce_query_expr))) {
@@ -2160,6 +2165,8 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
                                                             new_exprs,
                                                             assign.expr_))) {
             LOG_WARN("failed to replace expr", K(ret));
+          } else if (OB_FAIL(assign.expr_->formalize(ctx_->session_info_))) {
+            LOG_WARN("failed to formalize expr", K(ret));
           }
         }
       }
@@ -2557,6 +2564,18 @@ int ObTransformSubqueryCoalesce::sort_coalesce_stmts(Ob2DArray<CoalesceStmts *> 
     if (OB_FAIL(coalesce_stmts.assign(new_stmts))) {
       LOG_WARN("failed to assign array", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTransformSubqueryCoalesce::check_rule_bypass(const ObDMLStmt &stmt, bool &reject)
+{
+  int ret = OB_SUCCESS;
+  reject = false;
+  if (is_normal_disabled_transform(stmt)) {
+    reject = true;
+  } else if (stmt.get_subquery_expr_size() < 2) {
+    reject = true;
   }
   return ret;
 }

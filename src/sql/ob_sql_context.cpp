@@ -1145,5 +1145,17 @@ int ObQueryCtx::add_local_session_vars(ObIAllocator *alloc, const ObLocalSession
   return ret;
 }
 
+int ObQueryCtx::get_local_session_vars(const int64_t idx, const ObLocalSessionVar *&local_session_var) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(idx < 0 || idx >= all_local_session_vars_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid idx", K(ret), K(idx), K(all_local_session_vars_.count()));
+  } else {
+    local_session_var = &all_local_session_vars_.at(idx);
+  }
+  return ret;
+}
+
 }
 }

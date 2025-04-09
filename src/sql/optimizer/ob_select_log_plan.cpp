@@ -29,7 +29,6 @@ using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
-using namespace oceanbase::jit::expr;
 using share::schema::ObTableSchema;
 
 namespace oceanbase
@@ -8069,10 +8068,10 @@ int ObSelectLogPlan::init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool 
     //cast topn expr to int
     ObRawExpr *topn_with_cast = NULL;
     ObRawExpr *topn_without_cast = NULL;
-    ObExprResType res_type;
+    ObRawExprResType res_type;
     bool need_cast = false;
     bool ignore_err = false;
-    const ObExprResType &src_type = win_func_helper.topn_const_->get_result_type();
+    const ObRawExprResType &src_type = win_func_helper.topn_const_->get_result_type();
     res_type.set_int();
     res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
     res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);

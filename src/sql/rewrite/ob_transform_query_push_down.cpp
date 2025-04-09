@@ -152,7 +152,13 @@ int ObTransformQueryPushDown::need_transform(const common::ObIArray<ObParentDMLS
   UNUSED(current_level);
   const ObQueryHint *query_hint = NULL;
   const ObHint *trans_hint = NULL;
-  if (!stmt.is_select_stmt() || is_normal_disabled_transform(stmt)) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("fail check stmt validity", K(ret));
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else if (!stmt.is_select_stmt()) {
     need_trans = false;
   } else if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;

@@ -37,7 +37,6 @@ using namespace oceanbase::share;
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::storage;
-using namespace oceanbase::jit::expr;
 // using share::schema::ObSchemaGetterGuard;
 
 const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
@@ -387,7 +386,7 @@ int ObOptEstCost::cost_index_back(const ObCostTableScanInfo &est_cost_info,
   return ret;
 }
 
-int ObOptEstCost::get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types,
+int ObOptEstCost::get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types,
                                     double &cmp_cost,
                                     const ObOptimizerContext &opt_ctx)
 {
@@ -595,7 +594,7 @@ int ObOptEstCost::estimate_width_for_exprs(const OptTableMetas &table_metas,
   return ret;
 }
 
-double ObOptEstCost::get_estimate_width_from_type(const ObExprResType &type)
+double ObOptEstCost::get_estimate_width_from_type(const ObRawExprResType &type)
 {
   double width = ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
   if (type.is_integer_type()) {

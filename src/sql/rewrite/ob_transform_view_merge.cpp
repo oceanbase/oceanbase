@@ -96,7 +96,13 @@ int ObTransformViewMerge::need_transform(const common::ObIArray<ObParentDMLStmt>
   UNUSED(current_level);
   const ObQueryHint *query_hint = NULL;
   const ObHint *trans_hint = NULL;
-  if (!stmt.is_sel_del_upd() || stmt.has_instead_of_trigger() || stmt.is_hierarchical_query()) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("failed to fast reject transform", K(ret));
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else if (!stmt.is_sel_del_upd() || stmt.has_instead_of_trigger() || stmt.is_hierarchical_query()) {
     need_trans = false;
   } else if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;

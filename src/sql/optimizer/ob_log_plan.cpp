@@ -3919,12 +3919,10 @@ int ObLogPlan::compute_hash_distribution_info(const ObJoinType &join_type,
           std::swap(left_expr, right_expr);
         }
         if (OB_FAIL(left_exch_info.hash_dist_exprs_.push_back(
-                    ObExchangeInfo::HashExpr(left_expr,
-                                             expr->get_result_type().get_calc_meta())))) {
+                    ObExchangeInfo::HashExpr(left_expr)))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else if (OB_FAIL(right_exch_info.hash_dist_exprs_.push_back(
-                    ObExchangeInfo::HashExpr(right_expr,
-                                             expr->get_result_type().get_calc_meta())))) {
+                    ObExchangeInfo::HashExpr(right_expr)))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
@@ -8007,7 +8005,7 @@ int ObLogPlan::allocate_sort_as_top(ObLogicalOperator *&top,
     if (hash_sortkey != NULL &&
         hash_sortkey->expr_ != NULL &&
         hash_sortkey->expr_->get_expr_type() == T_FUN_SYS_HASH) {
-      part_cnt = hash_sortkey->expr_->get_children_count();
+      part_cnt = hash_sortkey->expr_->get_param_count();
     }
     sort->set_part_cnt(part_cnt);
 
@@ -10120,7 +10118,7 @@ int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
     } else if (static_cast<ObQueryRefRawExpr *>(expr)->is_scalar()) {
       if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back candi onetime expr", K(ret));
-      } else if (expr->is_explicited_reference() && expr->get_ref_count() > 1) {
+      } else if (expr->is_shared_reference()) {
         has_shared_subquery = true;
       }
     }
@@ -10147,7 +10145,7 @@ int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
                          || expr->has_flag(IS_WITH_ANY))) {
       if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back candi onetime exprs", K(ret));
-      } else if (expr->is_explicited_reference() && expr->get_ref_count() > 1) {
+      } else if (expr->is_shared_reference()) {
         has_shared_subquery = true;
       }
     }
@@ -11632,7 +11630,7 @@ int ObLogPlan::adjust_expr_properties_for_external_table(ObRawExpr *col_expr, Ob
             static_cast<ObColumnRefRawExpr *>(col_expr)->get_table_name());
     }
   }
-  for (int i = 0; OB_SUCC(ret) && i < expr->get_children_count(); i++) {
+  for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
     if (OB_FAIL(adjust_expr_properties_for_external_table(col_expr, expr->get_param_expr(i)))) {
       LOG_WARN("fail to adjust expr properties for external table", K(ret));
     }
@@ -13026,7 +13024,6 @@ int ObLogPlan::allocate_output_expr_for_values_op(ObLogicalOperator &values_op)
       ObObj v;
       v.set_varchar(" ");
       v.set_collation_type(ObCharset::get_system_collation());
-      output->set_param(v);
       output->set_value(v);
       if (OB_FAIL(output->formalize(optimizer_context_.get_session_info()))) {
         LOG_WARN("const expr formalize failed", K(ret));
@@ -13217,7 +13214,8 @@ int ObLogPlan::generate_column_expr(ObRawExprFactory &expr_factory,
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument passed in", K(stmt), K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, column_schema, rowkey))) {
+  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, column_schema,
+                                        optimizer_context_.get_session_info(), rowkey))) {
     LOG_WARN("build column expr failed", K(ret));
   } else if (OB_ISNULL(rowkey)) {
     ret = OB_ERR_UNEXPECTED;
@@ -13233,13 +13231,13 @@ int ObLogPlan::generate_column_expr(ObRawExprFactory &expr_factory,
     if (!table_item->alias_name_.empty()) {
       rowkey->set_table_alias_name();
     }
+    column_item.expr_ = rowkey;
     column_item.table_id_ = rowkey->get_table_id();
     column_item.column_id_ = rowkey->get_column_id();
     column_item.base_tid_ = table_item->ref_id_;
     column_item.base_cid_ = rowkey->get_column_id();
     column_item.column_name_ = rowkey->get_column_name();
     column_item.set_default_value(column_schema.get_cur_default_value());
-    column_item.expr_ = rowkey;
     if (OB_FAIL(rowkey->add_relation_id(stmt->get_table_bit_index(table_id)))) {
       LOG_WARN("add relation id to expr failed", K(ret));
     } else if (OB_FAIL(rowkey->formalize(optimizer_context_.get_session_info()))) {
@@ -13879,6 +13877,8 @@ int ObLogPlan::create_hash_sortkey(const int64_t part_cnt,
   } else if (OB_UNLIKELY(part_cnt > order_keys.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected order_keys count", K(ret), K(part_cnt), K(order_keys));
+  } else if (OB_FAIL(hash_expr->init_param_exprs(part_cnt))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_cnt; ++i) {
       if (OB_FAIL(hash_expr->add_param_expr(order_keys.at(i).expr_))) {

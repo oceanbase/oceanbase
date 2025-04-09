@@ -199,7 +199,7 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
     } else if (OB_FAIL(trans_stmt_to_anti(ref_query,
                                           ref_query->get_joined_tables().at(0)))) {
       LOG_WARN("failed to create semi stmt", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else {
       trans_happened = true;
@@ -332,7 +332,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item rel id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
   }

@@ -7991,7 +7991,7 @@ static int bit_geometry(const ObObjType expect_type, ObObjCastParams &params,
 
 static bool is_enum_set_with_subschema(const ObObj &in)
 {
-  return in.get_scale() == ObEnumSetMeta::MetaState::READY;
+  return in.get_scale() == ObEnumSetMeta::MetaState::SQL;
 }
 
 static OB_INLINE int common_enumset_string(const ObObj &in,
@@ -8008,7 +8008,7 @@ static OB_INLINE int common_enumset_string(const ObObj &in,
     if (OB_ISNULL(params.exec_ctx_)) {
       ret = OB_ERR_UNDEFINED;
       LOG_WARN("exec ctx is null", K(ret));
-    } else if (OB_FAIL(params.exec_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta))) {
+    } else if (OB_FAIL(params.exec_ctx_->get_enumset_meta_by_subschema_id(subschema_id, false, meta))) {
       LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
     } else if (OB_ISNULL(meta) || OB_ISNULL(meta->get_str_values())) {
       ret = OB_ERR_UNEXPECTED;

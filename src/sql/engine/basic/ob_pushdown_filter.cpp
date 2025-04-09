@@ -358,13 +358,13 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
     } else {
       const ObRawExpr *param_exprs = T_OP_IN == item_type ? raw_expr->get_param_expr(1) : raw_expr;
       int64_t i = T_OP_IN == item_type ? 0 : 1;
-      const ObExprResType &col_type = child->get_result_type();
+      const ObRawExprResType &col_type = child->get_result_type();
       for (; OB_SUCC(ret) && need_check && i < param_exprs->get_param_count(); i++) {
         if (OB_ISNULL(child = param_exprs->get_param_expr(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected null child expr", K(ret), K(i));
         } else {
-          const ObExprResType &param_type = child->get_result_type();
+          const ObRawExprResType &param_type = child->get_result_type();
           need_check = child->is_const_expr();
           if (need_check && !param_type.is_null()) {
             const ObCmpOp cmp_op = sql::ObRelationalExprOperator::get_cmp_op(raw_expr->get_expr_type());
@@ -745,7 +745,7 @@ int ObPushdownFilterConstructor::split_multi_cols_runtime_filter(
   int ret = OB_SUCCESS;
   ObPushdownFilterNode *and_filter_node = nullptr;
   ObArray<ObPushdownFilterNode*> tmp_filter_nodes;
-  for (int64_t i = 0; i < raw_expr->get_children_count() && OB_SUCC(ret); ++i) {
+  for (int64_t i = 0; i < raw_expr->get_param_count() && OB_SUCC(ret); ++i) {
     ObRawExpr *child_expr = raw_expr->get_param_exprs().at(i);
     ObPushdownFilterNode *sub_filter_node = nullptr;
     if (OB_ISNULL(child_expr)) {
@@ -757,7 +757,7 @@ int ObPushdownFilterConstructor::split_multi_cols_runtime_filter(
       LOG_WARN("failed to generate filter node from raw expr", K(ret));
     } else if (OB_FAIL(tmp_filter_nodes.push_back(sub_filter_node))) {
       LOG_WARN("failed to push back filter node", K(ret));
-    } else if (i == raw_expr->get_children_count() - 1) {
+    } else if (i == raw_expr->get_param_count() - 1) {
       static_cast<ObPushdownDynamicFilterNode *>(sub_filter_node)->set_last_child(true);
     }
   }
@@ -807,7 +807,7 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
              && raw_expr->is_white_runtime_filter_expr()) {
     // only in column store, the runtime filter can be pushdown as white filter
     ObOpRawExpr *op_raw_expr = static_cast<ObOpRawExpr *>(raw_expr);
-    if (op_raw_expr->get_children_count() > 1) {
+    if (op_raw_expr->get_param_count() > 1) {
       if (OB_FAIL(split_multi_cols_runtime_filter(op_raw_expr, filter_node))) {
         LOG_WARN("Failed to split_multi_cols_runtime_filter", K(ret), K(raw_expr->get_expr_type()));
       }

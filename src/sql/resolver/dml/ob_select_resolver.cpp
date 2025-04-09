@@ -31,7 +31,6 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace share::schema;
-using namespace jit::expr;
 namespace sql
 {
 
@@ -296,7 +295,7 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
                                                                session_info_, params_.expr_factory_,
                                                                select_stmt->is_set_distinct(),
                                                                select_stmt->get_set_query(),
-                                                               child_stmt, NULL, is_set_recursive_union && !is_oracle_mode,
+                                                               child_stmt, is_set_recursive_union && !is_oracle_mode,
                                                                &cte_ctx_.cte_col_names_))) {
             LOG_WARN("failed to try add cast to set child list", K(ret));
           } else if (OB_FAIL(select_stmt->add_set_query(child_stmt))) {
@@ -440,7 +439,7 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
         if (0 != i && OB_FAIL(ObOptimizerUtil::try_add_cast_to_set_child_list(allocator_,
                                                session_info_, params_.expr_factory_,
                                                select_stmt->is_set_distinct(),
-                                               select_stmt->get_set_query(), child_stmt, NULL))) {
+                                               select_stmt->get_set_query(), child_stmt))) {
           LOG_WARN("failed to try add cast to set child list", K(ret));
         } else if (OB_FAIL(select_stmt->get_set_query().push_back(child_stmt))) {
           LOG_WARN("failed to push back child_stmt", K(ret));
@@ -450,7 +449,7 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
                                                session_info_, params_.expr_factory_,
                                                select_stmt->is_set_distinct(),
                                                select_stmt->get_set_query(),
-                                               child_stmt->get_set_query(), NULL))) {
+                                               child_stmt->get_set_query()))) {
           LOG_WARN("failed to try add cast to set child list", K(ret));
         } else if (OB_FAIL(append(select_stmt->get_set_query(), child_stmt->get_set_query()))) {
           LOG_WARN("failed set child stmts", K(ret));
@@ -682,7 +681,7 @@ int ObSelectResolver::check_recursive_cte_limited()
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < right_stmt->get_select_items().count(); ++i) {
       SelectItem& item = right_stmt->get_select_items().at(i);
-      if (OB_UNLIKELY(jit::expr::ObIRawExpr::EXPR_AGGR == item.expr_->get_expr_class())) {
+      if (OB_UNLIKELY(item.expr_->is_aggr_expr())) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggregation in recursive with clause");
       }
@@ -694,7 +693,6 @@ int ObSelectResolver::check_recursive_cte_limited()
 int ObSelectResolver::check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt &right_stmt)
 {
   int ret = OB_SUCCESS;
-  ObExprResType res_type;
   int64_t num = left_stmt.get_select_item_size();
   ObSelectStmt *select_stmt = get_select_stmt();
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(select_stmt)) {
@@ -707,8 +705,8 @@ int ObSelectResolver::check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt 
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
     SelectItem &left_select_item = left_stmt.get_select_item(i);
     SelectItem &right_select_item = right_stmt.get_select_item(i);
-    ObExprResType l_type = left_select_item.expr_->get_result_type();
-    ObExprResType r_type = right_select_item.expr_->get_result_type();
+    ObRawExprResType l_type = left_select_item.expr_->get_result_type();
+    ObRawExprResType r_type = right_select_item.expr_->get_result_type();
     if (l_type != r_type) {
       if (((ObObjMeta)l_type) == ((ObObjMeta)r_type)) {
         //类型相等，不考虑精度
@@ -1480,7 +1478,7 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to create select stmt");
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("check stack overflow failed", K(ret), K(is_stack_overflow));
-  } else if (is_stack_overflow) {
+  } else if (OB_UNLIKELY(is_stack_overflow)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else {
@@ -2050,6 +2048,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info_),
         K(select_stmt), K(ret));
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                         enable_modify_null_name))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     exec_ctx = session_info_->get_cur_exec_ctx();
   }
@@ -2084,11 +2085,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           LOG_WARN("Can not malloc space for alias name", K(ret));
         }
       }
-    } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
-                                                           enable_modify_null_name))) {
-      LOG_WARN("failed to check feature enable", K(ret));
-    } else if (is_mysql_mode() && node.children_[i]->children_[0]->type_ == T_NULL &&
-               enable_modify_null_name) {
+    } else if (is_mysql_mode()
+               && node.children_[i]->children_[0]->type_ == T_NULL
+               && enable_modify_null_name) {
       // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
       // Note: when null value is in a composite expression, its alias is not modified.
       ObString alias_name = ObString::make_string("NULL");
@@ -2542,9 +2541,6 @@ int ObSelectResolver::transfer_rb_iterate_items()
       } else {
         // get and push_back rb_expr
         rb_expr = rb_iterate_expr->get_param_expr(0);
-        uint64_t extra = rb_expr->get_extra();
-        extra |= CM_ERROR_ON_SCALE_OVER;
-        rb_expr->set_extra(extra);
         if (OB_FAIL(rb_expr->deduce_type(session_info_))) {
           LOG_WARN("failed to deduce type", K(ret));
         } else if (OB_FAIL(table_item->json_table_def_->doc_exprs_.push_back(rb_expr))) {
@@ -2921,7 +2917,7 @@ int ObSelectResolver::is_need_check_col_dup(const ObRawExpr *expr, bool &need_ch
   } else if (T_QUESTIONMARK == expr->get_expr_type()) {
     need_check = false;
   } else {
-    for (int64_t j = 0; OB_SUCC(ret) && need_check && j < expr->get_children_count(); ++j) {
+    for (int64_t j = 0; OB_SUCC(ret) && need_check && j < expr->get_param_count(); ++j) {
       const ObRawExpr *child = expr->get_param_expr(j);
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3026,7 +3022,7 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           LOG_WARN("fail to create const string c_expr", K(ret));
         } else {
           ObSysFunRawExpr *cast_expr = NULL;
-          ObExprResType res_type;
+          ObRawExprResType res_type;
           res_type.set_type(ObVarcharType);
           res_type.set_length(1);
           res_type.set_length_semantics(LS_BYTE);
@@ -4025,7 +4021,7 @@ int ObSelectResolver::check_rollup_clause(const ParseNode *node, bool &has_rollu
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resolver arguments", K(ret), K(node));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_rollup && i < node->num_child_; ++i) {
       const ParseNode *child_node = node->children_[i];
       if (OB_ISNULL(child_node)) {
         ret = OB_ERR_UNEXPECTED;
@@ -6954,7 +6950,7 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode *node)
         LOG_WARN("get unexpected null", K(ret), K(limit_offset));
       } else {
         floor_offset_expr->set_func_name(ObString::make_string("FLOOR"));
-        ObExprResType dst_type;
+        ObRawExprResType dst_type;
         dst_type.set_int();
         ObSysFunRawExpr *cast_expr = NULL;
         OZ(ObRawExprUtils::create_cast_expr(
@@ -6990,7 +6986,7 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode *node)
           LOG_WARN("get unexpected null", K(ret), K(limit_count));
         } else {
           floor_count_expr->set_func_name(ObString::make_string("FLOOR"));
-          ObExprResType dst_type;
+          ObRawExprResType dst_type;
           dst_type.set_int();
           ObSysFunRawExpr *cast_expr = NULL;
           OZ(ObRawExprUtils::create_cast_expr(
@@ -7014,7 +7010,7 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode *node)
           ret = OB_ERR_INVALID_SQL_ROW_LIMITING;
           LOG_WARN("Invalid SQL ROW LIMITING expression was specified", K(ret));
         } else {
-          ObExprResType dst_type;
+          ObRawExprResType dst_type;
           dst_type.set_double();
           ObSysFunRawExpr *cast_expr = NULL;
           OZ(ObRawExprUtils::create_cast_expr(

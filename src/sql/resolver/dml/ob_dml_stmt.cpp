@@ -111,6 +111,18 @@ bool JoinedTable::same_as(const JoinedTable &other) const
   return bret;
 }
 
+void ColumnItem::set_default_value(const common::ObObj &val)
+{
+  default_value_ = val;
+  if (NULL != expr_ &&
+          (ob_is_enumset_tc(val.get_type()) || ob_is_collection_sql_type(val.get_type()))) {
+    default_value_.set_subschema_id(expr_->get_subschema_id());
+    if (expr_->is_enum_set_with_subschema()) {
+      default_value_.set_scale(ObEnumSetMeta::MetaState::SQL);
+    }
+  }
+}
+
 int ColumnItem::deep_copy(ObIRawExprCopier &expr_copier,
                           const ColumnItem &other)
 {
@@ -1736,14 +1748,14 @@ int ObDMLStmt::get_order_exprs(ObIArray<ObRawExpr*> &order_exprs) const
   return ret;
 }
 
-int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info)
+int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info, bool need_deduce_type /*true*/)
 {
   int ret = OB_SUCCESS;
   ObArray<ObSelectStmt*> view_stmts;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(formalize_relation_exprs(session_info))) {
+  } else if (OB_FAIL(formalize_relation_exprs(session_info, need_deduce_type))) {
     LOG_WARN("failed to formalize relation exprs", K(ret));
   } else if (OB_FAIL(get_from_subquery_stmts(view_stmts))) {
     LOG_WARN("get from subquery stmts failed", K(ret));
@@ -1753,7 +1765,7 @@ int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info)
       if (OB_ISNULL(view_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("view_stmt is null", K(ret));
-      } else if (OB_FAIL(SMART_CALL(view_stmt->formalize_stmt(session_info)))) {
+      } else if (OB_FAIL(SMART_CALL(view_stmt->formalize_stmt(session_info, need_deduce_type)))) {
         LOG_WARN("formalize view stmt failed", K(ret));
       }
     }
@@ -1761,17 +1773,18 @@ int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info)
   return ret;
 }
 
-int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
+int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info, bool need_deduce_type /*false*/)
 {
 
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> relation_exprs;
-  if (OB_ISNULL(session_info)) {
+  if (OB_ISNULL(session_info) || OB_ISNULL(get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(get_relation_exprs(relation_exprs))) {
     LOG_WARN("get relation exprs failed", K(ret));
   } else {
+    need_deduce_type = get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2) ? need_deduce_type : true;
     // rel id maintenance of dependent exprs
     subquery_exprs_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
@@ -1788,7 +1801,7 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
         if (dependant_expr == nullptr) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(dependant_expr->formalize(session_info))) {
+        } else if (OB_FAIL(dependant_expr->formalize(session_info, false, need_deduce_type))) {
           LOG_WARN("failed to formalize expr", K(ret));
         } else if (OB_FAIL(dependant_expr->pull_relation_id())) {
           LOG_WARN("pull expr relation ids failed", K(ret), K(*dependant_expr));
@@ -1802,7 +1815,7 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
-      } else if (OB_FAIL(expr->formalize(session_info))) {
+      } else if (OB_FAIL(expr->formalize(session_info, false, need_deduce_type))) {
         // 'formalize' method calls 'extract_info' and 'decude_type' methods inside
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(expr->pull_relation_id())) {
@@ -3783,10 +3796,30 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs)
   return get_relation_exprs(relation_exprs, visitor);
 }
 
+int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs,
+                                  const ObExprInfo &flags,
+                                  bool match_any_flag) const
+{
+  ObStmtExprGetter visitor;
+  visitor.set_relation_scope();
+  visitor.set_expr_flags_required(flags, match_any_flag);
+  return get_relation_exprs(relation_exprs, visitor);
+}
+
 int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs)
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  return get_relation_exprs(relation_expr_ptrs, visitor);
+}
+
+int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs,
+                                  const ObExprInfo &flags,
+                                  bool match_any_flag)
+{
+  ObStmtExprGetter visitor;
+  visitor.set_relation_scope();
+  visitor.set_expr_flags_required(flags, match_any_flag);
   return get_relation_exprs(relation_expr_ptrs, visitor);
 }
 
@@ -5610,7 +5643,7 @@ int ObValuesTableDef::deep_copy(const ObValuesTableDef &other,
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < other.column_types_.count(); ++i) {
-      ObExprResType tmp_type;
+      ObRawExprResType tmp_type;
       if (OB_FAIL(tmp_type.assign(other.column_types_.at(i)))) {
         LOG_WARN("failed to assign tmp type", K(ret));
       } else if (OB_FAIL(column_types_.push_back(tmp_type))) {

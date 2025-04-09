@@ -394,6 +394,8 @@ int ObTransformDistinctAggregate::replace_aggr_func(ObSelectStmt *stmt,
     } else if (OB_FAIL(new_aggr->assign(*aggr))) {
       LOG_WARN("failed to assign aggr expr", K(ret));
     } else if (OB_FALSE_IT(new_aggr->set_param_distinct(false))) {
+    } else if (OB_FAIL(new_aggr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize aggr expr", K(ret));
     } else if (OB_FAIL(ObExpandAggregateUtils::add_aggr_item(stmt->get_aggr_items(),
                                                              new_aggr))) {
       LOG_WARN("failed to add aggr item", K(ret), KPC(new_aggr));

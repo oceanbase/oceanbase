@@ -229,6 +229,9 @@ int ObTruncatePartKeyInfo::resolve_part_expr(
   ObSchemaChecker schema_checker;
   if (OB_FAIL(schema_checker.init(schema_guard))) {
     LOG_WARN("Failed to init schema_checker", K(ret));
+  } else if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
   } else {
     ObStmtFactory stmt_factory(allocator);
     TableItem table_item;
@@ -245,7 +248,12 @@ int ObTruncatePartKeyInfo::resolve_part_expr(
     table_item.type_ = TableItem::BASE_TABLE;
     ObPartitionFuncType part_type = ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX;
 
-    SMART_VAR (ObDeleteResolver, delete_resolver, resolver_ctx) {
+    SMART_VARS_3 ((ObDeleteResolver, delete_resolver, resolver_ctx),
+                  (sql::ObExecContext, exec_ctx, allocator),
+                  (sql::ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+      LinkExecCtxGuard link_guard(*session_, exec_ctx);
+      exec_ctx.set_my_session(session_);
+      exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
       ObString part_str;
       ObDeleteStmt *delete_stmt = delete_resolver.create_stmt<ObDeleteStmt>();
       if (OB_ISNULL(delete_stmt) || OB_ISNULL(resolver_ctx.query_ctx_)) {
@@ -274,6 +282,7 @@ int ObTruncatePartKeyInfo::resolve_part_expr(
           LOG_WARN("raw_part_expr is NULL", K(ret), K(part_type));
         }
       }
+      exec_ctx.set_physical_plan_ctx(NULL);
     } // end smart_var
   }
   return ret;

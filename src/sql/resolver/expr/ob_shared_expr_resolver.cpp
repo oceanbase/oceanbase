@@ -34,10 +34,8 @@ bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
   } else if (left.get_expr_type() != T_QUESTIONMARK) {
     bret = left.get_value().strict_equal(right.get_value());
   } else {
-    bret = !left.get_result_type().get_param().is_null() &&
-           !right.get_result_type().get_param().is_null() &&
-        left.get_result_type().get_param().strict_equal(
-          right.get_result_type().get_param());
+    bret = !left.get_param().is_null() && !right.get_param().is_null() &&
+        left.get_param().strict_equal(right.get_param());
     if (bret) {
       ObPCParamEqualInfo equal_info;
       equal_info.first_param_idx_ = left.get_value().get_unknown();

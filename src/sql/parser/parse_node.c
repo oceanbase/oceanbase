@@ -899,20 +899,25 @@ ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_n
                            T_OP_AND == left_node->type_ ||
                            T_EXPR_LIST == left_node->type_ ||
                            T_SET_UNION == left_node->type_ ||
-                           T_SET_UNION_ALL == left_node->type_))) {
+                           T_SET_UNION_ALL == left_node->type_ ||
+                           T_VALUE_VECTOR == left_node->type_ ||
+                           T_VALUE_LIST == left_node->type_))) {
     *error_code = OB_PARSER_ERR_UNEXPECTED;
   } else {
     int64_t capacity = get_need_reserve_capacity(left_node->num_child_ + 1);
     if (left_node->value_ < capacity) {
-      ParseNode *new_op = new_node(malloc_pool, left_node->type_, capacity);
-      if (OB_ISNULL(new_op)) {
+      if (NULL == left_node->children_) {
+        left_node->children_ = parse_malloc(capacity * sizeof(ParseNode*), malloc_pool);
+      } else {
+        left_node->children_ = parse_realloc(left_node->children_, capacity * sizeof(ParseNode*), malloc_pool);
+      }
+      if (OB_ISNULL(left_node->children_)) {
         *error_code = OB_PARSER_ERR_NO_MEMORY;
       } else {
-        MEMCPY(new_op->children_, left_node->children_, sizeof(ParseNode*) * left_node->num_child_);
-        new_op->children_[left_node->num_child_] = node;
-        new_op->num_child_ = left_node->num_child_ + 1;
-        new_op->value_ = capacity;
-        ret_node = new_op;
+        left_node->children_[left_node->num_child_] = node;
+        left_node->num_child_ = left_node->num_child_ + 1;
+        left_node->value_ = capacity;
+        ret_node = left_node;
       }
     } else {
       left_node->children_[left_node->num_child_] = node;

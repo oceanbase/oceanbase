@@ -7184,7 +7184,9 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
     ObResolverParams params;
     ObRawExpr *expr = NULL;
     ObRawExprFactory expr_factory(allocator);
-    SMART_VAR(sql::ObSQLSessionInfo, empty_session) {
+    SMART_VARS_3((sql::ObSQLSessionInfo, empty_session), (ObExecContext, exec_ctx, allocator),
+                 (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+      LinkExecCtxGuard link_guard(empty_session, exec_ctx);
       uint64_t tenant_id = column.get_tenant_id();
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard guard;
@@ -7195,6 +7197,8 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
       params.allocator_ = &allocator;
       params.session_info_ = &empty_session;
       params.param_list_ = &empty_param_list;
+      exec_ctx.set_my_session(&empty_session);
+      exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
       if (OB_FAIL(empty_session.test_init(0, 0, 0, &allocator))) {
         LOG_WARN("init empty session failed", K(ret));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
@@ -7274,6 +7278,7 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
           default_value = dest_obj;
         }
       }
+      exec_ctx.set_physical_plan_ctx(NULL);
     }
     LOG_DEBUG("finish calc default value", K(column), K(expr_str), K(default_value), KPC(expr), K(ret));
   } else {
@@ -7616,25 +7621,38 @@ int ObDDLResolver::adjust_number_decimal_column_accuracy_within_max(share::schem
   return ret;
 }
 
-int ObDDLResolver::adjust_enum_set_column_meta_info(const ObRawExpr &expr,
-                                                    sql::ObSQLSessionInfo &session_info,
-                                                    share::schema::ObColumnSchemaV2 &column)
+int ObDDLResolver::fill_column_with_subschema(const ObRawExpr &expr,
+                                              sql::ObSQLSessionInfo &session_info,
+                                              share::schema::ObColumnSchemaV2 &column)
 {
   int ret = OB_SUCCESS;
   if (column.is_enum_or_set()) {
     const ObEnumSetMeta *enum_set_meta = nullptr;
-    if (expr.is_enum_set_with_subschema()) {
-      if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr.get_result_type(),
-                                                        &session_info,
-                                                        enum_set_meta))) {
-        LOG_WARN("fail to extract enum set meta", K(ret), K(expr));
-      } else {
-        column.set_meta_type(enum_set_meta->get_obj_meta());
-        column.set_data_scale(-1);
-        OZ(column.set_extended_type_info(*enum_set_meta->get_str_values()), expr);
-      }
+    if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr.get_result_type(),
+                                                      &session_info,
+                                                      enum_set_meta))) {
+      LOG_WARN("fail to extract enum set meta", K(ret), K(expr));
+    } else if (OB_ISNULL(enum_set_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(column.set_extended_type_info(*enum_set_meta->get_str_values()))) {
+      LOG_WARN("set enum or set info failed", K(ret), K(expr));
     } else {
-      OZ(column.set_extended_type_info(expr.get_enum_set_values()), expr);
+      column.set_meta_type(enum_set_meta->get_obj_meta());
+      column.set_data_scale(SCALE_UNKNOWN_YET);
+      OZ(column.set_extended_type_info(*enum_set_meta->get_str_values()), expr);
+    }
+  } else if (column.is_collection()) {
+    const ObSqlCollectionInfo *coll_info = NULL;
+    uint16_t subschema_id = expr.get_result_type().get_subschema_id();
+    ObSubSchemaValue value;
+    if (OB_FAIL(session_info.get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+      LOG_WARN("failed to get subschema ctx", K(ret));
+    } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(column.add_type_info(coll_info->get_def_string()))) {
+      LOG_WARN("set type info failed", K(ret));
     }
   }
   return ret;
@@ -8299,7 +8317,7 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
               c_expr = new(c_expr) ObConstRawExpr();
               maxvalue_expr = c_expr;
               maxvalue_expr->set_data_type(common::ObMaxType);
-              if (OB_FAIL(row_expr->add_param_expr(maxvalue_expr))) {
+              if (OB_FAIL(row_expr->set_param_expr(maxvalue_expr))) {
                 LOG_WARN("failed add param expr", K(ret));
               } else if (OB_FAIL(list_value_exprs.push_back(row_expr))) {
                 LOG_WARN("array push back fail", K(ret));
@@ -8330,6 +8348,11 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
                                                                                     part_value_exprs,
                                                                                     in_tablegroup))) {
                 LOG_WARN("resolve partition expr failed", K(ret));
+              }
+              if (OB_SUCC(ret) && 0 == j) {
+                if (OB_FAIL(row_expr->init_param_exprs(expr_list_node->num_child_ * expr_num))) {
+                  LOG_WARN("failed to init param exprs", K(ret));
+                }
               }
               for (int64_t k = 0; OB_SUCC(ret) && k < part_value_exprs.count(); k ++) {
                 int64_t idx = row_expr->get_param_count() % expr_num; //列向量中第idx列
@@ -9484,7 +9507,7 @@ int ObDDLResolver::resolve_split_partition_list_value(const ParseNode *node,
       maxvalue_expr = c_expr;
       maxvalue_expr->set_data_type(common::ObMaxType);
       ObDDLStmt::array_t part_value_expr_array;
-      if (OB_FAIL(row_expr->add_param_expr(maxvalue_expr))) {
+      if (OB_FAIL(row_expr->set_param_expr(maxvalue_expr))) {
         LOG_WARN("failed to add param expr", K(ret));
       } else if (OB_FAIL(list_value_exprs.push_back(row_expr))) {
         LOG_WARN("array push back fail", K(ret));
@@ -9521,6 +9544,11 @@ int ObDDLResolver::resolve_split_partition_list_value(const ParseNode *node,
                                                                                              part_value_exprs,
                                                                                              in_tablegroup))) {
         LOG_WARN("resolve partition expr failed", K(ret));
+      }
+      if (OB_SUCC(ret) && 0 == j) {
+        if (OB_FAIL(row_expr->init_param_exprs(node->num_child_ * expr_num))) {
+          LOG_WARN("failed to init param exprs", K(ret));
+        }
       }
       for (int64_t k = 0; OB_SUCC(ret) && k < part_value_exprs.count(); k++) {
         if (OB_FAIL(row_expr->add_param_expr(part_value_exprs.at(k)))) {
@@ -12901,7 +12929,7 @@ int ObDDLResolver::resolve_list_partition_value_node(ParseNode &expr_list_node,
       c_expr = new(c_expr) ObConstRawExpr();
       maxvalue_expr = c_expr;
       maxvalue_expr->set_data_type(common::ObMaxType);
-      if (OB_FAIL(row_expr->add_param_expr(maxvalue_expr))) {
+      if (OB_FAIL(row_expr->set_param_expr(maxvalue_expr))) {
         LOG_WARN("failed add param expr", K(ret));
       }
     }
@@ -12925,6 +12953,8 @@ int ObDDLResolver::resolve_list_partition_value_node(ParseNode &expr_list_node,
                                                                   part_value_exprs,
                                                                   in_tablegroup))) {
         LOG_WARN("resolve partition expr failed", K(ret));
+      } else if (OB_FAIL(row_expr->init_param_exprs(part_value_exprs.count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < part_value_exprs.count(); ++j) {
         if (OB_FAIL(row_expr->add_param_expr(part_value_exprs.at(j)))) {
@@ -12949,6 +12979,11 @@ int ObDDLResolver::resolve_list_partition_value_node(ParseNode &expr_list_node,
                                                                               part_value_exprs,
                                                                               in_tablegroup))) {
           LOG_WARN("resolve partition expr failed", K(ret));
+        }
+        if (OB_SUCC(ret) && 0 == i) {
+          if (OB_FAIL(row_expr->init_param_exprs(expr_list_node.num_child_ * part_value_exprs.count()))) {
+            LOG_WARN("failed to init param exprs", K(ret));
+          }
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < part_value_exprs.count(); ++j) {
           if (OB_FAIL(row_expr->add_param_expr(part_value_exprs.at(j)))) {
@@ -13178,7 +13213,7 @@ int ObDDLResolver::generate_default_list_subpart(
           c_expr = new(c_expr) ObConstRawExpr();
           maxvalue_expr = c_expr;
           maxvalue_expr->set_data_type(common::ObMaxType);
-          if (OB_FAIL(row_expr->add_param_expr(maxvalue_expr))) {
+          if (OB_FAIL(row_expr->set_param_expr(maxvalue_expr))) {
             LOG_WARN("failed add param expr", K(ret));
           } else if (OB_FAIL(list_value_exprs.push_back(row_expr))) {
             LOG_WARN("array push back fail", K(ret));

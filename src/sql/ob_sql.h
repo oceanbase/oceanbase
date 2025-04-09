@@ -447,11 +447,6 @@ private:
   int resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
 
   int resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
-
-  int replace_const_expr(common::ObIArray<ObRawExpr*> &raw_exprs,
-                         ParamStore &param_store);
-  int replace_const_expr(ObRawExpr *raw_expr,
-                         ParamStore &param_store);
   void generate_ps_sql_id(const ObString &raw_sql,
                           ObSqlCtx &context);
   void generate_sql_id(ObPlanCacheCtx &pc_ctx,

@@ -284,6 +284,21 @@ public:
   iterator end();
 
   AllocatorT* get_allocator() { return allocator_; }
+  virtual int64_t to_string(char* buf, int64_t buf_len) const override
+  {
+    int64_t pos = 0;
+    J_ARRAY_START();
+    int64_t N = count();
+    for (int64_t index = 0; index < N - 1; ++index) {
+      BUF_PRINTO(at(index));
+      J_COMMA();
+    }
+    if (0 < N) {
+      BUF_PRINTO(at(N - 1));
+    }
+    J_ARRAY_END();
+    return pos;
+  }
   NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   template<typename ... Args>

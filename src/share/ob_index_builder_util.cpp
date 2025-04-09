@@ -845,9 +845,11 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
           ObSchemaChecker schema_checker;
           ObRawExpr *expr = NULL;
           LinkExecCtxGuard link_guard(session, exec_ctx);
+          ObObj sql_mode_obj;
           exec_ctx.set_my_session(&session);
           exec_ctx.set_is_ps_prepare_stage(false);
           exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
+          sql_mode_obj.set_uint64(arg.sql_mode_);
           if (OB_FAIL(session.init(0 /*default session id*/,
                                   0 /*default proxy id*/,
                                   &allocator))) {
@@ -872,6 +874,8 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
             LOG_WARN("session load default configs failed", K(ret));
           } else if (OB_FAIL(arg.local_session_var_.update_session_vars_with_local(session))) {
             LOG_WARN("fail to update session vars", K(ret));
+          } else if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_SQL_MODE, sql_mode_obj))) {
+            LOG_WARN("fail to update sql mode", K(ret));
           } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(&arg,
                                                         index_expr_def,
                                                         expr_factory,
@@ -906,7 +910,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
             } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(data_schema.get_tenant_id(), guard))) {
               LOG_WARN("get schema guard failed", K(ret));
             } else if (OB_FAIL(generate_ordinary_generated_column(
-                *expr, arg.sql_mode_, data_schema, gen_col, &guard))) {
+                *expr, session, data_schema, gen_col, &guard))) {
               LOG_WARN("generate ordinary generated column failed", K(ret));
             } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
                 gen_col->get_cur_default_value().get_string(), session, data_schema))) {
@@ -975,7 +979,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
 
 int ObIndexBuilderUtil::generate_ordinary_generated_column(
     ObRawExpr &expr,
-    const ObSQLMode sql_mode,
+    const sql::ObSQLSessionInfo &session,
     ObTableSchema &data_schema,
     ObColumnSchemaV2 *&gen_col,
     ObSchemaGetterGuard *schema_guard,
@@ -997,7 +1001,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
         LOG_WARN("get tenant data version failed", K(ret));
       } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
         //do nothing
-      } else if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(&expr, sql_mode, tmp_gen_col))) {
+      } else if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(&expr, &session, tmp_gen_col))) {
         LOG_WARN("fail to extract sysvar from expr", K(ret));
       }
     }
@@ -1026,7 +1030,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
         tmp_gen_col.set_table_id(data_schema.get_table_id());
         tmp_gen_col.set_column_id(data_schema.get_max_used_column_id() + 1);
         tmp_gen_col.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
-        if (is_pad_char_to_full_length(sql_mode)) {
+        if (is_pad_char_to_full_length(session.get_sql_mode())) {
           tmp_gen_col.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
         }
         tmp_gen_col.set_is_hidden(true);

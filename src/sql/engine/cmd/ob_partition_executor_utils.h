@@ -127,7 +127,7 @@ public:
   static int expr_cal_and_cast(const sql::stmt::StmtType &stmt_type,
                                bool is_list_part,
                                ObExecContext &ctx,
-                               const sql::ObExprResType &dst_res_type,
+                               const sql::ObRawExprResType &dst_res_type,
                                const common::ObCollationType fun_collation_type,
                                ObRawExpr *expr,
                                common::ObObj &value_obj);
@@ -135,7 +135,7 @@ public:
   static int expr_cal_and_cast_with_check_varchar_len(const stmt::StmtType &stmt_type,
                                                       bool is_list_part,
                                                       ObExecContext &ctx,
-                                                      const sql::ObExprResType &dst_res_type,
+                                                      const sql::ObRawExprResType &dst_res_type,
                                                       ObRawExpr *expr,
                                                       common::ObObj &value_obj);
 

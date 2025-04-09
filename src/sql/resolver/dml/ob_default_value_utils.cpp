@@ -97,7 +97,8 @@ int ObDefaultValueUtils::resolve_default_function_static(
       LOG_WARN("only pure sys function can be indexed", K(ret));
     } else if (ObResolverUtils::DISABLE_CHECK == check_status) {
       if (OB_FAIL(build_type_expr_static(expr_factory, 
-                                         col_schema->get_data_type(), 
+                                         session_info,
+                                         *col_schema,
                                          fun_expr->get_param_expr(0)))) {
         LOG_WARN("fail to replace first child", K(ret));
       } else if (OB_FAIL(build_collation_expr_static(expr_factory, 
@@ -116,12 +117,6 @@ int ObDefaultValueUtils::resolve_default_function_static(
                   expr_factory, col_schema, fun_expr->get_param_expr(4),
                   session_info))) {
         LOG_WARN("fail to build default value", K(ret));
-      } else if (ob_is_enumset_tc(col_schema->get_data_type())
-                 || ob_is_collection_sql_type(col_schema->get_data_type())) {
-        const ObIArray<ObString> &enum_set_values = col_schema->get_extended_type_info();
-        if (OB_FAIL(fun_expr->set_enum_set_values(enum_set_values))) {
-          LOG_WARN("failed to set_enum_set_values", K(ret));
-        }
       } else {/*do nothing*/}
     }
   }
@@ -207,13 +202,7 @@ int ObDefaultValueUtils::resolve_default_function(ObRawExpr *&expr, ObStmtScope 
         } else if (OB_FAIL(build_default_function_expr(
                     column_item, fun_expr->get_param_expr(4), scope, false))) {
           LOG_WARN("fail to build default value", K(ret));
-        } else if (ob_is_enumset_tc(column_expr->get_data_type())
-                   || ob_is_collection_sql_type(column_expr->get_data_type())) {
-          const ObIArray<ObString> &enum_set_values = column_expr->get_enum_set_values();
-          if (OB_FAIL(fun_expr->set_enum_set_values(enum_set_values))) {
-            LOG_WARN("failed to set_enum_set_values", K(ret));
-          }
-        } else {/*do nothing*/}
+        }
       }
     }
   }
@@ -258,6 +247,8 @@ int ObDefaultValueUtils::resolve_default_expr(const ColumnItem &column_item, ObR
       default_func_expr->set_result_type(*column_item.get_column_type());
       if (OB_FAIL(build_type_expr(&column_item, c_expr))) {
         LOG_WARN("fail to build type expr", K(ret));
+      } else if (OB_FAIL(default_func_expr->init_param_exprs(5))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else if (OB_FAIL(default_func_expr->add_param_expr(c_expr))) {
         LOG_WARN("fail to add param expr", K(ret));
       } else if (OB_FAIL(build_collation_expr(&column_item, collation_expr))) {
@@ -277,31 +268,7 @@ int ObDefaultValueUtils::resolve_default_expr(const ColumnItem &column_item, ObR
       } else if (OB_FAIL(default_func_expr->add_param_expr(default_value_expr))) {
         LOG_WARN("fail to add defualt value expr", K(ret));
       } else {
-        const ObColumnSchemaV2 *column_schema = NULL;
-        if (ob_is_enumset_tc(column_item.get_column_type()->get_type())
-            || ob_is_collection_sql_type(column_item.get_column_type()->get_type())) {
-          bool is_link = ObSqlSchemaGuard::is_link_table(stmt_, column_item.table_id_);
-          if (OB_ISNULL(params_->schema_checker_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("schema checker is NULL", K(ret));
-          } else if (OB_FAIL(params_->schema_checker_->get_column_schema(
-                             params_->session_info_->get_effective_tenant_id(),
-                             column_item.base_tid_, column_item.base_cid_, column_schema, is_link))) {
-            LOG_WARN("get column schema fail", K(column_item), K(ret));
-          } else if (OB_ISNULL(column_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column schema is NULL", K(column_item), K(ret));
-          } else {
-            const ObIArray<ObString> &enum_set_values = column_schema->get_extended_type_info();
-            if (OB_FAIL(default_func_expr->set_enum_set_values(enum_set_values))) {
-              LOG_WARN("failed to set_enum_set_values", K(ret));
-            }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          expr = default_func_expr;
-        }
+        expr = default_func_expr;
       }
     }
   }
@@ -316,6 +283,7 @@ int ObDefaultValueUtils::build_default_expr_strict_static(
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *c_expr = NULL;
+  ObObj default_value;
   if (OB_ISNULL(column_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguemnt", K(column_schema));
@@ -330,22 +298,30 @@ int ObDefaultValueUtils::build_default_expr_strict_static(
         && !column_schema->is_nullable()
         && column_schema->get_cur_default_value().is_null()) {
       const uint64_t ENUM_FIRST_VAL = 1;
-      ObObj enum_val;
-      enum_val.set_enum(ENUM_FIRST_VAL);
-      c_expr->set_value(enum_val);
+      default_value.set_enum(ENUM_FIRST_VAL);
     } else {
-      c_expr->set_value(column_schema->get_cur_default_value());
+      default_value = column_schema->get_cur_default_value();
     }
     if (OB_SUCC(ret)
-        && (ob_is_enumset_tc(c_expr->get_data_type()) || ob_is_collection_sql_type(c_expr->get_data_type()))) {
+        && (ob_is_enumset_tc(default_value.get_type()) || default_value.is_collection_sql_type())) {
+      uint16_t subschema_id = 0;
       if (OB_UNLIKELY(column_schema->get_extended_type_info().count() < 1)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column schema", KPC(column_schema), K(ret));
-      } else if (OB_FAIL(c_expr->set_enum_set_values(column_schema->get_extended_type_info()))) {
-        LOG_WARN("failed to set_enum_set_values", KPC(column_schema), K(ret));
-      } else {/*do nothing*/}
+        LOG_WARN("invalid column_expr", KPC(column_schema), K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::get_subschema_id(column_schema->get_meta_type(),
+                                                          column_schema->get_extended_type_info(),
+                                                          session_info,
+                                                          subschema_id))) {
+        LOG_WARN("failed to get column subschema id", K(ret));
+      } else {
+        default_value.set_subschema_id(subschema_id);
+        if (ob_is_enumset_tc(c_expr->get_data_type())) {
+          default_value.set_scale(ObEnumSetMeta::MetaState::SQL);
+        }
+      }
     }
     if (OB_SUCC(ret)) {
+      c_expr->set_value(default_value);
       expr = c_expr;
       if (OB_FAIL(expr->formalize(&session_info))) {
         LOG_WARN("failed to extract info", K(ret));
@@ -406,25 +382,22 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
     if (column->get_column_type()->is_enum()
         && column->is_not_null_for_write()
         && column->default_value_.is_null()) {
-      const uint64_t ENUM_FIRST_VAL = 1;
-      ObObj enum_val;
-      enum_val.set_enum(ENUM_FIRST_VAL);
-      c_expr->set_value(enum_val);
-    } else {
-      c_expr->set_value(column->default_value_);
-    }
-    if (OB_SUCC(ret)
-        && (ob_is_enumset_tc(c_expr->get_data_type()) || ob_is_collection_sql_type(c_expr->get_data_type()))) {
       const ObColumnRefRawExpr *column_expr = column->get_expr();
       if (OB_ISNULL(column_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column expr is NULL", KPC(column), K(ret));
-      } else if (OB_UNLIKELY(column_expr->get_enum_set_values().count() < 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column_expr", KPC(column_expr), K(ret));
-      } else if (OB_FAIL(c_expr->set_enum_set_values(column_expr->get_enum_set_values()))) {
-        LOG_WARN("failed to set_enum_set_values", KPC(column_expr), K(ret));
-      } else {/*do nothing*/}
+      } else {
+        const uint64_t ENUM_FIRST_VAL = 1;
+        ObObj enum_val;
+        enum_val.set_enum(ENUM_FIRST_VAL);
+        enum_val.set_subschema_id(column_expr->get_subschema_id());
+        if (column_expr->is_enum_set_with_subschema()) {
+          enum_val.set_scale(ObEnumSetMeta::MetaState::SQL);
+        }
+        c_expr->set_value(enum_val);
+      }
+    } else {
+      c_expr->set_value(column->default_value_);
     }
     if (OB_SUCC(ret)) {
       if (!ob_is_numeric_type(column->get_column_type()->get_type())) {
@@ -780,6 +753,22 @@ int ObDefaultValueUtils::build_default_expr_not_strict_static(
     default_value.set_type(column_schema->get_data_type());
     if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision(), column_schema->get_collation_type()))) {
       LOG_WARN("failed to build not strict default value info", K(column_schema), K(ret));
+    } else if (ob_is_enumset_tc(default_value.get_type()) || default_value.is_collection_sql_type()) {
+      uint16_t subschema_id = 0;
+      if (OB_UNLIKELY(column_schema->get_extended_type_info().count() < 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column_expr", KPC(column_schema), K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::get_subschema_id(column_schema->get_meta_type(),
+                                                          column_schema->get_extended_type_info(),
+                                                          session_info,
+                                                          subschema_id))) {
+        LOG_WARN("failed to get column subschema id", K(ret));
+      } else {
+        default_value.set_subschema_id(subschema_id);
+        if (ob_is_enumset_tc(c_expr->get_data_type())) {
+          default_value.set_scale(ObEnumSetMeta::MetaState::SQL);
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -799,15 +788,6 @@ int ObDefaultValueUtils::build_default_expr_not_strict_static(
     }
   }
 
-  if (OB_SUCC(ret)
-      && (ob_is_enumset_tc(c_expr->get_data_type()) || ob_is_collection_sql_type(c_expr->get_data_type()))) {
-    if (OB_UNLIKELY(column_schema->get_extended_type_info().count() < 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid column_expr", KPC(column_schema), K(ret));
-    } else if (OB_FAIL(c_expr->set_enum_set_values(column_schema->get_extended_type_info()))) {
-      LOG_WARN("failed to set_enum_set_values", KPC(column_schema), K(ret));
-    } else {/*do nothing*/}
-  }
   if (OB_SUCC(ret)) {
     expr = c_expr;
     if (OB_FAIL(expr->formalize(&session_info))) {
@@ -833,6 +813,17 @@ int ObDefaultValueUtils::build_default_expr_not_strict(const ColumnItem *column,
     default_value.set_type(column->get_column_type()->get_type());
     if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision(), column->get_column_type()->get_collation_type()))) {
       LOG_WARN("failed to build not strict default value info", K(column), K(ret));
+    } else if (ob_is_enumset_tc(default_value.get_type()) || default_value.is_collection_sql_type()) {
+      const ObColumnRefRawExpr *column_expr = column->get_expr();
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column expr is NULL", KPC(column), K(ret));
+      } else {
+        default_value.set_subschema_id(column_expr->get_subschema_id());
+        if (column_expr->is_enum_set_with_subschema()) {
+          default_value.set_scale(ObEnumSetMeta::MetaState::SQL);
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -849,20 +840,6 @@ int ObDefaultValueUtils::build_default_expr_not_strict(const ColumnItem *column,
       c_expr->set_value(default_value);
       c_expr->set_accuracy(column->get_column_type()->get_accuracy());
     }
-  }
-
-  if (OB_SUCC(ret)
-      && (ob_is_enumset_tc(c_expr->get_data_type()) || ob_is_collection_sql_type(c_expr->get_data_type()))) {
-    const ObColumnRefRawExpr *column_expr = column->get_expr();
-    if (OB_ISNULL(column_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column expr is NULL", KPC(column), K(ret));
-    } else if (OB_UNLIKELY(column_expr->get_enum_set_values().count() < 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid column_expr", KPC(column_expr), K(ret));
-    } else if (OB_FAIL(c_expr->set_enum_set_values(column_expr->get_enum_set_values()))) {
-      LOG_WARN("failed to set_enum_set_values", KPC(column_expr), K(ret));
-    } else {/*do nothing*/}
   }
   if (OB_SUCC(ret)) {
     expr = c_expr;
@@ -961,7 +938,6 @@ int ObDefaultValueUtils::build_collation_expr_static(ObRawExprFactory& expr_fact
     LOG_WARN("fail to build accuracy expr", K(ret));
   } else {
     expr = c_expr;
-    LOG_INFO("build collation expr", K(*expr), K(coll_type));
   }
   return ret;
 }
@@ -983,7 +959,6 @@ int ObDefaultValueUtils::build_collation_expr(const ColumnItem *column, ObRawExp
     LOG_WARN("fail to build accuracy expr", K(ret));
   } else {
     expr = c_expr;
-    LOG_INFO("build collation expr", K(*expr), K(*column->get_column_type()));
   }
   return ret;
 }
@@ -1029,15 +1004,29 @@ int ObDefaultValueUtils::build_accuracy_expr_static(ObRawExprFactory& expr_facto
 }
 
 int ObDefaultValueUtils::build_type_expr_static(ObRawExprFactory& expr_factory, 
-                                                const common::ColumnType data_type, 
+                                                const ObSQLSessionInfo &session_info,
+                                                const ObColumnSchemaV2 &column_schema,
                                                 ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *c_expr = NULL;
+  ObObjType data_type = column_schema.get_data_type();
   if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
               expr_factory, ObInt32Type, data_type, c_expr))) {
     LOG_WARN("fail to build accuracy expr", K(ret));
-  } else {
+  } else if (column_schema.is_enum_or_set() || column_schema.is_collection()) {
+    uint16_t subschema_id = 0;
+    if (OB_FAIL(ObRawExprUtils::get_subschema_id(column_schema.get_meta_type(),
+                                                 column_schema.get_extended_type_info(),
+                                                 session_info,
+                                                 subschema_id))) {
+      LOG_WARN("failed to get column subschema id", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::adjust_type_expr_with_subschema(
+                                                data_type, subschema_id, false, c_expr))) {
+      LOG_WARN("failed to adjust type expr with subschema", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     expr = c_expr;
   }
   return ret;
@@ -1057,6 +1046,12 @@ int ObDefaultValueUtils::build_type_expr(const ColumnItem *column, ObRawExpr *&e
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
               *expr_factory, ObInt32Type, column->get_column_type()->get_type(), c_expr))) {
     LOG_WARN("fail to build accuracy expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::adjust_type_expr_with_subschema(
+                                                  column->get_column_type()->get_type(),
+                                                  column->get_column_type()->get_subschema_id(),
+                                                  false,
+                                                  c_expr))) {
+    LOG_WARN("failed to adjust type expr with subschema", K(ret));
   } else {
     expr = c_expr;
   }

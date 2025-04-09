@@ -475,7 +475,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
         LOG_WARN("failed to append expired equal params constraints", K(ret));
       } else if (OB_FAIL(remove_const_exec_param(stmt))) {
         LOG_WARN("failed to remove const exec param", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt info", K(ret));
       } else {
         LOG_TRACE("succeed to do replacement internal", KPC(stmt));
@@ -1026,7 +1026,7 @@ int ObTransformConstPropagate::replace_semi_conditions(ObDMLStmt *stmt,
                                             const_ctx,
                                             is_happened))) {
       LOG_WARN("failed to replace semi condition exprs", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -1523,7 +1523,7 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     // do nothing
   } else {
     const ObObj *dest_val = NULL;
-    const ObExprResType &dst_type = const_info.column_expr_->get_result_type();
+    const ObRawExprResType &dst_type = const_info.column_expr_->get_result_type();
     ObDataTypeCastParams dtc_params = ctx_->session_info_->get_dtc_params();
     ObCastCtx cast_ctx(ctx_->allocator_,
                        &dtc_params,
@@ -2366,6 +2366,11 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
         LOG_WARN("push back failed", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, or_expr_children, or_expr))) {
         LOG_WARN("build or exprs failed", K(ret));
+      } else if (OB_ISNULL(or_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("or expr is null", K(ret));
+      } else if (OB_FAIL(or_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize failed", K(ret));
       } else {
         new_check_cst_expr = or_expr;
       }
@@ -2426,10 +2431,10 @@ int ObTransformConstPropagate::build_new_in_condition_expr(ObRawExpr *check_cons
     } else if (OB_ISNULL(in_expr) || OB_ISNULL(row_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("add expr is null", K(ret), K(in_expr), K(row_expr));
-    } else if (OB_FAIL(in_expr->add_param_expr(part_column_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
-    } else if (OB_FAIL(in_expr->add_param_expr(row_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
+    } else if (OB_FAIL(in_expr->set_param_exprs(part_column_expr, row_expr))) {
+      LOG_WARN("failed to set param exprs", K(ret));
+    } else if (OB_FAIL(row_expr->init_param_exprs(expr_const_info.multi_const_exprs_.count()))) {
+      LOG_WARN("failed to init param exprs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && !reject && i < expr_const_info.multi_const_exprs_.count(); ++i) {
         ObRawExpr *new_param_expr = NULL;

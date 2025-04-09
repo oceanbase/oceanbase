@@ -137,7 +137,7 @@ struct ObValuesTableDef {
   int64_t row_cnt_;
   TableAccessType access_type_;
   bool is_const_; // values table’s outputs are all params.
-  common::ObArray<ObExprResType, common::ModulePageAllocator, true> column_types_;
+  common::ObArray<ObRawExprResType, common::ModulePageAllocator, true> column_types_;
   virtual TO_STRING_KV(K(column_cnt_), K(row_cnt_), K(access_exprs_), K(start_param_idx_),
                        K(end_param_idx_), K(access_objs_), K(column_ndvs_), K(column_nnvs_),
                        K(access_type_), K(is_const_), K(column_types_));
@@ -377,10 +377,7 @@ struct ColumnItem
   bool is_invalid() const { return NULL == expr_; }
   const ObColumnRefRawExpr *get_expr() const { return expr_; }
   ObColumnRefRawExpr *get_expr() { return expr_; }
-  void set_default_value(const common::ObObj &val)
-  {
-    default_value_ = val;
-  }
+  void set_default_value(const common::ObObj &val);
   void set_default_value_expr(ObRawExpr *expr)
   {
     default_value_expr_ = expr;
@@ -411,9 +408,9 @@ struct ColumnItem
     table_id_ = table_id; column_id_ = column_id;
     (NULL != expr_) ? expr_->set_ref_id(table_id, column_id) : (void) 0;
   }
-  const ObExprResType *get_column_type() const
+  const ObRawExprResType *get_column_type() const
   {
-    const ObExprResType *column_type = NULL;
+    const ObRawExprResType *column_type = NULL;
     if (expr_ != NULL) {
       column_type = &(expr_->get_result_type());
     }
@@ -778,8 +775,8 @@ public:
   int get_order_exprs(common::ObIArray<ObRawExpr*> &order_exprs) const;
   //提取该stmt中所有表达式的relation id
   int pull_all_expr_relation_id();
-  int formalize_stmt(ObSQLSessionInfo *session_info);
-  int formalize_relation_exprs(ObSQLSessionInfo *session_info);
+  int formalize_stmt(ObSQLSessionInfo *session_info, bool need_deduce_type = true);
+  int formalize_relation_exprs(ObSQLSessionInfo *session_info, bool need_deduce_type = true);
   int formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
                                     ObSQLSessionInfo *session_info,
                                     bool explicit_for_col = false);
@@ -1026,7 +1023,13 @@ public:
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs,
                          ObStmtExprGetter &visitor);
   int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs) const;
+  int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs,
+                         const ObExprInfo &flags,
+                         bool match_any_flag = true) const;
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs);
+  int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs,
+                         const ObExprInfo &flags,
+                         bool match_any_flag = true);
   //this func is used for enum_set_wrapper to get exprs which need to be handled
   int get_relation_exprs_for_enum_set_wrapper(common::ObIArray<ObRawExpr*> &rel_array);
   int check_relation_exprs_deterministic(bool &is_deterministic) const;

@@ -427,8 +427,12 @@ int ObMViewSchedJobUtils::calc_date_expression(
     ctx_param.set_mem_attr(common::OB_SERVER_TENANT_ID, "MVSchedTmp");
     CREATE_WITH_TEMP_CONTEXT(ctx_param) {
       ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
-      SMART_VAR(ObSQLSessionInfo, session) {
+      SMART_VARS_3((ObSQLSessionInfo, session), (ObExecContext, exec_ctx, tmp_allocator),
+                   (ObPhysicalPlanCtx, phy_plan_ctx, tmp_allocator)) {
+        LinkExecCtxGuard link_guard(session, exec_ctx);
         ObDBMSSchedJobExecutor executor;
+        exec_ctx.set_my_session(&session);
+        exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
         if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
           ret = OB_INVALID_ERROR;
           LOG_WARN("null ptr", K(ret), K(GCTX.sql_proxy_), K(GCTX.schema_service_));
@@ -465,6 +469,7 @@ int ObMViewSchedJobUtils::calc_date_expression(
             THIS_WORKER.set_compatibility_mode(Worker::CompatMode::MYSQL);
           }
         }
+        exec_ctx.set_physical_plan_ctx(NULL);
       }
     }
   }

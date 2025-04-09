@@ -61,6 +61,7 @@ int ObTableExprCgService::generate_all_column_exprs(ObTableCtx &ctx)
         LOG_WARN("fail to get column schema", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(),
                                                            *col_schema,
+                                                           &ctx.get_session_info(),
                                                            item.expr_))) {
         LOG_WARN("fail to build column expr", K(ret), K(*col_schema));
       }
@@ -83,6 +84,7 @@ int ObTableExprCgService::generate_all_column_exprs(ObTableCtx &ctx)
         LOG_WARN("fail to get column schema", K(ret), K(assign));
       } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(),
                                                            *col_schema,
+                                                           &ctx.get_session_info(),
                                                            assign.column_item_->expr_))) {
         LOG_WARN("fail to build column expr", K(ret), K(*col_schema));
       }
@@ -222,7 +224,7 @@ int ObTableExprCgService::generate_autoinc_nextval_expr(ObTableCtx &ctx,
       LOG_WARN("fail to create nextval expr", K(ret));
     } else {
       autoinc_nextval_expr->set_func_name(ObString::make_string(N_AUTOINC_NEXTVAL));
-      if (OB_FAIL(autoinc_nextval_expr->add_param_expr(column_cnv_expr))) {
+      if (OB_FAIL(autoinc_nextval_expr->set_param_expr(column_cnv_expr))) {
         LOG_WARN("fail to add collumn conv expr to function param", K(ret));
       } else if (OB_FAIL(autoinc_nextval_expr->formalize(&ctx.get_session_info()))) {
         LOG_WARN("fail to extract info", K(ret));
@@ -387,7 +389,6 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
         } else if (is_inc_or_append) {
           expr = gen_expr; // expr should be a calculate expr in increment or append operation
         } else {
-          gen_expr->set_for_generated_column();
           item.expr_->set_dependant_expr(gen_expr);
           expr = item.expr_;
         }
@@ -736,7 +737,7 @@ int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<sql::Ob
       // for generated col, the calculate expr may stored in dependant_expr,
       //  should replaced with calculate expr instead of column ref expr
       if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
-          && dst_column_ref->get_dependant_expr()->is_for_generated_column()) {
+          && dst_column_ref->is_generated_column()) {
         real_dest_col = dst_column_ref->get_dependant_expr();
       }
       if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
@@ -766,7 +767,7 @@ int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<sql::Ob
             // for generated col, the calculate expr may stored in dependant_expr
             //  should replaced with calculate expr instead of column ref expr
             if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
-                && dst_column_ref->get_dependant_expr()->is_for_generated_column()) {
+                && dst_column_ref->is_generated_column()) {
               real_dest_col = dst_column_ref->get_dependant_expr();
             }
             if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
@@ -822,7 +823,8 @@ int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignmen
     } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(column_info->column_id_))) {
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("fail to get column schema", K(ret), K(*item));
-    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(), *col_schema, tmp_ref_expr))) {
+    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(), *col_schema,
+                                                         &ctx.get_session_info(), tmp_ref_expr))) {
       LOG_WARN("fail to build column expr", K(ret));
     }
     tmp_expr = tmp_ref_expr;
@@ -862,7 +864,8 @@ int ObTableExprCgService::generate_delta_expr(ObTableCtx &ctx, ObTableAssignment
     } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(column_info->column_id_))) {
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("fail to get column schema", K(ret), K(*item));
-    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(), *col_schema, tmp_ref_expr))) {
+    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(), *col_schema,
+                                                         &ctx.get_session_info(), tmp_ref_expr))) {
       LOG_WARN("fail to build column expr", K(ret));
     }
     assign.delta_expr_ = tmp_ref_expr;
@@ -967,6 +970,7 @@ int ObTableExprCgService::generate_exprs(ObTableCtx &ctx,
                                          oceanbase::sql::ObExprFrameInfo &expr_frame_info)
 {
   int ret = OB_SUCCESS;
+  LinkExecCtxGuard link_guard(ctx.get_session_info(), ctx.get_exec_ctx());
   if (OB_FAIL(generate_all_column_exprs(ctx))) { // 1. generate all column exprs and add to column item array
     LOG_WARN("fail to generate all column exprs", K(ret), K(ctx));
   } else if (OB_FAIL(resolve_exprs(ctx))) { // 2. resolve exprs, such as generate expr.

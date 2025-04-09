@@ -59,63 +59,69 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
       int64_t max_version = OB_INVALID_VERSION;
       ObSEArray<ObString, 4> operators;
       ObSEArray<ObDependencyInfo, 4> dependency_infos;
-      ObMVPrinterCtx mv_printer_ctx(alloc,
-                                    *session_info,
-                                    stmt_factory,
-                                    expr_factory,
-                                    refresh_info);
-      if (OB_ISNULL(query_ctx = stmt_factory.get_query_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(query_ctx));
-      } else if (OB_FALSE_IT(query_ctx->sql_schema_guard_.set_schema_guard(schema_guard))) {
-      } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_, (session_info->get_session_type() != ObSQLSessionInfo::INNER_SESSION
-                                                                            ? session_info->get_sessid_for_table() : OB_INVALID_ID)))) {
-        LOG_WARN("init schema checker failed", K(ret));
-      } else if (OB_FAIL(generate_mv_stmt(alloc,
-                                          stmt_factory,
-                                          expr_factory,
-                                          schema_checker,
-                                          *session_info,
-                                          mview_id_,
-                                          mv_schema,
-                                          mv_container_schema,
-                                          view_stmt))) {
-        LOG_WARN("failed to gen mv stmt", K(ret));
-      } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
-                                                             dependency_infos,
-                                                             ObObjectType::VIEW,
-                                                             OB_INVALID_ID,
-                                                             max_version))) {
-        LOG_WARN("failed to collect dep infos", K(ret));
-      } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
-        LOG_WARN("failed to assign fixed array", K(ret));
-      } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt, *session_info))) {
-        if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
-          inited_ = true;
-          refreshable_type_ = OB_MV_REFRESH_INVALID;
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to check mv column type", K(ret));
-        }
-      } else {
-        ObMVChecker checker(*view_stmt, expr_factory, session_info, *mv_container_schema, fast_refreshable_note_);
-        if (OB_FAIL(checker.check_mv_refresh_type())) {
-          LOG_WARN("failed to check mv refresh type", K(ret));
-        } else if (OB_MV_COMPLETE_REFRESH >= (refreshable_type_ = checker.get_refersh_type())) {
-          LOG_TRACE("mv not support fast refresh", K_(refreshable_type), K(mv_schema->get_table_name()));
-        } else if (check_refreshable_only) {
-          inited_ = true;
-        } else if (OB_FAIL(print_mv_operators(mv_printer_ctx,
-                                              checker,
-                                              *mv_schema,
-                                              *view_stmt,
-                                              operators))) {
-          LOG_WARN("failed to print mv operators", K(ret));
-        } else if (OB_FAIL(operators_.assign(operators))) {
+      SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
+        LinkExecCtxGuard link_guard(*session_info, exec_ctx);
+        exec_ctx.set_my_session(session_info);
+        exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
+        ObMVPrinterCtx mv_printer_ctx(alloc,
+                                      *session_info,
+                                      stmt_factory,
+                                      expr_factory,
+                                      refresh_info);
+        if (OB_ISNULL(query_ctx = stmt_factory.get_query_ctx())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(query_ctx));
+        } else if (OB_FALSE_IT(query_ctx->sql_schema_guard_.set_schema_guard(schema_guard))) {
+        } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_, (session_info->get_session_type() != ObSQLSessionInfo::INNER_SESSION
+                                                                              ? session_info->get_sessid_for_table() : OB_INVALID_ID)))) {
+          LOG_WARN("init schema checker failed", K(ret));
+        } else if (OB_FAIL(generate_mv_stmt(alloc,
+                                            stmt_factory,
+                                            expr_factory,
+                                            schema_checker,
+                                            *session_info,
+                                            mview_id_,
+                                            mv_schema,
+                                            mv_container_schema,
+                                            view_stmt))) {
+          LOG_WARN("failed to gen mv stmt", K(ret));
+        } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
+                                                               dependency_infos,
+                                                               ObObjectType::VIEW,
+                                                               OB_INVALID_ID,
+                                                               max_version))) {
+          LOG_WARN("failed to collect dep infos", K(ret));
+        } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
           LOG_WARN("failed to assign fixed array", K(ret));
+        } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt, *session_info))) {
+          if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
+            inited_ = true;
+            refreshable_type_ = OB_MV_REFRESH_INVALID;
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to check mv column type", K(ret));
+          }
         } else {
-          inited_ = true;
+          ObMVChecker checker(*view_stmt, expr_factory, session_info, *mv_container_schema, fast_refreshable_note_);
+          if (OB_FAIL(checker.check_mv_refresh_type())) {
+            LOG_WARN("failed to check mv refresh type", K(ret));
+          } else if (OB_MV_COMPLETE_REFRESH >= (refreshable_type_ = checker.get_refersh_type())) {
+            LOG_TRACE("mv not support fast refresh", K_(refreshable_type), K(mv_schema->get_table_name()));
+          } else if (check_refreshable_only) {
+            inited_ = true;
+          } else if (OB_FAIL(print_mv_operators(mv_printer_ctx,
+                                                checker,
+                                                *mv_schema,
+                                                *view_stmt,
+                                                operators))) {
+            LOG_WARN("failed to print mv operators", K(ret));
+          } else if (OB_FAIL(operators_.assign(operators))) {
+            LOG_WARN("failed to assign fixed array", K(ret));
+          } else {
+            inited_ = true;
+          }
         }
+        exec_ctx.set_physical_plan_ctx(NULL);
       }
     }
   }

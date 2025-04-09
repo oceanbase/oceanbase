@@ -117,8 +117,10 @@ TEST_F(TestRawExprPrintVisitor, multi_op_test)
   ObConstRawExpr const_expr2(obj, T_INT);
   ObConstRawExpr const_expr3(obj, T_INT);
   ObConstRawExpr const_expr4(obj, T_INT);
-  ObOpRawExpr expr;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObOpRawExpr expr(allocator);
   expr.set_expr_type(T_OP_ROW);
+  OK(expr.init_param_exprs(4));
   OK(expr.add_param_expr(&const_expr1));
   OK(expr.add_param_expr(&const_expr2));
   OK(expr.add_param_expr(&const_expr3));
@@ -167,8 +169,10 @@ TEST_F(TestRawExprPrintVisitor, sys_fun_test)
   obj.set_int(123);
   ObConstRawExpr const_expr1(obj, T_INT);
   ObConstRawExpr const_expr2(obj, T_INT);
-  ObSysFunRawExpr expr;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObSysFunRawExpr expr(allocator);
   expr.set_func_name(ObString::make_string("myfunc"));
+  OK(expr.init_param_exprs(2));
   OK(expr.add_param_expr(&const_expr1));
   OK(expr.add_param_expr(&const_expr2));
   ObCStringHelper helper;

@@ -572,10 +572,9 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt));
-  } else if (ctx_->in_accept_transform_) {
+  } else if (ctx_->eval_cost_) {
     LOG_TRACE("not accept transform because already in one accepct transform");
   } else {
-    ctx_->in_accept_transform_ = true;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_trans_helper.fill_helper(stmt->get_query_ctx()))) {
         LOG_WARN("failed to fill try trans helper", K(ret));
@@ -605,7 +604,6 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
         LOG_WARN("failed to finish try trans helper", K(ret));
       }
     }
-    ctx_->in_accept_transform_ = false;
   }
   END_OPT_TRACE_EVA_COST;
 
@@ -701,7 +699,7 @@ int ObTransformLateMaterialization::generate_late_materialization_stmt(
     LOG_WARN("failed generate pk join condition", K(ret));
   } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*select_stmt))) {
     LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-  } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   } else if (OB_FAIL(select_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {

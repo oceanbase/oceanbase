@@ -1134,8 +1134,12 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr &udf_expr = const_cast<ObUDFRawExpr &> (static_cast<const ObUDFRawExpr&>(raw_expr));
+  ObIArray<ObRawExprResType> &params_type = udf_expr.get_params_type();
   OZ(subprogram_path_.assign(udf_expr.get_subprogram_path()));
-  OZ(params_type_.assign(udf_expr.get_params_type()));
+  OZ(params_type_.init(params_type.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < params_type.count(); ++i) {
+    OZ(params_type_.push_back(params_type.at(i)));
+  }
   OZ(params_desc_.assign(udf_expr.get_params_desc()));
   OZ(nocopy_params_.assign(udf_expr.get_nocopy_params()));
   udf_id_ = udf_expr.get_udf_id();

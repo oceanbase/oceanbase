@@ -1126,10 +1126,6 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
       value_desc->set_ref_id(stmt->get_insert_table_info().table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       value_desc->set_udt_set_id(column_ref->get_udt_set_id());
-      if ((ob_is_enumset_tc(column_ref->get_result_type().get_type()) || ob_is_collection_sql_type(column_ref->get_result_type().get_type()))
-          && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
-        LOG_WARN("failed to set_enum_set_values", K(*column_ref), K(ret));
-      }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(value_desc->add_flag(IS_COLUMN))) {
           LOG_WARN("failed to add flag IS_COLUMN", K(ret));
@@ -1506,7 +1502,6 @@ int ObInsertResolver::inner_cast(common::ObIArray<ObColumnRefRawExpr*> &target_c
     ObSelectStmt &select_stmt)
 {
   int ret = OB_SUCCESS;
-  ObExprResType res_type;
   if (target_columns.count() != select_stmt.get_select_items().count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected insert target column and select items", K(ret), K(target_columns),
@@ -1514,7 +1509,7 @@ int ObInsertResolver::inner_cast(common::ObIArray<ObColumnRefRawExpr*> &target_c
   }
   for (int64_t i = 0; i < target_columns.count() && OB_SUCC(ret); ++i) {
     SelectItem &select_item = select_stmt.get_select_item(i);
-    res_type = target_columns.at(i)->get_result_type();
+    const ObRawExprResType &res_type = target_columns.at(i)->get_result_type();
     ObSysFunRawExpr *new_expr = NULL;
     if (res_type == select_item.expr_->get_result_type()) {
       // no need to generate cast expr.

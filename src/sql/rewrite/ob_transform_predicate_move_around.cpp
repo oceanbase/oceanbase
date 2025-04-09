@@ -178,12 +178,16 @@ int ObTransformPredicateMoveAround::need_transform(const common::ObIArray<ObPare
 {
   int ret = OB_SUCCESS;
   const ObQueryHint *query_hint = stmt.get_stmt_hint().query_hint_;
-  need_trans = !is_normal_disabled_transform(stmt);
+  need_trans = true;
   ObDMLStmt *parent = NULL;
   temp_table_infos_.reuse();
   applied_hints_.reuse();
-  if (!need_trans) {
-    //do nothing
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("fail check stmt validity", K(ret));
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
   } else if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
@@ -2961,7 +2965,7 @@ int ObTransformPredicateMoveAround::check_has_shared_query_ref(ObRawExpr *expr, 
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
-  } else if (expr->is_query_ref_expr() && expr->get_ref_count() > 1) {
+  } else if (expr->is_query_ref_expr() && expr->is_shared_reference()) {
     has = true;
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
     for (int64_t i = 0; OB_SUCC(ret) && !has && i < expr->get_param_count(); ++i) {

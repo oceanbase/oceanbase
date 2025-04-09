@@ -205,12 +205,11 @@ public:
   : column_type_()
   {}
 
-  ObRangeColumnMeta(ObExprResType type)
+  ObRangeColumnMeta(const ObExprResType &type)
   : column_type_(type)
   {}
 
   TO_STRING_KV(N_COLUMN_TYPE, column_type_);
-
   ObExprResType column_type_;
 };
 

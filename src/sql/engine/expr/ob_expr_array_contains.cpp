@@ -62,7 +62,7 @@ int ObExprArrayContains::calc_result_type2(ObExprResType &type,
   } else if (OB_ISNULL(type_ctx.get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("raw expr is null", K(ret));
-  } else if (type_ctx.get_raw_expr()->get_extra() != 0) {
+  } else if (type_ctx.get_raw_expr()->get_reverse_param_order() != 0) {
     // It's any operator ,param order is reversed
     ObExprResType *type_tmp = type2_ptr;
     type2_ptr = type1_ptr;
@@ -396,7 +396,7 @@ int ObExprArrayContains::cg_expr(ObExprCGCtx &expr_cg_ctx,
   } else {
     rt_expr.eval_func_ = NULL;
     rt_expr.may_not_need_raw_check_ = false;
-    rt_expr.extra_ = raw_expr.get_extra();
+    rt_expr.extra_ = raw_expr.get_reverse_param_order();
     uint32_t p1 = rt_expr.extra_ == 1 ? 0 : 1;
     uint32_t p0 = rt_expr.extra_ == 1 ? 1 : 0;
     const ObObjType right_type = rt_expr.args_[p1]->datum_meta_.type_;

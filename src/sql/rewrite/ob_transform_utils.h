@@ -170,7 +170,7 @@ class ObTransformUtils
   private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckHelper);
   };
-  static const uint64_t MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES = 5;
+  static const uint64_t MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES = 20;
 
 public:
   struct LazyJoinInfo {
@@ -1512,7 +1512,7 @@ public:
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
                                  ObIArray<ObSelectStmt*> &child_stmts,
-                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL,
+                                 hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> *parent_map = NULL,
                                  const ObIArray<ObSelectStmt*> *ignore_stmts = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
@@ -2043,6 +2043,40 @@ public:
                                               bool &is_valid_join_chain);
   static int get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
                                   ObSqlBitSet<> &null_reject_rels);
+  static int check_has_exec_param_from_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObDMLStmt *&stmt,
+                                              bool &has_pushed_param);
+  static int partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObDMLStmt *&stmt,
+                                              bool check_nlj_inner_path,
+                                              bool &is_valid);
+  static int check_nlj_opportunity(const ObDMLStmt *root_stmt,
+                                   const ObSelectStmt *stmt,
+                                   const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                   ObIArray<int64_t> &semi_join_stmt_ids,
+                                   bool &has_nlj_opportunity);
+  static int check_projected_cols_used_for_join(const ObSelectStmt *stmt,
+                                                const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                                const ObIArray<int64_t> &sel_idxs,
+                                                ObIArray<int64_t> &semi_join_stmt_ids,
+                                                bool &used_for_join);
+  static int can_push_dynamic_filter_to_cols(const ObSelectStmt *stmt,
+                                             const ObIArray<ObColumnRefRawExpr*> &col_exprs,
+                                             uint64_t table_id,
+                                             ObIArray<int64_t> &sel_idxs,
+                                             bool &can_filter_pushdown);
+  static int extract_pushdown_cols(const ObQueryRefRawExpr &query_ref,
+                                   uint64_t cur_table_id,
+                                   ObIArray<ObColumnRefRawExpr*> &pushdown_cols);
+  static int collect_semi_join_stmt_ids(const ObDMLStmt &parent_stmt,
+                                        const ObIArray<ObColumnRefRawExpr*> &mapped_col_exprs,
+                                        uint64_t cur_table_id,
+                                        ObIArray<int64_t> &semi_join_stmt_ids);
+  static int get_parent_stmt(const ObSelectStmt *stmt,
+                             const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                             uint64_t &table_id,
+                             ObDMLStmt *&parent_stmt);
+  static int check_ref_fake_cte_table(ObDMLStmt *stmt, bool &ref_fake_cte_table);
   static int check_stmt_strict_deterministic(const ObSelectStmt *stmt,
                                             ObSQLSessionInfo *session_info,
                                             ObSchemaChecker *schema_checker,

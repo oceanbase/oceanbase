@@ -294,6 +294,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
                                       bool force_accept,
                                       bool check_original_plan,
                                       bool &trans_happened,
+                                      bool eval_partial_cost,
                                       void *check_ctx /* = NULL*/)
 {
   int ret = OB_SUCCESS;
@@ -307,6 +308,8 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObDMLStmt *tmp2 = NULL;
   bool ignore_cost = (OB_E(EventTable::EN_CBQT_IGNORE_COST) OB_SUCCESS) != OB_SUCCESS;
   cost_based_trans_tried_ = true;
+  ObSEArray<ObParentDMLStmt, 4> dummy_parent_stmts;
+  ObIArray<ObParentDMLStmt> &eval_parent_stmts = eval_partial_cost ? dummy_parent_stmts : parent_stmts;
   BEGIN_OPT_TRACE_EVA_COST;
   if (OB_UNLIKELY((OB_SUCCESS != (ret = TRY_CHECK_MEM_STATUS(check_try_times))))) {
     LOG_WARN("Exceeded memory usage limit", K(ret));
@@ -317,16 +320,15 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     trans_happened = true;
   } else if (ctx_->is_set_stmt_oversize_) {
     LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
-  } else if (ctx_->in_accept_transform_) {
-    LOG_TRACE("not accept transform because already in one accepct transform", K(ctx_->in_accept_transform_));
+  } else if (ctx_->eval_cost_) {
+    LOG_TRACE("not accept transform because already in one cost evaluation process", K(ctx_->eval_cost_));
   } else {
-    ctx_->in_accept_transform_ = true;
-    if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true, trans_stmt_cost, is_expected,
+    if (OB_FAIL(evaluate_cost(eval_parent_stmts, trans_stmt, true, trans_stmt_cost, is_expected,
                               check_ctx))) {
       LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
     } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
       trans_happened = is_expected && (ignore_cost || trans_stmt_cost < stmt_cost_);
-    } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false, stmt_cost_, is_original_expected,
+    } else if (OB_FAIL(evaluate_cost(eval_parent_stmts, stmt, false, stmt_cost_, is_original_expected,
                                      check_original_plan ? check_ctx : NULL))) {
       LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
     } else if (!is_original_expected) {
@@ -337,13 +339,13 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     if (stmt->get_query_ctx()->get_injected_random_status()) {
       trans_happened = true;
     }
-    ctx_->in_accept_transform_ = false;
   }
   END_OPT_TRACE_EVA_COST;
 
   if (OB_FAIL(ret)) {
   } else if (!trans_happened) {
     OPT_TRACE("reject transform because the cost is increased or the query plan is unexpected.");
+    OPT_TRACE("eval partial cost", eval_partial_cost);
     OPT_TRACE("before transform cost:", stmt_cost_);
     OPT_TRACE("after transform cost:", trans_stmt_cost);
     OPT_TRACE("is ignore cost:", ignore_cost);
@@ -351,8 +353,8 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     OPT_TRACE("is expected original plan:", is_original_expected);
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
               K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(ignore_cost),
-              K(is_expected), K(is_original_expected));
-  } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
+              K(is_expected), K(is_original_expected), K(eval_partial_cost));
+  } else if (OB_FAIL(adjust_transformed_stmt(eval_parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
     LOG_TRACE("succeed force accept transform because hint/rule");
@@ -360,10 +362,11 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     OPT_TRACE("hint or rule force cost based transform apply.");
   } else {
     OPT_TRACE("accept transform because the cost is decreased.");
+    OPT_TRACE("eval partial cost", eval_partial_cost);
     OPT_TRACE("before transform cost:", stmt_cost_);
     OPT_TRACE("after transform cost:", trans_stmt_cost);
     LOG_TRACE("accept transform because the cost is decreased",
-              K_(stmt_cost), K(trans_stmt_cost));
+              K_(stmt_cost), K(trans_stmt_cost), K(eval_partial_cost));
     stmt = trans_stmt;
     stmt_cost_ = trans_stmt_cost;
   }
@@ -512,7 +515,7 @@ int ObTransformRule::prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_st
                                                             column_exprs,
                                                             sel_stmt_with_filter))) {
       LOG_WARN("failed to create select item", K(ret));
-    } else if (OB_FAIL(sel_stmt_with_filter->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(sel_stmt_with_filter->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::push_down_temp_table_filter(*ctx_->expr_factory_,
                                                                     ctx_->session_info_,
@@ -591,7 +594,7 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
@@ -711,10 +714,22 @@ int ObTransformRule::adjust_transformed_stmt(ObIArray<ObParentDMLStmt> &parent_s
 
 bool ObTransformRule::is_normal_disabled_transform(const ObDMLStmt &stmt)
 {
-  return (stmt.is_hierarchical_query() && transform_method_ != TransMethod::ROOT_ONLY) ||
-         stmt.is_insert_all_stmt() ||
-         (stmt.is_values_table_query() && NULL != stmt.get_query_ctx() &&
-          !ObTransformUtils::is_enable_values_table_rewrite(stmt.get_query_ctx()->optimizer_features_enable_version_));
+  bool bret = false;
+  if (stmt.is_hierarchical_query() && transform_method_ != TransMethod::ROOT_ONLY) {
+    OPT_TRACE("hierarchical query can not transform");
+    bret = true;
+  } else if (stmt.is_insert_all_stmt()) {
+    OPT_TRACE("insert all can not transform");
+    bret = true;
+  } else if (stmt.is_values_table_query() && NULL != stmt.get_query_ctx() &&
+            !ObTransformUtils::is_enable_values_table_rewrite(stmt.get_query_ctx()->optimizer_features_enable_version_)) {
+    OPT_TRACE("values table can not transform");
+    bret = true;
+  } else if (stmt.has_instead_of_trigger()) {
+    OPT_TRACE("stmt with instead of trigger can not transform");
+    bret = true;
+  }
+  return bret;
 }
 
 int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -726,16 +741,22 @@ int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &par
   UNUSED(parent_stmts);
   UNUSED(current_level);
   need_trans = false;
-  if (is_normal_disabled_transform(stmt)) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("failed to check fast reject", K(ret));
+  } else if (bypass) {
     need_trans = false;
-    OPT_TRACE("hierarchical query or insert query can not transform");
-  } else if (stmt.has_instead_of_trigger()) {
-    need_trans = false;
-    OPT_TRACE("stmt with instead of trigger can not transform");
+    OPT_TRACE("transform rule bypassed");
   } else if (OB_FAIL(check_hint_status(stmt, need_trans))) {
     LOG_WARN("failed to check hint status", K(ret));
   }
   return ret;
+}
+
+int ObTransformRule::check_rule_bypass(const ObDMLStmt &stmt, bool &reject_trans)
+{
+  reject_trans = is_normal_disabled_transform(stmt);
+  return OB_SUCCESS;
 }
 
 int ObTransformRule::transform_one_stmt_with_outline(common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -802,7 +823,7 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     LOG_WARN("get unexpected src hash val count after transform", K(ret));
   } else if (!trans_happened) {
     // do nothing
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                          ctx_->session_info_))) {

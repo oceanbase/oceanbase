@@ -94,24 +94,24 @@ public:
 
   int extract_common_table_expression(ObDMLStmt *stmt,
                                      ObIArray<ObSelectStmt*> &stmts,
-                                     hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                     hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                      bool &trans_happened);
 
   int inner_extract_common_table_expression(ObDMLStmt &root_stmt,
                                            ObIArray<ObSelectStmt*> &stmts,
-                                           hash::ObHashMap<uint64_t,ObParentDMLStmt> &parent_map,
+                                           hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                            bool &trans_happened);
 
   int add_materialize_stmts(const ObIArray<ObSelectStmt*> &stms);
 
   int check_has_stmt(ObSelectStmt *left_stmt,
                      ObSelectStmt *right_stmt,
-                     hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                     hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                      bool &has_stmt);
 
   int check_has_stmt(const ObIArray<ObSelectStmt *> &left_stmt,
                      ObSelectStmt *right_stmt,
-                     hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                     hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                      bool &has_stmt);
 
   int check_stmt_can_extract_temp_table(ObSelectStmt *first,
@@ -153,7 +153,7 @@ public:
 
   int create_temp_table(ObDMLStmt &root_stmt,
                         StmtCompareHelper& compare_info,
-                        hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                        hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                         bool &trans_happened);
 
   int compute_common_map_info(ObIArray<ObStmtMapInfo>& map_infos,
@@ -226,14 +226,14 @@ public:
 
   int get_stmt_pointers(ObDMLStmt &root_stmt,
                         ObIArray<ObSelectStmt *> &stmts,
-                        hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                        hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                         ObIArray<ObSelectStmtPointer> &stmt_ptrs);
   int accept_cte_transform(ObDMLStmt &origin_root_stmt,
                            TableItem *temp_table,
                            common::ObIArray<ObSelectStmt *> &origin_stmts,
                            common::ObIArray<ObSelectStmt *> &trans_stmts,
                            common::ObIArray<ObSelectStmt *> &accept_stmts,
-                           hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                           hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                            bool force_accept,
                            bool &trans_happened);
   int accept_cte_transform_v2(ObDMLStmt &origin_root_stmt,
@@ -241,7 +241,7 @@ public:
                               common::ObIArray<ObSelectStmt *> &origin_stmts,
                               common::ObIArray<ObSelectStmt *> &trans_stmts,
                               common::ObIArray<ObSelectStmt *> &accept_stmts,
-                              hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                              hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                               bool force_accept,
                               bool &trans_happened);
   int prepare_eval_cte_cost_stmt(ObDMLStmt &root_stmt,
@@ -274,31 +274,10 @@ public:
                               ObIArray<ObSelectStmt *> *origin_stmts);
   int need_check_global_cte_cost(const ObDMLStmt *root_stmt,
                                  const ObIArray<ObSelectStmt *> &origin_stmts,
-                                 const hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                                 const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                  const ObSelectStmt *temp_table_query,
                                  ObIArray<int64_t> &semi_join_stmt_ids,
                                  bool &check_global_cost);
-  int get_parent_stmt(const ObSelectStmt *stmt,
-                      const hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
-                      uint64_t &table_id,
-                      ObDMLStmt *&parent_stmt);
-  int can_push_dynamic_filter_to_cols(const ObSelectStmt *sel_stmt,
-                                    const ObIArray<ObColumnRefRawExpr*> &col_exprs,
-                                    uint64_t table_id,
-                                    ObIArray<int64_t> &sel_idxs,
-                                    bool &can_filter_pushdown);
-  int check_projected_cols_used_for_join(const ObSelectStmt *stmt,
-                                         const hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
-                                         const ObIArray<int64_t> &sel_idxs,
-                                         ObIArray<int64_t> &semi_join_stmt_ids,
-                                         bool &used_for_join);
-  int extract_pushdown_cols(const ObQueryRefRawExpr &query_ref,
-                            uint64_t cur_table_id,
-                            ObIArray<ObColumnRefRawExpr*> &pushdown_cols);
-  int collect_semi_join_stmt_ids(const ObDMLStmt &parent_stmt,
-                                 const ObIArray<ObColumnRefRawExpr*> &mapped_col_exprs,
-                                 uint64_t cur_table_id,
-                                 ObIArray<int64_t> &semi_join_stmt_ids);
   int add_semi_to_inner_hint_if_need(ObDMLStmt *copy_root_stmt,
                                      ObIArray<int64_t> &semi_join_stmt_ids);
   int check_inline_temp_table_by_cost(ObDMLStmt *root_stmt,

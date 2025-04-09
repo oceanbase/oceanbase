@@ -42,7 +42,7 @@ public:
                         ObIExprExtraInfo *&copied_info) const override;
 
   template <typename RE>
-  int from_raw_expr(RE &expr, ObIAllocator &alloc);
+  int from_raw_expr(RE &expr, const ObSQLSessionInfo *session, ObIAllocator &alloc);
 
   ObPsStmtId id_; //prepare的语句id, 保留id，兼容老版本
   common::ObString ps_sql_;

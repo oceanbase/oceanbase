@@ -207,6 +207,7 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObSEArray<ObSEArray<TableItem *, 4>, 4> trans_basic_tables;
   ObTryTransHelper try_trans_helper;
   const ObWinMagicHint *myhint = static_cast<const ObWinMagicHint*>(stmt->get_stmt_hint().get_normal_hint(T_WIN_MAGIC));
+  bool partial_cost_check = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -227,12 +228,16 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
     LOG_WARN("win magic do transform from type failed", K(ret));
   } else if (OB_FAIL(try_to_push_down_join(trans_stmt))) {
     LOG_WARN("try to push down join failed.", K(*trans_stmt));
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
+                                                                        partial_cost_check))) {
+    LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(parent_stmts,
                                       stmt,
                                       trans_stmt,
                                       NULL != myhint && myhint->is_enable_hint(),
                                       false,
-                                      accepted))) {
+                                      accepted,
+                                      partial_cost_check))) {
     LOG_WARN("accept transform failed", K(ret));
   } else if (OB_FAIL(try_trans_helper.finish(accepted, stmt->get_query_ctx(), ctx_))) {
     LOG_WARN("failed to finish try trans helper", K(ret));
@@ -325,7 +330,7 @@ int ObTransformWinMagic::do_transform_from_type(ObDMLStmt *&stmt,
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(drill_down_stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item relation id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt info", K(ret));
     }
   }
@@ -2049,7 +2054,7 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
     LOG_WARN("failed to rebuild table hash", K(ret));
   } else if (OB_FAIL(view_stmt->update_column_item_rel_id())) {
     LOG_WARN("failed to update column item relation id", K(ret));
-  } else if (OB_FAIL(main_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(main_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt info", K(ret));
   } else {
     LOG_DEBUG("push down join", K(*main_stmt));

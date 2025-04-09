@@ -57,7 +57,7 @@ class ObPhyTableLocation;
 class ObQueryRange;
 class ObSqlExpression;
 class ObPhysicalPlan;
-class ObExprResType;
+class ObRawExprResType;
 class ObStmtHint;
 struct ObTransformerCtx;
 struct ObPreCalcExprFrameInfo;
@@ -323,26 +323,6 @@ public:
                                 common::ObObj &result,
                                 bool force_copy_extend_type = false);
 
-  static int make_generated_expression_from_str(const common::ObString &expr_str,
-                                                const share::schema::ObTableSchema &schema,
-                                                const share::schema::ObColumnSchemaV2 &gen_col,
-                                                const common::ObIArray<share::schema::ObColDesc> &col_ids,
-                                                common::ObIAllocator &allocator,
-                                                ObTempExpr *&temp_expr);
-  static int make_generated_expression_from_str(const common::ObString &expr_str,
-                                                ObSQLSessionInfo &session,
-                                                const share::schema::ObTableSchema &schema,
-                                                const share::schema::ObColumnSchemaV2 &gen_col,
-                                                const common::ObIArray<share::schema::ObColDesc> &col_ids,
-                                                common::ObIAllocator &allocator,
-                                                ObTempExpr *&temp_expr);
-  static int make_default_expr_context(uint64_t tenant_id, ObIAllocator &allocator, ObExprCtx &expr_ctx);
-  static int calc_sql_expression(const ObTempExpr *expr,
-                                 const ObIArray<share::schema::ObColDesc> &col_ids,
-                                 const ObNewRow &row,
-                                 ObExecContext &exec_ctx,
-                                 ObObj &result);
-  static void destruct_default_expr_context(ObExprCtx &expr_ctx);
   static int64_t get_usec();
   static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool preserve_lettercase,
                                        common::ObString &name);
@@ -418,7 +398,7 @@ public:
   static void set_insert_update_scope(common::ObCastMode &cast_mode);
   static bool is_insert_update_scope(common::ObCastMode &cast_mode);
   static int get_cast_mode_for_replace(const ObRawExpr *expr,
-                                       const ObExprResType &dst_type,
+                                       const ObRawExprResType &dst_type,
                                        const ObSQLSessionInfo *session,
                                        ObCastMode &cast_mode);
   static common::ObCollationLevel transform_cs_level(const common::ObCollationLevel cs_level);
@@ -486,7 +466,7 @@ public:
                                        ObMbrFilterArray &mbr_filters,
                                        const ObDataTypeCastParams &dtc_params);
 
-  static bool is_same_type(const ObExprResType &type1, const ObExprResType &type2);
+  static bool is_same_type(const ObRawExprResType &type1, const ObRawExprResType &type2);
 
   static bool is_same_type(const ObObjMeta &meta1,
                            const ObObjMeta &meta2,
@@ -541,6 +521,10 @@ public:
   static int wrap_column_convert_ctx(const common::ObExprCtx &expr_ctx, common::ObCastCtx &column_conv_ctx);
 
   static void init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &type_ctx);
+  static int get_solidified_vars_from_ctx(const ObRawExpr &expr,
+                                          const ObLocalSessionVar *&local_vars);
+  static int merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
+                                                 const ObRawExpr &expr);
   static int merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
                                                  const ObLocalSessionVar &session_vars_snapshot);
   static int merge_solidified_var_into_dtc_params(const ObLocalSessionVar *local_vars,
@@ -752,7 +736,7 @@ public:
                                   share::schema::ObObjectType &obj_type,
                                   uint64_t &schema_version);
   static bool check_need_disconnect_parser_err(const int ret_code);
-  static bool check_json_expr(ObItemType type);
+  static bool check_json_expr(const ObRawExpr &expr);
 
   static int print_identifier_require_quotes(ObCollationType collation_type,
                                              const ObString &ident,

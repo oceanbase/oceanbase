@@ -708,7 +708,7 @@ private:
                         jit::ObLLVMValue &allocator_ptr,
                         jit::ObLLVMValue &ret_value,
                         jit::ObLLVMBasicBlock &exit,
-                        const sql::ObExprResType &res_type);
+                        const sql::ObRawExprResType &res_type);
   int generate_get_record_attr(const ObObjAccessIdx &current_access,
                                            uint64_t udt_id,
                                            bool for_write,
@@ -725,12 +725,12 @@ private:
                                            jit::ObLLVMValue &current_allocator,
                                            jit::ObLLVMValue &ret_value_ptr,
                                            jit::ObLLVMBasicBlock& exit,
-                                           const sql::ObExprResType &res_type);
+                                           const sql::ObRawExprResType &res_type);
   int generate_get_attr_func(const common::ObIArray<ObObjAccessIdx> &idents,
                              int64_t param_count, const
                              common::ObString &func_name,
                              bool for_write,
-                             const sql::ObExprResType &res_type);
+                             const sql::ObRawExprResType &res_type);
 #ifdef OB_BUILD_ORACLE_PL
   int build_nested_table_type(const ObNestedTableType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
   int build_assoc_array_type(const ObAssocArrayType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
@@ -757,7 +757,7 @@ private:
   int generate_arith_calc(jit::ObLLVMValue &left,
                           jit::ObLLVMValue &right,
                           ObItemType type,
-                          const sql::ObExprResType &result_type,
+                          const sql::ObRawExprResType &result_type,
                           int64_t stmt_id,
                           bool in_notfound,
                           bool in_warning,

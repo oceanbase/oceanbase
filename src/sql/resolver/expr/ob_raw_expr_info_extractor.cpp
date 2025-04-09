@@ -117,7 +117,6 @@ int ObRawExprInfoExtractor::visit(ObExecParamRawExpr &expr)
     LOG_WARN("failed to add is onetime", K(ret));
   } else if (!expr.is_eval_by_storage() && expr.get_ref_expr()->has_enum_set_column()) {
     OZ(expr.add_flag(CNT_ENUM_OR_SET));
-    OZ(expr.set_enum_set_values(expr.get_ref_expr()->get_enum_set_values()));
   }
   return ret;
 }
@@ -406,7 +405,9 @@ int ObRawExprInfoExtractor::visit_subquery_node(ObOpRawExpr &expr)
           //子查询的结果是向量或者集合，那么必须将比较操作符转换为对应的subquery expr operator
           expr.set_expr_type(get_subquery_comparison_type(expr.get_expr_type()));
         }
-        if (expr.get_subquery_key() == T_WITH_ALL) {
+        if (!IS_SUBQUERY_COMPARISON_OP(expr.get_expr_type())) {
+          // do nothing
+        } else if (expr.get_subquery_key() == T_WITH_ALL) {
           if (OB_FAIL(expr.add_flag(IS_WITH_ALL))) {
             LOG_WARN("failed to add flag IS_WITH_ALL", K(ret));
           }

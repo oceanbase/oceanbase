@@ -433,20 +433,15 @@ public:
 
 struct ObExchangeInfo
 {
+  // TODO: remove this struct, use ObRawExpr* directly
   struct HashExpr
   {
     HashExpr() : expr_(NULL) {}
-    HashExpr(ObRawExpr *expr, const ObObjMeta &cmp_type) : expr_(expr), cmp_type_(cmp_type) {}
+    HashExpr(ObRawExpr *expr) : expr_(expr) {}
 
-    TO_STRING_KV(K_(expr), K_(cmp_type));
+    TO_STRING_KV(K_(expr));
 
     ObRawExpr *expr_;
-
-    // Compare type of %expr_ when compare with other values.
-    // Objects should convert to %cmp_type_ before calculate hash value.
-    //
-    // Only type_ and cs_type_ of %cmp_type_ are used right now.
-    ObObjMeta cmp_type_;
   };
   ObExchangeInfo()
   : is_remote_(false),
@@ -1239,8 +1234,6 @@ public:
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs);
   int build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_exprs);
-  int build_and_put_into_outfile_expr(const ObSelectIntoItem *into_item,
-                                      ObIArray<ObRawExpr*> &output_exprs);
   int put_into_outfile_expr(ObRawExpr *into_expr);
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs,

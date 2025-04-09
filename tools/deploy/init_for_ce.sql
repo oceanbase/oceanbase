@@ -47,6 +47,7 @@ alter system set_tp tp_no = 509, error_code = 4016, frequency = 1;
 alter system set_tp tp_no = 368, error_code = 4016, frequency = 1;
 alter system set_tp tp_no = 551, error_code = 5434, frequency = 1;
 alter system set_tp tp_no = 558, error_code = 4016, frequency = 1;
+alter system set_tp tp_no = 565, error_code = 4007, frequency = 1;
 
 alter system set _enable_var_assign_use_das = true tenant = sys;
 alter system set _enable_var_assign_use_das = true tenant = all_user;

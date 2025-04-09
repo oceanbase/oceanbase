@@ -194,18 +194,21 @@ int ObExprBaseLRpad::get_origin_len_obj(ObObj &len_obj) const
   if (OB_ISNULL(expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get_raw_expr", K(ret));
-  } else if (expr->get_children_count() >= 2 && OB_NOT_NULL(expr = expr->get_param_expr(1))
-             && expr->get_expr_type() == T_FUN_SYS_CAST && CM_IS_IMPLICIT_CAST(expr->get_extra())) {
+  } else if (expr->get_param_count() >= 2 && OB_NOT_NULL(expr = expr->get_param_expr(1))
+             && expr->get_expr_type() == T_FUN_SYS_CAST && CM_IS_IMPLICIT_CAST(expr->get_cast_mode())) {
     do {
-      if (expr->get_children_count() >= 1
+      if (expr->get_param_count() >= 1
           && OB_ISNULL(expr = expr->get_param_expr(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get_param_expr", K(ret));
       }
     } while (OB_SUCC(ret) && T_FUN_SYS_CAST == expr->get_expr_type()
-             && CM_IS_IMPLICIT_CAST(expr->get_extra()));
-    if (OB_SUCC(ret)) {
-      len_obj = expr->get_result_type().get_param();
+             && CM_IS_IMPLICIT_CAST(expr->get_cast_mode()));
+    if (OB_FAIL(ret)) {
+    } else if (!expr->is_const_raw_expr()) {
+      len_obj.set_null();
+    } else {
+      len_obj = static_cast<ObConstRawExpr *>(expr)->get_param();
     }
   }
   return ret;

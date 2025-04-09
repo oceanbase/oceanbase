@@ -1764,7 +1764,6 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
         ObObj val;
         val.set_uint64(current_scn);
         c_expr->set_value(val);
-        c_expr->set_param(val);
         table_item->flashback_query_expr_ = c_expr;
         table_item->flashback_query_type_ = TableItem::USING_SCN;
       }

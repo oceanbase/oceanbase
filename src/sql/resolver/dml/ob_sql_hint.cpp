@@ -541,7 +541,9 @@ int ObQueryHint::reset_duplicate_qb_name()
 {
   int ret = OB_SUCCESS;
   int64_t idx = 0;
-  qb_name_map_.reuse();
+  if (!qb_name_map_.empty()) {
+    qb_name_map_.reuse();
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt_id_map_.count(); ++i) {
     QbNames &qb_names = stmt_id_map_.at(i);
     if (!qb_names.is_from_hint_) {
@@ -568,7 +570,9 @@ int ObQueryHint::reset_duplicate_qb_name()
       stmt_id_map_.at(idx).is_from_hint_ = false;
     }
   }
-  qb_name_map_.reuse();
+  if (!qb_name_map_.empty()) {
+    qb_name_map_.reuse();
+  }
   return ret;
 }
 

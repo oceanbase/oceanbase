@@ -159,17 +159,24 @@ int ObStmtExprVisitor::visit(common::ObIArray<T *> &exprs,
 class ObStmtExprGetter : public ObStmtExprVisitor
 {
 public:
-  ObStmtExprGetter() : checker_(NULL)
+  ObStmtExprGetter() : checker_(NULL), match_any_(true), expr_flags_(NULL)
   {}
-  ObStmtExprGetter(const ObIArray<DmlStmtScope> &scopes) : checker_(NULL)
+  ObStmtExprGetter(const ObIArray<DmlStmtScope> &scopes) : checker_(NULL), match_any_(true), expr_flags_(NULL)
   {
     remove_all();
     add_scope(scopes);
   }
-
   int do_visit(ObRawExpr *&expr) override;
-
+  void set_expr_flags_required(const ObExprInfo &expr_flags, bool match_any = true)
+  {
+    expr_flags_ = &expr_flags;
+    match_any_ = match_any;
+  }
   RelExprCheckerBase *checker_;
+private:
+  bool match_any_;  // set the matching mode, where true indicates that an intersection is sufficient,
+                    // and false means that it is necessary to completely contain the required flags.
+  const ObExprInfo *expr_flags_;  // retrieve expressions that contain required flags.
 };
 
 class ObStmtExprReplacer : public ObStmtExprVisitor

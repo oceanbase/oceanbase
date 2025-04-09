@@ -1788,10 +1788,7 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
     column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
   }
   if (OB_FAIL(ret)) {
-  } else if (column.is_collection()
-             && OB_FAIL(column.set_extended_type_info(expr.get_enum_set_values()))) {
-    LOG_WARN("set enum or set info failed", K(ret), K(expr));
-  } else if (OB_FAIL(adjust_enum_set_column_meta_info(expr, session_info, column))) {
+  } else if (OB_FAIL(fill_column_with_subschema(expr, session_info, column))) {
     LOG_WARN("fail to adjust enum set colum meta info", K(ret), K(expr));
   } else if (OB_FAIL(adjust_string_column_length_within_max(column, lib::is_oracle_mode()))) {
     LOG_WARN("failed to adjust string column length within max", K(ret), K(expr));
@@ -1825,10 +1822,13 @@ int ObCreateViewResolver::resolve_column_default_value(const sql::ObSelectStmt *
     LOG_WARN("failed to resolve default value", K(ret));
   } else if (OB_FAIL(ob_write_obj(alloc, column_item.default_value_, res_obj))) {
     LOG_WARN("failed to write obj", K(ret));
+  } else if (OB_ISNULL(select_item.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select item expr is null", K(ret));
   } else if (ob_is_enum_or_set_type(column_item.default_value_.get_type())
              || ob_is_collection_sql_type(column_item.default_value_.get_type())) {
-    if (OB_FAIL(column_schema.set_extended_type_info(select_item.expr_->get_enum_set_values()))) {
-      LOG_WARN("failed to set extended type info", K(ret));
+    if (OB_FAIL(fill_column_with_subschema(*select_item.expr_, session_info, column_schema))) {
+      LOG_WARN("failed to fill column with subschema", K(ret));
     }
   }
   return ret;

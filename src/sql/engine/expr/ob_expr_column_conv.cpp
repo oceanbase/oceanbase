@@ -25,7 +25,7 @@ namespace sql
 ObFastColumnConvExpr::ObFastColumnConvExpr(ObIAllocator &alloc)
     : ObBaseExprColumnConv(alloc),
       ObFastExprOperator(T_FUN_COLUMN_CONV),
-      column_type_(alloc),
+      column_type_(),
       value_item_(),
       column_info_()
 {
@@ -238,8 +238,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
     ObCollationLevel coll_level = ObRawExprUtils::get_column_collation_level(types[0].get_type());
     type.set_collation_level(coll_level);
     type.set_accuracy(types[2].get_accuracy());
-    if (type.get_type() == ObUserDefinedSQLType
-        || type.get_type() == ObCollectionSQLType) {
+    if (type.get_type() == ObUserDefinedSQLType) {
       uint64_t udt_id = types[2].get_accuracy().get_accuracy();
       uint16_t subschema_id = ObMaxSystemUDTSqlType;
       // need const cast to modify subschema ctx, in physcial plan ctx belong to cur exec_ctx;
@@ -250,16 +249,17 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       } else if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("need context to search subschema mapping", K(ret), K(udt_id));
-      } else if (str_values_.count() > 0) {
-        // array type
-        if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(str_values_.at(0), subschema_id))) {
-          LOG_WARN("failed to get array type subschema id", K(ret));
-        }
       } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
         LOG_WARN("failed to get sub schema id", K(ret), K(udt_id));
       }
       if (OB_SUCC(ret)) {
         type.set_subschema_id(subschema_id);
+      }
+    }
+    if (ob_is_enumset_tc(type.get_type()) || ob_is_collection_sql_type(type.get_type())) {
+      type.set_subschema_id(types[0].get_subschema_id());
+      if (ob_is_enumset_tc(type.get_type())) {
+        type.mark_enum_set_with_subschema(types[0].get_enum_set_subschema_state());
       }
     }
     if (types[3].is_not_null_for_read()) {
@@ -297,7 +297,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
         type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
-                               type_ctx.get_raw_expr()->get_extra() |
+                               type_ctx.get_raw_expr()->get_cast_mode() |
                                CM_COLUMN_CONVERT);
         types[4].set_calc_meta(type);
         if (ob_is_number_or_decimal_int_tc(type.get_type())) {
@@ -344,26 +344,12 @@ int ObExprColumnConv::calc_enum_set_result_type(ObExprResType &type,
       // subschema id of the expr result type.
       const ObRawExpr *conv_expr = get_raw_expr();
       const ObRawExpr *enumset_expr = NULL;
-      const ObEnumSetMeta *src_meta = NULL;
-      const ObExecContext *exec_ctx = NULL;
       if (OB_ISNULL(conv_expr) || OB_ISNULL(enumset_expr = conv_expr->get_param_expr(4))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("raw expr or child expr is null", K(ret), KP(conv_expr));
-      } else if (OB_ISNULL(exec_ctx = type_ctx.get_session()->get_cur_exec_ctx())) {
-      } else if (OB_UNLIKELY(!enumset_expr->is_enum_set_with_subschema())) {
-        // skip check enum/set expr with old behavior
-      } else if (OB_UNLIKELY(conv_expr->get_enum_set_values().empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("str values for enum set expr is empty", K(ret));
-      } else if (OB_FAIL(exec_ctx->get_enumset_meta_by_subschema_id(
-                          enumset_expr->get_subschema_id(), src_meta))) {
-        LOG_WARN("failed to meta from exec_ctx", K(ret), K(enumset_expr->get_subschema_id()));
-      } else if (OB_ISNULL(src_meta)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("src meta is unexpected", K(ret), KP(src_meta));
-      } else if (src_meta->is_same(src_meta->get_obj_meta(), conv_expr->get_enum_set_values())) {
+      } else {
         // set wrap to str to false, it will be checked in `ObRawExprWrapEnumSet`
-        wrap_to_str = false;
+        wrap_to_str = type.get_subschema_id() != enumset_expr->get_subschema_id();
       }
     }
     if (OB_SUCC(ret)) {
@@ -371,7 +357,7 @@ int ObExprColumnConv::calc_enum_set_result_type(ObExprResType &type,
         types[4].set_calc_type(calc_type);
         types[4].set_calc_collation_type(coll_type);
         types[4].set_calc_collation_level(CS_LEVEL_IMPLICIT);
-        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra());
+        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_cast_mode());
       }
     }
   }
@@ -391,7 +377,7 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   } else if (OB_FAIL(ObEnumSetInfo::init_enum_set_info(op_cg_ctx.allocator_, rt_expr, type_,
-      raw_expr.get_extra(), str_values_))) {
+      raw_expr.get_cast_mode(), str_values_))) {
     LOG_WARN("fail to init_enum_set_info", K(ret), K(type_), K(str_values_));
   } else {
     ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(rt_expr.extra_info_);

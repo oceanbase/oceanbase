@@ -73,9 +73,9 @@ public:
   ObExprResTypeIterator();
   ~ObExprResTypeIterator() {}
 
-  int next(ObExprResType &res_type);
+  int next(ObRawExprResType &res_type);
 private:
-  int set_res_type(ObExprResType &res_type);
+  int set_res_type(ObRawExprResType &res_type);
   int update_type_idx();
 private:
   const static int64_t COLLATION_TYPE_COUNT = 8;
@@ -111,7 +111,7 @@ const int64_t ObExprResTypeIterator::DOUBLE_SCALES[DOUBLE_SCALE_COUNT] = {
   OB_MAX_DOUBLE_FLOAT_SCALE
 };
 
-int ObExprResTypeIterator::next(ObExprResType &res_type)
+int ObExprResTypeIterator::next(ObRawExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   res_type.reset();
@@ -125,7 +125,7 @@ int ObExprResTypeIterator::next(ObExprResType &res_type)
   return ret;
 }
 
-int ObExprResTypeIterator::set_res_type(ObExprResType &res_type)
+int ObExprResTypeIterator::set_res_type(ObRawExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   res_type.set_type(type_);
@@ -221,8 +221,9 @@ TEST_F(ObRawExprEqualTest, type_comparable)
   ASSERT_EQ(OB_SUCCESS, expr_factory_.create_raw_expr(T_REF_COLUMN, expr2));
   bool can_compare = true;
   ObObjType equal_type = ObMaxType;
-  const ObExprResType &type1 = expr1->get_result_type();
-  const ObExprResType &type2 = expr2->get_result_type();
+  const ObRawExprResType &type1 = expr1->get_result_type();
+  const ObRawExprResType &type2 = expr2->get_result_type();
+  LinkExecCtxGuard link_guard(session_info_, exec_ctx_);
   while (OB_SUCC(ret)) {
     ObExprResTypeIterator iter2;
     ObArenaAllocator allocator;

@@ -1228,11 +1228,8 @@ int ObPreRangeGraph::get_range_exprs_by_graph(ObQueryRangeCtx &ctx,
       ObOpRawExpr *or_expr = nullptr;
       if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {
         LOG_WARN("failed to create a new expr", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < or_exprs.count(); ++i) {
-        if (OB_FAIL(or_expr->add_param_expr(or_exprs.at(i)))) {
-          LOG_WARN("failed to set params for like expr", KPC(or_expr));
-        }
+      } else if (OB_FAIL(or_expr->set_param_exprs(or_exprs))) {
+        LOG_WARN("failed to set param exprs", K(ret));
       }
       if (FAILEDx(exprs.push_back(or_expr))) {
         LOG_WARN("failed to push back and exprs");
@@ -1336,11 +1333,8 @@ int ObPreRangeGraph::recursive_generate_range_node_expr(ObQueryRangeCtx &ctx,
         ObOpRawExpr *and_expr = nullptr;
         if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, and_expr))) {
           LOG_WARN("failed to create a new expr", K(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < and_exprs.count(); ++i) {
-          if (OB_FAIL(and_expr->add_param_expr(and_exprs.at(i)))) {
-            LOG_WARN("failed to set params for like expr", KPC(and_expr));
-          }
+        } else if (OB_FAIL(and_expr->set_param_exprs(and_exprs))) {
+          LOG_WARN("failed to set param exprs", K(ret));
         }
         if (FAILEDx(or_exprs.push_back(and_expr))) {
           LOG_WARN("failed to push back and exprs");
@@ -1384,6 +1378,8 @@ int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
       ObOpRawExpr *row_in_expr = nullptr;
       if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_in_expr))) {
         LOG_WARN("fail to create equal expr");
+      } else if (OB_FAIL(row_in_expr->init_param_exprs(in_param->count()))) {
+        LOG_WARN("failed to set param exprs", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < in_param->count(); ++i) {
         int64_t in_val_idx = in_param->at(i);
@@ -1411,6 +1407,9 @@ int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
       } else {
         int64_t in_list_idx = -(node->start_keys_[node->min_offset_] + 1);
         InParam* in_param = range_map_.in_params_.at(in_list_idx);
+        if (OB_FAIL(in_list_expr->init_param_exprs(in_param->count()))) {
+          LOG_WARN("failed to set param exprs", K(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < in_param->count(); ++i) {
           int64_t in_val_idx = in_param->at(i);
           ObRawExpr *in_val_expr = range_map_.expr_final_infos_.at(in_val_idx).related_raw_expr_;
@@ -1434,7 +1433,10 @@ int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
           in_count = in_param->count();
         }
       }
-      if (is_rowid) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(in_list_expr->init_param_exprs(in_count))) {
+        LOG_WARN("failed to init param exprs", K(ret));
+      } else if (is_rowid) {
         InParam* in_param = in_params.at(0);
         for (int64_t i = 0; OB_SUCC(ret) && i < in_count; ++i) {
           int64_t in_val_idx = in_param->at(i);
@@ -1448,6 +1450,8 @@ int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
           ObOpRawExpr *row_expr = nullptr;
           if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_expr))) {
             LOG_WARN("fail to create equal expr");
+          } else if (OB_FAIL(row_expr->init_param_exprs(in_params.count()))) {
+            LOG_WARN("failed to init param exprs", K(ret));
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < in_params.count(); ++j) {
             int64_t in_val_idx = in_params.at(j)->at(i);
@@ -1618,6 +1622,9 @@ int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
         ObRawExpr *value_expr = range_map_.expr_final_infos_.at(val_idx).related_raw_expr_;
         rowid_value_expr = value_expr;
       } else {
+        if (OB_FAIL(row_value_expr->init_param_exprs(node->max_offset_ - node->min_offset_ + 1))) {
+          LOG_WARN("failed to init param exprs", K(ret));
+        }
         for (int64_t i = node->min_offset_; OB_SUCC(ret) && i <= node->max_offset_; ++i) {
           int64_t val_idx = (T_OP_LT == op_type || T_OP_LE == op_type) ? node->end_keys_[i] : node->start_keys_[i];
           ObRawExpr *value_expr = range_map_.expr_final_infos_.at(val_idx).related_raw_expr_;
@@ -1675,6 +1682,8 @@ int ObPreRangeGraph::get_node_row_column_expr(ObRangeNode *node,
     LOG_WARN("get unexpected column idx", K(min_column_idx), K(max_column_idx), K(range_columns));
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, row_column_expr))) {
     LOG_WARN("fail to create equal expr");
+  } else if (OB_FAIL(row_column_expr->init_param_exprs(max_column_idx - min_column_idx + 1))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   }
   for (int64_t i = min_column_idx; OB_SUCC(ret) && i <= max_column_idx; ++i) {
     if (OB_FAIL(row_column_expr->add_param_expr(range_columns.at(i).expr_))) {
@@ -1699,8 +1708,8 @@ int ObPreRangeGraph::create_rowid_expr(ObRawExprFactory &expr_factory,
   } else if (OB_ISNULL(calc_urowid_expr) || OB_UNLIKELY(range_columns.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(range_columns));
-  } else if (OB_FAIL(calc_urowid_expr->add_param_expr(range_columns.at(0).expr_))) {
-    LOG_WARN("failed to add params for op expr", KPC(range_columns.at(0).expr_));
+  } else if (OB_FAIL(calc_urowid_expr->set_param_expr(range_columns.at(0).expr_))) {
+    LOG_WARN("failed to set param expr for rowid expr", KPC(range_columns.at(0).expr_));
   } else {
     calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID));
     rowid_expr = calc_urowid_expr;
@@ -1719,6 +1728,8 @@ int ObPreRangeGraph::create_op_expr(ObRawExprFactory &expr_factory,
   ObOpRawExpr* tmp_expr = nullptr;
   if (OB_FAIL(expr_factory.create_raw_expr(op_type, tmp_expr))) {
     LOG_WARN("failed to create a new expr", K(op_type));
+  } else if (OB_FAIL(tmp_expr->init_param_exprs(extra_value_expr != nullptr ? 3: 2))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else if (OB_FAIL(tmp_expr->add_param_expr(column_expr)) ||
              OB_FAIL(tmp_expr->add_param_expr(value_expr))) {
     LOG_WARN("failed to add param for op expr", KPC(column_expr), KPC(value_expr));

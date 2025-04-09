@@ -10864,19 +10864,14 @@ value_or_values insert_vals_list opt_insert_row_alias
   if ($3 != NULL) {
     ParseNode *subquery_node = NULL;
     ParseNode *values_node = NULL;
-    ParseNode *values_list_node = NULL;
-    if ($2->type_ == T_LINK_NODE) {
-      merge_nodes(values_list_node,result, T_VALUES_ROW_LIST, $2);
-    } else {
-      malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, $2);
-    }
-    malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, values_list_node);
+    $2->type_ = T_VALUES_ROW_LIST;
+    malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, $2);
     malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL);
     malloc_select_values_stmt($$, result, subquery_node, NULL, NULL, NULL);
     $$->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $3;
     $$->reserved_ = 1;
   } else {
-    merge_nodes($$, result, T_VALUE_LIST, $2);
+    $$ = $2;
   }
 }
 | select_stmt
@@ -11143,24 +11138,27 @@ column_name
 insert_vals_list:
 '(' insert_vals ')'
 {
-  merge_nodes($$, result, T_VALUE_VECTOR, $2);
+  malloc_list_node($$, result->malloc_pool_, T_VALUE_LIST, 2, 1, $2);
 }
 | insert_vals_list ',' '(' insert_vals ')'
 {
-  merge_nodes($4, result, T_VALUE_VECTOR, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $4);
+  push_back_list(result->malloc_pool_, result, $$, $1, $4);
 }
 ;
 
 insert_vals:
-expr_or_default { $$ = $1; }
+expr_or_default
+{
+  malloc_list_node($$, result->malloc_pool_, T_VALUE_VECTOR, 2, 1, $1);
+}
 | insert_vals ',' expr_or_default
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  push_back_list(result->malloc_pool_, result, $$, $1, $3);
 }
 | /* EMPTY */
 {
   malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);
+  malloc_list_node($$, result->malloc_pool_, T_VALUE_VECTOR, 2, 1, $$);
 }
 ;
 expr_or_default:
@@ -15198,7 +15196,7 @@ values_row_list ',' row_value
 row_value:
 ROW '(' insert_vals ')'
 {
-  merge_nodes($$, result, T_VALUE_VECTOR, $3);
+  $$ = $3;
 }
 ;
 

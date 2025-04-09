@@ -637,13 +637,13 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
           LOG_WARN("failed to generate semi info", K(ret));
         } else if (OB_FAIL(split_subquery->adjust_subquery_list())) {
           LOG_WARN("failed to adjust subquery list", K(ret));
-        } else if (OB_FAIL(split_subquery->formalize_stmt(ctx_->session_info_))) {
+        } else if (OB_FAIL(split_subquery->formalize_stmt(ctx_->session_info_, false))) {
           LOG_WARN("formalize child stmt failed", K(ret));
         }
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -831,6 +831,8 @@ int ObWhereSubQueryPullup::generate_anti_condition(ObDMLStmt *stmt,
   } else if (OB_ISNULL(anti_expr = new_cond_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new_expr is null", K(new_cond_expr), K(ret));
+  } else if (OB_FAIL(new_cond_expr->init_param_exprs(3))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else if (OB_FAIL(new_cond_expr->add_param_expr(cond_expr))) {
     LOG_WARN("failed to add param expr", K(ret));
   }
@@ -920,6 +922,11 @@ int ObWhereSubQueryPullup::generate_conditions(ObDMLStmt *stmt,
         } else if (OB_FAIL(generate_anti_condition(
                                    stmt, subquery, cmp_expr, select_expr, left_arg, right_arg, cmp_expr))) {
           LOG_WARN("failed to create anti join condition", K(ret));
+        } else if (OB_ISNULL(cmp_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cmp expr is null", K(ret));
+        } else if (OB_FAIL(cmp_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize expr", K(ret));
         }
         if (OB_SUCC(ret)) {
           if (left_arg->is_const_expr() && !right_arg->has_flag(CNT_DYNAMIC_PARAM)) {
@@ -941,13 +948,13 @@ int ObWhereSubQueryPullup::generate_conditions(ObDMLStmt *stmt,
       oper_type = expr->has_flag(IS_WITH_ALL)? T_OP_EQ : T_OP_NE;
       if (OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, right_vector))) {
         LOG_WARN("failed to create a new expr", K(ret));
-      } else if (OB_FAIL(right_vector->get_param_exprs().assign(subq_exprs))) {
+      } else if (OB_FAIL(right_vector->set_param_exprs(subq_exprs))) {
         LOG_WARN("failed to add param expr", K(ret));
       } else if (lib::is_oracle_mode()) {
         ObOpRawExpr *row_expr = NULL;
         if (OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, row_expr))) {
           LOG_WARN("failed to create a new expr", K(oper_type), K(ret));
-        } else if (OB_FAIL(row_expr->add_param_expr(right_vector))) {
+        } else if (OB_FAIL(row_expr->set_param_expr(right_vector))) {
           LOG_WARN("fail to set param expr", K(ret), K(right_vector), K(row_expr));
         }
         right_vector = row_expr;
@@ -1115,12 +1122,12 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
         LOG_WARN("failed to generate semi info", K(ret));
       } else if (OB_FAIL(split_subquery->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(split_subquery->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(split_subquery->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("formalize child stmt failed", K(ret));
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -1144,7 +1151,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (0 == stmt->get_from_item_size()) {
+  } else if (0 == stmt->get_from_item_size() || !stmt->has_subquery()) {
     /*do dothing*/
   } else if (OB_FAIL(cond_exprs.assign(stmt->get_condition_exprs()))) {
     LOG_WARN("failed to get non semi conditions", K(ret));
@@ -1509,7 +1516,7 @@ int ObWhereSubQueryPullup::unnest_single_set_subquery(ObDMLStmt *stmt,
       LOG_WARN("failed to merge subquery stmt hint", K(ret));
     } else if (OB_FAIL(stmt->replace_relation_exprs(query_refs, select_list))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
   }

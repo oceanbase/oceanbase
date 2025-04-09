@@ -117,7 +117,7 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
                                    ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  ObTableID ref_table_id = reinterpret_cast<ObTableID>(raw_expr.get_extra());
+  ObTableID ref_table_id = reinterpret_cast<ObTableID>(raw_expr.get_ref_table_id());
   CalcPartitionBaseInfo *calc_part_info = NULL;
   const ObTableSchema *table_schema = NULL;
   OptRouteType opt_route = OPT_ROUTE_NONE;

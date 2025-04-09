@@ -434,7 +434,7 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
       ObObj output_obj;
       ObArray<ObString> *type_infos = NULL;
       const bool is_strict = false;
-      ObExprResType res_type;
+      ObRawExprResType res_type;
       res_type.set_accuracy(col_schema->get_accuracy());
       res_type.set_collation_type(col_schema->get_collation_type());
       res_type.set_type(col_schema->get_data_type());

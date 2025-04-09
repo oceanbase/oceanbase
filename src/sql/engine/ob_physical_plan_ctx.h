@@ -516,10 +516,12 @@ public:
   void set_rich_format(bool v) { enable_rich_format_ = v; }
   bool is_rich_format() const { return enable_rich_format_; }
 
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta);
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta) const;
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta) const;
   bool is_subschema_ctx_inited();
-  int get_enumset_meta_by_subschema_id(uint16_t subschema_id, const ObEnumSetMeta *&meta) const;
+  int get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                       bool is_in_pl,
+                                       const ObEnumSetMeta *&meta) const;
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
@@ -527,9 +529,13 @@ public:
                                                const ObDataType &elem_type,
                                                uint16_t &subschema_id);
   int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
+  int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id) const;
   int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
                                     const ObIArray<common::ObString> &type_info,
                                     uint16_t &subschema_id);
+  int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                    const ObIArray<common::ObString> &type_info,
+                                    uint16_t &subschema_id) const;
   int build_subschema_by_fields(const ColumnsFieldIArray *fields,
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);
@@ -571,6 +577,9 @@ private:
                             ObDatum *&datum,
                             ObEvalInfo *&eval_info,
                             VectorHeader *&vec_header);
+  int inner_get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                          const ObIArray<common::ObString> &type_info,
+                                          uint16_t &subschema_id) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalPlanCtx);
 private:

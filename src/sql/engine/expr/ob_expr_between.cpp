@@ -228,8 +228,7 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
     const ObDatumMeta &val_meta = rt_expr.args_[0]->datum_meta_;
     const ObDatumMeta &left_meta = rt_expr.args_[1]->datum_meta_;
     const ObDatumMeta &right_meta = rt_expr.args_[2]->datum_meta_;
-    const ObCollationType cmp_cs_type =
-      raw_expr.get_result_type().get_calc_collation_type();
+    const ObCollationType cmp_cs_type = val_meta.cs_type_;
     const bool has_lob_header1 = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
                                  rt_expr.args_[1]->obj_meta_.has_lob_header();
     const bool has_lob_header2 = rt_expr.args_[0]->obj_meta_.has_lob_header() ||

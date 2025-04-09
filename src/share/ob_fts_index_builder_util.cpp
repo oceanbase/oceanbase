@@ -2480,8 +2480,10 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
     const ObString &index_expr_def = expr_def_string;
     ObRawExprFactory expr_factory(allocator);
 
-    SMART_VARS_2((sql::ObSQLSessionInfo, session),
-                 (sql::ObExecContext, exec_ctx, allocator)) {
+    SMART_VARS_3((sql::ObSQLSessionInfo, session),
+                 (sql::ObExecContext, exec_ctx, allocator),
+                 (sql::ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+      LinkExecCtxGuard link_guard(session, exec_ctx);
       uint64_t tenant_id = data_schema.get_tenant_id();
       const ObTenantSchema *tenant_schema = nullptr;
       ObSchemaGetterGuard guard;
@@ -2490,6 +2492,8 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
       ObRawExpr *expr = nullptr;
       ObColumnSchemaV2 *gen_col = nullptr;
       budy_mulvalue_col = nullptr;
+      exec_ctx.set_my_session(&session);
+      exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
 
       if (OB_FAIL(session.init(0 /*default session id*/,
                                 0 /*default proxy id*/,
@@ -2538,6 +2542,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
           }
         }
       }
+      exec_ctx.set_physical_plan_ctx(NULL);
     }
   }
 

@@ -849,8 +849,7 @@ int ObDMLStmtPrinter::print_values_table_to_union_all(const TableItem &table_ite
             DATA_PRINTF(" FROM DUAL UNION ALL SELECT ");
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
-            OZ (ObLinkStmtParam::write(buf_, buf_len_, *pos_, start_idx + i * column_cnt + j,
-                                        table_def->column_types_.at(j).get_calc_type()));
+            OZ (ObLinkStmtParam::write(buf_, buf_len_, *pos_, start_idx + i * column_cnt + j));
             if (i == 0) {
               DATA_PRINTF(" AS \"column_%ld\"", j);
             }

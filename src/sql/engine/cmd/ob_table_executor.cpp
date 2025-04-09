@@ -1365,7 +1365,7 @@ int ObAlterTableExecutor::resolve_alter_column_partition_expr(
     ObSQLSessionInfo &session_info,
     common::ObIAllocator &allocator,
     const bool is_sub_part,
-    ObExprResType &dst_res_type)
+    ObRawExprResType &dst_res_type)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *part_expr = NULL;
@@ -1415,7 +1415,7 @@ int ObAlterTableExecutor::resolve_alter_column_partition_expr(
   } else if (part_expr->is_column_ref_expr()) {
     ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(part_expr);
     if (column_ref->get_column_id() == col_schema.get_column_id()) {
-      if (OB_FAIL(ObRawExprUtils::init_column_expr(col_schema, *column_ref))) {
+      if (OB_FAIL(ObRawExprUtils::init_column_expr(col_schema, &session_info, *column_ref))) {
         LOG_WARN("init column expr failed", K(ret));
       } else if (CS_TYPE_INVALID == column_ref->get_collation_type()) {
         column_ref->set_collation_type(table_schema.get_collation_type());
@@ -1430,7 +1430,7 @@ int ObAlterTableExecutor::resolve_alter_column_partition_expr(
       } else if (sub_expr->is_column_ref_expr()) {
         ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(sub_expr);
         if (column_ref->get_column_id() == col_schema.get_column_id()) {
-          if (OB_FAIL(ObRawExprUtils::init_column_expr(col_schema, *column_ref))) {
+          if (OB_FAIL(ObRawExprUtils::init_column_expr(col_schema, &session_info, *column_ref))) {
             LOG_WARN("init column expr failed", K(ret));
           } else if (CS_TYPE_INVALID == column_ref->get_collation_type()) {
             column_ref->set_collation_type(table_schema.get_collation_type());
@@ -1448,7 +1448,7 @@ template<class T>
 int ObAlterTableExecutor::calc_range_part_high_bound(
     const ObPartitionFuncType part_func_type,
     const ObString &col_name,
-    const ObExprResType &dst_res_type,
+    const ObRawExprResType &dst_res_type,
     T &part,
     ObExecContext &ctx)
 {
@@ -1525,7 +1525,7 @@ int ObAlterTableExecutor::calc_range_values_exprs(
     const bool is_subpart)
 {
   int ret = OB_SUCCESS;
-  ObExprResType dst_res_type;
+  ObRawExprResType dst_res_type;
   if (OB_FAIL(resolve_alter_column_partition_expr(col_schema, orig_table_schema, schema_guard,
               session_info, allocator, is_subpart, dst_res_type))) {
     LOG_WARN("failed to resolve alter column partition expr", K(ret));
@@ -1584,7 +1584,7 @@ template<class T>
 int ObAlterTableExecutor::calc_list_part_rows(
     const ObPartitionFuncType part_func_type,
     const ObString &col_name,
-    const ObExprResType &dst_res_type,
+    const ObRawExprResType &dst_res_type,
     const T &orig_part,
     T &new_part,
     ObExecContext &ctx,
@@ -1669,7 +1669,7 @@ int ObAlterTableExecutor::calc_list_values_exprs(
     const bool is_subpart)
 {
   int ret = OB_SUCCESS;
-  ObExprResType dst_res_type;
+  ObRawExprResType dst_res_type;
   if (OB_FAIL(resolve_alter_column_partition_expr(col_schema, orig_table_schema, schema_guard,
               session_info, allocator, is_subpart, dst_res_type))) {
     LOG_WARN("failed to resolve alter column partition expr", K(ret));

@@ -401,7 +401,6 @@ protected:
                                 ObDMLStmt *stmt = NULL);
   int adjust_values_desc_position(ObInsertTableInfo& table_info,
                                   ObIArray<int64_t> &value_idxs);
-  int generate_subschema_id(ObColumnRefRawExpr &col_expr);
 public:
   virtual int resolve_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_all_basic_table_columns(const TableItem &table_item,
@@ -708,7 +707,7 @@ protected:
    */
   int resolve_is_expr(ObRawExpr *&expr, bool &replace_happened);
   int resolve_autoincrement_column_is_null(ObRawExpr *&expr);
-  int resolve_not_null_date_column_is_null(ObRawExpr *&expr, const ObExprResType* col_type);
+  int resolve_not_null_date_column_is_null(ObRawExpr *&expr, const ObRawExprResType* col_type);
   int resolve_partition_expr(const ParseNode &part_expr_node, ObRawExpr *&expr, common::ObIArray<ObQualifiedName> &columns);
 
   void report_user_error_msg(int &ret, const ObRawExpr *root_expr, const ObQualifiedName &q_name) const;
@@ -908,7 +907,7 @@ protected:
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
   int gen_values_table_column_items(const int64_t column_cnt,
-                                    const ObIArray<ObExprResType> &res_types,
+                                    const ObIArray<ObRawExprResType> &res_types,
                                     TableItem &table_item);
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
 private:
@@ -1067,9 +1066,9 @@ private:
                                       ObValuesTableDef &table_values);
   int resolve_values_table_for_insert(const ParseNode &table_node,
                                       ObValuesTableDef &table_values);
-  int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
-                           ObIArray<ObExprResType> &res_types);
-  int try_add_cast_to_values(const ObIArray<ObExprResType> &res_types,
+  int get_values_res_types(const ObIArray<ObRawExprResType> &cur_values_types,
+                           ObIArray<ObRawExprResType> &res_types);
+  int try_add_cast_to_values(const ObIArray<ObRawExprResType> &res_types,
                              ObIArray<ObRawExpr*> &values_vector);
   int refine_generate_table_column_name(const ParseNode &column_alias_node,
                                         ObSelectStmt &select_stmt);

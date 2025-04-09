@@ -62,6 +62,8 @@ int ObExchangeInfo::init_calc_part_id_expr(ObOptimizerContext &opt_ctx)
       ObOpRawExpr *op_row_expr = NULL;
       if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, op_row_expr))) {
         LOG_WARN("fail to create raw expr", K(ret));
+      } else if (OB_FAIL(op_row_expr->init_param_exprs(repartition_keys_.count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < repartition_keys_.count(); i ++) {
           if (OB_FAIL(op_row_expr->add_param_expr(repartition_keys_.at(i)))) {
@@ -83,6 +85,8 @@ int ObExchangeInfo::init_calc_part_id_expr(ObOptimizerContext &opt_ctx)
       ObOpRawExpr *op_row_expr = NULL;
       if (OB_FAIL(expr_factory.create_raw_expr(T_OP_ROW, op_row_expr))) {
         LOG_WARN("fail to create raw expr", K(ret));
+      } else if (OB_FAIL(op_row_expr->init_param_exprs(repartition_sub_keys_.count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < repartition_sub_keys_.count(); i ++) {
           if (OB_FAIL(op_row_expr->add_param_expr(repartition_sub_keys_.at(i)))) {
@@ -132,7 +136,7 @@ int ObExchangeInfo::append_hash_dist_expr(const common::ObIArray<ObRawExpr *> &e
     if (OB_ISNULL(raw_expr = exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(hash_dist_exprs_.push_back(HashExpr(raw_expr, raw_expr->get_result_type())))) {
+    } else if (OB_FAIL(hash_dist_exprs_.push_back(HashExpr(raw_expr)))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1955,37 +1959,6 @@ int ObLogicalOperator::build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_expr
   } else {
     get_plan()->get_optimizer_context().set_packed(true);
   }
-  return ret;
-}
-
-int ObLogicalOperator::build_and_put_into_outfile_expr(const ObSelectIntoItem *into_item,
-                                                       ObIArray<ObRawExpr*> &output_exprs)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *child = NULL;
-  ObRawExpr *to_outfile_expr = NULL;
-  uint64_t producer_id = OB_INVALID_ID;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(into_item) || OB_ISNULL(child = get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(into_item), K(child), K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_to_outfile_expr(
-                                    get_plan()->get_optimizer_context().get_expr_factory(),
-                                    get_plan()->get_optimizer_context().get_session_info(),
-                                    into_item,
-                                    output_exprs,
-                                    to_outfile_expr))) {
-    LOG_WARN("failed to build_to_outfile_expr", K(*into_item), K(ret));
-  } else if (OB_ISNULL(to_outfile_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (FALSE_IT(output_exprs.reuse())) {
-    /*do nothing*/
-  } else if (OB_FAIL(output_exprs.push_back(to_outfile_expr))) {
-    LOG_WARN("failed to push back exprs", K(ret));
-  } else if (ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == get_phy_plan_type() &&
-             OB_FAIL(put_into_outfile_expr(to_outfile_expr))) {
-    LOG_WARN("failed to push back expr", K(ret));
-  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -5029,6 +5002,8 @@ int ObLogicalOperator::generate_runtime_filter_expr(
         K(join_use_exprs.count()), K(join_create_exprs.count()));
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_RUNTIME_FILTER, join_filter_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_FAIL(join_filter_expr->init_param_exprs(join_use_exprs.count()))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else {
     join_filter_expr->set_runtime_filter_type(type);
     ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
@@ -5914,7 +5889,7 @@ int ObLogicalOperator::allocate_runtime_filter_for_hash_join(AllocBloomFilterCon
 int ObLogicalOperator::generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  ObExprResType res_type;
+  ObRawExprResType res_type;
   res_type.set_type(ObIntType);
   res_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObIntType]);
 

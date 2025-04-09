@@ -68,9 +68,15 @@ public:
   virtual int visit(ObMatchFunRawExpr &expr);
   virtual int visit(ObUnpivotRawExpr &expr);
 
-  int add_implicit_cast(ObOpRawExpr &parent, const ObCastMode &cast_mode);
-  int add_implicit_cast(ObCaseOpRawExpr &parent, const ObCastMode &cast_mode);
-  int add_implicit_cast(ObAggFunRawExpr &parent, const ObCastMode &cast_mode);
+  int add_implicit_cast(ObOpRawExpr &parent,
+                        const ObIExprResTypes &input_types,
+                        const ObCastMode &cast_mode);
+  int add_implicit_cast(ObCaseOpRawExpr &parent,
+                        const ObIExprResTypes &input_types,
+                        const ObCastMode &cast_mode);
+  int add_implicit_cast(ObAggFunRawExpr &parent,
+                        const ObExprResType &res_type,
+                        const ObCastMode &cast_mode);
 
   int check_type_for_case_expr(ObCaseOpRawExpr &case_expr, common::ObIAllocator &alloc);
   static bool skip_cast_expr(const ObRawExpr &parent, const int64_t child_idx);
@@ -86,13 +92,9 @@ private:
                               const common::ObObjType to,
                               const common::ObCollationType to_cs_type,
                               ObExprOperatorType expr_type);
-  int push_back_types(const ObRawExpr *param_expr, ObExprResTypes &types);
+  int push_back_types(const ObRawExpr *param_expr, ObIExprResTypes &types);
   int calc_result_type(ObNonTerminalRawExpr &expr, ObIExprResTypes &types,
                        common::ObCastMode &cast_mode, int32_t row_dimension);
-  template<typename RawExprType>
-  int construct_collecton_attr_expr(RawExprType &expr);
-  template<typename RawExprType>
-  int add_attr_exprs(const ObCollectionTypeBase *coll_meta, RawExprType &expr);
   int calc_result_type_with_const_arg(
     ObNonTerminalRawExpr &expr,
     ObIExprResTypes &types,
@@ -162,7 +164,12 @@ private:
   int try_replace_casts_with_questionmarks_ora(ObRawExpr *row_expr);
 
   int try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx);
-  int build_subschema_for_enum_set_type(ObRawExpr &expr);
+  int set_extra_calc_type_info(ObRawExpr &expr, const ObExprResType &res_type);
+  OB_INLINE bool is_lob_param_conversion_exempt(const ObItemType expr_type) {
+    return T_FUN_COLUMN_CONV == expr_type
+           || T_OP_OUTPUT_PACK == expr_type
+           || T_FUN_SYS_REMOVE_CONST == expr_type;
+  };
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;
@@ -224,8 +231,8 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
 
       // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
       if (ObStringTC == ori_tc && ObJsonTC == expect_tc && IS_JSON_COMPATIBLE_OP(parent.get_expr_type())) {
-        uint64_t extra = new_expr->get_extra();
-        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
+        uint64_t extra = new_expr->get_cast_mode();
+        new_expr->set_cast_mode(CM_SET_SQL_AS_JSON_SCALAR(extra));
       }
       OZ(parent.replace_param_expr(child_idx, new_expr));
 #ifdef MARK_MACRO_DEFINED_BY_OB_RAW_EXPR_DEDUCE_TYPE_H
@@ -238,144 +245,15 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
       //add local vars to cast expr
       if (OB_SUCC(ret)) {
         if (solidify_session_vars_) {
-          if (OB_FAIL(new_expr->set_local_session_vars(NULL, my_session_, local_vars_id_))) {
-            SQL_RESV_LOG(WARN, "fail to set session vars", K(ret), KPC(new_expr));
-          }
-        } else if (NULL != my_local_vars_) {
-          if (OB_FAIL(new_expr->set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
-            SQL_RESV_LOG(WARN, "fail to set local vars", K(ret), KPC(new_expr));
-          }
+          // do nothing
+        } else if (OB_INVALID_INDEX_INT64 != local_vars_id_){
+          new_expr->set_local_session_var_id(local_vars_id_);
         }
       }
     }
   }
   return ret;
 };
-
-
-template<typename RawExprType>
-int ObRawExprDeduceType::add_attr_exprs(const ObCollectionTypeBase *coll_meta, RawExprType &expr)
-{
-  int ret = OB_SUCCESS;
-  ObItemType expr_type = T_REF_COLUMN;
-  if (coll_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE || coll_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-    ObColumnRefRawExpr *attr_expr = NULL;
-    const ObCollectionArrayType *arr_meta = static_cast<const ObCollectionArrayType*>(coll_meta);
-    if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_NULL_BITMAP,
-                                                 attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-    } else if (arr_meta->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-      const ObCollectionBasicType *elem_type = static_cast<const ObCollectionBasicType*>(arr_meta->element_type_);
-      if (!is_fixed_length(elem_type->basic_meta_.get_obj_type())) {
-        if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                     expr_type, ArrayAttr::ATTR_OFFSETS,
-                                                     attr_expr))) {
-          SQL_RESV_LOG(WARN, "failed to create offset attr expr", K(ret));
-        } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-          SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                          expr_type, ArrayAttr::ATTR_DATA,
-                                                          attr_expr))) {
-        SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
-      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-        SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-      }
-    } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                  expr_type, ArrayAttr::ATTR_OFFSETS,
-                                                  attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to create offset attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-    } else if (OB_FAIL(add_attr_exprs(arr_meta->element_type_, expr))) {
-      SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-    }
-  } else if (coll_meta->type_id_ == ObNestedType::OB_MAP_TYPE || coll_meta->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
-    const ObCollectionMapType *map_meta = static_cast<const ObCollectionMapType*>(coll_meta);
-    if (OB_FAIL(add_attr_exprs(map_meta->key_type_, expr))) {
-      SQL_RESV_LOG(WARN, "failed to add key attr expr", K(ret));
-    } else if (OB_FAIL(add_attr_exprs(map_meta->value_type_, expr))) {
-      SQL_RESV_LOG(WARN, "failed to add value attr expr", K(ret));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "unexpected meta type", K(ret), K(coll_meta->type_id_));
-  }
-  return ret;
-}
-
-template<typename RawExprType>
-int ObRawExprDeduceType::construct_collecton_attr_expr(RawExprType &expr)
-{
-  int ret = OB_SUCCESS;
-  uint16_t subschema_id = expr.get_result_type().get_subschema_id();
-  ObExecContext *exec_ctx = const_cast<ObExecContext *>(my_session_->get_cur_exec_ctx());
-  ObSubSchemaValue value;
-  const ObSqlCollectionInfo *coll_info = NULL;
-  ObItemType expr_type = expr.get_expr_type();
-  bool need_set_values = expr.get_enum_set_values().empty();
-  bool need_construct_attrs = true;
-  if (expr.get_attr_count() > 0) {
-    // attrs constructed already, do nothing
-    need_construct_attrs = false;
-  } else if (expr.is_const_expr()) {
-    // is uniform format, do nothing
-    need_construct_attrs = false;
-  }
-  if (!need_set_values && !need_construct_attrs) {
-    // do nothing
-  } else if (OB_ISNULL(exec_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "exec ctx is null", K(ret));
-  } else if (OB_ISNULL(expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "unexpected null raw expr", K(ret));
-  } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-    SQL_RESV_LOG(WARN, "failed to get subschema ctx", K(ret));
-  } else if (OB_ISNULL(value.value_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "subschema is null", K(ret));
-  } else {
-    coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
-    ObCollectionTypeBase *coll_meta = coll_info->collection_meta_;
-    ObColumnRefRawExpr *attr_expr = NULL;
-    if (coll_meta->type_id_ != ObNestedType::OB_ARRAY_TYPE
-        && coll_meta->type_id_ != ObNestedType::OB_VECTOR_TYPE
-        && coll_meta->type_id_ != ObNestedType::OB_MAP_TYPE
-        && coll_meta->type_id_ != ObNestedType::OB_SPARSE_VECTOR_TYPE) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "unexpected meta type", K(ret), K(coll_meta->type_id_));
-    } else if (OB_ISNULL(coll_meta)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "subschema is null", K(ret));
-    } else if (need_construct_attrs) {
-      if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                   T_REF_COLUMN, ArrayAttr::ATTR_LENGTH,
-                                                   attr_expr))) {
-        SQL_RESV_LOG(WARN, "failed to create nullbitmap attr expr", K(ret));
-      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-        SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-      } else if (OB_FAIL(add_attr_exprs(coll_meta, expr))) {
-        SQL_RESV_LOG(WARN, "failed to add attr expr", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && need_set_values) {
-      ObString def = coll_info->get_def_string();
-      ObSEArray<ObString, 1> enum_set_values;
-      if (OB_FAIL(enum_set_values.push_back(def))) {
-        SQL_RESV_LOG(WARN, "failed to push back array", K(ret));
-      } else if (OB_FAIL(expr.set_enum_set_values(enum_set_values))) {
-        SQL_RESV_LOG(WARN, "failed to set values", K(ret));
-      }
-    }
-  }
-  return ret;
-}
 
 } // end namespace sql
 } // end namespace oceanbase

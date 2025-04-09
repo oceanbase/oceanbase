@@ -311,16 +311,16 @@ int ObExprObjectConstructInfo::deep_copy(common::ObIAllocator &allocator,
   return ret;
 }
 
-template <typename RE>
-int ObExprObjectConstructInfo::from_raw_expr(RE &raw_expr)
+int ObExprObjectConstructInfo::from_raw_expr(const ObObjectConstructRawExpr &pl_expr)
 {
   int ret = OB_SUCCESS;
-  ObObjectConstructRawExpr &pl_expr
-        = const_cast<ObObjectConstructRawExpr &>
-            (static_cast<const ObObjectConstructRawExpr &>(raw_expr));
+  const ObIArray<ObRawExprResType> &elem_types = pl_expr.get_elem_types();
   rowsize_ = pl_expr.get_rowsize();
   udt_id_ = pl_expr.get_udt_id();
-  OZ(elem_types_.assign(pl_expr.get_elem_types()));
+  OZ(elem_types_.init(elem_types.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < elem_types.count(); ++i) {
+    OZ(elem_types_.push_back(elem_types.at(i)));
+  }
   return ret;
 }
 

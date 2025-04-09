@@ -1009,6 +1009,18 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
   return ret;
 }
 
+int ObExprResultTypeUtil::assign_type_array(const ObIArray<ObRawExprResType> &src, ObIArray<ObExprResType> &dest)
+{
+  int ret = OB_SUCCESS;
+  dest.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
+    if (OB_FAIL(dest.push_back(src.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObExprResultTypeUtil::get_collection_calc_type(ObExecContext *exec_ctx,
                                                    const ObExprResType &type1,
                                                    const ObExprResType & type2,

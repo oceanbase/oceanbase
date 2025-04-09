@@ -1076,7 +1076,7 @@ int ObCreateTableResolver::create_default_partition_for_table(ObTableSchema &tab
     c_expr = new(c_expr) ObConstRawExpr();
     maxvalue_expr = c_expr;
     maxvalue_expr->set_data_type(common::ObMaxType);
-    if (OB_FAIL(row_expr->add_param_expr(maxvalue_expr))) {
+    if (OB_FAIL(row_expr->set_param_expr(maxvalue_expr))) {
       LOG_WARN("failed add param expr", K(ret));
     }
   }
@@ -1125,7 +1125,7 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition dependant expr is not metadata$external_partition pseudo column");
           LOG_WARN("user specified partition col expr contains non external partition pseudo column is not supported", K(ret));
-        } else if (ObOptimizerUtil::find_item(external_part_idx, col_exprs.at(i)->get_extra())) {
+        } else if (ObOptimizerUtil::find_item(external_part_idx, col_exprs.at(i)->get_column_idx())) {
           ObSqlString tmp;
           OZ (tmp.append(col_exprs.at(i)->get_expr_name()));
           OZ (tmp.append(" redefinition"));
@@ -1134,7 +1134,7 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
           LOG_USER_ERROR(OB_NOT_SUPPORTED, helper.convert(tmp.string()));
           LOG_WARN("redefine the metadata$external_partition[i] column", K(ret));
         } else {
-          OZ (external_part_idx.push_back(col_exprs.at(i)->get_extra()));
+          OZ (external_part_idx.push_back(col_exprs.at(i)->get_column_idx()));
           found = true;
         }
       }
@@ -2246,23 +2246,6 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column_meta.set_type(ObLongTextType);
             }
             column.set_meta_type(column_meta);
-            if (column.is_collection()) { // array column
-              if (T_REF_COLUMN == expr->get_expr_type()) {
-                if(OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
-                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
-                }
-              } else {
-                const ObSqlCollectionInfo *coll_info = NULL;
-                uint16_t subschema_id = expr->get_result_type().get_subschema_id();
-                ObSubSchemaValue value;
-                if (OB_FAIL(session_info_->get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-                  LOG_WARN("failed to get subschema ctx", K(ret));
-                } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
-                } else if (OB_FAIL(column.add_type_info(coll_info->get_def_string()))) {
-                  LOG_WARN("set type info failed", K(ret));
-                }
-              }
-            }
             ObCharsetType char_type = table_schema.get_charset_type();
             ObCollationType collation_type = expr->get_collation_type();
             if (is_oracle_mode() && ob_is_string_or_lob_type(column.get_data_type())
@@ -2279,23 +2262,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_accuracy(expr->get_accuracy());
             column.set_zero_fill(expr->get_result_flag() & ZEROFILL_FLAG);
             OZ (adjust_number_decimal_column_accuracy_within_max(column, lib::is_oracle_mode()));
-            if (OB_SUCC(ret) && column.is_enum_or_set()) {
-              if (expr->is_enum_set_with_subschema()) {
-                const ObEnumSetMeta *enum_set_meta = NULL;
-                if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr->get_result_type(),
-                                                                  session_info_,
-                                                                  enum_set_meta))) {
-                  LOG_WARN("fail to extrac enum set mete", K(ret));
-                } else if (OB_FAIL(column.set_extended_type_info(*enum_set_meta->get_str_values()))) {
-                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
-                } else {
-                  column.set_collation_type(enum_set_meta->get_collation_type());
-                  column.set_data_scale(SCALE_UNKNOWN_YET);
-                }
-              } else {
-                if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
-                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
-                }
+            if (OB_SUCC(ret) && (column.is_enum_or_set() || column.is_collection())) {
+              if (OB_FAIL(fill_column_with_subschema(*expr, *session_info_, column))) {
+                LOG_WARN("failed to fill column with subschema", K(ret));
               }
             }
             if (OB_SUCC(ret) && lib::is_oracle_mode() && expr->get_result_type().is_user_defined_sql_type()) {
@@ -2998,7 +2967,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                   ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
                   LOG_WARN("Functional index for vector index is not supported.", K(ret), K(column_name));
                 } else if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
-                                                                                   session_info_->get_sql_mode(),
+                                                                                   *session_info_,
                                                                                    tbl_schema,
                                                                                    column_schema,
                                                                                    schema_checker_->get_schema_guard()))) {

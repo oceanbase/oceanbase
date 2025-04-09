@@ -1660,6 +1660,7 @@ int ObTableLocation::init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard sql_schema_guard;
+  LinkExecCtxGuard link_guard(session_info, exec_ctx);
   sql_schema_guard.set_schema_guard(&schema_guard);
   exec_ctx.set_my_session(&session_info);
   if (OB_UNLIKELY(is_virtual_table(table_id))) {
@@ -1787,6 +1788,7 @@ int ObTableLocation::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
     exec_ctx.set_my_session(&session_info);
     exec_ctx.set_sql_ctx(&sql_ctx);
     ObDASTabletMapper tablet_mapper;
+    LinkExecCtxGuard link_guard(session_info, exec_ctx);
     if (is_non_partition_optimized_ && table_id == loc_meta_.ref_table_id_) {
       tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
     }
@@ -2537,16 +2539,24 @@ int ObTableLocation::add_se_value_expr(const ObRawExpr *value_expr,
       OX(vie.dst_type_ = desc_expr->get_result_type().get_type());
       OX(vie.dst_cs_type_ = desc_expr->get_result_type().get_collation_type());
       if (ob_is_enum_or_set_type(vie.dst_type_)) {
-        vie.enum_set_values_cnt_ = desc_expr->get_enum_set_values().count();
-        vie.enum_set_values_ = desc_expr->get_enum_set_values().get_data();
+        const ObEnumSetMeta *meta = NULL;
+        OZ(exec_ctx->get_enumset_meta_by_subschema_id(desc_expr->get_subschema_id(), false, meta));
+        CK(OB_NOT_NULL(meta));
+        CK(OB_NOT_NULL(meta->get_str_values()));
+        OX(vie.enum_set_values_cnt_ = meta->get_str_values()->count());
+        OX(vie.enum_set_values_ = meta->get_str_values()->get_data());
       }
     } else {
       // for in expr, and set dest_type after call this function
       vie.dst_type_ = value_expr->get_result_type().get_type();
       vie.dst_cs_type_ = value_expr->get_result_type().get_collation_type();
       if (ob_is_enum_or_set_type(vie.dst_type_)) {
-        vie.enum_set_values_cnt_ = value_expr->get_enum_set_values().count();
-        vie.enum_set_values_ = value_expr->get_enum_set_values().get_data();
+        const ObEnumSetMeta *meta = NULL;
+        OZ(exec_ctx->get_enumset_meta_by_subschema_id(value_expr->get_subschema_id(), false, meta));
+        CK(OB_NOT_NULL(meta));
+        CK(OB_NOT_NULL(meta->get_str_values()));
+        OX(vie.enum_set_values_cnt_ = meta->get_str_values()->count());
+        OX(vie.enum_set_values_ = meta->get_str_values()->get_data());
       }
     }
     OZ(vies.push_back(vie));
@@ -2954,8 +2964,7 @@ int ObTableLocation::analyze_filter(const ObIArray<ColumnItem> &partition_column
     const ObRawExpr *l_expr = filter->get_param_expr(0);
     const ObRawExpr *r_expr = filter->get_param_expr(1);
     if (OB_FAIL(extract_eq_op(exec_ctx, l_expr, r_expr, column_id, partition_expr,
-                              filter->get_result_type(), cnt_func_expr,
-                              always_true, calc_node))) {
+                              cnt_func_expr, always_true, calc_node))) {
       LOG_WARN("Failed to extract equal expr", K(ret));
     }
   } else { }
@@ -2968,7 +2977,6 @@ int ObTableLocation::extract_eq_op(ObExecContext *exec_ctx,
                                    const ObRawExpr *r_expr,
                                    const uint64_t column_id,
                                    const ObRawExpr *partition_expr,
-                                   const ObExprResType &res_type,
                                    bool &cnt_func_expr,
                                    bool &always_true,
                                    ObPartLocCalcNode *&calc_node)
@@ -2994,7 +3002,7 @@ int ObTableLocation::extract_eq_op(ObExecContext *exec_ctx,
     ObExprEqualCheckContext equal_ctx;
     bool true_false = true;
     if (!ObQueryRange::can_be_extract_range(T_OP_EQ, func_expr->get_result_type(),
-        res_type.get_calc_meta(), c_expr->get_result_type().get_type(), true_false)) {
+        c_expr->get_result_type(), c_expr->get_result_type().get_type(), true_false)) {
       always_true = true_false;
     } else if (OB_FAIL(check_expr_equal(partition_expr, func_expr, equal, equal_ctx))) {
       LOG_WARN("Failed to check equal expr", K(ret));
@@ -3043,7 +3051,7 @@ int ObTableLocation::extract_eq_op(ObExecContext *exec_ctx,
     if (column_id == column_expr->get_column_id()) {
       bool true_false = false;
       if (!ObQueryRange::can_be_extract_range(T_OP_EQ, col_expr->get_result_type(),
-          res_type.get_calc_meta(), c_expr->get_result_type().get_type(), true_false)) {
+          c_expr->get_result_type(), c_expr->get_result_type().get_type(), true_false)) {
         always_true = true_false;
       } else if (NULL == (calc_node = ObPartLocCalcNode::create_part_calc_node(
                   allocator_, calc_nodes_, ObPartLocCalcNode::COLUMN_VALUE))) {
@@ -3103,8 +3111,12 @@ int ObTableLocation::extract_value_item_expr(ObExecContext *exec_ctx,
     vie.dst_type_ = dst_expr->get_result_type().get_type();
     vie.dst_cs_type_ = dst_expr->get_result_type().get_collation_type();
     if (ob_is_enum_or_set_type(vie.dst_type_)) {
-      vie.enum_set_values_cnt_ = dst_expr->get_enum_set_values().count();
-      vie.enum_set_values_ = dst_expr->get_enum_set_values().get_data();
+      const ObEnumSetMeta *meta = NULL;
+      OZ(exec_ctx->get_enumset_meta_by_subschema_id(dst_expr->get_subschema_id(), false, meta));
+      CK(OB_NOT_NULL(meta));
+      CK(OB_NOT_NULL(meta->get_str_values()));
+      OX(vie.enum_set_values_cnt_ = meta->get_str_values()->count());
+      OX(vie.enum_set_values_ = meta->get_str_values()->get_data());
     }
   }
   return ret;
@@ -6355,7 +6367,7 @@ int ObTableLocation::try_get_gather_stat_partition_info(
         ObRawExpr *r_expr = cur_expr->get_param_expr(1);
         if (l_expr->get_expr_type() == T_FUN_SYS_CALC_PARTITION_ID &&
             l_expr->get_partition_id_calc_type() == CALC_IGNORE_SUB_PART &&
-            l_expr->get_extra() == ref_table_id &&
+            l_expr->get_ref_table_id() == ref_table_id &&
             r_expr->is_const_expr()) {
           if (OB_ISNULL(calc_node = ObPartLocCalcNode::create_part_calc_node(allocator_, calc_nodes_,
                                                                              ObPartLocCalcNode::GATHER_STAT))) {
@@ -6369,7 +6381,7 @@ int ObTableLocation::try_get_gather_stat_partition_info(
           }
         } else if (l_expr->get_expr_type() == T_FUN_SYS_CALC_PARTITION_ID &&
                    l_expr->get_partition_id_calc_type() == CALC_NORMAL &&
-                   l_expr->get_extra() == ref_table_id &&
+                   l_expr->get_ref_table_id() == ref_table_id &&
                    r_expr->is_const_expr()) {
           if (OB_ISNULL(subcalc_node = ObPartLocCalcNode::create_part_calc_node(allocator_, calc_nodes_,
                                                                              ObPartLocCalcNode::GATHER_STAT))) {

@@ -653,8 +653,8 @@ int ObMVPrinter::gen_exists_cond_for_table(const TableItem *source_table,
              || OB_UNLIKELY(NULL == mlog_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(query_ref_expr), K(exists_op_expr), K(mlog_schema));
-  } else if (OB_FAIL(exists_op_expr->add_param_expr(query_ref_expr))) {
-    LOG_WARN("failed to add param expr", K(ret));
+  } else if (OB_FAIL(exists_op_expr->set_param_expr(query_ref_expr))) {
+    LOG_WARN("failed to set param expr", K(ret));
   } else if (OB_FAIL(create_simple_stmt(subquery))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(subquery, mlog_schema->get_table_name_str(),
@@ -696,8 +696,8 @@ int ObMVPrinter::gen_exists_cond_for_mview(const TableItem &source_table,
   } else if (OB_ISNULL(query_ref_expr) || OB_ISNULL(exists_op_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(query_ref_expr), K(exists_op_expr));
-  } else if (OB_FAIL(exists_op_expr->add_param_expr(query_ref_expr))) {
-    LOG_WARN("failed to add param expr", K(ret));
+  } else if (OB_FAIL(exists_op_expr->set_param_expr(query_ref_expr))) {
+    LOG_WARN("failed to set param expr", K(ret));
   } else if (OB_FAIL(create_simple_stmt(subquery))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(subquery, mv_schema_.get_table_name(), mv_table))) {

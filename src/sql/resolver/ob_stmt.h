@@ -833,6 +833,7 @@ public:
    * @return query_ctx_
    */
   ObQueryCtx *get_query_ctx();
+  const ObQueryCtx *get_query_ctx() const { return query_ctx_; }
   inline common::ObIAllocator &get_allocator() { return allocator_; }
 private:
   common::ObIAllocator &allocator_;

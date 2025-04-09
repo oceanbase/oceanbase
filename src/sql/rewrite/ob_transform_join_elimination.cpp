@@ -40,6 +40,8 @@ int ObTransformJoinElimination::transform_one_stmt(common::ObIArray<ObParentDMLS
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is null", K(ret));
+  } else if (stmt->get_table_size() < 2) {
+    //do nothing
   } else if (OB_FAIL(eliminate_join_self_foreign_key(stmt, trans_happened_self_foreign_key, eliminated_tables))) {
     LOG_WARN("failed to eliminate self join/join between primary key and foreign key", K(ret));
   } else if (OB_FAIL(eliminate_outer_join(parent_stmts, stmt, trans_happened_outer_join, eliminated_tables))) {
@@ -343,7 +345,7 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt *stmt,
         LOG_WARN("failed to rebuild table hash", K(ret));
       } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
         LOG_WARN("failed to update colun item rel id", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
         LOG_TRACE("succ to do self key join in joined table elimination to remove.");
@@ -660,7 +662,7 @@ int ObTransformJoinElimination::trans_table_item(ObDMLStmt *stmt,
       LOG_WARN("rebuild table hash failed", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update columns' relation id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("formalize stmt is failed", K(ret));
     }
   }
@@ -1055,7 +1057,7 @@ int ObTransformJoinElimination::eliminate_left_outer_join(ObDMLStmt *stmt,
       LOG_WARN("failed to rebuild tables hash", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update columns relation id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalizae stmt", K(ret));
     }
   }
@@ -1322,7 +1324,7 @@ int ObTransformJoinElimination::eliminate_outer_join(ObIArray<ObParentDMLStmt> &
         LOG_WARN("failed to rebuild table hash", K(ret));
       } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
         LOG_WARN("failed to update colun item rel id", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
         LOG_TRACE("succ to do outer join elimination to remove.");
@@ -1497,7 +1499,7 @@ int ObTransformJoinElimination::check_all_column_primary_key(const ObDMLStmt *st
         all_primary_key =  find;
       }
       if (all_primary_key) {
-        const ObExprResType *res_type = item.get_column_type();
+        const ObRawExprResType *res_type = item.get_column_type();
         if (OB_ISNULL(res_type)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
@@ -1935,7 +1937,7 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
       LOG_WARN("rebuild table hash failed", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update columns' relation id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("formalize stmt is failed", K(ret));
     }
   }
@@ -2239,7 +2241,7 @@ int ObTransformJoinElimination::try_remove_semi_info(ObDMLStmt *stmt,
     LOG_WARN("rebuild table hash failed", K(ret));
   } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
     LOG_WARN("failed to update columns' relation id", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("formalize stmt is failed", K(ret));
   }
   return ret;
@@ -2814,7 +2816,7 @@ int ObTransformJoinElimination::trans_semi_table_item(ObDMLStmt *stmt,
     LOG_WARN("rebuild table hash failed", K(ret));
   } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
     LOG_WARN("failed to update columns' relation id", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("formalize stmt is failed", K(ret));
   } else {/*do nothing*/}
   return ret;
@@ -2912,6 +2914,8 @@ int ObTransformJoinElimination::trans_semi_condition_exprs(ObDMLStmt *stmt,
       } else if (OB_ISNULL(filter_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("or expr is null", K(ret));
+      } else if (OB_FAIL(filter_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize expr failed", K(ret));
       } else if (OB_FAIL(stmt->get_condition_exprs().push_back(filter_expr))) {
         LOG_WARN("failed to push back cond", K(ret));
       } else {/*do nothing*/}

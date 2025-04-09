@@ -3905,7 +3905,7 @@ do {                                                                  \
 
     bool is_strict = is_strict_mode(ctx_.exec_ctx_->get_my_session()->get_sql_mode());
     ObCastMode cast_mode = CM_NONE;
-    ObExprResType result_type;
+    ObRawExprResType result_type;
     OZ (ObSQLUtils::get_default_cast_mode(
         stmt::T_NONE, ctx_.exec_ctx_->get_my_session(), cast_mode));
 

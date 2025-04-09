@@ -318,18 +318,20 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
       } else {
         rt_expr.eval_func_ = ObExprLeast::calc_least;
       }
-      const ObObjMeta &cmp_meta = result_type_.get_calc_meta();
+      const ObObjMeta &cmp_meta = raw_expr.get_extra_calc_meta();
       const bool is_explicit_cast = false;
       const int32_t result_flag = 0;
       ObCastMode cm = CM_NONE;
       if (!is_oracle_mode && !cmp_meta.is_null()) {
         DatumCastExtraInfo *info = OB_NEWx(DatumCastExtraInfo, op_cg_ctx.allocator_, *(op_cg_ctx.allocator_), type_);
         ObSQLMode sql_mode = op_cg_ctx.session_->get_sql_mode();
+        const ObLocalSessionVar *local_vars = NULL;
         if (OB_ISNULL(info)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc memory failed", K(ret));
-        } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(&raw_expr.get_local_session_var(),
-                                                                          sql_mode))) {
+        } else if (OB_FAIL(ObSQLUtils::get_solidified_vars_from_ctx(raw_expr, local_vars))) {
+          LOG_WARN("failed to get local session var", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(local_vars, sql_mode))) {
           LOG_WARN("try get local sql mode failed", K(ret));
         } else if (CS_TYPE_INVALID == cmp_meta.get_collation_type()) {
           ret = OB_ERR_UNEXPECTED;

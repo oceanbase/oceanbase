@@ -377,7 +377,7 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("target expr is null", K(ret));
         } else {
-          const ObExprResType &column_type = target_expr->get_result_type();
+          const ObRawExprResType &column_type = target_expr->get_result_type();
           if (OB_FAIL(info.ref_expr_->add_column_type(column_type))) {
             LOG_WARN("add column type to subquery ref expr failed", K(ret));
           }

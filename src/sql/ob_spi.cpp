@@ -729,16 +729,19 @@ int ObSPIService::cast_enum_set_to_string(ObExecContext &ctx,
   ObConstRawExpr *c_expr = NULL;
   ObSysFunRawExpr *out_expr = NULL;
   ObExprResType result_type;
+  uint16_t subschema_id = 0;
+  ObObj obj = src;
   CK (OB_NOT_NULL(expr_factory));
   CK (OB_NOT_NULL(session_info));
   OZ (expr_factory->create_raw_expr(static_cast<ObItemType>(src.get_type()), c_expr));
   CK (OB_NOT_NULL(c_expr));
-  OZ (c_expr->set_enum_set_values(enum_set_values));
-  OX (c_expr->set_value(src));
-  OX (result_type.set_meta(src.get_meta()));
+  OZ (ObRawExprUtils::get_subschema_id(src.get_meta(), enum_set_values, *session_info, subschema_id));
+  OX (obj.set_subschema_id(subschema_id));
+  OX (c_expr->set_value(obj));
+  OX (result_type.set_meta(obj.get_meta()));
   OX (result_type.set_accuracy(src.get_accuracy()));
+  OX (result_type.mark_pl_enum_set_with_subschema());
   OX (c_expr->set_result_type(result_type));
-  OX (c_expr->mark_enum_set_skip_build_subschema());
   OZ (ObRawExprUtils::create_type_to_str_expr(*expr_factory, c_expr, out_expr, session_info, true));
   CK (OB_NOT_NULL(out_expr));
   OZ (ObSPIService::spi_calc_raw_expr(session_info, &(ctx.get_allocator()), out_expr, &result));
@@ -751,11 +754,16 @@ int ObSPIService::spi_calc_raw_expr(ObSQLSessionInfo *session,
                                     ObObj *result)
 {
   int ret = OB_SUCCESS;
-  ObExecContext *exec_ctx = NULL;
   ParamStore param_store((ObWrapperAllocator(*allocator)));
+  CK (OB_NOT_NULL(session));
   CK (OB_NOT_NULL(result));
-  OZ (ObSQLUtils::se_calc_const_expr(session, expr, param_store, *allocator, exec_ctx, *result));
+  OZ (ObSQLUtils::se_calc_const_expr(session, expr, param_store, *allocator, session->get_cur_exec_ctx(), *result));
   OX (result->set_collation_level(expr->get_result_type().get_collation_level()));
+  if (OB_SUCC(ret) && expr->is_enum_set_with_subschema()) {
+    ObObjMeta org_obj_meta;
+    OZ (ObRawExprUtils::extract_enum_set_collation(expr->get_result_type(), session, org_obj_meta));
+    OX (result->set_collation(org_obj_meta));
+  }
   OZ (spi_pad_char_or_varchar(session, expr, allocator, result));
   return ret;
 }

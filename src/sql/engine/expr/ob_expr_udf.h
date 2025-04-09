@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/engine/expr/ob_expr_result_type_util.h"
 
 namespace oceanbase
 {
@@ -125,9 +126,9 @@ public:
     return subprogram_path_.assign(path);
   }
   inline void set_result_type(const ObExprResType &result_type) { result_type_ = result_type; }
-  inline int set_params_type(common::ObIArray<ObExprResType> &params_type)
+  inline int set_params_type(common::ObIArray<ObRawExprResType> &params_type)
   {
-    return params_type_.assign(params_type);
+    return ObExprResultTypeUtil::assign_type_array(params_type, params_type_);
   }
   inline int set_params_desc(common::ObIArray<ObUDFParamDesc> &params_desc)
   {

@@ -4896,7 +4896,7 @@ int ObPLCodeGenerator::generate_get_collection_attr(ObLLVMValue &param_array,
                                          ObLLVMValue &current_allocator,
                                          ObLLVMValue &ret_value_ptr,
                                          ObLLVMBasicBlock& exit,
-                                         const sql::ObExprResType &res_type)
+                                         const sql::ObRawExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   ObLLVMValue ret_value;
@@ -5115,7 +5115,7 @@ int ObPLCodeGenerator::generate_get_attr(ObLLVMValue &param_array,
                                          ObLLVMValue &allocator_ptr,     // 读取的allator
                                          ObLLVMValue &ret_value_ptr, // 标识是否越界
                                          ObLLVMBasicBlock& exit,     // 越界后需要跳转的BLOCK
-                                         const sql::ObExprResType &res_type)
+                                         const sql::ObRawExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   ObLLVMType user_type;
@@ -6856,7 +6856,7 @@ int ObPLCodeGenerator::generate_compare_calc(ObLLVMValue &left,
 int ObPLCodeGenerator::generate_arith_calc(ObLLVMValue &left,
                                            ObLLVMValue &right,
                                            ObItemType type,
-                                           const ObExprResType &result_type,
+                                           const ObRawExprResType &result_type,
                                            int64_t stmt_id,
                                            bool in_notfound,
                                            bool in_warning,
@@ -8292,7 +8292,7 @@ int ObPLCodeGenerator::generate_obj_access_expr()
 int ObPLCodeGenerator::generate_get_attr_func(const ObIArray<ObObjAccessIdx> &idents,
                                               int64_t param_count, const ObString &func_name,
                                               bool for_write,
-                                              const sql::ObExprResType &res_type)
+                                              const sql::ObRawExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObLLVMType, 4> arg_types;

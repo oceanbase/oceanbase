@@ -171,7 +171,7 @@ public:
                              double &index_back_cost,
                              const ObOptimizerContext &opt_ctx);
 
-  static int get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types,
+  static int get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types,
                                double &cmp_cost,
                                const ObOptimizerContext &opt_ctx);
 
@@ -249,7 +249,7 @@ public:
                                            const ObNewRange &range,
                                            double &count);
 
-  static double get_estimate_width_from_type(const ObExprResType &type);
+  static double get_estimate_width_from_type(const ObRawExprResType &type);
   static double calc_pred_cost_per_row(const ObRawExpr *expr,
                                       double card,
                                       double &cost,

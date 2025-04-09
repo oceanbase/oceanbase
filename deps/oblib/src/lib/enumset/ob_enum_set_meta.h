@@ -39,14 +39,14 @@ private:
 
 public:
   /**
-   * Since the `scale` field within the `ObExprResType` of the enum/set type is not used, we use
+   * Since the `scale` field within the `ObRawExprResType` of the enum/set type is not used, we use
    * this field to save the meta state.
    */
-  enum MetaState
+  enum MetaState // FARM COMPAT WHITELIST
   {
     UNINITIALIZED = -1, // meta has not been saved, -1(SCALE_UNKNOWN_YET) as the default value
-    SKIP = 0, // used in pl, compilation and running are separated, so skip this scenario
-    READY = 1, // meta has been saved in `ObSubSchemaCtx`
+    PL = 0, // used in pl, meta is only avaiable in compilation stage
+    SQL = 1, // used in sql, meta has been saved in `ObSubSchemaCtx`
     MAX_STATE
   };
 

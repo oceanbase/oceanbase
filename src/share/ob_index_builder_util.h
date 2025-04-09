@@ -54,7 +54,7 @@ public:
       common::ObIArray<share::schema::ObColumnSchemaV2*> &gen_columns);
   static int generate_ordinary_generated_column(
       sql::ObRawExpr &expr,
-      const ObSQLMode sql_mode,
+      const sql::ObSQLSessionInfo &session,
       share::schema::ObTableSchema &data_schema,
       share::schema::ObColumnSchemaV2 *&gen_col,
       share::schema::ObSchemaGetterGuard *schema_guard,

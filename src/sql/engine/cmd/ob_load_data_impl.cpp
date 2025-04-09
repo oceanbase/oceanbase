@@ -663,7 +663,7 @@ public:
       } else {
         is_user_variable = true;
         ObSysFunRawExpr *func_expr = static_cast<ObSysFunRawExpr*>(raw_expr);
-        if (func_expr->get_children_count() != 1) {
+        if (func_expr->get_param_count() != 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sys func expr child num is not correct", K(ret));
         } else {

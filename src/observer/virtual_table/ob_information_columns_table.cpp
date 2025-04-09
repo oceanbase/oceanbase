@@ -1087,8 +1087,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
               } else {
                 ObArray<common::ObString> extended_type_info;
                 const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-                if (OB_FAIL(extended_type_info.assign(select_item.expr_->get_enum_set_values()))) {
-                  SERVER_LOG(WARN, "failed to assign enum values", K(ret));
+                if (OB_FAIL(ObRawExprUtils::extract_extended_type_info(select_item.expr_,
+                                                                       session_,
+                                                                       extended_type_info))) {
+                  SERVER_LOG(WARN, "failed to extract extended type info", K(ret));
                 } else if (OB_FAIL(column_item.default_value_.print_plain_str_literal(extended_type_info, buf, buf_len, pos))) {
                   SERVER_LOG(WARN, "fail to print plain str literal", K(buf), K(buf_len), K(pos), K(ret));
                 } else {

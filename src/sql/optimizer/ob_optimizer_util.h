@@ -470,11 +470,6 @@ public:
                                                       common::ObIArray<ObRawExpr*> &correlated_filters,
                                                       common::ObIArray<ObRawExpr*> &uncorrelated_filters);
 
-  static int add_parameterized_expr(ObRawExpr *&target_expr,
-                                    ObRawExpr *orig_expr,
-                                    ObRawExpr *child_expr,
-                                    int64_t child_idx);
-
   static int get_default_directions(const int64_t direction_num,
                                     ObIArray<ObOrderDirection> &directions);
 
@@ -503,7 +498,7 @@ public:
                                   common::ObIArray<ObOrderDirection> &directions);
   static int get_expr_and_types(const common::ObIArray<OrderItem> &order_items,
                                 ObIArray<ObRawExpr*> &order_exprs,
-                                ObIArray<ObExprResType> &order_types);
+                                ObIArray<ObRawExprResType> &order_types);
   static int extract_column_ids(const ObRawExpr *expr,
                                 const uint64_t table_id,
                                 common::ObIArray<uint64_t> &column_ids);
@@ -1129,7 +1124,7 @@ public:
                                const ObIArray<ObRawExpr *> &const_exprs,
                                bool &is_match);
   static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range = false);
-  static bool is_lossless_type_conv(const ObExprResType &child_type, const ObExprResType &dst_type);
+  static bool is_lossless_type_conv(const ObRawExprResType &child_type, const ObRawExprResType &dst_type);
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
   static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr, bool is_query_range = false);
   static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr, bool is_query_range = false);
@@ -1150,13 +1145,13 @@ public:
                                          const int64_t column_cnt,
                                          const bool is_set_distinct,
                                          ObIArray<ObRawExpr*> &select_exprs,
-                                         ObIArray<ObExprResType> *res_types);
+                                         ObIArray<ObRawExprResType> *res_types);
   static int add_cast_to_set_select_expr(ObSQLSessionInfo *session_info,
                                          ObRawExprFactory &expr_factory,
-                                         const ObExprResType &res_type,
+                                         const ObRawExprResType &res_type,
                                          ObRawExpr *&src_expr);
-  static int check_set_child_res_types(const ObExprResType &left_type,
-                                       const ObExprResType &right_type,
+  static int check_set_child_res_types(const ObRawExprResType &left_type,
+                                       const ObRawExprResType &right_type,
                                        const bool is_ps_prepare_stage,
                                        const bool is_distinct,
                                        const bool is_mysql_recursive_union,
@@ -1172,7 +1167,6 @@ public:
                                             const bool is_distinct,
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObIArray<ObSelectStmt*> &right_stmts,
-                                            ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL);
   static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
@@ -1181,7 +1175,6 @@ public:
                                             const bool is_distinct,
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObSelectStmt *right_stmt,
-                                            ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL);
 
@@ -1194,18 +1187,18 @@ public:
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObSelectStmt*> &stmts,
-                                  const ObExprResType &res_type,
+                                  const ObRawExprResType &res_type,
                                   const int64_t idx);
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObRawExpr*> &exprs,
-                                  const ObExprResType &res_type,
+                                  const ObRawExprResType &res_type,
                                   const int64_t column_idx,
                                   const int64_t row_cnt);
   static int add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
                                          ObIArray<ObSelectStmt*> &stmts,
-                                         const ObExprResType &res_type,
+                                         const ObRawExprResType &res_type,
                                          const int64_t idx,
                                          ObIArray<ObString> *rcte_col_name);
 

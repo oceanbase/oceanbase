@@ -803,7 +803,7 @@ public:
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
   int generate_auto_split_filter();
   int construct_table_split_range_filter(ObSQLSessionInfo *session, const int64_t filter_type);
-  int create_exec_param_for_auto_split(const ObExprResType &type, ObRawExpr *&expr);
+  int create_exec_param_for_auto_split(const ObRawExprResType &type, ObRawExpr *&expr);
   uint64_t get_auto_split_filter_type() const { return auto_split_filter_type_; };
   const ObRawExpr *get_auto_split_filter() const { return auto_split_filter_; };
   const ObIArray<ObRawExpr *> &get_auto_split_params() const { return auto_split_params_; };
@@ -1011,6 +1011,9 @@ private: // member functions
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
   int prepare_rowkey_vid_dep_exprs(const bool is_rowkey_docid = false);
+  int build_column_expr(ObRawExprFactory &expr_factory,
+                        const share::schema::ObColumnSchemaV2 &column_schema,
+                        ObColumnRefRawExpr *&column_expr);
   int check_is_delete_insert_scan(bool &is_delete_insert_scan) const;
 protected: // memeber variables
   // basic info

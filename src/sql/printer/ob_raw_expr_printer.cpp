@@ -661,7 +661,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
           DATA_PRINTF("(");
           PRINT_EXPR(expr->get_param_expr(0));
           DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
-          if (OB_SUCC(ret)) {
+          if (OB_SUCC(ret) && IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
             // any, all
             if (T_WITH_ANY == expr->get_subquery_key()) {
               DATA_PRINTF("any ");
@@ -3774,7 +3774,7 @@ do { \
     }
     DATA_PRINTF("(");
 
-    ObIArray<ObExprResType> &params_type = expr->get_params_type();
+    ObIArray<ObRawExprResType> &params_type = expr->get_params_type();
     ObIArray<ObString> &params_name = expr->get_params_name();
     bool last_is_comma = false;
     CK (params_type.count() == expr->get_param_count());
@@ -4586,7 +4586,7 @@ int ObRawExprPrinter::pre_check_treat_opt(ObRawExpr *expr, bool &is_treat)
   return ret;
 }
 
-int ObRawExprPrinter::print_type(const ObExprResType &dst_type)
+int ObRawExprPrinter::print_type(const ObRawExprResType &dst_type)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *type_expr = NULL;

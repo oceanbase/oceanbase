@@ -4155,8 +4155,9 @@ int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr
       type.set_meta_type(final_type.get_data_type()->get_meta_type());
       type.set_accuracy(final_type.get_data_type()->get_accuracy());
     } else {
-      type.set_meta_type(expr.get_result_type().get_obj_meta());
-      type.set_accuracy(expr.get_result_type().get_accuracy());
+      CK (ns.get_external_ns());
+      OZ (ObRawExprUtils::extract_real_result_type(expr,
+                  ns.get_external_ns()->get_resolve_ctx().session_info_ , type));
     }
     OZ (calc_type_constraint(expr, ns, flag, range), expr);
     OZ (data_type_.push_back(type), type);

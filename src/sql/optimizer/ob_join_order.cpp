@@ -20,6 +20,7 @@
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/rewrite/ob_query_range_define.h"
+#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
 using namespace oceanbase;
@@ -2207,7 +2208,7 @@ int ObJoinOrder::init_column_store_est_info_with_other_column(const uint64_t tab
       LOG_WARN("unexpect null expr", K(ret));
     } else if (used_column_ids.has_member(column_id)) {
       //do nothing
-    } else if (expr->get_ref_count() <= 0) {
+    } else if (!expr->is_explicited_reference()) {
       //do nothing
     } else if (OB_ISNULL(col_opt_meta)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4252,7 +4253,7 @@ int IndexMergePath::estimate_cost()
   if (OB_SUCC(ret)) {
     double merge_cost_per_row = 0.0;
     double merge_cost = 0.0;
-    ObSEArray<ObExprResType, 4> types;
+    ObSEArray<ObRawExprResType, 4> types;
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
       if (OB_ISNULL(rowkey_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -8887,20 +8888,27 @@ int JoinPath::compute_hash_hash_sharding_info()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(join_expr), K(left_expr), K(right_expr), K(ret));
       } else {
+        ObObjType left_type = ObMaxType;
+        ObObjType right_type = ObMaxType;
         if (!left_expr->get_relation_ids().is_subset(left_path_->parent_->get_tables())) {
           std::swap(left_expr, right_expr);
         }
         if (OB_FAIL(left_join_exprs.push_back(left_expr)) ||
             OB_FAIL(right_join_exprs.push_back(right_expr))) {
           LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_equal_type(left_type,
+                                                      left_expr->get_result_type().get_type(),
+                                                      left_expr->get_result_type().get_type()))) {
+          LOG_WARN("failed to get relation equal type", KPC(left_expr), K(ret));
+        } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_equal_type(right_type,
+                                                      right_expr->get_result_type().get_type(),
+                                                      right_expr->get_result_type().get_type()))) {
+          LOG_WARN("failed to get relation equal type", KPC(right_expr), K(ret));
         } else {
-          ObExprCalcType result_type = join_expr->get_result_type().get_calc_meta();
-          if (!ObSQLUtils::is_same_type_for_compare(left_expr->get_result_type(),
-                                                    result_type)) {
+          if (ObMaxType == left_type) {
             use_left = false;
           }
-          if (!ObSQLUtils::is_same_type_for_compare(right_expr->get_result_type(),
-                                                    result_type)) {
+          if (ObMaxType == right_type) {
             use_right = false;
           }
         }
@@ -14491,22 +14499,7 @@ int ObJoinOrder::extract_mergejoin_conditions(const ObIArray<ObRawExpr*> &join_q
                     && right_expr->get_relation_ids().is_subset(right_tables))
                    || (left_expr->get_relation_ids().is_subset(right_tables)
                        && right_expr->get_relation_ids().is_subset(left_tables)))) {
-      bool is_mj_able = false;
-      common::ObObjType compare_type = cur_expr->get_result_type().get_calc_type();
-      if (OB_FAIL(ObObjCaster::is_cast_monotonic(left_expr->get_data_type(), compare_type, is_mj_able))) {
-        LOG_WARN("check cast monotonic error", K(left_expr->get_data_type()), K(compare_type), K(ret));
-      } else if (is_mj_able) {
-        if (OB_FAIL(ObObjCaster::is_cast_monotonic(right_expr->get_data_type(), compare_type, is_mj_able))) {
-          LOG_WARN("check cast monotonic error", K(right_expr->get_data_type()), K(compare_type), K(ret));
-        } else { /*do nothing*/ }
-      } else { /*do nothing*/ }
-      if (OB_SUCC(ret)) {
-        if (is_mj_able) {
-          ret = equal_join_conditions.push_back(cur_expr);
-        } else {
-          ret = other_join_conditions.push_back(cur_expr);
-        }
-      } else { /*do nothing*/ }
+      ret = equal_join_conditions.push_back(cur_expr);
     } else if (cur_expr->get_relation_ids().is_subset(get_tables())) {
       //如果条件仅涉及左右分支，可以拿出来作为join filter
       if (OB_FAIL(other_join_conditions.push_back(cur_expr))) {
@@ -14688,7 +14681,7 @@ int ObJoinOrder::is_onetime_expr(const ObRelIds &ignore_relids,ObRawExpr* expr, 
         !expr->has_flag(CNT_WINDOW_FUNC) &&
         !expr->has_flag(CNT_ONETIME) &&
         !expr->has_flag(CNT_ALIAS) &&
-        expr->get_ref_count() <= 1;
+        !expr->is_shared_reference();
   }
 
   if (OB_SUCC(ret) && is_valid && expr->is_query_ref_expr()) {
@@ -18795,6 +18788,8 @@ int ObJoinOrder::build_prefix_index_compare_expr(ObRawExpr &column_expr,
       } else if (OB_ISNULL(row_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("to_type is null");
+      } else if (OB_FAIL(row_expr->init_param_exprs(value_expr.get_param_count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else {
         right_expr = row_expr;
         for (int64_t k = 0; OB_SUCC(ret) && k < value_expr.get_param_count(); ++k) {
@@ -20015,6 +20010,8 @@ int ObJoinOrder::get_range_of_query_tokens(ObIArray<ObConstRawExpr*> &query_toke
     } else if (OB_ISNULL(in_list_expr) || OB_ISNULL(in_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(in_list_expr), K(in_expr), K(ret));
+    } else if (OB_FAIL(in_list_expr->init_param_exprs(query_tokens.count()))) {
+      LOG_WARN("failed to init param exprs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < query_tokens.count(); i++) {
         if (OB_FAIL(in_list_expr->add_param_expr(query_tokens.at(i)))) {

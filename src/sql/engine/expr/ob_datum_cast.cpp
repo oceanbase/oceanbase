@@ -2308,7 +2308,7 @@ static int common_string_lob(const ObExpr &expr,
 int get_enumset_meta(sql::ObEvalCtx &ctx, const ObObjMeta &obj_meta, const ObEnumSetMeta *&meta) {
   int ret = OB_SUCCESS;
   const uint16_t subschema_id = obj_meta.get_subschema_id();
-  if (OB_FAIL(ctx.exec_ctx_.get_enumset_meta_by_subschema_id(subschema_id, meta))) {
+  if (OB_FAIL(ctx.exec_ctx_.get_enumset_meta_by_subschema_id(subschema_id, false, meta))) {
     LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
   } else if (OB_ISNULL(meta) || OB_UNLIKELY(!meta->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -11929,7 +11929,7 @@ int get_accuracy_from_parse_node(const ObExpr &expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObDatum *dst_type_dat = NULL;
-  ObExprResType dst_type;
+  ObRawExprResType dst_type;
   if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(expr.args_) ||
       OB_ISNULL(expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;

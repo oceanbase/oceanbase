@@ -400,7 +400,7 @@ int ObExternalTableFileManager::get_genarated_expr_from_partition_column(const O
     } else if (OB_FAIL(gen_expr->formalize(session_info))) {
       LOG_WARN("formalize failed", K(ret));
     } else {
-      ObExprResType expected_type;
+      ObRawExprResType expected_type;
       expected_type.set_meta(column_schema->get_meta_type());
       expected_type.set_accuracy(column_schema->get_accuracy());
       expected_type.set_result_flag(ObRawExprUtils::calc_column_result_flag(*column_schema));

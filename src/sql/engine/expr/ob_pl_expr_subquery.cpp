@@ -14,6 +14,7 @@
 
 #include "ob_pl_expr_subquery.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase
 {
@@ -121,7 +122,7 @@ int ObExprOpSubQueryInPl::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
-    OZ(info->from_raw_expr(fun_sys, alloc));
+    OZ(info->from_raw_expr(fun_sys, op_cg_ctx.session_, alloc));
     rt_expr.extra_info_ = info;
     rt_expr.eval_func_ = eval_subquery;
   }
@@ -419,11 +420,12 @@ int ObExprPlSubQueryInfo::deep_copy(common::ObIAllocator &allocator,
 }
 
 template <typename RE>
-int ObExprPlSubQueryInfo::from_raw_expr(RE &raw_expr, ObIAllocator &alloc)
+int ObExprPlSubQueryInfo::from_raw_expr(RE &raw_expr, const ObSQLSessionInfo *session, ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
   ObPlQueryRefRawExpr &subquery_expr =
     const_cast<ObPlQueryRefRawExpr &> (static_cast<const ObPlQueryRefRawExpr&>(raw_expr));
+  const ObEnumSetMeta *enum_set_meta = NULL;
   
   id_ = common::OB_INVALID_ID;
   type_ = subquery_expr.get_stmt_type();
@@ -432,7 +434,12 @@ int ObExprPlSubQueryInfo::from_raw_expr(RE &raw_expr, ObIAllocator &alloc)
 
   OZ(ob_write_string(alloc, subquery_expr.get_route_sql(), route_sql_, true));
   OZ(ob_write_string(alloc, subquery_expr.get_route_sql(), ps_sql_, true));
-  OZ(ObExprOpSubQueryInPl::deep_copy_type_info(type_info_, alloc, subquery_expr.get_enum_set_values()));
+  if (OB_SUCC(ret) && raw_expr.get_result_type().is_enum_or_set()) {
+    OZ (ObRawExprUtils::extract_enum_set_meta(raw_expr.get_result_type(), session, enum_set_meta));
+    CK (OB_NOT_NULL(enum_set_meta));
+    CK (OB_NOT_NULL(enum_set_meta->get_str_values()));
+    OZ(ObExprOpSubQueryInPl::deep_copy_type_info(type_info_, alloc, *enum_set_meta->get_str_values()));
+  }
   return ret;
 }
 

@@ -63,11 +63,25 @@ int ObExprRowNum::rownum_eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Usage of rownum is");
   } else if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("operator is NULL", K(ret), K(operator_id), KP(kit));
+    if (0 == operator_id) {
+      // the default value of expr.extra_ is 0
+      ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+      LOG_WARN("operator is NULL", K(ret), K(operator_id), KP(kit));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Usage of rownum is");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), K(operator_id), KP(kit));
+    }
   } else if (OB_UNLIKELY(PHY_COUNT != kit->op_->get_spec().type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("is not count operator", K(ret), K(operator_id), "spec", kit->op_->get_spec());
+    if (0 == operator_id) {
+      // the default value of expr.extra_ is 0
+      ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+      LOG_WARN("is not count operator", K(ret), K(operator_id), "spec", kit->op_->get_spec());
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Usage of rownum is");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("is not count operator", K(ret), K(operator_id), "spec", kit->op_->get_spec());
+    }
   } else {
     char local_buff[number::ObNumber::MAX_BYTE_LEN];
     ObDataBuffer local_alloc(local_buff, number::ObNumber::MAX_BYTE_LEN);

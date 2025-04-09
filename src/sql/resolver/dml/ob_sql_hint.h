@@ -181,7 +181,7 @@ struct ObQueryHint {
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> outline_trans_hints_; // tranform hints to generate outline data
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
   ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
-  hash::ObHashMap<ObString, int64_t> qb_name_map_;	// qb name -> stmt id
+  hash::ObHashMap<ObString, int64_t, common::hash::NoPthreadDefendMode> qb_name_map_;	// qb name -> stmt id
   int64_t sel_start_id_;
   int64_t set_start_id_;
   int64_t other_start_id_;

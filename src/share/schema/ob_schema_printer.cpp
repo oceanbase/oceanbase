@@ -1106,7 +1106,11 @@ int ObSchemaPrinter::print_prefix_index_column(const ObColumnSchemaV2 &column,
   ObArray<sql::ObQualifiedName> columns;
   ObString column_name;
   int64_t const_value = 0;
-  SMART_VAR(sql::ObSQLSessionInfo, default_session) {
+  SMART_VARS_3((sql::ObSQLSessionInfo, default_session), (ObExecContext, exec_ctx, allocator),
+               (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+    LinkExecCtxGuard link_guard(default_session, exec_ctx);
+    exec_ctx.set_my_session(&default_session);
+    exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
                 column.get_tenant_id(), column.get_table_id(), is_oracle_mode))) {
       LOG_WARN("fail to get compat mode", KR(ret), K(column));
@@ -1157,6 +1161,7 @@ int ObSchemaPrinter::print_prefix_index_column(const ObColumnSchemaV2 &column,
         }
       }
     }
+    exec_ctx.set_physical_plan_ctx(NULL);
   }
   return ret;
 }
@@ -2752,7 +2757,11 @@ int ObSchemaPrinter::print_index_definition_columns(
               ObArray<sql::ObQualifiedName> columns;
               ObString column_name;
               int64_t const_value = 0;
-              SMART_VAR(sql::ObSQLSessionInfo, default_session) {//此处是mock的session，因此应该使用test_init,否则无法为tz_mgr初始化
+              SMART_VARS_3((sql::ObSQLSessionInfo, default_session), (ObExecContext, exec_ctx, allocator),
+                           (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+                LinkExecCtxGuard link_guard(default_session, exec_ctx);
+                exec_ctx.set_my_session(&default_session);
+                exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
                 if (OB_FAIL(default_session.test_init(0, 0, 0, &allocator))) {
                   OB_LOG(WARN, "init empty session failed", K(ret));
                 } else if (OB_FAIL(default_session.load_default_sys_variable(false, false))) {
@@ -2795,6 +2804,7 @@ int ObSchemaPrinter::print_index_definition_columns(
                     }
                   }
                 }
+                exec_ctx.set_physical_plan_ctx(NULL);
               }
             }
           } else {

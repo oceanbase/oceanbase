@@ -21,7 +21,7 @@ using namespace common;
 namespace sql
 {
 const int64_t ObTransformOrExpansion::MAX_STMT_NUM_FOR_OR_EXPANSION = 10;
-const int64_t ObTransformOrExpansion::MAX_TIMES_FOR_OR_EXPANSION = 5;
+const int64_t ObTransformOrExpansion::MAX_TIMES_FOR_OR_EXPANSION = 10;
 
 int ObTransformOrExpansion::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent_stmts,
                                                ObDMLStmt *&stmt,
@@ -156,6 +156,7 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
       ObSelectStmt *transformed_union_stmt = NULL;
       StmtUniqueKeyProvider unique_key_provider;
       try_trans_helper2.unique_key_provider_ = &unique_key_provider;
+      bool partial_cost_check = false;
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
@@ -168,9 +169,12 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+                                                                            partial_cost_check))) {
+        LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                           NULL != ctx.hint_, false,
-                                          trans_happened, &ctx))) {
+                                          trans_happened, partial_cost_check, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
         LOG_WARN("failed to add transform hint", K(ret));
@@ -209,6 +213,7 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
   ObSelectStmt *spj_stmt = NULL;
   ObTryTransHelper try_trans_helper1;
   ObTryTransHelper try_trans_helper2;
+  bool partial_cost_check = false;
   OPT_TRACE("try to expand semi condition");
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -271,9 +276,12 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
             LOG_WARN("failed to do transformation", K(ret));
           } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
             LOG_WARN("failed to merge stmt", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+                                                                                partial_cost_check))) {
+            LOG_WARN("failed to check partial cost eval validity", K(ret));
           } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                               NULL != ctx.hint_, false,
-                                              trans_happened, &ctx))) {
+                                              trans_happened, partial_cost_check, &ctx))) {
             LOG_WARN("failed to accept transform", K(ret));
           } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
             LOG_WARN("failed to add transform hint", K(ret));
@@ -386,6 +394,7 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
   ObTryTransHelper try_trans_helper1;
   ObTryTransHelper try_trans_helper2;
+  bool partial_cost_check = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(ctx_)
       || OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -443,9 +452,12 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to merge stmt", K(ret));
       } else if (OB_FALSE_IT(NULL == view_table ? origin_trans_stmt = trans_stmt
                                                 : view_table->ref_query_ = static_cast<ObSelectStmt*>(trans_stmt))) {
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+                                                                            partial_cost_check))) {
+        LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, origin_trans_stmt,
                                           NULL != ctx.hint_, false,
-                                          trans_happened, &ctx))) {
+                                          trans_happened, partial_cost_check, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
         LOG_WARN("failed to add transform hint", K(ret));
@@ -505,6 +517,7 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   ObSelectStmt *orig_flag_stmt = NULL;
   StmtUniqueKeyProvider unique_key_provider1;
   try_trans_helper1.unique_key_provider_ = &unique_key_provider1;
+  bool partial_cost_check = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -573,9 +586,12 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
         LOG_WARN("just stmt select item failed", K(ret));
       } else if (OB_FALSE_IT(NULL == view_table ? trans_stmt = trans_ref_query
                                                 : view_table->ref_query_ = trans_ref_query)) {
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+                                                                            partial_cost_check))) {
+        LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                           NULL != ctx.hint_, false,
-                                          trans_happened, &ctx))) {
+                                          trans_happened, partial_cost_check, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
         LOG_WARN("failed to add transform hint", K(ret));
@@ -1004,6 +1020,11 @@ int ObTransformOrExpansion::add_filter_to_stmt(ObSelectStmt *stmt,
                                                                  rn_expr, const_one,
                                                                  equal_expr))) {
     LOG_WARN("failed to build common binary op expr", K(ret));
+  } else if (OB_ISNULL(equal_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("equal expr is null", K(ret));
+  } else if (OB_FAIL(equal_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize windown function", K(ret));
   } else if (OB_FAIL(conds.push_back(equal_expr))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, flag_exprs.at(0),
@@ -2316,6 +2337,7 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
     } else if (OB_ISNULL(set_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(set_stmt));
+    // jinmao TODO: remove deduce type after fixing deduce type of Array type
     } else if (OB_FAIL(set_stmt->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else {
@@ -2383,7 +2405,7 @@ int ObTransformOrExpansion::adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds
     LOG_WARN("failed to create expr", K(ret), K(generated_exprs));
   } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
     LOG_WARN("failed to append expr", K(ret));
-  } else if (OB_FAIL(or_expansion_stmt->formalize_stmt(session_info))) {
+  } else if (OB_FAIL(or_expansion_stmt->formalize_stmt(session_info, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -2473,6 +2495,11 @@ int ObTransformOrExpansion::create_expr_for_or_expr(ObRawExpr &transformed_expr,
        /*do nothing */
       } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*expr_factory, expr, temp_expr))) {
         LOG_WARN("failed to create lnnvl expr", K(ret));
+      } else if (OB_ISNULL(temp_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(ret));
+      } else if (OB_FAIL(temp_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(generated_exprs.push_back(temp_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else { /*do nothing*/ }
@@ -3150,7 +3177,7 @@ int ObTransformOrExpansion::classify_or_expr(const ObDMLStmt &stmt, ObRawExpr *&
     } else {
       //modify the expr according to the partitions
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
-      op_expr->clear_child();
+      op_expr->reuse_child();
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_classes.count(); i++) {
         if (OB_FAIL(op_expr->add_param_expr(expr_classes.at(i)))) {
           LOG_WARN("failed to add param expr", K(ret));
@@ -3173,14 +3200,26 @@ int ObTransformOrExpansion::merge_expr_class(ObRawExpr *&expr_class, ObRawExpr *
   } else if (T_OP_OR == expr_class->get_expr_type()) {
     new_or_expr = static_cast<ObOpRawExpr *>(expr_class);
     if (OB_FAIL(new_or_expr->add_param_expr(expr))) {
-      LOG_WARN("add param expr to or expr failed", K(ret));
+      if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(new_or_expr->extend_param_exprs(new_or_expr->get_param_count() * 2))) {
+          LOG_WARN("failed to init param exprs", K(ret));
+        } else if (OB_FAIL(new_or_expr->add_param_expr(expr))) {
+          LOG_WARN("failed to add param expr", K(ret));
+        }
+      } else {
+        LOG_WARN("add param expr to or expr failed", K(ret));
+      }
     }
   } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_OR, new_or_expr))) {
     LOG_WARN("failed to create or expr", K(ret));
-  } else if (OB_FAIL(new_or_expr->add_param_expr(expr_class))) {
-    LOG_WARN("add param expr to or expr failed", K(ret));
-  } else if (OB_FAIL(new_or_expr->add_param_expr(expr))) {
-    LOG_WARN("add param expr to or expr failed", K(ret));
+  } else if (OB_ISNULL(new_or_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(new_or_expr));
+  } else if (OB_FAIL(new_or_expr->set_param_exprs(expr_class, expr))) {
+    LOG_WARN("failed to set param exprs", K(ret));
+  } else if (OB_FAIL(new_or_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
   } else {
     expr_class = new_or_expr;
   }
@@ -3217,7 +3256,7 @@ int ObTransformOrExpansion::get_condition_related_tables(ObSelectStmt &stmt,
       if (OB_ISNULL(expand_subqueries.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret));
-      } else if (expand_subqueries.at(i)->get_ref_count() > 1){
+      } else if (expand_subqueries.at(i)->is_shared_reference()){
         contain_shared_subqueries = true;
       }
     }
@@ -3458,6 +3497,26 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
     }
   } else if (rel_table == table){
     left_bottom = true;
+  }
+  return ret;
+}
+
+int ObTransformOrExpansion::check_rule_bypass(const ObDMLStmt &stmt, bool &reject)
+{
+  int ret = OB_SUCCESS;
+  reject = false;
+  if (is_normal_disabled_transform(stmt)) {
+    reject = true;
+  } else if (reached_max_times_for_or_expansion()) {
+    reject = true;
+  } else {
+    ObSEArray<ObRawExpr*, 4> target_exprs;
+    DECLARE_EXPR_INFO_WITH_FLAGS(flags_required, CNT_OR, CNT_IN);
+    if (FAILEDx(stmt.get_relation_exprs(target_exprs, flags_required, true))) {
+      LOG_WARN("failed to get relation exprs with flags", K(ret));
+    } else if (target_exprs.empty()) {
+      reject = true;
+    }
   }
   return ret;
 }

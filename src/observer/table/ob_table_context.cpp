@@ -501,7 +501,7 @@ int ObTableCtx::read_real_lob(ObIAllocator &allocator, ObObj &obj)
 int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  const ObExprResType &column_type = column_info.type_;
+  const ObRawExprResType &column_type = column_info.type_;
   const ObCollationType cs_type = column_type.get_collation_type();
 
   // 1. check nullable

@@ -145,12 +145,12 @@ private:
       ObSQLSessionInfo &session_info,
       common::ObIAllocator &allocator,
       const bool is_sub_part,
-      ObExprResType &dst_res_type);
+      ObRawExprResType &dst_res_type);
   template<class T>
   int calc_range_part_high_bound(
       const ObPartitionFuncType part_func_type,
       const ObString &col_name,
-      const ObExprResType &dst_res_type,
+      const ObRawExprResType &dst_res_type,
       T &part,
       ObExecContext &ctx);
   int calc_range_values_exprs(
@@ -166,7 +166,7 @@ private:
   int calc_list_part_rows(
     const ObPartitionFuncType part_func_type,
     const ObString &col_name,
-    const ObExprResType &dst_res_type,
+    const ObRawExprResType &dst_res_type,
     const T &orig_part,
     T &new_part,
     ObExecContext &ctx,

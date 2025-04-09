@@ -257,6 +257,14 @@ int ObMajorRefreshMJVPrinter::append_rowkey_range_filter(const ObIArray<SelectIt
              || OB_ISNULL(start_col_row) || OB_ISNULL(end_col_row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_FAIL(start_col_row->init_param_exprs(range->start_key_.get_obj_cnt()))) {
+    LOG_WARN("failed to init param exprs", K(ret));
+  } else if (OB_FAIL(start_const_row->init_param_exprs(range->start_key_.get_obj_cnt()))) {
+    LOG_WARN("failed to init param exprs", K(ret));
+  } else if (OB_FAIL(end_col_row->init_param_exprs(range->end_key_.get_obj_cnt()))) {
+    LOG_WARN("failed to init param exprs", K(ret));
+  } else if (OB_FAIL(end_const_row->init_param_exprs(range->end_key_.get_obj_cnt()))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else {
     ObRawExpr *filter = NULL;
     uint64_t s_cnt = range->start_key_.get_obj_cnt();

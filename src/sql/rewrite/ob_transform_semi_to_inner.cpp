@@ -53,6 +53,7 @@ int ObTransformSemiToInner::transform_one_stmt(
       bool happened = false;
       bool force_trans = false;
       bool force_no_trans = false;
+      bool partial_cost_check = false;
       if (!parent_stmts.empty()) {
         root_stmt = parent_stmts.at(parent_stmts.count()-1).stmt_;
       } else {
@@ -91,10 +92,13 @@ int ObTransformSemiToInner::transform_one_stmt(
       } else if (!happened) {
         OPT_TRACE("semi join can not transform to inner join");
         LOG_TRACE("semi join can not transform to inner join", K(*semi_info));
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+                                                                            partial_cost_check))) {
+        LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                           !need_check_cost || ctx.hint_force_,
                                           false,
-                                          accepted, &ctx))) {
+                                          accepted, partial_cost_check, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (OB_FAIL(try_trans_helper.finish(accepted, stmt->get_query_ctx(), ctx_))) {
         LOG_WARN("failed to finish try trans helper", K(ret));
@@ -403,7 +407,7 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
         LOG_WARN("failed to push back expr", K(ret));
       }
     } else if (OB_FALSE_IT(is_all_left_filter = false)) {
-    } else if (expr->get_children_count() != 2) {
+    } else if (expr->get_param_count() != 2) {
       // select * from t1 semi join t2 on abs(t1.c1 + t1.c2)
       if (OB_FAIL(other_conds.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -632,7 +636,7 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
       need_check_cost = true;
     }
   }
-  if (OB_SUCC(ret) && is_valid && need_check_cost && ctx_->in_accept_transform_) {
+  if (OB_SUCC(ret) && is_valid && need_check_cost && ctx_->eval_cost_) {
     is_valid = false;
   }
   return ret;

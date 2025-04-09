@@ -5661,51 +5661,6 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
   return ret;
 }
 
-int ObSql::replace_const_expr(ObIArray<ObRawExpr*> &raw_exprs,
-                              ParamStore &param_store)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < raw_exprs.count(); i++) {
-    if (OB_FAIL(replace_const_expr(raw_exprs.at(i),
-                                   param_store))) {
-      LOG_WARN("failed to replace const expr", K(ret));
-    } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
-int ObSql::replace_const_expr(ObRawExpr *raw_expr,
-                              ParamStore &param_store)
-{
-  int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  if (OB_ISNULL(raw_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("check stack overflow failed", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret));
-  } else if (raw_expr->is_const_raw_expr()) {
-    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(raw_expr);
-    if (const_expr->get_value().is_unknown()) {
-      int pos = const_expr->get_value().get_unknown();
-      if (pos >= 0 && pos < param_store.count()) {
-        const_expr->set_param(param_store.at(pos));
-      } else { /*do nothing*/ }
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); i++) {
-      if (OB_FAIL(replace_const_expr(raw_expr->get_param_expr(i),
-                                     param_store))) {
-        LOG_WARN("failed to replace const expr", K(ret));
-      } else { /*do nothing*/ }
-    }
-  }
-  return ret;
-}
-
 void ObSql::generate_ps_sql_id(const ObString &raw_sql,
                                ObSqlCtx &context)
 {

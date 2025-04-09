@@ -1148,7 +1148,8 @@ int ObLoadDataResolver::build_column_ref_expr(ObQualifiedName &q_name, ObRawExpr
   } else if (OB_ISNULL(col_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column schema is null");
-  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_, *col_schema, col_expr))) {
+  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_, *col_schema,
+                                                       params_.session_info_, col_expr))) {
     LOG_WARN("build column expr failed", K(ret));
   } else {
     col_expr->set_column_attr(tb_name, q_name.col_name_);
@@ -1158,8 +1159,8 @@ int ObLoadDataResolver::build_column_ref_expr(ObQualifiedName &q_name, ObRawExpr
     column_expr = col_expr;
 
     ColumnItem column_item;
-    column_item.set_default_value(col_schema->get_cur_default_value());
     column_item.expr_ = col_expr;
+    column_item.set_default_value(col_schema->get_cur_default_value());
     column_item.table_id_ = col_expr->get_table_id();
     column_item.column_id_ = col_expr->get_column_id();
     column_item.column_name_ = col_expr->get_column_name();

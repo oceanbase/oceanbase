@@ -651,6 +651,9 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
         LOG_TRACE("multi sort keys, and the first column can be pushdown as white");
         effective_sk_cnt = 1;
       }
+      if (OB_FAIL(pushdown_topn_filter_expr->init_param_exprs(effective_sk_cnt))) {
+        LOG_WARN("failed to init param exprs", K(ret));
+      }
       for (int64_t i = 0; i < effective_sk_cnt && OB_SUCC(ret); ++i) {
         ObRawExpr *sort_key = candidate_sk_exprs.at(i);
         if (OB_FAIL(pushdown_topn_filter_expr->add_param_expr(sort_key))) {

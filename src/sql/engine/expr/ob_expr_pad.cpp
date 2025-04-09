@@ -159,9 +159,8 @@ int ObExprPad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
-  UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_pad_expr;
-  rt_expr.extra_ = raw_expr.get_extra();
+  rt_expr.extra_ = raw_expr.get_used_in_column_conv();
   return ret;
 }
 

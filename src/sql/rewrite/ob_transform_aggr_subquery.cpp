@@ -1043,7 +1043,7 @@ int ObTransformAggrSubquery::transform_child_stmt(ObDMLStmt *stmt,
       LOG_WARN("failed to eliminate redundant aggregation if need", K(ret));
     } else if (OB_FAIL(eliminate_limit_if_need(subquery, param, false))) {
       LOG_WARN("failed to eliminate limit if need", K(ret));
-    } else if (OB_FAIL(subquery.formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(subquery.formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize subquery", K(ret));
     }
   }
@@ -1133,7 +1133,7 @@ int ObTransformAggrSubquery::transform_upper_stmt(ObDMLStmt &stmt, TransformPara
     } else if (OB_FAIL(transform_from_list(stmt, view_table, pullup_conds, upper_filters, param.pullup_flag_))) {
       LOG_WARN("failed to transform from list", K(ret));
       // 4. post process
-    } else if (OB_FAIL(stmt.formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt.formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
   }
@@ -1734,6 +1734,7 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
   ObSelectStmt *subquery = NULL;
   ObRawExprFactory *expr_factory = NULL;
   ObRawExpr *parent_expr_of_query_ref = NULL;
+  ObRawExpr* vec_cmp_expr = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(root_expr)
       || OB_ISNULL(expr_factory = ctx_->expr_factory_)
       || OB_ISNULL(query_ref_expr = trans_param.ja_query_ref_)
@@ -1761,6 +1762,11 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
         ObRawExpr *cond = subquery->get_having_exprs().at(i);
         if (need_lnnvl && OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*expr_factory, cond, cond))) {
           LOG_WARN("failed to build lnnvl expr", K(ret));
+        } else if (OB_ISNULL(cond)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(cond->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize expr", K(ret));
         } else if (OB_FAIL(select_stmt.add_having_expr(cond))) {
           LOG_WARN("failed to add having condition", K(ret));
         }
@@ -1769,7 +1775,11 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
       ObSEArray<ObRawExpr *, 4> select_exprs;
       if (OB_FAIL(subquery->get_select_exprs(select_exprs))) {
         LOG_WARN("failed to get select exprs", K(ret));
-      } else if (OB_FAIL(modify_vector_comparison_expr_if_necessary(select_stmt, expr_factory, select_exprs, parent_expr_of_query_ref))) {
+      } else if (OB_FAIL(modify_vector_comparison_expr_if_necessary(select_stmt,
+                                                                    expr_factory,
+                                                                    select_exprs,
+                                                                    parent_expr_of_query_ref,
+                                                                    vec_cmp_expr))) {
         LOG_WARN("failed to modify vector comparison expr", K(ret));
       } else if (OB_FAIL(select_stmt.replace_relation_exprs(trans_param.query_refs_,
                                                             select_exprs))) {
@@ -1801,7 +1811,9 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
       LOG_WARN("failed to append semi infos", K(ret));
     } else if (OB_FAIL(ObTransformUtils::decorrelate(&select_stmt, query_ref_expr->get_exec_params()))) {
       LOG_WARN("failed to decorrelate stmt", K(ret));
-    } else if (OB_FAIL(select_stmt.formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_NOT_NULL(vec_cmp_expr) && OB_FAIL(vec_cmp_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize vector comparison expr", K(ret));
+    } else if (OB_FAIL(select_stmt.formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(rebuild_conditon(select_stmt, *subquery))) {
       LOG_WARN("failed to rebuild condition", K(ret));
@@ -1818,8 +1830,11 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
  *   1. select exprs of subquery need to be integrated into a T_OP_ROW expr
  *   2. parent expr of subquery should be replaced to a new one with common comparision
  */
-int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
-  ObSelectStmt &select_stmt, ObRawExprFactory *expr_factory, ObSEArray<ObRawExpr*, 4> &select_exprs, ObRawExpr *parent_expr_of_query_ref) {
+int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt,
+                                                                        ObRawExprFactory *expr_factory,
+                                                                        ObSEArray<ObRawExpr*, 4> &select_exprs,
+                                                                        ObRawExpr *parent_expr_of_query_ref,
+                                                                        ObRawExpr *&vec_cmp_expr) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr_factory) || OB_ISNULL(parent_expr_of_query_ref) || select_exprs.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -1845,6 +1860,8 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
 
       if (OB_FAIL(expr_factory->create_raw_expr(value_cmp_type, new_parent_expr))) {
         LOG_WARN("failed to build expr", K(ret), K(new_parent_expr));
+      } else if (OB_FAIL(new_parent_expr->init_param_exprs(parent_expr_of_query_ref->get_param_count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else {
         for (int64_t i=0; i < parent_expr_of_query_ref->get_param_count(); i++) {
           if (OB_FAIL(new_parent_expr->add_param_expr(parent_expr_of_query_ref->get_param_expr(i)))) {
@@ -1858,6 +1875,8 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
           LOG_WARN("failed to push back expr", K(ret));
         } else if (OB_FAIL(select_stmt.replace_relation_exprs(old_exprs, new_exprs))) {
           LOG_WARN("failed to replace expr in stmt", K(ret));
+        } else {
+          vec_cmp_expr = new_parent_expr;
         }
       }
     }
@@ -2251,6 +2270,8 @@ int ObTransformAggrSubquery::modify_aggr_param_expr_for_outer_join(TransformPara
           LOG_WARN("failed to build case when expr", K(ret));
         } else if (OB_FAIL(ObTransformUtils::replace_expr(then_expr, case_when_expr, aggr))) {
           LOG_WARN("failed to build case when expr", K(ret));
+        } else if (OB_FAIL(aggr->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize aggr expr", K(ret));
         }
       }
     }
@@ -3031,6 +3052,18 @@ int ObTransformAggrSubquery::eliminate_redundant_aggregation_if_need(ObSelectStm
     if (OB_SUCC(ret) && OB_FAIL(stmt.get_select_items().assign(new_select_items))) {
       LOG_WARN("failed to assign select items", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTransformAggrSubquery::check_rule_bypass(const ObDMLStmt &stmt, bool &reject)
+{
+  int ret = OB_SUCCESS;
+  reject = false;
+  if (is_normal_disabled_transform(stmt)) {
+    reject = true;
+  } else if (stmt.get_subquery_expr_size() < 1) {
+    reject = true;
   }
   return ret;
 }

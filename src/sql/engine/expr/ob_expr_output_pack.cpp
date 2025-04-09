@@ -56,7 +56,7 @@ int ObExprOutputPack::cg_expr(ObExprCGCtx &cg_ctx, const ObRawExpr &raw_expr, Ob
 {
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOutputPackInfo::init_output_pack_info(raw_expr.get_extra(), cg_ctx.allocator_, rt_expr, type_))) {
+  if (OB_FAIL(ObOutputPackInfo::init_output_pack_info(raw_expr.get_field_array(), cg_ctx.allocator_, rt_expr, type_))) {
     LOG_WARN("failed to init output pack info", K(ret));
   } else {
     rt_expr.eval_func_ = &eval_output_pack;

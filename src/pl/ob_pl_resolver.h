@@ -331,7 +331,7 @@ public:
   static int resolve_sp_scalar_type(common::ObIAllocator &allocator,
                                     const ParseNode *sp_data_type_node,
                                     const ObString &ident_name,
-                                    const sql::ObSQLSessionInfo &session_info,
+                                    sql::ObSQLSessionInfo &session_info,
                                     ObPLDataType &data_type,
                                     bool is_for_param_type = false,
                                     uint64_t package_id = OB_INVALID_ID);
@@ -415,6 +415,7 @@ public:
     sql::ObSelectStmt *&select_stmt);
   static
   int fill_record_type(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const ObSQLSessionInfo &session_info,
                        common::ObIAllocator &allocator,
                        sql::ObSelectStmt *select_stmt,
                        ObRecordType *&record_type);
@@ -845,8 +846,8 @@ private:
                    common::ObIArray<ObObjAccessIdx> &access_idxs,
                    ObPLCompileUnitAST &func);
   int convert_pltype_to_restype(ObIAllocator &alloc,
-                                              const ObPLDataType &pl_type,
-                                              ObExprResType *&result_type);
+                                const ObPLDataType &pl_type,
+                                ObRawExprResType *&result_type);
   int resolve_access_ident(ObObjAccessIdent &access_ident, const ObPLBlockNS &ns,
                            ObRawExprFactory &expr_factory, const ObSQLSessionInfo *session_info,
                            ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func,

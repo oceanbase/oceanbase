@@ -3935,7 +3935,7 @@ int ObPLComposite::copy_element(const ObObj &src,
 #endif
   } else if (NULL != dest_type && NULL != session && !src.is_null()) {
     ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObExprResType result_type;
+    ObRawExprResType result_type;
     ObObjParam result;
     ObObjParam src_tmp;
     CK (OB_NOT_NULL(dest_type));

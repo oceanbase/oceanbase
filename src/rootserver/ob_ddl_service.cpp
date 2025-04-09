@@ -9985,26 +9985,18 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
       }
       if (OB_SUCC(ret)) {
         ObRawExpr *expr_with_implicit_cast = NULL;
-        ObExprResType dst_type;
+        ObRawExprResType dst_type;
         dst_type.set_meta(generated_column.get_meta_type());
         dst_type.set_accuracy(generated_column.get_accuracy());
         dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
-        ObSQLMode sql_mode = default_session.get_sql_mode();
-        if (NULL != local_session_var) {
-          sql::ObSessionSysVar *sys_var = NULL;
-          if (OB_FAIL(local_session_var->get_local_var(share::SYS_VAR_SQL_MODE, sys_var))) {
-            LOG_WARN("fail to get sys var", K(ret));
-          } else if (NULL != sys_var) {
-            sql_mode = sys_var->val_.get_uint64();
-          }
-        }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
           LOG_WARN("erase implicit cast failed", K(ret));
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), KP(expr));
-        } else if (OB_FAIL(modify_depend_column_type(expr, column_name, new_column_schema, compat_mode))) {
+        } else if (OB_FAIL(modify_depend_column_type(expr, column_name, new_column_schema,
+                                                     default_session, compat_mode))) {
           LOG_WARN("modify column type failed", K(ret));
         } else if (OB_FAIL(expr->formalize_with_local_vars(&default_session,
                                                           local_session_var,
@@ -10021,7 +10013,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
                                                                               OB_INVALID_INDEX_INT64))) {
           LOG_WARN("expr formalize failed", K(ret));
         } else if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(expr_with_implicit_cast,
-                                                                         sql_mode,
+                                                                         &default_session,
                                                                          generated_column))) {
           LOG_WARN("extract sysvar from expr failed", K(ret));
         }
@@ -10035,6 +10027,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
 int ObDDLService::modify_depend_column_type(sql::ObRawExpr *expr,
                                             const ObString &column_name,
                                             const AlterColumnSchema &column_schema,
+                                            ObSQLSessionInfo &session,
                                             lib::Worker::CompatMode compat_mode) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -10068,8 +10061,9 @@ int ObDDLService::modify_depend_column_type(sql::ObRawExpr *expr,
         }
       }
       if (OB_SUCC(ret) && (column_schema.is_enum_or_set() || column_schema.is_collection())) {
-        if (OB_FAIL(column_expr->set_enum_set_values(column_schema.get_extended_type_info()))) {
-          LOG_WARN("failed to set enum set values", K(ret));
+        if (OB_FAIL(ObRawExprUtils::init_column_expr_subschema(
+                            column_schema, &session, *column_expr))) {
+          LOG_WARN("failed to init column expr subschema", K(ret));
         }
       }
       if (OB_SUCC(ret) && column_schema.is_xmltype()) {
@@ -10085,7 +10079,7 @@ int ObDDLService::modify_depend_column_type(sql::ObRawExpr *expr,
   } else if (expr->has_flag(CNT_COLUMN)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(modify_depend_column_type(expr->get_param_expr(i), column_name,
-                                                       column_schema, compat_mode)))) {
+                                                       column_schema, session, compat_mode)))) {
         LOG_WARN("modify depend column type failed", K(ret));
       }
     }
@@ -10187,7 +10181,11 @@ int ObDDLService::modify_func_expr_column_name(
   ObString orig_part_expr;
   ObArray<ObString> expr_strs;
 
-  SMART_VAR(ObSQLSessionInfo, default_session) {
+  SMART_VARS_3((ObSQLSessionInfo, default_session), (ObExecContext, exec_ctx, allocator),
+               (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+    LinkExecCtxGuard link_guard(default_session, exec_ctx);
+    exec_ctx.set_my_session(&default_session);
+    exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     if (!is_sub_part) {
       orig_part_expr = part_option.get_part_func_expr_str();
     } else {
@@ -10247,7 +10245,7 @@ int ObDDLService::modify_func_expr_column_name(
             } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column schema is null", K(ret), K(q_name.col_name_));
-            } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
+            } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, NULL, *q_name.ref_expr_))) {
               LOG_WARN("init column expr failed", K(ret));
             } else {
               q_name.ref_expr_->set_ref_id(table_schema.get_table_id(), col_schema->get_column_id());
@@ -10295,6 +10293,7 @@ int ObDDLService::modify_func_expr_column_name(
         }
       }
     }
+    exec_ctx.set_physical_plan_ctx(NULL);
   }
 
   return ret;
@@ -10504,7 +10503,11 @@ int ObDDLService::refill_columns_id_for_check_constraint(
     uint64_t tenant_id = alter_column_schema.get_tenant_id();
     const ObTenantSchema *tenant_schema = nullptr;
     ObSchemaGetterGuard schema_guard;
-    SMART_VAR(ObSQLSessionInfo, default_session) {
+    SMART_VARS_3((sql::ObSQLSessionInfo, default_session), (ObExecContext, exec_ctx, allocator),
+                 (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+      LinkExecCtxGuard link_guard(default_session, exec_ctx);
+      exec_ctx.set_my_session(&default_session);
+      exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
       if (OB_FAIL(default_session.init(0, 0, &allocator))) {
         LOG_WARN("init empty session failed", K(ret));
       } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -10556,6 +10559,7 @@ int ObDDLService::refill_columns_id_for_check_constraint(
           }
         }
       }
+      exec_ctx.set_physical_plan_ctx(NULL);
     }
   }
   return ret;
@@ -10658,7 +10662,11 @@ int ObDDLService::rebuild_constraint_check_expr(
   ObArray<ObQualifiedName> columns;
   const ObColumnSchemaV2 *col_schema = NULL;
   ObString orig_check_expr = cst.get_check_expr_str();
-  SMART_VAR(ObSQLSessionInfo, default_session) {
+  SMART_VARS_3((ObSQLSessionInfo, default_session), (ObExecContext, exec_ctx, allocator),
+               (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+    LinkExecCtxGuard link_guard(default_session, exec_ctx);
+    exec_ctx.set_my_session(&default_session);
+    exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     if (OB_FAIL(default_session.init(0, 0, &allocator))) {
       LOG_WARN("init empty session failed", K(ret));
     } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -10717,7 +10725,7 @@ int ObDDLService::rebuild_constraint_check_expr(
             } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column schema is null", K(ret), K(q_name.col_name_));
-            } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
+            } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, NULL, *q_name.ref_expr_))) {
               LOG_WARN("init column expr failed", K(ret), K((*col_schema).get_column_name_str()));
             } else {
               q_name.ref_expr_->set_ref_id(table_schema.get_table_id(), col_schema->get_column_id());
@@ -10749,6 +10757,7 @@ int ObDDLService::rebuild_constraint_check_expr(
         }
       }
     }
+    exec_ctx.set_physical_plan_ctx(NULL);
   }
   return ret;
 }

@@ -2790,7 +2790,7 @@ int ObJsonExprHelper::init_json_expr_extra_info(
     ObExpr &rt_expr)
 {
   int ret = OB_SUCCESS;
-  const uint64_t extra = raw_expr.get_extra();
+  const uint64_t extra = raw_expr.get_json_partial_update_flag();
   if (! is_json_partial_update_mode(extra)) { // only used for json partial update now
   } else {
     rt_expr.extra_ = extra;

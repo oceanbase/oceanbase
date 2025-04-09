@@ -111,7 +111,9 @@ class ObRawExprUniqueSet
 public:
 
   ObRawExprUniqueSet(bool need_unique)
-    : need_unique_(need_unique)
+    : need_unique_(need_unique),
+      expr_factory_(NULL),
+      session_info_(NULL)
   {}
   virtual ~ObRawExprUniqueSet() {}
 
@@ -132,18 +134,27 @@ public:
                                   = [](ObRawExpr *e){ return NULL != e;});
 
   int flatten_temp_expr(ObRawExpr *raw_expr);
-
-
+  void set_expr_factory(ObRawExprFactory *expr_factory)
+  {
+    expr_factory_ = expr_factory;
+  }
+  void set_session_info(ObSQLSessionInfo *session_info)
+  {
+    session_info_ = session_info;
+  }
 private:
   int flatten_and_add_raw_exprs(ObRawExpr *raw_expr,
                                 bool need_flatten_gen_col = true,
                                 std::function<bool(ObRawExpr *)> filter
                                   = [](ObRawExpr *e){ return NULL != e;});
-  int flatten_and_add_attr_exprs(ObRawExpr *raw_expr);
+  int check_need_build_attr(ObRawExpr *raw_expr, bool &need_attr);
+  int build_and_add_attr_exprs(ObRawExpr *raw_expr);
   DISALLOW_COPY_AND_ASSIGN(ObRawExprUniqueSet);
 private:
   ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> expr_array_;
   bool need_unique_;
+  ObRawExprFactory *expr_factory_;
+  ObSQLSessionInfo *session_info_;
 };
 
 template<typename RawExprType>
@@ -180,6 +191,39 @@ int ObRawExprUniqueSet::append(const ObIArray<RawExprType *> &exprs)
   }
   return ret;
 }
+
+class ObCollectionTypeVisitor
+{
+public:
+  ObCollectionTypeVisitor() {}
+  virtual int visit(const ObCollectionBasicType &coll_meta) = 0;
+  virtual int visit(const ObCollectionArrayType &coll_meta) = 0;
+};
+
+class ObCollectionAttrBuilder : public ObCollectionTypeVisitor
+{
+public:
+  ObCollectionAttrBuilder(ObRawExprFactory *expr_factory,
+                          const ObSQLSessionInfo *session_info,
+                          ObRawExprUniqueSet &expr_set);
+  virtual int visit(const ObCollectionBasicType &coll_meta) override;
+  virtual int visit(const ObCollectionArrayType &coll_meta) override;
+private:
+  ObRawExprFactory *expr_factory_;
+  const ObSQLSessionInfo *session_info_;
+  ObRawExprUniqueSet &expr_set_;
+};
+
+class ObCollectionAttrCounter : public ObCollectionTypeVisitor
+{
+public:
+  ObCollectionAttrCounter();
+  virtual int visit(const ObCollectionBasicType &coll_meta) override;
+  virtual int visit(const ObCollectionArrayType &coll_meta) override;
+  int64_t get_attr_cnt() const { return attr_cnt_; }
+private:
+  int64_t attr_cnt_;
+};
 
 class ObRawExprUtils
 {
@@ -296,18 +340,6 @@ public:
                                          const ObResolverUtils::PureFunctionCheckStatus
                                            check_status = ObResolverUtils::DISABLE_CHECK,
                                          ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols = NULL);
-  static int build_generated_column_expr(const common::ObString &expr_str,
-                                         ObRawExprFactory &expr_factory,
-                                         const ObSQLSessionInfo &session_info,
-                                         uint64_t table_id,
-                                         const share::schema::ObTableSchema &table_schema,
-                                         const share::schema::ObColumnSchemaV2 &gen_col_schema,
-                                         ObRawExpr *&expr,
-                                         const bool sequence_allowed,
-                                         ObDMLResolver *dml_resolver,
-                                         const ObSchemaChecker *schema_checker = NULL,
-                                         const ObResolverUtils::PureFunctionCheckStatus
-                                           check_status = ObResolverUtils::DISABLE_CHECK);
   static int check_generated_column_expr_str(const common::ObString &expr_str,
                                              const ObSQLSessionInfo &session_info,
                                              const share::schema::ObTableSchema &table_schema);
@@ -476,7 +508,7 @@ public:
   static int try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                                      const ObSQLSessionInfo *session,
                                      ObRawExpr &src_expr,
-                                     const ObExprResType &dst_type,
+                                     const ObRawExprResType &dst_type,
                                      ObRawExpr *&new_expr);
   static int try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                                      const ObSQLSessionInfo *session,
@@ -539,19 +571,19 @@ public:
   //             NOTE: IS_INNER_ADDED_EXPR flag will be set.
   static int create_cast_expr(ObRawExprFactory &expr_factory,
                               ObRawExpr *src_expr,
-                              const ObExprResType &dst_type,
+                              const ObRawExprResType &dst_type,
                               ObSysFunRawExpr *&func_expr,
                               const ObSQLSessionInfo *session_info,
                               bool use_def_cm = true,
                               ObCastMode cm = CM_NONE,
                               const ObLocalSessionVar *local_vars = NULL,
                               int64_t local_var_id = OB_INVALID_INDEX_INT64);
-  static void need_extra_cast(const ObExprResType &src_type,
-                              const ObExprResType &dst_type,
+  static void need_extra_cast(const ObRawExprResType &src_type,
+                              const ObRawExprResType &dst_type,
                               bool &need_extra_cast_for_src_type,
                               bool &need_extra_cast_for_dst_type);
-  static int setup_extra_cast_utf8_type(const ObExprResType &type,
-                                        ObExprResType &utf8_type);
+  static int setup_extra_cast_utf8_type(const ObRawExprResType &type,
+                                        ObRawExprResType &utf8_type);
 
   static int erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
   static int erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
@@ -567,39 +599,27 @@ public:
   static const ObColumnRefRawExpr *get_column_ref_expr_recursively(const ObRawExpr *expr);
   static ObRawExpr *get_sql_udt_type_expr_recursively(ObRawExpr *expr);
 
-  static int create_to_type_expr(ObRawExprFactory &expr_factory,
-                                 ObRawExpr *src_expr,
-                                 const common::ObObjType &dst_type,
-                                 ObSysFunRawExpr *&to_type,
-                                 ObSQLSessionInfo *session_info);
   static int create_substr_expr(ObRawExprFactory &expr_factory,
                                 ObSQLSessionInfo *session_info,
                                 ObRawExpr *first_expr,
                                 ObRawExpr *second_expr,
                                 ObRawExpr *third_expr,
                                 ObSysFunRawExpr *&out_expr);
-  static int create_instr_expr(ObRawExprFactory &expr_factory,
-                                       ObSQLSessionInfo *session_info,
-                                       ObRawExpr *first_expr,
-                                       ObRawExpr *second_expr,
-                                       ObRawExpr *third_expr,
-                                       ObRawExpr *fourth_expr,
-                                       ObSysFunRawExpr *&out_expr);
-  static int create_concat_expr(ObRawExprFactory &expr_factory,
-                                       ObSQLSessionInfo *session_info,
-                                       ObRawExpr *first_expr,
-                                       ObRawExpr *second_expr,
-                                       ObOpRawExpr *&out_expr);
   static int create_prefix_pattern_expr(ObRawExprFactory &expr_factory,
                                         ObSQLSessionInfo *session_info,
                                         ObRawExpr *first_expr,
                                         ObRawExpr *second_expr,
                                         ObRawExpr *third_expr,
                                         ObSysFunRawExpr *&out_expr);
+  static int try_wrap_type_to_str(ObRawExprFactory *expr_factory,
+                                  const ObSQLSessionInfo *session,
+                                  ObRawExpr &expr,
+                                  const ObRawExprResType &dst_type,
+                                  ObRawExpr *&new_expr);
   static int create_type_to_str_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *src_expr,
                                      ObSysFunRawExpr *&out_expr,
-                                     ObSQLSessionInfo *session_info,
+                                     const ObSQLSessionInfo *session_info,
                                      bool is_type_to_str,
                                      ObObjType dst_type = ObMaxType);
 
@@ -632,13 +652,6 @@ public:
                              const ObLocalSessionVar *local_vars = NULL,
                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
-  static int replace_json_wrapper_expr_if_need(ObRawExpr* qual,
-                                         int64_t qual_idx,
-                                         ObRawExpr *depend_expr,
-                                         ObRawExprFactory &expr_factory,
-                                         ObSQLSessionInfo *session_info,
-                                         bool& is_done_replace);
-
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
                             const share::schema::ObColumnSchemaV2 *column_schema,
@@ -646,7 +659,7 @@ public:
                             const sql::ObSQLSessionInfo *session_info,
                             const ObLocalSessionVar *local_vars = NULL,
                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
-  static bool need_column_conv(const ObExprResType &expected_type,
+  static bool need_column_conv(const ObRawExprResType &expected_type,
                                const ObRawExpr &expr,
                                bool strict_type_check);
   static bool check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2);
@@ -712,18 +725,6 @@ public:
   static int build_const_mysql_date_expr(ObRawExprFactory &expr_factory,
                                          int64_t int_value,
                                          ObConstRawExpr *&expr);
-  static int build_const_ym_expr(ObRawExprFactory &expr_factory,
-                                 common::ObObjType type,
-                                 const ObObj &obj,
-                                 ObConstRawExpr *&expr);
-  static int build_const_ds_expr(ObRawExprFactory &expr_factory,
-                                 common::ObObjType type,
-                                 ObIntervalDSValue &ds_value,
-                                 ObConstRawExpr *&expr);
-  static int build_const_timestampnano_expr(ObRawExprFactory &expr_factory,
-                                            ObObjType type,
-                                            ObOTimestampData &value,
-                                            ObConstRawExpr *&expr);
   static int build_const_number_expr(ObRawExprFactory &expr_factory,
                                      ObObjType type,
                                      number::ObNumber value,
@@ -794,13 +795,10 @@ public:
                                   ObRawExpr *left,
                                   ObRawExpr *right,
                                   ObOpRawExpr *&less_than_expr);
-  static int build_variable_expr(ObRawExprFactory &expr_factory,
-                                 const ObExprResType &result_type,
-                                 ObVarRawExpr *&expr);
   static int build_op_pseudo_column_expr(ObRawExprFactory &expr_factory,
                                          const ObItemType expr_type,
                                          const char *expr_name,
-                                         const ObExprResType &res_type,
+                                         const ObRawExprResType &res_type,
                                          ObOpPseudoColumnRawExpr *&expr);
   static int build_const_bool_expr(ObRawExprFactory *expr_factory,
                                    ObRawExpr *&expr,
@@ -838,7 +836,7 @@ public:
                                    uint64_t package_id,
                                    int64_t var_idx,
                                    const ObString &var_name,
-                                   ObExprResType *result_type,
+                                   ObRawExprResType *result_type,
                                    ObRawExpr *&expr,
                                    const ObSQLSessionInfo *session_info);
   static int build_calc_part_id_expr(ObRawExprFactory &expr_factory,
@@ -866,7 +864,7 @@ public:
                                    uint64_t package_id,
                                    uint64_t routine_id,
                                    int64_t var_idx,
-                                   const ObExprResType *result_type,
+                                   const ObRawExprResType *result_type,
                                    ObRawExpr *&expr,
                                    const ObSQLSessionInfo *session_info);
   static int build_exists_expr(ObRawExprFactory &expr_factory,
@@ -896,7 +894,7 @@ public:
   static int make_set_op_expr(ObRawExprFactory &expr_factory,
                               int64_t idx,
                               ObItemType set_op_type,
-                              const ObExprResType &res_type,
+                              const ObRawExprResType &res_type,
                               ObSQLSessionInfo *session_info,
                               ObRawExpr *&out_expr);
   static int merge_variables(const common::ObIArray<ObVarInfo> &src_vars, common::ObIArray<ObVarInfo> &dst_vars);
@@ -904,6 +902,7 @@ public:
   static int get_array_param_index(const ObRawExpr *expr, int64_t &param_index);
   static int build_column_expr(ObRawExprFactory &expr_factory,
                                const share::schema::ObColumnSchemaV2 &column_schema,
+                               const ObSQLSessionInfo *session_info,
                                ObColumnRefRawExpr *&column_expr);
   static bool is_same_column_ref(const ObRawExpr *column_ref1, const ObRawExpr *column_ref2);
   static int build_alias_column_expr(ObRawExprFactory &expr_factory, ObRawExpr *ref_expr, int32_t alias_level, ObAliasRefRawExpr *&alias_expr);
@@ -911,7 +910,19 @@ public:
                                     ObQueryRefRawExpr *query_ref,
                                     int64_t project_index,
                                     ObAliasRefRawExpr *&alias_expr);
-  static int init_column_expr(const share::schema::ObColumnSchemaV2 &column_schema, ObColumnRefRawExpr &column_expr);
+  static int init_column_expr(const share::schema::ObColumnSchemaV2 &column_schema,
+                              const ObSQLSessionInfo *session_info,
+                              ObColumnRefRawExpr &column_expr);
+  static int init_column_expr_subschema(const share::schema::ObColumnSchemaV2 &column_schema,
+                                        const ObSQLSessionInfo *session_info,
+                                        ObColumnRefRawExpr &column_expr);
+  static int init_enum_set_subschema_id(const ObObjMeta &obj_meta,
+                                        const ObIArray<common::ObString> &type_infos,
+                                        ObSQLSessionInfo &session_info);
+  static int get_subschema_id(const ObObjMeta &obj_meta,
+                              const ObIArray<common::ObString> &type_infos,
+                              const ObSQLSessionInfo &session_info,
+                              uint16_t &subschema_id);
   static ObCollationLevel get_column_collation_level(const common::ObObjType &type);
   /* 计算基本列的flag */
   static uint32_t calc_column_result_flag(const share::schema::ObColumnSchemaV2 &column_schema);
@@ -921,14 +932,18 @@ public:
   //extract from const value
   static int extract_int_value(const ObRawExpr *expr, int64_t &val);
   //used for enum set type
-  static int need_wrap_to_string(const ObExprResType &src_res_type, common::ObObjType calc_type,
-                                 const bool is_same_type_need, bool &need_wrap);
-  static int extract_enum_set_collation(const ObExprResType &src_res_type,
+  static int need_wrap_to_string(const ObRawExprResType &src_res_type, common::ObObjType calc_type,
+                                 const bool is_same_type_need, bool &need_wrap,
+                                 const bool support_subschema = true);
+  static int extract_enum_set_collation(const ObRawExprResType &src_res_type,
                                         const sql::ObSQLSessionInfo *session,
                                         ObObjMeta &obj_meta);
-  static int extract_enum_set_meta(const ObExprResType &src_res_type,
+  static int extract_enum_set_meta(const ObRawExprResType &src_res_type,
                                    const sql::ObSQLSessionInfo *session,
                                    const ObEnumSetMeta *&meta);
+  static int extract_extended_type_info(const ObRawExpr *expr,
+                                        const sql::ObSQLSessionInfo *session,
+                                        common::ObIArray<ObString> &type_info);
   static bool contain_id(const common::ObIArray<uint64_t> &ids, const uint64_t target);
   static int clear_exprs_flag(const common::ObIArray<ObRawExpr*> &exprs, ObExprInfoFlag flag);
 
@@ -1064,8 +1079,8 @@ public:
   static bool is_pseudo_column_like_expr(const ObRawExpr &expr);
   static bool is_sharable_expr(const ObRawExpr &expr);
 
-  static int check_need_cast_expr(const ObExprResType &src_res_type,
-                                  const ObExprResType &dst_res_type,
+  static int check_need_cast_expr(const ObRawExprResType &src_res_type,
+                                  const ObRawExprResType &dst_res_type,
                                   bool &need_cast,
                                   bool &ignore_dup_cast_error);
   static int build_add_expr(ObRawExprFactory &expr_factory,
@@ -1108,7 +1123,8 @@ public:
                                     bool is_not_null,
                                     ObRawExpr *&is_not_null_expr);
 
-  static int process_window_complex_agg_expr(ObRawExprFactory &expr_factory,
+  static int process_window_complex_agg_expr(ObSQLSessionInfo *session_info,
+                                             ObRawExprFactory &expr_factory,
                                              const ObItemType func_type,
                                              ObWinFunRawExpr *win_func,
                                              ObRawExpr *&agg_expr,
@@ -1155,11 +1171,6 @@ public:
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
                                     const TableItem &table_item,
                                     ObRawExpr *&rowid_expr);
-  static int build_to_outfile_expr(ObRawExprFactory &expr_factory,
-                                   const ObSQLSessionInfo *session_info,
-                                   const ObSelectIntoItem *into_item,
-                                   const ObIArray<ObRawExpr*> &exprs,
-                                   ObRawExpr* &to_outfile_expr);
   static int build_pack_expr(ObRawExprFactory &expr_factory,
                              const bool is_ps,
                              const ObSQLSessionInfo *session_info,
@@ -1267,7 +1278,7 @@ public:
 
   static int create_type_expr(ObRawExprFactory &expr_factory,
                               ObConstRawExpr *&type_expr,
-                              const ObExprResType &dst_type,
+                              const ObRawExprResType &dst_type,
                               bool avoid_zero_len = false);
 
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
@@ -1300,7 +1311,7 @@ public:
                                     ObSysFunRawExpr *&new_expr);
 
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
-                                           const ObSQLMode sql_mode,
+                                           const ObSQLSessionInfo *session,
                                            ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
   /*
@@ -1315,7 +1326,7 @@ public:
                                          ObRawExpr *&expr);
 
   static int wrap_cm_warn_on_fail_if_need(const ObRawExpr *src_expr,
-                                          const ObExprResType &dst_type,
+                                          const ObRawExprResType &dst_type,
                                           const ObSQLSessionInfo *session,
                                           ObCastMode &cm);
 
@@ -1326,22 +1337,37 @@ public:
                                 ObIArray<ObRawExpr *> &new_exprs,
                                 ObRawExprCopier *copier,
                                 ObSQLSessionInfo *session_info);
-
+  static int get_expr_attr_cnt(const ObRawExpr *expr,
+                               ObExecContext *exec_ctx,
+                               int64_t &attr_cnt);
+  static int get_expr_collection_info(const ObRawExpr *expr,
+                                      const ObExecContext *exec_ctx,
+                                      const ObSqlCollectionInfo *&coll_info);
+  static int iterate_collection_type(const ObCollectionTypeBase *coll_meta,
+                                     ObCollectionTypeVisitor &visitor);
+  static int adjust_type_expr_with_subschema(const common::ObObjType type,
+                                             const uint16_t subschema_id,
+                                             const bool is_in_pl,
+                                             ObRawExpr *expr);
+  static int extract_real_result_type(const ObRawExpr &expr,
+                                      const ObSQLSessionInfo &session_info,
+                                      ObDataType &type);
+  static int get_all_expr_types(ObRawExpr *expr, ObIArray<ObRawExprResType> &res_types);
   static int build_unpivot_expr(ObRawExprFactory &expr_factory,
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
 private:
-  static int need_extra_cast_for_enumset(const ObExprResType &src_type,
-                                         const ObExprResType &dst_type,
+  static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
+                                         const ObRawExprResType &dst_type,
                                          const ObSQLSessionInfo *session_info,
-                                         ObExprResType &extra_type,
+                                         ObRawExprResType &extra_type,
                                          bool &need_extra_cast);
 
 private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,
                               ObRawExpr *src_expr,
-                              const ObExprResType &dst_type,
+                              const ObRawExprResType &dst_type,
                               ObSysFunRawExpr *&func_expr,
                               const ObSQLSessionInfo *session_info);
   static int ora_cmp_integer(const ObConstRawExpr &const_expr, const int64_t v, int &cmp_ret);

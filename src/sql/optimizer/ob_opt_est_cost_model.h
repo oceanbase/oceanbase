@@ -785,8 +785,10 @@ public:
 
   double cost_quals(double rows, const ObIArray<ObRawExpr *> &quals, bool need_scale = true);
   int cost_one_qual(const ObRawExpr *qual, double &cost);
+  double cost_comparisions(double rows, const ObIArray<ObRawExpr *> &exprs, bool need_scale = true);
 
   double cost_hash(double rows, const ObIArray<ObRawExpr *> &hash_exprs);
+  double cost_hash_quals(double rows, const ObIArray<ObRawExpr *> &quals);
 
   double cost_late_materialization_table_get(int64_t column_cnt);
 
@@ -801,7 +803,7 @@ public:
 																int64_t column_count,
 																double &cost);
 
-  int get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types, double &cost);
+  int get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types, double &cost);
 
   int cost_window_function(double rows, double width, double win_func_cnt, double &cost);
 
@@ -842,16 +844,16 @@ public:
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,
-								const common::ObIArray<ObExprResType> &order_col_types,
+								const common::ObIArray<ObRawExprResType> &order_col_types,
 								double &cost);
 
   int cost_part_sort(const ObSortCostInfo &cost_info,
 											const ObIArray<ObRawExpr *> &order_exprs,
-											const ObIArray<ObExprResType> &order_col_types,
+											const ObIArray<ObRawExprResType> &order_col_types,
 											double &cost);
   int cost_part_topn_sort(const ObSortCostInfo &cost_info,
                           const ObIArray<ObRawExpr *> &order_exprs,
-                          const ObIArray<ObExprResType> &order_col_types,
+                          const ObIArray<ObRawExprResType> &order_col_types,
                           double &cost);
 
   int cost_prefix_sort(const ObSortCostInfo &cost_info,
@@ -860,24 +862,24 @@ protected:
 											double &cost);
 
   int cost_topn_sort(const ObSortCostInfo &cost_info,
-										const ObIArray<ObExprResType> &types,
+										const ObIArray<ObRawExprResType> &types,
 										double &cost);
 
   int cost_local_order_sort(const ObSortCostInfo &cost_info,
-														const ObIArray<ObExprResType> &types,
+														const ObIArray<ObRawExprResType> &types,
 														double &cost);
 
-  int cost_topn_sort_inner(const ObIArray<ObExprResType> &types,
+  int cost_topn_sort_inner(const ObIArray<ObRawExprResType> &types,
 													double rows,
 													double n,
 													double &cost);
 
   //calculate real sort cost (std::sort)
-  int cost_sort_inner(const common::ObIArray<sql::ObExprResType> &types,
+  int cost_sort_inner(const common::ObIArray<sql::ObRawExprResType> &types,
 											double row_count,
 											double &cost);
 
-  int cost_local_order_sort_inner(const common::ObIArray<sql::ObExprResType> &types,
+  int cost_local_order_sort_inner(const common::ObIArray<sql::ObRawExprResType> &types,
 																	double row_count,
 																	double &cost);
 
@@ -942,6 +944,7 @@ protected:
                           double row_count,
                           bool is_get,
                           double &cost);
+  int get_qual_cmp_tc(const ObRawExpr *qual, ObObjTypeClass &cmp_tc);
 
 protected:
   const ObOptCostModelParameter &cost_params_;

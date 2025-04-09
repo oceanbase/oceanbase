@@ -126,7 +126,7 @@ int ObExprField::calc_result_typeN(ObExprResType &type,
           types_stack[i].set_calc_meta(type.get_calc_meta());
           types_stack[i].set_calc_accuracy(types_stack[0].get_accuracy());
           if (type.get_calc_meta().is_decimal_int()) {
-            types_stack[i].add_cast_mode(CM_CONST_TO_DECIMAL_INT_EQ);
+            types_stack[i].add_decimal_int_cast_mode(CM_CONST_TO_DECIMAL_INT_EQ);
           }
         }
       }

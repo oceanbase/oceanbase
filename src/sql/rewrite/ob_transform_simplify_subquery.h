@@ -31,6 +31,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 private:
   int transform_subquery_as_expr(ObDMLStmt *stmt, bool &trans_happened);
   int try_trans_subquery_in_expr(ObDMLStmt *stmt,

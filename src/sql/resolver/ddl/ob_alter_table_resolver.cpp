@@ -658,7 +658,7 @@ int ObAlterTableResolver::resolve_add_external_partition(const ParseNode &part_e
           } else if (OB_FAIL(part_value_expr_array.push_back(const_expr))) {
             LOG_WARN("push back failed", K(ret));
           } else {
-            ObExprResType col_type;
+            ObRawExprResType col_type;
             col_type.set_meta(part_column->get_meta_type());
             col_type.set_accuracy(part_column->get_accuracy());
             if (OB_FAIL(ObResolverUtils::check_partition_range_value_result_type(table_schema_->get_part_option().get_part_func_type(),
@@ -686,6 +686,8 @@ int ObAlterTableResolver::resolve_add_external_partition(const ParseNode &part_e
     } else if (OB_ISNULL(row_expr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allcoate memory", K(ret));
+    } else if (OB_FAIL(row_expr->init_param_exprs(part_value_expr_array.count()))) {
+      LOG_WARN("failed to init param exprs", K(ret));
     } else {
       ObPartition partition;
       ObString tmp_str = ObString(location_element.str_len_, location_element.str_value_);
@@ -6250,9 +6252,9 @@ int ObAlterTableResolver::alter_column_expr_in_part_expr(
     if (0 == column_ref->get_column_name().case_compare(src_col_schema.get_column_name())) {
       column_ref->set_data_type(dst_col_schema.get_data_type());
       column_ref->set_accuracy(dst_col_schema.get_accuracy());
-    }
-    if (ob_is_enum_or_set_type(column_ref->get_result_type().get_type())) {
-      OZ (column_ref->set_enum_set_values(dst_col_schema.get_extended_type_info()));
+      if (OB_FAIL(ObRawExprUtils::init_column_expr_subschema(dst_col_schema, session_info_, *column_ref))) {
+        LOG_WARN("failed to init column expr subschema", K(ret));
+      }
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {

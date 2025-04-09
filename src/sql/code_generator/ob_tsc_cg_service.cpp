@@ -262,7 +262,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
   if (OB_SUCC(ret)) {
     for (int i = 0; i < op.get_ext_file_column_exprs().count(); i++) {
       tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_.at(i)->extra_
-          = op.get_ext_file_column_exprs().at(i)->get_extra();
+          = op.get_ext_file_column_exprs().at(i)->get_column_idx();
     }
   }
 
@@ -879,7 +879,7 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
             || T_PSEUDO_OLD_NEW_COL == (*e)->get_expr_type()) {
           pd_blockscan = false;
           pd_filter = false;
-        } else if (T_ORA_ROWSCN != (*e)->get_expr_type()) {
+        } else if ((*e)->is_column_ref_expr()) {
           auto col = static_cast<ObColumnRefRawExpr *>(*e);
           if (col->is_lob_column() && cg_.cur_cluster_version_ < CLUSTER_VERSION_4_1_0_0) {
             pd_filter = false;

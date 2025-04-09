@@ -1256,7 +1256,7 @@ int ObExecContext::deserialize_group_pwj_map(const char *buf, const int64_t data
   return ret;
 }
 
-int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta)
+int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta) const
 {
   int ret = OB_SUCCESS;
   if (ob_is_reserved_subschema_id(subschema_id)) {
@@ -1270,7 +1270,7 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlU
   return ret;
 }
 
-int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta)
+int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta) const
 {
   int ret = OB_SUCCESS;
   if (ob_is_reserved_subschema_id(subschema_id)) {
@@ -1286,6 +1286,7 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubS
 }
 
 int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                                    bool is_in_pl,
                                                     const ObEnumSetMeta *&meta) const
 {
   int ret = OB_SUCCESS;
@@ -1296,7 +1297,7 @@ int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
   } else {
-    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta);
+    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, is_in_pl, meta);
   }
   return ret;
 }
@@ -1370,7 +1371,33 @@ int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
   return ret;
 }
 
+int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                                 const ObIArray<common::ObString> &type_info,
+                                                 uint16_t &subschema_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_info(obj_meta, type_info, subschema_id);
+  }
+  return ret;
+}
+
 int ObExecContext::get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_string(type_string, subschema_id);
+  }
+  return ret;
+}
+
+int ObExecContext::get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan_ctx_)) {

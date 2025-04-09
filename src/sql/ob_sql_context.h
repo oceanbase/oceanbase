@@ -905,6 +905,7 @@ public:
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
+  int get_local_session_vars(const int64_t idx, const ObLocalSessionVar *&local_session_var) const;
   bool get_injected_random_status() const { return injected_random_status_; }
   void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
   void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}

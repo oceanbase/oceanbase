@@ -263,7 +263,7 @@ int64_t ObDbmsCursorInfo::search_array(const ObString &name, ObIArray<ObString> 
 int ObDbmsCursorInfo::variable_value(sql::ObSQLSessionInfo *session,
                                      ObIAllocator *allocator,
                                      const ObString &variable_name,
-                                     sql::ObExprResType &result_type,
+                                     sql::ObRawExprResType &result_type,
                                      ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -411,7 +411,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
                  ObIAllocator *allocator,
                  int64_t col_idx,
                  const ObObjParam src_obj,
-                 sql::ObExprResType &result_type,
+                 sql::ObRawExprResType &result_type,
                  ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -446,7 +446,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
         ObPLAssocArray *table = reinterpret_cast<ObPLAssocArray*>(result.get_ext());
         ObObjParam obj;
         ObObj key(ObInt32Type);
-        ObExprResType element_type;
+        ObRawExprResType element_type;
         ObExprPLAssocIndex::Info info;
         OX (info.for_write_ = true);
         OX (element_type.set_meta(desc->type_.get_meta_type()));
@@ -488,7 +488,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
                                ObIAllocator *allocator,
                                int64_t col_idx,
                                const ObObjParam src_obj,
-                               sql::ObExprResType &result_type,
+                               sql::ObRawExprResType &result_type,
                                ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -660,7 +660,7 @@ int64_t ObDbmsCursorInfo::convert_to_dbms_cursor_id(int64_t id)
 int ObDbmsCursorInfo::column_value(sql::ObSQLSessionInfo *session,
                             ObIAllocator *allocator,
                             int64_t col_idx,
-                            sql::ObExprResType &result_type,
+                            sql::ObRawExprResType &result_type,
                             ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -1268,7 +1268,7 @@ int ObPLDbmsSql::column_value(ObExecContext &exec_ctx, ParamStore &params, ObObj
   int64_t param_count = params.count();
 
   // parse all param.
-  ObExprResType result_type;
+  ObRawExprResType result_type;
   if (5 == param_count) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("five parameters for column_value not supported", K(ret));
@@ -1301,7 +1301,7 @@ int ObPLDbmsSql::variable_value(ObExecContext &exec_ctx, ParamStore &params, ObO
   ObString name;
   int64_t param_count = params.count();
   // parse all param.
-  ObExprResType result_type;
+  ObRawExprResType result_type;
   OV (3 == param_count, OB_INVALID_ARGUMENT, params);
   OV (params.at(1).is_varchar(), OB_INVALID_ARGUMENT, params);
   OZ (params.at(1).get_string(name));

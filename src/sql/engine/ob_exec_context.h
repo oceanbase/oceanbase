@@ -527,8 +527,8 @@ public:
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
   int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
   hash::ObHashMap<uint64_t, void*> &get_dblink_snapshot_map() { return dblink_snapshot_map_; }
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta);
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta) const;
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta) const;
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
@@ -536,11 +536,17 @@ public:
                                                const ObDataType &elem_type,
                                                uint16_t &subschema_id);
   int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
-  int get_enumset_meta_by_subschema_id(uint16_t subschema_id, const ObEnumSetMeta *&meta) const;
+  int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id) const;
+  int get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                       bool is_in_pl,
+                                       const ObEnumSetMeta *&meta) const;
   bool support_enum_set_type_subschema(ObSQLSessionInfo &session);
   int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
                                     const ObIArray<common::ObString> &type_info,
                                     uint16_t &subschema_id);
+  int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                    const ObIArray<common::ObString> &type_info,
+                                    uint16_t &subschema_id) const;
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   inline void set_cur_rownum(int64_t cur_rownum) { user_logging_ctx_.row_num_ = cur_rownum; }
   inline int64_t get_cur_rownum() const { return user_logging_ctx_.row_num_; }

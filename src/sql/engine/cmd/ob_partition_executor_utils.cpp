@@ -686,7 +686,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
     const stmt::StmtType &stmt_type,
     bool is_list_part,
     ObExecContext &ctx,
-    const sql::ObExprResType &dst_res_type,
+    const sql::ObRawExprResType &dst_res_type,
     const ObCollationType fun_collation_type,
     ObRawExpr *expr,
     ObObj &value_obj)
@@ -782,7 +782,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
     const stmt::StmtType &stmt_type,
     bool is_list_part,
     ObExecContext &ctx,
-    const ObExprResType &dst_res_type,
+    const ObRawExprResType &dst_res_type,
     ObRawExpr *expr,
     ObObj &value_obj)
 {

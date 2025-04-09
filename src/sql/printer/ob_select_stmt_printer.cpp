@@ -663,7 +663,7 @@ int ObSelectStmtPrinter::print_order_by()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
         } else if (T_FUN_SYS_CAST == order_expr->get_expr_type() &&
-                   CM_IS_IMPLICIT_CAST(order_expr->get_extra())) {
+                   CM_IS_IMPLICIT_CAST(order_expr->get_cast_mode())) {
           order_expr = order_expr->get_param_expr(0);
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_select_item_size(); ++j) {
@@ -672,7 +672,7 @@ int ObSelectStmtPrinter::print_order_by()
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret));
           } else if (T_FUN_SYS_CAST == select_expr->get_expr_type() &&
-                     CM_IS_IMPLICIT_CAST(select_expr->get_extra())) {
+                     CM_IS_IMPLICIT_CAST(select_expr->get_cast_mode())) {
             select_expr = select_expr->get_param_expr(0);
           }
           if (order_expr == select_expr) {

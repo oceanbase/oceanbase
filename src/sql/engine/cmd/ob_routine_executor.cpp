@@ -235,7 +235,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
               const ObDataTypeCastParams dtc_params =
                 ObBasicSessionInfo::create_dtc_params(ctx.get_my_session());
               ObCastMode cast_mode = CM_NONE;
-              ObExprResType result_type;
+              ObRawExprResType result_type;
               OZ (ObSQLUtils::get_default_cast_mode(stmt::T_NONE, ctx.get_my_session(), cast_mode));
               ObCastCtx cast_ctx(&ctx.get_allocator(), &dtc_params, cast_mode, param.get_collation_type());
               result_type.reset();

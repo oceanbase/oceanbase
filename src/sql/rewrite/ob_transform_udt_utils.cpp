@@ -87,7 +87,6 @@ int ObTransformUdtUtils::transform_make_xml_binary(ObTransformerCtx *ctx, ObRawE
     ObObj val;
     val.set_int(0);
     c_expr->set_value(val);
-    c_expr->set_param(val);
     if (OB_FAIL(make_xml_expr->set_param_exprs(c_expr, old_expr))) {
       LOG_WARN("set param expr fail", K(ret));
     } else {
@@ -247,10 +246,9 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("old_expr_type invalid ObLongTextType type", K(ret), K(param_store.at(param_idx).get_type()));
           } else {
-            ObExprResType res_type;
+            ObRawExprResType res_type;
             res_type.set_varchar();
             res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-            res_type.set_param(value_expr->get_result_type().get_param());
             value_expr->set_result_type(res_type);
           }
         }
@@ -393,7 +391,6 @@ int ObTransformUdtUtils::transform_sys_makexml(ObTransformerCtx *ctx, ObRawExpr 
     ObObj val;
     val.set_int(0);
     c_expr->set_value(val);
-    c_expr->set_param(val);
     if (OB_FAIL(sys_makexml->set_param_exprs(c_expr, hidden_blob_expr))) {
       LOG_WARN("set param expr fail", K(ret));
     } else if (FALSE_IT(sys_makexml->set_func_name(ObString::make_string("SYS_MAKEXML")))) {
@@ -600,7 +597,8 @@ int ObTransformUdtUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
             col_expr = column_item->expr_;
             need_transform = true;
           }
-        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(i), col_expr))) {
+        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(i),
+                                                             ctx->session_info_, col_expr))) {
           LOG_WARN("build column expr failed", K(ret));
         } else if (OB_ISNULL(col_expr)) {
           ret = OB_ERR_UNEXPECTED;

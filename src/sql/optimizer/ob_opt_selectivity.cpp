@@ -4569,7 +4569,7 @@ int ObOptSelectivity::calculate_expr_avg_len(const OptTableMetas &table_metas,
     }
   } else if (expr->is_sys_func_expr()) {
     if (T_FUN_SYS_REPLACE == expr->get_expr_type() ||
-        (T_FUN_SYS_CAST == expr->get_expr_type() && CM_IS_IMPLICIT_CAST(expr->get_extra()) )) {
+        (T_FUN_SYS_CAST == expr->get_expr_type() && CM_IS_IMPLICIT_CAST(expr->get_cast_mode()) )) {
       if (OB_UNLIKELY(expr->get_param_count() < 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expr param", KPC(expr));
@@ -4792,10 +4792,10 @@ int ObOptSelectivity::calc_expr_min_max(const OptTableMetas &table_metas,
                min_value.is_max_value() || max_value.is_max_value() ||
                min_value.is_null() || max_value.is_null()) {
       // do nothing
-    } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, expr->get_extra(), min_value))) {
+    } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, expr->get_cast_mode(), min_value))) {
       ret = OB_SUCCESS;
       min_value.set_min_value();
-    } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, expr->get_extra(), max_value))) {
+    } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, expr->get_cast_mode(), max_value))) {
       ret = OB_SUCCESS;
       max_value.set_max_value();
     }

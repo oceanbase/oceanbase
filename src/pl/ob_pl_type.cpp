@@ -1151,7 +1151,7 @@ int ObPLDataType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
   CK (OB_NOT_NULL(dst));
   if (is_obj_type()) {
     ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObExprResType result_type;
+    ObRawExprResType result_type;
     ObObj tmp;
     result_type.reset();
     CK (OB_NOT_NULL(get_data_type()));

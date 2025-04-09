@@ -116,7 +116,7 @@ struct ObTableColumnInfo
     } part_pos_;//partition key
     int64_t tbl_part_key_pos_;
   };//greater than zero if this column is used to calc part expr
-  sql::ObExprResType type_;
+  sql::ObRawExprResType type_;
   common::ObString generated_expr_str_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> cascaded_column_ids_;
 };

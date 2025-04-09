@@ -53,6 +53,7 @@ public:
     ObSQLSessionInfo session;
     session.effective_tenant_id_ = 1;
     ctx.session_info_ = &session;
+    LinkExecCtxGuard link_guard(session, exec_ctx_);
 
     EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
     EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
@@ -132,6 +133,7 @@ public:
     ObSQLSessionInfo session;
     session.effective_tenant_id_ = 1;
     ctx.session_info_ = &session;
+    LinkExecCtxGuard link_guard(session, exec_ctx_);
 
     EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
     EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));

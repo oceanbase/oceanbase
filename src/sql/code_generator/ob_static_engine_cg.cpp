@@ -2807,11 +2807,19 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
       // According to code in ob_expr_values_op.cpp, it should be in the same order as output_exprs.
       for (int64_t i = 0; OB_SUCC(ret) && i < op.get_output_exprs().count(); i++) {
         ObRawExpr *output_raw_expr = op.get_output_exprs().at(i);
-        const common::ObIArray<common::ObString> &str_values = output_raw_expr->get_enum_set_values();
-        if (!str_values.empty()) {
-          if (OB_FAIL(spec.str_values_array_.at(i).prepare_allocate(str_values.count()))) {
-            LOG_WARN("init fixed array failed", K(ret));
+        if (ob_is_enumset_tc(output_raw_expr->get_data_type())) {
+          const uint16_t subschema_id = output_raw_expr->get_subschema_id();
+          const ObEnumSetMeta *meta = NULL;
+          if (OB_FAIL(exec_ctx->get_enumset_meta_by_subschema_id(subschema_id, false, meta))) {
+            LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+          } else if (OB_ISNULL(meta) || OB_ISNULL(meta->get_str_values())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get meta", K(ret));
           } else {
+            const common::ObIArray<common::ObString> &str_values = *meta->get_str_values();
+            if (OB_FAIL(spec.str_values_array_.at(i).prepare_allocate(str_values.count()))) {
+              LOG_WARN("init fixed array failed", K(ret));
+            }
             for (int64_t j = 0; OB_SUCC(ret) && j < str_values.count(); ++j) {
               if (OB_FAIL(deep_copy_ob_string(phy_plan_->get_allocator(), str_values.at(j),
                                               spec.str_values_array_.at(i).at(j)))) {
@@ -7953,7 +7961,7 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
       } else {
         ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(raw_expr.get_pl_agg_udf_expr());
         aggr_info.pl_agg_udf_type_id_ = udf_expr->get_type_id();
-        aggr_info.pl_result_type_ = const_cast<ObExprResType &>(raw_expr.get_result_type());
+        aggr_info.pl_result_type_ = raw_expr.get_result_type();
       }
     }
 
@@ -7988,7 +7996,7 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
           LOG_WARN("failed to push_back param_expr", K(ret));
         } else if (T_FUN_PL_AGG_UDF == raw_expr.get_expr_type() &&
                    OB_FAIL(aggr_info.pl_agg_udf_params_type_.push_back(
-                                  const_cast<ObExprResType &>(param_raw_expr.get_result_type())))) {
+                                  param_raw_expr.get_result_type()))) {
           LOG_WARN("failed to push_back expr type", K(ret));
         } else if (aggr_info.has_distinct_) {
           if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {

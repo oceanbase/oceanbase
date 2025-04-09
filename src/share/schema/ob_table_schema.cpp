@@ -3985,7 +3985,8 @@ int ObTableSchema::has_generated_column_using_udf_expr(bool &ans) const
   int ret = OB_SUCCESS;
   ans = false;
   ObSEArray<uint64_t, 8> gen_column_ids;
-  if (OB_FAIL(get_generated_column_ids(gen_column_ids))) {
+  if (OB_LIKELY(generated_columns_.is_empty())) {
+  } else if (OB_FAIL(get_generated_column_ids(gen_column_ids))) {
     LOG_WARN("get generated column ids failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < gen_column_ids.count(); ++i) {

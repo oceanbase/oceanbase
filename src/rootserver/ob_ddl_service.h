@@ -1842,6 +1842,7 @@ int check_will_be_having_domain_index_operation(
   int modify_depend_column_type(sql::ObRawExpr *expr,
                                 const ObString &column_name,
                                 const AlterColumnSchema &alter_column_schema,
+                                sql::ObSQLSessionInfo &session,
                                 lib::Worker::CompatMode compat_mode);
 
   int modify_part_func_expr(const share::schema::ObTableSchema &orig_table_schema,

@@ -377,7 +377,7 @@ int ObSelectStmt::create_select_list_for_set_stmt(ObRawExprFactory &expr_factory
 {
   int ret = OB_SUCCESS;
   SelectItem new_select_item;
-  ObExprResType res_type;
+  ObRawExprResType res_type;
   ObSelectStmt *child_stmt = NULL;
   if (OB_ISNULL(child_stmt = get_set_query(0))) {
     ret = OB_ERR_UNEXPECTED;

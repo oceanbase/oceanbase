@@ -103,13 +103,13 @@ public:
                    ObIAllocator *allocator,
                    int64_t col_idx,
                    const ObObjParam src_obj,
-                   sql::ObExprResType &result_type,
+                   sql::ObRawExprResType &result_type,
                    ObObjParam &result);
   int variable_value(sql::ObSQLSessionInfo *session,
                      ObIAllocator *allocator,
                      int64_t col_idx,
                      const ObObjParam src_obj,
-                     sql::ObExprResType &result_type,
+                     sql::ObRawExprResType &result_type,
                      ObObjParam &result);
 #endif
 protected:
@@ -224,12 +224,12 @@ public:
   int column_value(sql::ObSQLSessionInfo *session,
                    ObIAllocator *allocator,
                    int64_t col_idx,
-                   sql::ObExprResType &result_type,
+                   sql::ObRawExprResType &result_type,
                    ObObjParam &result);
   int variable_value(sql::ObSQLSessionInfo *session,
                     ObIAllocator *allocator,
                     const ObString &variable_name,
-                    sql::ObExprResType &result_type,
+                    sql::ObRawExprResType &result_type,
                     ObObjParam &result);
 #endif
 

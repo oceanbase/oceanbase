@@ -1299,12 +1299,10 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
   OB_ASSERT(NULL != rt_expr.args_[1]);
   const common::ObObjType left = rt_expr.args_[0]->datum_meta_.type_;
   const common::ObObjType right = rt_expr.args_[1]->datum_meta_.type_;
-  OB_ASSERT(left == input_types_[0].get_calc_type());
-  OB_ASSERT(right == input_types_[1].get_calc_type());
 
   rt_expr.inner_functions_ = NULL;
   rt_expr.may_not_need_raw_check_ = false;
-  rt_expr.div_calc_scale_ = raw_expr.get_result_type().get_calc_scale();
+  rt_expr.div_calc_scale_ = raw_expr.get_extra_calc_scale();
   LOG_DEBUG("arrive here cg_expr", K(ret), K(raw_expr), K(rt_expr), K(rt_expr.div_calc_scale_));
   switch (rt_expr.datum_meta_.type_) {
     case ObFloatType: {

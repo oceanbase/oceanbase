@@ -791,8 +791,7 @@ int ObTransformSimplifyExpr::do_check_like_condition(ObRawExpr *&expr,
         }
         if (OB_SUCC(ret) && need_cast) {
           ObSysFunRawExpr *cast_expr = NULL;
-          ObExprResType cast_type(pattern_expr->get_result_type());
-          cast_type.set_calc_type(ObVarcharType);
+          ObRawExprResType cast_type(pattern_expr->get_result_type());
           cast_type.set_type(ObVarcharType);
           if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_, pattern_expr, cast_type, cast_expr, ctx_->session_info_))) {
             LOG_WARN("fail to create cast expr", K(ret));
@@ -1715,6 +1714,8 @@ int ObTransformSimplifyExpr::remove_subquery_when_filter_is_false(ObDMLStmt* stm
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (stmt->get_subquery_expr_size() < 1) {
+    //do nothing
   } else if (OB_FAIL(stmt->get_relation_exprs(relation_expr_pointers))) {
     LOG_WARN("failed to get_relation_exprs", K(ret));
   }
@@ -1876,10 +1877,8 @@ int ObTransformSimplifyExpr::adjust_subquery_comparison_expr(ObRawExpr*& expr,
     } else if (expr->get_param_count() != 2) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr param count != 2", K(ret));
-    } else if (OB_FAIL(new_expr->add_param_expr(param_expr_left))) {
-      LOG_WARN("add null expr failed", K(ret));
-    } else if (OB_FAIL(new_expr->add_param_expr(param_expr_right))) {
-      LOG_WARN("add null expr failed", K(ret));
+    } else if (OB_FAIL(new_expr->set_param_exprs(param_expr_left, param_expr_right))) {
+      LOG_WARN("failed to set param exprs", K(ret));
     } else {
       expr = new_expr;
     }
@@ -2106,13 +2105,17 @@ int ObTransformSimplifyExpr::build_expr_for_not_empty_set(ObSelectStmt* sub_stmt
       } else if (OB_ISNULL(row_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("row expr is null", K(ret));
+      } else if (OB_FAIL(row_expr->init_param_exprs(select_item_size))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
           if (OB_FAIL(row_expr->add_param_expr(sub_stmt->get_select_item(i).expr_))) {
             LOG_WARN("add new select expr failed", K(ret));
           }
         }
-        if (OB_SUCC(ret)) {
+        if (FAILEDx(row_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("formalize row expr failed", K(ret));
+        } else {
           expr = row_expr;
         }
       }
@@ -2146,6 +2149,8 @@ int ObTransformSimplifyExpr::build_null_for_empty_set(const ObSelectStmt* sub_st
     } else if (OB_ISNULL(row_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("row expr is null", K(ret));
+    } else if (OB_FAIL(row_expr->init_param_exprs(select_item_size))) {
+      LOG_WARN("failed to init param exprs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
         if (OB_FAIL(build_null_expr_and_cast(sub_stmt->get_select_item(i).expr_, null_expr))) {
@@ -2154,7 +2159,9 @@ int ObTransformSimplifyExpr::build_null_for_empty_set(const ObSelectStmt* sub_st
           LOG_WARN("add new select expr failed", K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
+      if (FAILEDx(row_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize row expr failed", K(ret));
+      } else {
         expr = row_expr;
       }
     }
@@ -2507,7 +2514,7 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
   bool push_not_happend = false;
   bool remove_duplicate_happend = false;
   bool pull_similar_happend = false;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K(stmt), K(ret));
   } else if (conditions.count() == 0) {
@@ -2523,6 +2530,14 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
   } else {
     trans_happened =  push_not_happend | remove_duplicate_happend | pull_similar_happend;
     if (trans_happened) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
+        if (OB_ISNULL(conditions.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null expr", K(ret));
+        } else if (OB_FAIL(conditions.at(i)->formalize(ctx_->session_info_))) {
+          LOG_WARN("formalize expr failed", K(ret));
+        }
+      }
       OPT_TRACE("   push_not_happend:", push_not_happend);
       OPT_TRACE("   remove_duplicate_happend:", remove_duplicate_happend);
       OPT_TRACE("   pull_similar_happend:", pull_similar_happend);
@@ -2678,6 +2693,8 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       } else if (OB_ISNULL(new_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new_expr is null", K(new_expr), K(ret));
+      } else if (OB_FAIL(new_expr->init_param_exprs(child->get_param_count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < child->get_param_count(); ++i) {
           ObOpRawExpr *not_expr = NULL;
@@ -2686,7 +2703,7 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
           } else if (OB_ISNULL(not_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("not_expr is null", K(not_expr), K(ret));
-          } else if (OB_FAIL(not_expr->add_param_expr(child->get_param_expr(i)))) {
+          } else if (OB_FAIL(not_expr->set_param_expr(child->get_param_expr(i)))) {
             LOG_WARN("failed to add param expr", K(ret));
           } else if (OB_FAIL(new_expr->add_param_expr(not_expr))) {
             LOG_WARN("failed to add param expr", K(ret));
@@ -2694,7 +2711,9 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
             LOG_WARN("failed to add not flag", K(ret));
           }
         }
-        if (OB_SUCC(ret)) {
+        if (FAILEDx(new_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize", K(ret));
+        } else {
           expr = new_expr;
           trans_happened = true;
           if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
@@ -2712,7 +2731,7 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       } else if (OB_ISNULL(new_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new_expr is null", K(new_expr), K(ret));
-      } else if (OB_FAIL(new_expr->get_param_exprs().assign(static_cast<ObOpRawExpr*>(child)->get_param_exprs()))) {
+      } else if (OB_FAIL(new_expr->set_param_exprs(static_cast<ObOpRawExpr*>(child)->get_param_exprs()))) {
         LOG_WARN("failed to assign param exprs", K(ret));
       } else if (IS_COMMON_COMPARISON_OP(new_expr->get_expr_type())) {
         ObRawExpr *left_expr = NULL;
@@ -2730,7 +2749,9 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
           LOG_WARN("fail to reverse_cmp_type_of_align_date4cmp", K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
+      if (FAILEDx(new_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize", K(ret));
+      } else {
         expr = new_expr;
         if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
           LOG_WARN("fail to formalize", K(ret));
@@ -2963,7 +2984,7 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
           expr = temp;
           trans_happened = true;
         }
-      } else if (OB_FAIL(op_expr->get_param_exprs().assign(param_conds))) {
+      } else if (OB_FAIL(op_expr->set_param_exprs(param_conds))) {
         LOG_WARN("assign array failed", K(ret));
       } else {
         trans_happened = true;
@@ -3165,7 +3186,7 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
     } else if (OB_ISNULL(new_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null pointer error", K(new_expr), K(ret));
-    } else if (OB_FAIL(new_expr->get_param_exprs().assign(intersection))) {
+    } else if (OB_FAIL(new_expr->set_param_exprs(intersection))) {
       LOG_WARN("fail to assign array", K(ret));
     }
   } else if (OB_FAIL(factory->create_raw_expr(new_type, new_expr))) {
@@ -3173,14 +3194,20 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
   } else if (OB_ISNULL(new_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K(new_expr), K(ret));
+  } else if (OB_FAIL(new_expr->init_param_exprs(intersection.count() + 1))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else if (OB_FAIL(append(new_expr->get_param_exprs(), intersection))) {
     LOG_WARN("fail to append array", K(ret));
   } else if (OB_FAIL(new_expr->add_param_expr(new_param))) {
     LOG_WARN("failed to add param expr", K(ret));
   }
   if (OB_SUCC(ret) && is_valid) {
-    expr = new_expr;
-    trans_happened = true;
+    if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else {
+      expr = new_expr;
+      trans_happened = true;
+    }
   }
   return ret;
 }
@@ -3303,8 +3330,10 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
     } else if (OB_ISNULL(new_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null pointer error", K(new_expr), K(ret));
-    } else if (OB_FAIL(new_expr->get_param_exprs().assign(item))) {
+    } else if (OB_FAIL(new_expr->set_param_exprs(item))) {
       LOG_WARN("fail to assign array", K(ret));
+    } else if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
     } else if (OB_FAIL(params.push_back(new_expr))) {
       LOG_WARN("fail to push back expr", K(ret));
     }
@@ -3330,8 +3359,10 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
   } else if (OB_ISNULL(op_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K(op_expr), K(ret));
-  } else if (OB_FAIL(op_expr->get_param_exprs().assign(params))) {
+  } else if (OB_FAIL(op_expr->set_param_exprs(params))) {
     LOG_WARN("fail to assign array", K(ret));
+  } else if (OB_FAIL(op_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
   } else {
     expr = op_expr;
   }

@@ -364,9 +364,9 @@ public:
       const bool is_oracle_mode);
   static int adjust_number_decimal_column_accuracy_within_max(share::schema::ObColumnSchemaV2 &column,
                                                               const bool is_oracle_mode);
-  static int adjust_enum_set_column_meta_info(const ObRawExpr &expr,
-                                              sql::ObSQLSessionInfo &session_info,
-                                              share::schema::ObColumnSchemaV2 &column);
+  static int fill_column_with_subschema(const ObRawExpr &expr,
+                                        sql::ObSQLSessionInfo &session_info,
+                                        share::schema::ObColumnSchemaV2 &column);
 
   // { used for enum and set
   int fill_extended_type_info(

@@ -760,7 +760,11 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
     const common::ObString &database_name)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(sql::ObSQLSessionInfo, empty_session) {
+  SMART_VARS_3((sql::ObSQLSessionInfo, empty_session), (ObExecContext, exec_ctx, *allocator_),
+               (ObPhysicalPlanCtx, phy_plan_ctx, *allocator_)) {
+    LinkExecCtxGuard link_guard(empty_session, exec_ctx);
+    exec_ctx.set_my_session(&empty_session);
+    exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     new_table_schema = NULL;
     const ObComplexTableType orig_complex_table_type = complex_table_type_;
     if (OB_FAIL(empty_session.init(0, 0, allocator_))) {
@@ -889,6 +893,7 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
         LOG_WARN("get table schema failed", KR(ret), K(tenant_name), K(new_db_name), K(new_table_name));
       }
     }
+    exec_ctx.set_physical_plan_ctx(NULL);
   }
   return ret;
 }

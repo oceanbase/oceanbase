@@ -147,8 +147,8 @@ int ObSimpleMAVPrinter::gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &v
   } else if (OB_ISNULL(query_ref_expr) || OB_ISNULL(not_exists_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(query_ref_expr), K(not_exists_expr));
-  } else if (OB_FAIL(not_exists_expr->add_param_expr(query_ref_expr))) {
-    LOG_WARN("failed to add param expr", K(ret));
+  } else if (OB_FAIL(not_exists_expr->set_param_expr(query_ref_expr))) {
+    LOG_WARN("failed to set param expr", K(ret));
   } else if (OB_FAIL(conds.push_back(not_exists_expr))) {
     LOG_WARN("failed to push back not exists expr", K(ret));
   } else if (OB_FAIL(create_simple_table_item(subquery, mv_schema_.get_table_name(), mv_table))) {
@@ -1110,9 +1110,8 @@ int ObSimpleMAVPrinter::add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_
   } else if (OB_ISNULL(expr) || OB_ISNULL(default_expr) || OB_ISNULL(nvl_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(expr), K(default_expr), K(nvl_expr));
-  } else if (OB_FAIL(nvl_expr->add_param_expr(expr))
-             || OB_FAIL(nvl_expr->add_param_expr(default_expr))) {
-    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(nvl_expr->set_param_exprs(expr, default_expr))) {
+    LOG_WARN("fail to set param exprs", K(ret));
   } else {
     nvl_expr->set_expr_type(T_FUN_SYS_NVL);
     nvl_expr->set_func_name(ObString::make_string(N_NVL));

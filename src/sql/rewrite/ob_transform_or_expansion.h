@@ -115,6 +115,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 protected:
   virtual int adjust_transform_types(uint64_t &transform_types) override;
   virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;

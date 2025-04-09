@@ -679,9 +679,7 @@ int ObMergeResolver::find_value_desc(ObInsertTableInfo &table_info,
     column_ref = table_info.values_vector_.at(idx);
     if (T_QUESTIONMARK == column_ref->get_expr_type()) {
       OZ (column_ref->add_flag(IS_TABLE_ASSIGN));
-      ObObj val = column_ref->get_result_type().get_param();
       OX (column_ref->set_result_type(value_desc.at(idx)->get_result_type()));
-      OX (column_ref->set_param(val));
     }
   }
   if (OB_ENTRY_NOT_EXIST == ret) {

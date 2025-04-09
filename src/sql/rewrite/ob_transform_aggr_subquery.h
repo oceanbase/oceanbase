@@ -42,6 +42,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 protected:
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
@@ -267,7 +268,11 @@ private:
 
   int modify_aggr_param_expr_for_outer_join(TransformParam& trans_param);
 
-  int modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt, ObRawExprFactory *expr_factory, ObSEArray<ObRawExpr*, 4> &select_exprs, ObRawExpr *parent_expr_of_query_ref);
+  int modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt,
+                                                 ObRawExprFactory *expr_factory,
+                                                 ObSEArray<ObRawExpr*, 4> &select_exprs,
+                                                 ObRawExpr *parent_expr_of_query_ref,
+                                                 ObRawExpr *&vec_cmp_expr);
 
   inline bool is_exists_op(const ObItemType type)
   { return type == T_OP_EXISTS || type == T_OP_NOT_EXISTS; }
