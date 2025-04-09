@@ -863,8 +863,8 @@ int ObMvccRow::mvcc_sanity_check_(const SCN snapshot_version,
                && prev->get_write_epoch() == node.get_write_epoch()
                && prev->get_seq_no().get_branch() != node.get_seq_no().get_branch()) {
       // Case 3: Check concurrent modify to the same row
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "concurrent modify to the same row", K(ret), KPC(prev), K(node));
+      ret = OB_SEQ_NO_REORDER_UNDER_PDML;
+      TRANS_LOG(WARN, "concurrent modify to the same row", K(ret), KPC(prev), K(node));
     }
   }
 
