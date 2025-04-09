@@ -921,6 +921,7 @@ public:
       const char *endpoint,
       const char *authorization,
       const char *extension);
+  int set_endpoint(const common::ObStorageType device_type, const char *storage_info);
   int get_authorization_info(char *authorization, const int64_t length) const;
   int get_unencrypted_authorization_info(char *authorization, const int64_t length) const;
 
@@ -949,13 +950,17 @@ public:
   int set(const char *root_path, const char *storage_info);
   int set(const char *root_path, const ObBackupStorageInfo *storage_info);
   int set_without_decryption(const common::ObString &backup_dest);
+  int set_storage_path(const common::ObString &storage_path_str);
   void reset();
   int reset_access_id_and_access_key(
       const char *access_id, const char *access_key);
-  ObStorageType get_device_type() const;
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
+  bool is_assume_role_mode() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_assume_role_mode(); }
+  bool is_enable_worm() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_enable_worm(); }
+  bool is_storage_type_file(){ return OB_ISNULL(storage_info_) ?
+      false : ObStorageType::OB_STORAGE_FILE == storage_info_->get_type(); }
   bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
@@ -970,7 +975,7 @@ public:
 
 private:
   int alloc_and_init();
-  int parse_backup_dest_str_(const char *backup_dest);
+  int parse_backup_dest_str_(const char *backup_dest, const bool only_parse_for_unique_path);
   void root_path_trim_();
 
   char *root_path_;

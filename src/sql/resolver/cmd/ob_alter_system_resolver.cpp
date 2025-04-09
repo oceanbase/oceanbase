@@ -2756,13 +2756,14 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_CHANGE_EXTERNAL_STORAGE_DEST", "type", get_type_name(parse_tree.type_));
   } else if (OB_ISNULL(parse_tree.children_)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children should not be null");
   } else if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
-  } else if (OB_ISNULL(parse_tree.children_[0]) && (OB_ISNULL(parse_tree.children_[1]) || OB_ISNULL(parse_tree.children_[2])) ) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(parse_tree.children_[0])
+                || (OB_ISNULL(parse_tree.children_[1]) && OB_ISNULL(parse_tree.children_[2])) ) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children should not be null", K(ret), "children", parse_tree.children_);
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2796,7 +2797,11 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
           // access info may be null
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             const ObString access_info_value = parse_tree.children_[1]->str_value_;
-            if (OB_FAIL(item.value_.assign(access_info_value))) {
+            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "min cluster version is less than 4.3.5.2, changing ak&sk is");
+              LOG_WARN("min cluster version is less than 4.3.5.2, changing ak&sk is not supported", K(ret));
+            } else if (OB_FAIL(item.value_.assign(access_info_value))) {
               LOG_WARN("failed to assign config value", K(ret));
             }
           }

@@ -161,7 +161,8 @@ ObObjectStorageInfo::ObObjectStorageInfo()
   : delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE),
     device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO),
-    is_assume_role_mode_(false)
+    is_assume_role_mode_(false),
+    enable_worm_(false)
 {
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
@@ -190,6 +191,7 @@ void ObObjectStorageInfo::reset()
   role_arn_[0] = '\0';
   external_id_[0] = '\0';
   is_assume_role_mode_ = false;
+  enable_worm_ = false;
 }
 
 bool ObObjectStorageInfo::is_valid() const
@@ -210,8 +212,8 @@ int64_t ObObjectStorageInfo::hash() const
   hash_value = murmurhash(&max_bandwidth_, static_cast<int32_t>(sizeof(max_bandwidth_)), hash_value);
   hash_value = murmurhash(role_arn_, static_cast<int32_t>(strlen(role_arn_)), hash_value);
   hash_value = murmurhash(external_id_, static_cast<int32_t>(strlen(external_id_)), hash_value);
-
   hash_value = murmurhash(&is_assume_role_mode_, static_cast<int32_t>(sizeof(is_assume_role_mode_)), hash_value);
+  hash_value = murmurhash(&enable_worm_, static_cast<int32_t>(sizeof(enable_worm_)), hash_value);
   return hash_value;
 }
 
@@ -227,7 +229,8 @@ bool ObObjectStorageInfo::operator ==(const ObObjectStorageInfo &storage_info) c
       && (0 == STRCMP(external_id_, storage_info.external_id_))
       && is_assume_role_mode_ == storage_info.is_assume_role_mode_
       && max_iops_ == storage_info.max_iops_
-      && max_bandwidth_ == storage_info.max_bandwidth_;
+      && max_bandwidth_ == storage_info.max_bandwidth_
+      && enable_worm_ == storage_info.enable_worm_;
 }
 
 bool ObObjectStorageInfo::operator !=(const ObObjectStorageInfo &storage_info) const
@@ -254,7 +257,7 @@ int ObObjectStorageInfo::reset_access_id_and_access_key(
   if (OB_NOT_NULL(access_key)) {
     int64_t pos = 0;
     if (FAILEDx(databuff_printf(access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH, pos, "%s%s", ACCESS_KEY, access_key))) {
-      LOG_WARN("failed to databuff printf", K(ret), KCSTRING(access_key));
+      LOG_WARN("failed to databuff printf", K(ret));
     }
   }
   return ret;
@@ -263,6 +266,11 @@ int ObObjectStorageInfo::reset_access_id_and_access_key(
 bool ObObjectStorageInfo::is_assume_role_mode() const
 {
   return is_assume_role_mode_;
+}
+
+bool ObObjectStorageInfo::is_enable_worm() const
+{
+  return enable_worm_;
 }
 
 ObClusterVersionBaseMgr *ObObjectStorageInfo::cluster_version_mgr_ = nullptr;
@@ -370,6 +378,13 @@ int ObObjectStorageInfo::validate_arguments() const
           K_(device_type), K_(endpoint), K_(access_id), KP_(access_key), KP_(role_arn), KP_(external_id));
     }
   }
+  if (OB_SUCC(ret) && enable_worm_ && !(OB_MD5_ALGO == checksum_type_ && OB_STORAGE_OSS == device_type_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("device or checksum type don't support enable_worm", K(ret), KPC(this));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        "Only OSS and checksum_type=md5 support setting enable_worm, other devices or checksum types are");
+  }
+
   return ret;
 }
 
@@ -485,6 +500,12 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("fail to set checksum type into extension", K(ret), K(token));
         }
+      } else if (0 == strncmp(ENABLE_WORM, token, strlen(ENABLE_WORM))) {
+        if (OB_FAIL(check_enable_worm_(token + strlen(ENABLE_WORM)))) {
+          LOG_WARN("failed to check enable worm", K(ret), K(token));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set enable worm", K(ret), K(token));
+        }
       } else if (0 == strncmp(ROLE_ARN, token, strlen(ROLE_ARN))) {
         if (ObStorageType::OB_STORAGE_FILE == device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
@@ -526,6 +547,31 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
   }
   return ret;
 }
+
+int ObObjectStorageInfo::check_enable_worm_(const char *enable_worm)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cluster_version_mgr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_version_mgr_));
+  } else if (OB_FAIL(cluster_version_mgr_->is_supported_enable_worm_version())) {
+    LOG_WARN("The current version does not support enable worm", K(ret), KPC(this));
+  } else if (OB_ISNULL(enable_worm)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(enable_worm));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set eanble_worm. eanble_worm must be true or false");
+  } else if (0 == strcmp(enable_worm, "true")) {
+    enable_worm_ = true;
+  } else if (0 == strcmp(enable_worm, "false")) {
+    enable_worm_ = false;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("enable worm argument is invalid", K(ret), K(enable_worm));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set eanble_worm. eanble_worm must be true or false");
+  }
+  return ret;
+}
+
 //TODO(shifagndan): define delete mode as enum
 int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
 {
@@ -658,6 +704,7 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
   MEMCPY(role_arn_, storage_info.role_arn_, sizeof(role_arn_));
   MEMCPY(external_id_, storage_info.external_id_, sizeof(external_id_));
   is_assume_role_mode_ = storage_info.is_assume_role_mode_;
+  enable_worm_ = storage_info.enable_worm_;
   return ret;
 }
 

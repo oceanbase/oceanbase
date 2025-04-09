@@ -52,6 +52,7 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "share/backup/ob_backup_config.h"
 
 namespace oceanbase
 {
@@ -3986,25 +3987,35 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    const uint64_t tenant_id = arg.items_.at(0).exec_tenant_id_;
+    const uint64_t tenant_id = gen_user_tenant_id(arg.items_.at(0).exec_tenant_id_);
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path = arg.items_.at(0).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &access_info = arg.items_.at(1).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &attribute = arg.items_.at(2).value_;
 
+    ChangeExternalStorageDestMgr change_mgr;
     const bool has_access_info = !access_info.is_empty();
     const bool has_attribute = !attribute.is_empty();
-
-    share::ObBackupDest backup_dest;
+    ObBackupPathString backup_path;
     ObBackupDestAttribute access_info_option;
     ObBackupDestAttribute attribute_option;
     ObMySQLTransaction trans;
-    if (OB_FAIL(backup_dest.set(path.str()))) {
-      LOG_WARN("failed to set backup dest", K(ret));
+
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret), K(tenant_id));
+    } else if (!is_user_tenant(tenant_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("The instruction is only supported by user tenant.", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, " using the syntax under sys tenant or meta tenant is");
+    } else if (OB_FAIL(change_mgr.init(tenant_id, path, *GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init change_external_storage_dest_mgr", K(ret));
     }
+
     if (OB_SUCC(ret) && has_access_info) {
       if (OB_FAIL(ObBackupDestAttributeParser::parse(access_info.str(), access_info_option))) {
         LOG_WARN("failed to parse attribute", K(ret), K(access_info));
-      } else if (OB_FAIL(backup_dest.reset_access_id_and_access_key(access_info_option.access_id_, access_info_option.access_key_))) {
+      } else if (OB_FAIL(change_mgr.update_and_validate_authorization(
+                            access_info_option.access_id_, access_info_option.access_key_))) {
         LOG_WARN("failed to reset access id and access key", K(ret), K(access_info_option));
       }
     }
@@ -4017,15 +4028,14 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     if (FAILEDx(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
       LOG_WARN("failed to start trans", K(ret), K(tenant_id));
     } else {
-      if (ObStorageType::OB_STORAGE_FILE != backup_dest.get_device_type()) {
-        if (has_access_info && OB_FAIL(ObBackupStorageInfoOperator::update_backup_authorization(trans, tenant_id, backup_dest))) {
-          LOG_WARN("failed to update backup authorization", K(ret), K(tenant_id), K(backup_dest));
-        }
+      if (has_access_info && OB_FAIL(change_mgr.update_inner_table_authorization(trans))) {
+        LOG_WARN("failed to update backup authorization", K(ret), K(tenant_id));
       }
+
       if (OB_SUCC(ret) && has_attribute) {
         if (FAILEDx(ObBackupStorageInfoOperator::update_backup_dest_attribute(
-            trans, tenant_id, backup_dest, attribute_option.max_iops_, attribute_option.max_bandwidth_))) {
-          LOG_WARN("failed to update backup dest attribute", K(ret), K(tenant_id), K(backup_dest));
+            trans, tenant_id, change_mgr.backup_dest_, attribute_option.max_iops_, attribute_option.max_bandwidth_))) {
+          LOG_WARN("failed to update backup dest attribute", K(ret), K(tenant_id));
         } else {
           LOG_INFO("admin change external storage dest", K(arg));
         }

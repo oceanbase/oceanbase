@@ -56,6 +56,8 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
     STORAGE_LOG(WARN, "failed to init io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   }
 
   ObRefHolder<ObTenantIOManager> tenant_holder;
@@ -241,13 +243,21 @@ int CleanOp::func(const dirent *entry)
   int ret = OB_SUCCESS;
   ObBackupIoAdapter adapter;
 
-  if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%s/%s", base_path_, entry->d_name))) {
+  if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
+  } else if (OB_UNLIKELY(storage_info_->is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
+  } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%s/%s", base_path_, entry->d_name))) {
     OB_LOG(WARN, "fail to set uri", K(ret), K_(uri), KPC_(storage_info));
   } else if (OB_FAIL(adapter.del_file(uri_, storage_info_))) {
     OB_LOG(WARN, "fail to delete file", K(ret), K_(uri), KPC_(storage_info));
   } else {
     cleaned_objects_++;
   }
+
   return ret;
 }
 
@@ -460,6 +470,10 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
   } else if (OB_FAIL(util.mkdir(uri, storage_info_))) {
     OB_LOG(WARN, "fail to make base task dir for current thread",
         K(ret), K_(base_uri), K(thread_idx));
+  } else if (OB_UNLIKELY(BenchmarkTaskType::BENCHMARK_TASK_DEL == config_.type_ && storage_info_->is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
   } else if (OB_FAIL(init_task_executor(uri, storage_info_, config_, executor))) {
     OB_LOG(WARN, "fail to create and init task executor", K(ret), K(uri), K(thread_idx));
   } else {

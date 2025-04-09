@@ -722,6 +722,7 @@ static bool is_gcs_destination(const OutcomeType &outcome)
 }
 
 const int S3_BAD_REQUEST = 400;
+const int S3_PERMISSION_DENIED = 403;
 const int S3_ITEM_NOT_EXIST = 404;
 const int S3_SLOW_DOWN = 503;
 
@@ -762,6 +763,14 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
         ob_errcode = OB_ITEM_NOT_SETTED;
       } else {
         ob_errcode = OB_OBJECT_NOT_EXIST;
+      }
+      break;
+    }
+    case S3_PERMISSION_DENIED: {
+      if (exception == "InvalidAccessKeyId") {
+        ob_errcode = OB_OBJECT_STORAGE_PERMISSION_DENIED;
+      } else {
+        ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
       }
       break;
     }

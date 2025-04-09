@@ -12,6 +12,7 @@
 
 #include "ob_archive_round_mgr.h"
 #include "observer/ob_server_event_history_table_operator.h"   // SERVER_EVENT
+#include "share/backup/ob_backup_connectivity.h"
 
 namespace oceanbase
 {
@@ -134,6 +135,47 @@ void ObArchiveRoundMgr::set_archive_suspend(const ArchiveKey &key)
   }
 }
 
+int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key)
+{
+  int ret = OB_SUCCESS;
+
+  ObBackupPathString backup_path;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  const uint64_t tenant_id = gen_user_tenant_id(MTL_ID());
+  share::ObBackupDest backup_dest;
+  bool is_equal = false;
+  if (key != key_) {
+    ret = OB_EAGAIN;
+  } else if (OB_ISNULL(sql_proxy) || !backup_dest_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "sql_proxy is null or backup_dest is invalid", K(ret), KP(sql_proxy), K(backup_dest_));
+  } else if (OB_FAIL(backup_dest_.get_backup_path_str(backup_path.ptr(), backup_path.capacity()))) {
+    ARCHIVE_LOG(WARN, "fail to get backup path str", K(ret), K(backup_dest_));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, backup_path, backup_dest))) {
+    ARCHIVE_LOG(WARN, "fail to get backup dest", K(ret), K(tenant_id), K(backup_path));
+  } else {
+    WLockGuard guard(rwlock_);
+    if (OB_FAIL(backup_dest_.is_backup_path_equal(backup_dest, is_equal))) {
+      ARCHIVE_LOG(WARN, "fail to compare backup path", K(ret), K(backup_dest), K_(backup_dest), K(is_equal));
+    } else if(is_equal) {
+      if (OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
+        ARCHIVE_LOG(WARN, "fail to deep copy dest", K(ret), K(backup_dest));
+      } else {
+        ARCHIVE_LOG(INFO, "reset_backup_dest succ", K(ret), K_(backup_dest));
+      }
+    } else {
+      ARCHIVE_LOG(INFO, "backup dest has changed, do not need update", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+// Note: The member variable backup_dest_ in ObArchiveRoundMgr may not be up-to-date.
+// If you encounter the error ret == OB_OBJECT_STORAGE_PERMISSION_DENIED when accessing the archive path
+//with the backup_dest_ obtained from the ObArchiveRoundMgr::get_backup_dest_and_id function,
+// you need to call ObArchiveRoundMgr::reset_backup_dest to refresh backup_dest_.
+// For details, refer to the use of ObArchiveRoundMgr::reset_backup_dest in #define ADD_LS_RECORD_TASK(CLASS, type).
 int ObArchiveRoundMgr::get_backup_dest_and_id(const ArchiveKey &key,
     share::ObBackupDest &dest,
     int64_t &dest_id)

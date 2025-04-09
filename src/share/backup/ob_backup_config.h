@@ -218,6 +218,35 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveDestStateConfigParser);
 };
 
+//class for update backup dest or archive dest.
+class ChangeExternalStorageDestMgr final
+{
+public:
+  ChangeExternalStorageDestMgr();
+  ~ChangeExternalStorageDestMgr() { reset(); }
+  int init(
+    const uint64_t tenant_id,
+    const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path,
+    common::ObISQLClient &sql_proxy);
+  void reset();
+  int update_and_validate_authorization(const char *access_id, const char *access_key);
+  int update_inner_table_authorization(common::ObISQLClient &trans);
+private:
+  int update_backup_dest_authorization_(const char *access_id, const char *access_key);
+  int update_backup_parameter_(common::ObISQLClient &trans);
+  int update_archive_parameter_(common::ObISQLClient &trans);
+private:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  int64_t dest_id_;
+  ObBackupDestType::TYPE dest_type_;
+  common::ObISQLClient *sql_proxy_;
+public:
+  ObBackupDest backup_dest_;
+
+  DISALLOW_COPY_AND_ASSIGN(ChangeExternalStorageDestMgr);
+};
+
 }
 }
 

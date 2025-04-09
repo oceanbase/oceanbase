@@ -109,10 +109,13 @@ bool is_object_storage_type(const ObStorageType &type)
       && ObStorageType::OB_STORAGE_MAX_TYPE != type;
 }
 
-bool is_adaptive_append_mode(const ObStorageType &type)
+bool is_adaptive_append_mode(const ObObjectStorageInfo &storage_info)
 {
+  const ObStorageType type = storage_info.get_type();
+  const bool enable_worm = storage_info.is_enable_worm();
   return ObStorageType::OB_STORAGE_S3 == type
-      || (ObStorageType::OB_STORAGE_COS == type && is_use_obdal());
+      || (ObStorageType::OB_STORAGE_COS == type && is_use_obdal())
+      || (ObStorageType::OB_STORAGE_OSS == type && enable_worm);
 }
 
 bool is_io_error(const int result)
@@ -2697,7 +2700,10 @@ int64_t ObStorageAppender::get_length()
 
   if (OB_ISNULL(appender_)) {
     STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
-  } else if (!is_adaptive_append_mode(type_)) {
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage info is null", K(ret), KPC_(storage_info));
+  } else if (!is_adaptive_append_mode(*storage_info_)) {
     ret_int = appender_->get_length();
   } else {
     int ret = OB_SUCCESS;
@@ -2747,7 +2753,10 @@ int ObStorageAppender::seal_for_adaptive()
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (!is_adaptive_append_mode(type_)) {
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage info is null", K(ret), KPC_(storage_info));
+  } else if (!is_adaptive_append_mode(*storage_info_)) {
   } else {
     char *buf = NULL;
     char seal_meta_uri[OB_MAX_URI_LENGTH] = { 0 };
@@ -2784,6 +2793,13 @@ int ObStorageAppender::seal_for_adaptive()
           K_(uri),  K(seal_meta_uri), KP(buf), K(pos), K(appendable_obj_meta));
     }
     util.close();
+    if (OB_FAIL(ret)) {
+      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && storage_info_->is_enable_worm()) {
+        ret = OB_SUCCESS;
+        OB_LOG(INFO, "seal meta file exist, can not seal file again, ignore the error code",
+                        KR(ret), K(seal_meta_uri), KPC_(storage_info));
+      }
+    }
   }
 
   return ret;

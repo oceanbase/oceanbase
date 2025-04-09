@@ -51,18 +51,22 @@ TEST(ObBackupDest, nfs)
   const char *backup_test = "file:///backup_dir/?&delete_mode=tagging";
   ObBackupDest dest;
   ObBackupDest dest1;
+  ObBackupDest dest2;
+  ObBackupDest dest3;
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest.set(backup_test));
+  ASSERT_EQ(OB_SUCCESS, dest.set_storage_path(ObString(backup_test)));
   backup_test = "file:///backup_dir/";
 
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test)));
+  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), KPC(dest.get_storage_info()));
+  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), KPC(dest.get_storage_info()));
   ASSERT_EQ(0, strcmp(dest.root_path_, "file:///backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 1);
   ObString backup_str("file:///backup_dir/");
-  ObBackupDest dest2;
   ASSERT_EQ(OB_SUCCESS, dest2.set(backup_str));
   ASSERT_EQ(0, strcmp(dest.root_path_, "file:///backup_dir"));
 
@@ -73,6 +77,9 @@ TEST(ObBackupDest, nfs)
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
   ASSERT_TRUE(is_equal);
   ASSERT_TRUE(dest == dest1);
   ASSERT_EQ(OB_SUCCESS, dest2.deep_copy(dest));
@@ -121,13 +128,20 @@ TEST(ObBackupDestAttributeParser, parse_acces_info)
 TEST(ObBackupDest, oss)
 {
   const char *backup_test = "oss://backup_dir/?host=xxx.com&access_id=111&access_key=222&delete_mode=tagging";
+  const char *backup_test1 = "oss://backup_dir/?host=xxx.com";
   ObBackupDest dest;
   ObBackupDest dest1;
+  ObBackupDest dest2;
+  ObBackupDest dest3;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  ASSERT_EQ(OB_SUCCESS, dest2.set_storage_path(ObString(backup_test)));
+  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test1)));
+  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), KPC(dest.get_storage_info()));
+  LOG_INFO("dump backup dest", K(dest2), K(dest.get_root_path()), KPC(dest.get_storage_info()));
+  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), KPC(dest.get_storage_info()));
   ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
 
@@ -141,6 +155,12 @@ TEST(ObBackupDest, oss)
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest2, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
   ASSERT_TRUE(is_equal);
   ASSERT_TRUE(dest == dest1);
   dest1.reset();
@@ -159,7 +179,7 @@ TEST(ObBackupDest, oss_encrypt)
   EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
                                                         obrpc::RootKeyType::DEFAULT, ObString()));
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest.get_root_path()), KPC(dest.get_storage_info()));
   ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
   const char *path = "oss://backup_dir/";
@@ -191,13 +211,20 @@ TEST(ObBackupDest, oss_encrypt)
 TEST(ObBackupDest, cos)
 {
   const char *backup_test = "cos://backup_dir/?host=xxx.com&access_id=111&access_key=222&delete_mode=tagging&appid=333";
+  const char *backup_test1 = "cos://backup_dir/?host=xxx.com";
   ObBackupDest dest;
   ObBackupDest dest1;
+  ObBackupDest dest2;
+  ObBackupDest dest3;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  ASSERT_EQ(OB_SUCCESS, dest2.set_storage_path(ObString(backup_test)));
+  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test1)));
+  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), KPC(dest.get_storage_info()));
+  LOG_INFO("dump backup dest", K(dest2), K(dest.get_root_path()), KPC(dest.get_storage_info()));
+  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), KPC(dest.get_storage_info()));
   ASSERT_EQ(0, strcmp(dest.root_path_, "cos://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 2);
 
@@ -211,6 +238,12 @@ TEST(ObBackupDest, cos)
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest2, is_equal));
+  ASSERT_TRUE(is_equal);
+  is_equal = false;
+  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
   ASSERT_TRUE(is_equal);
   ASSERT_TRUE(dest == dest1);
   dest1.reset();
@@ -229,7 +262,7 @@ TEST(ObBackupDest, cos_encrypt)
   EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
                                                         obrpc::RootKeyType::DEFAULT, ObString()));
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest.get_root_path()), K(*(dest.get_storage_info())));
+  LOG_INFO("dump backup dest", K(dest.get_root_path()), KPC(dest.get_storage_info()));
   ASSERT_EQ(0, strcmp(dest.root_path_, "cos://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 2);
   const char *path = "cos://backup_dir/";

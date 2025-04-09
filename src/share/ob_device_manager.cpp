@@ -108,6 +108,21 @@ bool ObClusterEnableObdalConfig::is_enable_obdal() const
   return GCONF._enable_obdal;
 }
 
+int ObClusterVersionMgr::is_supported_enable_worm_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    OB_LOG(WARN, "get data version failed", K(ret));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_5_2)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "date version is less than 4.3.5.2, set enable_worm is");
+    OB_LOG(WARN, "date version is less than 4.3.5.2, setting enable_worm is not supported", K(ret), K(data_version));
+  }
+  return ret;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
 {

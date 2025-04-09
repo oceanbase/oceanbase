@@ -146,6 +146,11 @@ public:
       int64_t &write_size,
       const bool is_can_seal,
       const common::ObStorageIdMod &storage_id_mod);
+
+  static int seal_file(
+      const common::ObString &uri,
+      const share::ObBackupStorageInfo *storage_info,
+      const common::ObStorageIdMod &storage_id_mod);
   static int pwrite(
       common::ObIODevice &device_handle, common::ObIOFd &fd,
       const char *buf, const int64_t offset, const int64_t size,

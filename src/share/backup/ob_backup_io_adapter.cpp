@@ -452,12 +452,37 @@ int ObBackupIoAdapter::pwrite(
   } else if (OB_FAIL(io_manager_write(buf, offset, size, fd, write_size))) {
     STORAGE_LOG(WARN, "fail to io manager write", K(ret), K(uri), K(storage_info), K(size), K(fd));
   } else if (is_can_seal && OB_FAIL(device_handle->seal_file(fd))) {
-    STORAGE_LOG(WARN, "fail to seal file", K(ret), K(uri), K(storage_info), K(fd));
+    STORAGE_LOG(WARN, "fail to seal file", KR(ret), K(uri), K(storage_info), K(fd));
   }
 
   if (OB_SUCCESS != (ret_tmp = close_device_and_fd(device_handle, fd))) {
     ret = (OB_SUCCESS == ret) ? ret_tmp : ret;
-    STORAGE_LOG(WARN, "failed to close device and fd", K(ret), K(ret_tmp));
+    STORAGE_LOG(WARN, "failed to close device and fd", KR(ret), K(ret_tmp));
+  }
+  return ret;
+}
+
+int ObBackupIoAdapter::seal_file(
+  const common::ObString &uri,
+  const share::ObBackupStorageInfo *storage_info,
+  const common::ObStorageIdMod &storage_id_mod)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObIOFd fd;
+  ObIODevice *device_handle = nullptr;
+
+  if (OB_FAIL(open_with_access_type(device_handle, fd,
+      storage_info, uri, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, storage_id_mod))) {
+    OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), KR(ret));
+  } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
+  } else if (OB_FAIL(device_handle->seal_file(fd))) {
+    STORAGE_LOG(WARN, "fail to seal file", KR(ret), K(uri), K(storage_info), K(fd));
+  }
+
+  if (OB_TMP_FAIL(close_device_and_fd(device_handle, fd))) {
+    ret = COVER_SUCC(tmp_ret);
+    STORAGE_LOG(WARN, "failed to close device and fd", KR(ret), K(tmp_ret));
   }
   return ret;
 }

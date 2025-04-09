@@ -788,6 +788,7 @@ const char *const OB_HDFS_PREFIX= "hdfs://";
 const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const char *const OB_OSS_WORM_APPENDABLE_FORMAT_META = "FORMAT_META";
 const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const int64_t OB_STORAGE_DEL_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";

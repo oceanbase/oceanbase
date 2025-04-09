@@ -55,6 +55,8 @@ int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
     STORAGE_LOG(WARN, "failed to init io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  }  else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   }
 
   if (FAILEDx(parse_cmd_(argc, argv))) {
@@ -444,6 +446,9 @@ int ObAdminTestIODeviceExecutor::test_clean_backup_file_()
 
   if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
+  } else if (storage_info.is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info.get_delete_mode()) {
+    //enable oss worm, do not delete
   } else if (OB_FAIL(databuff_printf(check_file_dir_path, OB_MAX_URI_LENGTH, "%s%s%s",
              backup_path_, "/", check_file_dir_name))) {
     STORAGE_LOG_FILTER(ERROR, "fail to databuff printf", K(ret));

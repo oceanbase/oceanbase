@@ -46,7 +46,7 @@ int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
 bool is_io_error(const int result);
 bool is_object_storage_type(const ObStorageType &type);
-bool is_adaptive_append_mode(const ObStorageType &type);
+bool is_adaptive_append_mode(const ObObjectStorageInfo &storage_info);
 
 class ObExternalIOCounter final
 {

@@ -71,6 +71,7 @@ const char *const DELETE_MODE = "delete_mode=";
 const char *const REGION = "s3_region=";
 const char *const MAX_IOPS = "max_iops=";
 const char *const MAX_BANDWIDTH = "max_bandwidth=";
+const char *const ENABLE_WORM = "enable_worm=";
 
 const char *const ADDRESSING_MODEL = "addressing_model=";
 const char *const ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE = "virtual_hosted_style";
@@ -178,6 +179,10 @@ public:
   {
     return OB_SUCCESS;
   };
+  virtual int is_supported_enable_worm_version() const
+  {
+    return OB_SUCCESS;
+  };
   static ObClusterVersionBaseMgr &get_instance()
   {
     static ObClusterVersionBaseMgr mgr;
@@ -205,6 +210,7 @@ public:
   // the following two functions are designed for Assume Role.
   virtual int validate_arguments() const;
   bool is_assume_role_mode() const;
+  bool is_enable_worm() const;
   virtual int get_authorization_str(char *authorization_str,
                                   const int64_t authorization_str_len,
                                   ObSTSToken &sts_token) const;
@@ -224,12 +230,13 @@ public:
   int reset_access_id_and_access_key(
       const char *access_id, const char *access_key);
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
-      K_(checksum_type), K_(max_iops), K_(max_bandwidth), KP_(role_arn), KP_(external_id));
+      K_(checksum_type), K_(max_iops), K_(max_bandwidth), KP_(role_arn), KP_(external_id), K_(enable_worm));
   static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
 
 protected:
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
   virtual int parse_storage_info_(const char *storage_info, bool &has_appid);
+  int check_enable_worm_(const char *enable_worm);
   int check_delete_mode_(const char *delete_mode);
   int check_addressing_model_(const char *addressing_model) const;
   int set_checksum_type_(const char *checksum_type_str);
@@ -261,6 +268,7 @@ public:
   char role_arn_[OB_MAX_ROLE_ARN_LENGTH];
   char external_id_[OB_MAX_EXTERNAL_ID_LENGTH];
   bool is_assume_role_mode_;
+  bool enable_worm_;
   static ObClusterVersionBaseMgr *cluster_version_mgr_;
 };
 
