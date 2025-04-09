@@ -2484,7 +2484,9 @@ int ObBaseIndexBlockBuilder::row_desc_to_meta(
                   K(macro_row_desc));
     } else if (OB_FAIL(agg_row_writer_.init(
                    data_store_desc_->get_agg_meta_array(),
-                   *macro_row_desc.aggregated_row_, allocator))) {
+                   *macro_row_desc.aggregated_row_,
+                   data_store_desc_->get_major_working_cluster_version(),
+                   allocator))) {
       STORAGE_LOG(WARN, "Fail to init aggregate row writer", K(ret));
     } else if (FALSE_IT(agg_row_upper_size = agg_row_writer_.get_serialize_data_size())) {
     } else if (OB_ISNULL(agg_row_buf = static_cast<char *>(

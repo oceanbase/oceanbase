@@ -389,8 +389,9 @@ void ObSSTablePrinter::print_pre_agg_row(const int64_t column_cnt, ObAggRowReade
     P_VALUE_BINT(col_idx);
     P_COLON();
     for (int64_t meta_type = 0; OB_SUCC(ret) && meta_type < ObSkipIndexColType::SK_IDX_MAX_COL_TYPE; ++meta_type) {
+      bool is_min_max_prefix = false;
       ObSkipIndexColMeta skp_idx_meta(col_idx, static_cast<ObSkipIndexColType>(meta_type));
-      if (OB_FAIL(agg_row_reader.read(skp_idx_meta, agg_datum))) {
+      if (OB_FAIL(agg_row_reader.read(skp_idx_meta, agg_datum, is_min_max_prefix))) {
         STORAGE_LOG(WARN, "Failed to read agg datum", K(ret), K(skp_idx_meta), K(agg_datum));
         P_VALUE_STR_B("error: read agg datum failed");
       } else if (!agg_datum.is_null()) {
@@ -399,6 +400,9 @@ void ObSSTablePrinter::print_pre_agg_row(const int64_t column_cnt, ObAggRowReade
         P_COLON();
         P_NAME("value=");
         print_cell(agg_datum);
+        P_COLON();
+        P_NAME("is_min_max_prefix=");
+        P_VALUE_INT(is_min_max_prefix);
       }
     }
     P_BAR();

@@ -219,6 +219,7 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   min_iops_ = other.min_iops_;
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
+  skip_rate_sample_cnt_ = other.skip_rate_sample_cnt_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -295,6 +296,7 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   degree_ = other.degree_;
   allocator_ = other.allocator_;
   partition_id_block_map_ = other.partition_id_block_map_;
+  partition_id_skip_rate_map_ = other.partition_id_skip_rate_map_;
   gather_start_time_ = other.gather_start_time_;
   stattype_ = other.stattype_;
   is_split_gather_ = other.is_split_gather_;
@@ -372,7 +374,12 @@ int AsyncStatTable::assign(const AsyncStatTable &other)
 {
   int ret = OB_SUCCESS;
   table_id_ = other.table_id_;
-  return partition_ids_.assign(other.partition_ids_);
+  if (OB_FAIL(partition_ids_.assign(other.partition_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(tablet_ids_.assign(other.tablet_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObOptDmlStat,
@@ -547,6 +554,34 @@ public:
   int64_t cost_time_;
 };
 
+class FlushBlockCountAuditItem : public AuditBaseItem
+{
+public:
+  FlushBlockCountAuditItem(int64_t cost_time) :
+    cost_time_(cost_time) {}
+  virtual ~FlushBlockCountAuditItem() {}
+
+  virtual int64_t get_cost_time() const { return cost_time_; }
+
+  TO_STRING_KV("TYPE", "BlockCount", "COST", cost_time_);
+public:
+  int64_t cost_time_;
+};
+
+class FlushSkipRateAuditItem : public AuditBaseItem
+{
+public:
+  FlushSkipRateAuditItem(int64_t cost_time) :
+    cost_time_(cost_time) {}
+  virtual ~FlushSkipRateAuditItem() {}
+
+  virtual int64_t get_cost_time() const { return cost_time_; }
+
+  TO_STRING_KV("TYPE", "SkipRate", "COST", cost_time_);
+public:
+  int64_t cost_time_;
+};
+
 ObOptStatGatherAudit::~ObOptStatGatherAudit()
 {
   for (int64_t i = 0; i < audit_items_.count(); ++i) {
@@ -689,6 +724,40 @@ int ObOptStatGatherAudit::add_flush_stats_audit(int64_t cost_time)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate audit item", K(ret));
     } else if (OB_FALSE_IT(item = new(ptr) FlushStatsAuditItem(cost_time))) {
+    } else if (OB_FAIL(audit_items_.push_back(item))) {
+      LOG_WARN("failed to push back audit item", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatGatherAudit::add_flush_block_count_audit(int64_t cost_time)
+{
+  int ret = OB_SUCCESS;
+  FlushBlockCountAuditItem *item = NULL;
+  void *ptr = NULL;
+  if (need_audit(cost_time)) {
+    if (OB_ISNULL(ptr = allocator_.alloc(sizeof(FlushBlockCountAuditItem)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate audit item", K(ret));
+    } else if (OB_FALSE_IT(item = new(ptr) FlushBlockCountAuditItem(cost_time))) {
+    } else if (OB_FAIL(audit_items_.push_back(item))) {
+      LOG_WARN("failed to push back audit item", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatGatherAudit::add_flush_skip_rate_audit(int64_t cost_time)
+{
+  int ret = OB_SUCCESS;
+  FlushSkipRateAuditItem *item = NULL;
+  void *ptr = NULL;
+  if (need_audit(cost_time)) {
+    if (OB_ISNULL(ptr = allocator_.alloc(sizeof(FlushSkipRateAuditItem)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate audit item", K(ret));
+    } else if (OB_FALSE_IT(item = new(ptr) FlushSkipRateAuditItem(cost_time))) {
     } else if (OB_FAIL(audit_items_.push_back(item))) {
       LOG_WARN("failed to push back audit item", K(ret));
     }

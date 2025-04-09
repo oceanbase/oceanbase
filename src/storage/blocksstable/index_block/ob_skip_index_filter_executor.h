@@ -65,7 +65,9 @@ private:
                    const bool is_padding_mode,
                    ObStorageDatum &null_count,
                    ObStorageDatum &min_datum,
-                   ObStorageDatum &max_datum);
+                   bool &is_min_prefix,
+                   ObStorageDatum &max_datum,
+                   bool &is_max_prefix);
   int pad_column(const ObObjMeta &obj_meta,
                  const share::schema::ObColumnParam *col_param,
                  const bool is_padding_mode,
@@ -75,41 +77,57 @@ private:
   // *_operator args are the same
   int eq_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int ne_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
   int gt_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int ge_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int lt_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int le_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int bt_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int in_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int black_filter_on_min_max(const uint32_t col_idx,

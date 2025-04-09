@@ -491,6 +491,12 @@ public:
                                     int64_t &succeed_cnt,
                                     ObOptStatTaskInfo &task_info);
 
+  static int build_stat_table_by_async_table(sql::ObExecContext &ctx,
+                                             const uint64_t tenant_id,
+                                             const ObTableSchema &table_schema,
+                                             const AsyncStatTable &async_table,
+                                             StatTable &stat_table);
+
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const share::schema::ObTableSchema &table_schema,
@@ -710,6 +716,10 @@ private:
                                           const uint64_t tenant_id,
                                           const uint64_t table_id,
                                           int64_t &batch_part_size);
+
+  static int append_part_id_if_valid(hash::ObHashMap<int64_t, ObPartitionStatInfo *> &id_to_part_stat_map,
+                                     int64_t part_id,
+                                     ObIArray<int64_t> &part_ids);
 };
 
 }

@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObSkipIndexAggResult;
 
 struct ObAggRowHeader final
 {
@@ -30,12 +31,15 @@ public:
   static const int64_t AGG_COL_TYPE_BITMAP_SIZE = 1; // 1 byte bitmap
   static const int64_t AGG_COL_MAX_OFFSET_SIZE = 2; // total size of agg_data < 1K, at most 64K
   static const int64_t AGG_ROW_HEADER_VERSION = 1;
+  static const int64_t AGG_ROW_HEADER_VERSION_2 = 2;
+  static const int64_t TYPE_BITMAP_IDX = 0;
+  static const int64_t PREFIX_BITMAP_IDX = 1;
 public:
   ObAggRowHeader();
   ~ObAggRowHeader() = default;
   bool is_valid() const
   {
-    return version_ == AGG_ROW_HEADER_VERSION && agg_col_cnt_ > 0 && agg_col_idx_size_ > 0 && agg_col_idx_off_size_ > 0
+    return (version_ == AGG_ROW_HEADER_VERSION || version_ == AGG_ROW_HEADER_VERSION_2) && agg_col_cnt_ > 0 && agg_col_idx_size_ > 0 && agg_col_idx_off_size_ > 0
            && bitmap_size_ == AGG_COL_TYPE_BITMAP_SIZE;
   }
   TO_STRING_KV(K_(version), K_(length), K_(agg_col_cnt), K_(agg_col_idx_size),
@@ -72,7 +76,8 @@ public:
   ObAggRowWriter();
   ~ObAggRowWriter();
   int init(const ObIArray<ObSkipIndexColMeta> &agg_col_arr,
-           const ObDatumRow &agg_data,
+           const ObSkipIndexAggResult &agg_data,
+           const int64_t major_working_cluster_version,
            ObIAllocator &allocator);
   OB_INLINE int64_t get_serialize_data_size() const { return header_.length_; }
   int write_agg_data(char *buf, const int64_t buf_size, int64_t &pos);
@@ -93,12 +98,13 @@ private:
 
 private:
   bool is_inited_;
-  const ObStorageDatum *agg_datums_;
+  const ObSkipIndexAggResult *agg_data_;
   int64_t column_count_;
   int64_t col_idx_count_;
   ColMetaList col_meta_list_;
   ObAggRowHeader header_;
   ObAggRowHelper row_helper_;
+  int64_t major_working_cluster_version_;
   DISALLOW_COPY_AND_ASSIGN(ObAggRowWriter);
 };
 
@@ -110,14 +116,19 @@ public:
   ~ObAggRowReader();
   int init(const char *buf, const int64_t buf_size); // init with agg_buf
   int read(const ObSkipIndexColMeta &meta, ObDatum &datum); // use meta get datum
+  int read(const ObSkipIndexColMeta &meta, ObDatum &datum, bool &is_prefix);
   void reset();
 private:
   int inner_init(const char *buf, const int64_t buf_size);
   int binary_search_col(const int64_t col_idx, int64_t &pos);
-  int find_col(const int64_t pos, const int64_t type, ObDatum &datum);
+  int find_col(const int64_t pos, const int64_t type, ObDatum &datum, bool &is_prefix);
   int read_cell(
       const char *cell_buf, const int64_t buf_size, const int64_t type,
-      bool &found, int64_t &col_off, int64_t &col_len);
+      bool &found, int64_t &col_off, int64_t &col_len, bool &is_prefix);
+  inline bool has_cell_prefix_bitmap()
+  {
+    return header_->version_ >= ObAggRowHeader::AGG_ROW_HEADER_VERSION_2;
+  }
 
 private:
   bool is_inited_;

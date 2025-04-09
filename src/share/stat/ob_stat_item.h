@@ -364,6 +364,23 @@ private:
   int64_t memtable_row_cnt_;
 };
 
+
+class ObGlobalSkipRateStat
+{
+public:
+  ObGlobalSkipRateStat(): count_(0), skip_sample_cnt_arr_(), cg_skip_rate_arr_() {}
+  int add(const ObIArray<uint64_t> &skip_sample_cnt_arr, const ObIArray<double> &cg_skip_rate_arr);
+  const ObIArray<double> &get_skip_rate_arr() const;
+  const ObIArray<uint64_t> & get_skip_sample_cnt_arr() const;
+  int merge();
+  TO_STRING_KV(K(skip_sample_cnt_arr_), K(cg_skip_rate_arr_));
+
+private:
+  uint64_t count_; //increment when add
+  ObArray<uint64_t> skip_sample_cnt_arr_;
+  ObArray<double> cg_skip_rate_arr_;
+};
+
 class ObGlobalNullEval
 {
 public:
@@ -530,6 +547,22 @@ private:
   int64_t cg_micro_blk_cnt_;
 };
 
+class ObGlobalCgSkipRateEval
+{
+public:
+  ObGlobalCgSkipRateEval() : cg_skip_rate_(0.0), cg_micro_blk_cnt_(0) {}
+
+  void add_cg_skip_rate(double value, int64_t cg_micro_blk_cnt)
+  {
+    cg_micro_blk_cnt_ += cg_micro_blk_cnt;
+    cg_skip_rate_ += (value * (double)cg_micro_blk_cnt);
+  }
+
+public:
+  double cg_skip_rate_;
+  int64_t cg_micro_blk_cnt_;
+};
+
 struct ObGlobalAllColEvals
 {
   ObGlobalMinEval min_eval_;
@@ -538,6 +571,7 @@ struct ObGlobalAllColEvals
   ObGlobalAvglenEval avglen_eval_;
   ObGlobalNdvEval ndv_eval_;
   ObGlobalCgBlockCntEval cg_blk_eval_;
+  ObGlobalCgSkipRateEval cg_skip_rate_eval_;
   bool column_stat_valid_ = true;
   int flush(common::ObIAllocator *alloc);
 
@@ -554,7 +588,7 @@ struct ObGlobalColumnStat
     ndv_val_(0),
     cg_macro_blk_cnt_(0),
     cg_micro_blk_cnt_(0),
-    cg_skip_rate_(1.0)
+    cg_skip_rate_(0.0)
   {
     min_val_.set_min_value();
     max_val_.set_max_value();
@@ -563,6 +597,9 @@ struct ObGlobalColumnStat
   {
     cg_macro_blk_cnt_ += cg_macro_blk_cnt;
     cg_micro_blk_cnt_ += cg_micro_blk_cnt;
+  }
+  void add_cg_skip_rate(double value, int64_t cg_micro_blk_cnt) {
+    cg_skip_rate_ += (value * (double)cg_micro_blk_cnt);
   }
   TO_STRING_KV(K(min_val_),
                K(max_val_),

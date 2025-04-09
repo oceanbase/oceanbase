@@ -31,12 +31,13 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObSkipIndexAggResult;
 struct ObMicroBlockDesc
 {
   ObDatumRowkey last_rowkey_;
   const char *buf_; // buf does not contain any header
   const ObMicroBlockHeader *header_;
-  const ObDatumRow *aggregated_row_;
+  const ObSkipIndexAggResult *aggregated_row_;
   int64_t buf_size_;
   int64_t data_size_; // encoding data size
   int64_t original_size_; // original data size
@@ -69,7 +70,7 @@ struct ObMicroBlockDesc
       K_(last_rowkey),
       KPC_(header),
       KP_(buf),
-      KPC_(aggregated_row),
+      KP_(aggregated_row),
       K_(buf_size),
       K_(data_size),
       K_(row_count),

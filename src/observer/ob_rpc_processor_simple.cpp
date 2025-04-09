@@ -2943,6 +2943,18 @@ int ObEstimateTabletBlockCountP::process()
   return ret;
 }
 
+int ObEstimateSkipRateP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->estimate_skip_rate(arg_, result_);
+  }
+  return ret;
+}
+
 int ObRpcGenUniqueIDP::process()
 {
   int ret = ObCommonIDUtils::gen_unique_id(arg_, result_);

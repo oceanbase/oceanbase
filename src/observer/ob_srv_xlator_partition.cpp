@@ -341,4 +341,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObGAISBroadcastAutoIncCacheP);
   // kill query client session
   RPC_PROCESSOR(ObKillQueryClientSessionP, gctx_);
+
+  //sql optimizer estimate skip rate
+  RPC_PROCESSOR(ObEstimateSkipRateP, gctx_);
+
 }

@@ -1062,6 +1062,7 @@ int ObDbmsStatsUtils::remove_stat_gather_param_partition_info(int64_t reserved_p
 int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
                                                 StatLevel stat_level,
                                                 const PartitionIdBlockMap *partition_id_block_map,
+                                                const PartitionIdSkipRateMap *partition_id_skip_rate_map,
                                                 bool is_split_gather,
                                                 int64_t gather_vectorize,
                                                 bool use_column_store,
@@ -1090,6 +1091,7 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.max_duration_time_ = param.duration_time_;
   gather_param.allocator_ = param.allocator_;
   gather_param.partition_id_block_map_ = partition_id_block_map;
+  gather_param.partition_id_skip_rate_map_ = partition_id_skip_rate_map;
   gather_param.gather_start_time_ = ObTimeUtility::current_time();
   gather_param.stattype_ = param.stattype_;
   gather_param.is_split_gather_ = is_split_gather;
@@ -1112,6 +1114,9 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.part_level_ = param.part_level_;
   gather_param.consumer_group_id_ = param.consumer_group_id_;
   ret = gather_param.column_group_params_.assign(param.column_group_params_);
+  if (OB_SUCC(ret)) {
+    ret = gather_param.all_column_params_.assign(param.column_params_);
+  }
   return ret;
 }
 

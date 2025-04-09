@@ -3451,6 +3451,21 @@ int ObService::estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
   }
   return ret;
 }
+
+int ObService::estimate_skip_rate(const obrpc::ObEstSkipRateArg &arg,
+                                  obrpc::ObEstSkipRateRes &res) const
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("receive estimate tablet skip rate request", K(arg));
+  if (!inited_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("service is not inited", K(ret));
+  } else if (OB_FAIL(sql::ObStorageEstimator::estimate_skip_rate(arg, res))) {
+    LOG_WARN("failed to estimate skip rate", K(ret));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_GET_LS_SYNC_SCN_ERROR);
 ERRSIM_POINT_DEF(ERRSIM_GET_SYS_LS_SYNC_SCN_ERROR);
 int ObService::get_ls_sync_scn(

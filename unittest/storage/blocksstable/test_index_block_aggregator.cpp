@@ -32,7 +32,10 @@ using namespace share::schema;
 class TestIndexBlockAggregator : public ::testing::Test
 {
 public:
-  TestIndexBlockAggregator() {}
+  TestIndexBlockAggregator()
+  {
+    data_version_ = DATA_VERSION_4_3_5_2;
+  }
   virtual ~TestIndexBlockAggregator() {}
   virtual void SetUp() {}
   virtual void TearDown() {}
@@ -45,12 +48,13 @@ public:
   void reset_min_max_row();
   void update_min_max_row(const ObDatumRow &row);
   void update_sum_row(const ObDatumRow &row,  ObObj *sum_res, ObObj *data);
-  void validate_sum_agg_row(const ObDatumRow &agg_row, const ObObj *sum_res, int64_t nop_col_cnt= 0, int64_t *nop_col_idxs = nullptr);
-  void validate_agg_row(const ObDatumRow &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr, ObSkipIndexColType *nop_col_types = nullptr);
-  void set_nop_cols(ObDatumRow &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr, ObSkipIndexColType *nop_col_types = nullptr);
+  void validate_sum_agg_row(const ObSkipIndexAggResult &agg_row, const ObObj *sum_res, int64_t nop_col_cnt= 0, int64_t *nop_col_idxs = nullptr);
+  void validate_agg_row(const ObSkipIndexAggResult &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr, ObSkipIndexColType *nop_col_types = nullptr);
+  void set_nop_cols(ObSkipIndexAggResult &agg_row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr, ObSkipIndexColType *nop_col_types = nullptr);
   bool is_col_in_nop_col_arr(const int64_t col_idx, const int64_t nop_col_cnt, int64_t *nop_col_idxs, int64_t &index);
-  void serialize_agg_row(const ObDatumRow &agg_row, const char *&row_buf, int64_t &row_size);
+  void serialize_agg_row(const ObSkipIndexAggResult &agg_data, const char *&row_buf, int64_t &row_size);
   void get_cmp_func(const ObColDesc &col_desc, ObStorageDatumCmpFunc &cmp_func);
+  void str_datum_to_lob_data(const ObDatum &str_datum, ObDatum &lob_datum, ObIAllocator &alloc);
 
   ObArenaAllocator allocator_;
   ObRowGenerate row_generate_;
@@ -67,6 +71,7 @@ public:
   ObAggRowWriter agg_row_writer_;
   ObMicroBlockEncodingCtx ctx_;
   ObIMicroBlockWriter *micro_writer_;
+  int64_t data_version_;
 };
 
 void TestIndexBlockAggregator::init_schema(const int64_t col_count, const ObObjType *col_obj_types)
@@ -200,10 +205,10 @@ void TestIndexBlockAggregator::update_min_max_row(const ObDatumRow &row)
     if (!curr_datum.is_null()) {
       ObStorageDatum &min_datum = min_row_.storage_datums_[i];
       ObStorageDatum &max_datum = max_row_.storage_datums_[i];
-      if (curr_datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) {
-        min_datum.set_null();
-        max_datum.set_null();
-      } else {
+      // if (curr_datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) {
+      //   min_datum.set_null();
+      //   max_datum.set_null();
+      // } else {
         int min_cmp_ret = 0;
         int max_cmp_ret = 0;
         ObStorageDatumCmpFunc cmp_func;
@@ -216,7 +221,7 @@ void TestIndexBlockAggregator::update_min_max_row(const ObDatumRow &row)
         if (max_cmp_ret > 0) {
           max_datum.deep_copy(curr_datum, allocator_);
         }
-      }
+      // }
     } else {
       null_count_arr_[i]++;
     }
@@ -239,16 +244,24 @@ void TestIndexBlockAggregator::update_sum_row(const ObDatumRow &row,  ObObj *sum
 }
 
 void TestIndexBlockAggregator::validate_agg_row(
-    const ObDatumRow &datum_row, int64_t nop_col_cnt, int64_t *nop_col_idxs, ObSkipIndexColType *nop_col_types)
+    const ObSkipIndexAggResult &agg_result, int64_t nop_col_cnt, int64_t *nop_col_idxs, ObSkipIndexColType *nop_col_types)
 {
+  const ObDatumRow &datum_row = agg_result.agg_row_;
+  const ObIArray<ObSkipIndexDatumAttr> &attr_array = agg_result.attr_array_;
   for (int64_t i = 0; i < full_agg_metas_.count(); ++i) {
     ObSkipIndexColMeta idx_meta = full_agg_metas_.at(i);
     const int64_t col_idx = idx_meta.col_idx_;
     int64_t index = 0;
+    const bool is_prefix = attr_array.at(i).is_min_max_prefix_;
     bool is_nop_column = is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs, index);
     if (is_nop_column && ((nop_col_types == nullptr ) || (nop_col_types != nullptr && nop_col_types[index] == idx_meta.col_type_))) {
       ASSERT_TRUE(datum_row.storage_datums_[i].is_nop());
     } else if (datum_row.storage_datums_[i].is_nop() || datum_row.storage_datums_[i].is_null()) { // skip for not aggregate data
+      if ((!min_row_.storage_datums_[col_idx].is_null()) || (max_row_.storage_datums_[col_idx].is_null())) {
+        FLOG_INFO("[Salton] validate failed", K(datum_row.storage_datums_[i]),
+            K(min_row_.storage_datums_[col_idx]), K(max_row_.storage_datums_[col_idx]), K(idx_meta),
+            K(col_descs_.at(col_idx)));
+      }
       ASSERT_TRUE(min_row_.storage_datums_[col_idx].is_null());
       ASSERT_TRUE(max_row_.storage_datums_[col_idx].is_null());
     } else {
@@ -259,13 +272,25 @@ void TestIndexBlockAggregator::validate_agg_row(
       case SK_IDX_MIN: {
         ASSERT_EQ(OB_SUCCESS, cmp_func.compare(
             min_row_.storage_datums_[col_idx], datum_row.storage_datums_[i], cmp_ret));
-        ASSERT_EQ(0, cmp_ret);
+        if (is_prefix) {
+          ASSERT_TRUE(min_row_.storage_datums_[col_idx].len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH);
+        } else {
+          if (cmp_ret != 0) {
+            FLOG_INFO("[Salton] min datum validate failed", K(datum_row.storage_datums_[i]),
+              K(min_row_.storage_datums_[col_idx]), K(idx_meta), K(col_descs_.at(col_idx)));
+          }
+          ASSERT_EQ(0, cmp_ret);
+        }
         break;
       }
       case SK_IDX_MAX: {
         ASSERT_EQ(OB_SUCCESS, cmp_func.compare(
             max_row_.storage_datums_[col_idx], datum_row.storage_datums_[i], cmp_ret));
-        ASSERT_EQ(0, cmp_ret);
+        if (is_prefix) {
+          ASSERT_TRUE(max_row_.storage_datums_[col_idx].len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH);
+        } else {
+          ASSERT_EQ(0, cmp_ret);
+        }
         break;
       }
       case SK_IDX_NULL_COUNT: {
@@ -280,9 +305,10 @@ void TestIndexBlockAggregator::validate_agg_row(
   }
 }
 
-void TestIndexBlockAggregator::validate_sum_agg_row(const ObDatumRow &agg_row, const ObObj *sum_res,
+void TestIndexBlockAggregator::validate_sum_agg_row(const ObSkipIndexAggResult &agg_row, const ObObj *sum_res,
     int64_t nop_col_cnt, int64_t *nop_col_idxs)
 {
+  const ObDatumRow &datum_row = agg_row.agg_row_;
   for (int64_t i = 0; i < full_agg_metas_.count(); ++i) {
     ObSkipIndexColMeta idx_meta = full_agg_metas_.at(i);
     const int64_t col_idx = idx_meta.col_idx_;
@@ -290,7 +316,7 @@ void TestIndexBlockAggregator::validate_sum_agg_row(const ObDatumRow &agg_row, c
     int64_t index = 0;
     bool is_nop_column = is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs, index);
     if (is_nop_column || !col_type.is_numeric_type()|| col_type.get_type_class() == ObObjTypeClass::ObBitTC) {
-      ASSERT_TRUE(agg_row.storage_datums_[i].is_nop());
+      ASSERT_TRUE(datum_row.storage_datums_[i].is_nop());
     } else {
       const ObObjTypeClass obj_tc = col_type.get_type_class();
       switch (obj_tc) {
@@ -300,20 +326,20 @@ void TestIndexBlockAggregator::validate_sum_agg_row(const ObDatumRow &agg_row, c
         case ObObjTypeClass::ObNumberTC: {
           int cmp = 0;
           ObObj agg;
-          agg.set_number(agg_row.storage_datums_[i].get_number());
+          agg.set_number(datum_row.storage_datums_[i].get_number());
           ASSERT_EQ(0, sum_res[i].compare(agg, cmp));
           break;
         }
         case ObObjTypeClass::ObFloatTC: {
           ObObj agg_obj;
-          agg_row.storage_datums_[i].to_obj(agg_obj, col_type);
+          datum_row.storage_datums_[i].to_obj(agg_obj, col_type);
           int cmp = 0;
           ASSERT_EQ(0, sum_res[col_idx].compare(agg_obj, cmp));
           break;
         }
         case ObObjTypeClass::ObDoubleTC: {
           ObObj agg_obj;
-          agg_row.storage_datums_[i].to_obj(agg_obj, col_type);
+          datum_row.storage_datums_[i].to_obj(agg_obj, col_type);
           int cmp = 0;
           ASSERT_EQ(0, sum_res[col_idx].compare(agg_obj, cmp));
           break;
@@ -329,20 +355,21 @@ void TestIndexBlockAggregator::validate_sum_agg_row(const ObDatumRow &agg_row, c
 }
 
 void TestIndexBlockAggregator::set_nop_cols(
-    ObDatumRow &row, int64_t nop_col_cnt, int64_t *nop_col_idxs, ObSkipIndexColType *nop_col_types)
+    ObSkipIndexAggResult &agg_row, int64_t nop_col_cnt, int64_t *nop_col_idxs, ObSkipIndexColType *nop_col_types)
 {
+  ObDatumRow &datum_row = agg_row.agg_row_;
   for (int64_t i = 0; i < full_agg_metas_.count(); ++i) {
-    ASSERT_TRUE(i < row.get_column_count());
+    ASSERT_TRUE(i < datum_row.get_column_count());
     ObSkipIndexColMeta idx_meta = full_agg_metas_.at(i);
     const int64_t col_idx = idx_meta.col_idx_;
     int64_t index = 0;
     if (is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs, index)) {
       if (nop_col_types != nullptr) {
         if (nop_col_types[index] == idx_meta.col_type_) {
-          row.storage_datums_[i].set_nop();
+          datum_row.storage_datums_[i].set_nop();
         }
       } else {
-        row.storage_datums_[i].set_nop();
+        datum_row.storage_datums_[i].set_nop();
       }
     }
   }
@@ -363,13 +390,13 @@ bool TestIndexBlockAggregator::is_col_in_nop_col_arr(
 }
 
 void TestIndexBlockAggregator::serialize_agg_row(
-    const ObDatumRow &agg_row, const char *&row_buf, int64_t &row_size)
+    const ObSkipIndexAggResult &agg_data, const char *&row_buf, int64_t &row_size)
 {
   agg_row_writer_.reset();
   char *buf = nullptr;
   int64_t size = 0;
   int64_t pos = 0;
-  ASSERT_EQ(OB_SUCCESS, agg_row_writer_.init(full_agg_metas_, agg_row, allocator_));
+  ASSERT_EQ(OB_SUCCESS, agg_row_writer_.init(full_agg_metas_, agg_data, data_version_, allocator_));
   size = agg_row_writer_.get_serialize_data_size();
   buf = static_cast<char *>(allocator_.alloc(size));
   ASSERT_TRUE(nullptr != buf);
@@ -383,6 +410,16 @@ void TestIndexBlockAggregator::get_cmp_func(const ObColDesc &col_desc, ObStorage
   sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
       col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type());
   cmp_func.cmp_func_.cmp_func_ = lib::is_oracle_mode() ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
+}
+
+void TestIndexBlockAggregator::str_datum_to_lob_data(const ObDatum &str_datum, ObDatum &lob_datum, ObIAllocator &alloc)
+{
+  const int64_t buf_len = sizeof(ObLobCommon) + str_datum.len_;
+  char *buf = (char *)alloc.alloc(buf_len);
+  ASSERT_TRUE(nullptr != buf);
+  ObLobCommon *lob_common = new (buf) ObLobCommon();
+  MEMCPY(lob_common->buffer_, str_datum.ptr_, str_datum.len_);
+  lob_datum.set_lob_data(*lob_common, buf_len);
 }
 
 TEST_F(TestIndexBlockAggregator, basic_aggregate)
@@ -402,20 +439,20 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
 
   ObSkipIndexDataAggregator data_aggregator;
   ObSkipIndexIndexAggregator index_aggregator;
-  ObDatumRow data_agg_result;
-  ObDatumRow index_agg_result;
-  ASSERT_EQ(OB_SUCCESS, data_agg_result.init(full_agg_metas_.count()));
-  ASSERT_EQ(OB_SUCCESS, index_agg_result.init(full_agg_metas_.count()));
+  ObSkipIndexAggResult data_agg_result;
+  ObSkipIndexAggResult index_agg_result;
+  ASSERT_EQ(OB_SUCCESS, data_agg_result.init(full_agg_metas_.count(), allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_agg_result.init(full_agg_metas_.count(), allocator_));
 
   for (int64_t test_round = 0; test_round < 7; ++test_round) {
     reset_min_max_row();
     data_agg_result.reuse();
     index_agg_result.reuse();
-    ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_agg_result, allocator_));
-    ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, index_agg_result, allocator_));
+    ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+    ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
 
-    const ObDatumRow *data_agg_row = nullptr;
-    const ObDatumRow *index_agg_row = nullptr;
+    const ObSkipIndexAggResult *data_agg_row = nullptr;
+    const ObSkipIndexAggResult *index_agg_row = nullptr;
     ObDatumRow generate_row;
     ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
     for (int64_t i = 0; i < test_row_cnt; ++i) {
@@ -449,10 +486,10 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
   reset_min_max_row();
   data_agg_result.reuse();
   index_agg_result.reuse();
-  ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_agg_result, allocator_));
-  ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, index_agg_result, allocator_));
-  const ObDatumRow *data_agg_row = nullptr;
-  const ObDatumRow *index_agg_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+  const ObSkipIndexAggResult *data_agg_row = nullptr;
+  const ObSkipIndexAggResult *index_agg_row = nullptr;
   ObDatumRow generate_row;
   ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
   for (int64_t i = 0; i < test_row_cnt; ++i) {
@@ -461,7 +498,7 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
     ASSERT_EQ(OB_SUCCESS, data_aggregator.eval(generate_row));
     ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
     ASSERT_TRUE(nullptr != data_agg_row);
-    set_nop_cols(*const_cast<ObDatumRow *>(data_agg_row), nop_col_cnt, nop_col_idxs);
+    set_nop_cols(*const_cast<ObSkipIndexAggResult *>(data_agg_row), nop_col_cnt, nop_col_idxs);
     if (0 == i / 2) {
       ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
     } else {
@@ -493,7 +530,7 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
     ASSERT_EQ(OB_SUCCESS, data_aggregator.eval(generate_row));
     ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
     ASSERT_TRUE(nullptr != data_agg_row);
-    set_nop_cols(*const_cast<ObDatumRow *>(data_agg_row), nop_col_cnt, nop_col_idxs, nop_col_types);
+    set_nop_cols(*const_cast<ObSkipIndexAggResult *>(data_agg_row), nop_col_cnt, nop_col_idxs, nop_col_types);
     if (0 == i / 2) {
       ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
     } else {
@@ -525,7 +562,7 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
     ASSERT_EQ(OB_SUCCESS, data_aggregator.eval(generate_row));
     ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
     ASSERT_TRUE(nullptr != data_agg_row);
-    set_nop_cols(*const_cast<ObDatumRow *>(data_agg_row), 0, nullptr);
+    set_nop_cols(*const_cast<ObSkipIndexAggResult *>(data_agg_row), 0, nullptr);
     ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
     ASSERT_EQ(OB_SUCCESS, index_aggregator.get_aggregated_row(index_agg_row));
     ASSERT_TRUE(nullptr != index_agg_row);
@@ -557,28 +594,20 @@ TEST_F(TestIndexBlockAggregator, test_sum)
   ObObj sum_res[test_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()];
   init_sum_meta(test_column_cnt, sum_col_idxs);
 
-  ObSkipIndexIndexAggregator data_aggregator;
+  ObSkipIndexDataAggregator data_aggregator;
   ObSkipIndexIndexAggregator reuse_data_aggregator;
   ObSkipIndexIndexAggregator index_aggregator;
-  ObDatumRow data_agg_result;
-  ObDatumRow reuse_data_agg_result;
-  ObDatumRow index_agg_result;
-  ASSERT_EQ(OB_SUCCESS, data_agg_result.init(full_agg_metas_.count()));
-  ASSERT_EQ(OB_SUCCESS, reuse_data_agg_result.init(full_agg_metas_.count()));
-  ASSERT_EQ(OB_SUCCESS, index_agg_result.init(full_agg_metas_.count()));
+
   ObArenaAllocator allocator;
   for (int64_t test_round = 0; test_round < 7; ++test_round) {
     allocator.reuse();
-    data_agg_result.reuse();
-    reuse_data_aggregator.reuse();
-    index_agg_result.reuse();
-    ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_agg_result, allocator_));
-    ASSERT_EQ(OB_SUCCESS, reuse_data_aggregator.init(full_agg_metas_, col_descs_, reuse_data_agg_result, allocator_));
-    ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, index_agg_result, allocator_));
+    ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+    ASSERT_EQ(OB_SUCCESS, reuse_data_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+    ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
 
-    const ObDatumRow *data_agg_row = nullptr;
-    const ObDatumRow *reuse_data_agg_row = nullptr;
-    const ObDatumRow *index_agg_row = nullptr;
+    const ObSkipIndexAggResult *data_agg_row = nullptr;
+    const ObSkipIndexAggResult *reuse_data_agg_row = nullptr;
+    const ObSkipIndexAggResult *index_agg_row = nullptr;
     ObDatumRow generate_row;
     ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
     for (int64_t i = 0; i < test_row_cnt; ++i) {
@@ -621,12 +650,10 @@ TEST_F(TestIndexBlockAggregator, test_sum)
   for (int64_t col_id = 0; col_id < test_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(); ++col_id) {
     sum_res[col_id].set_null();
   }
-  data_agg_result.reuse();
-  index_agg_result.reuse();
-  ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_agg_result, allocator_));
-  ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, index_agg_result, allocator_));
-  const ObDatumRow *data_agg_row = nullptr;
-  const ObDatumRow *index_agg_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, data_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
+  const ObSkipIndexAggResult *data_agg_row = nullptr;
+  const ObSkipIndexAggResult *index_agg_row = nullptr;
   ObDatumRow generate_row;
   ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
   for (int64_t i = 0; i < test_row_cnt; ++i) {
@@ -636,7 +663,7 @@ TEST_F(TestIndexBlockAggregator, test_sum)
     ASSERT_EQ(OB_SUCCESS, data_aggregator.eval(generate_row));
     ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
     ASSERT_TRUE(nullptr != data_agg_row);
-    set_nop_cols(*const_cast<ObDatumRow *>(data_agg_row), nop_col_cnt, nop_col_idxs);
+    set_nop_cols(*const_cast<ObSkipIndexAggResult *>(data_agg_row), nop_col_cnt, nop_col_idxs);
     ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
     ASSERT_EQ(OB_SUCCESS, index_aggregator.get_aggregated_row(index_agg_row));
     ASSERT_TRUE(nullptr != index_agg_row);
@@ -670,12 +697,12 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_from_encoder)
   ASSERT_EQ(OB_SUCCESS, agg_result.init(full_agg_metas_.count()));
   char *block_buf = nullptr;
   int64_t block_size = 0;
-  ASSERT_EQ(OB_SUCCESS, aggregator.init(full_agg_metas_, col_descs_, agg_result, allocator_));
+  ASSERT_EQ(OB_SUCCESS, aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
 
   // cs encoder min_max
   aggregator.reuse();
   reset_min_max_row();
-  const ObDatumRow *agg_row = nullptr;
+  const ObSkipIndexAggResult *agg_row = nullptr;
   ObDatumRow generate_row;
   ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
 
@@ -740,11 +767,11 @@ TEST_F(TestIndexBlockAggregator, sum_agg_from_encoder)
   ASSERT_EQ(OB_SUCCESS, agg_result.init(full_agg_metas_.count()));
   char *block_buf = nullptr;
   int64_t block_size = 0;
-  ASSERT_EQ(OB_SUCCESS, aggregator.init(full_agg_metas_, col_descs_, agg_result, allocator_));
+  ASSERT_EQ(OB_SUCCESS, aggregator.init(full_agg_metas_, col_descs_, data_version_, allocator_));
 
   // cs encoder sum
   aggregator.reuse();
-  const ObDatumRow *agg_row = nullptr;
+  const ObSkipIndexAggResult *agg_row = nullptr;
   ObDatumRow generate_row;
   ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
 
@@ -775,6 +802,157 @@ TEST_F(TestIndexBlockAggregator, sum_agg_from_encoder)
   ASSERT_EQ(OB_SUCCESS, aggregator.eval(*encoder));
   ASSERT_EQ(OB_SUCCESS, aggregator.get_aggregated_row(agg_row));
   validate_sum_agg_row(*agg_row, sum_res);
+}
+
+TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
+{
+
+  ObColDesc varchar_desc;
+  varchar_desc.col_type_.set_varchar();
+  varchar_desc.col_type_.set_collation_level(CS_LEVEL_IMPLICIT);
+  varchar_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
+
+  ObColMinAggregator min_varchar_aggregator;
+  ObStorageDatum min_varchar_agg_res;
+  ObSkipIndexDatumAttr min_varchar_res_attr;
+  ASSERT_EQ(OB_SUCCESS, min_varchar_aggregator.init(varchar_desc, DATA_CURRENT_VERSION, min_varchar_agg_res, min_varchar_res_attr));
+
+  ObColMaxAggregator max_varchar_aggregator;
+  ObStorageDatum max_varchar_agg_res;
+  ObSkipIndexDatumAttr max_varchar_res_attr;
+  ASSERT_EQ(OB_SUCCESS, max_varchar_aggregator.init(varchar_desc, DATA_CURRENT_VERSION, max_varchar_agg_res, max_varchar_res_attr));
+
+  // TODO: add text for other types
+  ObColDesc medium_text_desc;
+  medium_text_desc.col_type_.set_type(ObMediumTextType);
+  medium_text_desc.col_type_.set_collation_level(CS_LEVEL_IMPLICIT);
+  medium_text_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
+
+  ObColMinAggregator min_text_aggregator;
+  ObStorageDatum min_text_agg_res;
+  ObSkipIndexDatumAttr min_text_res_attr;
+  ASSERT_EQ(OB_SUCCESS, min_text_aggregator.init(medium_text_desc, DATA_CURRENT_VERSION, min_text_agg_res, min_text_res_attr));
+
+  ObColMaxAggregator max_text_aggregator;
+  ObStorageDatum max_text_agg_res;
+  ObSkipIndexDatumAttr max_text_res_attr;
+  ASSERT_EQ(OB_SUCCESS, max_text_aggregator.init(medium_text_desc, DATA_CURRENT_VERSION, max_text_agg_res, max_text_res_attr));
+
+  {
+    // same datum
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg)
+    {
+      int cmp_ret = 0;
+      // min
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, false, false, cmp_ret));
+      ASSERT_EQ(cmp_ret, 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_EQ(cmp_ret, 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      // max
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, false, cmp_ret));
+      ASSERT_EQ(cmp_ret, 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_EQ(cmp_ret, 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+    };
+
+    const char *str1 = "abc";
+    ObDatum l_datum(str1, strlen(str1), false);
+    ObDatum r_datum(str1, strlen(str1), false);
+    verify(l_datum, r_datum, min_varchar_aggregator, max_varchar_aggregator);
+
+    // text
+    ObDatum lt_datum;
+    ObDatum rt_datum;
+    str_datum_to_lob_data(l_datum, lt_datum, allocator_);
+    str_datum_to_lob_data(r_datum, rt_datum, allocator_);
+    verify(lt_datum, rt_datum, min_text_aggregator, max_text_aggregator);
+  }
+
+  {
+    // different length
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg)
+    {
+      int cmp_ret = 0;
+      // min
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, false, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      // max
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+    };
+
+    const char *str_s = "abc";
+    const char *str_l = "dddd";
+    ObDatum l_datum(str_s, strlen(str_s), false);
+    ObDatum r_datum(str_l, strlen(str_l), false);
+    verify(l_datum, r_datum, min_varchar_aggregator, max_varchar_aggregator);
+
+    //text
+    ObDatum lt_datum;
+    ObDatum rt_datum;
+    str_datum_to_lob_data(l_datum, lt_datum, allocator_);
+    str_datum_to_lob_data(r_datum, rt_datum, allocator_);
+    verify(lt_datum, rt_datum, min_text_aggregator, max_text_aggregator);
+  }
+
+  {
+    // different length with same prefix
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMinAggregator &min_agg, ObColMaxAggregator &max_agg)
+    {
+      int cmp_ret = 0;
+      // min
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, false, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, min_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      // max
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+    };
+
+    const char *str_s = "abc";
+    const char *str_l = "abcd";
+    ObDatum l_datum(str_s, strlen(str_s), false);
+    ObDatum r_datum(str_l, strlen(str_l), false);
+    verify(l_datum, r_datum, min_varchar_aggregator, max_varchar_aggregator);
+
+    //text
+    ObDatum lt_datum;
+    ObDatum rt_datum;
+    str_datum_to_lob_data(l_datum, lt_datum, allocator_);
+    str_datum_to_lob_data(r_datum, rt_datum, allocator_);
+    verify(lt_datum, rt_datum, min_text_aggregator, max_text_aggregator);
+  }
 }
 
 }

@@ -14,6 +14,7 @@
 #define OCEANBASE_BLOCKSSTABLE_OB_INDEX_BLOCK_UTIL_
 
 #include "share/datum/ob_datum.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
@@ -26,7 +27,6 @@ struct ObSkipIndexColumnAttr;
 }
 namespace blocksstable
 {
-
 // Only MIN_MAX skipping index is supported now.
 enum ObSkipIndexType : uint8_t
 {
@@ -203,6 +203,27 @@ OB_INLINE static int get_sum_store_size(const ObObjType &obj_type, uint32_t &sum
   }
   return ret;
 }
+
+OB_INLINE static bool enable_skip_index_min_max_prefix(const int64_t data_version)
+{
+  // TODO: set this version to latest before merge to master
+  return data_version >= DATA_VERSION_4_3_5_2;
+}
+
+int get_prefix_for_string_tc_datum(
+    const ObDatum &orig_datum,
+    const ObObjType obj_type,
+    const ObCollationType collation_type,
+    const int64_t max_prefix_byte_len,
+    ObDatum &prefix_datum);
+
+int get_prefix_for_text_tc_datum(
+    const ObDatum &orig_datum,
+    const ObObjType obj_type,
+    const ObCollationType collation_type,
+    const int64_t max_prefix_byte_len,
+    ObDatum &prefix_datum,
+    char *prefix_datum_buf);
 
 } // blocksstable
 } // oceanbase

@@ -104,18 +104,21 @@ private:
                                   ObMySQLTransaction &trans,
                                   const ObTableStatParam &param,
                                   PartitionIdBlockMap &partition_id_block_map,
+                                  PartitionIdSkipRateMap &partition_id_skip_rate_map,
                                   GatherHelper &gather_helper);
 
   static int split_gather_stats(ObExecContext &ctx,
                                 ObMySQLTransaction &trans,
                                 const ObTableStatParam &param,
                                 const PartitionIdBlockMap *partition_id_block_map,
+                                const PartitionIdSkipRateMap *partition_id_skip_rate_map,
                                 GatherHelper &gather_helper);
 
   static int no_split_gather_stats(ObExecContext &ctx,
                                    ObMySQLTransaction &trans,
                                    const ObTableStatParam &param,
                                    const PartitionIdBlockMap *partition_id_block_map,
+                                   const PartitionIdSkipRateMap *partition_id_skip_rate_map,
                                    GatherHelper &gather_helper);
 
   static int split_gather_partition_stats(ObExecContext &ctx,
@@ -123,12 +126,14 @@ private:
                                           const ObTableStatParam &param,
                                           StatLevel stat_level,
                                           const PartitionIdBlockMap *partition_id_block_map,
-                                          GatherHelper &gather_helper);
+                                          const PartitionIdSkipRateMap *partition_id_skip_rate_map,
+                                          const GatherHelper &gather_helper);
 
   static int split_gather_global_stats(ObExecContext &ctx,
                                        ObMySQLTransaction &trans,
                                        const ObTableStatParam &param,
                                        const PartitionIdBlockMap *partition_id_block_map,
+                                       const PartitionIdSkipRateMap *partition_id_skip_rate_map,
                                        GatherHelper &gather_helper);
 
   static int do_gather_stats(ObExecContext &ctx,
@@ -216,7 +221,10 @@ private:
                                       bool use_column_store,
                                       bool &need_split_part);
 
-
+  static int get_skip_rate_sample_count(ObMySQLProxy *mysql_proxy,
+                                        const uint64_t tenant_id,
+                                        const uint64_t table_id,
+                                        int64_t &sample_count);
 };
 
 } // end of sql

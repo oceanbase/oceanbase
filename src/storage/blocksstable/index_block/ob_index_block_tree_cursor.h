@@ -175,6 +175,7 @@ public:
   int pull_up(const bool cascade, const bool is_reverse_scan);
   int pull_up_to_root();
   int move_forward(const bool is_reverse_scan);
+  int move_forward_micro(const uint64_t step);
 
   TO_STRING_KV(K_(cursor_path), K_(is_normal_cg_sstable), K_(curr_path_item));
 public:
@@ -238,6 +239,7 @@ private:
       ObIArray<ObDatumRowkey> &end_keys);
   int check_reach_target_depth(const MoveDepth target_depth, bool &reach_target_depth);
   int init_curr_endkey(ObDatumRow &row_buf, const int64_t datum_cnt);
+  int move_until_cannot_skip(int64_t &remain_step);
 
 private:
   static const int64_t OB_INDEX_BLOCK_MAX_COL_CNT =

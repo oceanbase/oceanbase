@@ -110,7 +110,7 @@ public:
                        common::sqlclient::ObMySQLResult &result,
                        hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
                        ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                       bool need_cg_info);
+                       const uint64_t tenant_id);
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
                         ObIArray<ObOptKeyColumnStat> &key_col_stats,

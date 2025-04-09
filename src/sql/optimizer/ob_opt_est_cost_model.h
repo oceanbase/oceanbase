@@ -179,7 +179,7 @@ struct ObCostColumnGroupInfo {
   ObCostColumnGroupInfo()
   :micro_block_count_(0.0),
   filter_sel_(1.0),
-  skip_rate_(1.0),
+  skip_rate_(0.0),
   skip_filter_sel_(1.0)
   {
   }

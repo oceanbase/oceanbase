@@ -169,6 +169,8 @@ public:
                               obrpc::ObEstPartRes &res) const;
   int estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
                                   obrpc::ObEstBlockRes &res) const;
+  int estimate_skip_rate(const obrpc::ObEstSkipRateArg &arg,
+                         obrpc::ObEstSkipRateRes &res) const;
   int update_tenant_info_cache(const obrpc::ObUpdateTenantInfoCacheArg &arg,
                                   obrpc::ObUpdateTenantInfoCacheRes &result);
   int refresh_service_name(const obrpc::ObRefreshServiceNameArg &arg,

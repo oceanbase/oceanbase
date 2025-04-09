@@ -11961,6 +11961,50 @@ int ObEstBlockRes::assign(const ObEstBlockRes &other)
 
 OB_SERIALIZE_MEMBER(ObEstBlockRes, tablet_params_res_);
 
+int ObEstSkipRateArgElement::assign(const ObEstSkipRateArgElement &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  table_id_ = other.table_id_;
+  tablet_id_ = other.tablet_id_;
+  ls_id_ = other.ls_id_;
+  if (OB_FAIL(sample_count_.assign(other.sample_count_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(column_ids_.assign(other.column_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObEstSkipRateArgElement, tenant_id_, table_id_, tablet_id_, ls_id_, sample_count_, column_ids_);
+
+int ObEstSkipRateArg::assign(const ObEstSkipRateArg &other)
+{
+  return tablet_params_arg_.assign(other.tablet_params_arg_);
+}
+
+OB_SERIALIZE_MEMBER(ObEstSkipRateArg, tablet_params_arg_);
+
+int ObEstSkipRateResElement::assign(const ObEstSkipRateResElement &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cg_skip_rate_arr_.assign(other.cg_skip_rate_arr_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(sample_count_.assign(other.sample_count_))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObEstSkipRateResElement, cg_skip_rate_arr_, sample_count_);
+
+int ObEstSkipRateRes::assign(const ObEstSkipRateRes &other)
+{
+  return tablet_params_res_.assign(other.tablet_params_res_);
+}
+
+OB_SERIALIZE_MEMBER(ObEstSkipRateRes, tablet_params_res_);
+
 OB_SERIALIZE_MEMBER(ObBatchGetTabletAutoincSeqArg, tenant_id_, ls_id_, src_tablet_ids_, dest_tablet_ids_);
 
 int ObBatchGetTabletAutoincSeqArg::assign(const ObBatchGetTabletAutoincSeqArg &other)

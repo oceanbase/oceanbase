@@ -29,11 +29,12 @@ namespace common
 class ObOptTableStat;
 class ObOptColumnStat;
 struct BlockNumStat;
-
+struct SkipRateStat;
 typedef hash::ObHashMap<int64_t, BlockNumStat *, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
 typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *, common::hash::NoPthreadDefendMode> OSGColStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
+typedef hash::ObHashMap<int64_t, SkipRateStat*, common::hash::NoPthreadDefendMode> PartitionIdSkipRateMap;
 
 enum StatOptionFlags
 {
@@ -80,13 +81,16 @@ const static int64_t DEFAULT_ASYNC_FULL_TABLE_SIZE = 10000000;
 const static int64_t DEFAULT_ASYNC_MIN_TABLE_SIZE = 10000;
 const static int64_t DEFAULT_ASYNC_STALE_MAX_TABLE_SIZE = 100000000;
 const static int64_t DEFAULT_ASYNC_MAX_SCAN_ROWCOUNT = 100000000;
-const static int64_t MINIMUM_OF_ASYNC_GATHER_STALE_RATIO = 2;
+const static double MINIMUM_OF_ASYNC_GATHER_STALE_RATIO = 0;
 const int64_t MAXIMUM_BLOCK_CNT_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 100000;
 const int64_t MAXIMUM_ROWS_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 10000000;
 const int64_t MINIMUM_BLOCK_CNT_OF_BLOCK_SAMPLE_HYBRID_HIST = 16;
 const static int64_t DEFAULT_AUTO_SAMPLE_ROW_COUNT = 0;
 const static int64_t DEFAULT_ASYNC_SAMPLE_ROW_COUNT = 5000000;
 const static int64_t MAX_GATHER_COLUMN_COUNT_PER_QUERY = 128;
+const static int64_t MAX_SKIP_RATE_SAMPLE_COUNT = 100000;
+
+const static int64_t DEFAULT_SKIP_RATE_SAMPLE_COUNT = 0;
 
 enum StatLevel
 {
@@ -183,6 +187,18 @@ struct BlockNumStat
                K(memtable_row_cnt_));
 };
 
+struct SkipRateStat
+{
+  SkipRateStat() : cg_skip_rate_arr_(), skip_sample_cnt_arr_()
+  {
+    cg_skip_rate_arr_.set_attr(ObMemAttr(MTL_ID(), "SkipRateStat"));
+    skip_sample_cnt_arr_.set_attr(ObMemAttr(MTL_ID(), "SkipRateStat"));
+  }
+  ObSEArray<double, 32, common::ModulePageAllocator, true> cg_skip_rate_arr_;
+  ObSEArray<uint64_t, 32, common::ModulePageAllocator, true> skip_sample_cnt_arr_;
+  TO_STRING_KV(K(cg_skip_rate_arr_));
+};
+
 //TODO@jiangxiu.wt: improve the expression of PartInfo, use the map is better.
 struct PartInfo
 {
@@ -251,6 +267,8 @@ struct StatTable
   ObArray<ObPartitionStatInfo> partition_stat_infos_;
   bool is_async_gather_;
   ObArray<int64_t> async_partition_ids_;
+
+  ObArray<uint64_t> async_tblet_ids_;
   int64_t consecutive_failed_count_;
 };
 
@@ -258,18 +276,24 @@ struct AsyncStatTable
 {
   AsyncStatTable() :
     table_id_(OB_INVALID_ID),
-    partition_ids_()
+    partition_ids_(),
+    tablet_ids_()
   {}
 
   AsyncStatTable(int64_t table_id) :
     table_id_(table_id),
-    partition_ids_()
+    partition_ids_(),
+    tablet_ids_()
   {}
   int assign(const AsyncStatTable &other);
+
   TO_STRING_KV(K_(table_id),
-               K_(partition_ids));
+               K_(partition_ids),
+               K_(tablet_ids));
   uint64_t table_id_;
-  ObArray<int64_t> partition_ids_;
+  ObSEArray<int64_t, 16> partition_ids_;
+
+  ObArray<uint64_t> tablet_ids_;
 
 };
 
@@ -569,7 +593,8 @@ struct ObTableStatParam {
     consumer_group_id_(0),
     min_iops_(-1),
     max_iops_(-1),
-    weight_iops_(-1)
+    weight_iops_(-1),
+    skip_rate_sample_cnt_(DEFAULT_SKIP_RATE_SAMPLE_COUNT)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -655,6 +680,8 @@ struct ObTableStatParam {
   bool is_async_gather_;
   int64_t async_full_table_size_;
   const ObIArray<int64_t> *async_partition_ids_;
+
+  const ObIArray<uint64_t> *async_tablet_ids_;
   ObAnalyzeSampleInfo hist_sample_info_;
   bool is_auto_gather_;
   bool is_auto_sample_size_;
@@ -665,7 +692,7 @@ struct ObTableStatParam {
   int64_t min_iops_;
   int64_t max_iops_;
   int64_t weight_iops_;
-
+  int64_t skip_rate_sample_cnt_;
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
                K(db_id_),
@@ -721,7 +748,8 @@ struct ObTableStatParam {
                K(consumer_group_id_),
                K(min_iops_),
                K(max_iops_),
-               K(weight_iops_));
+               K(weight_iops_),
+               K(skip_rate_sample_cnt_));
 };
 
 struct ObOptStatGatherParam {
@@ -759,7 +787,9 @@ struct ObOptStatGatherParam {
     data_table_id_(OB_INVALID_ID),
     is_global_index_(false),
     part_level_(share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO),
-    consumer_group_id_(0)
+    consumer_group_id_(0),
+    partition_id_skip_rate_map_(NULL),
+    all_column_params_()
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -797,6 +827,8 @@ struct ObOptStatGatherParam {
   bool is_global_index_;
   share::schema::ObPartitionLevel part_level_;
   int64_t consumer_group_id_;
+  const PartitionIdSkipRateMap *partition_id_skip_rate_map_;
+  ObSEArray<ObColumnStatParam, 4> all_column_params_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -828,7 +860,8 @@ struct ObOptStatGatherParam {
                K(auto_sample_row_cnt_),
                K(data_table_id_),
                K(is_global_index_),
-               K(consumer_group_id_));
+               K(consumer_group_id_),
+               K(all_column_params_));
 };
 
 struct ObOptStat
@@ -1105,6 +1138,8 @@ public:
   int add_histogram_estimate_audit(uint64_t part_id, int64_t topk_cost, int64_t hybrid_cost);
   int add_refine_estimate_audit(bool use_skip_index, uint64_t part_id, int64_t cost_time);
   int add_flush_stats_audit(int64_t cost_time);
+  int add_flush_block_count_audit(int64_t cost_time);
+  int add_flush_skip_rate_audit(int64_t cost_time);
   DECLARE_TO_STRING;
 private:
   int64_t inner_to_string(const ObIArray<AuditBaseItem*> &items, char* buf, const int64_t buf_len) const;

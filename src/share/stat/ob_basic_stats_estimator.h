@@ -49,6 +49,15 @@ struct EstimateBlockRes
                K(cg_micro_cnt_arr_));
 };
 
+struct EstimateSkipRateRes
+{
+  EstimateSkipRateRes() : part_id_(), cg_skip_rate_arr_(), skip_sample_cnt_arr_() {}
+  ObObjectID part_id_;
+  ObArray<double> cg_skip_rate_arr_;
+  ObArray<uint64_t> skip_sample_cnt_arr_;
+  TO_STRING_KV(K(part_id_), K(cg_skip_rate_arr_), K(skip_sample_cnt_arr_));
+};
+
 class ObBasicStatsEstimator : public ObStatsEstimator
 {
 public:
@@ -146,6 +155,7 @@ public:
   static int get_async_gather_stats_tables(ObExecContext &ctx,
                                            const int64_t tenant_id,
                                            const int64_t max_table_cnt,
+                                           int64_t &total_part_cnt,
                                            ObIArray<AsyncStatTable> &stat_tables);
 
   static int check_async_gather_need_sample(ObExecContext &ctx, ObTableStatParam &param);
@@ -187,6 +197,35 @@ public:
     return ObStatsEstimator::fill_partition_info(allocator, part_nam);
   }
 
+  static int estimate_skip_rate(ObExecContext &ctx,
+                                const ObTableStatParam &param,
+                                PartitionIdSkipRateMap &id_skip_rate_map,
+                                PartitionIdBlockMap &id_block_map);
+
+  static int request_estimate_skip_rate(ObExecContext &ctx,
+                                        const ObTableStatParam &param,
+                                        const uint64_t table_id,
+                                        const ObIArray<ObTabletID> &tablet_ids,
+                                        const ObIArray<ObObjectID> &partition_ids,
+                                        const ObIArray<uint64_t> &sample_count,
+                                        const ObIArray<uint64_t> &column_ids,
+                                        ObIArray<EstimateSkipRateRes> &estimate_res);
+
+  static int do_estimate_skip_rate(ObExecContext &ctx,
+                                   const ObTableStatParam &param,
+                                   const uint64_t table_id,
+                                   bool force_leader,
+                                   const ObIArray<ObTabletID> &tablet_ids,
+                                   const ObIArray<ObObjectID> &partition_ids,
+                                   const ObIArray<uint64_t> &sample_count,
+                                   const ObIArray<uint64_t> &column_ids,
+                                   ObIArray<EstimateSkipRateRes> &estimate_res);
+
+  static int storage_estimate_skip_rate(ObExecContext &ctx,
+                                        const ObAddr &addr,
+                                        const obrpc::ObEstSkipRateArg &arg,
+                                        obrpc::ObEstSkipRateRes &result);
+
 private:
 
   static int generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
@@ -205,6 +244,10 @@ private:
   static int generate_column_group_ids(const ObTableStatParam &param,
                                        ObIArray<uint64_t> &column_group_ids);
 
+  static int prepare_skip_params(const ObTableStatParam &param,
+                                 ObIArray<uint64_t> &sample_counts,
+                                 ObIArray<uint64_t> &column_ids);
+
   static int check_can_use_column_store_and_split_part_gather(const int64_t sstable_row_cnt,
                                                               const int64_t memtable_row_cnt,
                                                               const int64_t cg_cnt,
@@ -214,6 +257,10 @@ private:
                                                               bool &use_split_part);
 
   static int get_gather_table_type_list(ObSqlString &gather_table_type_list);
+
+  static int add_global_skip_rate(ObGlobalSkipRateStat &global_skip_rate,
+                                  EstimateSkipRateRes &estimate_res,
+                                  BlockNumStat *block_num_stat = NULL);
 };
 }
 }

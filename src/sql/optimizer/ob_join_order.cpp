@@ -2094,9 +2094,11 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> filter_columns;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
+  if (OB_ISNULL(get_plan())
+      || OB_ISNULL(get_plan()->get_stmt())
+      || OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null plan", K(ret));
+    LOG_WARN("NULL pointer error", K(get_plan()), K(OPT_CTX.get_query_ctx()), K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
     ObRawExpr *filter = filters.at(i);
@@ -2130,12 +2132,19 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
           cg_info.micro_block_count_ = col_opt_meta->get_cg_micro_blk_cnt();
           cg_info.column_id_ = col_expr->get_column_id();
           cg_info.skip_rate_ = col_opt_meta->get_cg_skip_rate();
+          if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
+            cg_info.skip_filter_sel_ = 1 - ((1-filter_compare.get_selectivity(filter)) * cg_info.skip_rate_);
+          } else {
+            cg_info.skip_filter_sel_ = 1;
+          }
           if (OB_FAIL(cg_info.access_column_items_.push_back(*col_item))) {
             LOG_WARN("failed to push back filter", K(ret));
           } else if (OB_FAIL(column_group_infos.push_back(cg_info))) {
             LOG_WARN("failed to push back column group info", K(ret));
           }
+          LOG_TRACE("COST:init_column_store_est_info_with_other_column",K(cg_info.skip_rate_),K(col_opt_meta->get_cg_skip_rate()), K(filter_compare.get_selectivity(filter)));
         }
+
       }
     }
     //distribute filter
@@ -2183,6 +2192,10 @@ int ObJoinOrder::init_column_store_est_info_with_other_column(const uint64_t tab
   ObIArray<ObCostColumnGroupInfo> &column_group_infos = est_cost_info.index_meta_info_.is_index_back_ ?
                                           est_cost_info.index_back_column_group_infos_
                                           : est_cost_info.index_scan_column_group_infos_;
+  if (OB_ISNULL(OPT_CTX.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL pointer error", K(OPT_CTX.get_query_ctx()), K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < est_cost_info.access_column_items_.count(); ++i) {
     uint64_t column_id = est_cost_info.access_column_items_.at(i).column_id_;
     const OptColumnMeta* col_opt_meta = table_opt_meta.get_column_meta_by_table_id(
@@ -2203,6 +2216,8 @@ int ObJoinOrder::init_column_store_est_info_with_other_column(const uint64_t tab
       ObCostColumnGroupInfo cg_info;
       cg_info.micro_block_count_ = col_opt_meta->get_cg_micro_blk_cnt();
       cg_info.skip_rate_ = col_opt_meta->get_cg_skip_rate();
+      cg_info.skip_filter_sel_ =  cg_info.skip_rate_;
+      cg_info.skip_filter_sel_ = 1;
       cg_info.column_id_ = column_id;
       if (OB_FAIL(cg_info.access_column_items_.push_back(est_cost_info.access_column_items_.at(i)))) {
         LOG_WARN("failed to push back filter", K(ret));

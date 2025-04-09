@@ -57,6 +57,11 @@ extern int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg
 
 extern int init_group_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                        ObIAllocator &allocator, IAggregate *&agg);
+
+extern int init_top_fre_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                       ObIAllocator &allocator, IAggregate *&agg);
+extern int init_hybrid_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                      ObIAllocator &allocator, IAggregate *&agg);
 #define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
     ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
@@ -100,6 +105,8 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, rb_build, i);
         INIT_AGGREGATE_CASE(T_FUN_SUM_OPNSIZE, sum_opnsize, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUP_CONCAT, group_concat, i);
+        INIT_AGGREGATE_CASE(T_FUN_TOP_FRE_HIST, top_fre_hist, i);
+        INIT_AGGREGATE_CASE(T_FUN_HYBRID_HIST, hybrid_hist, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -135,6 +142,8 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     // do nothing
   } else {
     switch (info.get_expr_type()) {
+    case T_FUN_INNER_PREFIX_MIN:
+    case T_FUN_INNER_PREFIX_MAX:
     case T_FUN_MIN:
     case T_FUN_MAX: {
       VecValueTypeClass vec_tc = info.expr_->get_vec_value_tc();

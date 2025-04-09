@@ -218,6 +218,27 @@ public:
       int64_t &memtable_row_count,
       common::ObIArray<int64_t> &cg_macro_cnt_arr,
       common::ObIArray<int64_t> &cg_micro_cnt_arr) const;
+
+  int estimate_skip_index_sortedness(
+      const share::ObLSID &ls_id,
+      const uint64_t& table_id,
+      const common::ObTabletID &tablet_id,
+      const uint64_t column_id,
+      const int64_t sample_count,
+      const int64_t timeout_us,
+      double &sortedness,
+      uint64_t& res_sample_count) const;
+
+  int estimate_skip_index_sortedness(
+      const share::ObLSID &ls_id,
+      const uint64_t& table_id,
+      const common::ObTabletID &tablet_id,
+      const common::ObIArray<uint64_t> &column_ids,
+      const common::ObIArray<uint64_t> &sample_counts,
+      const int64_t timeout_us,
+      common::ObIArray<double> &sortedness,
+      common::ObIArray<uint64_t> &res_sample_counts) const;
+
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
   int check_data_disk_full_(

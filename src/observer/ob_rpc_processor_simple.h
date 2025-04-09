@@ -324,6 +324,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_NOTIFY_SHARED_STORAGE_INFO, ObNotifySharedStorageI
 OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_CONFIG_VERSION, ObRpcBroadcastConfigVersionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_NOTIFY_LS_RESTORE_FINISH, ObRpcNotifyLSRestoreFinishP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_NOTIFY_START_ARCHIVE, ObRpcStartArchiveP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_ESTIMATE_SKIP_RATE, ObEstimateSkipRateP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

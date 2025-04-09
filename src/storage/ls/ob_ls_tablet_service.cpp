@@ -25,6 +25,10 @@
 #include "storage/access/ob_rows_info.h"
 #include "storage/access/ob_rows_info.h"
 #include "storage/access/ob_table_estimator.h"
+#include "storage/access/ob_index_sstable_estimator.h"
+#include "storage/access/ob_skip_index_sortedness.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/blocksstable/ob_sstable.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet_iterator.h"
@@ -8304,6 +8308,205 @@ int ObLSTabletService::process_lob_after_update(
   }
   return ret;
 }
+
+int ObLSTabletService::estimate_skip_index_sortedness(
+    const uint64_t &table_id,
+    const common::ObTabletID &tablet_id,
+    const int64_t timeout_us,
+    const common::ObIArray<uint64_t> &column_ids,
+    const common::ObIArray<uint64_t> &sample_counts,
+    common::ObIArray<double> &sortedness,
+    common::ObIArray<uint64_t> &res_sample_counts)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t tenant_id = MTL_ID();
+  ObTabletHandle tablet_handle;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ObSSTable *latest_major_sstable = nullptr;
+
+  ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService *)->get_schema_service();
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+
+  ObSkipIndexSortedness calcer;
+
+  // when co_sstable does't have cg_sstable, we consider it as a row store table to calc
+  bool use_row_store_table_to_calc = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", KR(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(column_ids.count() != sample_counts.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("The length of column_ids is not match sample_counts", K(column_ids.count()), K(sample_counts.count()), KR(ret));
+  } else if (OB_FAIL(sortedness.reserve(column_ids.count()))) {
+    LOG_WARN("Fail to reserve sortedness array", KR(ret));
+  } else if (OB_FAIL(res_sample_counts.reserve(column_ids.count()))) {
+    LOG_WARN("Fail to reserve sortedness array", KR(ret));
+  } else if (OB_FAIL(get_tablet(tablet_id, tablet_handle))) {
+    LOG_WARN("Fail to get tablet", KR(ret), K(tablet_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("Fail to fetch table store", KR(ret));
+  } else if (FALSE_IT(latest_major_sstable = static_cast<ObSSTable *>(
+                          table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(
+                              true)))) {
+  } else if (OB_ISNULL(latest_major_sstable) || latest_major_sstable->is_empty()) {
+    // there is no major sstable, we default return the sortedness as 0
+    LOG_DEBUG("No major sstable, sortedness will be set to 0",
+             K(table_id),
+             K(tablet_id),
+             K(column_ids));
+    for (int i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+      if (OB_FAIL(sortedness.push_back(0))) {
+        LOG_WARN("Fail to push back to sortedness when no major sstable", KR(ret));
+      } else if (OB_FAIL(res_sample_counts.push_back(0))) {
+        LOG_WARN("Fail to push back to res_sample_counts when no major sstable", KR(ret));
+      }
+    }
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to get schema service", KR(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("Fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("Fail to get table schema", KR(ret), K(tenant_id), K(tablet_id));
+  } else if (latest_major_sstable->is_co_sstable()) {
+    // for column store table, there are a few points to note:
+    //   1. Firstly use cg_sstable to calculate skip index sortedness
+    //   2. It may not have cg_sstable here
+    //   3. notice that transform column_id to cg_idx
+    ObCOSSTableV2 *cosstable = static_cast<ObCOSSTableV2 *>(latest_major_sstable);
+    const ObITableReadInfo *index_read_info = nullptr;
+
+    // the column_param is used to transform column_id to cg_idx
+    common::ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "SkipIndexEsti"));
+    ObColumnParam *column_param = nullptr;
+
+    if (cosstable->is_cgs_empty_co_table()) {
+      // there are not cg_sstable here
+      // we consider this sstable as a row store table
+      use_row_store_table_to_calc = true;
+    } else if (OB_FAIL(ObTableParam::alloc_column(allocator, column_param))) {
+      LOG_WARN("Fail to alloc column param", KR(ret));
+    } else if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
+      LOG_WARN("Fail to get cg index read info", KR(ret));
+    } else {
+      // the table contains cg_sstable, we need do as follows:
+      //   1. transform the column_id to cg_idx
+      //   2. get the cg sstable and calc skip index sortedness
+      for (int i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+        ObSSTableWrapper cg_wrapper;
+        ObSSTable *cg_sstable = nullptr;
+        double tmp_sortedness = 0.0;
+
+        const ObColumnSchemaV2 *column_schema = nullptr;
+        int32_t cg_idx = 0;
+
+        if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_ids.at(i)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Fail to get column schema", KR(ret), K(table_schema), K(column_ids), K(i));
+        } else if (column_schema->is_virtual_generated_column()) {
+          // for virtual column, the sortedness is 0
+          if (OB_FAIL(sortedness.push_back(0))) {
+            LOG_WARN("Fail to push back sortedness", KR(ret));
+          } else if (OB_FAIL(res_sample_counts.push_back(0))) {
+            LOG_WARN("Fail to push back to res_sample_counts when no major sstable", KR(ret));
+          }
+        } else if (OB_FAIL(ObTableParam::convert_column_schema_to_param(*column_schema,
+                                                                        *column_param))) {
+          LOG_WARN("Fail to convert column schema to param", KR(ret));
+        } else if (OB_FAIL(table_schema->get_column_group_index(*column_param, true, cg_idx))) {
+          LOG_WARN("Fail to get column group idx", KR(ret), KPC(column_param));
+        } else if (cg_idx >= cosstable->get_cs_meta().get_column_group_count() || cg_idx < 0) {
+          // no cg sstable for this column, the sortedness is 0
+          if (OB_FAIL(sortedness.push_back(0))) {
+            LOG_WARN("Fail to push back sortedness", KR(ret));
+          } else if (OB_FAIL(res_sample_counts.push_back(0))) {
+            LOG_WARN("Fail to push back to res_sample_counts when no major sstable", KR(ret));
+          }
+        } else if (OB_FAIL(cosstable->fetch_cg_sstable(cg_idx, cg_wrapper))) {
+          LOG_WARN("Fail to get cg sstable", KR(ret), K(cg_idx), K(i));
+        } else if (OB_FAIL(cg_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
+          LOG_WARN("Fail to get sstable from wrapper", K(ret), K(cg_wrapper));
+        } else if (cg_sstable->is_empty()) {
+          // fast path for empty sstable
+          if (OB_FAIL(sortedness.push_back(0))) {
+            LOG_WARN("Fail to push back sortedness", KR(ret));
+          } else if (OB_FAIL(res_sample_counts.push_back(0))) {
+            LOG_WARN("Fail to push back to res_sample_counts when no major sstable", KR(ret));
+          }
+        } else if (FALSE_IT(calcer.reset())) {
+        } else if (OB_FAIL(calcer.init(*cg_sstable,
+                                       *table_schema,
+                                       index_read_info,
+                                       sample_counts.at(i),
+                                       column_ids.at(i),
+                                       res_sample_counts))) {
+          LOG_WARN("Fail to init skip index sortedness",
+                   KR(ret),
+                   KPC(cg_sstable),
+                   KPC(table_schema),
+                   K(column_ids),
+                   K(sample_counts),
+                   K(cg_idx),
+                   K(i));
+        } else if (OB_FAIL(calcer.sample_and_calc(tmp_sortedness))) {
+          LOG_WARN("Fail to sample and calc sortedness", KR(ret));
+        } else if (OB_FAIL(sortedness.push_back(tmp_sortedness))) {
+          LOG_WARN("Fail to push back sortedness", KR(ret));
+        }
+      }
+    }
+  } else {
+    use_row_store_table_to_calc = true;
+  }
+
+  if (OB_SUCC(ret) && use_row_store_table_to_calc) {
+    // for row store table, there are a few points to note:
+    //   1. column in row store table may not have skip index, we should check it
+    //   2. the read_info is not same as column store table
+    const ObITableReadInfo &read_info = tablet_handle.get_obj()->get_rowkey_read_info();
+
+    for (int i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+      const ObColumnSchemaV2 *column_schema = nullptr;
+      double tmp_sortedness = 0;
+      if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_ids.at(i)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Fail to get column schema", KR(ret), KPC(table_schema), K(column_ids), K(i));
+      } else if (!column_schema->get_skip_index_attr().has_min_max()
+                 || column_schema->is_virtual_generated_column()) {
+        // when there's not skip index, we consider the sortedness as 0
+        LOG_WARN("No skip index in column", K(table_id), KPC(column_schema));
+        if (OB_FAIL(sortedness.push_back(0))) {
+          LOG_WARN("Fail to push back sortedness", KR(ret));
+        } else if (OB_FAIL(res_sample_counts.push_back(0))) {
+          LOG_WARN("Fail to push back to res_sample_counts when no major sstable", KR(ret));
+        }
+      } else if (FALSE_IT(calcer.reset())) {
+      } else if (OB_FAIL(calcer.init(*latest_major_sstable,
+                                     *table_schema,
+                                     &read_info,
+                                     sample_counts.at(i),
+                                     column_ids.at(i),
+                                     res_sample_counts))) {
+        LOG_WARN("Fail to init skip index sortedness",
+                 KR(ret),
+                 KPC(latest_major_sstable),
+                 KPC(table_schema),
+                 K(column_ids),
+                 K(sample_counts),
+                 K(i));
+      } else if (OB_FAIL(calcer.sample_and_calc(tmp_sortedness))) {
+        LOG_WARN("Fail to sample and calc sortedness", KR(ret));
+      } else if (OB_FAIL(sortedness.push_back(tmp_sortedness))) {
+        LOG_WARN("Fail to push back sortedness", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 
 } // namespace storage
 } // namespace oceanbase

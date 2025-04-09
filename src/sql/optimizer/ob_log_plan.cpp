@@ -14820,7 +14820,65 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
   ObLogGroupBy *group_by = NULL;
   if (NULL != (table_scan = dynamic_cast<ObLogTableScan *>(op))) {
     ObOpPseudoColumnRawExpr *partition_id_expr = nullptr;
-    if (OB_FAIL(table_scan->generate_pseudo_partition_id_expr(partition_id_expr))) {
+    ObSchemaGetterGuard *schema_guard = NULL;
+    ObSQLSessionInfo *session = NULL;
+    const ObTableSchema *table_schema = NULL;
+    if (table_scan->get_pushdown_aggr_exprs().empty()) {
+      // do nothing
+    } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+      // do nothing
+    } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
+               || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null pointers", K(ret), KP(schema_guard), KP(session));
+    } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                      table_scan->get_real_ref_table_id(),
+                                                      table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table schema", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_scan->get_pushdown_aggr_exprs().count(); ++i) {
+        ObAggFunRawExpr *old_aggr = table_scan->get_pushdown_aggr_exprs().at(i);
+        ObRawExpr *param_expr = NULL;
+        ObAggFunRawExpr *new_aggr = NULL;
+        const ObColumnSchemaV2 *column_schema = NULL;
+        if (OB_ISNULL(old_aggr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (old_aggr->get_expr_type() != T_FUN_MIN &&
+                   old_aggr->get_expr_type() != T_FUN_MAX) {
+          // do nothing
+        } else if (OB_UNLIKELY(old_aggr->get_param_count() != 1) ||
+                   OB_ISNULL(param_expr = old_aggr->get_param_expr(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected push down aggr", K(ret), KPC(old_aggr));
+        } else if (OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
+          // do nothing
+        } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(
+                   static_cast<ObColumnRefRawExpr*>(param_expr)->get_column_id()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected column schema", K(ret));
+        } else if (!column_schema->is_string_type()) {
+          // do nothing
+        } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(
+                           get_optimizer_context().get_expr_factory(),
+                           session,
+                           old_aggr->get_expr_type() == T_FUN_MIN ? T_FUN_INNER_PREFIX_MIN : T_FUN_INNER_PREFIX_MAX,
+                           param_expr,
+                           new_aggr))) {
+          LOG_WARN("failed to build common aggr expr", K(ret));
+        } else if (OB_FAIL(stat_gather_replacer_.add_replace_expr(old_aggr, new_aggr))) {
+          LOG_WARN("failed to add replace expr", K(ret));
+        } else {
+          table_scan->get_pushdown_aggr_exprs().at(i) = new_aggr;
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(table_scan->generate_pseudo_partition_id_expr(partition_id_expr))) {
       LOG_WARN("fail allocate part id expr", K(ret));
     } else {
       stat_partition_id_expr_ = partition_id_expr;

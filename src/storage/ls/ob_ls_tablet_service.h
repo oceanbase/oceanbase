@@ -428,6 +428,14 @@ public:
       int64_t &memtable_row_count,
       common::ObIArray<int64_t> &cg_macro_cnt_arr,
       common::ObIArray<int64_t> &cg_micro_cnt_arr);
+  int estimate_skip_index_sortedness(
+      const uint64_t& table_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
+      const common::ObIArray<uint64_t> &column_ids,
+      const common::ObIArray<uint64_t> &sample_count,
+      common::ObIArray<double> &sortedness,
+      common::ObIArray<uint64_t> &res_sample_counts);
 
   // iterator
   int build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet = false);

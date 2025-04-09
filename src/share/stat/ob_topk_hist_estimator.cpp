@@ -232,6 +232,59 @@ int ObTopKFrequencyHistograms::add_top_k_frequency_item(uint64_t datum_hash, con
   return ret;
 }
 
+int ObTopKFrequencyHistograms::add_batch_items(const char **payloads, int32_t *lens, uint64_t *hash_val, int64_t batch_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(window_size_ <= 0 ||
+                  item_size_ <= 0 ||
+                  get_max_reserved_item_size() >= window_size_ ||
+                  is_need_merge_topk_hist())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(window_size_), K(item_size_), K(is_need_merge_topk_hist()), K(ret));
+  } else if (OB_ISNULL(payloads) ||
+             OB_ISNULL(lens) ||
+             OB_ISNULL(hash_val)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(payloads), K(lens), K(hash_val));
+  } else if (OB_UNLIKELY(!by_pass_ && !topk_map_.created())) {
+    int64_t hash_map_size = window_size_ + get_max_reserved_item_size();
+    if (OB_FAIL(topk_map_.create(hash_map_size, "TopkMap", "TopkNode", MTL_ID()))) {
+      LOG_WARN("failed to create hash map", K(ret));
+    } else {
+      set_the_obj_memory_use_limit();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!by_pass_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < batch_cnt; ++i) {
+        ++N_;
+        if (!by_pass_) {
+          ObTopkBaseItem *item = NULL;
+          ObDatum datum;
+          datum.ptr_ = payloads[i];
+          datum.pack_ = lens[i];
+          if (NULL != (item = get_entry(hash_val[i]))) {
+            item->fre_times_ ++;
+          } else if (OB_FAIL(add_entry(hash_val[i], datum, 1L, bucket_num_ - 1))) {
+            LOG_WARN("failed to add new entry", K(ret));
+          }
+          if (OB_SUCC(ret) && N_ % window_size_ == 0) {
+            if (OB_FAIL(shrink_topk_items())) {
+              LOG_WARN("failed to try shrinking topk fre item", K(ret));
+            }
+          }
+        } else {
+          ++disuse_cnt_;
+        }
+      }
+    } else {
+      N_ += batch_cnt;
+      disuse_cnt_ += batch_cnt;
+    }
+  }
+  return ret;
+}
+
 int ObTopKFrequencyHistograms::add_top_k_frequency_item(const ObObj &obj, int64_t repeat_cnt)
 {
   int ret = OB_SUCCESS;
@@ -644,7 +697,11 @@ int ObTopkHistEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to add topk hist stat items", K(ret));
   } else if (get_item_size() <= 0) {
     //no need topk histogram item.
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false, false))) {
+  } else if (OB_FAIL(fill_hints(allocator,
+                                param.tab_name_,
+                                param.gather_vectorize_,
+                                false,
+                                !param.sample_info_.is_specify_sample()))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
@@ -652,7 +709,7 @@ int ObTopkHistEstimator::estimate(const ObOptStatGatherParam &param,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
   } else if (!param.partition_infos_.empty() &&
-             OB_FAIL(fill_partition_info(allocator, param.partition_infos_.at(0).part_name_))) {
+             OB_FAIL(fill_partition_info(allocator, param, param.partition_infos_.at(0)))) {
     LOG_WARN("failed to add partition info", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));

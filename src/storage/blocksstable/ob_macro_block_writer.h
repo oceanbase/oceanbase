@@ -292,7 +292,6 @@ private:
   blocksstable::ObMacroBlockReader macro_reader_;
   common::ObArray<uint32_t> micro_rowkey_hashs_;
   blocksstable::ObDatumRow datum_row_;
-  blocksstable::ObDatumRow *aggregated_row_;
   ObSkipIndexDataAggregator *data_aggregator_;
   ObIMacroBlockFlushCallback *callback_;
   ObIODevice *device_handle_;

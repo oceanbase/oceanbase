@@ -82,7 +82,7 @@ public:
   OB_INLINE bool is_max_agg() const { return PD_MAX == agg_type_; }
   OB_INLINE ObBitmap &get_bitmap() { return *bitmap_; };
   VIRTUAL_TO_STRING_KV(K_(agg_type), K_(is_inited), KPC_(bitmap), KP_(agg_row_reader),
-    K_(result_datum), K_(is_assigned_to_group_by_processor));
+    K_(result_datum), K_(skip_index_datum), K_(skip_index_datum_is_prefix), K_(is_assigned_to_group_by_processor));
 protected:
   ObBitmap *bitmap_;
   blocksstable::ObAggRowReader *agg_row_reader_;
@@ -91,6 +91,7 @@ protected:
   common::ObIAllocator &allocator_;
   ObPDAggType agg_type_;
   bool is_assigned_to_group_by_processor_;
+  bool skip_index_datum_is_prefix_;
   bool is_inited_;
 };
 

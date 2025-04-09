@@ -1442,5 +1442,87 @@ int ObAccessService::check_mlog_safe_(
   return ret;
 }
 
+int ObAccessService::estimate_skip_index_sortedness(const share::ObLSID &ls_id,
+                                                    const uint64_t &table_id,
+                                                    const common::ObTabletID &tablet_id,
+                                                    const uint64_t column_id,
+                                                    const int64_t sample_count,
+                                                    const int64_t timeout_us,
+                                                    double &sortedness,
+                                                    uint64_t &res_sample_count) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 1> column_ids;
+  ObSEArray<uint64_t, 1> sample_counts;
+  ObSEArray<double, 1> tmp_sortedness;
+  ObSEArray<uint64_t, 1> tmp_sample_counts;
+  if (OB_FAIL(column_ids.push_back(column_id))
+      || OB_FAIL(sample_counts.push_back(sample_count))) {
+    LOG_WARN("Fail to push back cg_idx and sample_counts", KR(ret));
+  } else if (OB_FAIL(estimate_skip_index_sortedness(ls_id,
+                                                    table_id,
+                                                    tablet_id,
+                                                    column_ids,
+                                                    sample_counts,
+                                                    timeout_us,
+                                                    tmp_sortedness,
+                                                    tmp_sample_counts))) {
+    LOG_WARN("Fail to estimate skip index sortedness", KR(ret));
+  } else if (OB_FAIL(tmp_sortedness.at(0, sortedness))) {
+    LOG_WARN("Fail to get sortedness result", KR(ret));
+  } else if (OB_FAIL(tmp_sample_counts.at(0, res_sample_count))) {
+    LOG_WARN("Fail to get sortedness result", KR(ret));
+  }
+  return ret;
+}
+
+int ObAccessService::estimate_skip_index_sortedness(
+    const share::ObLSID &ls_id,
+    const uint64_t &table_id,
+    const common::ObTabletID &tablet_id,
+    const common::ObIArray<uint64_t> &column_ids,
+    const common::ObIArray<uint64_t> &sample_counts,
+    const int64_t timeout_us,
+    common::ObIArray<double> &sortedness,
+    common::ObIArray<uint64_t> &res_sample_counts) const
+{
+  int ret = OB_SUCCESS;
+
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSTabletService *tablet_service = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_ERROR;
+    LOG_WARN("Ob access service is not running", KR(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid()) || OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD))) {
+    LOG_WARN("Fail to get log stream", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Ls should not be null", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Tablet service should not be null", KR(ret), K(ls_id));
+  } else if (OB_FAIL(tablet_service->estimate_skip_index_sortedness(table_id,
+                                                                    tablet_id,
+                                                                    timeout_us,
+                                                                    column_ids,
+                                                                    sample_counts,
+                                                                    sortedness,
+                                                                    res_sample_counts))) {
+    LOG_WARN("Fail to estimate skip index sortedness",
+             KR(ret),
+             K(ls_id),
+             K(tablet_id),
+             K(column_ids),
+             K(sortedness),
+             K(res_sample_counts));
+  }
+
+  return ret;
+}
 }
 }

@@ -658,6 +658,7 @@ ob_set_subtarget(ob_storage access
   access/ob_empty_read_bucket.cpp
   access/ob_global_iterator_pool.cpp
   access/ob_where_optimizer.cpp
+  access/ob_skip_index_sortedness.cpp
 )
 
 ob_set_subtarget(ob_storage ddl

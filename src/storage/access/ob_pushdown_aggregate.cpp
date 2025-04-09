@@ -137,9 +137,9 @@ int ObAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info,
   if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(index_info));
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
+  } else if (OB_UNLIKELY(skip_index_datum_.is_null() || skip_index_datum_is_prefix_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
+    LOG_WARN("Unexpected skip index datum", K(ret), K(index_info), K_(skip_index_datum), K_(skip_index_datum_is_prefix));
   } else if (OB_FAIL(eval(skip_index_datum_))) {
     LOG_WARN("Failed to process datum", K(ret), K(skip_index_datum_), KPC(this));
   }
@@ -336,7 +336,7 @@ int ObAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_in
     if (OB_FAIL(read_agg_datum(index_info, is_cg))) {
       LOG_WARN("fail to read agg datum", K(ret), K(is_cg), K(index_info));
     } else {
-      can_agg = !skip_index_datum_.is_null();
+      can_agg = !skip_index_datum_.is_null() && !skip_index_datum_is_prefix_;
     }
   } else {
     can_agg = false;
@@ -360,6 +360,7 @@ int ObAggCell::read_agg_datum(
   if (OB_SUCC(ret)) {
     skip_index_datum_.reuse();
     skip_index_datum_.set_null();
+    skip_index_datum_is_prefix_ = false;
     blocksstable::ObSkipIndexColMeta meta;
     // TODO: @baichangmin.bcm fix col_index in cg, use 0 temporarily
     meta.col_idx_ = is_cg ? 0 : static_cast<uint32_t>(basic_info_.col_index_);
@@ -389,7 +390,7 @@ int ObAggCell::read_agg_datum(
     agg_row_reader_->reset();
     if (OB_FAIL(agg_row_reader_->init(index_info.agg_row_buf_, index_info.agg_buf_size_))) {
       LOG_WARN("Fail to init aggregate row reader", K(ret));
-    } else if (OB_FAIL(agg_row_reader_->read(meta, skip_index_datum_))) {
+    } else if (OB_FAIL(agg_row_reader_->read(meta, skip_index_datum_, skip_index_datum_is_prefix_))) {
       LOG_WARN("Failed read aggregate row", K(ret), K(meta));
     }
   }
@@ -518,9 +519,9 @@ int ObCountAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
     row_count_ += index_info.get_row_count();
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
+  } else if (OB_UNLIKELY(skip_index_datum_.is_null() || skip_index_datum_is_prefix_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
+    LOG_WARN("Unexpected skip index datum", K(ret), K(index_info), K_(skip_index_datum), K_(skip_index_datum_is_prefix));
   } else {
     row_count_ += index_info.get_row_count() - skip_index_datum_.get_int();
   }
@@ -1468,9 +1469,9 @@ int ObSumOpSizeAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &in
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
     total_size_ += index_info.get_row_count() * op_size_;
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())) {
+  } else if (OB_UNLIKELY(skip_index_datum_.is_null() || skip_index_datum_is_prefix_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum, is null", K(ret), K(index_info));
+    LOG_WARN("Unexpected skip index datum", K(ret), K(index_info), K_(skip_index_datum), K_(skip_index_datum_is_prefix));
   } else {
     int64_t null_count = skip_index_datum_.get_int();
     total_size_ += (index_info.get_row_count() - null_count) * op_size_ + null_count * sizeof(ObDatum);
@@ -1953,9 +1954,9 @@ int ObSumAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_in
   if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(index_info));
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
+  } else if (OB_UNLIKELY(skip_index_datum_.is_null() || skip_index_datum_is_prefix_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
+    LOG_WARN("Unexpected skip index datum", K(ret), K(index_info), K_(skip_index_datum), K_(skip_index_datum_is_prefix));
   } else if (OB_FAIL((this->*eval_skip_index_func_)(skip_index_datum_, DEFAULT_DATUM_OFFSET))) {
     LOG_WARN("Fail to eval", K(ret), K(obj_tc_));
   } else {
@@ -2929,6 +2930,7 @@ int ObPDAggFactory::alloc_cell(
         }
         break;
       }
+      case T_FUN_INNER_PREFIX_MIN:
       case T_FUN_MIN: {
         const ObDatumCmpFuncType cmp_fun = basic_info.agg_expr_->basic_funcs_->null_first_cmp_;
         if (OB_ISNULL(cmp_fun)) {
@@ -2941,6 +2943,7 @@ int ObPDAggFactory::alloc_cell(
         }
         break;
       }
+      case T_FUN_INNER_PREFIX_MAX:
       case T_FUN_MAX: {
         const ObDatumCmpFuncType cmp_fun = basic_info.agg_expr_->basic_funcs_->null_first_cmp_;
         if (OB_ISNULL(cmp_fun)) {

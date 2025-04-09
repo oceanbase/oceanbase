@@ -95,5 +95,64 @@ int ObSkipIndexColMeta::calc_skip_index_maximum_size(
   return ret;
 }
 
+int get_prefix_for_string_tc_datum(
+    const ObDatum &orig_datum,
+    const ObObjType obj_type,
+    const ObCollationType collation_type,
+    const int64_t max_prefix_byte_len,
+    ObDatum &prefix_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(orig_datum.is_null() || (!ob_is_string_tc(obj_type) && ObTinyTextType != obj_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(orig_datum), K(max_prefix_byte_len), K(obj_type));
+  } else {
+    int64_t prefix_len = 0;
+    int32_t error = 0;
+    const ObString &src_str = orig_datum.get_string();
+    if (OB_FAIL(common::ObCharset::well_formed_len(collation_type, src_str.ptr(), max_prefix_byte_len, prefix_len, error))) {
+      LOG_WARN("failed to get well formed len", K(ret), K(orig_datum), K(obj_type),
+          K(collation_type), K(max_prefix_byte_len));
+    } else {
+      prefix_datum.pack_ = prefix_len;
+      prefix_datum.set_string(src_str.ptr(), prefix_len);
+    }
+  }
+  return ret;
+}
+
+int get_prefix_for_text_tc_datum(
+    const ObDatum &orig_datum,
+    const ObObjType obj_type,
+    const ObCollationType collation_type,
+    const int64_t max_prefix_byte_len,
+    ObDatum &prefix_datum,
+    char *prefix_datum_buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(orig_datum.is_outrow() || !ob_is_text_tc(obj_type)) || OB_ISNULL(prefix_datum_buf)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected out row datum", K(ret), K(orig_datum), K(obj_type), KP(prefix_datum_buf));
+  } else {
+    int64_t prefix_len = 0;
+    int32_t error = 0;
+    const ObLobCommon &lob_data = orig_datum.get_lob_data();
+    const char *text_data = lob_data.get_inrow_data_ptr();
+    const int64_t text_size = lob_data.get_byte_size(orig_datum.len_);
+    const int64_t lob_header_size = text_data - orig_datum.ptr_;
+    const int64_t max_prefix_len = max_prefix_byte_len - lob_header_size;
+    if (OB_FAIL(common::ObCharset::well_formed_len(collation_type, text_data, max_prefix_len, prefix_len, error))) {
+      LOG_WARN("failed to get well formend len for text type", K(ret), K(orig_datum), K(obj_type),
+        K(collation_type), K(max_prefix_byte_len), K(lob_header_size), K(max_prefix_len), K(lob_data));
+    } else {
+      ObLobCommon *new_lob_data = new (prefix_datum_buf) ObLobCommon();
+      MEMCPY(new_lob_data->buffer_, text_data, prefix_len);
+      prefix_datum.set_lob_data(*new_lob_data, new_lob_data->get_handle_size(prefix_len));
+      prefix_datum.set_has_lob_header();
+    }
+  }
+  return ret;
+}
+
 } // namespace blocksstable
 } // namespace oceanbase

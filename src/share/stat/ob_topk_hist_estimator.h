@@ -108,6 +108,7 @@ class ObTopKFrequencyHistograms
     int shrink_topk_items();
     int add_top_k_frequency_item(const ObObj &obj, int64_t repeat_cnt);
     int add_top_k_frequency_item(uint64_t datum_hash, const ObDatum &datum);
+    int add_batch_items(const char **payloads, int32_t *lens, uint64_t *hash_val, int64_t batch_cnt);
     int merge_distribute_top_k_fre_items(const ObObj &obj);
     void set_window_size(int64_t window_size) { window_size_ = window_size; }
     void set_item_size(int64_t item_size) { item_size_ = item_size; }
@@ -129,6 +130,11 @@ class ObTopKFrequencyHistograms
     void set_the_obj_memory_use_limit();
     int64_t get_max_reserved_item_size() const { return item_size_ * 1.5; }
     void set_max_disuse_cnt(int64_t max_disuse_cnt) { max_disuse_cnt_ = max_disuse_cnt; }
+    OB_INLINE void inc_disuse_cnt()
+    {
+      ++N_;
+      ++disuse_cnt_;
+    }
     //int64_t get_max_disuse_cnt()
     ObTopkItem *alloc_topk_item();
     ObTopkDatumItem *alloc_topk_datum_item();

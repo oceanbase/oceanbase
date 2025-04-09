@@ -332,7 +332,7 @@ public:
     min_max_inited_(false),
     cg_macro_blk_cnt_(0),
     cg_micro_blk_cnt_(0),
-    cg_skip_rate_(1.0),
+    cg_skip_rate_(0.0),
     base_ndv_(-1.0)
   {
     min_val_.set_min_value();
@@ -345,7 +345,7 @@ public:
             const double avg_len,
             const int64_t cg_macro_blk_cnt = 0,
             const int64_t cg_micro_blk_cnt = 0,
-            const double cg_skip_rat = 1.0);
+            const double cg_skip_rate = 0.0);
 
   uint64_t get_column_id() const { return column_id_; }
   void set_column_id(const uint64_t column_id) { column_id_ = column_id; }

@@ -32,7 +32,7 @@ namespace common {
 #define FETCH_COL_STATS_HISTROY "SELECT table_id, partition_id, column_id, object_type stat_level,\
                                  distinct_cnt num_distinct, null_cnt num_null, b_max_value,\
                                  b_min_value, avg_len, distinct_cnt_synopsis, distinct_cnt_synopsis_size,\
-                                 histogram_type, sample_size, bucket_cnt, density, last_analyzed, spare1 as compress_type %s\
+                                 histogram_type, sample_size, bucket_cnt, density, last_analyzed, spare1 as compress_type %s%s\
                                  FROM %s T WHERE tenant_id = %lu and table_id = %ld \
                                  and partition_id in %s and savtime in (SELECT min(savtime) From \
                                  %s TF where TF.tenant_id = T.tenant_id \
@@ -120,7 +120,7 @@ namespace common {
                                                    density,                   \
                                                    bucket_cnt,                \
                                                    histogram_type,            \
-                                                   spare1%s) %s"
+                                                   spare1%s%s) %s"
 
 #define SELECT_COLUMN_STAT               "SELECT   tenant_id,                 \
                                                    table_id,                  \
@@ -143,12 +143,12 @@ namespace common {
                                                    density,                   \
                                                    bucket_cnt,                \
                                                    histogram_type,            \
-                                                   spare1%s                   \
+                                                   spare1%s%s                   \
                                              FROM %s                          \
                                              WHERE %s"
 
 #define COLUMN_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, %lu, usec_to_time(%ld), 0, 0, usec_to_time(%ld), 0, 0, \
-                                         %s, '%.*s', %s, '%.*s', 0, '', 0, -1, 0.000000, 0, 0, NULL%s)"
+                                         %s, '%.*s', %s, '%.*s', 0, '', 0, -1, 0.000000, 0, 0, NULL%s%s)"
 
 #define INSERT_HISTOGRAM_STAT_HISTORY "INSERT INTO %s(tenant_id,                \
                                                       table_id,                 \
@@ -681,12 +681,14 @@ int ObDbmsStatsHistoryManager::backup_having_column_stats(ObMySQLTransaction &tr
       if (OB_FAIL(select_sql.append_fmt(SELECT_COLUMN_STAT,
                                         saving_time,
                                         data_version < DATA_VERSION_4_3_0_0 ? " " : ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                        data_version < DATA_VERSION_4_3_5_2 ? " " : ", cg_skip_rate",
                                         share::OB_ALL_COLUMN_STAT_TNAME,
                                         where_str.ptr()))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(raw_sql.append_fmt(INSERT_COLUMN_STAT_HISTORY,
                                             share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
-                                            data_version < DATA_VERSION_4_3_0_0 ? " " : ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                            data_version < DATA_VERSION_4_3_0_0 ? " ": ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                            data_version < DATA_VERSION_4_3_5_2 ? " ": ", cg_skip_rate",
                                             select_sql.ptr()))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
@@ -751,7 +753,8 @@ int ObDbmsStatsHistoryManager::backup_no_column_stats(ObMySQLTransaction &trans,
                                            null_sql_str.ptr(),
                                            b_null_str.length(),
                                            b_null_str.ptr(),
-                                           data_version < DATA_VERSION_4_3_0_0 ? " " : ",0 ,0"))) {
+                                           data_version < DATA_VERSION_4_3_0_0 ? " ": ", 0, 0",
+                                           data_version < DATA_VERSION_4_3_5_2 ? " ": ", 0"))) {
                 LOG_WARN("failed to append fmt", K(ret));
               } else if (OB_FAIL(values_list.append_fmt("%s%s",
                                                         cur_cnt == 0 ? "VALUES " : ", ",
@@ -765,7 +768,8 @@ int ObDbmsStatsHistoryManager::backup_no_column_stats(ObMySQLTransaction &trans,
                     int64_t affected_rows = 0;
                     if (OB_FAIL(raw_sql.append_fmt(INSERT_COLUMN_STAT_HISTORY,
                                                    share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
-                                                   data_version < DATA_VERSION_4_3_0_0 ? " " : ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                                   data_version < DATA_VERSION_4_3_0_0 ? " ": ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                                   data_version < DATA_VERSION_4_3_5_2 ? " ": ", cg_skip_rate",
                                                    values_list.ptr()))) {
                       LOG_WARN("failed to append fmt", K(ret));
                     } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
@@ -790,7 +794,8 @@ int ObDbmsStatsHistoryManager::backup_no_column_stats(ObMySQLTransaction &trans,
           int64_t affected_rows = 0;
           if (OB_FAIL(raw_sql.append_fmt(INSERT_COLUMN_STAT_HISTORY,
                                          share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
-                                         data_version < DATA_VERSION_4_3_0_0 ? " " : ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                         data_version < DATA_VERSION_4_3_0_0 ? " ": ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                         data_version < DATA_VERSION_4_3_5_2 ? " ": ", cg_skip_rate",
                                          values_list.ptr()))) {
             LOG_WARN("failed to append fmt", K(ret));
           } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
@@ -1244,6 +1249,7 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(FETCH_COL_STATS_HISTROY,
                                         data_version < DATA_VERSION_4_3_0_0 ? " ": ",cg_macro_blk_cnt, cg_micro_blk_cnt",
+                                        data_version < DATA_VERSION_4_3_5_2 ? " ": ", cg_skip_rate",
                                         share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
                                         share::schema::ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                         share::schema::ObSchemaUtils::get_extract_schema_id(exec_tenant_id, param.table_id_),
@@ -1263,7 +1269,9 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
       } else {
         while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
           ObOptColumnStat *col_stat = NULL;
-          if (OB_FAIL(fill_column_stat_history(*param.allocator_, *client_result, col_stat, data_version >= DATA_VERSION_4_3_0_0))) {
+          if (OB_FAIL(fill_column_stat_history(param,
+                                               *client_result,
+                                               col_stat))) {
             LOG_WARN("failed to fill table stat", K(ret));
           } else if (OB_ISNULL(col_stat)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1301,14 +1309,16 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
+int ObDbmsStatsHistoryManager::fill_column_stat_history(const ObTableStatParam &param,
                                                         common::sqlclient::ObMySQLResult &result,
-                                                        ObOptColumnStat *&col_stat,
-                                                        bool need_cg_info)
+                                                        ObOptColumnStat *&col_stat)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
-  if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptColumnStat)))) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (OB_ISNULL(ptr = param.allocator_->alloc(sizeof(ObOptColumnStat)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("memory is not enough", K(ret), K(ptr));
   } else {
@@ -1347,7 +1357,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
     EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
     if (OB_SUCC(ret)) {
       hist.set_type(histogram_type);
-      if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(allocator, bucket_cnt))) {
+      if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(*param.allocator_, bucket_cnt))) {
         LOG_WARN("failed to prepare allocate buckets", K(ret));
       }
     }
@@ -1364,7 +1374,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_min_value", hex_str);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObOptStatSqlService::hex_str_to_obj(hex_str.ptr(), hex_str.length(),
-                                                      allocator, obj))) {
+                                                      *param.allocator_, obj))) {
         LOG_WARN("failed to convert hex str to obj", K(ret));
       } else {
         col_stat->set_min_value(obj);
@@ -1373,7 +1383,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_max_value", hex_str);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObOptStatSqlService::hex_str_to_obj(hex_str.ptr(), hex_str.length(),
-                                                      allocator, obj))) {
+                                                      *param.allocator_, obj))) {
         LOG_WARN("failed to convert hex str to obj", K(ret));
       } else {
         col_stat->set_max_value(obj);
@@ -1388,7 +1398,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
         if (OB_UNLIKELY(compress_type < 0 || compress_type >= ObOptStatCompressType::MAX_COMPRESS)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(ret), K(compress_type));
-        } else if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
+        } else if (NULL == (bitmap_buf = static_cast<char*>(param.allocator_->alloc(hex_str.length())))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
         } else {
@@ -1397,7 +1407,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
           char *decomp_buf = NULL ;
           int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
           const int64_t bitmap_size = hex_str.length() / 2;
-          if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(allocator, bitmap_compress_lib_name[compress_type],
+          if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(*param.allocator_, bitmap_compress_lib_name[compress_type],
                                                                        bitmap_buf, bitmap_size,
                                                                        decomp_buf, decomp_size))) {
             COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
@@ -1407,19 +1417,23 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
         }
       }
     }
-    if (OB_SUCC(ret) && need_cg_info) {
-      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cg_macro_blk_cnt, *col_stat, int64_t, true, true, 0);
-      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cg_micro_blk_cnt, *col_stat, int64_t, true, true, 0);
-      //will be used in the future, not removed.
-      // if (OB_SUCC(ret)) {
-      //   if (OB_FAIL(result.get_type("cg_skip_rate", obj_type))) {
-      //     LOG_WARN("failed to get type", K(ret));
-      //   } else if (OB_LIKELY(obj_type.is_double())) {
-      //     EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, cg_skip_rate, *col_stat, int64_t);
-      //   } else {
-      //     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, cg_skip_rate, *col_stat, int64_t);
-      //   }
-      // }
+    if (OB_SUCC(ret)) {
+      uint64_t data_version = 0;
+      bool need_cg_blk_cnt = false;
+      bool need_cg_skip_rate = false;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
+        LOG_WARN("failed to get data version", K(ret));
+      } else {
+        need_cg_blk_cnt = data_version >= DATA_VERSION_4_3_0_0;
+        need_cg_skip_rate = data_version >= DATA_VERSION_4_3_5_2;
+      }
+      if (OB_SUCC(ret) && need_cg_blk_cnt) {
+        EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cg_macro_blk_cnt, *col_stat, int64_t, true, true, 0);
+        EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cg_micro_blk_cnt, *col_stat, int64_t, true, true, 0);
+      }
+      if (OB_SUCC(ret) && need_cg_skip_rate) {
+        EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, cg_skip_rate, *col_stat, double);
+      }
     }
   }
   return ret;

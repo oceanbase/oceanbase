@@ -363,7 +363,7 @@ TEST_F(TestStringDiffNullLength, test_string_diff_null_length)
        ObColumnHeader::Type::STRING_DIFF};
   ctx_.column_encodings_ = column_encoding_array;
   ctx_.micro_block_size_ = 1 << 20; // 1M
-  ctx_.major_working_cluster_version_ = DATA_VERSION_4_3_5_1;
+  ctx_.major_working_cluster_version_ = DATA_VERSION_4_3_5_2;
   ObMicroBlockEncoder encoder;
   encoder.data_buffer_.allocator_.set_tenant_id(500);
   encoder.row_buf_holder_.allocator_.set_tenant_id(500);

@@ -12227,6 +12227,56 @@ public:
   TO_STRING_KV(K(tablet_params_res_));
 };
 
+struct ObEstSkipRateArgElement
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObEstSkipRateArgElement() : tenant_id_(0), table_id_(0), tablet_id_(), ls_id_(), sample_count_(), column_ids_() {}
+  bool is_valid() const { return tenant_id_ > 0 && tablet_id_.is_valid() && ls_id_.is_valid(); }
+  int assign(const ObEstSkipRateArgElement &other);
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
+  common::ObSEArray<uint64_t, 4> sample_count_;
+  common::ObSEArray<uint64_t, 4> column_ids_;
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(tablet_id), K_(ls_id), K_(sample_count), K_(column_ids));
+};
+
+struct ObEstSkipRateArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  common::ObSEArray<ObEstSkipRateArgElement, 4> tablet_params_arg_;
+  bool is_valid() const;
+  int assign(const ObEstSkipRateArg &other);
+  ObEstSkipRateArg() : tablet_params_arg_() {}
+  TO_STRING_KV(K(tablet_params_arg_));
+};
+
+struct ObEstSkipRateResElement
+{
+  OB_UNIS_VERSION(1);
+public:
+  common::ObSEArray<double, 4> cg_skip_rate_arr_;
+  common::ObSEArray<uint64_t, 4> sample_count_;
+  bool is_valid() const { return true; }
+  int assign(const ObEstSkipRateResElement &other);
+  ObEstSkipRateResElement(){}
+  TO_STRING_KV(K(cg_skip_rate_arr_), K(sample_count_));
+};
+
+struct ObEstSkipRateRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  common::ObSEArray<ObEstSkipRateResElement, 4> tablet_params_res_;
+  bool is_valid() const { return true; }
+  int assign(const ObEstSkipRateRes &other);
+  ObEstSkipRateRes() : tablet_params_res_() {}
+  TO_STRING_KV(K(tablet_params_res_));
+};
+
 class ObReportBackupJobResultArg final
 {
   OB_UNIS_VERSION(1);

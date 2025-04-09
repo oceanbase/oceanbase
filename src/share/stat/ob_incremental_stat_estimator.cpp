@@ -665,6 +665,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         ObGlobalNotNullEval not_null_eval;
         ObGlobalNdvEval ndv_eval;
         ObGlobalAvglenEval avglen_eval;
+        ObGlobalColumnStat tmp_stat;
         ObSEArray<ObHistogram, 4> all_part_histograms;
         int64_t sample_size = 0;
         int64_t total_row_cnt = 0;
@@ -706,6 +707,9 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
             if (opt_col_stat->get_avg_len() != 0) {
               avglen_eval.add(opt_col_stat->get_avg_len());
             }
+            tmp_stat.add_cg_blk_cnt(opt_col_stat->get_cg_macro_blk_cnt(),
+                                    opt_col_stat->get_cg_micro_blk_cnt());
+            tmp_stat.add_cg_skip_rate(opt_col_stat->get_cg_skip_rate(), opt_col_stat->get_cg_micro_blk_cnt());
           }
         }
         if (OB_SUCC(ret)) {
@@ -722,6 +726,12 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           ndv_eval.get_llc_bitmap(col_stat->get_llc_bitmap(), col_stat->get_llc_bitmap_size());
           col_stat->set_llc_bitmap_size(ObOptColumnStat::NUM_LLC_BUCKET);
           col_stat->set_collation_type(param.column_params_.at(i).cs_type_);
+          col_stat->set_cg_micro_blk_cnt(tmp_stat.cg_micro_blk_cnt_);
+          col_stat->set_cg_macro_blk_cnt(tmp_stat.cg_macro_blk_cnt_);
+          if (tmp_stat.cg_micro_blk_cnt_ != 0 &&
+              tmp_stat.cg_skip_rate_ != 0) {
+            col_stat->set_cg_skip_rate(tmp_stat.cg_skip_rate_/((double)tmp_stat.cg_micro_blk_cnt_));
+          }
           ObObj new_min_obj, new_max_obj;
           //maybe the stat is from KVCACHE, need deep copy min/max obj.
           if (OB_FAIL(ob_write_obj(alloc, min_eval.get(), new_min_obj)) ||
@@ -777,7 +787,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
       int64_t start_time = 0;
       int64_t topk_cost = 0;
       int64_t hybrid_cost = 0;
-      if (OB_FAIL(ObDbmsStatsUtils::prepare_gather_stat_param(param, approx_level, NULL, false,
+      if (OB_FAIL(ObDbmsStatsUtils::prepare_gather_stat_param(param, approx_level, NULL, NULL, false,
                                                               DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE,
                                                               false, gather_param))) {
         LOG_WARN("failed to assign", K(ret));

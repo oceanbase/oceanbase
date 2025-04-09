@@ -134,7 +134,6 @@ protected:
   ObTableReadInfo read_info_;
   static ObArenaAllocator allocator_;
   ObTabletHandle tablet_handle_;
-  ObFixedArray<ObSkipIndexColMeta, common::ObIAllocator> agg_col_metas_;
   bool need_agg_data_;
   ObTableReadInfo cg_read_info_;
   ObDatumRowkey start_key_;
@@ -208,7 +207,6 @@ TestIndexBlockDataPrepare::TestIndexBlockDataPrepare(
     data_macro_block_cnt_(0),
     schema_cols_(),
     read_info_(),
-    agg_col_metas_(&allocator_),
     need_agg_data_(need_aggregate_data),
     rows_per_mirco_block_(rows_per_mirco_block),
     mirco_blocks_per_macro_block_(mirco_blocks_per_macro_block),
@@ -639,11 +637,6 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   // index_desc.schema_version_ = 10;
   // ASSERT_TRUE(index_desc.is_valid());
 
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-    // ASSERT_EQ(OB_SUCCESS, index_desc.agg_meta_array_.assign(agg_col_metas_));
-  }
-
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(desc.get_desc()));
   if (micro_block_size > 0) {
     root_index_builder_->index_store_desc_.get_desc().micro_block_size_ = 500;
@@ -962,9 +955,6 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ASSERT_NE(nullptr, merge_root_index_builder_);
   desc.get_desc().sstable_index_builder_ = merge_root_index_builder_;
   ASSERT_TRUE(desc.is_valid());
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-  }
   ASSERT_EQ(OB_SUCCESS, merge_root_index_builder_->init(desc.get_desc()));
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -1040,9 +1030,6 @@ void TestIndexBlockDataPrepare::prepare_partial_cg_data()
   ASSERT_NE(nullptr, merge_root_index_builder_);
   desc.get_desc().sstable_index_builder_ = merge_root_index_builder_;
   ASSERT_TRUE(desc.is_valid());
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-  }
   ASSERT_EQ(OB_SUCCESS, merge_root_index_builder_->init(desc.get_desc()));
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -1281,9 +1268,6 @@ void TestIndexBlockDataPrepare::prepare_contrastive_sstable()
   desc.get_desc().sstable_index_builder_ = root_index_builder_;
 
   ASSERT_TRUE(desc.is_valid());
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-  }
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(desc.get_desc()));
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;

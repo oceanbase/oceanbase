@@ -597,6 +597,69 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
       }
       break;
     }
+    case T_FUN_TOP_FRE_HIST: {
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        TopFreHistVecExtraResult *&top_store = extra->top_fre_hist_store_;
+        if (nullptr == top_store) {
+          void *tmp_buf = NULL;
+          extra->is_top_fre_hist_ = true;
+          if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(TopFreHistVecExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FALSE_IT(top_store = new (tmp_buf) TopFreHistVecExtraResult(
+                                  extra_allocator, *agg_ctx.op_monitor_info_))) {
+            // do nothing
+          } else if (OB_FAIL(top_store->init_topk_fre_histogram_item(agg_ctx.allocator_,
+                                                                     aggr_info,
+                                                                     agg_ctx.eval_ctx_))) {
+            LOG_WARN("failed to init topk fre histogram item", K(ret));
+          } else {
+            extra_store_inited = true;
+            agg_ctx.need_advance_collect_ = true;
+          }
+        }
+      }
+      break;
+    }
+    case T_FUN_HYBRID_HIST: {
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        HybridHistVecExtraResult *&store = extra->hybrid_hist_store_;
+        DataStoreVecExtraResult *&data_store = extra->data_store;
+
+        if (nullptr == store) {
+          void *tmp_buf = NULL;
+          extra->is_hybrid_hist_ = true;
+          if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(HybridHistVecExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FALSE_IT(store = new (tmp_buf) HybridHistVecExtraResult(
+                                  extra_allocator, *agg_ctx.op_monitor_info_))) {
+            // do nothing
+          } else if (OB_FAIL(store->init_data_set(agg_ctx.allocator_,
+                                                  aggr_info,
+                                                  agg_ctx.eval_ctx_,
+                                                  agg_ctx.io_event_observer_))) {
+            LOG_WARN("failed to init data set", K(ret));
+          } else if (OB_FAIL(alloc_extra_space_with_order_by(agg_ctx,
+                                                             data_store,
+                                                             extra_allocator,
+                                                             aggr_info))) {
+            SQL_LOG(WARN, "alloc extra space with order by failed", K(ret));
+          } else {
+            data_store->set_need_count(true);
+            extra_store_inited = true;
+            agg_ctx.need_advance_collect_ = true;
+          }
+        }
+      }
+      break;
+    }
     case T_FUN_GROUP_RANK:
     case T_FUN_GROUP_DENSE_RANK:
     case T_FUN_GROUP_PERCENT_RANK:
@@ -616,8 +679,6 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
-    case T_FUN_HYBRID_HIST:
-    case T_FUN_TOP_FRE_HIST:
     case T_FUN_AGG_UDF:
     case T_FUNC_SYS_ARRAY_AGG:
     case T_FUN_SYS_RB_OR_CARDINALITY_AGG:

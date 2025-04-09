@@ -39,6 +39,7 @@ namespace blocksstable
 {
 
 class ObIndexBlockRowParser;
+struct ObSkipIndexAggResult;
 
 struct ObIndexBlockRowDesc
 {
@@ -83,7 +84,7 @@ private:
 
 public:
   union {
-    const ObDatumRow *aggregated_row_;
+    const ObSkipIndexAggResult *aggregated_row_;
     const char *serialized_agg_row_buf_;
   };
   ObDatumRowkey row_key_;

@@ -408,7 +408,6 @@ ObMacroBlockWriter::ObMacroBlockWriter(const bool is_need_macro_buffer)
     macro_reader_(),
     micro_rowkey_hashs_(),
     datum_row_(),
-    aggregated_row_(nullptr),
     data_aggregator_(nullptr),
     callback_(nullptr),
     device_handle_(nullptr),
@@ -2403,14 +2402,11 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for aggrgator", K(ret));
     } else {
-      aggregated_row_ = new (row_buf) ObDatumRow();
       data_aggregator_ = new (aggregator_buf) ObSkipIndexDataAggregator();
-      if (OB_FAIL(aggregated_row_->init(allocator_, full_agg_metas.count()))) {
-        LOG_WARN("Fail to init aggregated row", K(ret), K(data_store_desc));
-      } else if (OB_FAIL(data_aggregator_->init(
+      if (OB_FAIL(data_aggregator_->init(
           full_agg_metas,
           data_store_desc.get_col_desc_array(),
-          *aggregated_row_,
+          data_store_desc.get_major_working_cluster_version(),
           allocator_))) {
         LOG_WARN("Fail to init aggregator", K(ret), K(data_store_desc));
       }
@@ -2429,11 +2425,6 @@ void ObMacroBlockWriter::release_pre_agg_util()
     data_aggregator_->~ObSkipIndexDataAggregator();
     allocator_.free(data_aggregator_);
     data_aggregator_ = nullptr;
-  }
-  if (nullptr != aggregated_row_) {
-    aggregated_row_->~ObDatumRow();
-    allocator_.free(aggregated_row_);
-    aggregated_row_ = nullptr;
   }
 }
 

@@ -1467,7 +1467,7 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
     for (int64_t i = 0; OB_SUCC(ret) && i < est_cost_info.index_scan_column_group_infos_.count(); ++i) {
       // prepare est cost info for column group
       const ObCostColumnGroupInfo &cg_info = est_cost_info.index_scan_column_group_infos_.at(i);
-      double cg_row_count = row_count * prefix_filter_sel * cg_info.skip_filter_sel_ * cg_info.skip_rate_;
+      double cg_row_count = row_count * prefix_filter_sel * cg_info.skip_filter_sel_ ;
       column_group_est_cost_info.index_meta_info_.index_micro_block_count_ = cg_info.micro_block_count_;
       column_group_est_cost_info.table_filters_.reuse();
       double column_group_cost = 0.0;
@@ -1480,8 +1480,8 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
                 OB_FAIL(column_group_est_cost_info.index_access_column_items_.assign(cg_info.access_column_items_))) {
         LOG_WARN("failed to assign filters", K(ret));
       } else if (OB_FAIL(cost_row_store_index_scan(column_group_est_cost_info,
-                                                  row_count * prefix_filter_sel,
-                                                  column_group_cost))) {
+                                                   cg_row_count,
+                                                   column_group_cost))) {
         LOG_WARN("failed to calc index scan cost", K(ret), K(cg_row_count), K(column_group_est_cost_info));
       } else {
         index_scan_cost += column_group_cost;
@@ -1491,7 +1491,7 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
           prefix_filter_sel *= runtime_filter_sel;
           runtime_filter_sel = 1.0;
         }
-        LOG_TRACE("OPT:[COST ONE COLUMN GROUP]", K(row_count), K(prefix_filter_sel), K(column_group_cost));
+        LOG_TRACE("[COST ONE COLUMN GROUP]", K(row_count), K(prefix_filter_sel), K(column_group_cost), K(cg_info.skip_filter_sel_), K(column_group_cost));
       }
     }
   }
@@ -1522,11 +1522,12 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
       column_group_est_cost_info.use_column_store_ = true;
       column_group_est_cost_info.join_filter_sel_ = 1.0;
     }
+    prefix_filter_sel = 1.0;
     // calc scan cost for each column group
     for (int64_t i = 0; OB_SUCC(ret) && i < est_cost_info.index_back_column_group_infos_.count(); ++i) {
       // prepare est cost info for column group
       const ObCostColumnGroupInfo &cg_info = est_cost_info.index_back_column_group_infos_.at(i);
-      double cg_row_count = row_count * prefix_filter_sel * cg_info.skip_filter_sel_ * cg_info.skip_rate_;
+      double cg_row_count = index_back_row_count * prefix_filter_sel * cg_info.skip_filter_sel_;
       column_group_est_cost_info.index_meta_info_.index_micro_block_count_ = cg_info.micro_block_count_;
       column_group_est_cost_info.table_filters_.reuse();
       double column_group_cost = 0.0;
@@ -1536,13 +1537,13 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
         LOG_WARN("failed to assign filters", K(ret));
       } else if (OB_FAIL(cost_range_get(column_group_est_cost_info,
                                         false,
-                                        index_back_row_count,
+                                        cg_row_count,
                                         column_group_cost))) {
         LOG_WARN("failed to calc index scan cost", K(ret), K(cg_row_count), K(column_group_est_cost_info));
       } else {
         index_back_cost += column_group_cost;
         OPT_TRACE_COST_MODEL(KV(index_back_cost), "+=", KV(column_group_cost));
-        LOG_TRACE("OPT:[COST ONE COLUMN GROUP]", K(row_count), K(index_back_row_count), K(prefix_filter_sel), K(column_group_cost));
+        LOG_TRACE("OPT:[COST ONE COLUMN GROUP]", K(row_count), K(index_back_row_count), K(prefix_filter_sel), K(column_group_cost), K(cg_info.skip_filter_sel_), K(column_group_cost));
         prefix_filter_sel *= cg_info.filter_sel_;
         index_back_row_count = row_count * prefix_filter_sel;
         if (est_cost_info.table_filters_.empty() && limit_count >= 0.0) {

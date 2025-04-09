@@ -824,6 +824,113 @@ int ObIndexBlockTreeCursor::pull_up_to_root()
   return ret;
 }
 
+int ObIndexBlockTreeCursor::move_until_cannot_skip(int64_t &remain_step)
+{
+  int ret = OB_SUCCESS;
+  const ObIndexBlockRowHeader *idx_row_header = nullptr;
+
+  while (OB_SUCC(ret) && curr_path_item_->curr_row_idx_ < curr_path_item_->row_count_) {
+    if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
+      LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
+    } else if (OB_FAIL(idx_row_parser_.get_header(idx_row_header))) {
+      LOG_WARN("Fail to get next level row header", K(ret), KPC(curr_path_item_));
+    } else if (OB_ISNULL(idx_row_header)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null index row header", K(ret));
+    } else if (remain_step > idx_row_header->micro_block_count_) {
+      // we can skip whole node
+      remain_step -= idx_row_header->micro_block_count_;
+      curr_path_item_->curr_row_idx_++;
+    } else {
+      // this node is needed
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObIndexBlockTreeCursor::move_forward_micro(const uint64_t step)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t remain_step = step;
+  int64_t next_idx = 0;
+
+  const ObIndexBlockRowHeader *idx_row_header = nullptr;
+  bool reach_target_depth = false;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Tree cursor not inited", K(ret));
+  } else if (FALSE_IT(next_idx = curr_path_item_->curr_row_idx_ + step)) {
+  } else if (next_idx >= curr_path_item_->row_count_) {
+
+    // remain row in current block is less than remain_step, pull up and find next node
+    if (OB_FAIL(idx_row_parser_.get_header(idx_row_header))) {
+      LOG_WARN("Fail to get index block row header", K(ret));
+    } else if (OB_ISNULL(idx_row_header)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null index row header", K(ret));
+    } else if (OB_UNLIKELY(!idx_row_header->is_data_block())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid depth for cursor to move forward micro", K(ret));
+    } else {
+      // firstly, skip current node
+      remain_step -= curr_path_item_->row_count_ - curr_path_item_->curr_row_idx_ - 1;
+      curr_path_item_->curr_row_idx_ = curr_path_item_->row_count_;
+    }
+
+    while (OB_SUCC(ret) && !cursor_path_.empty() && remain_step > 0
+           && curr_path_item_->curr_row_idx_ >= curr_path_item_->row_count_) {
+      // try to pull up
+      if (OB_FAIL(pull_up(true /* cascade */, false))) {
+        LOG_WARN("Fail to pull up index block tree cursor", K(ret), KPC(curr_path_item_));
+      } else if (FALSE_IT(curr_path_item_->curr_row_idx_++)){
+      } else if (OB_FAIL(move_until_cannot_skip(remain_step))) {
+        LOG_WARN("Fail to move until cannot skip", K(ret), K(remain_step));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (cursor_path_.empty() && curr_path_item_->curr_row_idx_ >= curr_path_item_->row_count_) {
+      // Scan finished
+      ret = OB_ITER_END;
+      LOG_DEBUG("[INDEX_BLOCK] Same level scan end", K(ret), K(curr_path_item_->curr_row_idx_), KPC(curr_path_item_));
+    } else {
+      while (OB_SUCC(ret) && !reach_target_depth && remain_step > 0) {
+        if (OB_FAIL(drill_down())) {
+          LOG_WARN("Fail to drill down to next level",
+                   K(ret),
+                   KPC(curr_path_item_),
+                   K_(cursor_path));
+        } else if (FALSE_IT(curr_path_item_->curr_row_idx_ = 0)) {
+        } else if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
+          LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
+        } else if (OB_FAIL(check_reach_target_depth(LEAF, reach_target_depth))) {
+          LOG_WARN("Fail to check if reach the target depth", K(ret));
+        } else if (reach_target_depth) {
+          // ! remain_step = 1 means curr_row_idx should be 0 (because we are move from last block)
+          curr_path_item_->curr_row_idx_ = remain_step - 1;
+          if (OB_UNLIKELY(curr_path_item_->curr_row_idx_ >= curr_path_item_->row_count_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Fail to move forward micro", K(ret), K(remain_step), KPC(curr_path_item_));
+          } else if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
+            LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
+          }
+        } else if (OB_FAIL(move_until_cannot_skip(remain_step))) {
+          LOG_WARN("Fail to move until cannot skip", K(ret), K(remain_step));
+        }
+      }
+    }
+
+  } else if (FALSE_IT(curr_path_item_->curr_row_idx_ = next_idx)) {
+  } else if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
+    LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
+  }
+
+  return ret;
+}
+
 int ObIndexBlockTreeCursor::move_forward(const bool is_reverse_scan)
 {
   int ret = OB_SUCCESS;
