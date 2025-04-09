@@ -1304,7 +1304,15 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
              create_index_arg_.is_multivalue_index()) {
     need_verify = false;
   } else if (is_unique_index_) {
-    need_verify = true;
+    ObDDLTaskRecord task_record;
+    ObArenaAllocator allocator("uk_checksum");
+    if (parent_task_id_ != 0 && OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id_, parent_task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
+      LOG_WARN("fail to get ddl task record", K(ret), K(parent_task_id_));
+    } else if (share::is_direct_load_task(task_record.ddl_type_)) {
+      need_verify = false;
+    } else {
+      need_verify = true;
+    }
   } else if (create_index_arg_.is_spatial_index() || create_index_arg_.is_vec_index()) {
     need_verify = false;
   } else {
