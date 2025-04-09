@@ -654,19 +654,21 @@ int ObDiagnosticInfoContainer::get_session_diag_info(
 void ObDiagnosticInfoContainer::purge_tenant_summary(int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  std::function<bool(const ObDiagnosticKey &, ObDiagnosticInfoCollector *)> fn =
-      [tenant_id](const ObDiagnosticKey &key, ObDiagnosticInfoCollector *collector) -> bool {
-    bool bret = false;
-    if (key.get_tenant_id() == tenant_id) {
-      LOG_INFO("target di collector need to be purged", K(tenant_id), K(key), KPC(collector));
-      bret = true;
+  if (OB_SYS_TENANT_ID != tenant_id) {  // sys tenant will not be destroyed
+    std::function<bool(const ObDiagnosticKey &, ObDiagnosticInfoCollector *)> fn =
+        [tenant_id](const ObDiagnosticKey &key, ObDiagnosticInfoCollector *collector) -> bool {
+      bool bret = false;
+      if (key.get_tenant_id() == tenant_id) {
+        LOG_INFO("target di collector need to be purged", K(tenant_id), K(key), KPC(collector));
+        bret = true;
+      }
+      return bret;
+    };
+    if (OB_FAIL(summarys_.remove_if(fn))) {
+      LOG_WARN("failed to remove summary collects", K(ret), K(tenant_id));
+    } else {
+      LOG_INFO("success to remove summary collects", K(tenant_id), KPC(this));
     }
-    return bret;
-  };
-  if (OB_FAIL(summarys_.remove_if(fn))) {
-    LOG_WARN("failed to remove summary collects", K(ret), K(tenant_id));
-  } else {
-    LOG_INFO("success to remove summary collects", K(tenant_id), KPC(this));
   }
 }
 
