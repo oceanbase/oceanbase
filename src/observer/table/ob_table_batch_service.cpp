@@ -16,6 +16,7 @@
 #include "observer/ob_req_time_service.h"
 #include "ob_htable_utils.h"
 #include "observer/table/ob_table_query_common.h"
+#include "tableapi/ob_table_api_service.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -180,10 +181,12 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   ObTableApiExecutor *executor = nullptr;
-  tb_ctx.set_batch_operation(&ops);
+  ObSEArray<ObITableEntity*, 16> entities;
+  entities.set_attr(ObMemAttr(MTL_ID(), "MulOpEntArr"));
   tb_ctx.set_batch_tablet_ids(&ctx.tablet_ids_);
+  tb_ctx.set_batch_entities(&entities);
   tb_ctx.set_need_dist_das(ctx.tb_ctx_.need_dist_das());
-  if (OB_FAIL(adjust_entities(ctx, ops))) {
+  if (OB_FAIL(adjust_entities(ctx, ops, entities))) {
     LOG_WARN("fail to adjust entities", K(ret), K(ctx));
   } else if (OB_FAIL(spec.create_executor(tb_ctx, executor))) {
     LOG_WARN("fail to create scan executor", K(ret));
@@ -215,19 +218,22 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
   return ret;
 }
 
-int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx, const ObIArray<ObTableOperation> &ops)
+int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
+                                        const ObIArray<ObTableOperation> &ops,
+                                        ObIArray<ObITableEntity*> &entities)
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-
   // first entity has beed adjusted when create tb_ctx
   // but in hbase, the tb_ctx maybe reused and first entity
   // also need to be adjusted
   for (int64_t i = 0; OB_SUCC(ret) && i < ops.count(); ++i) {
-    if (i == 0 && tb_ctx.get_entity_type() != ObTableEntityType::ET_HKV) {
+    const ObTableOperation &op = ops.at(i);
+    if (OB_FAIL(entities.push_back(const_cast<ObITableEntity *>(&ops.at(i).entity())))) {
+      LOG_WARN("fail to push back entity", K(i));
+    } else if (i == 0 && tb_ctx.get_entity_type() != ObTableEntityType::ET_HKV) {
       // do noting
     } else {
-      const ObTableOperation &op = ops.at(i);
       tb_ctx.set_entity(&op.entity());
       if (OB_FAIL(tb_ctx.adjust_entity())) {
         LOG_WARN("fail to adjust entity", K(ret));
@@ -268,19 +274,14 @@ int ObTableBatchService::get_result_index(
 
 int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
                                                   ObTableApiSpec &spec,
-                                                  const ObIArray<ObTableOperation> &ops,
-                                                  ObIArray<ObTableOperationResult> &results)
+                                                  const ObIArray<ObITableEntity *> &entities,
+                                                  ObIArray<ObTableOperationResult> &results,
+                                                  int64_t &got_row_count)
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   ObTableApiExecutor *executor = nullptr;
-  const int64_t op_size = ops.count();
-  int64_t row_cnt = 0;
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, ops);
-  OB_TABLE_START_AUDIT(*ctx.credential_,
-                       *tb_ctx.get_sess_guard(),
-                       tb_ctx.get_table_name(),
-                       &ctx.audit_ctx_, multi_op);
+  const int64_t entity_count = entities.count();
 
   ObTableApiScanRowIterator *row_iter = nullptr;
   if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx, row_iter))) {
@@ -295,17 +296,6 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
     } else {
-      // generate scan range with all rowkeys
-      for (int64_t i = 0; OB_SUCC(ret) && i < op_size; ++i) {
-        ObRowkey rowkey = ops.at(i).entity().get_rowkey();
-        ObNewRange range;
-        if (OB_FAIL(range.build_range(tb_ctx.get_ref_table_id(), rowkey))) {
-          LOG_WARN("fail to build key range", K(ret), K(rowkey));
-        } else if (OB_FAIL(tb_ctx.get_key_ranges().push_back(range))) {
-          LOG_WARN("fail to push back key range", K(ret), K(range));
-        }
-      }
-
       ObIAllocator &allocator = tb_ctx.get_allocator();
       ObObj *rowkey_cells = nullptr;
       ObSEArray<uint64_t, 4> rowkey_column_ids;
@@ -332,7 +322,7 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
       // we will return an empty result for duplicate primary keys op.
       // For example, if there are 50 operations out of 100 with the same primary key,
       // only 50 records can be scanned, but we return 100 results
-      for (int64_t i = 0; OB_SUCC(ret) && i < op_size; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < entity_count; ++i) {
         ObNewRow *row = nullptr;
         if (OB_FAIL(row_iter->get_next_row(row, allocator))) {
           if (ret != OB_ITER_END) {
@@ -341,24 +331,24 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
             ret = OB_SUCCESS;
           }
         } else {
-          row_cnt++;
+          got_row_count++;
         }
         if (OB_SUCC(ret) && OB_NOT_NULL(row)) {
           ObSEArray<int64_t, 2> indexs;
-          if (OB_FAIL(get_result_index(*row, ops, rowkey_idxs, rowkey_cells, indexs))) {
+          if (OB_FAIL(ObTableApiService::get_result_index(*row, entities, rowkey_idxs, rowkey_cells, indexs))) {
             LOG_WARN("fail to get reuslt indexs", K(ret), KPC(row), K(ops));
           } else {
             const ObTableEntity *requset_entity = nullptr;
             ObITableEntity *result_entity = nullptr;
             for (int64_t idx = 0; OB_SUCC(ret) && idx < indexs.count(); ++idx) {
               int64_t index = indexs[idx];
-              if (index >= results.count() || index >= op_size) {
+              if (index >= results.count() || index >= entity_count) {
                 ret = OB_INDEX_OUT_OF_RANGE;
                 LOG_WARN("result index is out of range",
-                    K(ret), K(index), K(results), K(op_size), KPC(row), K(ops));
+                    K(ret), K(index), K(results), K(entity_count), KPC(row), K(ops));
               } else if (OB_FAIL(results.at(index).get_entity(result_entity))) {
                 LOG_WARN("fail to get result entity", K(ret));
-              } else if (OB_ISNULL(requset_entity = &static_cast<const ObTableEntity &>(ops.at(index).entity()))) {
+              } else if (OB_ISNULL(requset_entity = static_cast<ObTableEntity *>(entities.at(index)))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("entity is null", K(ret), K(index));
               } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator, row,
@@ -381,11 +371,6 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
   }
   spec.destroy_executor(executor);
 
-  OB_TABLE_END_AUDIT(ret_code, ret,
-                     snapshot, ctx.trans_param_->tx_snapshot_,
-                     stmt_type, StmtType::T_KV_MULTI_GET,
-                     return_rows, row_cnt,
-                     has_table_scan, true);
   return ret;
 }
 
@@ -434,21 +419,36 @@ int ObTableBatchService::multi_get(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
+  ObSEArray<ObITableEntity*, 16> entities;
+  entities.set_attr(ObMemAttr(MTL_ID(), "MGetEntArr"));
   tb_ctx.set_read_latest(false);
-  tb_ctx.set_batch_operation(&ops);
+  tb_ctx.set_batch_entities(&entities);
   tb_ctx.set_batch_tablet_ids(&ctx.tablet_ids_);
   tb_ctx.set_need_dist_das(ctx.tb_ctx_.need_dist_das());
-
+  tb_ctx.set_operation_type(ObTableOperationType::Type::GET);
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, &ops);
+  int64_t got_row_count = 0;
+  OB_TABLE_START_AUDIT(*ctx.credential_,
+                       *tb_ctx.get_sess_guard(),
+                       tb_ctx.get_table_name(),
+                       &ctx.audit_ctx_, multi_op);
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
-  } else if (OB_FAIL(adjust_entities(ctx, ops))) {
+  } else if (OB_FAIL(adjust_entities(ctx, ops, entities))) {
     LOG_WARN("fail to adjust entities", K(ret), K(ctx), K(ops));
+  } else if (OB_FAIL(ObTableApiService::generate_scan_ranges_by_entities(tb_ctx.get_ref_table_id(),
+                                                                    entities, tb_ctx.get_key_ranges()))) {
+    LOG_WARN("fail to gen scan range from entities", K(ret), K(tb_ctx.get_ref_table_id()), K(entities));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
-  } else if (OB_FAIL(multi_get_fuse_key_range(ctx, *spec, ops, results))) {
+  } else if (OB_FAIL(multi_get_fuse_key_range(ctx, *spec, entities, results, got_row_count))) {
     LOG_WARN("fail to multi get fuse key range", K(ret), K(ctx), K(ops));
   }
-
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_GET,
+                     return_rows, got_row_count,
+                     has_table_scan, true);
   return ret;
 }
 
@@ -461,7 +461,7 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::INSERT, ops);
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::INSERT, &ops);
   OB_TABLE_START_AUDIT(*ctx.credential_,
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),
@@ -495,7 +495,7 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::DEL, ops);
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::DEL, &ops);
   OB_TABLE_START_AUDIT(*ctx.credential_,
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),
@@ -525,7 +525,7 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::REPLACE, ops);
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::REPLACE, &ops);
   OB_TABLE_START_AUDIT(*ctx.credential_,
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),
@@ -555,7 +555,7 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, ops);
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, &ops);
   OB_TABLE_START_AUDIT(*ctx.credential_,
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),
@@ -655,7 +655,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
   ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   bool can_use_put = true;
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, ops);
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, &ops);
   OB_TABLE_START_AUDIT(*ctx.credential_,
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),

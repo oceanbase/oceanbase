@@ -334,6 +334,8 @@ public:
   inline int64_t get_rowid_version() const { return rowid_version_; }
   inline bool is_column_replica_table() const { return is_column_replica_table_; }
   inline bool is_normal_cgs_at_the_end() const { return is_normal_cgs_at_the_end_; }
+  inline bool is_enable_semistruct_encoding() const { return is_enable_semistruct_encoding_; }
+  inline void set_is_enable_semistruct_encoding(const bool v) { is_enable_semistruct_encoding_ = v; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }

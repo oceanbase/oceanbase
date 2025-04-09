@@ -147,7 +147,7 @@ int ObTableTTLDeleteTask::init_sess_info()
 {
   int ret = OB_SUCCESS;
   // try get session from session pool
-  if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential_, sess_guard_))) {
+  if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->get_sess_info(credential_, sess_guard_))) {
     LOG_WARN("fail to get session info", K(ret), K(credential_));
   } else if (OB_ISNULL(sess_guard_.get_sess_node_val())) {
     ret = OB_ERR_UNEXPECTED;
@@ -677,6 +677,7 @@ ObTableTTLDeleteRowIterator::ObTableTTLDeleteRowIterator()
       cur_qualifier_(),
       is_last_row_ttl_(true),
       is_hbase_table_(false),
+      has_cell_ttl_(false),
       rowkey_cnt_(0),
       hbase_new_cq_(false)
 {
@@ -701,6 +702,7 @@ int ObTableTTLDeleteRowIterator::init(const schema::ObTableSchema &table_schema,
     max_version_ = ttl_operation.max_version_;
     limit_del_rows_ = ttl_operation.del_row_limit_;
     is_hbase_table_ = ttl_operation.is_htable_;
+    has_cell_ttl_ = ttl_operation.has_cell_ttl_;
     rowkey_cnt_ = table_schema.get_rowkey_column_num();
     hbase_new_cq_ = is_hbase_table_ ? false : true;
 
@@ -773,7 +775,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
             ttl_cnt_++;
             cur_del_rows_++;
             is_expired = true;
-          } else if (row->get_count() > ObHTableConstants::COL_IDX_TTL) {
+          } else if (has_cell_ttl_) {
             int64_t cell_ttl_time = INT64_MAX;
             if (OB_FAIL(cell.get_ttl(cell_ttl_time))) {
               LOG_WARN("fail to get ttl", KR(ret));

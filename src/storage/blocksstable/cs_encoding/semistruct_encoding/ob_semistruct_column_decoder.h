@@ -30,7 +30,21 @@ public:
   ObSemiStructColumnDecoder &operator=(const ObSemiStructColumnDecoder&) = delete;
 
   virtual int decode(const ObColumnCSDecoderCtx &ctx,
-    const int32_t row_id, common::ObDatum &datum) const override { return OB_NOT_SUPPORTED; }
+    const int32_t row_id, common::ObDatum &datum) const override;
+  virtual int batch_decode(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
+      const int64_t row_cap, common::ObDatum *datums) const override;
+  virtual int decode_vector(const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const override;
+
+  virtual int get_null_count(const ObColumnCSDecoderCtx &ctx,
+     const int32_t *row_ids, const int64_t row_cap, int64_t &null_count) const override;
+
+  virtual int pushdown_operator(
+      const sql::ObPushdownFilterExecutor *parent,
+      const ObColumnCSDecoderCtx &col_ctx,
+      const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap) const override;
+
   virtual ObCSColumnHeader::Type get_type() const override { return type_; }
 
 };

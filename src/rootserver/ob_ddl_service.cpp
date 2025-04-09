@@ -1271,6 +1271,11 @@ int ObDDLService::generate_schema(
     LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
              KR(ret), K(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 && arg.schema_.get_semistruct_encoding_flags() != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support semistruct encoding for this version",
+             KR(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support semistruct encoding");
   } else if (compat_version < DATA_VERSION_4_3_5_2 && arg.schema_.is_delete_insert_merge_engine()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K(tenant_id), K(compat_version), K(arg));
@@ -3377,6 +3382,19 @@ int ObDDLService::set_raw_table_options(
           } else {
             new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
             need_update_index_table = true;
+          }
+          break;
+        }
+        case ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_3_5_2) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("semistruct_encoding_type less than 4.3.5.2 not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding_types less than 4.3.5.2");
+          } else {
+            new_table_schema.set_semistruct_encoding_type(alter_table_schema.get_semistruct_encoding_type());
           }
           break;
         }

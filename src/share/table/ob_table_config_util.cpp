@@ -23,7 +23,7 @@ ObKVFeatureMode::ObKVFeatureMode(const uint8_t *values)
     value_ = 0;
     is_valid_ = false;
   } else {
-    value_ = static_cast<uint16_t>(values[0]);
+    value_ = (static_cast<uint16_t>(values[1]) << 8) | static_cast<uint16_t>(values[0]);
     is_valid_ = true;
   }
 }
@@ -52,16 +52,23 @@ void ObKVFeatureMode::set_hotkey_mode(uint16_t mode)
   }
 }
 
+void ObKVFeatureMode::set_distributed_execute_mode(uint16_t mode) {
+  is_valid_ = check_mode_valid(mode);
+  if (is_valid_) {
+    distributed_execute_mode_ = mode;
+  }
+}
+
 void ObKVFeatureMode::set_value(uint16_t value)
 {
-  if ((value & 0b11) == 0b11 || ((value >> 2) & 0b11) == 0b11 || ((value >> 4) & 0b11) == 0b11) {
+  if ((value & 0b11) == 0b11 || ((value >> 2) & 0b11) == 0b11 || ((value >> 4) & 0b11) == 0b11 ||
+      ((value >> 6) & 0b11) == 0b11 || ((value >> 8) & 0b11) == 0b11) {
     is_valid_ = false;
   } else {
     is_valid_ = true;
     value_ = value;
   }
 }
-
 
 bool ObKVFeatureMode::is_ttl_enable() {
   bool mode = MODE_DEFAULT_VAL_TTL;
@@ -93,6 +100,16 @@ bool ObKVFeatureMode::is_hotkey_enable() {
   return mode;
 }
 
+bool ObKVFeatureMode::is_distributed_execute_enable() {
+  bool mode = MODE_DEFAULT_VAL_DISTRIBUTED_EXECUTE;
+  if (distributed_execute_mode_ == ObKvFeatureModeParser::MODE_ON) {
+    mode = true;
+  } else if (distributed_execute_mode_ == ObKvFeatureModeParser::MODE_ON) {
+    mode = false;
+  }
+  return mode;
+}
+
 bool ObKVFeatureModeUitl::is_obkv_feature_enable(ObKVFeatureType feat_type)
 {
   bool bret = false;
@@ -110,6 +127,9 @@ bool ObKVFeatureModeUitl::is_obkv_feature_enable(ObKVFeatureType feat_type)
         break;
       case ObKVFeatureType::HOTKEY:
         bret = cfg.is_hotkey_enable();
+        break;
+      case ObKVFeatureType::DISTRIBUTED_EXECUTE:
+        bret = cfg.is_distributed_execute_enable();
         break;
       default:
         OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "unexpected feature type", K(feat_type));
@@ -132,6 +152,11 @@ bool ObKVFeatureModeUitl::is_rerouting_enable()
 bool ObKVFeatureModeUitl::is_hotkey_enable()
 {
   return is_obkv_feature_enable(ObKVFeatureType::HOTKEY);
+}
+
+bool ObKVFeatureModeUitl::is_distributed_execute_enable()
+{
+  return is_obkv_feature_enable(ObKVFeatureType::DISTRIBUTED_EXECUTE);
 }
 
 ObPrivControlMode::ObPrivControlMode(const uint8_t *values)

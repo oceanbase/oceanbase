@@ -169,7 +169,9 @@ ob_set_subtarget(ob_server table
   table/ob_table_cg_service.cpp
   table/ob_table_cache.cpp
   table/ob_table_schema_cache.cpp
-  table/ob_table_session_pool.cpp
+  table/object_pool/ob_table_object_pool.cpp
+  table/object_pool/ob_table_sess_pool.cpp
+  table/object_pool/ob_table_system_variable.cpp
   table/ob_table_op_wrapper.cpp
   table/ob_table_query_common.cpp
   table/ob_table_direct_load_processor.cpp
@@ -228,6 +230,30 @@ ob_set_subtarget(ob_server table
   table/ob_table_multi_batch_service.cpp
   table/ob_redis_execute_processor_v2.cpp
   table/fts/ob_table_fts_cg_service.cpp
+  table/adapters/ob_hbase_cell_iter.cpp
+  table/adapters/ob_normal_adapter_iter.cpp
+  table/adapters/ob_series_adapter_iter.cpp
+  table/adapters/ob_i_adapter.cpp
+  table/adapters/ob_hbase_normal_adapter.cpp
+  table/adapters/ob_hbase_series_adapter.cpp
+  table/adapters/ob_hbase_adapter_factory.cpp
+  table/cf_service/ob_hbase_column_family_service.cpp
+  table/cf_service/ob_hbase_cf_iterator.cpp
+  table/cf_service/ob_hbase_multi_cf_iterator.cpp
+  table/cf_service/ob_hbase_tablet_merge_iterator.cpp
+  table/models/ob_i_model.cpp
+  table/models/ob_hbase_model.cpp
+  table/models/ob_table_model.cpp
+  table/models/ob_redis_model.cpp
+  table/tableapi/ob_table_api_service.cpp
+  table/part_calc/ob_table_part_calc.cpp
+  table/trans/ob_table_trans_ctrl.cpp
+  table/common/ob_table_sequential_grouper.cpp
+  table/async_query/ob_hbase_async_query_iter.cpp
+  table/common/ob_table_query_session.cpp
+  table/common/ob_table_query_session_mgr.cpp
+  table/common/ob_hbase_common_struct.cpp
+  table/ob_table_merge_filter.cpp
 )
 
 ob_set_subtarget(ob_server table_load

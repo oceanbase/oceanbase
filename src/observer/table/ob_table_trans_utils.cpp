@@ -31,7 +31,7 @@ int ObTableTransParam::init(const ObTableConsistencyLevel consistency_level,
 {
   int ret = OB_SUCCESS;
 
-  if (!ls_id.is_valid()) {
+  if (!need_global_snapshot && !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls id", K(ret), K(ls_id));
   } else {
@@ -52,7 +52,7 @@ int ObTableTransParam::init(bool is_readonly,
 {
   int ret = OB_SUCCESS;
 
-  if (!ls_id.is_valid()) {
+  if (!need_global_snapshot && !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls id", K(ret));
   } else {

@@ -815,8 +815,8 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
   // Why do not use MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*) ?
   // MTL(xxx) accesses the ptr in the cache, we need to access the ptr in the memory.
   // In the following scene，we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed or not:
-  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableApiSessPoolMgr*) destroy later.
-  // When MTL(ObTableApiSessPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
+  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableObjectPoolMgr*) destroy later.
+  // When MTL(ObTableObjectPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
   // so we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed to avoid accessing the memory that has been destroyed
   if (OB_ISNULL(MTL_CTX())) {
     // do nothing

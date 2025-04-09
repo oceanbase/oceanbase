@@ -136,6 +136,11 @@ ob_set_subtarget(ob_storage blocksstable_cs_encoding
   blocksstable/cs_encoding/ob_integer_stream_vector_decoder.cpp
   blocksstable/cs_encoding/ob_string_stream_vector_decoder.cpp
   blocksstable/cs_encoding/ob_cs_vector_decoding_util.cpp
+  blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_column_encoder.cpp
+  blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_column_decoder.cpp
+  blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_json.cpp
+  blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.cpp
+  blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_struct.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_index_block

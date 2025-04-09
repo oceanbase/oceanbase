@@ -6448,6 +6448,140 @@ int ObJsonBaseFactory::transform(ObIAllocator *allocator, ObIJsonBase *src,
   return ret;
 }
 
+int ObJsonBaseFactory::alloc_node(ObIAllocator &allocator, const ObJsonNodeType type, ObJsonNode *&j_node)
+{
+  INIT_SUCC(ret);
+  switch (type) {
+    case ObJsonNodeType::J_NULL: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonNull, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for null json node", K(ret), "size", sizeof(ObJsonNull));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_DECIMAL:
+    case ObJsonNodeType::J_ODECIMAL:
+    {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonDecimal, &allocator, number::ObNumber()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for decimal json node", K(ret), "size", sizeof(ObJsonDecimal));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_INT:
+    case ObJsonNodeType::J_OINT:
+    {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonInt, &allocator, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for int json node", K(ret), "size", sizeof(ObJsonInt));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_UINT:
+    case ObJsonNodeType::J_OLONG:
+    {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonUint, &allocator, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for uint json node", K(ret), "size", sizeof(ObJsonUint));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_DOUBLE:
+    case ObJsonNodeType::J_ODOUBLE:
+    {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonDouble, &allocator, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for double json node", K(ret), "size", sizeof(ObJsonDouble));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_OFLOAT: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonOFloat, &allocator, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for float json node", K(ret), "size", sizeof(ObJsonOFloat));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_STRING: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonString, &allocator, nullptr, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for str json node", K(ret));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_OBJECT: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonObject, &allocator, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for obj json node", K(ret), "size", sizeof(ObJsonObject));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_ARRAY: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonArray, &allocator, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for array json node", K(ret), "size", sizeof(ObJsonArray));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_BOOLEAN: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonBoolean, &allocator, false))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for boolean json node", K(ret), "size", sizeof(ObJsonBoolean));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_DATE:
+    case ObJsonNodeType::J_TIME:
+    case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_TIMESTAMP:
+    case ObJsonNodeType::J_ORACLEDATE:
+    case ObJsonNodeType::J_ODATE:
+    case ObJsonNodeType::J_OTIMESTAMP:
+    case ObJsonNodeType::J_OTIMESTAMPTZ:
+    case ObJsonNodeType::J_MYSQL_DATE:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
+    {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonDatetime, &allocator, type, ObTime()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for date time json node", K(ret), "size", sizeof(ObJsonDatetime));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_OPAQUE: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonOpaque, &allocator, ObString(), ObNullType))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for opaque json node", K(ret), "size", sizeof(ObJsonOpaque));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_OBINARY:
+    case ObJsonNodeType::J_OOID:
+    case ObJsonNodeType::J_ORAWHEX:
+    case ObJsonNodeType::J_ORAWID: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonORawString, &allocator, nullptr, 0, type))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for raw str json node", K(ret), "size", sizeof(ObJsonORawString));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_ODAYSECOND:
+    case ObJsonNodeType::J_OYEARMONTH: {
+      ObObjType field_type = type == ObJsonNodeType::J_ODAYSECOND ? ObIntervalYMType : ObIntervalDSType;
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonOInterval, &allocator, nullptr, 0, field_type))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for interval json node", K(ret), "size", sizeof(ObJsonOInterval));
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("invalid node type.", K(ret), K(type));
+      break;
+    }
+  }
+  return ret;
+}
+
 bool ObJsonBaseUtil::is_time_type(ObJsonNodeType j_type)
 {
   bool bool_ret = (j_type == ObJsonNodeType::J_DATETIME

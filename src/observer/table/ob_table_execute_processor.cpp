@@ -47,12 +47,12 @@ int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &enti
 ////////////////////////////////////////////////////////////////
 ObTableApiExecuteP::ObTableApiExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
-     allocator_("TbExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
      is_group_commit_(false),
      is_group_trigger_(false),
      group_single_op_(nullptr)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbExeP", ObCtxIds::DEFAULT_CTX_ID));
 }
 
 int ObTableApiExecuteP::deserialize()
@@ -321,7 +321,7 @@ int ObTableApiExecuteP::process_group_commit()
     ObTableGroupKey key(ls_id, table_id_, schema_version, op.type());
     ObTableGroupCtx ctx(allocator_);
     bool is_insup_use_put = false;
-    int64_t binlog_row_image_type = TABLEAPI_SESS_POOL_MGR->get_binlog_row_image();
+    int64_t binlog_row_image_type = TABLEAPI_OBJECT_POOL_MGR->get_binlog_row_image();
     ctx.key_ = &key;
     if (arg_.table_operation_.type() == ObTableOperationType::Type::INSERT_OR_UPDATE) {
       if (OB_FAIL(ObTableCtx::check_insert_up_can_use_put(schema_cache_guard_,

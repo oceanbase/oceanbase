@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_and_mutate_processor.h"
 #include "ob_table_query_and_mutate_helper.h"
+#include "observer/table/models/ob_model_factory.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -22,11 +23,11 @@ using namespace oceanbase::sql;
 
 ObTableQueryAndMutateP::ObTableQueryAndMutateP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
-     allocator_("TbQaMP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
      default_entity_factory_("QueryAndMutateEntFac", MTL_ID()),
      end_in_advance_(false)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbQaMP", ObCtxIds::DEFAULT_CTX_ID));
 }
 
 int ObTableQueryAndMutateP::deserialize()
@@ -144,7 +145,7 @@ int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check
   return process_type;
 }
 
-int ObTableQueryAndMutateP::try_process()
+int ObTableQueryAndMutateP::old_try_process()
 {
   int ret = OB_SUCCESS;
   // query_and_mutate request arg does not contain consisteny_level_
@@ -157,16 +158,18 @@ int ObTableQueryAndMutateP::try_process()
   ObLSID ls_id;
   bool exist_global_index = false;
   table_id_ = arg_.table_id_;
-  stat_process_type_ = get_stat_process_type(is_hkv,
-                                             arg_.query_and_mutate_.is_check_and_execute(),
-                                             arg_.query_and_mutate_.get_mutations().at(0).type());
-  if (ObTableProccessType::TABLE_API_HBASE_INCREMENT != stat_process_type_ &&
-      ObTableProccessType::TABLE_API_HBASE_APPEND != stat_process_type_) {
-    arg_.query_and_mutate_.get_query().set_batch(1);
-  }
 
   if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else if (OB_ISNULL(simple_table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get simple schema", K(ret), K(table_id_), K(arg_.table_name_));
+  } else if (simple_table_schema_->get_table_id() != table_id_) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(table_id_),
+      K(simple_table_schema_->get_table_id()));
+  } else if (OB_FAIL(check_mode_type(schema_cache_guard_))) {
+    LOG_WARN("fail to check mode type", K(ret));
   } else if (OB_FAIL(get_tablet_id(simple_table_schema_, arg_.tablet_id_, arg_.table_id_, tablet_id_))) {
     LOG_WARN("fail to get tablet id", K(ret), K(arg_.table_id_));
   } else if (OB_FAIL(get_ls_id(tablet_id_, ls_id))) {
@@ -216,6 +219,79 @@ int ObTableQueryAndMutateP::try_process()
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
 
+
+  return ret;
+}
+
+int ObTableQueryAndMutateP::new_try_process()
+{
+  int ret = OB_SUCCESS;
+  ObLSID ls_id(ObLSID::INVALID_LS_ID);
+
+  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
+    LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else if (schema_cache_guard_.get_hbase_mode_type() == OB_HBASE_SERIES_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("hbase series type not support query and mutate", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "query and mutate with hbase series type");
+  } else {
+    exec_ctx_.set_timeout_ts(get_timeout_ts());
+    exec_ctx_.set_entity_factory(&default_entity_factory_);
+    exec_ctx_.set_table_name(arg_.table_name_);
+    exec_ctx_.set_table_id(arg_.table_id_);
+    exec_ctx_.set_audit_ctx(audit_ctx_);
+    ObModelGuard model_guard;
+    ObIModel *model = nullptr;
+    if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {
+      LOG_WARN("fail to get model guard", K(ret), K(arg_.entity_type_));
+    } else if (FALSE_IT(model = model_guard.get_model())) {
+    } else if (OB_ISNULL(model)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("model is null", K(ret));
+    } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, result_))) {
+      LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+    } else if (OB_FAIL(start_trans(false, /* is_readonly */
+                                   ObTableConsistencyLevel::STRONG,
+                                   exec_ctx_.get_ls_id(),
+                                   get_timeout_ts(),
+                                   !exec_ctx_.get_ls_id().is_valid()/*need_global_snapshot*/))) {
+      LOG_WARN("fail to start readonly transaction", K(ret));
+    } else if (OB_FAIL(model->work(exec_ctx_, arg_, result_))) {
+      LOG_WARN("model fail to work", K(ret), K_(arg), K_(result));
+    }
+
+    bool need_rollback_trans = (OB_SUCCESS != ret);
+    int tmp_ret = ret;
+    const bool use_sync = true;
+    if (OB_FAIL(end_trans(need_rollback_trans, req_, nullptr/* ObTableCreateCbFunctor */, use_sync))) {
+      LOG_WARN("failed to end trans", K(ret), "rollback", need_rollback_trans);
+    }
+    ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  }
+
+  return ret;
+}
+
+int ObTableQueryAndMutateP::try_process()
+{
+  int ret = OB_SUCCESS;
+  table_id_ = arg_.table_id_;
+  tablet_id_ = arg_.tablet_id_;
+  const bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  // statis
+  stat_process_type_ = get_stat_process_type(is_hkv,
+                                             arg_.query_and_mutate_.is_check_and_execute(),
+                                             arg_.query_and_mutate_.get_mutations().at(0).type());
+  if (ObTableProccessType::TABLE_API_HBASE_INCREMENT != stat_process_type_ &&
+      ObTableProccessType::TABLE_API_HBASE_APPEND != stat_process_type_) {
+    arg_.query_and_mutate_.get_query().set_batch(1);
+  }
+
+  if (is_new_try_process()) {
+    ret = new_try_process();
+  } else {
+    ret = old_try_process();
+  }
   // record events
   stat_row_count_ = 1;
 
@@ -232,4 +308,11 @@ int ObTableQueryAndMutateP::try_process()
               "receive_ts", get_receive_timestamp());
   #endif
   return ret;
+}
+
+bool ObTableQueryAndMutateP::is_new_try_process()
+{
+  return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
+         !arg_.tablet_id_.is_valid() &&
+         TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute();
 }

@@ -793,7 +793,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
 
       bool filtered = false;
       if (OB_SUCC(ret)) {
-        if (filter.is_filter_black_node() || has_lob_out_row) {
+        if (filter.is_filter_black_node() || has_lob_out_row || filter.is_semistruct_filter_node()) {
           sql::ObPhysicalFilterExecutor &physical_filter = static_cast<sql::ObPhysicalFilterExecutor &>(filter);
           if (OB_FAIL(physical_filter.filter(datum_buf, col_count, *pd_filter_info.skip_bit_, filtered))) {
             LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));

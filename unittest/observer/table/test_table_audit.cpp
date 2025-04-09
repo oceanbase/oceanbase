@@ -719,7 +719,7 @@ TEST_F(TestTableAudit, ObTableAuditMultiOp)
   int64_t pos = 0;
   ObTableOperationType::Type op_type = ObTableOperationType::Type::INSERT;
   ObSEArray<ObTableOperation, 8> ops;
-  ObTableAuditMultiOp multi_op(op_type, ops);
+  ObTableAuditMultiOp multi_op(op_type, &ops);
   // test1: empty table name
   ObString table_name = ObString::make_empty_string();
   ASSERT_EQ(OB_SUCCESS, multi_op.generate_stmt(table_name, buf, buf_len, pos));

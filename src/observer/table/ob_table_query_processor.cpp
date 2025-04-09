@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_processor.h"
 #include "ob_table_query_common.h"
+#include "observer/table/models/ob_model_factory.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -23,10 +24,10 @@ using namespace oceanbase::sql::stmt;
 
 ObTableQueryP::ObTableQueryP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
-      allocator_("TbQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tb_ctx_(allocator_),
       result_row_count_(0)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbQueryP", ObCtxIds::DEFAULT_CTX_ID));
   // the streaming interface may return multi packet. The memory may be freed after the first packet has been sended.
   // the deserialization of arg_ is shallow copy, so we need deep copy data to processor
   set_preserve_recv_data();
@@ -197,11 +198,6 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   }
 
   // record events
-  if (is_hkv) {
-    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
-  } else {
-    stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
-  }
   stat_row_count_ = result_row_count_;
 
   #ifndef NDEBUG
@@ -227,24 +223,29 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
 int ObTableQueryP::before_process()
 {
   is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  // In HBase model, scan range columns only for odp routing, useless in server
+  if (arg_.entity_type_ == ObTableEntityType::ET_HKV) {
+    arg_.query_.get_scan_range_columns().reset();
+  }
   return ParentType::before_process();
 }
 
-int ObTableQueryP::try_process()
+int ObTableQueryP::old_try_process()
 {
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
   ObTableApiExecutor *executor = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
+
   // Tips: when table_name is tablegroup name
   // Since we only have one table in a tablegroup now
   // tableId and tabletId are correct, which are calculated by the client
-  table_id_ = arg_.table_id_; // init move response need
-  tablet_id_ = arg_.tablet_id_;
   if (FALSE_IT(is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_))) {
   } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(check_mode_type(schema_cache_guard_))) {
+    LOG_WARN("fail to check mode type", K(ret));
   } else if (is_tablegroup_req_ && OB_NOT_NULL(simple_table_schema_) && arg_.table_id_ != simple_table_schema_->get_table_id()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table id not correct in table group", K(ret));
@@ -275,4 +276,69 @@ int ObTableQueryP::try_process()
   ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
 
   return ret;
+}
+
+int ObTableQueryP::new_try_process()
+{
+  int ret = OB_SUCCESS;
+  ObModelGuard model_guard;
+  ObIModel *model = nullptr;
+  exec_ctx_.set_table_name(arg_.table_name_);
+  exec_ctx_.set_table_id(arg_.table_id_);
+  exec_ctx_.set_timeout_ts(get_timeout_ts());
+  exec_ctx_.set_audit_ctx(audit_ctx_);
+  if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+    LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {
+    LOG_WARN("fail to get model guard", K(ret), K(arg_.entity_type_));
+  } else if (FALSE_IT(model = model_guard.get_model())) {
+  } else if (OB_ISNULL(model)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("model is null", K(ret));
+  } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, result_))) {
+    LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+  } else if (OB_FAIL(trans_param_.init(true, /* is_read_only */
+                                       arg_.consistency_level_,
+                                       exec_ctx_.get_ls_id(),
+                                       get_timeout_ts(),
+                                       !exec_ctx_.get_ls_id().is_valid()/*need_global_snapshot*/))) {
+    LOG_WARN("fail to inti trans param", K(ret));
+  } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param_))) {
+    LOG_WARN("fail to init read trans", K(ret));
+  } else if (OB_FAIL(model->work(exec_ctx_, arg_, result_))) {
+    LOG_WARN("model fail to work", K(ret), K_(exec_ctx), K_(arg));
+  }
+
+  ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
+
+  return ret;
+}
+
+int ObTableQueryP::try_process()
+{
+  int ret = OB_SUCCESS;
+  // statis
+  bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  if (is_hkv) {
+    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
+  } else {
+    stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
+  }
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
+
+  if (is_new_try_process()) {
+    ret = new_try_process();
+  } else {
+    ret = old_try_process();
+  }
+
+  return ret;
+}
+
+bool ObTableQueryP::is_new_try_process()
+{
+  return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
+         !arg_.tablet_id_.is_valid() &&
+         TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute();
 }

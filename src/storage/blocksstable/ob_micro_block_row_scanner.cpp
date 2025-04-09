@@ -253,6 +253,9 @@ int ObIMicroBlockRowScanner::get_next_row(const ObDatumRow *&store_row)
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Fail to reserve datum row", K(ret), K_(row));
+  } else if (OB_ISNULL(reader_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reader is NULL", K(ret));
   } else if (OB_FAIL(inner_get_next_row(store_row))) {
   }
   return ret;
@@ -810,7 +813,11 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
     LOG_WARN("Failed to init exprs vector header", K(ret));
   } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
              ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    if (param_->has_lob_column_out() && reader_->has_lob_out_row()) {
+    // change to black filter in below situation
+    // 1. if need project lob column and micro block has outrow lob
+    // 2. if it is semistruct_filter_node, but not cs decoder (beacuase semistrcut white filter only support cs decoder)
+    if ((param_->has_lob_column_out() && reader_->has_lob_out_row())
+        || (filter->is_semistruct_filter_node() && ObIMicroBlockReader::CSDecoder != reader_->get_type())) {
       sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
       if (OB_FAIL(decoder_->filter_pushdown_filter(parent,
                                                    *physical_filter,

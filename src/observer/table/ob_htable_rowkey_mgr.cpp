@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_rowkey_mgr.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/location_cache/ob_location_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -55,9 +56,31 @@ void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_
 {
   if (ObTTLUtil::is_enable_ttl(MTL_ID())) {
     int ret = OB_SUCCESS;
-    HTableRowkeyInserter inserter(ls_id, table_id, tablet_id, rowkey);
-    if (OB_FAIL(rowkey_queue_map_.read_atomic(ls_id, inserter))) {
-      LOG_WARN("fail to insert queue map", K(ret), K(ls_id));
+    ObLSID real_ls_id = ls_id;
+    uint64_t tenant_id = MTL_ID();
+    bool is_cache_hit = false;
+    if (!real_ls_id.is_valid()) {
+      if (OB_FAIL(GCTX.location_service_->get(tenant_id, tablet_id, 0, is_cache_hit, real_ls_id))) {
+        LOG_WARN("fail to get ls id", K(ret), K(tenant_id), K(tablet_id));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      HTableRowkeyInserter inserter(real_ls_id, table_id, tablet_id, rowkey);
+      if (OB_FAIL(rowkey_queue_map_.read_atomic(real_ls_id, inserter))) {
+        LOG_WARN("fail to insert queue map", K(ret), K(real_ls_id), K(tablet_id), K(tablet_id));
+      }
+    }
+  }
+}
+
+void ObHTableRowkeyMgr::record_htable_rowkey(const ObLSID &ls_id, int64_t table_id,
+                                             const ObIArray<ObTabletID> &tablet_ids,
+                                             const ObString &rowkey)
+{
+  if (ObTTLUtil::is_enable_ttl(MTL_ID())) {
+    for (int i = 0; i < tablet_ids.count(); i++) {
+      record_htable_rowkey(ls_id, table_id, tablet_ids.at(i), rowkey);
     }
   }
 }

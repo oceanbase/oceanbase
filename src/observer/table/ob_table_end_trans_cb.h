@@ -175,6 +175,7 @@ public:
       entity_factory_("TableLSCbEntFac", MTL_ID()),
       response_sender_(req, &result_)
   {
+    dependent_results_.set_attr(ObMemAttr(MTL_ID(), "LsCbDepRes"));
   }
   virtual ~ObTableLSExecuteEndTransCb() = default;
 
@@ -182,10 +183,14 @@ public:
   virtual void callback(int cb_param, const transaction::ObTransID &trans_id) override;
   virtual const char *get_type() const override { return "ObTableLSEndTransCallback"; }
   virtual sql::ObEndTransCallbackType get_callback_type() const override { return sql::ASYNC_CALLBACK_TYPE; }
-  int assign_ls_execute_result(const ObTableLSOpResult &result);
   OB_INLINE ObTableLSOpResult &get_result() { return result_; }
   OB_INLINE ObTableEntityFactory<ObTableSingleOpEntity> &get_entity_factory() { return entity_factory_; }
   OB_INLINE ObIAllocator &get_allocator() { return allocator_; }
+  OB_INLINE int assign_dependent_results(common::ObIArray<ObTableLSOpResult*> &results)
+  {
+    return dependent_results_.assign(results);
+  }
+  void free_dependent_results();
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableLSExecuteEndTransCb);
@@ -194,6 +199,7 @@ private:
   ObTableSingleOpEntity result_entity_;
   ObTableEntityFactory<ObTableSingleOpEntity> entity_factory_;
   ObTableLSOpResult result_;
+  common::ObSEArray<ObTableLSOpResult*, 3> dependent_results_;
   obrpc::ObTableRpcResponseSender response_sender_;
 };
 

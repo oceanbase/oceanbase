@@ -369,7 +369,7 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op,
     ttl_ctx->set_model(model_);
     tb_ctx.set_redis_ttl_ctx(ttl_ctx);
     // When it is not a get operation, the string cmd need to be processed through ttl.
-    if (model_ == ObRedisModel::STRING && op_type != ObTableOperationType::GET) {
+    if (model_ == ObRedisDataModel::STRING && op_type != ObTableOperationType::GET) {
       tb_ctx.set_is_ttl_table(true);
       tb_ctx.set_ttl_definition(ObRedisUtil::STRING_TTL_DEFINITION);
     }
@@ -495,7 +495,7 @@ int CommandOperator::do_get_meta_entity(ObITableEntity &req_meta_entity,
   return ret;
 }
 
-int CommandOperator::get_meta(int64_t db, const ObString &key, ObRedisModel model,
+int CommandOperator::get_meta(int64_t db, const ObString &key, ObRedisDataModel model,
                               ObRedisMeta *&meta_info)
 {
   int ret = OB_SUCCESS;
@@ -525,7 +525,7 @@ int CommandOperator::get_meta(int64_t db, const ObString &key, ObRedisModel mode
       SERVER_LOG(INFO, "meta is expired", K(ret), KPC(meta_info));
       meta_info->reset();
       ret = OB_ITER_END;
-    } else if (model == ObRedisModel::LIST && static_cast<ObRedisListMeta *>(meta_info)->count_ == 0) {
+    } else if (model == ObRedisDataModel::LIST && static_cast<ObRedisListMeta *>(meta_info)->count_ == 0) {
       SERVER_LOG(INFO, "list is empty, but not be del", K(ret), K(db), K(key), KPC(meta_info));
       meta_info->reset();
       ret = OB_ITER_END;
@@ -535,7 +535,7 @@ int CommandOperator::get_meta(int64_t db, const ObString &key, ObRedisModel mode
   return ret;
 }
 
-int CommandOperator::put_meta(int64_t db, const ObString &key, ObRedisModel model,
+int CommandOperator::put_meta(int64_t db, const ObString &key, ObRedisDataModel model,
                               const ObRedisMeta &meta_info)
 {
   int ret = OB_SUCCESS;
@@ -553,7 +553,7 @@ int CommandOperator::put_meta(int64_t db, const ObString &key, ObRedisModel mode
   return ret;
 }
 
-int CommandOperator::gen_meta_entity(int64_t db, const ObString &key, ObRedisModel model,
+int CommandOperator::gen_meta_entity(int64_t db, const ObString &key, ObRedisDataModel model,
                                      const ObRedisMeta &meta_info, ObITableEntity *&put_meta_entity)
 {
   int ret = OB_SUCCESS;
@@ -579,7 +579,7 @@ int CommandOperator::add_meta_select_columns(ObTableQuery &query)
   } else if (OB_FAIL(query.add_select_column(ObRedisUtil::INSERT_TS_PROPERTY_NAME))) {
     LOG_WARN("fail to add select column", K(ret));
   }
-  if (model_ == ObRedisModel::LIST) {
+  if (model_ == ObRedisDataModel::LIST) {
     if (OB_FAIL(query.add_select_column(ObRedisUtil::IS_DATA_PROPERTY_NAME))) {
       LOG_WARN("fail to add select column", K(ret));
     }
@@ -692,7 +692,7 @@ int CommandOperator::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard, const O
   return ret;
 }
 
-int CommandOperator::insup_meta(int64_t db, const ObString &key, ObRedisModel model)
+int CommandOperator::insup_meta(int64_t db, const ObString &key, ObRedisDataModel model)
 {
   int ret = OB_SUCCESS;
   ObRedisMeta *meta = nullptr;
@@ -724,7 +724,7 @@ int CommandOperator::insup_meta(int64_t db, const ObString &key, ObRedisModel mo
 int CommandOperator::check_and_insup_meta(
   int64_t db,
   const ObString &key,
-  ObRedisModel model,
+  ObRedisDataModel model,
   bool &do_insup,
   ObRedisMeta *&meta)
 {
@@ -911,7 +911,7 @@ int CommandOperator::build_del_query(int64_t db, const ObString &key, ObTableQue
   return ret;
 }
 
-int CommandOperator::build_del_ops(ObRedisModel model,
+int CommandOperator::build_del_ops(ObRedisDataModel model,
                                    int db,
                                    const ObString &key,
                                    const ObTableQuery &query,
@@ -956,7 +956,7 @@ int CommandOperator::build_del_ops(ObRedisModel model,
 }
 
 int CommandOperator::del_complex_key(
-    ObRedisModel model,
+    ObRedisDataModel model,
     int64_t db,
     const ObString &key,
     bool del_meta,
@@ -1027,7 +1027,7 @@ int CommandOperator::delete_results(const ResultFixedArray &results, const ObArr
 }
 
 int CommandOperator::fake_del_meta(
-  ObRedisModel model, int64_t db, const ObString &key, ObRedisMeta *meta_info/* = nullptr*/)
+  ObRedisDataModel model, int64_t db, const ObString &key, ObRedisMeta *meta_info/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(meta_info)) {
@@ -1073,15 +1073,15 @@ int CommandOperator::get_complex_type_count(int64_t db, const common::ObString &
 }
 
 int CommandOperator::fake_del_empty_key_meta(
-    ObRedisModel model, int64_t db, const ObString &key, ObRedisMeta *meta_info/*= nullptr*/)
+    ObRedisDataModel model, int64_t db, const ObString &key, ObRedisMeta *meta_info/*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   // check whether key is empty
   bool is_empty = false;
-  if (model == ObRedisModel::INVALID || model == ObRedisModel::STRING) {
+  if (model == ObRedisDataModel::MODEL_MAX || model == ObRedisDataModel::STRING) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("model should be HASH/SET/ZSET/LIST", K(ret), K(model));
-  } else if (model == ObRedisModel::LIST) {
+  } else if (model == ObRedisDataModel::LIST) {
     if (OB_ISNULL(meta_info)) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("invalid null list meta", K(ret));
@@ -1171,7 +1171,7 @@ int CommandOperator::reply_batch_res(const ResultFixedArray &batch_res)
 }
 
 int CommandOperator::get_group_metas(ObIAllocator &allocator,
-                                     ObRedisModel model,
+                                     ObRedisDataModel model,
                                      ObIArray<ObRedisMeta *> &metas)
 {
   int ret = OB_SUCCESS;
@@ -1233,7 +1233,7 @@ int CommandOperator::get_group_metas(ObIAllocator &allocator,
         } else if (OB_FAIL(meta_info->get_meta_from_entity(*res_entity))) {
           LOG_WARN("fail get meta from entity", K(ret), KPC(res_entity));
         } else if (meta_info->is_expired()
-          || (model == ObRedisModel::LIST && static_cast<ObRedisListMeta *>(meta_info)->count_ == 0)) {
+          || (model == ObRedisDataModel::LIST && static_cast<ObRedisListMeta *>(meta_info)->count_ == 0)) {
           meta_info->reset();
           meta_info->set_is_exists(false);
         }
@@ -1357,7 +1357,7 @@ int CommandOperator::do_group_complex_type_set()
 }
 
 // do_group_complex_type_subkey_exists
-int CommandOperator::do_group_complex_type_subkey_exists(ObRedisModel model)
+int CommandOperator::do_group_complex_type_subkey_exists(ObRedisDataModel model)
 {
   int ret = OB_SUCCESS;
   model_ = model;
@@ -1438,12 +1438,12 @@ ObTableOperation CommandOperator::put_or_insup(const ObITableEntity &entity)
 bool CommandOperator::can_use_put(const ObITableEntity &entity)
 {
   int64_t expect_property_num = 0;
-  if (model_ == ObRedisModel::STRING || model_ == ObRedisModel::SET) {
+  if (model_ == ObRedisDataModel::STRING || model_ == ObRedisDataModel::SET) {
     expect_property_num = ObRedisUtil::STRING_SET_PROPERTY_SIZE;
-  } else if (model_ == ObRedisModel::HASH) {
+  } else if (model_ == ObRedisDataModel::HASH) {
     expect_property_num = ObRedisUtil::HASH_ZSET_PROPERTY_SIZE;
   }
-  return model_ != ObRedisModel::ZSET && binlog_row_image_type_ == ObBinlogRowImage::MINIMAL
+  return model_ != ObRedisDataModel::ZSET && binlog_row_image_type_ == ObBinlogRowImage::MINIMAL
         && entity.get_properties_count() == expect_property_num;
 }
 

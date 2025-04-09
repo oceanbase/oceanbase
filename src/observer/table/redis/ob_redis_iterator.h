@@ -23,7 +23,7 @@ namespace table
 class ObRedisCellEntity
 {
 public:
-  explicit ObRedisCellEntity(common::ObNewRow &ob_row, ObRedisModel model)
+  explicit ObRedisCellEntity(common::ObNewRow &ob_row, ObRedisDataModel model)
       : ob_row_(&ob_row), model_(model)
   {}
   virtual ~ObRedisCellEntity()
@@ -46,7 +46,7 @@ private:
   int get_cell(int64_t idx, ObObj *&obj) const;
 
   common::ObNewRow *ob_row_;
-  ObRedisModel model_;
+  ObRedisDataModel model_;
   DISALLOW_COPY_AND_ASSIGN(ObRedisCellEntity);
 };
 
@@ -84,7 +84,7 @@ public:
   int64_t meta_expire_ts_;   // timestamp of last meta expire ts
   int64_t meta_insert_ts_;   // timestamp of last meta insert ts
   int64_t expire_ts_;        // depends on meta_expire_ts_ and meta_insert_ts_
-  ObRedisModel model_;
+  ObRedisDataModel model_;
   bool is_ttl_table_;
   const ObRedisMeta *meta_;        // scan may need meta
   bool return_redis_meta_;

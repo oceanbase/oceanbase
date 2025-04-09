@@ -25,11 +25,12 @@ using namespace oceanbase::sql;
 
 ObRedisExecuteP::ObRedisExecuteP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
-      allocator_("TbRedisExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       default_entity_factory_("TableRedisEntFac", MTL_ID()),
       redis_result_(&allocator_),
       redis_ctx_(allocator_, &default_entity_factory_, arg_, redis_result_)
-{}
+{
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbRedisExeP", ObCtxIds::DEFAULT_CTX_ID));
+}
 
 int ObRedisExecuteP::deserialize()
 {

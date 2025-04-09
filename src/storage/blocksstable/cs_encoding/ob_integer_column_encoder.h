@@ -34,6 +34,7 @@ public:
     const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const int64_t row_count) override;
   void reuse() override;
   int store_column(ObMicroBufferWriter &buf_writer) override;
+  int store_column_meta(ObMicroBufferWriter &buf_writer) override;
   int64_t estimate_store_size() const override;
   ObCSColumnHeader::Type get_type() const override { return type_; }
   int get_identifier_and_stream_types(
@@ -50,7 +51,6 @@ public:
 
 private:
   int do_init_();
-  int store_column_meta_(ObMicroBufferWriter &buf_writer);
   int build_signed_stream_meta_();
   int build_unsigned_encoder_ctx_();
 

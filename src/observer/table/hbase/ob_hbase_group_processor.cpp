@@ -25,34 +25,48 @@ int ObHbaseOpProcessor::init_table_ctx(const ObTableSingleOp &single_op, ObTable
 {
   int ret = OB_SUCCESS;
 
-  ObLSID ls_id = static_cast<ObHbaseOp*>(ops_->at(0))->ls_req_.ls_op_.get_ls_id();
-  ObTabletID tablet_id = static_cast<ObHbaseOp*>(ops_->at(0))->ls_req_.ls_op_.at(0).get_tablet_id();
-  ObTableOperationType::Type op_type = single_op.get_op_type();
-  tb_ctx.set_schema_guard(group_ctx_->schema_guard_);
-  tb_ctx.set_schema_cache_guard(group_ctx_->schema_cache_guard_);
-  tb_ctx.set_simple_table_schema(group_ctx_->simple_schema_);
-  tb_ctx.set_sess_guard(group_ctx_->sess_guard_);
-  tb_ctx.set_audit_ctx(&group_ctx_->audit_ctx_);
-  tb_ctx.set_entity(&single_op.get_entities().at(0));
-  tb_ctx.set_entity_type(ObTableEntityType::ET_HKV);
-  tb_ctx.set_operation_type(op_type);
-  tb_ctx.set_need_dist_das(false);
-  tb_ctx.set_ls_id(ls_id);
-
-  if (OB_FAIL(tb_ctx.init_common(group_ctx_->credential_, tablet_id, group_ctx_->timeout_ts_))) {
-    LOG_WARN("fail to init table tb_ctx common part", K(ret));
+  if (ops_->empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty ops", K(ret));
   } else {
-    switch (op_type) {
-      case ObTableOperationType::INSERT_OR_UPDATE: {
-        if (OB_FAIL(tb_ctx.init_insert_up(false))) {
-          LOG_WARN("fail to init insert up tb_ctx", K(ret), K(tb_ctx));
+    ObHbaseOp *hbase_op = static_cast<ObHbaseOp*>(ops_->at(0));
+    if (OB_ISNULL(hbase_op->ls_req_.ls_op_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls_op_ is null", K(ret));
+    } else if (hbase_op->ls_req_.ls_op_->count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("empty tablet op", K(ret));
+    } else {
+      ObLSID ls_id = hbase_op->ls_req_.ls_op_->get_ls_id();
+      ObTabletID tablet_id = hbase_op->ls_req_.ls_op_->at(0).get_tablet_id();
+      ObTableOperationType::Type op_type = single_op.get_op_type();
+      tb_ctx.set_schema_guard(group_ctx_->schema_guard_);
+      tb_ctx.set_schema_cache_guard(group_ctx_->schema_cache_guard_);
+      tb_ctx.set_simple_table_schema(group_ctx_->simple_schema_);
+      tb_ctx.set_sess_guard(group_ctx_->sess_guard_);
+      tb_ctx.set_audit_ctx(&group_ctx_->audit_ctx_);
+      tb_ctx.set_entity(&single_op.get_entities().at(0));
+      tb_ctx.set_entity_type(ObTableEntityType::ET_HKV);
+      tb_ctx.set_operation_type(op_type);
+      tb_ctx.set_need_dist_das(false);
+      tb_ctx.set_ls_id(ls_id);
+
+      if (OB_FAIL(tb_ctx.init_common(group_ctx_->credential_, tablet_id, group_ctx_->timeout_ts_))) {
+        LOG_WARN("fail to init table tb_ctx common part", K(ret));
+      } else {
+        switch (op_type) {
+          case ObTableOperationType::INSERT_OR_UPDATE: {
+            if (OB_FAIL(tb_ctx.init_insert_up(false))) {
+              LOG_WARN("fail to init insert up tb_ctx", K(ret), K(tb_ctx));
+            }
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected operation type", "type", op_type);
+            break;
+          }
         }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("unexpected operation type", "type", op_type);
-        break;
       }
     }
   }
@@ -76,11 +90,14 @@ int ObHbaseOpProcessor::init_multi_batch_ctx()
     LOG_WARN("invalid argument", K(ret), KPC_(ops));
   } else {
     ObHbaseOp *op = static_cast<ObHbaseOp*>(ops_->at(0));
-    if (op->ls_req_.ls_op_.count() == 0) {
+    if (OB_ISNULL(op->ls_req_.ls_op_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls op is null", K(ret));
+    } else if (op->ls_req_.ls_op_->count() == 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tablet op count is 0", K(ret));
     } else {
-      const ObTableTabletOp &tablet_op = op->ls_req_.ls_op_.at(0);
+      const ObTableTabletOp &tablet_op = op->ls_req_.ls_op_->at(0);
       if (tablet_op.count() == 0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("single op count is 0", K(ret));
@@ -92,8 +109,8 @@ int ObHbaseOpProcessor::init_multi_batch_ctx()
           multi_batch_ctx_->trans_param_ = group_ctx_->trans_param_;
           multi_batch_ctx_->is_atomic_ = true;
           multi_batch_ctx_->is_readonly_ = tablet_op.is_readonly();
-          multi_batch_ctx_->is_same_type_ = op->ls_req_.ls_op_.is_same_type();
-          multi_batch_ctx_->is_same_properties_names_ = op->ls_req_.ls_op_.is_same_properties_names();
+          multi_batch_ctx_->is_same_type_ = op->ls_req_.ls_op_->is_same_type();
+          multi_batch_ctx_->is_same_properties_names_ = op->ls_req_.ls_op_->is_same_properties_names();
           multi_batch_ctx_->consistency_level_ = op->ls_req_.consistency_level_;
           multi_batch_ctx_->credential_ = &group_ctx_->credential_;
         }
@@ -157,15 +174,20 @@ int ObHbaseOpProcessor::init_result(const int64_t total_tablet_count, ObTableMul
     int64_t batch_result_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < op_count; i++) { // loop group op
       ObHbaseOp *op = static_cast<ObHbaseOp*>(ops_->at(i));
-      int64_t tablet_count = op->ls_req_.ls_op_.count();
-      for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_result_idx++) { // loop tablet
-        ObTableTabletOpResult &tablet_result = op->result_.at(j);
-        ObTableBatchOperationResult &batch_result = result.get_results().at(batch_result_idx);
-        batch_result.set_attr(ObMemAttr(MTL_ID(), "ObHbaseGrpRes"));
-        int64_t single_op_count = tablet_result.count();
-        for (int64_t k = 0; OB_SUCC(ret) && k < single_op_count; k++) { // loop single op
-          if (OB_FAIL(batch_result.push_back(tablet_result.at(k)))) {
-            LOG_WARN("fail to push back ObTableOperationResult", K(ret));
+      if (OB_ISNULL(op->ls_req_.ls_op_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls op is null", K(ret));
+      } else {
+        int64_t tablet_count = op->ls_req_.ls_op_->count();
+        for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_result_idx++) { // loop tablet
+          ObTableTabletOpResult &tablet_result = op->result_.at(j);
+          ObTableBatchOperationResult &batch_result = result.get_results().at(batch_result_idx);
+          batch_result.set_attr(ObMemAttr(MTL_ID(), "ObHbaseGrpRes"));
+          int64_t single_op_count = tablet_result.count();
+          for (int64_t k = 0; OB_SUCC(ret) && k < single_op_count; k++) { // loop single op
+            if (OB_FAIL(batch_result.push_back(tablet_result.at(k)))) {
+              LOG_WARN("fail to push back ObTableOperationResult", K(ret));
+            }
           }
         }
       }
@@ -191,15 +213,20 @@ int ObHbaseOpProcessor::process()
         int64_t batch_req_idx = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < op_count; i++) { // loop op
           ObHbaseOp *op = static_cast<ObHbaseOp*>(ops_->at(i));
-          int64_t tablet_count = op->ls_req_.ls_op_.count();
-          for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_req_idx++) { // loop tablet
-            const ObTableTabletOp &tablet_op = op->ls_req_.ls_op_.at(j);
-            ObTableBatchOperation &batch_op = req.get_ops().at(batch_req_idx);
-            batch_op.set_entity_factory(&default_entity_factory_);
-            if (OB_FAIL(fill_batch_op(tablet_op, batch_op))) {
-              LOG_WARN("fail to fill batch op", K(ret), KPC(op));
-            } else if (OB_FAIL(req.get_tablet_ids().push_back(tablet_op.get_tablet_id()))) {
-              LOG_WARN("fail to add tablet id", K(ret));
+          if (OB_ISNULL(op->ls_req_.ls_op_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ls op is null", K(ret));
+          } else {
+            int64_t tablet_count = op->ls_req_.ls_op_->count();
+            for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_req_idx++) { // loop tablet
+              const ObTableTabletOp &tablet_op = op->ls_req_.ls_op_->at(j);
+              ObTableBatchOperation &batch_op = req.get_ops().at(batch_req_idx);
+              batch_op.set_entity_factory(&default_entity_factory_);
+              if (OB_FAIL(fill_batch_op(tablet_op, batch_op))) {
+                LOG_WARN("fail to fill batch op", K(ret), KPC(op));
+              } else if (OB_FAIL(req.get_tablet_ids().push_back(tablet_op.get_tablet_id()))) {
+                LOG_WARN("fail to add tablet id", K(ret));
+              }
             }
           }
         }

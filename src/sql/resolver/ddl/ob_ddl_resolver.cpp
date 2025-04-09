@@ -110,6 +110,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     vec_column_name_(),
     vec_index_type_(INDEX_TYPE_MAX),
     enable_macro_block_bloom_filter_(false),
+    semistruct_encoding_type_(),
     dynamic_partition_policy_()
 {
   table_mode_.reset();
@@ -3010,7 +3011,15 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             } else if (OB_FAIL(ob_write_string(*allocator_, tmp_str, kv_attributes_))) {
               SQL_RESV_LOG(WARN, "write string failed", K(ret));
             } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-              if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::KV_ATTRIBUTES))) {
+              HEAP_VAR(ObTableSchema, tmp_table_schema) {
+                if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
+                  LOG_WARN("get table schema failed", K(ret));
+                } else if (OB_FAIL(ObTTLUtil::check_kv_attributes(kv_attributes_, tmp_table_schema,
+                                      tmp_table_schema.get_part_level()))) {
+                  LOG_WARN("fail to check kv attributes partition", K(ret));
+                }
+              }
+              if (OB_SUCC(ret) && OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::KV_ATTRIBUTES))) {
                 SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
               }
             }
@@ -3163,6 +3172,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         } else {
           // do nothing
         }
+        break;
+      }
+      case T_SEMISTRUCT_ENCODING_TYPE: {
+        ret = resolve_semistruct_encoding_type(option_node, is_index_option);
         break;
       }
       case T_MERGE_ENGINE: {
@@ -5745,6 +5758,7 @@ void ObDDLResolver::reset() {
   index_params_.reset();
   mv_refresh_dop_ = 0;
   enable_macro_block_bloom_filter_ = false;
+  semistruct_encoding_type_.reset();
   dynamic_partition_policy_.reset();
 }
 
@@ -13974,6 +13988,56 @@ bool ObDDLResolver::is_column_group_supported() const
     // do nothing. column group is supported under shared-nothing mode
   }
   return is_supported;
+}
+
+int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node, const bool is_index_option)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = 0;
+  uint64_t tenant_data_version = 0;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "session_info_ is null", K(ret));
+  } else if (OB_FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("semistruct encoding is not supported in data version less than 4.3.5.2", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct encoding in data version less than 4.3.5.2");
+  } else if (is_index_option) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index option should not specify semistruct encoding", K(ret));
+  } else if (OB_ISNULL(option_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "option_node is null", K(ret));
+  } else if (OB_ISNULL(option_node->children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "the children of option_node is null", K(option_node->children_), K(ret));
+  } else if (OB_ISNULL(option_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN,"children can't be null", K(ret));
+  } else if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN,"stmt_ is null", K(ret));
+  } else {
+    ObString type_str(static_cast<int32_t>(option_node->children_[0]->str_len_), (char *)(option_node->children_[0]->str_value_));
+    if (type_str.empty()) {
+      semistruct_encoding_type_.mode_ = ObSemiStructEncodingType::Mode::NONE;
+    } else if (0 == type_str.case_compare("encoding")) {
+      semistruct_encoding_type_.mode_ = ObSemiStructEncodingType::Mode::ENCODING;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(type_str));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be none or encoding");
+    }
+    if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+      if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE))) {
+        SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 // assuming part_func_expr_str is utf-8 encoded

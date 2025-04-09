@@ -99,10 +99,10 @@ public:
       : redis_ctx_(redis_ctx),
         op_temp_allocator_(redis_ctx.allocator_),
         op_entity_factory_(*redis_ctx.entity_factory_),
-        model_(ObRedisModel::INVALID),
+        model_(ObRedisDataModel::MODEL_MAX),
         tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                     ModulePageAllocator(op_temp_allocator_, "RedisCmd")),
-        binlog_row_image_type_(TABLEAPI_SESS_POOL_MGR->get_binlog_row_image())
+        binlog_row_image_type_(TABLEAPI_OBJECT_POOL_MGR->get_binlog_row_image())
   {}
   virtual ~CommandOperator() {}
 
@@ -134,10 +134,10 @@ public:
                                        const ObString &member,
                                        ObITableEntity *&entity);
 
-  int insup_meta(int64_t db, const ObString &key, ObRedisModel model);
+  int insup_meta(int64_t db, const ObString &key, ObRedisDataModel model);
   int check_and_insup_meta(int64_t db,
                            const ObString &key,
-                           ObRedisModel model,
+                           ObRedisDataModel model,
                            bool &do_insup,
                            ObRedisMeta *&meta);
   int add_complex_type_subkey_scan_range(int64_t db, const ObString &key, ObTableQuery &query);
@@ -149,7 +149,7 @@ public:
       const ObString &member,
       common::ObRowkey &rowkey);
   int do_group_complex_type_set();
-  int do_group_complex_type_subkey_exists(ObRedisModel model);
+  int do_group_complex_type_subkey_exists(ObRedisDataModel model);
 
 protected:
   int build_range(const common::ObRowkey &start_key,
@@ -172,13 +172,13 @@ protected:
 protected:
   // common functions for ZSET/SET/HASH
   // return OB_ITER_END if meta not exist or is expired
-  int get_meta(int64_t db, const ObString &key, ObRedisModel model, ObRedisMeta *&meta_info);
+  int get_meta(int64_t db, const ObString &key, ObRedisDataModel model, ObRedisMeta *&meta_info);
   int build_complex_type_rowkey(int64_t db,
                                 const ObString &key,
                                 bool is_next_prefix,
                                 common::ObRowkey &rowkey);
-  int put_meta(int64_t db, const ObString &key, ObRedisModel model, const ObRedisMeta &meta_info);
-  int gen_meta_entity(int64_t db, const ObString &key, ObRedisModel model,
+  int put_meta(int64_t db, const ObString &key, ObRedisDataModel model, const ObRedisMeta &meta_info);
+  int gen_meta_entity(int64_t db, const ObString &key, ObRedisDataModel model,
                       const ObRedisMeta &meta_info, ObITableEntity *&put_meta_entity);
   int add_meta_select_columns(ObTableQuery &query);
   int build_string_rowkey_entity(int64_t db, const ObString &key, ObITableEntity *&entity);
@@ -194,13 +194,13 @@ protected:
       ObString &subkey);
   int get_insert_ts_from_entity(const ObITableEntity &entity, int64_t &insert_ts);
   int del_complex_key(
-      ObRedisModel model,
+      ObRedisDataModel model,
       int64_t db,
       const common::ObString &key,
       bool del_meta,
       bool& is_exist);
   int build_del_query(int64_t db, const ObString &key, ObTableQuery &query);
-  int build_del_ops(ObRedisModel model,
+  int build_del_ops(ObRedisDataModel model,
                     int db,
                     const ObString &key,
                     const ObTableQuery &query,
@@ -209,12 +209,12 @@ protected:
   int delete_results(const ResultFixedArray &results,
                      const ObArray<ObRowkey> &rowkeys,
                      int64_t &del_num);
-  int fake_del_meta(ObRedisModel model,
+  int fake_del_meta(ObRedisDataModel model,
                                     int64_t db,
                                     const ObString &key,
                                     ObRedisMeta *meta_info = nullptr);
   int get_complex_type_count(int64_t db, const common::ObString &key, int64_t &total_count);
-  int fake_del_empty_key_meta(ObRedisModel model,
+  int fake_del_empty_key_meta(ObRedisDataModel model,
                               int64_t db,
                               const ObString &key,
                               ObRedisMeta *meta_info = nullptr);
@@ -224,7 +224,7 @@ protected:
   // for batch
   int reply_batch_res(const ResultFixedArray &batch_res);
   // for group service
-  int get_group_metas(ObIAllocator &allocator, ObRedisModel model, ObIArray<ObRedisMeta *> &metas);
+  int get_group_metas(ObIAllocator &allocator, ObRedisDataModel model, ObIArray<ObRedisMeta *> &metas);
   virtual int fill_set_batch_op(const ObRedisOp &op,
                                 ObIArray<ObTabletID> &tablet_ids,
                                 ObTableBatchOperation &batch_op);
@@ -238,7 +238,7 @@ protected:
   ObRedisCtx &redis_ctx_;
   common::ObIAllocator &op_temp_allocator_;
   ObITableEntityFactory &op_entity_factory_;
-  ObRedisModel model_; // to init tb ctx
+  ObRedisDataModel model_; // to init tb ctx
   ObString fmt_redis_msg_;
   // remember call tablet_ids_.reuse() before use it
   common::ObSEArray<ObTabletID, 16> tablet_ids_;

@@ -133,11 +133,11 @@ OB_DEF_DESERIALIZE(ObTableDirectLoadResult)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTableLSOpRequest,
+OB_SERIALIZE_MEMBER(ObTableLSOpRequest, // FARM COMPAT WHITELIST
                     credential_,
                     entity_type_,
                     consistency_level_,
-                    ls_op_);
+                    *ls_op_);
 
 OB_DEF_SERIALIZE(ObTableLSOpResult) {
   int ret = OB_SUCCESS;
@@ -148,6 +148,14 @@ OB_DEF_SERIALIZE(ObTableLSOpResult) {
     }
   }
   return ret;
+}
+
+void ObTableLSOpRequest::shaddow_copy_without_op(const ObTableLSOpRequest &other)
+{
+  this->credential_ = other.credential_;
+  this->entity_type_ = other.entity_type_;
+  this->consistency_level_ = other.consistency_level_;
+  this->ls_op_->shaddow_copy_without_op(*other.ls_op_);
 }
 
 OB_DEF_SERIALIZE_SIZE(ObTableLSOpResult) {

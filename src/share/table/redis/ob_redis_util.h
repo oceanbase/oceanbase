@@ -34,9 +34,9 @@ public:
   static const uint64_t MAX_BULK_LEN = 1 * 1024 * 1024; // 1M, not compatible with redis (512M)
 
   static int get_lock_key(ObIAllocator &allocator, const ObRedisRequest &redis_req, ObString &lock_key);
-  static int get_table_name_by_model(ObRedisModel model, ObString &table_name);
-  static int model_to_string(ObRedisModel model, ObString &str);
-  static int check_redis_ttl_schema(const ObTableSchema &table_schema, const table::ObRedisModel redis_model);
+  static int get_table_name_by_model(ObRedisDataModel model, ObString &table_name);
+  static int model_to_string(ObRedisDataModel model, ObString &str);
+  static int check_redis_ttl_schema(const ObTableSchema &table_schema, const table::ObRedisDataModel redis_model);
   static int string_to_double(const ObString &str, double &d);
   static int double_to_string(ObIAllocator &allocator, double d, ObString &str);
   static int string_to_long_double(const ObString &str, long double &ld);

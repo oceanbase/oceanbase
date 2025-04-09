@@ -52,7 +52,9 @@ private:
     if (OB_NOT_NULL(ops_)) {
       for (int64_t i = 0; i < ops_->count(); i++) {
         const ObHbaseOp *op = reinterpret_cast<ObHbaseOp*>(ops_->at(i));
-        cnt += op->ls_req_.ls_op_.count();
+        if (OB_NOT_NULL(op->ls_req_.ls_op_)) {
+          cnt += op->ls_req_.ls_op_->count();
+        }
       }
     }
 

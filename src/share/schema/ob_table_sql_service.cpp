@@ -3064,6 +3064,11 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
+  } else if (data_version < DATA_VERSION_4_3_5_2 && table.get_semistruct_encoding_flags() != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("semistruct encodin is not supported in version less than 4.3.5.2",
+        "semistruct_encoding_flags", table.get_semistruct_encoding_flags(),
+        "semistruct_encoding_type", table.get_semistruct_encoding_type());
   } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
@@ -3251,6 +3256,8 @@ int ObTableSqlService::gen_table_dml(
         || (data_version >= DATA_VERSION_4_3_5_1
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         || (data_version >= DATA_VERSION_4_3_5_2
+            && OB_FAIL(dml.add_column("semistruct_encoding_type", table.get_semistruct_encoding_flags())))
+        || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
         || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("merge_engine_type", table.get_merge_engine_type())))
@@ -3297,6 +3304,11 @@ int ObTableSqlService::gen_table_options_dml(
   } else if (data_version < DATA_VERSION_4_3_3_0 && (!table.get_index_params().empty())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index params setting is not support before 433", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_3_5_2 && table.get_semistruct_encoding_flags() != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("semistruct encodin is not supported in version less than 4.3.5.2",
+        "semistruct_encoding_mode", table.get_semistruct_encoding_flags(),
+        "semistruct_encoding_type", table.get_semistruct_encoding_type());
   } else {}
   if (OB_SUCC(ret)) {
     ObString empty_str("");
@@ -3434,6 +3446,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("parser_properties", ObHexEscapeSqlStr(parser_properties))))
         || (data_version >= DATA_VERSION_4_3_5_1
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
+        || (data_version >= DATA_VERSION_4_3_5_2
+            && OB_FAIL(dml.add_column("semistruct_encoding_type", table.get_semistruct_encoding_flags())))
         || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
         || (data_version >= DATA_VERSION_4_3_5_2

@@ -33,7 +33,7 @@ public:
   T& top();
   int top(const T* &element);
   int replace_top(const T &element);
-  bool empty() {return array_.empty();}
+  bool empty() const {return array_.empty();}
   int64_t count() const {return array_.count();}
   void reset()
   {

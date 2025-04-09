@@ -91,9 +91,8 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
       if (OB_ISNULL(sql_ctx_) || OB_ISNULL(schema_guard = sql_ctx_->schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is nullptr", K(ret), K(sql_ctx_), K(schema_guard));
-      } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
-                                                        real_table_id,
-                                                        tablet_mapper.table_schema_))) {
+      } else if (OB_ISNULL(tablet_mapper.table_schema_)
+          && OB_FAIL(schema_guard->get_table_schema(tenant_id, real_table_id, tablet_mapper.table_schema_))) {
         LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(real_table_id));
       } else if (OB_ISNULL(tablet_mapper.table_schema_)) {
         ret = OB_TABLE_NOT_EXIST;
@@ -106,8 +105,8 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
       if (OB_ISNULL(sql_schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is nullptr", K(ret), K(sql_ctx_), K(sql_schema_guard));
-      } else if (OB_FAIL(sql_schema_guard->get_mocked_table_schema(real_table_id,
-                                                              tablet_mapper.table_schema_))) {
+      } else if (OB_ISNULL(tablet_mapper.table_schema_) &&
+          OB_FAIL(sql_schema_guard->get_mocked_table_schema(real_table_id, tablet_mapper.table_schema_))) {
         LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(real_table_id));
       } else if (OB_ISNULL(tablet_mapper.table_schema_)) {
         ret = OB_TABLE_NOT_EXIST;

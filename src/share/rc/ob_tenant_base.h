@@ -140,7 +140,7 @@ namespace table
 {
   class ObTTLService;
   class ObHTableLockMgr;
-  class ObTableApiSessPoolMgr;
+  class ObTableObjectPoolMgr;
   class ObTableGroupCommitMgr;
   class ObHTableRowkeyMgr;
   class ObTableClientInfoMgr;
@@ -421,7 +421,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
-      table::ObTableApiSessPoolMgr*,                \
+      table::ObTableObjectPoolMgr*,                \
       rootserver::ObTenantSnapshotScheduler*,       \
       storage::ObTenantSnapshotService*,            \
       rootserver::ObCloneScheduler*,                \

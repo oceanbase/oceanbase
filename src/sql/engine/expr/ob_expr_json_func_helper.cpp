@@ -19,6 +19,7 @@
 #include "sql/ob_spi.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "lib/charset/ob_charset_string_helper.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -2806,6 +2807,111 @@ int ObJsonExprHelper::get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &time
     LOG_WARN("session is NULL", K(ret));
   } else {
     timeout_ts = session->get_query_timeout_ts();
+  }
+  return ret;
+}
+
+bool ObJsonExprHelper::check_json_path_can_pushdown(const ObRawExpr &path_expr)
+{
+  bool res = false;
+  if (! path_expr.is_const_expr()) {
+    LOG_INFO("path expr is not const expr, so not support", K(path_expr));
+  } else {
+    const ObConstRawExpr &const_param = static_cast<const ObConstRawExpr &>(path_expr);
+    const ObObj &path_value = const_param.get_value();
+    share::ObSubColumnPath sub_col_path;
+    if (! path_value.is_string_type() || path_value.is_null()) {
+      LOG_INFO("path expr is not string, so not support", K(path_value), K(const_param));
+    } else if (OB_SUCCESS != share::ObSubColumnPath::parse_sub_column_path(path_value.get_string(), sub_col_path)) {
+      LOG_INFO("can not parse path string to sub column path, so do not pushdown", K(path_value), K(const_param));
+    } else {
+      res = true;
+    }
+  }
+  return res;
+}
+
+bool ObJsonExprHelper::check_json_expr_can_pushdown(const ObRawExpr &json_expr)
+{
+  bool res = false;
+  if (T_FUN_SYS_JSON_VALUE == json_expr.get_expr_type() && json_expr.get_param_count() == OB_JSON_VALUE_EXPR_PARAM_COUNT) {
+    const ObRawExpr *doc_expr = json_expr.get_param_expr(JSN_VAL_DOC);
+    const ObRawExpr *path_expr = json_expr.get_param_expr(JSN_VAL_PATH);
+    const ObRawExpr *type_expr = json_expr.get_param_expr(JSN_VAL_RET);
+    const ObRawExpr *trunc_expr = json_expr.get_param_expr(JSN_VAL_TRUNC);
+    const ObRawExpr *ascii_expr = json_expr.get_param_expr(JSN_VAL_ASCII);
+    const ObRawExpr *empty_expr = json_expr.get_param_expr(JSN_VAL_EMPTY);
+    const ObRawExpr *empty_def_expr = json_expr.get_param_expr(JSN_VAL_EMPTY_DEF);
+    const ObRawExpr *error_expr = json_expr.get_param_expr(JSN_VAL_ERROR);
+    const ObRawExpr *error_def_expr = json_expr.get_param_expr(JSN_VAL_ERROR_DEF);
+    const ObRawExpr *mismatch_expr = json_expr.get_param_expr(JSN_VAL_MISMATCH);
+
+    if (OB_ISNULL(doc_expr) || OB_ISNULL(path_expr) || OB_ISNULL(type_expr) || OB_ISNULL(trunc_expr)
+        || OB_ISNULL(ascii_expr) || OB_ISNULL(empty_expr) || OB_ISNULL(empty_def_expr)
+        || OB_ISNULL(error_expr) || OB_ISNULL(error_def_expr) || OB_ISNULL(mismatch_expr)) {
+      LOG_INFO("param expr is null, so do not pushdown", KP(doc_expr), KP(path_expr), KP(type_expr), KP(trunc_expr),
+          KP(ascii_expr), K(empty_expr), KP(empty_def_expr), KP(error_expr), KP(error_def_expr), KP(mismatch_expr), K(json_expr));
+    } else if (json_expr.get_result_meta().is_json()) {
+      LOG_INFO("result type is json, so do not pushdown", KPC(type_expr), K(json_expr));
+    // check doc_expr, it must be json cloumn ref
+    } else if (ObRawExpr::EXPR_COLUMN_REF != doc_expr->get_expr_class() ||  ! doc_expr->get_result_meta().is_json()) {
+      LOG_INFO("doc expr is not json column ref, so do not pushdown", KPC(doc_expr), K(json_expr));
+    // check path_expr
+    } else if (! check_json_path_can_pushdown(*path_expr)) {
+      LOG_INFO("json path is not support pushdown", KPC(path_expr), K(json_expr));
+    // check return type expr
+    } else if (! type_expr->is_const_expr()) {
+      LOG_INFO("returning type is not const, so do not pushdown", KPC(type_expr), K(json_expr));
+    // check trunc expr
+    } else if (! trunc_expr->is_const_expr() || static_cast<const ObConstRawExpr *>(trunc_expr)->get_value().get_int() != 0) {
+      LOG_INFO("truncate expr is not default value, so do not support pushdown", KPC(trunc_expr), K(json_expr));
+    // check ascii expr
+    } else if (! ascii_expr->is_const_expr() || static_cast<const ObConstRawExpr *>(ascii_expr)->get_value().get_int() != 0) {
+      LOG_INFO("ascii expr not default value, so do not support pushdown", KPC(ascii_expr), K(json_expr));
+    } else if (! empty_expr->is_const_expr() || static_cast<const ObConstRawExpr *>(empty_expr)->get_value().get_int() != JSN_VALUE_IMPLICIT) {
+      LOG_INFO("empty clause expr not default value, so do not support pushdown", KPC(empty_expr), K(json_expr));
+    } else if (! empty_def_expr->is_const_expr() || ! static_cast<const ObConstRawExpr *>(empty_def_expr)->get_value().is_null()) {
+      LOG_INFO("empty define clause expr not default value, so do not support pushdown", KPC(empty_def_expr), K(json_expr));
+    } else if (! error_expr->is_const_expr() || static_cast<const ObConstRawExpr *>(error_expr)->get_value().get_int() != JSN_VALUE_IMPLICIT) {
+      LOG_INFO("error clause expr not default value, so do not support pushdown", KPC(error_expr), K(json_expr));
+    } else if (! error_def_expr->is_const_expr() || ! static_cast<const ObConstRawExpr *>(error_def_expr)->get_value().is_null()) {
+      LOG_INFO("error define clause expr not default value, so do not support pushdown", KPC(error_def_expr), K(json_expr));
+    } else {
+      res = true;
+    }
+  } else {
+    LOG_INFO("not support pushdown json expr", K(json_expr));
+  }
+  return res;
+}
+
+int ObJsonExprHelper::get_sub_column_path_from_json_expr(ObIAllocator& allocator, const ObRawExpr &json_expr, share::ObSubColumnPath& sub_col_path)
+{
+  int ret = OB_SUCCESS;
+  if (T_FUN_SYS_JSON_VALUE == json_expr.get_expr_type()) {
+    const ObRawExpr *path_expr = json_expr.get_param_expr(JSN_VAL_PATH);
+    ObString path_str;
+    if (OB_ISNULL(path_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("path_expr is null", K(ret), K(json_expr));
+    } else if (! path_expr->is_const_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("path_expr is not const", K(ret), KPC(path_expr), K(json_expr));
+    } else {
+      const ObConstRawExpr *const_param = static_cast<const ObConstRawExpr *>(path_expr);
+      const ObObj &path_value = const_param->get_value();
+      if (! path_value.is_string_type() || path_value.is_null()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("path expr is not string", K(ret), K(path_value), KPC(const_param));
+      } else if (OB_FAIL(ob_write_string(allocator, path_value.get_string(), path_str))) {
+        LOG_WARN("copy path_str fail", K(ret),  K(path_value));
+      } else if (OB_FAIL(share::ObSubColumnPath::parse_sub_column_path(path_str, sub_col_path))) {
+        LOG_WARN("parse sub column path fail", K(ret), K(path_str), K(path_value), KPC(const_param));
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("json expr is not support pushdown", K(ret), K(json_expr));
   }
   return ret;
 }

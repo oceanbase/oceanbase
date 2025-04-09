@@ -15,7 +15,7 @@
 #include "ob_table_tenant_group.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/table/ob_table_session_pool.h"
+#include "observer/table/object_pool/ob_table_object_pool.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -384,7 +384,7 @@ int ObTableGroupUtils::init_sess_guard(ObTableGroup &group,
   int ret = OB_SUCCESS;
   ObTableApiCredential &credential = group.group_meta_.credential_;
 
-  if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential, sess_guard))) {
+  if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->get_sess_info(credential, sess_guard))) {
     LOG_WARN("fail to get session info", K(ret), K(credential));
   }
 
@@ -449,14 +449,14 @@ int ObTableGroupUtils::trigger(const ObTableGroupTriggerRequest &request)
 
 bool ObTableGroupUtils::is_group_commit_config_enable()
 {
-  return TABLEAPI_SESS_POOL_MGR->get_kv_group_commit_batch_size() > 1;
+  return TABLEAPI_OBJECT_POOL_MGR->get_kv_group_commit_batch_size() > 1;
 }
 
 bool ObTableGroupUtils::is_group_commit_config_enable(ObTableOperationType::Type op_type)
 {
   bool bret = false;
-  int64_t batch_size = TABLEAPI_SESS_POOL_MGR->get_kv_group_commit_batch_size();
-  ObTableGroupRwMode mode = TABLEAPI_SESS_POOL_MGR->get_group_rw_mode();
+  int64_t batch_size = TABLEAPI_OBJECT_POOL_MGR->get_kv_group_commit_batch_size();
+  ObTableGroupRwMode mode = TABLEAPI_OBJECT_POOL_MGR->get_group_rw_mode();
   if (batch_size > 1) {
     if (mode == ObTableGroupRwMode::ALL) { // 'ALL'
       bret = true;

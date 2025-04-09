@@ -67,7 +67,7 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
   }
 
   int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = executor->close())) {
+  if (OB_NOT_NULL(executor) && OB_SUCCESS != (tmp_ret = executor->close())) {
     LOG_WARN("fail to close executor", K(tmp_ret));
     ret = COVER_SUCC(tmp_ret);
   }
@@ -428,7 +428,7 @@ int ObHTableDeleteExecutor::get_next_row()
       const ObTableOperation &op = ops->at(i);
       if (OB_FAIL(build_range(op.entity()))) {
         LOG_WARN("fail to build range", K(ret), K(op.entity()));
-      } else if (OB_FAIL(generate_filter(op.entity(), filter))) {
+      } else if (OB_FAIL(ObHTableUtils::gen_filter_by_entity(op.entity(), filter))) {
         LOG_WARN("fail to generate htable filter", K(ret), K(op.entity()));
       } else if (OB_FAIL(query_and_delete(query))) {
         LOG_WARN("fail to query and delete", K(ret), K(query));
@@ -450,7 +450,7 @@ int ObHTableDeleteExecutor::get_next_row_by_entity()
     ObHTableFilter &filter = query.htable_filter();
     if (OB_FAIL(build_range(*entity))) {
       LOG_WARN("fail to build range", K(ret), K(entity));
-    } else if (OB_FAIL(generate_filter(*entity, filter))) {
+    } else if (OB_FAIL(ObHTableUtils::gen_filter_by_entity(*entity, filter))) {
       LOG_WARN("fail to generate htable filter", K(ret), K(entity));
     } else if (OB_FAIL(query_and_delete(query))) {
       LOG_WARN("fail to query and delete", K(ret), K(query));

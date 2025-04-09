@@ -240,7 +240,7 @@ int ObRedisImporter::check_redis_info()
       uint64_t table_id = 0;
       ObString table_name;
       if (OB_FAIL(
-              ObRedisHelper::get_table_name_by_model(static_cast<ObRedisModel>(i), table_name))) {
+              ObRedisHelper::get_table_name_by_model(static_cast<ObRedisDataModel>(i), table_name))) {
         LOG_WARN("failed to get table name by model", K(ret), K(i));
       } else if (OB_FAIL(sql.assign_fmt("SELECT TABLE_ID from oceanbase.%s where database_id = %lu "
                                         "and table_name = \"%s\";",

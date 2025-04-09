@@ -133,6 +133,7 @@ int ObTableApiLockExecutor::get_next_row_from_child()
 int ObTableApiLockExecutor::lock_row_to_das()
 {
   int ret = OB_SUCCESS;
+  bool is_primary_index = false;
   int64_t lock_ctdef_count = lock_spec_.get_ctdefs().count();
   if (OB_UNLIKELY(lock_ctdef_count != lock_rtdefs_.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -150,10 +151,12 @@ int ObTableApiLockExecutor::lock_row_to_das()
     } else if (OB_ISNULL(table_loc = lock_rtdef.das_rtdef_.table_loc_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_loc is NULL", K(ret), K(i));
-    } else if (OB_FAIL(calc_tablet_loc(lock_ctdef->old_part_id_expr_,
+    } else if (FALSE_IT(is_primary_index = (lock_ctdef->das_ctdef_.table_id_ == lock_ctdef->das_ctdef_.index_tid_))) {
+    } else if (OB_FAIL(calc_tablet_loc(is_primary_index,
+                                       lock_ctdef->old_part_id_expr_,
                                        *table_loc,
                                        tablet_loc))) {
-      LOG_WARN("fail tp calc tablet location", K(ret), K(i));
+      LOG_WARN("fail tp calc tablet location", K(ret), K(i), K(is_primary_index));
     } else if (OB_FAIL(ObDMLService::lock_row(lock_ctdef->das_ctdef_,
                                               lock_rtdef.das_rtdef_,
                                               tablet_loc,

@@ -107,11 +107,14 @@ int ObDictColumnEncoder::build_ref_encoder_ctx_()
         ref_stream_idx = 1;
       }
       ++int_stream_count_;
-      if (OB_FAIL(ref_enc_ctx_.build_stream_encoder_info(
+      ObPreviousColumnEncoding *pre_col_encoding = nullptr;
+      if (OB_FAIL(get_previous_cs_encoding(pre_col_encoding))) {
+        LOG_WARN("get_previous_cs_encoding fail", K(ret));
+      } else if (OB_FAIL(ref_enc_ctx_.build_stream_encoder_info(
           false/*has_null*/,
           false/*not monotonic*/,
           &ctx_->encoding_ctx_->cs_encoding_opt_,
-          ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_),
+          pre_col_encoding,
           ref_stream_idx, ctx_->encoding_ctx_->compressor_type_, ctx_->allocator_))) {
         LOG_WARN("fail to build_stream_encoder_info", K(ret));
       }

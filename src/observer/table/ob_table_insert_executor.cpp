@@ -153,8 +153,8 @@ int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *enti
 int ObTableApiInsertExecutor::get_next_row_from_child()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObTableOperation> *ops = tb_ctx_.get_batch_operation();
-  bool is_batch = (OB_NOT_NULL(ops) && !tb_ctx_.is_htable()) || (OB_NOT_NULL(ops) && tb_ctx_.is_client_use_put());
+  const ObIArray<ObITableEntity*> *batch_entities = tb_ctx_.get_batch_entities();
+  bool is_batch = batch_entities != nullptr;
 
   // single operation
   if (!is_batch) {
@@ -168,16 +168,19 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
     }
   } else { // batch operation
     const ObIArray<ObTabletID> *tablet_ids = tb_ctx_.get_batch_tablet_ids();
-    if (cur_idx_ >= ops->count()) {
+    if (cur_idx_ >= batch_entities->count()) {
       ret = OB_ITER_END;
     } else {
-      const ObTableEntity *entity = static_cast<const ObTableEntity *>(&ops->at(cur_idx_).entity());
-      if (tb_ctx_.is_multi_tablet_get()) {
-        if (OB_UNLIKELY(tablet_ids->count() != ops->count())) {
+      const ObTableEntity *entity = static_cast<const ObTableEntity *>(batch_entities->at(cur_idx_));
+      if (OB_ISNULL(entity)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("entity is NULL", K(ret), K(cur_idx_));
+      } else if (tb_ctx_.is_multi_tablets()) {
+        if (OB_UNLIKELY(tablet_ids->count() != batch_entities->count())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("use multi tablets batch but tablet ids is not equal to ops", K(tablet_ids->count()), K(ops->count()));
+          LOG_WARN("use multi tablets batch but tablet ids is not equal to ops", K(tablet_ids->count()), K(batch_entities->count()));
         } else {
-          ObTabletID tablet_id= tablet_ids->at(cur_idx_);
+          ObTabletID tablet_id = tablet_ids->at(cur_idx_);
           tb_ctx_.set_tablet_id(tablet_id);
         }
       }

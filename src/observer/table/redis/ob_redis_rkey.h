@@ -58,7 +58,7 @@ public:
   static int decode_is_data(const ObString &encoded_rkey, bool &is_data);
   static int decode_subkey(const ObString &encoded_rkey, ObString &subkey);
   static int decode_key(const ObString &encoded_rkey, ObString &key);
-  static int gen_partition_key_by_rowkey(ObRedisModel model, ObIAllocator &allocator, const ObRowkey &rowkey, ObRowkey &partition_key);
+  static int gen_partition_key_by_rowkey(ObRedisDataModel model, ObIAllocator &allocator, const ObRowkey &rowkey, ObRowkey &partition_key);
 
 private:
   static int hex_to_key_length(const ObString &hex_str, uint32_t &key_length);

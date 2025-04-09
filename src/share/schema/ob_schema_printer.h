@@ -529,6 +529,10 @@ public:
                                char* buf,
                                const int64_t& buf_len,
                                int64_t& pos) const;
+  int print_semistruct_encodng_options(const ObTableSchema &table_schema,
+                                       char* buf,
+                                       const int64_t& buf_len,
+                                       int64_t& pos) const;
   int print_dynamic_partition_policy(const ObTableSchema &table_schema,
                                      char* buf,
                                      const int64_t& buf_len,

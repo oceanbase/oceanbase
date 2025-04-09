@@ -1310,7 +1310,7 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
     } else {
       ObKVFeatureMode kv_mode;
       for (int64_t i = 0; i < kv_list.count() && bret; i++) {
-        uint8_t mode = MODE_DEFAULT;
+        uint16_t mode = MODE_DEFAULT;
         if (kv_list.at(i).second.case_compare(MODE_VAL_ON) == 0) {
           mode = MODE_ON;
         } else if (kv_list.at(i).second.case_compare(MODE_VAL_OFF) == 0) {
@@ -1326,13 +1326,17 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
           kv_mode.set_rerouting_mode(mode);
         } else if (kv_list.at(i).first.case_compare(MODE_NAME_HOTKEY) == 0) {
           kv_mode.set_hotkey_mode(mode);
+        } else if (kv_list.at(i).first.case_compare(MODE_NAME_DISTRIBUTED_EXECUTE) == 0) {
+          kv_mode.set_distributed_execute_mode(mode);
         } else {
           bret = false;
           OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode name", K(kv_list.at(i).first));
         }
       } // end for
       if (bret) {
-        arr[0] = kv_mode.get_value();
+        int16_t mode_value = kv_mode.get_value();
+        arr[0] = (mode_value & 0xFF);
+        arr[1] = ((mode_value >> 8) & 0xFF);
       }
     }
   }

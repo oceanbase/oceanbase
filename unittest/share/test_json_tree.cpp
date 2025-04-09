@@ -1488,7 +1488,7 @@ TEST_F(TestJsonTree, test_get_serialize_size)
                                         syntaxerr, &err_offset, j_node));
   serialize_size = j_node->get_serialize_size();
   cout << "============ object serialize_size:" << serialize_size << endl;
-  ASSERT_EQ(19, serialize_size);
+  ASSERT_EQ(20, serialize_size);
   
   // array
   common::ObString j_arr_text("[1, \"abc\", 1.2, null, 0, [123, 1, 2]]");
@@ -1496,7 +1496,7 @@ TEST_F(TestJsonTree, test_get_serialize_size)
                                         syntaxerr, &err_offset, j_node));
   serialize_size = j_node->get_serialize_size();
   cout << "============ array serialize_size:" << serialize_size << endl;
-  ASSERT_EQ(44, serialize_size);
+  ASSERT_EQ(45, serialize_size);
 
   // int
   ObJsonInt j_int(1);
@@ -1577,11 +1577,11 @@ TEST_F(TestJsonTree, test_get_serialize_size)
   j_node = &j_str;
   serialize_size = j_node->get_serialize_size();
   cout << "============ string(a) serialize_size:" << serialize_size << endl;
-  ASSERT_EQ(2, serialize_size);
+  ASSERT_EQ(3, serialize_size);
   j_str.set_value("abcdefghijklmnobqrst", strlen("abcdefghijklmnobqrst"));
   serialize_size = j_node->get_serialize_size();
   cout << "============ string(abcdefghijklmnobqrst) serialize_size:" << serialize_size << endl;
-  ASSERT_EQ(21, serialize_size);
+  ASSERT_EQ(22, serialize_size);
 
   // bool
   ObJsonBoolean j_bool(true);
@@ -1630,7 +1630,7 @@ TEST_F(TestJsonTree, test_get_serialize_size)
   j_node = &j_opaque;
   serialize_size = j_node->get_serialize_size();
   cout << "============ opaque(10101011010101010110101010101) serialize_size:" << serialize_size << endl;
-  ASSERT_EQ(39, serialize_size);
+  ASSERT_EQ(40, serialize_size);
 }
 
 TEST_F(TestJsonTree, test_get_serialize_size_array_one_depth)

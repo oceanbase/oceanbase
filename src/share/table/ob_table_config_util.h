@@ -39,6 +39,8 @@ public:
   bool is_ttl_enable();
   bool is_rerouting_enable();
   bool is_hotkey_enable();
+  bool is_distributed_execute_enable();
+  void set_distributed_execute_mode(uint16_t mode);
   void set_ttl_mode(uint16_t mode);
   void set_rerouting_mode(uint16_t mode);
   void set_hotkey_mode(uint16_t mode);
@@ -67,6 +69,7 @@ public:
   static bool is_ttl_enable();
   static bool is_rerouting_enable();
   static bool is_hotkey_enable();
+  static bool is_distributed_execute_enable();
 };
 
 class ObPrivControlMode final

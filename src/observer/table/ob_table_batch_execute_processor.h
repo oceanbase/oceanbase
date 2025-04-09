@@ -62,7 +62,6 @@ private:
 private:
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
   table::ObTableEntity result_entity_;
-  common::ObArenaAllocator allocator_;
   table::ObTableBatchCtx batch_ctx_;
 };
 

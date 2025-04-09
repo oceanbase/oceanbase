@@ -273,6 +273,16 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
     if (OB_SUCC(ret) && auto_increment_cache_size_ != 0) {
       table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     }
+    if (OB_SUCC(ret)) {
+      if (table_schema.get_row_store_type() != CS_ENCODING_ROW_STORE
+          && semistruct_encoding_type_.is_enable_semistruct_encoding()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("semistruct_encoding is not support if cs encoding is not set", K(ret), K(table_schema.get_row_store_type()), K(semistruct_encoding_type_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding is not support if cs encoding is not set");
+      } else {
+        table_schema.set_semistruct_encoding_type(semistruct_encoding_type_);
+      }
+    }
   }
   return ret;
 }

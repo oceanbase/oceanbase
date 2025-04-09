@@ -27,7 +27,7 @@ public:
   explicit StringCommandOperator(ObRedisCtx &redis_ctx) :
     CommandOperator(redis_ctx)
   {
-    model_ = ObRedisModel::STRING;
+    model_ = ObRedisDataModel::STRING;
   }
   virtual ~StringCommandOperator() = default;
   int is_key_exists(int64_t db, const ObString &key, bool &exists);

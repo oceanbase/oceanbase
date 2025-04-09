@@ -70,13 +70,16 @@ int ObStrDictColumnEncoder::build_string_dict_encoder_ctx_()
       ++int_stream_count_;
       int_stream_idx = 0;
     }
+    ObPreviousColumnEncoding *pre_col_encoding = nullptr;
     if (OB_FAIL(string_dict_enc_ctx_.build_string_stream_meta(
         ctx_->fix_data_size_, false/*use_zero_len_as_null*/, ctx_->dict_var_data_size_))) {
       LOG_WARN("fail to build_string_stream_meta", K(ret));
+    } else if (OB_FAIL(get_previous_cs_encoding(pre_col_encoding))) {
+      LOG_WARN("get_previous_cs_encoding fail", K(ret));
     } else if (OB_FAIL(string_dict_enc_ctx_.build_string_stream_encoder_info(
         ctx_->encoding_ctx_->compressor_type_, is_force_raw_,
         &ctx_->encoding_ctx_->cs_encoding_opt_,
-        ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_),
+        pre_col_encoding,
         int_stream_idx,
         ctx_->encoding_ctx_->major_working_cluster_version_,
         ctx_->allocator_))) {
@@ -94,9 +97,7 @@ int ObStrDictColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(sort_dict_())) {
-    LOG_WARN("fail to do_sort_dict", K(ret));
-  } else if (OB_FAIL(store_dict_encoding_meta_(buf_writer))) {
+  } else if (! ctx_->has_stored_meta_ && OB_FAIL(store_column_meta(buf_writer))) {
     LOG_WARN("fail to store dict encoding meta", K(ret), K_(dict_encoding_meta));
   } else if (OB_FAIL(store_dict_(buf_writer))) {
     LOG_WARN("fail to store dict", K(ret), K_(dict_encoding_meta));
@@ -115,6 +116,17 @@ int ObStrDictColumnEncoder::sort_dict_()
     // do nothing
   } else if (OB_FAIL(do_sort_dict_())) {
     LOG_WARN("fail to do_sort_dict", K(ret));
+  }
+  return ret;
+}
+
+int ObStrDictColumnEncoder::store_column_meta(ObMicroBufferWriter &buf_writer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sort_dict_())) {
+    LOG_WARN("fail to do_sort_dict", K(ret));
+  } else if (OB_FAIL(store_dict_encoding_meta_(buf_writer))) {
+    LOG_WARN("fail to store dict encoding meta", K(ret), K_(dict_encoding_meta));
   }
   return ret;
 }

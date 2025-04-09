@@ -21,6 +21,7 @@
 #include "ob_new_column_cs_decoder.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/ob_i_store.h"
+#include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 
 namespace oceanbase
 {
@@ -90,6 +91,28 @@ private:
 template <class Decoder>
 int new_decoder_with_allocated_buf(char *buf, const ObIColumnCSDecoder *&decoder);
 
+class ObSemiStructDecodeCtx
+{
+public:
+  ObSemiStructDecodeCtx():
+    allocator_("SemiDec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    handlers_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiDec", MTL_ID()))
+  {}
+
+  ~ObSemiStructDecodeCtx() { reset(); }
+
+  void reset();
+  int build_semistruct_ctx(ObSemiStructColumnDecoderCtx &semistruct_ctx);
+
+private:
+  int build_decode_handler(ObSemiStructColumnDecoderCtx &semistruct_ctx);
+  int build_sub_col_decoder(ObSemiStructColumnDecoderCtx &semistruct_ctx);
+
+public:
+  common::ObArenaAllocator allocator_;
+  ObSEArray<ObSemiStructDecodeHandler*, 10> handlers_;
+};
+
 class ObICSEncodeBlockReader
 {
 public:
@@ -105,6 +128,7 @@ protected:
   int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, int64_t &decoders_buf_pos, ObColumnCSDecoder &dest);
   int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder);
   int alloc_decoders_buf();
+  int init_semistruct_decoder(const ObIColumnCSDecoder *decoder, ObColumnCSDecoderCtx &decoder_ctx);
 
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
@@ -131,6 +155,7 @@ protected:
   int32_t default_store_ids_[DEFAULT_DECODER_CNT];
   common::ObObjMeta default_column_types_[DEFAULT_DECODER_CNT];
   bool need_cast_;
+  ObSemiStructDecodeCtx *semistruct_decode_ctx_;
   static ObNoneExistColumnCSDecoder none_exist_column_decoder_;
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
 };
@@ -304,6 +329,7 @@ private:
       const ObColumnParam *col_param,
       int64_t &decoders_buf_pos,
       ObColumnCSDecoder &dest);
+  int init_semistruct_decoder(const ObIColumnCSDecoder *decoder, ObColumnCSDecoderCtx &decoder_ctx);
   int free_decoders();
   int get_stream_data_buf(const int64_t stream_idx, const char *&buf);
   int decode_cells(
@@ -350,6 +376,7 @@ private:
   common::ObArenaAllocator buf_allocator_;
   char *allocated_decoders_buf_;
   int64_t allocated_decoders_buf_size_;
+  ObSemiStructDecodeCtx *semistruct_decode_ctx_;
 };
 
 }  // namespace blocksstable

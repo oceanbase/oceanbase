@@ -36,7 +36,8 @@ public:
     table_id_(OB_INVALID_ID),
     is_redis_table_(false),
     is_redis_ttl_(false),
-    redis_model_(ObRedisModel::INVALID)
+    has_cell_ttl_(false),
+    redis_model_(ObRedisDataModel::MODEL_MAX)
   {}
 
   bool is_valid() const
@@ -58,12 +59,13 @@ public:
            table_id_ == param.table_id_ &&
            is_redis_table_ == param.is_redis_table_ &&
            is_redis_ttl_ == param.is_redis_ttl_ &&
-           redis_model_ == param.redis_model_;
+           redis_model_ == param.redis_model_ &&
+           has_cell_ttl_ == param.has_cell_ttl_;
   }
 
   TO_STRING_KV(K_(ttl), K_(max_version), K_(is_htable), K_(tenant_id),
-               K_(user_id), K_(database_id), K_(table_id),
-               K_(is_redis_table), K_(is_redis_ttl), K_(redis_model));
+               K_(user_id), K_(database_id), K_(table_id), K_(is_redis_table),
+              K_(is_redis_ttl), K_(redis_model), K_(has_cell_ttl));
 public:
   int32_t  ttl_;
   int32_t  max_version_;
@@ -75,7 +77,8 @@ public:
   // for ob redis
   bool is_redis_table_;
   bool is_redis_ttl_;
-  ObRedisModel redis_model_;
+  bool has_cell_ttl_;
+  ObRedisDataModel redis_model_;
 };
 
 

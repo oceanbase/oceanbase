@@ -47,8 +47,10 @@ protected:
   virtual bool is_kv_processor() override { return true; }
 private:
   int32_t get_stat_process_type(bool is_hkv, bool is_check_and_execute, table::ObTableOperationType::Type type);
+  int old_try_process();
+  int new_try_process();
+  virtual bool is_new_try_process() override;
 private:
-  common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
 

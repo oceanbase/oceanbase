@@ -157,6 +157,35 @@ private:
   int build_all_string_data_desc_(const int64_t payload_len);
   int build_original_transform_desc_(const int32_t *store_ids, const int32_t store_ids_cnt);
   int build_stream_decoder_ctx_();
+  int build_semistruct_column_stream_(
+      const uint32_t column_idx,
+      const uint32_t &first_stream_begin_offset,
+      int32_t &stream_idx,
+      uint32_t &pre_streams_len);
+  int build_integer_sub_column_stream_(
+      const uint32_t &first_stream_begin_offset,
+      const ObCSColumnHeader &column_header,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &pre_streams_len);
+  int build_string_sub_column_stream_(
+      const uint32_t &first_stream_begin_offset,
+      const ObCSColumnHeader &column_header,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &pre_streams_len);
+  int build_integer_dict_sub_column_stream_(
+      const uint32_t &first_stream_begin_offset,
+      const ObCSColumnHeader &column_header,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &pre_streams_len);
+  int build_string_dict_sub_column_stream_(
+      const uint32_t &first_stream_begin_offset,
+      const ObCSColumnHeader &column_header,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &pre_streams_len);
 
 private:
   static const int32_t STREAM_OFFSETS_CACHED_COUNT = 128;
@@ -255,6 +284,46 @@ private:
                                      const int32_t col_end_stream_idx,
                                      const int32_t col_idx,
                                      ObDictColumnDecoderCtx &ctx);
+  int build_semistruct_column_decoder_ctx_(
+      const ObObjMeta &obj_meta,
+      const int32_t col_first_stream_idx,
+      const int32_t col_end_stream_idx,
+      const int32_t col_idx,
+      ObSemiStructColumnDecoderCtx &ctx);
+  int build_string_sub_column_decoder_ctx_(
+      const ObObjMeta &obj_meta,
+      const ObCSColumnHeader &sub_col_header,
+      const int32_t col_idx,
+      const int32_t sub_col_idx,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &stream_offset,
+      ObStringColumnDecoderCtx &ctx);
+  int build_integer_sub_column_decoder_ctx_(
+      const ObObjMeta &obj_meta,
+      const ObCSColumnHeader &sub_col_header,
+      const int32_t col_idx,
+      const int32_t sub_col_idx,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &stream_offset,
+      ObIntegerColumnDecoderCtx &ctx);
+  int build_integer_dict_sub_decoder_ctx_(
+      const ObObjMeta &obj_meta,
+      const ObCSColumnHeader &sub_col_header,
+      const int32_t sub_col_idx,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &stream_offset,
+      ObDictColumnDecoderCtx &ctx);
+  int build_string_dict_sub_decoder_ctx_(
+      const ObObjMeta &obj_meta,
+      const ObCSColumnHeader &sub_col_header,
+      const int32_t sub_col_idx,
+      const char *&sub_col_meta_ptr,
+      int32_t &stream_idx,
+      uint32_t &stream_offset,
+      ObDictColumnDecoderCtx &ctx);
 
 private:
   bool is_inited_;

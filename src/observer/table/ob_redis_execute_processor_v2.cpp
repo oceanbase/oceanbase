@@ -25,10 +25,10 @@ using namespace oceanbase::sql;
 
 ObRedisExecuteV2P::ObRedisExecuteV2P(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
-      allocator_("TbRedisExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       default_entity_factory_("TableRedisEntFac", MTL_ID()),
       redis_ctx_(allocator_, &default_entity_factory_, arg_, result_)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbRedisExePV2", ObCtxIds::DEFAULT_CTX_ID));
   result_.set_allocator(&allocator_);
 }
 
@@ -123,7 +123,9 @@ int ObRedisExecuteV2P::try_process()
   table_id_ = arg_.table_id_;
   tablet_id_ = arg_.tablet_id_;
   // note: use single get tmp
-  if (OB_FAIL(check_arg())) {
+  if (!arg_.ls_id_.is_valid() && OB_FAIL(get_ls_id(tablet_id_, const_cast<ObRedisRpcRequest&>(arg_).ls_id_))) {
+    LOG_WARN("fail to get ls id", K(ret), K(tablet_id_));
+  } else if (OB_FAIL(check_arg())) {
     LOG_WARN("check arg failed", K(ret));
   } else if (OB_FAIL(init_schema_info(arg_.table_id_, empty_table_name))) {
     ret = OB_SCHEMA_ERROR; // let client refresh table, maybe invalid schema cache

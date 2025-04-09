@@ -36,6 +36,7 @@ public:
       ttl_cnt_(0),
       scan_cnt_(0),
       last_row_(nullptr),
+      has_cell_ttl_(false),
       iter_end_ts_(0)
   {
     rowkey_cell_ids_.set_attr(ObMemAttr(MTL_ID(), "TTLRowIter"));
@@ -66,6 +67,7 @@ public:
   uint64_t ttl_cnt_;
   uint64_t scan_cnt_;
   ObNewRow *last_row_;
+  bool has_cell_ttl_;
   // map new row -> rowkey column
   common::ObSArray<uint64_t> rowkey_cell_ids_;
   // map new row -> normal column
@@ -93,6 +95,7 @@ public:
   ObString cur_qualifier_; // Q
   bool is_last_row_ttl_; // false indicate row del by max version
   bool is_hbase_table_;
+  bool has_cell_ttl_;
   common::ObTableTTLChecker ttl_checker_;
   int64_t rowkey_cnt_;
   bool hbase_new_cq_;

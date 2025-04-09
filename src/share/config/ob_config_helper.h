@@ -906,9 +906,9 @@ public:
   virtual ~ObKvFeatureModeParser() {}
   virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
 public:
-  static const int8_t MODE_DEFAULT = 0b00;
-  static const int8_t MODE_ON = 0b01;
-  static const int8_t MODE_OFF = 0b10;
+  static const int16_t MODE_DEFAULT = 0b00;
+  static const int16_t MODE_ON = 0b01;
+  static const int16_t MODE_OFF = 0b10;
   DISALLOW_COPY_AND_ASSIGN(ObKvFeatureModeParser);
 };
 

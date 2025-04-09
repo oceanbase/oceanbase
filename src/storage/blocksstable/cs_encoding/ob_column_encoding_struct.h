@@ -281,6 +281,7 @@ public:
     is_inited_(false),
     previous_encoding_of_columns_() {}
   int init(const int32_t col_count);
+  void reset();
   int update_column_detect_info(const int32_t column_idx,
                              const ObColumnEncodingIdentifier identifier,
                              const int64_t cur_block_count,
@@ -326,6 +327,7 @@ struct ObCSEncodingOpt
 
 class ObDictEncodingHashTable;
 class ObMicroBlockEncodingCtx;
+class ObSemiStructColumnEncodeCtx;
 struct ObColumnCSEncodingCtx
 {
   ObIAllocator *allocator_;
@@ -338,12 +340,15 @@ struct ObColumnCSEncodingCtx
   const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> *col_datums_;
   ObDictEncodingHashTable *ht_;
   const ObMicroBlockEncodingCtx *encoding_ctx_;
+  ObSemiStructColumnEncodeCtx *semistruct_ctx_;
   ObMicroBufferWriter *all_string_buf_writer_;
 
   bool need_sort_;
   bool force_raw_encoding_;
   bool has_zero_length_datum_;
   bool is_wide_int_;
+  bool is_semistruct_sub_col_;
+  bool has_stored_meta_;
   uint64_t integer_min_;
   uint64_t integer_max_;
 
@@ -353,9 +358,10 @@ struct ObColumnCSEncodingCtx
       var_data_size_(0), dict_var_data_size_(0),
       fix_data_size_(0), max_string_size_(0),
       col_datums_(nullptr), ht_(nullptr),
-      encoding_ctx_(nullptr), all_string_buf_writer_(nullptr),
+      encoding_ctx_(nullptr), semistruct_ctx_(nullptr), all_string_buf_writer_(nullptr),
       need_sort_(false), force_raw_encoding_(false),
       has_zero_length_datum_(false), is_wide_int_(0),
+      is_semistruct_sub_col_(false), has_stored_meta_(false),
       integer_min_(0), integer_max_(0)
   {
   }
@@ -363,11 +369,15 @@ struct ObColumnCSEncodingCtx
                          const int64_t column_index,
                          const bool micro_block_has_lob_out_row,
                          const int64_t major_working_cluster_version);
+  void try_set_need_sort(const ObCSColumnHeader::Type type,
+                         const ObObjTypeClass col_tc,
+                         const bool micro_block_has_lob_out_row,
+                         const int64_t major_working_cluster_version);
 
   TO_STRING_KV(K_(null_cnt), K_(nope_cnt), K_(var_data_size),
                K_(dict_var_data_size), K_(fix_data_size),
-               KP_(col_datums), KP_(ht), KP_(encoding_ctx), K_(max_string_size),
-               K_(need_sort), K_(force_raw_encoding),
+               KP_(col_datums), KP_(ht), KP_(encoding_ctx), KP_(semistruct_ctx), K_(max_string_size),
+               K_(need_sort), K_(force_raw_encoding), K_(is_semistruct_sub_col), K_(has_stored_meta),
                K_(has_zero_length_datum), K_(is_wide_int), K_(integer_min), K_(integer_max));
 };
 
@@ -475,6 +485,31 @@ struct ObDictColumnDecoderCtx : public ObBaseColumnDecoderCtx
       KPC_(dict_meta), K_(need_copy), K_(datum_len));
 };
 
+class ObColumnCSDecoderCtx;
+class ObIColumnCSDecoder;
+class ObSemiStructEncodeHeader;
+class ObSemiStructDecodeHandler;
+struct ObSemiStructColumnDecoderCtx : public ObBaseColumnDecoderCtx
+{
+  ObSemiStructColumnDecoderCtx()
+    : ObBaseColumnDecoderCtx(),
+      semistruct_header_(nullptr),
+      sub_col_headers_(nullptr),
+      sub_schema_data_ptr_(nullptr),
+      sub_col_ctxs_(nullptr),
+      sub_col_decoders_(nullptr),
+      handler_(nullptr) {}
+
+  const ObSemiStructEncodeHeader *semistruct_header_;
+  const ObCSColumnHeader *sub_col_headers_;
+  const char *sub_schema_data_ptr_;
+  ObColumnCSDecoderCtx *sub_col_ctxs_;
+  const ObIColumnCSDecoder **sub_col_decoders_;
+  ObSemiStructDecodeHandler *handler_;
+  INHERIT_TO_STRING_KV("ObBaseColumnDecoderCtx", ObBaseColumnDecoderCtx, KP_(semistruct_header), KP_(sub_col_headers),
+      KP_(sub_schema_data_ptr), KP_(sub_col_ctxs), KP_(sub_col_decoders), KP_(handler));
+};
+
 
 struct ObColumnCSDecoderCtx
 {
@@ -486,6 +521,7 @@ struct ObColumnCSDecoderCtx
     ObStringColumnDecoderCtx string_ctx_;
     ObDictColumnDecoderCtx dict_ctx_;
     ObBaseColumnDecoderCtx new_col_ctx_;
+    ObSemiStructColumnDecoderCtx semistruct_ctx_;
   };
   bool is_padding_mode_;
   void reset() { MEMSET(this, 0, sizeof(ObColumnCSDecoderCtx));}
@@ -493,6 +529,7 @@ struct ObColumnCSDecoderCtx
   OB_INLINE bool is_string_type() const { return ObCSColumnHeader::STRING == type_; }
   OB_INLINE bool is_int_dict_type() const { return ObCSColumnHeader::INT_DICT == type_; }
   OB_INLINE bool is_string_dict_type() const { return ObCSColumnHeader::STR_DICT == type_; }
+  OB_INLINE bool is_semistruct_type() const { return ObCSColumnHeader::SEMISTRUCT == type_; }
   // just for new added column
   OB_INLINE void fill_for_new_column(const share::schema::ObColumnParam *col_param, common::ObIAllocator *allocator)
   {
@@ -512,6 +549,8 @@ struct ObColumnCSDecoderCtx
       base_ctx = &string_ctx_;
     } else if (is_int_dict_type() || is_string_dict_type()) {
       base_ctx = &dict_ctx_;
+    } else if (is_semistruct_type()) {
+      base_ctx = &semistruct_ctx_;
     }
     return *base_ctx;
   }

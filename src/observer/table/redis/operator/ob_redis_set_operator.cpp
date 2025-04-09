@@ -277,7 +277,7 @@ int SetCommandOperator::insert_single_data(int64_t db, const ObString &key,
   // add meta, sadd do not update expire time
   bool is_insup = false;
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisModel::SET, is_insup, meta))) {
+  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisDataModel::SET, is_insup, meta))) {
     LOG_WARN("fail to check and insup meta", K(ret), K(key), K(db));
   }
   ObITableEntity *value_entity = nullptr;
@@ -349,7 +349,7 @@ int SetCommandOperator::do_sadd_inner(
   // add meta, sadd do not update expire time
   bool is_new_meta = false;
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisModel::SET, is_new_meta, meta))) {
+  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisDataModel::SET, is_new_meta, meta))) {
     LOG_WARN("fail to check and insup meta", K(ret), K(key), K(db));
   } else if (OB_FAIL(do_sadd_data(db, key, members, is_new_meta, insert_num))) {
     LOG_WARN("fail to do sadd data", K(ret), K(db), K(key), K(is_new_meta));
@@ -400,10 +400,10 @@ int SetCommandOperator::do_aggregate_store(
   bool is_exist = false; // unused
   int64_t insert_num = 0;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(del_complex_key(ObRedisModel::SET, db, dest, false/*del_meta*/, is_exist))) {
+  } else if (OB_FAIL(del_complex_key(ObRedisDataModel::SET, db, dest, false/*del_meta*/, is_exist))) {
     LOG_WARN("fail to delete set", K(ret), K(db), K(dest));
   } else if (!members.empty()) {
-    if (OB_FAIL(insup_meta(db, dest, ObRedisModel::SET))) {
+    if (OB_FAIL(insup_meta(db, dest, ObRedisDataModel::SET))) {
       LOG_WARN("fail to insert up meta", K(ret), K(db), K(dest));
     } else if (OB_FAIL(do_sadd_data(db, dest, members, true/*is_new_meta*/, insert_num))) {
       LOG_WARN("fail to add diff members", K(ret), K(db), K(dest));
@@ -804,7 +804,7 @@ int SetCommandOperator::do_spop(int64_t db, const common::ObString &key, const c
     } else if (OB_FAIL(del_member_after_spop(db, key, srand_result.res_members_, srand_result.res_insert_ts_))) {
       LOG_WARN("fail to del member after spop", K(ret));
     } else if (
-        srand_result.is_get_all_ && OB_FAIL(fake_del_empty_key_meta(is_zset_ ? ObRedisModel::ZSET : ObRedisModel::SET, db, key))) {
+        srand_result.is_get_all_ && OB_FAIL(fake_del_empty_key_meta(is_zset_ ? ObRedisDataModel::ZSET : ObRedisDataModel::SET, db, key))) {
       LOG_WARN("fail to delete empty key meta", K(ret), K(db), K(key));
     }
   }
@@ -954,7 +954,7 @@ int SetCommandOperator::do_srem_inner(
     }
   }
 
-  ObRedisModel model = is_zset_ ? ObRedisModel::ZSET : ObRedisModel::SET;
+  ObRedisDataModel model = is_zset_ ? ObRedisDataModel::ZSET : ObRedisDataModel::SET;
   ResultFixedArray results(op_temp_allocator_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(process_table_batch_op(ops, results))) {
@@ -991,7 +991,7 @@ int SetCommandOperator::do_srem_inner(
     }
   }
 
-  ObRedisModel model = is_zset_ ? ObRedisModel::ZSET : ObRedisModel::SET;
+  ObRedisDataModel model = is_zset_ ? ObRedisDataModel::ZSET : ObRedisDataModel::SET;
   ResultFixedArray results(op_temp_allocator_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(process_table_batch_op(ops, results))) {

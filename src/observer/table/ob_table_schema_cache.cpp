@@ -69,7 +69,10 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     auto_inc_cache_size_ = table_schema->get_auto_increment_cache_size();
     set_is_ttl_table(!table_schema->get_ttl_definition().empty());
     set_is_partitioned_table(table_schema->is_partitioned_table());
-    if (ObHTableUtils::is_htable_schema(*table_schema)) {
+    set_is_secondary_part(table_schema->get_part_level() == PARTITION_LEVEL_TWO);
+    if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, hbase_mode_type_))) {
+      LOG_WARN("fail to get mode type", K(ret));
+    } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
       uint64_t data_version = 0;
       if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
         flags_.has_hbase_ttl_column_ = true;
@@ -685,6 +688,26 @@ int ObKvSchemaCacheGuard::get_cache_obj(ObKvSchemaCacheObj *&cache_obj)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache obj is NULL", K(ret));
   }
+  return ret;
+}
+
+int ObKvSchemaCacheGuard::get_all_column_name(common::ObIArray<common::ObString> &col_names)
+{
+  int ret = OB_SUCCESS;
+
+  const ObIArray<ObTableColumnInfo *> &col_info_array= get_column_info_array();
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_info_array.count(); i++) {
+    ObTableColumnInfo *col_info = col_info_array.at(i);
+    if (OB_ISNULL(col_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column info is NULL", K(ret), K(i));
+    } else if (col_info->is_fulltext_column()) {
+      // skip and do nothing
+    } else if (OB_FAIL(col_names.push_back(col_info->column_name_))) {
+      LOG_WARN("fail to push back column name", K(ret));
+    }
+  }
+
   return ret;
 }
 

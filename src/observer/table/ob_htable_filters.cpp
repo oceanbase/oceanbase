@@ -2677,7 +2677,7 @@ bool CheckAndMutateFilter::match_column(const ObHTableCell &cell)
 
 bool CheckAndMutateFilter::filter_column_value(const ObHTableCell &cell)
 {
-  int cmp_ret = comparator_->compare_to(cell.get_value());
+  int cmp_ret = -comparator_->compare_to(cell.get_value());
   return CompareFilter::compare(cmp_op_, cmp_ret);
 }
 

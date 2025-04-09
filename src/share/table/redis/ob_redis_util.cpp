@@ -51,27 +51,27 @@ int ObRedisHelper::get_lock_key(ObIAllocator &allocator, const ObRedisRequest &r
   return ret;
 }
 
-int ObRedisHelper::get_table_name_by_model(ObRedisModel model, ObString &table_name)
+int ObRedisHelper::get_table_name_by_model(ObRedisDataModel model, ObString &table_name)
 {
   int ret = OB_SUCCESS;
   switch (model) {
-    case ObRedisModel::HASH : {
+    case ObRedisDataModel::HASH : {
       table_name = ObRedisInfoV1::HASH_TABLE_NAME;
       break;
     }
-    case ObRedisModel::LIST : {
+    case ObRedisDataModel::LIST : {
       table_name = ObRedisInfoV1::LIST_TABLE_NAME;
       break;
     }
-    case ObRedisModel::ZSET : {
+    case ObRedisDataModel::ZSET : {
       table_name = ObRedisInfoV1::ZSET_TABLE_NAME;
       break;
     }
-    case ObRedisModel::SET : {
+    case ObRedisDataModel::SET : {
       table_name = ObRedisInfoV1::SET_TABLE_NAME;
       break;
     }
-    case ObRedisModel::STRING : {
+    case ObRedisDataModel::STRING : {
       table_name = ObRedisInfoV1::STRING_TABLE_NAME;
       break;
     }
@@ -83,27 +83,27 @@ int ObRedisHelper::get_table_name_by_model(ObRedisModel model, ObString &table_n
   return ret;
 }
 
-int ObRedisHelper::model_to_string(ObRedisModel model, ObString &str)
+int ObRedisHelper::model_to_string(ObRedisDataModel model, ObString &str)
 {
   int ret = OB_SUCCESS;
   switch (model) {
-    case ObRedisModel::STRING : {
+    case ObRedisDataModel::STRING : {
       str = "string";
       break;
     }
-    case ObRedisModel::HASH : {
+    case ObRedisDataModel::HASH : {
       str = "hash";
       break;
     }
-    case ObRedisModel::LIST : {
+    case ObRedisDataModel::LIST : {
       str = "list";
       break;
     }
-    case ObRedisModel::ZSET : {
+    case ObRedisDataModel::ZSET : {
       str = "zset";
       break;
     }
-    case ObRedisModel::SET : {
+    case ObRedisDataModel::SET : {
       str = "set";
       break;
     }
@@ -115,11 +115,11 @@ int ObRedisHelper::model_to_string(ObRedisModel model, ObString &str)
   return ret;
 }
 
-int ObRedisHelper::check_redis_ttl_schema(const ObTableSchema &table_schema, const table::ObRedisModel redis_model)
+int ObRedisHelper::check_redis_ttl_schema(const ObTableSchema &table_schema, const table::ObRedisDataModel redis_model)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *rowkey_schema = NULL;
-  if (redis_model == ObRedisModel::STRING) {
+  if (redis_model == ObRedisDataModel::STRING) {
     if (OB_ISNULL(rowkey_schema = table_schema.get_column_schema_by_idx(ObRedisUtil::COL_IDX_DB))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("can't get rowkey column schema", K(ret));
@@ -332,8 +332,8 @@ int ObRedisHelper::gen_meta_scan_range(ObIAllocator &allocator,
     ObNewRange meta_range = data_range;
     int64_t start_obj_cnt = data_range.start_key_.get_obj_cnt();
     int64_t end_obj_cnt = data_range.end_key_.get_obj_cnt();
-    ObRedisModel model = tb_ctx.redis_ttl_ctx()->get_model();
-    int64_t expected_cnt = (model == ObRedisModel::LIST) ?
+    ObRedisDataModel model = tb_ctx.redis_ttl_ctx()->get_model();
+    int64_t expected_cnt = (model == ObRedisDataModel::LIST) ?
                             ObRedisUtil::LIST_ROWKEY_NUM : ObRedisUtil::COMPLEX_ROWKEY_NUM;
     // copy first range and replace is_data with false
     if (start_obj_cnt == 1 || end_obj_cnt == 1) {

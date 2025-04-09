@@ -24,6 +24,16 @@ namespace oceanbase
 {
 namespace table
 {
+
+class ObKvSchemaCacheGuard;
+
+enum ObHbaseModeType {
+  OB_INVALID_MODE_TYPE = 0,
+  OB_HBASE_NORMAL_TYPE = 1,
+  OB_HBASE_SERIES_TYPE = 2,
+  OB_HBASE_MODE_MAX
+};
+
 // Interface ObHTableCell
 class ObHTableCell
 {
@@ -445,11 +455,11 @@ public:
   // lock all rows of mutations in the given lock mode with the given lock handle,
   // for put, delete, mutations in check_and_xxx
   static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableSingleOp> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   // lock the check row in the given lock mode with the given lock hanle,
   // for increment, append, and check operation in check_and_xxx
   static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
-  static bool is_htable_schema(const share::schema::ObTableSchema &table_schema);
   static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type)
   {
     return entity_type == ObTableEntityType::ET_HKV && table_name.find('$') == nullptr;
@@ -462,6 +472,48 @@ public:
   static int generate_hbase_bytes(ObIAllocator& allocator, int32_t len, char*& val);
   static int get_prefix_key_range(common::ObIAllocator &allocator, ObString prefix, KeyRange *range);
   static int merge_key_range(ObKeyRangeTree& tree);
+  static int cons_query_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);
+  static int gen_filter_by_entity(const ObITableEntity &entity, ObHTableFilter &filter);
+  static int get_mode_type(const share::schema::ObTableSchema &table_schema, ObHbaseModeType &mode_type);
+  static int construct_entity_from_row(const ObNewRow &row,
+                                       ObKvSchemaCacheGuard &schema_cache_guard,
+                                       ObTableEntity &entity);
+  static int process_columns(const ObIArray<ObString>& columns,
+                             ObIArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                             ObIArray<ObString>& real_columns);
+  static bool is_get_all_qualifier(const ObIArray<ObString>& columns);
+  static int check_family_existence_with_base_name(const ObString& table_name,
+                                                   const ObString& base_tablegroup_name,
+                                                   table::ObTableEntityType entity_type,
+                                                   const ObIArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                                                   std::pair<ObString, bool>& flag,
+                                                   bool &exist);
+  static int update_query_columns(ObTableQuery& query,
+                                  const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                                  const ObArray<ObString>& real_columns,
+                                  const std::pair<ObString, bool>& family_addfamily_flag);
+  static int init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    ObTableApiCredential &credential,
+                                    const ObString &arg_tablegroup_name,
+                                    const share::schema::ObSimpleTableSchemaV2 *&simple_table_schema);
+  static int init_schema_info(const ObString &arg_table_name,
+                              ObTableApiCredential &credential,
+                              bool is_tablegroup_req,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const share::schema::ObSimpleTableSchemaV2 *&simple_table_schema,
+                              ObKvSchemaCacheGuard &schema_cache_guard);
+  static int init_schema_info(const ObString &arg_table_name,
+                              uint64_t arg_table_id,
+                              ObTableApiCredential &credential,
+                              bool is_tablegroup_req,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const share::schema::ObSimpleTableSchemaV2 *&simple_table_schema,
+                              ObKvSchemaCacheGuard &schema_cache_guard);
+private:
+  static int build_range_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);
+  static int match_hbase_normal_mode(const share::schema::ObTableSchema &table_schema, bool &matched);
+  static int match_hbase_series_mode(const share::schema::ObTableSchema &table_schema, bool &matched);
+
 private:
   ObHTableUtils() = delete;
   ~ObHTableUtils() = delete;

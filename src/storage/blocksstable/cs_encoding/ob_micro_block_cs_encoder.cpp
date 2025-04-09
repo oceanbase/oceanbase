@@ -14,6 +14,7 @@
 
 #include "ob_micro_block_cs_encoder.h"
 #include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
+#include "semistruct_encoding/ob_semistruct_encoding_util.h"
 
 namespace oceanbase
 {
@@ -117,7 +118,8 @@ ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
     is_all_column_force_raw_(false),
     encoder_freezed_(false),
     block_generated_(false),
-    all_string_data_len_(0)
+    all_string_data_len_(0),
+    semistruct_encode_ctx_(nullptr)
 {
 }
 
@@ -205,6 +207,11 @@ void ObMicroBlockCSEncoder::reset()
   is_inited_ = false;
   // ctx_
   data_buffer_.reset();
+  if (OB_NOT_NULL(semistruct_encode_ctx_)) {
+    semistruct_encode_ctx_->reset();
+    OB_DELETE(ObSemiStructEncodeCtx, "unused", semistruct_encode_ctx_);
+    semistruct_encode_ctx_ = nullptr;
+  }
   allocator_.reset();
   FOREACH(cv, all_col_datums_)
   {
@@ -252,6 +259,9 @@ void ObMicroBlockCSEncoder::reuse()
   ObIMicroBlockWriter::reuse();
   // is_inited_
   // ctx_
+  if (OB_NOT_NULL(semistruct_encode_ctx_)) {
+    semistruct_encode_ctx_->reuse();
+  }
   data_buffer_.reuse();
   allocator_.reuse();
   FOREACH(c, all_col_datums_)
@@ -1766,7 +1776,8 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
     } else if (previous_encoding->is_column_encoding_type_valid() && !previous_encoding->column_need_redetect_) {
       // previous column encoding type is used and is not dict encoding, so no need to build hash table
       if (ObCSColumnHeader::INTEGER == previous_encoding->identifier_.column_encoding_type_ ||
-          ObCSColumnHeader::STRING == previous_encoding->identifier_.column_encoding_type_) {
+          ObCSColumnHeader::STRING == previous_encoding->identifier_.column_encoding_type_ ||
+          ObCSColumnHeader::SEMISTRUCT == previous_encoding->identifier_.column_encoding_type_) {
         need_build_hash_table = false;
       }
     }
@@ -1803,6 +1814,12 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
       LOG_DEBUG("hash table", K(column_index), KPC(ht), K(col_ctx));
     }
 
+    if (OB_SUCC(ret) && is_semistruct_store_(store_class, ctx_.is_enable_semistruct_encoding())) {
+      if (OB_FAIL(semistruct_scan_(column_index))) {
+        LOG_WARN("semistruct_scan_ fail", K(ret), K(column_index));
+      }
+    }
+
     if (OB_FAIL(ret) && ht != nullptr) {
       // avoid overwirte ret
       int temp_ret = OB_SUCCESS;
@@ -1812,6 +1829,32 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
     }
   }
 
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::semistruct_scan_(const int64_t column_index)
+{
+  int ret = OB_SUCCESS;
+  const ObColDesc &col_desc = ctx_.col_descs_->at(column_index);
+  ObColumnCSEncodingCtx &col_ctx = col_ctxs_.at(column_index);
+  ObSemiStructColumnEncodeCtx *semistruct_col_ctx = nullptr;
+  col_ctx.semistruct_ctx_ = nullptr;
+  if (OB_ISNULL(semistruct_encode_ctx_) && OB_ISNULL(semistruct_encode_ctx_ = OB_NEW(ObSemiStructEncodeCtx, ObMemAttr(MTL_ID(), "SemiEncCtx")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc semistruct_encoder fail", K(ret), "size", sizeof(ObSemiStructEncodeCtx));
+  } else if (OB_FAIL(semistruct_encode_ctx_->get_col_ctx(column_index, semistruct_col_ctx))) {
+    LOG_WARN("aloc semistruct_col_ctx fail",K(ret), K(column_index), K(col_desc), K(col_ctx));
+  } else {
+    semistruct_col_ctx->encoding_ctx_ = &ctx_;
+    semistruct_col_ctx->column_index_ = column_index;
+    semistruct_col_ctx->col_desc_ = col_desc;
+    semistruct_col_ctx->datums_ = col_ctx.col_datums_;
+    semistruct_col_ctx->all_string_buf_writer_ = &all_string_data_buffer_;
+    col_ctx.semistruct_ctx_ = semistruct_col_ctx;
+    if (OB_FAIL(semistruct_col_ctx->scan())) {
+      LOG_WARN("semistruct handle fail", K(ret), K(column_index), K(col_desc));
+    }
+  }
   return ret;
 }
 
@@ -1923,6 +1966,10 @@ int ObMicroBlockCSEncoder::choose_specified_encoder_(const int64_t column_idx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("specified unexpected econding type", K(ret), K(column_idx), K(store_class), K(col_ctx));
     }
+  } else if (ObCSColumnHeader::Type::SEMISTRUCT == type) {
+    if (OB_FAIL(alloc_and_init_encoder_<ObSemiStructColumnEncoder>(column_idx, e))) {
+      LOG_WARN("fail to alloc encoder", K(ret), K(column_idx), K(store_class));
+    }
   } else if (is_string_store_(store_class, col_ctx.is_wide_int_)) {
     if (ObCSColumnHeader::Type::STRING == type) {
       if (OB_FAIL(alloc_and_init_encoder_<ObStringColumnEncoder>(column_idx, e))) {
@@ -1969,6 +2016,12 @@ int ObMicroBlockCSEncoder::try_use_previous_encoder_(const int64_t column_idx,
           curr_type = ObCSColumnHeader::Type::INT_DICT;
         }
       }
+    } else if (ObCSColumnHeader::Type::SEMISTRUCT == previous_type) {
+      if (is_semistruct_encoding_enable_(store_class, column_idx)) {
+        curr_type = previous_type;
+      } else {
+        curr_type = ObCSColumnHeader::Type::STRING;
+      }
     } else if (is_string_store_(store_class, col_ctx.is_wide_int_)) {
       if (ObCSColumnHeader::Type::STRING == previous_type || ObCSColumnHeader::Type::STR_DICT == previous_type) {
         curr_type = previous_type;
@@ -2004,6 +2057,10 @@ int ObMicroBlockCSEncoder::try_use_previous_encoder_(const int64_t column_idx,
         if (OB_FAIL(alloc_and_init_encoder_<ObStrDictColumnEncoder>(column_idx, e))) {
           LOG_WARN("fail to alloc encoder", K(ret), K(column_idx), K(store_class));
         }
+      } else if (ObCSColumnHeader::Type::SEMISTRUCT == curr_type) {
+        if (OB_FAIL(alloc_and_init_encoder_<ObSemiStructColumnEncoder>(column_idx, e))) {
+          LOG_WARN("fail to alloc encoder", K(ret), K(column_idx), K(store_class));
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected econding type", K(ret), K(curr_type), K(store_class), K(col_ctx));
@@ -2029,6 +2086,10 @@ int ObMicroBlockCSEncoder::choose_encoder_(const int64_t column_idx)
   } else if (is_integer_store_(store_class, col_ctxs_.at(column_idx).is_wide_int_)) {
     if (OB_FAIL(choose_encoder_for_integer_(column_idx, e))) {
       LOG_WARN("fail to choose encoder for integer", K(ret));
+    }
+  } else if (is_semistruct_encoding_enable_(store_class, column_idx)) {
+    if (OB_FAIL(choose_encoder_for_semistruct_(column_idx, e))) {
+      LOG_WARN("fail to choose encoder for semistruct type", K(ret), K(store_class));
     }
   } else if (is_string_store_(store_class, col_ctxs_.at(column_idx).is_wide_int_)) {
     if (OB_FAIL(choose_encoder_for_string_(column_idx, e))) {
@@ -2149,6 +2210,83 @@ int ObMicroBlockCSEncoder::choose_encoder_for_string_(
     if (nullptr != dict_encoder) {
       free_encoder_(dict_encoder);
       dict_encoder = nullptr;
+    }
+  }
+
+  return ret;
+}
+
+bool ObMicroBlockCSEncoder::is_semistruct_encoding_enable_(const ObObjTypeStoreClass sc, const int64_t column_idx)
+{
+  bool is_enable = false;
+  ObSemiStructColumnEncodeCtx *semistruct_ctx = nullptr;
+  if (! is_semistruct_store_(sc, ctx_.is_enable_semistruct_encoding())) { // skip if disable
+  } else if (OB_ISNULL(semistruct_ctx = col_ctxs_.at(column_idx).semistruct_ctx_)) {
+    // just don't semistruct encode if semistruct_ctx is null
+    LOG_DEBUG("enable semistruct_encoding, but semistruct_ctx is null", K(sc), K(column_idx), K(col_ctxs_.at(column_idx)));
+  } else {
+    is_enable = semistruct_ctx->is_enable();
+  }
+  return is_enable;
+}
+
+int ObMicroBlockCSEncoder::choose_encoder_for_semistruct_(
+    const int64_t column_idx, ObIColumnCSEncoder *&e)
+{
+  int ret = OB_SUCCESS;
+  ObIColumnCSEncoder *string_encoder = nullptr;
+  ObIColumnCSEncoder *dict_encoder = nullptr;
+  ObIColumnCSEncoder *semistruct_encoder = nullptr;
+  if (OB_FAIL(alloc_and_init_encoder_<ObStringColumnEncoder>(column_idx, string_encoder))) {
+    LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
+  } else if (OB_FAIL(alloc_and_init_encoder_<ObStrDictColumnEncoder>(column_idx, dict_encoder))) {
+    LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
+  } else if (OB_FAIL(alloc_and_init_encoder_<ObSemiStructColumnEncoder>(column_idx, semistruct_encoder))) {
+    LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
+  } else {
+    int64_t string_estimate_size = string_encoder->estimate_store_size();
+    int64_t dict_estimate_size = dict_encoder->estimate_store_size();
+    int64_t semistruct_estimate_size = semistruct_encoder->estimate_store_size();
+    if (semistruct_estimate_size < string_estimate_size && semistruct_estimate_size < dict_estimate_size) {
+      // semistruct will be choosen only when it is best
+      e = semistruct_encoder;
+
+      free_encoder_(string_encoder);
+      string_encoder = nullptr;
+      free_encoder_(dict_encoder);
+      dict_encoder = nullptr;
+    } else if (dict_estimate_size < string_estimate_size) {
+      e = dict_encoder;
+
+      free_encoder_(string_encoder);
+      string_encoder = nullptr;
+      free_encoder_(semistruct_encoder);
+      semistruct_encoder = nullptr;
+    } else {
+      e = string_encoder;
+
+      free_encoder_(dict_encoder);
+      dict_encoder = nullptr;
+      free_encoder_(semistruct_encoder);
+      semistruct_encoder = nullptr;
+    }
+    LOG_TRACE("choose encoder for semistruct type", K(ret), K(column_idx),
+      K(string_estimate_size), K(dict_estimate_size), K(semistruct_estimate_size),
+      KPC(string_encoder), KPC(dict_encoder), KPC(semistruct_encoder));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (nullptr != string_encoder) {
+      free_encoder_(string_encoder);
+      string_encoder = nullptr;
+    }
+    if (nullptr != dict_encoder) {
+      free_encoder_(dict_encoder);
+      dict_encoder = nullptr;
+    }
+    if (nullptr != semistruct_encoder) {
+      free_encoder_(semistruct_encoder);
+      semistruct_encoder = nullptr;
     }
   }
 

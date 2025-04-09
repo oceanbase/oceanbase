@@ -303,25 +303,25 @@ int ObRedisMeta::get_meta_from_entity(const ObITableEntity &meta_entity)
 /*******************/
 
 int ObRedisMetaUtil::create_redis_meta_by_model(ObIAllocator &allocator,
-                                          ObRedisModel model,
+                                          ObRedisDataModel model,
                                           ObRedisMeta *&meta)
 {
   int ret = OB_SUCCESS;
   meta = nullptr;
   switch (model) {
-    case ObRedisModel::HASH: {
+    case ObRedisDataModel::HASH: {
       meta = OB_NEWx(ObRedisHashMeta, &allocator);
       break;
     }
-    case ObRedisModel::LIST: {
+    case ObRedisDataModel::LIST: {
       meta = OB_NEWx(ObRedisListMeta, &allocator);
       break;
     }
-    case ObRedisModel::ZSET: {
+    case ObRedisDataModel::ZSET: {
       meta = OB_NEWx(ObRedisZSetMeta, &allocator);
       break;
     }
-    case ObRedisModel::SET: {
+    case ObRedisDataModel::SET: {
       meta = OB_NEWx(ObRedisSetMeta, &allocator);
       break;
     }
@@ -340,16 +340,16 @@ int ObRedisMetaUtil::create_redis_meta_by_model(ObIAllocator &allocator,
 
 int ObRedisMetaUtil::build_meta_rowkey_by_model(
     ObIAllocator &allocator,
-    ObRedisModel model,
+    ObRedisDataModel model,
     int64_t db,
     const ObString &key,
     ObRowkey &meta_rowkey)
 {
   int ret = OB_SUCCESS;
   switch (model) {
-    case ObRedisModel::HASH:
-    case ObRedisModel::ZSET:
-    case ObRedisModel::SET: {
+    case ObRedisDataModel::HASH:
+    case ObRedisDataModel::ZSET:
+    case ObRedisDataModel::SET: {
       ObString decode_key;
       if (OB_FAIL(ObRedisRKeyUtil::decode_key(key, decode_key))) {
         LOG_WARN("fail to decode key", K(ret), K(key));
@@ -359,7 +359,7 @@ int ObRedisMetaUtil::build_meta_rowkey_by_model(
       }
       break;
     }
-    case ObRedisModel::LIST: {
+    case ObRedisDataModel::LIST: {
       ret = ListCommandOperator::build_list_type_rowkey(
           allocator, db, key, false /*is_data*/, ObRedisListMeta::META_INDEX, meta_rowkey);
       break;

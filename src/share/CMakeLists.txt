@@ -701,6 +701,10 @@ ob_set_subtarget(ob_share domain_id
   domain_id/ob_domain_id.cpp
 )
 
+ob_set_subtarget(ob_share semistruct
+  semistruct/ob_sub_column_path.cpp
+)
+
 ob_add_new_object_target(ob_share ob_share)
 ob_add_new_object_target(ob_share_extra ob_share_extra)
 

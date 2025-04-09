@@ -268,6 +268,10 @@ public:
   }
   int set_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID object_id);
   int get_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID &object_id);
+  void set_table_schema(const share::schema::ObTableSchema *schema)
+  {
+    table_schema_ = schema;
+  }
   int get_tablet_and_object_id(
       const share::schema::ObPartitionLevel part_level,
       const ObPartID part_id,

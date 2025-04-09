@@ -91,7 +91,8 @@ public:
       K_(progressive_merge_round),
       K_(need_submit_io),
       K_(is_delete_insert_table),
-      K_(encoding_granularity));
+      K_(encoding_granularity),
+      K_(semistruct_encoding_type));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -128,6 +129,7 @@ public:
   bool need_submit_io_;
   bool is_delete_insert_table_;
   uint64_t encoding_granularity_;
+  share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -313,6 +315,7 @@ public:
   OB_INLINE int64_t get_encrypt_key_size() const { return sizeof(static_desc_->encrypt_key_); }
   OB_INLINE int64_t get_micro_block_size() const { return micro_block_size_; }
   OB_INLINE common::ObRowStoreType get_row_store_type() const { return row_store_type_; }
+  OB_INLINE const share::schema::ObSemiStructEncodingType& get_semistruct_encoding_type() const { return static_desc_->semistruct_encoding_type_; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;

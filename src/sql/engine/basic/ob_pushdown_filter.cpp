@@ -19,6 +19,8 @@
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
+#include "sql/engine/expr/ob_json_param_type.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 namespace oceanbase
 {
@@ -38,7 +40,8 @@ ObPushdownFilterFactory::PDFilterAllocFunc ObPushdownFilterFactory::PD_FILTER_AL
   ObPushdownFilterFactory::alloc<ObTruncateWhiteFilterNode, TRUNCATE_WHITE_FILTER>,
   ObPushdownFilterFactory::alloc<ObTruncateBlackFilterNode, TRUNCATE_BLACK_FILTER>,
   ObPushdownFilterFactory::alloc<ObTruncateOrFilterNode, TRUNCATE_OR_FILTER>,
-  ObPushdownFilterFactory::alloc<ObTruncateAndFilterNode, TRUNCATE_AND_FILTER>
+  ObPushdownFilterFactory::alloc<ObTruncateAndFilterNode, TRUNCATE_AND_FILTER>,
+  ObPushdownFilterFactory::alloc<ObSemiStructWhiteFilterNode, SEMISTRUCT_FILTER>
 };
 
 ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER_EXECUTOR_ALLOC[PushdownExecutorType::MAX_EXECUTOR_TYPE] =
@@ -53,7 +56,8 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObTruncateWhiteFilterExecutor, ObTruncateWhiteFilterNode, TRUNCATE_WHITE_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObTruncateBlackFilterExecutor, ObTruncateBlackFilterNode, TRUNCATE_BLACK_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObTruncateOrFilterExecutor, ObTruncateOrFilterNode, TRUNCATE_OR_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObTruncateAndFilterExecutor, ObTruncateAndFilterNode, TRUNCATE_AND_FILTER_EXECUTOR>
+  ObPushdownFilterFactory::alloc<ObTruncateAndFilterExecutor, ObTruncateAndFilterNode, TRUNCATE_AND_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObSemiStructWhiteFilterExecutor, ObSemiStructWhiteFilterNode, SEMISTRUCT_FILTER_EXECUTOR>
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
@@ -126,6 +130,8 @@ OB_SERIALIZE_MEMBER((ObPushdownDynamicFilterNode, ObPushdownWhiteFilterNode), co
                     is_first_child_, is_last_child_, val_meta_,
                     dynamic_filter_type_ // FARM COMPAT WHITELIST for prepare_data_func_type_
 );
+
+OB_SERIALIZE_MEMBER((ObSemiStructWhiteFilterNode, ObPushdownWhiteFilterNode), sub_col_path_);
 
 int ObPushdownBlackFilterNode::merge(ObIArray<ObPushdownFilterNode*> &merged_node)
 {
@@ -260,6 +266,11 @@ int ObPushdownDynamicFilterNode::set_op_type(const ObRawExpr &raw_expr)
   return ret;
 }
 
+int ObSemiStructWhiteFilterNode::set_op_type(const ObRawExpr &raw_expr)
+{
+  return ObPushdownWhiteFilterNode::set_op_type(raw_expr);
+}
+
 int ObPushdownWhiteFilterNode::get_filter_val_meta(common::ObObjMeta &obj_meta) const
 {
   int ret = OB_SUCCESS;
@@ -291,7 +302,16 @@ int ObPushdownWhiteFilterNode::get_filter_val_meta(common::ObObjMeta &obj_meta) 
   return ret;
 }
 
-int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &is_white)
+bool ObPushdownFilterConstructor::can_pushdown_json_expr(const ObRawExpr &json_expr) const
+{
+  bool res = false;
+  if (enable_semistruct_pushdown_) {
+    res = ObJsonExprHelper::check_json_expr_can_pushdown(json_expr);
+  }
+  return res;
+}
+
+int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &is_white, bool &is_semistruct_white)
 {
   int ret = OB_SUCCESS;
   bool need_check = true;
@@ -306,7 +326,7 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
   } else if (OB_ISNULL(child = raw_expr->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected first child expr: nullptr", K(ret));
-  } else if (ObRawExpr::EXPR_COLUMN_REF != child->get_expr_class()) {
+  } else if (ObRawExpr::EXPR_COLUMN_REF != child->get_expr_class() && ! (is_semistruct_white = can_pushdown_json_expr(*child))) {
     need_check = false;
   } else if (T_OP_IS == item_type || T_OP_IS_NOT == item_type) {
     if (2 == raw_expr->get_param_count()
@@ -513,6 +533,8 @@ int ObPushdownFilterConstructor::create_white_or_dynamic_filter_node(
              K(raw_expr->get_runtime_filter_type()));
   } else if (OB_FAIL(white_filter_node->column_exprs_.init(column_exprs.count()))) {
     LOG_WARN("failed to init column exprs", K(ret), K(type));
+  } else if (SEMISTRUCT_FILTER == type && OB_FAIL(init_semistruct_filter_node(filter_node, raw_expr))) {
+    LOG_WARN("failed to init semistruct filter", K(ret), K(type));
   } else {
     if (DYNAMIC_FILTER == type) {
       ObPushdownDynamicFilterNode *dynamic_node =
@@ -537,6 +559,34 @@ int ObPushdownFilterConstructor::create_white_or_dynamic_filter_node(
   if (OB_SUCC(ret)) {
     white_filter_node->expr_ = expr;
     LOG_DEBUG("[PUSHDOWN] white_filter_node", K(*raw_expr), K(*expr), K(white_filter_node->col_ids_));
+  }
+  return ret;
+}
+
+int ObPushdownFilterConstructor::init_semistruct_filter_node(ObPushdownFilterNode* filter_node, ObRawExpr *raw_expr)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *child = nullptr;
+  if (OB_ISNULL(filter_node) || OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(filter_node), KP(raw_expr));
+  } else if (! filter_node->is_semistruct_filter_node()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("filter node is not semistruct filter node", K(ret), KPC(filter_node), KPC(raw_expr));
+  } else if (1 >= raw_expr->get_param_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("raw expr param count is unexpected", K(ret), K(raw_expr->get_param_count()), KPC(raw_expr));
+  } else if (OB_ISNULL(child = raw_expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected first child expr: nullptr", K(ret), KPC(raw_expr));
+  } else if (! is_support_pushdown_json_expr(child->get_expr_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first child expr is not support semistruct pushdown", K(ret), KPC(child), KPC(raw_expr));
+  } else {
+    ObSemiStructWhiteFilterNode* semistruct_node = static_cast<ObSemiStructWhiteFilterNode *>(filter_node);
+    if (OB_FAIL(ObJsonExprHelper::get_sub_column_path_from_json_expr(*alloc_, *child, semistruct_node->get_sub_col_path()))) {
+      LOG_WARN("get sub column path fail", K(ret), KPC(semistruct_node));
+    }
   }
   return ret;
 }
@@ -745,6 +795,7 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
 {
   int ret = OB_SUCCESS;
   bool is_white = false;
+  bool is_semistruct_white = false;
   ObItemType op_type = T_INVALID;
   ObPushdownFilterNode *filter_node = nullptr;
   if (OB_ISNULL(raw_expr) || OB_ISNULL(alloc_)) {
@@ -766,10 +817,15 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
     } else {
       static_cast<ObPushdownDynamicFilterNode *>(filter_node)->set_last_child(true);
     }
-  } else if (OB_FAIL(is_white_mode(raw_expr, is_white))) {
+  } else if (OB_FAIL(is_white_mode(raw_expr, is_white, is_semistruct_white))) {
     LOG_WARN("Failed to get filter type", K(ret));
   } else if (is_white) {
-    if (OB_FAIL((create_white_or_dynamic_filter_node<ObPushdownWhiteFilterNode, PushdownFilterType::WHITE_FILTER>(
+    if (is_semistruct_white) {
+      if (OB_FAIL((create_white_or_dynamic_filter_node<ObSemiStructWhiteFilterNode, PushdownFilterType::SEMISTRUCT_FILTER>(
+        raw_expr, filter_node)))) {
+        LOG_WARN("Failed to create white pushdown filter node", K(ret), K(raw_expr->get_expr_type()));
+      }
+    } else if (OB_FAIL((create_white_or_dynamic_filter_node<ObPushdownWhiteFilterNode, PushdownFilterType::WHITE_FILTER>(
         raw_expr, filter_node)))) {
       LOG_WARN("Failed to create white pushdown filter node", K(ret), K(raw_expr->get_expr_type()));
     }
@@ -1922,6 +1978,10 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &is_valid)
         col_obj_meta = filter_.expr_->args_[i]->obj_meta_;
         // skip column reference expr
         continue;
+      } else if (is_support_pushdown_json_expr(filter_.expr_->args_[i]->type_)) {
+        is_ref_column_found = true;
+        col_obj_meta = filter_.expr_->args_[i]->obj_meta_;
+        continue;
       } else {
         ObDatum *datum = NULL;
         if (OB_FAIL(filter_.expr_->args_[i]->eval(eval_ctx, datum))) {
@@ -1963,7 +2023,7 @@ int ObWhiteFilterExecutor::init_in_eval_datums(bool &is_valid)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected filter expr", K(ret), KPC(filter_.expr_));
   } else if (OB_UNLIKELY(nullptr == filter_.expr_->args_[0] ||
-                         T_REF_COLUMN != filter_.expr_->args_[0]->type_ ||
+                         (T_REF_COLUMN != filter_.expr_->args_[0]->type_ && ! (is_semistruct_filter_node() && is_support_pushdown_json_expr(filter_.expr_->args_[0]->type_)))||
                          nullptr == filter_.expr_->args_[1] ||
                          0 >= filter_.expr_->inner_func_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2706,6 +2766,13 @@ int ObFilterExecutorConstructor::apply(
       }
       case OR_FILTER: {
         ret = create_filter_executor<ObOrFilterExecutor, OR_FILTER_EXECUTOR>(filter_tree, filter_executor, op);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to create filter executor", K(ret));
+        }
+        break;
+      }
+      case SEMISTRUCT_FILTER: {
+        ret = create_filter_executor<ObSemiStructWhiteFilterExecutor, SEMISTRUCT_FILTER_EXECUTOR>(filter_tree, filter_executor, op);
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to create filter executor", K(ret));
         }

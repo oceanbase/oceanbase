@@ -27,7 +27,7 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObIArray<ObString> &select_columns = tb_ctx.get_query_col_names();
   int64_t N = select_columns.count();
-  if (N < 4 || N > 6) { // htable maybe has prefix generated column or TTL column
+  if (N < 4) { // htable maybe has prefix generated column or TTL column
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("TableQuery with htable_filter should select 4 columns", K(ret), K(N));
   }
@@ -292,12 +292,12 @@ int ObTableQueryUtils::get_scan_row_interator(const ObTableCtx &tb_ctx,
 }
 
 int ObTableQueryUtils::get_table_schemas(ObMultiVersionSchemaService *schema_service,
-                              ObSchemaGetterGuard& schema_guard,
-                              const ObString &arg_table_name,
-                              bool is_tablegroup_name,
-                              uint64_t arg_tenant_id,
-                              uint64_t arg_database_id,
-                              common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas)
+                                         ObSchemaGetterGuard& schema_guard,
+                                         const ObString &arg_table_name,
+                                         bool is_tablegroup_name,
+                                         uint64_t arg_tenant_id,
+                                         uint64_t arg_database_id,
+                                         common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas)
 {
   int ret = OB_SUCCESS;
   uint64_t tablegroup_id = OB_INVALID_ID;
@@ -307,6 +307,28 @@ int ObTableQueryUtils::get_table_schemas(ObMultiVersionSchemaService *schema_ser
     LOG_WARN("invalid shcema service", K(ret));
   } else if (OB_FAIL(schema_service->get_tenant_schema_guard(arg_tenant_id, schema_guard))) {
     LOG_WARN("Failed to get schema guard", K(ret), K(arg_tenant_id));
+  } else if (OB_FAIL(get_table_schemas(schema_guard, arg_table_name, is_tablegroup_name, arg_tenant_id,
+                        arg_database_id, table_schemas))) {
+    LOG_WARN("fail to get table schemas", K(ret), K(arg_table_name), K(is_tablegroup_name), K(arg_tenant_id),
+             K(arg_database_id));
+  }
+
+  return ret;
+}
+
+int ObTableQueryUtils::get_table_schemas(ObSchemaGetterGuard& schema_guard,
+                                         const ObString &arg_table_name,
+                                         bool is_tablegroup_name,
+                                         uint64_t arg_tenant_id,
+                                         uint64_t arg_database_id,
+                                         common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablegroup_id = OB_INVALID_ID;
+
+  if (!schema_guard.is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is not inited", K(ret));
   } else if (is_tablegroup_name) {
     // Handle table group case
     if (OB_FAIL(schema_guard.get_tablegroup_id(arg_tenant_id, arg_table_name, tablegroup_id))) {

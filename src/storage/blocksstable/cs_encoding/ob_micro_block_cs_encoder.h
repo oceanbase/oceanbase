@@ -31,6 +31,7 @@ namespace blocksstable
 
 class ObIColumnCSEncoder;
 class ObEncodingHashTable;
+class ObSemiStructEncodeCtx;
 
 class ObVecBatchInfo
 {
@@ -164,9 +165,11 @@ private:
                                 const int64_t col_idx,
                                 int64_t &size) const;
   int prescan_(const int64_t column_index);
+  int semistruct_scan_(const int64_t column_index);
   int choose_encoder_(const int64_t column_idx);
   int choose_encoder_for_integer_(const int64_t column_idx, ObIColumnCSEncoder *&e);
   int choose_encoder_for_string_(const int64_t column_idx, ObIColumnCSEncoder *&e);
+  int choose_encoder_for_semistruct_(const int64_t column_idx, ObIColumnCSEncoder *&e);
   int choose_specified_encoder_(const int64_t column_idx,
                                const ObObjTypeStoreClass store_class,
                                const ObCSColumnHeader::Type type,
@@ -193,6 +196,7 @@ private:
   int store_stream_offsets_(int64_t &stream_offsets_length);
   template <typename T>
   int do_encode_stream_offsets_(ObIntegerStreamEncoderCtx enc_ctx);
+  bool is_semistruct_encoding_enable_(const ObObjTypeStoreClass sc, const int64_t column_idx);
 
   static OB_INLINE bool is_integer_store_(const ObObjTypeStoreClass sc, const bool is_wide_int)
   {
@@ -201,6 +205,11 @@ private:
   static OB_INLINE bool is_string_store_(const ObObjTypeStoreClass sc, const bool is_wide_int)
   {
     return ObCSEncodingUtil::is_string_store_class(sc) || is_wide_int;
+  }
+
+  static OB_INLINE bool is_semistruct_store_(const ObObjTypeStoreClass sc, const bool enable_semistruct)
+  {
+    return enable_semistruct && ObJsonSC == sc;
   }
 
 private:
@@ -233,6 +242,7 @@ private:
   bool encoder_freezed_; // if encoder enable append data or build block
   bool block_generated_;
   uint32_t all_string_data_len_;
+  ObSemiStructEncodeCtx *semistruct_encode_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCSEncoder);
 };

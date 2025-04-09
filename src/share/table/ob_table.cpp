@@ -289,9 +289,10 @@ ObTableEntity::~ObTableEntity()
 
 void ObTableEntity::reset()
 {
-    rowkey_.reset();
-    properties_names_.reset();
-    properties_values_.reset();
+  rowkey_.reset();
+  properties_names_.reset();
+  properties_values_.reset();
+  tablet_id_.reset();
 }
 
 int ObTableEntity::construct_names_bitmap(const ObITableEntity &req_entity)
@@ -360,6 +361,15 @@ int ObTableEntity::set_rowkey_value(int64_t idx, const ObObj &value)
 int ObTableEntity::add_rowkey_value(const ObObj &value)
 {
   return rowkey_.push_back(value);
+}
+
+int ObTableEntity::add_rowkey_name(const ObString &name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rowkey_names_.push_back(name))) {
+    LOG_WARN("failed to add prop name", K(ret), K(name));
+  }
+  return ret;
 }
 
 int ObTableEntity::get_rowkey_value(int64_t idx, ObObj &value) const
@@ -1178,6 +1188,7 @@ void ObTableQuery::reset()
   batch_size_ = -1;
   max_result_size_ = -1;
   htable_filter_.reset();
+  tablet_ids_.reset();
 }
 
 bool ObTableQuery::is_valid() const
@@ -1370,6 +1381,7 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     dst.scan_order_ = scan_order_;
     dst.batch_size_ = batch_size_;
     dst.max_result_size_ = max_result_size_;
+    dst.tablet_ids_ = tablet_ids_;
   }
   return ret;
 }
@@ -1737,12 +1749,14 @@ ObTableEntityIterator::~ObTableEntityIterator()
 const char* const ObHTableConstants::ROWKEY_CNAME = "K";
 const char* const ObHTableConstants::CQ_CNAME = "Q";
 const char* const ObHTableConstants::VERSION_CNAME = "T";
+const char* const ObHTableConstants::SEQ_CNAME = "S";
 const char* const ObHTableConstants::VALUE_CNAME = "V";
 const char* const ObHTableConstants::TTL_CNAME = "TTL";
 
 const ObString ObHTableConstants::ROWKEY_CNAME_STR = ObString::make_string(ROWKEY_CNAME);
 const ObString ObHTableConstants::CQ_CNAME_STR = ObString::make_string(CQ_CNAME);
 const ObString ObHTableConstants::VERSION_CNAME_STR = ObString::make_string(VERSION_CNAME);
+const ObString ObHTableConstants::SEQ_CNAME_STR = ObString::make_string(SEQ_CNAME);
 const ObString ObHTableConstants::VALUE_CNAME_STR = ObString::make_string(VALUE_CNAME);
 const ObString ObHTableConstants::TTL_CNAME_STR = ObString::make_string(TTL_CNAME);
 
@@ -2404,7 +2418,8 @@ OB_DEF_DESERIALIZE(ObTableQueryResult)
 ////////////////////////////////////////////////////////////////
 ObTableQueryIterableResult::ObTableQueryIterableResult()
   : ObTableQueryIterableResultBase(),
-    current_(0)
+    current_(0),
+    need_append_family_(true)
   {
   }
 
@@ -2426,7 +2441,7 @@ int ObTableQueryIterableResult::add_all_row(ObTableQueryDListResult &other)
       LOG_WARN("fail to copy_row ", K(ret), K(row));
     } else {
       ObString family_name = row->get_family();
-      if (OB_FAIL(append_family(copy_row, family_name))) {
+      if (need_append_family_ && OB_FAIL(append_family(copy_row, family_name))) {
         LOG_WARN("fail to append family to row", K(ret), K(copy_row));
       } else if (OB_FAIL(rows_.push_back(copy_row))) {
         LOG_WARN("fail to push_back to rows", K(ret));
@@ -2475,7 +2490,7 @@ int ObTableQueryIterableResult::add_row(const common::ObNewRow &row, ObString fa
     ObNewRow copy_row;
     if (OB_FAIL(ob_write_row(allocator_, new_row, copy_row))) {
       LOG_WARN("fail to copy row", K(ret), K(new_row));
-    } else if (OB_FAIL(append_family(copy_row, family_name))) {
+    } else if (need_append_family_ && OB_FAIL(append_family(copy_row, family_name))) {
       LOG_WARN("fail to append family to row", K(ret), K(copy_row));
     } else if (OB_FAIL(rows_.push_back(copy_row))) {
       LOG_WARN("fail to push back to array", K(ret));
@@ -2863,6 +2878,7 @@ OB_DEF_DESERIALIZE(ObTableTabletOp,)
       single_op.set_dictionary(all_rowkey_names_, all_properties_names_);
       single_op.set_is_same_properties_names(is_ls_same_properties_names_);
       OB_UNIS_DECODE(single_op);
+      single_op.set_index(i);
     }  // end for
   }
 
@@ -2876,11 +2892,32 @@ ObTableTabletOp::ObTableTabletOp(const ObTableTabletOp &other)
   this->single_ops_ = other.single_ops_;
 }
 
+void ObTableTabletOp::shaddow_copy_without_op(const ObTableTabletOp &other)
+{
+  this->tablet_id_ = other.tablet_id_;
+  this->option_flag_ = other.option_flag_;
+  this->deserialize_alloc_ = other.deserialize_alloc_;
+  this->all_rowkey_names_ = other.all_rowkey_names_;
+  this->all_properties_names_ = other.all_properties_names_;
+  this->is_ls_same_properties_names_ = other.is_ls_same_properties_names_;
+}
+
 void ObTableLSOp::reset()
 {
   tablet_ops_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   option_flag_ = 0;
+}
+
+void ObTableLSOp::shaddow_copy_without_op(const ObTableLSOp &other)
+{
+  this->ls_id_ = other.ls_id_;
+  this->table_name_ = other.table_name_;
+  this->table_id_ = other.table_id_;
+  this->rowkey_names_ = other.rowkey_names_;
+  this->properties_names_ = other.properties_names_;
+  this->option_flag_ = other.option_flag_;
+  this->deserialize_alloc_ = other.deserialize_alloc_;
 }
 
 OB_UNIS_DEF_SERIALIZE(ObTableLSOp,
@@ -3010,6 +3047,7 @@ void ObTableSingleOp::reset()
   flag_ = 0;
   op_query_ = nullptr;
   entities_.reset();
+  index_ = -1;
 }
 
 int ObTableSingleOpQAM::set_mutations(const ObTableSingleOp &single_op)
@@ -3050,9 +3088,9 @@ uint64_t ObTableSingleOp::get_checksum()
 
 void ObTableSingleOpEntity::reset()
 {
-    rowkey_names_bp_.clear();
-    properties_names_bp_.clear();
-    ObTableEntity::reset();
+  rowkey_names_bp_.clear();
+  properties_names_bp_.clear();
+  ObTableEntity::reset();
 }
 
 int ObTableSingleOpEntity::deep_copy(common::ObIAllocator &allocator, const ObITableEntity &other)
@@ -3749,7 +3787,7 @@ int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
   return ret;
 }
 
-int ObKVParams::init_ob_params_for_hfilter(const ObHBaseParams*& params) const
+int ObKVParams::get_hbase_params(const ObHBaseParams*& params) const
 {
   int ret = OB_SUCCESS;
   if (ob_params_->get_param_type() != ParamType::HBase) {

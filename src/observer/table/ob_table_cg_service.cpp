@@ -498,10 +498,13 @@ int ObTableExprCgService::generate_calc_tablet_id_exprs(ObTableCtx &ctx)
     } else {
       ObRawExpr *raw_expr = nullptr;
       if (index_info.is_primary_index_) { // primary index
-        if (ctx.need_lookup_calc_tablet_id_expr()) {
+        if (ctx.is_insert() || ctx.need_lookup_calc_tablet_id_expr()) {
           if (OB_FAIL(generate_calc_tablet_id_expr(ctx, *index_schema, raw_expr))) {
             LOG_WARN("fail to generate calc tablet id expr", K(ret));
           } else {
+            if (ctx.is_insert()) {
+              index_info.old_part_id_expr_ = raw_expr;
+            }
             index_info.lookup_part_id_expr_ = raw_expr;
           }
         }
@@ -1230,7 +1233,7 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, exprs, rowkey))) {
       LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
-    } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, exprs, entity))) {
+    } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, exprs, entity, ctx.is_skip_scan()))) {
       LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx));
     }
   }
@@ -1490,7 +1493,8 @@ int ObTableExprCgService::build_refresh_values(ObTableCtx &ctx,
 */
 int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
                                                          const ObIArray<ObExpr *> &exprs,
-                                                         const ObTableEntity &entity)
+                                                         const ObTableEntity &entity,
+                                                         bool need_all_prop /* = false */)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObTableColumnInfo *> &col_info_array = ctx.get_column_info_array();
@@ -1531,7 +1535,10 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
           bool not_found = refresh_values.at(i) == nullptr;
           if (not_found) {
             obj = &col_info->default_value_;
-            if (!col_info->is_nullable_ && !col_info->is_auto_increment_ && obj->is_null()) {
+            if (need_all_prop) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("propertities in entity is not full row", K(ret), K(i));
+            } else if (!col_info->is_nullable_ && !col_info->is_auto_increment_ && obj->is_null()) {
               ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
               ObCStringHelper helper;
               LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(col_info->column_name_));

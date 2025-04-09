@@ -20,6 +20,7 @@
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #include "storage/blocksstable/cs_encoding/ob_icolumn_cs_decoder.h"
+#include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 
 #define NONE_COLOR "\033[m"
 #define RED "\033[0;32;31m"
@@ -93,8 +94,8 @@ public:
   void print_cs_encoding_all_column_header(const ObAllColumnHeader &all_header);
   void print_cs_encoding_column_header(const ObCSColumnHeader &col_header, const int64_t col_id);
   void print_cs_encoding_column_meta(const char *start, const int64_t len,
-                                            const ObCSColumnHeader::Type type, const int64_t col_id,
-                                            char *hex_print_buf, const int64_t hex_buf_size);
+                                            const ObCSColumnHeader &col_header, const int64_t col_id,
+                                            char *hex_print_buf, const int64_t hex_buf_size, const uint32_t row_cnt);
   void print_cs_encoding_orig_stream_data(
       const uint32_t stream_cnt, const ObMicroBlockTransformDesc &desc, const char *payload,
       const uint32_t all_string_data_offset, const uint32_t all_string_data_length);
@@ -105,6 +106,14 @@ public:
                                               char *hex_print_buf, const int64_t hex_buf_size);
   void print_bloom_filter_micro_header(const ObBloomFilterMicroBlockHeader *micro_block_header);
   void print_bloom_filter_micro_block(const char* micro_block_buf, const int64_t micro_block_size);
+
+  void print_semistruct_column_meta(const char *start, const int64_t len,
+                                    const ObCSColumnHeader &col_header, const uint32_t row_cnt);
+  void print_sub_schema(const ObSemiStructSubSchema &sub_schema);
+  void print_freq_column_info(const ObIArray<ObSemiStructSubColumn>& freq_columns);
+  void print_spare_column_info(const ObIArray<ObSemiStructSubColumn>& spare_columns);
+  void print_sub_column_path(const share::ObSubColumnPath &sub_col_path);
+
   FILE *fd_;
 };
 

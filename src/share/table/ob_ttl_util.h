@@ -279,9 +279,13 @@ public:
       ttl_(0),
       max_version_(0),
       is_redis_ttl_(false),
-      redis_model_(table::ObRedisModel::INVALID)
+      redis_model_(table::ObRedisDataModel::MODEL_MAX)
   {}
   bool is_ttl_table() const;
+  OB_INLINE bool is_max_versions_valid() const
+  {
+    return type_ == ObTTLTableType::HBASE && max_version_ > 0;
+  }
   OB_INLINE bool is_empty() const { return type_ == ObTTLTableType::INVALID; }
   TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_redis_ttl), K_(redis_model));
 
@@ -293,7 +297,7 @@ public:
 
   // for redis
   bool is_redis_ttl_;
-  table::ObRedisModel redis_model_;
+  table::ObRedisDataModel redis_model_;
 };
 
 class ObTTLUtil
@@ -381,7 +385,10 @@ public:
 
   static int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
   static bool is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns);
-
+  static int check_kv_attributes(const share::schema::ObTableSchema &table_schema);
+  static int check_kv_attributes(const ObString &kv_attributes,
+                                 const share::schema::ObTableSchema &table_schema,
+                                 ObPartitionLevel part_level);
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
@@ -398,7 +405,7 @@ private:
                                      const ObSimpleTTLInfo &ttl_info);
   static int get_all_user_tenant_ttl(common::ObIArray<ObSimpleTTLInfo> &ttl_info_array);
   static int parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions, int32_t &time_to_live);
-  static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisModel &redis_model_);
+  static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisDataModel &redis_model_);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLUtil);
 };

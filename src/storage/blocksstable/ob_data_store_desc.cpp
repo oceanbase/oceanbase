@@ -74,6 +74,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   need_submit_io_ = desc.need_submit_io_;
   is_delete_insert_table_ = desc.is_delete_insert_table_;
   encoding_granularity_ = desc.encoding_granularity_;
+  semistruct_encoding_type_ = desc.semistruct_encoding_type_;
   return ret;
 }
 
@@ -161,6 +162,8 @@ int ObStaticDataStoreDesc::init(
 
     if (FAILEDx(init_encryption_info(merge_schema))) {
       STORAGE_LOG(WARN, "fail to get encrypt info from table schema", K(ret));
+    } else if (OB_FAIL(merge_schema.get_semistruct_encoding_type(semistruct_encoding_type_))) {
+      STORAGE_LOG(WARN, "Failed to get semistruct encoding option", K(ret));
     } else {
       schema_version_ = merge_schema.get_schema_version();
       snapshot_version_ = snapshot_version;

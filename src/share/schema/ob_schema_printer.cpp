@@ -2073,6 +2073,12 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     }
   }
 
+  if (OB_SUCC(ret) && !strict_compat_ && !is_oracle_mode && !is_index_tbl) {
+    if (OB_FAIL(print_semistruct_encodng_options(table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encodng options", K(ret), K(table_schema));
+    }
+  }
+
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && table_schema.with_dynamic_partition_policy()) {
     if (OB_FAIL(print_dynamic_partition_policy(table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
@@ -6503,6 +6509,21 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
     }
   }
   return ret;
+}
+
+int ObSchemaPrinter::print_semistruct_encodng_options(const ObTableSchema &table_schema,
+                                                       char* buf,
+                                                       const int64_t& buf_len,
+                                                       int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  const ObSemiStructEncodingType& type = table_schema.get_semistruct_encoding_type();
+  if (type.mode_ == ObSemiStructEncodingType::Mode::ENCODING) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SEMISTRUCT_ENCODING_TYPE='ENCODING' "))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encoding type", K(ret), K(table_schema));
+    }
+  }
+    return ret;
 }
 
 int ObSchemaPrinter::print_dynamic_partition_policy(

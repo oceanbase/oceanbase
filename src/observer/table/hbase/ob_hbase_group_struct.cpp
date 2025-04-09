@@ -56,11 +56,14 @@ int ObHbaseOp::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_ISNULL(ls_req_.ls_op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_op_ is null", K(ret));
   } else {
-    bool need_all_prop = ls_req_.ls_op_.need_all_prop_bitmap();
-    const ObIArray<ObString>& all_rowkey_names = ls_req_.ls_op_.get_all_rowkey_names();
-    const ObIArray<ObString>& all_properties_names = ls_req_.ls_op_.get_all_properties_names();
-    int64_t tablet_count = ls_req_.ls_op_.count();
+    bool need_all_prop = ls_req_.ls_op_->need_all_prop_bitmap();
+    const ObIArray<ObString>& all_rowkey_names = ls_req_.ls_op_->get_all_rowkey_names();
+    const ObIArray<ObString>& all_properties_names = ls_req_.ls_op_->get_all_properties_names();
+    int64_t tablet_count = ls_req_.ls_op_->count();
     if (OB_FAIL(result_.prepare_allocate(tablet_count))) {
       LOG_WARN("fail to prepare allocate results", K(ret), K(tablet_count));
     } else if (OB_FAIL(result_.assign_rowkey_names(all_rowkey_names))) {
@@ -70,7 +73,7 @@ int ObHbaseOp::init()
     } else {
       bool init_once = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; i++) {
-        const ObTableTabletOp &tablet_op = ls_req_.ls_op_.at(i);
+        const ObTableTabletOp &tablet_op = ls_req_.ls_op_->at(i);
         ObTableTabletOpResult &tablet_result = result_.at(i);
         int64_t single_op_count = tablet_op.count();
         if (OB_FAIL(tablet_result.prepare_allocate(single_op_count))) {

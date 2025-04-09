@@ -14,7 +14,7 @@
 #include "ob_table_tenant_group.h"
 #include "ob_table_group_service.h"
 #include "ob_table_tenant_group.h"
-#include "observer/table/ob_table_session_pool.h"
+#include "observer/table/object_pool/ob_table_object_pool.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -553,7 +553,7 @@ void ObTableGroupCommitMgr::destroy()
 int64_t ObTableGroupCommitMgr::get_group_size() const
 {
   int64_t batch_size = 1;
-  batch_size = TABLEAPI_SESS_POOL_MGR->get_kv_group_commit_batch_size();
+  batch_size = TABLEAPI_OBJECT_POOL_MGR->get_kv_group_commit_batch_size();
   return batch_size > 1 ? batch_size : 1;
 }
 

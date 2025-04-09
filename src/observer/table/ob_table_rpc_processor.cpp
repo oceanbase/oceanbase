@@ -16,6 +16,7 @@
 #include "ob_table_connection_mgr.h"
 #include "ob_table_mode_control.h"
 #include "ob_table_client_info_mgr.h"
+#include "share/table/ob_table_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -33,6 +34,19 @@ bool ObTableLoginP::can_use_redis_v2()
     || (min_ver >= CLUSTER_VERSION_4_3_5_1);
 }
 
+int ObTableLoginP::check_client_type(uint8_t client_type)
+{
+  int ret = OB_SUCCESS;
+  ObTableClientType type = static_cast<ObTableClientType>(client_type);
+
+  if (type == ObTableClientType::INVALID_CLIENT || type >= ObTableClientType::MAX_CLIENT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid client type", K(ret), K(type));
+  }
+
+  return ret;
+}
+
 int ObTableLoginP::process()
 {
   int ret = OB_SUCCESS;
@@ -44,9 +58,8 @@ int ObTableLoginP::process()
       || 0 != login.reserved3_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid login request", K(ret), K(login));
-  } else if (1 != login.client_type_ && 2 != login.client_type_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid client type", K(ret), K(login));
+  } else if (OB_FAIL(check_client_type(login.client_type_))) {
+    LOG_WARN("fail to check client type", K(ret), K(login));
   } else if (login.tenant_name_.empty()
              || login.user_name_.empty()
              || login.database_name_.empty()) {
@@ -80,10 +93,13 @@ int ObTableLoginP::process()
     } else {
       MTL_SWITCH(credential_.tenant_id_) {
         const ObAddr &cli_addr = ObCurTraceId::get_addr();
-        if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->update_sess(credential_))) {
+        if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->update_sess(credential_))) {
           LOG_WARN("failed to update session pool", K(ret), K_(credential));
         } else if (!login.client_info_.empty() && OB_FAIL(TABLEAPI_CLI_INFO_MGR->record(login, cli_addr))) {
           LOG_WARN("failed to record login client info", K(ret), K(login));
+        } else {
+          // sync server capacity to client
+          sync_capacity(login.client_type_);
         }
       }
       result_.reserved1_ = can_use_redis_v2() ? ObTableLoginFlag::REDIS_PROTOCOL_V2 : ObTableLoginFlag::LOGIN_FLAG_NONE;
@@ -115,6 +131,17 @@ int ObTableLoginP::process()
   }
   EVENT_INC(TABLEAPI_LOGIN_COUNT);
   return ret;
+}
+
+void ObTableLoginP::sync_capacity(uint8_t client_type)
+{
+  ObTableClientType type = static_cast<ObTableClientType>(client_type);
+  uint32_t server_capabilities = ObTableServerCapacity::CAPACITY_NONE;
+  if (type == ObTableClientType::JAVA_HTABLE_CLIENT &&
+      TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute()) {
+    server_capabilities |= ObTableServerCapacity::DISTRIBUTED_EXECUTE;
+  }
+  result_.server_capabilities_ = server_capabilities;
 }
 
 int ObTableLoginP::get_ids()
@@ -232,23 +259,25 @@ int ObTableLoginP::generate_credential(uint64_t tenant_id,
 
 ////////////////////////////////////////////////////////////////
 ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
-    :gctx_(gctx),
-     table_service_(gctx_.table_service_),
-     access_service_(MTL(ObAccessService *)),
-     location_service_(gctx.location_service_),
-     sess_guard_(),
-     schema_guard_(),
-     simple_table_schema_(nullptr),
-     req_timeinfo_guard_(),
-     schema_cache_guard_(),
-     stat_process_type_(-1),
-     enable_query_response_time_stats_(true),
-     stat_row_count_(0),
-     need_retry_in_queue_(false),
-     is_tablegroup_req_(false),
-     retry_count_(0),
-     user_client_addr_(),
-     audit_ctx_(retry_count_, user_client_addr_)
+    : allocator_("TbApiPBaseP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      gctx_(gctx),
+      table_service_(gctx_.table_service_),
+      access_service_(MTL(ObAccessService *)),
+      location_service_(gctx.location_service_),
+      sess_guard_(),
+      schema_guard_(),
+      simple_table_schema_(nullptr),
+      req_timeinfo_guard_(),
+      schema_cache_guard_(),
+      stat_process_type_(-1),
+      enable_query_response_time_stats_(true),
+      stat_row_count_(0),
+      need_retry_in_queue_(false),
+      is_tablegroup_req_(false),
+      retry_count_(0),
+      user_client_addr_(),
+      audit_ctx_(retry_count_, user_client_addr_),
+      exec_ctx_(allocator_, sess_guard_, schema_cache_guard_, &audit_ctx_, credential_, schema_guard_, trans_param_)
 {
 }
 
@@ -260,87 +289,22 @@ void ObTableApiProcessorBase::reset_ctx()
   simple_table_schema_ = nullptr;
 }
 
-/// Get all table schemas based on the tablegroup name
-/// Since we only have one table in tablegroup, we could considered tableID as the target table now
-int ObTableApiProcessorBase::init_tablegroup_schema(const ObString &arg_tablegroup_name)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tablegroup_id = OB_INVALID_ID;
-  ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> table_schemas;
-  if (OB_FAIL(schema_guard_.get_tablegroup_id(credential_.tenant_id_, arg_tablegroup_name, tablegroup_id))) {
-    LOG_WARN("fail to get tablegroup id", K(ret), K(credential_.tenant_id_),
-              K(credential_.database_id_), K(arg_tablegroup_name));
-  } else if (OB_FAIL(schema_guard_.get_table_schemas_in_tablegroup(credential_.tenant_id_, tablegroup_id, table_schemas))) {
-    LOG_WARN("fail to get table schema from table group", K(ret), K(credential_.tenant_id_),
-              K(credential_.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
-  } else {
-    if (table_schemas.count() != 1) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "each Table has not one Family currently");
-      LOG_WARN("number of table in table gourp must be equal to one now", K(arg_tablegroup_name), K(table_schemas.count()), K(ret));
-    } else {
-      simple_table_schema_ = table_schemas.at(0);
-    }
-  }
-  return ret;
-}
 
 int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name, uint64_t arg_table_id)
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(init_schema_info(arg_table_name))) {
-    LOG_WARN("fail to init schema info", K(ret));
-  } else if (simple_table_schema_->get_table_id() != arg_table_id) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
-           K(simple_table_schema_->get_table_id()));
-  }
-  return ret;
+  return ObHTableUtils::init_schema_info(arg_table_name, arg_table_id, credential_, is_tablegroup_req_,
+                                         schema_guard_, simple_table_schema_, schema_cache_guard_);
 }
 
 int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name)
 {
-  int ret = OB_SUCCESS;
-  if (schema_cache_guard_.is_inited()) {
-    // skip and do nothing
-  } else if (OB_ISNULL(gctx_.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service", K(ret));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard_))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
-  /*When is_tablegroup_req_ is true, simple_table_schema_ is not properly initialized.
-    Defaulting to use the first element (index 0). */
-  } else if (is_tablegroup_req_ && OB_FAIL(init_tablegroup_schema(arg_table_name))) {
-    LOG_WARN("fail to get table schema from table group name", K(ret), K(credential_.tenant_id_),
-              K(credential_.database_id_), K(arg_table_name));
-  } else if (!is_tablegroup_req_
-             && OB_FAIL(schema_guard_.get_simple_table_schema(credential_.tenant_id_,
-                                                              credential_.database_id_,
-                                                              arg_table_name,
-                                                              false, /* is_index */
-                                                              simple_table_schema_))) {
-    LOG_WARN("fail to get table schema", K(ret), K(credential_.tenant_id_),
-              K(credential_.database_id_), K(arg_table_name));
-  } else if (OB_ISNULL(simple_table_schema_) || simple_table_schema_->get_table_id() == OB_INVALID_ID) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    ObString db("");
-    LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, arg_table_name.length(), arg_table_name.ptr(), db.length(), db.ptr());
-    LOG_WARN("table not exist", K(ret), K(credential_.tenant_id_), K(credential_.database_id_), K(arg_table_name));
-  } else if (simple_table_schema_->is_in_recyclebin()) {
-    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
-    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
-    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
-                K(credential_.database_id_), K(arg_table_name));
-  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
-                                              simple_table_schema_->get_table_id(),
-                                              simple_table_schema_->get_schema_version(),
-                                              schema_guard_))) {
-    LOG_WARN("fail to init schema cache guard", K(ret));
-  }
-  return ret;
+  return ObHTableUtils::init_schema_info(arg_table_name, credential_, is_tablegroup_req_, schema_guard_,
+                                         simple_table_schema_, schema_cache_guard_);
 }
 
-int ObTableApiProcessorBase::init_schema_info(uint64_t table_id, const ObString &arg_table_name)
+int ObTableApiProcessorBase::init_schema_info(uint64_t table_id,
+                                              const ObString &arg_table_name,
+                                              bool check_match/*=true*/)
 {
   int ret = OB_SUCCESS;
   if (schema_cache_guard_.is_inited()) {
@@ -355,15 +319,16 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id, const ObString 
   } else if (OB_ISNULL(simple_table_schema_) || !simple_table_schema_->is_valid()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(ret), K(credential_), K(table_id));
+  } else if (check_match && !arg_table_name.empty()
+      && arg_table_name.case_compare(simple_table_schema_->get_table_name()) != 0) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
+            K(simple_table_schema_->get_table_name()));
   } else if (simple_table_schema_->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
     LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
                 K(credential_.database_id_), K(table_id));
-  } else if (!arg_table_name.empty() && arg_table_name.case_compare(simple_table_schema_->get_table_name()) != 0) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
-            K(simple_table_schema_->get_table_name()));
   } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
                                               simple_table_schema_->get_table_id(),
                                               simple_table_schema_->get_schema_version(),
@@ -391,7 +356,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   const ObTableApiCredential *sess_credetial = nullptr;
   if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
-  } else if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential_, sess_guard_))) {
+  } else if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->get_sess_info(credential_, sess_guard_))) {
     LOG_WARN("fail to get session info", K(ret), K_(credential));
   } else if (OB_FAIL(sess_guard_.get_credential(sess_credetial))) {
     LOG_WARN("fail to get credential", K(ret));
@@ -409,7 +374,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(check_mode())) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
-    enable_query_response_time_stats_ = TABLEAPI_SESS_POOL_MGR->is_enable_query_response_time_stats();
+    enable_query_response_time_stats_ = TABLEAPI_OBJECT_POOL_MGR->is_enable_query_response_time_stats();
     LOG_DEBUG("user can access", K_(credential));
   }
   return ret;
@@ -418,7 +383,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
 int ObTableApiProcessorBase::check_mode()
 {
   int ret = OB_SUCCESS;
-  ObKvModeType tenant_kv_mode = TABLEAPI_SESS_POOL_MGR->get_kv_mode();
+  ObKvModeType tenant_kv_mode = TABLEAPI_OBJECT_POOL_MGR->get_kv_mode();
 
   if (!is_kv_processor()) {
     // do nothing
@@ -499,14 +464,25 @@ int ObTableApiProcessorBase::get_idx_by_table_tablet_id(uint64_t arg_table_id, O
   share::schema::ObSchemaGetterGuard schema_guard;
   if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, arg_table_id, table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(arg_table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-  } else if (!table_schema->is_partitioned_table()) {
-    // do nothing
-  } else if (OB_FAIL(table_schema->get_part_idx_by_tablet(arg_tablet_id, part_idx, subpart_idx))) {
-    LOG_WARN("fail to get part idx by tablet", K(ret));
+  } else if (OB_FAIL(ObTableUtils::get_part_idx_by_tablet_id(schema_guard, arg_table_id, arg_tablet_id, part_idx, subpart_idx))) {
+    LOG_WARN("fail to get part idx by tablet", K(ret), K(arg_table_id), K(arg_tablet_id));
+  }
+  return ret;
+}
+
+int ObTableApiProcessorBase::check_mode_type(ObKvSchemaCacheGuard& schema_cache_guard)
+{
+  int ret = OB_SUCCESS;
+  if (!schema_cache_guard.is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("kvCacheSchemaGuard is not inited", K(ret));
+  } else if (schema_cache_guard.get_hbase_mode_type() != ObHbaseModeType::OB_HBASE_NORMAL_TYPE
+      && get_entity_type() == ObTableEntityType::ET_HKV) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Using a time series model without turning on the distributed switch is not supported.",
+              K(ret),
+              K(schema_cache_guard.get_table_name_str()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using a time series model without turning on the distributed switch");
   }
   return ret;
 }
@@ -519,24 +495,10 @@ int ObTableApiProcessorBase::get_tablet_by_idx(uint64_t table_id,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = MTL_ID();
-  const ObTableSchema *table_schema = NULL;
-  ObObjectID tmp_object_id = OB_INVALID_ID;
-  ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
   if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
-  } else if (!table_schema->is_partitioned_table()) {
-    tablet_id = table_schema->get_tablet_id();
-  } else if (OB_FAIL(table_schema->get_part_id_and_tablet_id_by_idx(part_idx,
-                                                                    subpart_idx,
-                                                                    tmp_object_id,
-                                                                    tmp_first_level_part_id,
-                                                                    tablet_id))) {
-    LOG_WARN("fail to get tablet by idx", K(ret));
+  } else if (OB_FAIL(ObTableUtils::get_tablet_id_by_part_idx(schema_guard, table_id, part_idx, subpart_idx, tablet_id))) {
+    LOG_WARN("fail to get tablet id by part idx", K(ret), K(table_id), K(part_idx), K(subpart_idx));
   }
   return ret;
 }
@@ -604,6 +566,22 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
   return ret;
 }
 
+bool ObTableApiProcessorBase::can_retry(int retcode)
+{
+  bool can_retry = false;
+
+  if (OB_TRY_LOCK_ROW_CONFLICT == retcode ||
+      OB_TRANSACTION_SET_VIOLATION == retcode ||
+      OB_SCHEMA_EAGAIN == retcode) {
+    can_retry = true;
+  } else if (ObTableRpcProcessorUtil::is_require_rerouting_err(retcode) &&
+             is_new_try_process()) {
+    can_retry = true;
+  }
+
+  return can_retry && retry_policy_.allow_retry();
+}
+
 int ObTableApiProcessorBase::process_with_retry(const ObString &credential, const int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -623,10 +601,7 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
     do {
       ret = try_process();
       did_local_retry = false;
-      // is_partition_change_error(ret) || is_master_changed_error(ret) retry in client
-      // OB_SCHEMA_EAGAIN:
-      if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret || OB_SCHEMA_EAGAIN == ret)
-          && retry_policy_.allow_retry()) {
+      if (can_retry(ret)) {
         int64_t now = ObTimeUtility::fast_current_time();
         if (now > timeout_ts) {
           LOG_WARN("process timeout", K(ret), K(now), K(timeout_ts));
@@ -775,12 +750,6 @@ int ObTableRpcProcessor<T>::after_process(int error_code)
   return RpcProcessor::after_process(error_code);
 }
 
-template<class T>
-void ObTableRpcProcessor<T>::set_req_has_wokenup()
-{
-  RpcProcessor::req_ = NULL;
-}
-
 int ObTableApiProcessorBase::check_table_has_global_index(bool &exists, table::ObKvSchemaCacheGuard& schema_cache_guard) {
   int ret = OB_SUCCESS;
   exists = false;
@@ -870,6 +839,13 @@ ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_reado
         break;
       case ObTableOperationType::CHECK_AND_INSERT_UP:
         process_type = ObTableProccessType::TABLE_API_MULTI_CHECK_AND_INSERT_UP;
+        break;
+      case ObTableOperationType::QUERY_AND_MUTATE:
+        if (ObTableEntityType::ET_HKV == entity_type) {
+          process_type = ObTableProccessType::TABLE_API_HBASE_DELETE;
+        } else {
+          process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+        }
         break;
       default:
         process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;

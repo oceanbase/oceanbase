@@ -97,7 +97,8 @@ TEST_F(TestObKvConfig, test_parse)
   ASSERT_EQ(false, parser.parse("ttl=on, ttt=off, ", arr, 32));
 
   MEMSET(arr, 0, 32);
-  ASSERT_EQ(false, parser.parse("ttl=on, ttt=off,", arr, 32));
+  ASSERT_EQ(true, parser.parse("ttl=on, distributed_execute=on", arr, 32));
+  ASSERT_EQ(arr[0], 0b01000001);
 }
 
 TEST_F(TestObKvConfig, test_obkv_feature_mode)
@@ -125,7 +126,7 @@ TEST_F(TestObKvConfig, test_obkv_feature_mode)
 TEST_F(TestObKvConfig, testObKVFeatureMode)
 {
   // rerouting=off, ttl=on
-  uint8_t values[1] = {0b001001};
+  uint8_t values[2] = {0b001001, 0b00000000};
   ObKVFeatureMode kv_mode(values);
   ASSERT_EQ(true, kv_mode.is_ttl_enable());
   ASSERT_EQ(false, kv_mode.is_rerouting_enable());
@@ -139,7 +140,7 @@ TEST_F(TestObKvConfig, testObKVFeatureMode)
   ASSERT_EQ(false, kv_mode_1.is_ttl_enable());
   ASSERT_EQ(true, kv_mode_1.is_rerouting_enable());
   ASSERT_EQ(true, kv_mode_1.is_hotkey_enable());
-  kv_mode_1.set_value(0b11101001);
+  kv_mode_1.set_value(0b00101001);
   ASSERT_EQ(true, kv_mode_1.is_valid());
   ASSERT_EQ(true, kv_mode_1.is_ttl_enable());
   ASSERT_EQ(false, kv_mode_1.is_rerouting_enable());

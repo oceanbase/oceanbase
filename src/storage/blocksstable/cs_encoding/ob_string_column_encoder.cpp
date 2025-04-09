@@ -117,13 +117,16 @@ int ObStringColumnEncoder::do_init_()
   } else {
     uncompress_len = fixed_len * row_count_;
   }
+  ObPreviousColumnEncoding *pre_col_encoding = nullptr;
   if (OB_FAIL(enc_ctx_.build_string_stream_meta(
       fixed_len, is_use_zero_len_as_null, uncompress_len))) {
     LOG_WARN("fail to build_string_stream_meta", K(ret));
+  } else if (OB_FAIL(get_previous_cs_encoding(pre_col_encoding))) {
+    LOG_WARN("get_previous_cs_encoding fail", K(ret));
   } else if (OB_FAIL(enc_ctx_.build_string_stream_encoder_info(
       ctx_->encoding_ctx_->compressor_type_,
       is_force_raw_, &ctx_->encoding_ctx_->cs_encoding_opt_,
-      ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_),
+      pre_col_encoding,
       int_stream_idx,
       ctx_->encoding_ctx_->major_working_cluster_version_,
       ctx_->allocator_))) {
@@ -144,7 +147,7 @@ int ObStringColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
     LOG_WARN("not init", K(ret));
   } else {
     // first stream offset include the column optional meta
-    if (OB_FAIL(store_column_meta_(buf_writer))) {
+    if (! ctx_->has_stored_meta_ && OB_FAIL(store_column_meta(buf_writer))) {
       LOG_WARN("fail to store column optional meta", K(ret));
     } else {
       ObColumnDatumIter iter(*ctx_->col_datums_);
@@ -172,7 +175,7 @@ int ObStringColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
   return ret;
 }
 
-int ObStringColumnEncoder::store_column_meta_(ObMicroBufferWriter &buf_writer)
+int ObStringColumnEncoder::store_column_meta(ObMicroBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(store_null_bitamp(buf_writer))) {

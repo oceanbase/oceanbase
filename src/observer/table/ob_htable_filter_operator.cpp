@@ -97,15 +97,6 @@ void ObHColumnDescriptor::reset()
 }
 
 ////////////////////////////////////////////////////////////////
-class ObHTableColumnTracker::ColumnCountComparator
-{
-public:
-  bool operator()(const ColumnCount &a, const ColumnCount &b) const
-  {
-    return a.first.compare(b.first) < 0;
-  }
-};
-
 void ObHTableColumnTracker::set_ttl(int32_t ttl_value)
 {
   if (ttl_value > 0) {
@@ -142,7 +133,7 @@ ObHTableExplicitColumnTracker::ObHTableExplicitColumnTracker()
      curr_column_(NULL)
 {}
 
-int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filter)
+int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filter, bool qualifier_with_family)
 {
   int ret = OB_SUCCESS;
   max_versions_ = htable_filter.get_max_versions();
@@ -153,7 +144,8 @@ int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filt
     LOG_WARN("should not use ExplicitColumnTracker", K(ret));
   }
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
-    if (OB_FAIL(columns_.push_back(std::make_pair(qualifiers.at(i), 0)))) {
+    ObString real_qualifier = qualifier_with_family ? qualifiers.at(i).after('.') : qualifiers.at(i);
+    if (OB_FAIL(columns_.push_back(std::make_pair(real_qualifier, 0)))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }  // end for
@@ -324,7 +316,7 @@ ObHTableWildcardColumnTracker::ObHTableWildcardColumnTracker()
      current_count_(0)
 {}
 
-int ObHTableWildcardColumnTracker::init(const table::ObHTableFilter &htable_filter)
+int ObHTableWildcardColumnTracker::init(const table::ObHTableFilter &htable_filter, bool qualifier_with_family)
 {
   int ret = OB_SUCCESS;
   max_versions_ = htable_filter.get_max_versions();
@@ -1793,7 +1785,7 @@ int ObHTableFilterOperator::init(common::ObIAllocator *allocator)
         row_iterator_->set_hfilter(filter_);
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(ob_kv_params_.ob_params_)) {
-        if (OB_FAIL(ob_kv_params_.init_ob_params_for_hfilter(hbase_params))) {
+        if (OB_FAIL(ob_kv_params_.get_hbase_params(hbase_params))) {
           LOG_WARN("init ob_params fail", K(ret), K(ob_kv_params_));
         } else {
           caching_ = hbase_params->caching_;
@@ -1815,60 +1807,4 @@ int ObHTableFilterOperator::init(common::ObIAllocator *allocator)
     LOG_DEBUG("obHTableFilterOperator init success", K(ret));
   }
   return ret;
-}
-
-ScannerContext::ScannerContext()
-{
-  limits_.set_fields(LIMIT_DEFAULT_VALUE, LIMIT_DEFAULT_VALUE, LIMIT_DEFAULT_VALUE, LimitScope::Scope::BETWEEN_ROWS);
-  progress_.set_fields(
-      PROGRESS_DEFAULT_VALUE, PROGRESS_DEFAULT_VALUE, PROGRESS_DEFAULT_VALUE, LimitScope::Scope::BETWEEN_ROWS);
-}
-
-ScannerContext::ScannerContext(int32_t batch, int64_t size, int64_t time, LimitScope limit_scope)
-{
-  limits_.set_fields(batch, size, time, limit_scope);
-}
-
-void ScannerContext::increment_batch_progress(int32_t batch)
-{
-  int32_t current_batch = progress_.get_batch();
-  progress_.set_batch(current_batch + batch);
-}
-
-void ScannerContext::increment_size_progress(int64_t size)
-{
-  int64_t current_size = progress_.get_size();
-  progress_.set_size(current_size + size);
-}
-
-bool ScannerContext::check_batch_limit(LimitScope checker_scope)
-{
-  bool ret = false;
-  if (limits_.can_enforce_batch_from_scope(checker_scope) && limits_.get_batch() > 0) {
-    ret = progress_.get_batch() >= limits_.get_batch();
-  }
-  return ret;
-}
-
-bool ScannerContext::check_size_limit(LimitScope checker_scope)
-{
-  bool ret = false;
-  if (limits_.can_enforce_size_from_scope(checker_scope) && limits_.get_size() > 0) {
-    ret = progress_.get_size() >= limits_.get_size();
-  }
-  return ret;
-}
-
-bool ScannerContext::check_time_limit(LimitScope checker_scope)
-{
-  bool ret = false;
-  if (limits_.can_enforce_time_from_scope(checker_scope) && limits_.get_time() > 0) {
-    ret = progress_.get_time() >= limits_.get_time();
-  }
-  return ret;
-}
-
-bool ScannerContext::check_any_limit(LimitScope checker_scope)
-{
-  return check_batch_limit(checker_scope) || check_size_limit(checker_scope) || check_time_limit(checker_scope);
 }

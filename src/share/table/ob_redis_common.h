@@ -127,7 +127,7 @@ enum RedisCommandType {
   REDIS_COMMAND_MAX
 };
 
-enum ObRedisModel {
+enum ObRedisDataModel { // FARM COMPAT WHITELIST
   STRING,
   HASH,
   SET,
