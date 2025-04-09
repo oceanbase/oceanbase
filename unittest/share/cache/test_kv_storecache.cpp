@@ -1251,6 +1251,7 @@ TEST_F(TestKVCache, cache_handle_pin) {
   static const int64_t V_SIZE = 8 << 10; // 8K
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
+  CHUNK_MGR.set_limit(5ll << 30);
 
   int ret = OB_SUCCESS;
   ObKVCache<TestKey, TestValue> cache;
@@ -1267,48 +1268,55 @@ TEST_F(TestKVCache, cache_handle_pin) {
   ret = cache.init("test");
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  bool finished = false;
   std::vector<std::thread> threads;
   constexpr static int64_t THREAD_NUM = 8;
   for (int64_t thread_idx = 0; thread_idx < THREAD_NUM; ++thread_idx) {
-    threads.emplace_back([&cache, thread_idx](){
+    threads.emplace_back([this, &cache, &finished, thread_idx](){
       int64_t handle_size = (thread_idx + 1) * 128;
       std::vector<ObKVCacheHandle> handles(handle_size);
       std::vector<typeof(pvalue)> values(handle_size);
 	  TestKey key;
 	  TestValue value;
-      for (uint16_t repeat = 0; repeat < 1; ++repeat) {
+      for (uint16_t repeat = 0; !ATOMIC_LOAD_RLX(&finished); repeat += THREAD_NUM, repeat = repeat % 1024) {
         for (uint16_t j = 0; j < handle_size; ++j) {
           auto val = (thread_idx << 32) + (repeat << 16) + j;
           key.v_ = val;
+          key.tenant_id_ = tenant_id_;
           value.v_ = val;
-          int ret = cache.put_and_fetch(key, value, values[j], handles[j]);
-          ASSERT_EQ(OB_SUCCESS, ret);
-          ASSERT_EQ(val, values[j]->v_);
-          ASSERT_TRUE(handles[j].is_valid());
+          ObKVCacheHandle handle;
+          ASSERT_EQ(OB_SUCCESS, cache.put_and_fetch(key, value, values[j], handle));
+          handles[j].assign(handle);
         }
         for (uint16_t j = 0; j < handle_size; ++j) {
-          auto val = (thread_idx << 32) + (repeat << 16) + j;
-          ASSERT_EQ(val, values[j]->v_);
-          handles[j].reset();
+          if (handles[j].is_valid()) {
+            auto val = (thread_idx << 32) + (repeat << 16) + j;
+            ASSERT_EQ(val, values[j]->v_);
+            handles[j].reset();
+          }
         }
       }
     });
   }
 
-  bool finished = false;
-
   threads.emplace_back([&]() {
-    for (; ATOMIC_LOAD(&finished) == false;) {
-      ObKVGlobalCache::get_instance().wash();
+    while (!ATOMIC_LOAD(&finished)) {
+      ObKVGlobalCache::get_instance().store_.flush_washable_mbs(tenant_id_, false);
+      if (REACH_TIME_INTERVAL(1000)) {
+        HazardDomain::get_instance().wash();
+      }
+      if (REACH_TIME_INTERVAL(1000000)) {
+        ObKVGlobalCache::get_instance().print_all_cache_info();
+      }
     }
   });
 
-  for (auto i = 0; i < THREAD_NUM; ++i) {
-    threads[i].join();
-  }
-
+  sleep(10);
   ATOMIC_STORE(&finished, true);
-  threads.back().join();
+
+  for (auto& thread : threads) {
+    thread.join();
+  }
 }
 
 // TEST(HazardPointer, produce_consume) {

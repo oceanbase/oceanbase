@@ -265,13 +265,14 @@ ObKVMemBlockHandle* HazptrHolder::hazptr_get_mb_handle() const
 int HazptrHolder::hazptr_assign(const HazptrHolder& other)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(hazptr_)) {
-    if (OB_FAIL(HazptrTLCache::get_instance().acquire_hazptr(hazptr_))) {
-      COMMON_LOG(WARN, "failed to acquire hazptr");
-    }
-  }
-  if (OB_SUCC(ret)) {
-    hazptr_->reset_protect(other.get_mb_handle());
+  bool protect_success;
+  release();
+  if (!other.is_valid()) {
+  } else if (OB_FAIL(hazptr_protect(protect_success, other.get_mb_handle()))) {
+      COMMON_LOG(WARN, "failed to protect");
+  } else if (!protect_success) {
+    // has been retired
+    ret = OB_EAGAIN;
   }
   return ret;
 }
