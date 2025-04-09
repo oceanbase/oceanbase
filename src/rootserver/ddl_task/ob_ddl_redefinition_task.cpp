@@ -2086,6 +2086,8 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         // bypass hidden column
       } else if (col->is_udt_hidden_column() || col->is_unused()) {
         // bypass udt hidden column, unsed column.
+      } else if (col->is_domain_index_column()) {
+        // bypass vec/fulltext/multivalue index hidden column
       } else if (OB_FAIL(col_name_map.get(col->get_column_name_str(), new_col_name))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // the column is not in column name map, meaning it is dropped in this ddl
@@ -2462,7 +2464,10 @@ int ObDDLRedefinitionTask::generate_rebuild_index_arg_list(
         const ObTableSchema *index_schema = nullptr;
         ObTableSchema new_index_schema;
         const int64_t index_id = index_infos.at(i).table_id_;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_id, index_schema))) {
+        if (is_vec_index(index_infos.at(i).index_type_) && !is_vec_delta_buffer_type(index_infos.at(i).index_type_)) {
+        } else if (is_fts_index(index_infos.at(i).index_type_) && !is_fts_index_aux(index_infos.at(i).index_type_)) {
+        } else if (is_multivalue_index(index_infos.at(i).index_type_) && !is_multivalue_index_aux(index_infos.at(i).index_type_)) {
+        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_id, index_schema))) {
           LOG_WARN("fail to get index table schema", K(ret), K(tenant_id), K(index_id));
         } else if (OB_ISNULL(index_schema)) {
           ret = OB_ERR_UNEXPECTED;

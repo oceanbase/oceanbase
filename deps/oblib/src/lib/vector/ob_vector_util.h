@@ -16,7 +16,10 @@
 #include <vsag/ob_vsag_lib.h>
 #include <vsag/allocator.h>
 #include <vsag/logger.h>
+#include <vsag/iterator_context.h>
 #include <fstream>
+#include "lib/container/ob_loser_tree.h"
+#include "lib/allocator/page_arena.h"
 
 namespace oceanbase {
 namespace common {
@@ -51,24 +54,60 @@ bool check_vsag_init();
 int create_index(obvectorlib::VectorIndexPtr& index_handler, int index_type,
                  const char* dtype, const char* metric, int dim,
                  int max_degree, int ef_construction, int ef_search,
-                 void* allocator = NULL);
+                 void* allocator = NULL, int extra_info_size = 0);
 
-int build_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size);
+int build_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size, char *extra_info = nullptr);
 
-int add_index(obvectorlib::VectorIndexPtr index_handler,float* vector_list, int64_t* ids, int dim, int size);
+int add_index(obvectorlib::VectorIndexPtr index_handler,float* vector_list, int64_t* ids, int dim, char *extra_info, int size);
 
 int get_index_number(obvectorlib::VectorIndexPtr index_handler, int64_t &size);
 
 int get_index_type(obvectorlib::VectorIndexPtr index_handler);
-int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler, const float* vector, const int64_t* ids, int64_t count, const float *&distances);
-int knn_search(obvectorlib::VectorIndexPtr index_handler,float* query_vector,int dim, int64_t topk,
-               const float*& result_dist, const int64_t*& result_ids, int64_t &result_size, int ef_search,
-               void* invalid = NULL, bool reverse_filter = false, float valid_ratio = 1.0);
+int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler,
+                       const float *vector,
+                       const int64_t *ids,
+                       int64_t count,
+                       const float *&distances);
+int get_extra_info_by_ids(obvectorlib::VectorIndexPtr& index_handler,
+                          const int64_t* ids,
+                          int64_t count,
+                          char *extra_infos);
+int get_vid_bound(obvectorlib::VectorIndexPtr index_handler, int64_t &min_vid, int64_t &max_vid);
+int knn_search(obvectorlib::VectorIndexPtr index_handler,
+               float *query_vector,
+               int dim,
+               int64_t topk,
+               const float *&result_dist,
+               const int64_t *&result_ids,
+               const char *&extra_info,
+               int64_t &result_size,
+               int ef_search,
+               void *invalid = NULL,
+               bool reverse_filter = false,
+               float valid_ratio = 1.0,
+               bool need_extra_info = false);
+
+int knn_search(obvectorlib::VectorIndexPtr index_handler,
+               float *query_vector,
+               int dim,
+               int64_t topk,
+               const float *&result_dist,
+               const int64_t *&result_ids,
+               const char *&extra_info,
+               int64_t &result_size,
+               int ef_search,
+               void *invalid,
+               bool reverse_filter,
+               float valid_ratio,
+               bool need_extra_info,
+               void *&iter_filter,
+               bool is_last_search = false);
 
 int fserialize(obvectorlib::VectorIndexPtr index_handler, std::ostream& out_stream);
 
 int fdeserialize(obvectorlib::VectorIndexPtr& index_handler, std::istream& in_stream);
 int delete_index(obvectorlib::VectorIndexPtr& index_handler);
+void delete_iter_ctx(void *iter_ctx);
 } // namesapce obvectorutil
 } // namespace common
 } // namespace oceanbase

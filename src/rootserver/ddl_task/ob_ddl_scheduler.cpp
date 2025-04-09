@@ -1943,7 +1943,7 @@ int ObDDLScheduler::create_build_fts_index_task(
     const obrpc::ObCreateIndexArg *create_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record,
-    const int64_t snapshot_version,
+    int64_t snapshot_version,
     const bool ddl_need_retry_at_executor)
 {
   int ret = OB_SUCCESS;
@@ -1960,6 +1960,8 @@ int ObDDLScheduler::create_build_fts_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema), K(tenant_data_version), KP(GCTX.sql_proxy_));
+    } else if (create_index_arg->is_offline_rebuild_ && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
+      LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(data_table_schema, create_index_arg))) {
       LOG_WARN("fail to check supportability for building index", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
@@ -2051,7 +2053,7 @@ int ObDDLScheduler::create_build_vec_index_task(
     const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record,
-    const int64_t snapshot_version)
+    int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
@@ -2065,6 +2067,8 @@ int ObDDLScheduler::create_build_vec_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema));
+    } else if (create_index_arg->is_offline_rebuild_ && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
+      LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),

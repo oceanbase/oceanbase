@@ -158,10 +158,13 @@ void ObVectorQueryRowkeyIterator::reset()
 int ObVectorQueryVidIterator::init()
 {
   INIT_SUCC(ret);
-  if (OB_ISNULL(row_ = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
+  if (extra_column_count_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("extra_column_count_ is invalid", K(ret), K(extra_column_count_));
+  } else if (OB_ISNULL(row_ = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * 2)))) {
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * (2 + extra_column_count_))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
   } else {
@@ -173,7 +176,10 @@ int ObVectorQueryVidIterator::init()
 int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distances, ObIAllocator *allocator)
 {
   INIT_SUCC(ret);
-  if ((OB_ISNULL(vids) && total != 0) || OB_ISNULL(allocator)) {
+  if (extra_column_count_ != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("extra_column_count_ is invalid", K(ret), K(extra_column_count_));
+  } else if ((OB_ISNULL(vids) && total != 0) || OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get vids or allocator", K(ret), K(vids), K(allocator));
   } else if (OB_ISNULL(row_ =  OB_NEWx(ObNewRow, allocator))) {
@@ -187,6 +193,7 @@ int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distance
     obj_[1].reset();
     is_init_ = true;
     total_ = total;
+    alloc_size_ = total_;
     cur_pos_ = 0;
     vids_ = vids;
     allocator_ = allocator;
@@ -195,7 +202,125 @@ int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distance
   return ret;
 }
 
-int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row)
+int ObVectorQueryVidIterator::init(int64_t need_count, ObIAllocator *allocator)
+{
+  INIT_SUCC(ret);
+  if (need_count == 0 || OB_ISNULL(allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get vids or allocator", K(ret), K(allocator), K(need_count));
+  } else if (OB_ISNULL(row_ = static_cast<ObNewRow *>(allocator->alloc(sizeof(ObNewRow))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator NewRow.", K(ret));
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator->alloc(sizeof(ObObj) * (2 + extra_column_count_))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator NewRow.", K(ret));
+  } else if (OB_ISNULL(vids_ = static_cast<int64_t *>(allocator->alloc(sizeof(int64_t) * need_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator vids.", K(ret), K(need_count));
+  } else if (OB_ISNULL(distance_ = static_cast<float *>(allocator->alloc(sizeof(float) * need_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator vids.", K(ret), K(need_count));
+  } else {
+    if (extra_column_count_ > 0 && OB_FAIL(extra_info_ptr_.init(allocator, extra_info_actual_size_, need_count))) {
+      LOG_WARN("failed to init extra info array", K(ret), K(extra_info_ptr_), K(need_count));
+    } else {
+      for (int i = 0; i < 2 + extra_column_count_; i++) {
+        obj_[i].reset();
+      }
+      total_ = 0;
+      cur_pos_ = 0;
+      alloc_size_ = need_count;
+      allocator_ = allocator;
+      is_init_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObVectorQueryVidIterator::add_results(int64_t add_cnt, int64_t *add_vids, float *add_distance, const ObVecExtraInfoPtr &extra_infos)
+{
+  INIT_SUCC(ret);
+  if (!is_init_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iter is not initialized.", K(ret));
+  } else if (!extra_infos.is_null() && extra_infos.count_ != add_cnt) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra info array count is not equal to add cnt", K(ret), K(extra_infos), K(add_cnt));
+  } else if (!extra_infos.is_null() && extra_info_ptr_.is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra info array not empty extra_info_ptr_ is null", K(ret), K(extra_infos), K(add_cnt));
+  } else {
+    int start_pos = total_;
+    for (int64_t i = 0; i < add_cnt && (start_pos + i < alloc_size_) && OB_SUCC(ret); ++i) {
+      vids_[start_pos + i] = add_vids[i];
+      distance_[start_pos + i] = add_distance[i];
+      if (!extra_infos.is_null()) {
+        if (OB_FAIL(extra_info_ptr_.set_no_copy(start_pos + i, extra_infos[i]))) {
+          LOG_WARN("failed to set extra info", K(ret), K(extra_info_ptr_), K(extra_infos));
+        }
+      }
+      ++total_;
+    }
+  }
+  return ret;
+}
+
+int ObVectorQueryVidIterator::add_result(int64_t add_vid, float add_distance, const char *extra_info)
+{
+  INIT_SUCC(ret);
+  if (!is_init_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("iter is not initialized.", K(ret));
+  } else if ((extra_info_ptr_.is_null() && OB_NOT_NULL(extra_info)) ||
+             (OB_ISNULL(extra_info) && !extra_info_ptr_.is_null())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra info is null", K(ret), KP(extra_info), K(extra_info_ptr_), K(extra_column_count_));
+  } else if (total_ < alloc_size_) {
+    vids_[total_] = add_vid;
+    distance_[total_] = add_distance;
+    if (OB_NOT_NULL(extra_info)) {
+      if (OB_FAIL(extra_info_ptr_.set_no_copy(total_, extra_info))){
+        LOG_WARN("failed to set extra info", K(ret), K(extra_info_ptr_), K(extra_info));
+      }
+    }
+    ++total_;
+  }
+  return ret;
+}
+
+int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distances, const ObVecExtraInfoPtr& extra_info_ptr, ObIAllocator *allocator) {
+  INIT_SUCC(ret);
+  if (extra_column_count_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("extra_column_count_ is invalid", K(ret), K(extra_column_count_));
+  } else if (total != 0 && ((extra_column_count_ > 0 && extra_info_ptr.is_null()) || (extra_column_count_ == 0 && !extra_info_ptr.is_null()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("extra_info_ptr is null", K(ret), K(extra_column_count_));
+  } else if ((OB_ISNULL(vids) && total != 0) || OB_ISNULL(allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get vids or allocator", K(ret), K(vids), K(allocator));
+  } else if (OB_ISNULL(row_ =  OB_NEWx(ObNewRow, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator NewRow.", K(ret));
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj*>(allocator->alloc(sizeof(ObObj) * (2 + extra_column_count_))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator NewRow.", K(ret));
+  } else {
+    for (int i = 0; i < 2 + extra_column_count_; i++) {
+      obj_[i].reset();
+    }
+    is_init_ = true;
+    total_ = total;
+    cur_pos_ = 0;
+    vids_ = vids;
+    allocator_ = allocator;
+    distance_ = distances;
+    extra_info_ptr_ = extra_info_ptr;
+  }
+  return ret;
+}
+
+int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row, const sql::ExprFixedArray& res_exprs)
 {
   INIT_SUCC(ret);
   if (!is_init_) {
@@ -204,13 +329,33 @@ int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row)
   } else if (cur_pos_ < total_) {
     obj_[0].reset();
     obj_[1].reset();
+    for (int i = 0; i < extra_column_count_; i++) {
+      obj_[i + 2].reset();
+    }
     row_->reset();
 
-    obj_[0].set_int(vids_[cur_pos_]);
-    obj_[1].set_float(distance_[cur_pos_++]);
+    obj_[0].set_float(distance_[cur_pos_]);
+    obj_[1].set_int(vids_[cur_pos_]);
+    if (!extra_info_ptr_.is_null()) {
+      if (res_exprs.count() != extra_column_count_ + 1) {
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("res_exprs is not vid, extra_column", K(ret), K(res_exprs.count()), K(extra_column_count_));
+      }
+      if (OB_SUCC(ret)) {
+        for (int i = 0; i < extra_column_count_; i++) {
+          obj_[2 + i].set_meta_type(res_exprs.at(i + 1)->obj_meta_);
+        }
+        if (OB_FAIL(ObVecExtraInfo::extra_buf_to_obj(extra_info_ptr_[cur_pos_], extra_info_actual_size_,
+                                                     extra_column_count_, obj_ + 2))) {
+          LOG_WARN("failed to get extra info", K(ret), K(extra_info_ptr_[cur_pos_]), K(extra_info_actual_size_),
+                   K(extra_column_count_));
+        }
+      }
+    }
 
+    cur_pos_++;
     row_->cells_ = obj_;
-    row_->count_ = 2;
+    row_->count_ = 2 + extra_column_count_;
     row_->projector_ = NULL;
     row_->projector_size_ = 0;
 
@@ -221,32 +366,52 @@ int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row)
   return ret;
 }
 
-int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size)
+int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size, const sql::ExprFixedArray& res_exprs)
 {
   INIT_SUCC(ret);
   if (!is_init_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("iter is not initialized.", K(ret));
+    LOG_WARN("iter is not initialized.", K(ret), K(is_init_), K(alloc_size_), K(total_));
   } else if (cur_pos_ < total_) {
     size = 0;
     row = nullptr;
     ObObj *obj = nullptr;
     if (batch_size_ > 0) {
+      // row.cells: [dis\vid\extras][dis\vid\extras]...
+      // Indicates how many obj are in one row, 2 represents vid and dis
+      int64_t one_size_obj_count = 2 + extra_column_count_;
       if (OB_ISNULL(row = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator NewRow.", K(ret));
-      } else if (OB_ISNULL(obj = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * 2 * batch_size_)))) {
+      } else if (OB_ISNULL(obj = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * one_size_obj_count * batch_size_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator NewRow.", K(ret));
       } else {
         int64_t index = 0;
         for (; index < batch_size_ && cur_pos_ < total_; ++index) {
-          obj[index * 2].set_int(vids_[cur_pos_]);
-          obj[index * 2 + 1].set_float(distance_[cur_pos_]);
+          obj[index * one_size_obj_count].set_float(distance_[cur_pos_]);
+          obj[index * one_size_obj_count + 1].set_int(vids_[cur_pos_]);
+          if (!extra_info_ptr_.is_null()) {
+            if (res_exprs.count() != extra_column_count_ + 1) {
+              ret = OB_ERR_UNDEFINED;
+              LOG_WARN("res_exprs is not vid, extra_column", K(ret), K(res_exprs.count()), K(extra_column_count_));
+            }
+            if (OB_SUCC(ret)) {
+              for (int i = 0; i < extra_column_count_; i++) {
+                obj[index * one_size_obj_count + 2 + i].set_meta_type(res_exprs.at(i + 1)->obj_meta_);
+              }
+              if (OB_FAIL(ObVecExtraInfo::extra_buf_to_obj(extra_info_ptr_[cur_pos_], extra_info_actual_size_,
+                                                           extra_column_count_,
+                                                           obj + index * one_size_obj_count + 2))) {
+                LOG_WARN("failed to get extra info", K(ret), K(extra_info_ptr_[cur_pos_]), K(extra_info_actual_size_),
+                         K(extra_column_count_));
+              }
+            }
+          }
           cur_pos_++;
         }
         row->cells_ = obj;
-        row->count_ = index * 2;
+        row->count_ = index * one_size_obj_count;
         row->projector_ = NULL;
         row->projector_size_ = 0;
         size = index;
@@ -264,6 +429,7 @@ void ObVectorQueryVidIterator::reset()
   is_init_ = false;
   total_ = 0;
   cur_pos_ = 0;
+  extra_info_ptr_.reset();
 }
 
 int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult &first,
@@ -271,20 +437,31 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
                                                          const int64_t total,
                                                          int64_t &actual_cnt,
                                                          int64_t *&vids_result,
-                                                         float *&float_result)
+                                                         float *&float_result,
+                                                         ObVecExtraInfoPtr &extra_info_result)
 {
   INIT_SUCC(ret);
   actual_cnt = 0;
   int64_t res_num = 0;
   if (first.total_ == 0) {
-    while (res_num < total && res_num < second.total_) {
+    while (res_num < total && res_num < second.total_ && OB_SUCC(ret)) {
+      if (!extra_info_result.is_null()) {
+        if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[res_num], second.extra_info_ptr_.extra_info_actual_size_))) {
+          LOG_WARN("set extra info failed", K(ret), K(second.extra_info_ptr_), K(res_num));
+        }
+      }
       vids_result[res_num] = second.vids_[res_num];
       float_result[res_num] = second.distances_[res_num];
       res_num++;
     }
     actual_cnt = res_num;
   } else if (second.total_ == 0) {
-    while (res_num < total && res_num < first.total_) {
+    while (res_num < total && res_num < first.total_ && OB_SUCC(ret)) {
+      if (!extra_info_result.is_null()) {
+        if (OB_FAIL(extra_info_result.set_with_copy(res_num, first.extra_info_ptr_[res_num], first.extra_info_ptr_.extra_info_actual_size_))) {
+          LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(res_num));
+        }
+      }
       vids_result[res_num] = first.vids_[res_num];
       float_result[res_num] = first.distances_[res_num];
       res_num++;
@@ -309,6 +486,11 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
             if (OB_FAIL(vid_hash_set.set_refactored(first.vids_[i]))) {
               LOG_WARN("fail to set vid to hashset", K(first.vids_[i]));
             } else {
+              if (!extra_info_result.is_null()) {
+                if (OB_FAIL(extra_info_result.set_with_copy(res_num, first.extra_info_ptr_[i], first.extra_info_ptr_.extra_info_actual_size_))) {
+                  LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(i), K(res_num));
+                }
+              }
               float_result[res_num] = first.distances_[i];
               vids_result[res_num++] = first.vids_[i++];
             }
@@ -323,6 +505,11 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
             if (OB_FAIL(vid_hash_set.set_refactored(second.vids_[j]))) {
               LOG_WARN("fail to set vid to hashset", K(second.vids_[j]));
             } else {
+              if (!extra_info_result.is_null()) {
+                if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[j], second.extra_info_ptr_.extra_info_actual_size_))) {
+                  LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(j), K(res_num));
+                }
+              }
               float_result[res_num] = second.distances_[j];
               vids_result[res_num++] = second.vids_[j++];
             }
@@ -340,6 +527,11 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
           if (OB_FAIL(vid_hash_set.set_refactored(first.vids_[i]))) {
             LOG_WARN("fail to set vid to hashset", K(first.vids_[i]));
           } else {
+            if (!extra_info_result.is_null()) {
+              if (OB_FAIL(extra_info_result.set_with_copy(res_num, first.extra_info_ptr_[i], first.extra_info_ptr_.extra_info_actual_size_))) {
+                LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(i), K(res_num));
+              }
+            }
             float_result[res_num] = first.distances_[i];
             vids_result[res_num++] = first.vids_[i++];
           }
@@ -356,6 +548,11 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
           if (OB_FAIL(vid_hash_set.set_refactored(second.vids_[j]))) {
             LOG_WARN("fail to set vid to hashset", K(second.vids_[j]));
           } else {
+            if (!extra_info_result.is_null()) {
+              if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[j], second.extra_info_ptr_.extra_info_actual_size_))) {
+                LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(j), K(res_num));
+              }
+            }
             float_result[res_num] = second.distances_[j];
             vids_result[res_num++] = second.vids_[j++];
           }

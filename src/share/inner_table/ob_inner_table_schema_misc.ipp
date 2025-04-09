@@ -2249,6 +2249,8 @@ case OB_ALL_VIRTUAL_USER_PROXY_INFO_TID:
 case OB_ALL_VIRTUAL_USER_PROXY_INFO_HISTORY_TID:
 case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_TID:
 case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
+case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_TID:
+case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
 
 #endif
 
@@ -5159,6 +5161,36 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
         SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_VECTOR_INDEX_TASK_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_VECTOR_INDEX_TASK_HISTORY_TID, index_schema, params))) {
         SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
         iter->~ObIterateVirtualTable();
         allocator.free(iter);

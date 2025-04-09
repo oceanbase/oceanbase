@@ -389,6 +389,8 @@
 # 540: __all_catalog_privilege_history
 # 540: __all_catalog_privilege  # BASE_TABLE_NAME
 # 544: __all_pl_recompile_objinfo
+# 545: __all_vector_index_task
+# 546: __all_vector_index_task_history
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1229,6 +1231,10 @@
 # 12519: __all_catalog_privilege_history  # BASE_TABLE_NAME1
 # 12523: __all_virtual_pl_recompile_objinfo
 # 12523: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
+# 12524: __all_virtual_vector_index_task
+# 12524: __all_vector_index_task  # BASE_TABLE_NAME
+# 12525: __all_virtual_vector_index_task_history
+# 12525: __all_vector_index_task_history  # BASE_TABLE_NAME
 # 12526: __tenant_virtual_show_create_catalog
 # 12527: __tenant_virtual_show_catalog_databases
 # 12536: __all_virtual_dynamic_partition_table
@@ -2449,6 +2455,10 @@
 # 21634: CDB_OB_CS_REPLICA_STATS
 # 21635: GV$OB_PLUGINS
 # 21636: V$OB_PLUGINS
+# 21640: DBA_OB_VECTOR_INDEX_TASKS
+# 21641: CDB_OB_VECTOR_INDEX_TASKS
+# 21642: DBA_OB_VECTOR_INDEX_TASK_HISTORY
+# 21643: CDB_OB_VECTOR_INDEX_TASK_HISTORY
 # 21655: DBA_OB_DYNAMIC_PARTITION_TABLES
 # 21656: CDB_OB_DYNAMIC_PARTITION_TABLES
 # 21657: V$OB_DYNAMIC_PARTITION_TABLES

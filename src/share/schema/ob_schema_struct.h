@@ -21,6 +21,7 @@
 #include "common/ob_range.h"
 #include "common/ob_tablet_id.h"
 #include "common/row/ob_row_util.h"
+#include "common/rowkey/ob_rowkey_info.h"
 #include "share/ob_arbitration_service_status.h" // for ObArbitrationServieStatus
 #include "common/ob_store_format.h"
 #include "share/ob_replica_info.h"
@@ -2651,10 +2652,11 @@ public:
   virtual bool is_hidden_partition() const { return share::schema::is_hidden_partition(partition_type_); }
 
   bool is_in_splitting() const { return partition_type_ == PARTITION_TYPE_SPLIT_SOURCE; }
+  int get_part_column_schema(const ObTableSchema &table_schema, int64_t idx, const common::ObRowkeyInfo &info,  const ObColumnSchemaV2 *&part_column_schema);
 
   // convert character set.
-  int convert_character_for_range_columns_part(const ObCollationType &to_collation);
-  int convert_character_for_list_columns_part(const ObCollationType &to_collation);
+  int convert_character_for_range_columns_part(const ObCollationType &to_collation, const ObTableSchema &table_schema, const common::ObRowkeyInfo &info);
+  int convert_character_for_list_columns_part(const ObCollationType &to_collation, const ObTableSchema &table_schema, const common::ObRowkeyInfo &info);
 
   int set_external_location(common::ObString &location)
   { return deep_copy_str(location, external_location_); }

@@ -15,6 +15,9 @@
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "share/schema/ob_table_dml_param.h"
+#include "storage/ob_value_row_iterator.h"
+#include "storage/ddl/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -29,6 +32,8 @@ int ObPluginVectorIndexLoadScheduler::init(uint64_t tenant_id, ObLS *ls, int ttl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant vector index load task fail",
       KP(vector_index_service), KP(ls), K(ttl_timer_tg_id), KR(ret));
+  } else if (OB_FAIL(async_task_exec_.init(tenant_id, ls))) {
+    LOG_WARN("fail to init async task exec", K(ret), KP(ls));
   } else {
     vector_index_service_ = vector_index_service;
     ls_ = ls;
@@ -511,9 +516,12 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   int ret = OB_SUCCESS;
   ObVectorIndexTenantStatus tenant_task;
   ObVectorIndexTaskStatus expected_state;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPluginVectorIndexLoadScheduler not init", KR(ret));
+  } else if (OB_FAIL(get_ls_mgr(index_ls_mgr))) {
+    LOG_WARN("fail to get ls mgr", K(ret));
   } else if (OB_FAIL(read_tenant_task_status(tenant_id_, NULL, tenant_task))) {
     LOG_WARN("fail to read vector index tenant task", KR(ret), K_(tenant_id));
   } else if (OB_RS_TTL_TASK_MOVE == static_cast<ObTTLTaskStatus>(tenant_task.status_) ||
@@ -527,18 +535,7 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
     LOG_WARN("get invalid vector index tenant task status",
       KR(ret), K(tenant_task.status_), K(expected_state), K(local_tenant_task_));
   } else {
-    ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
-    if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
-      if (OB_HASH_NOT_EXIST == ret) { // do nothing
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get vector index ls mgr", KR(ret),
-                K(tenant_task.status_), K(tenant_id_), K(ls_->get_ls_id()));
-      }
-    } else if (OB_ISNULL(index_ls_mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid vector index ls mgr", KR(ret),
-                K(tenant_task.status_), K(tenant_id_), K(ls_->get_ls_id()));
+    if (OB_ISNULL(index_ls_mgr)) {
     } else if (index_ls_mgr->get_ls_task_ctx().state_ != expected_state) {
       if (expected_state != OB_TTL_TASK_RUNNING) {
         FLOG_INFO("vector index schedular is not running now", KR(ret), K(index_ls_mgr->get_ls_task_ctx()));
@@ -551,6 +548,13 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
       // all finish
       index_ls_mgr->get_ls_task_ctx().state_ = expected_state;
     }
+  }
+  // vector index async task
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
+    LOG_WARN("fail to check and open thread pool", K(tmp_ret));
+  } else if (OB_TMP_FAIL(async_task_exec_.load_task())) {
+    LOG_WARN("fail to load tenant sync task", K(tmp_ret));
   }
 
   return ret;
@@ -898,7 +902,7 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
           // do nothing
         } else if (tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
           // do nothing, wait for next schedule
-        } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower(need_sync))) {
+        } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(need_sync))) {
           LOG_WARN("fail to check need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
         } else if ((need_refresh_ || need_sync) && is_leader_) {
           if (OB_FAIL(tablet_id_array_.push_back(iter->first))) {
@@ -1010,12 +1014,10 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_memdata_sync_task(ObPlug
   return ret;
 }
 
-int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
+int ObPluginVectorIndexLoadScheduler::get_ls_mgr(ObPluginVectorIndexMgr *&index_ls_mgr)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard guard("ObPluginVectorIndexLoadScheduler::check_and_handle_event",
-                    VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
-  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  index_ls_mgr = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet ttl manager not init", KR(ret));
@@ -1028,6 +1030,21 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
   } else if (OB_ISNULL(index_ls_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
+{
+  int ret = OB_SUCCESS;
+  ObTimeGuard guard("ObPluginVectorIndexLoadScheduler::check_and_handle_event",
+                    VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet ttl manager not init", KR(ret));
+  } else if (OB_FAIL(get_ls_mgr(index_ls_mgr))) {
+    LOG_WARN("fail to get ls mgr", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -1045,6 +1062,12 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
     // Notice: leader write sync log, do memdata_sync only one loop(role changed from follower to leader)
     // explicit cover error code
     ret = OB_SUCCESS;
+
+    // start exec index async task
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(async_task_exec_.start_task())) {
+      LOG_WARN("fail to start index async task", K(tmp_ret));
+    }
     // write tablets need memdata sync to clog
     if (OB_NOT_NULL(index_ls_mgr)
         && (current_memory_config_ != 0)
@@ -1077,7 +1100,12 @@ void ObPluginVectorIndexLoadScheduler::run_task()
     LOG_INFO("schema service not ready", KR(ret));
   } else if (ATOMIC_BCAS(&need_do_for_switch_, true, false)) {
     // reserved, do nothing
+    int tmp_ret = OB_SUCCESS;
     LOG_INFO("switch leader", K(tenant_id_), K(ls_->get_ls_id()), K(is_leader_), K(is_stopped_));
+    if (!check_can_do_work()) { // skip
+    } else if (OB_TMP_FAIL(async_task_exec_.resume_task())) {
+      LOG_WARN("fail to resume async task", K(tmp_ret));
+    }
   } else if (check_can_do_work()){
     if (OB_FAIL(check_tenant_memory())) {
       LOG_WARN("check vector index resource failed", KR(ret));
@@ -1282,6 +1310,21 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
   return ret;
 }
 
+void ObPluginVectorIndexLoadScheduler::stop()
+{
+  is_stopped_= true;
+  if (OB_NOT_NULL(vector_index_service_)) {
+    vector_index_service_->get_vec_async_task_handle().stop();
+  }
+};
+
+void ObPluginVectorIndexLoadScheduler::destroy()
+{
+  if (OB_NOT_NULL(vector_index_service_)) {
+    vector_index_service_->get_vec_async_task_handle().destroy();
+  }
+}
+
 // ------ implement mem sync task ------
 int ObVectorIndexDag::init(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx)
 {
@@ -1435,6 +1478,7 @@ int ObVectorIndexTask::process_one()
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtil::current_time();
   ObPluginVectorIndexAdapterGuard adpt_guard;
+  ObPluginVectorIndexAdapterGuard new_adpt_guard;
 
   if (OB_FAIL(ObPluginVectorIndexUtils::get_task_read_snapshot(ls_id_, read_snapshot_))) {
     LOG_WARN("memdata sync fail to get task read snapshot", KR(ret), K(ls_id_), KPC(task_ctx_));
@@ -1445,15 +1489,21 @@ int ObVectorIndexTask::process_one()
                                                                read_snapshot_,
                                                                allocator_))) {
     LOG_WARN("memdata sync fail to refresh memdata", KR(ret), K(ls_id_), KPC(task_ctx_));
+  } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(task_ctx_->index_tablet_id_, new_adpt_guard))) {
+    LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), KPC(task_ctx_));
   }
 
   if (OB_SUCC(ret)) {
     task_ctx_->err_code_ = OB_SUCCESS;
-    adpt_guard.get_adatper()->sync_finish();
-    adpt_guard.get_adatper()->reset_sync_idle_count();
+    new_adpt_guard.get_adatper()->sync_finish();
+    new_adpt_guard.get_adatper()->reset_sync_idle_count();
   } else {
     task_ctx_->err_code_ = ret;
-    if (OB_NOT_NULL(adpt_guard.get_adatper())) {
+    if (OB_NOT_NULL(new_adpt_guard.get_adatper())) {
+      new_adpt_guard.get_adatper()->sync_finish();
+      new_adpt_guard.get_adatper()->sync_fail();
+      new_adpt_guard.get_adatper()->reset_sync_idle_count();
+    } else if (OB_NOT_NULL(adpt_guard.get_adatper())) {
       adpt_guard.get_adatper()->sync_finish();
       adpt_guard.get_adatper()->sync_fail();
       adpt_guard.get_adatper()->reset_sync_idle_count();

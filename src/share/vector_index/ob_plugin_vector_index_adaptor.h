@@ -27,6 +27,7 @@
 #include "share/vector_index/ob_plugin_vector_index_serialize.h"
 #include "ob_vector_index_util.h"
 
+
 namespace oceanbase
 {
 namespace share
@@ -120,10 +121,74 @@ struct ObVectorParamData
   int64_t dim_;
   int64_t count_;
   int64_t curr_idx_;
+  int64_t extra_column_count_;
   ObObj *vectors_; // need do init by yourself
   ObObj *vids_;
+  ObVecExtraInfoObj* extra_info_objs_; // need do init by yourself
   static const int64_t VI_PARAM_DATA_BATCH_SIZE = 1000;
-  TO_STRING_KV(K_(dim), K_(count), K_(curr_idx), KP_(vectors), KP_(vids));
+  TO_STRING_KV(K_(dim), K_(count), K_(curr_idx), KP_(vectors), KP_(vids), KP_(extra_info_objs));
+};
+
+class ObHnswBitmapFilter : public obvectorlib::FilterInterface
+{
+public:
+  static const uint64_t NORMAL_BITMAP_MAX_SIZE = 10000000;
+public:
+  ObHnswBitmapFilter(uint64_t tenant_id,
+               bool is_roaring_bitmap = false,
+               uint64_t capacity = 0,
+               ObIAllocator *allocator = nullptr,
+               uint8_t *bitmap = nullptr) :
+               tenant_id_(tenant_id),
+               is_roaring_bitmap_(is_roaring_bitmap),
+               capacity_(capacity),
+               base_(0),
+               valid_cnt_(0),
+               allocator_(allocator),
+               bitmap_(bitmap) {}
+  ~ObHnswBitmapFilter() {}
+  void reset();
+  int init(const int64_t &min, const int64_t &max);
+  bool is_valid() { return OB_NOT_NULL(bitmap_); }
+  bool test(int64_t id) override;
+  int add(int64_t id);
+  int get_valid_cnt();
+  bool is_subset(roaring::api::roaring64_bitmap_t *bitmap);
+  void operator=(ObHnswBitmapFilter &filter) {
+    tenant_id_ = filter.tenant_id_;
+    is_roaring_bitmap_ = filter.is_roaring_bitmap_;
+    capacity_ = filter.capacity_;
+    base_ = filter.base_;
+    valid_cnt_ = filter.valid_cnt_;
+    allocator_ = filter.allocator_;
+    bitmap_ = filter.bitmap_;
+  }
+  void set_roaring_bitmap(roaring::api::roaring64_bitmap_t *bitmap) {
+    is_roaring_bitmap_ = true;
+    roaring_bitmap_ = bitmap;
+  }
+  bool is_empty() {
+    return is_roaring_bitmap_ &&
+           OB_NOT_NULL(roaring_bitmap_) &&
+           (roaring64_bitmap_get_cardinality(roaring_bitmap_) == 0);
+  }
+  TO_STRING_KV(K(tenant_id_), K_(is_roaring_bitmap), K_(capacity), K_(base), K_(valid_cnt), KP_(allocator), KP_(bitmap));
+private:
+  int upgrade_to_roaring_bitmap();
+  uint8_t mask(int64_t low, int64_t high) const { return ((0xFF >> (7 - high)) & (0xFF << low)); }
+public:
+  uint64_t tenant_id_;
+  bool is_roaring_bitmap_;
+  uint64_t capacity_;
+  uint64_t base_;
+  uint64_t valid_cnt_;
+  ObIAllocator *allocator_;
+  union {
+    uint8_t *bitmap_;
+    roaring::api::roaring64_bitmap_t *roaring_bitmap_;
+  };
+  ObArray<int64_t> range_st_;
+  ObArray<int64_t> range_ed_;
 };
 
 class ObVectorQueryAdaptorResultContext {
@@ -133,15 +198,18 @@ public:
     : status_(PVQ_START),
       flag_(PVQP_MAX),
       tenant_id_(tenant_id),
+      iter_ctx_(nullptr),
       bitmaps_(nullptr),
-      extra_bitmaps_(nullptr),
+      pre_filter_(nullptr),
       vec_data_(),
       allocator_(allocator),
       tmp_allocator_(tmp_allocator),
       batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()) {};
   ~ObVectorQueryAdaptorResultContext();
-  int init_bitmaps(bool is_extra = false);
-  bool is_bitmaps_valid(bool is_extra = false);
+  int init_bitmaps();
+  int init_prefilter(const int64_t &min, const int64_t &max);
+  bool is_bitmaps_valid();
+  bool is_prefilter_valid();
   ObObj *get_vids() { return vec_data_.vids_; }
   ObObj *get_vectors() { return vec_data_.vectors_; }
   int64_t get_curr_idx() { return vec_data_.curr_idx_; }
@@ -149,6 +217,7 @@ public:
                                 ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE :
                                 vec_data_.count_ - vec_data_.curr_idx_; }
   int64_t get_dim() { return vec_data_.dim_; }
+  int64_t get_extra_column_count() { return vec_data_.extra_column_count_; }
   int64_t get_count() { return vec_data_.count_; }
   bool if_next_batch() { return vec_data_.count_ > vec_data_.curr_idx_; }
   bool is_query_end() { return get_curr_idx() + get_vec_cnt() >= get_count();}
@@ -160,6 +229,8 @@ public:
   int set_vector(int64_t index, const char *ptr, common::ObString::obstr_size_t size);
   int set_vector(int64_t index, ObObj &obj);
   void set_vectors(ObObj *vectors) { vec_data_.vectors_ = vectors; }
+  int set_extra_info(int64_t index, const ObRowkey &rowkey, const ObIArray<int64_t> &extra_in_rowkey_idxs);
+  void set_extra_infos(ObVecExtraInfoObj *extra_info_objs) { vec_data_.extra_info_objs_ = extra_info_objs; }
 
   void do_next_batch()
   {
@@ -170,22 +241,47 @@ private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
   uint64_t tenant_id_;
+  vsag::IteratorContext *iter_ctx_;
   ObVectorIndexRoaringBitMap *bitmaps_;
-  ObVectorIndexRoaringBitMap *extra_bitmaps_;  // pre filter only
+  ObHnswBitmapFilter *pre_filter_;  // pre filter only
   ObVectorParamData vec_data_;
   ObIAllocator *allocator_;       // allocator for vec_lookup_op, used to allocate memory for final query result
   ObIAllocator *tmp_allocator_;   // used to temporarily allocate memory during the query process and does not affect the final query results
   ObArenaAllocator batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
 };
 
-struct ObVectorQueryConditions {
+class ObVectorQueryConditions {
+public:
+  ObVectorQueryConditions()
+    : query_limit_(0),
+      query_order_(true),
+      only_complete_data_(false),
+      is_post_with_filter_(false),
+      ef_search_(0),
+      query_vector_(),
+      query_scn_(),
+      row_iter_(nullptr),
+      is_last_search_(false) {};
+  ~ObVectorQueryConditions() { query_vector_.reset(); }
+  bool is_inited() { return query_vector_.length() > 0 && ef_search_ > 0; }
+  void reset() {
+    query_vector_.reset();
+    ef_search_ = 0;
+    is_last_search_ = false;
+    is_post_with_filter_ = false;
+  }
+  TO_STRING_KV(K_(query_limit), K_(query_order), K_(ef_search), K_(query_vector), K_(query_scn));
+
   uint32_t query_limit_;
   bool query_order_; // true: asc, false: desc
   bool only_complete_data_; // true when search brute force
+  bool is_post_with_filter_;
   int64_t ef_search_;
   ObString query_vector_;
   SCN query_scn_;
   common::ObNewRowIterator *row_iter_; // index_snapshot_data_table iter
+  int64_t extra_column_count_;
+  bool is_last_search_;
 };
 
 struct ObVidBound {
@@ -208,6 +304,7 @@ struct ObVectorIndexMemData
       has_build_sq_(false),
       vid_array_(nullptr),
       vec_array_(nullptr),
+      extra_info_buf_(nullptr),
       mem_data_rwlock_(),
       bitmap_rwlock_(),
       scn_(),
@@ -254,6 +351,7 @@ public:
   bool has_build_sq_; // for hnsw+sq
   ObVecIdxVidArray *vid_array_; // for hnsw+sq
   ObVecIdxVecArray *vec_array_; // for hnsw+sq
+  ObVecExtraInfoBuffer *extra_info_buf_; // for hnsw+sq
   TCRWLock mem_data_rwlock_;
   TCRWLock bitmap_rwlock_;
   SCN scn_;
@@ -352,6 +450,7 @@ public:
   bool is_vbitmap_tablet_valid() { return vbitmap_tablet_id_.is_valid(); }
   bool is_data_tablet_valid() { return data_tablet_id_.is_valid(); }
   bool is_vid_rowkey_info_valid() { return rowkey_vid_table_id_ != OB_INVALID_ID && rowkey_vid_tablet_id_.is_valid(); }
+  bool is_need_async_optimal() { return need_be_optimized_; }
 
   ObTabletID& get_inc_tablet_id() { return inc_tablet_id_; }
   ObTabletID& get_vbitmap_tablet_id() { return vbitmap_tablet_id_; }
@@ -400,7 +499,12 @@ public:
 
   int get_dim(int64_t &dim);
   int get_hnsw_param(ObVectorIndexParam *&param);
-  int vsag_query_vids(float* vector, const int64_t* vids, int64_t count, const float *&distance, bool is_sanp);
+  int vsag_query_vids(float *vector,
+                      const int64_t *vids,
+                      int64_t count,
+                      const float *&distance,
+                      bool is_snap);
+  int get_extra_info_by_ids(const int64_t *vids, int64_t count, char *extra_info_buf_ptr, bool is_snap);
 
   // for virtual table
   int fill_vector_index_info(ObVectorIndexInfo &info);
@@ -420,11 +524,11 @@ public:
                   const int64_t vid_idx,
                   const int64_t type_idx,
                   const int64_t vector_idx,
+                  const ObIArray<ObExtraIdxType>& extra_info_ids,
                   const int64_t row_count);
   int add_extra_valid_vid(ObVectorQueryAdaptorResultContext *ctx, int64_t vid);
   int add_extra_valid_vid_without_malloc_guard(ObVectorQueryAdaptorResultContext *ctx, int64_t vid);
-  int add_snap_index(float *vectors, int64_t *vids, int num);
-
+  int add_snap_index(float *vectors, int64_t *vids, ObVecExtraInfoObj *extra_objs, int64_t extra_column_count, int num);
   // Query Processor first
   int check_delta_buffer_table_readnext_status(ObVectorQueryAdaptorResultContext *ctx,
                                                common::ObNewRowIterator *row_iter,
@@ -440,6 +544,9 @@ public:
   int query_result(ObVectorQueryAdaptorResultContext *ctx,
                    ObVectorQueryConditions *query_cond,
                    ObVectorQueryVidIterator *&vids_iter);
+  int query_next_result(ObVectorQueryAdaptorResultContext *ctx,
+                        ObVectorQueryConditions *query_cond,
+                        ObVectorQueryVidIterator *&vids_iter);
 
   static int param_deserialize(char *ptr, int32_t length,
                                     ObIAllocator *allocator,
@@ -473,7 +580,7 @@ public:
                               roaring::api::roaring64_bitmap_t *delta_bitmap,
                               ObIAllocator *allocator);
 
-  int check_need_sync_to_follower(bool &need_sync);
+  int check_need_sync_to_follower_or_do_opt_task(bool &need_sync);
 
   void sync_finish() { follower_sync_statistics_.sync_count_++; }
   void sync_fail() { follower_sync_statistics_.sync_fail_++; }
@@ -504,6 +611,31 @@ public:
   int64_t get_hnswsq_type_metric(int64_t origin_metric) {
     return origin_metric / 2 > VEC_INDEX_MIN_METRIC ? origin_metric / 2 : VEC_INDEX_MIN_METRIC;
   }
+  OB_INLINE int64_t get_extra_column_count()
+  {
+    return extra_info_column_count_;
+  }
+  OB_INLINE void set_extra_column_count(int64_t extra_info_column_count)
+  {
+    extra_info_column_count_ = extra_info_column_count;
+  }
+  int get_extra_info_actual_size(int64_t &extra_info_actual_size);
+  bool can_do_vector_index_task()
+  {
+    bool bret = !is_in_opt_task_;
+    is_in_opt_task_ |= bret;
+    return bret;
+  }
+
+  int check_if_need_optimize(ObVectorQueryAdaptorResultContext *ctx = nullptr);
+
+  void vector_index_task_finish() { is_in_opt_task_ = false; need_be_optimized_ = false; }
+
+  ObString get_snapshot_key_prefix() { return snapshot_key_prefix_; }
+  int set_snapshot_key_prefix(ObString &key_prefix) { return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_); }
+  int copy_meta_info(ObPluginVectorIndexAdaptor &other);
+
+  int get_vid_bound(ObVidBound &bound);
 
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
@@ -523,10 +655,14 @@ private:
                                ObArray<uint64_t> &d_vids);
   bool check_if_complete_index(SCN read_scn);
   bool check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count);
-  int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx, int count, float *vectors, uint64_t *vids, ObVidBound vid_bound);
-  int write_into_index_mem(int64_t dim, SCN read_scn,
-                           ObArray<uint64_t> &i_vids,
-                           ObArray<uint64_t> &d_vids);
+  int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx,
+                           int count,
+                           float *vectors,
+                           uint64_t *vids,
+                           ObVecExtraInfoObj *extra_objs,
+                           int64_t extra_column_count,
+                           ObVidBound vid_bound);
+  int write_into_index_mem(int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
   int generate_snapshot_valid_bitmap(ObVectorQueryAdaptorResultContext *ctx,
                                      common::ObNewRowIterator *row_iter,
                                      SCN query_scn);
@@ -541,8 +677,8 @@ private:
                       ObVectorIndexMemData *&src_mem_data,
                       ObVectorIndexMemData *&dst_mem_data);
   int merge_and_generate_bitmap(ObVectorQueryAdaptorResultContext *ctx,
-                                roaring::api::roaring64_bitmap_t *&ibitmap,
-                                roaring::api::roaring64_bitmap_t *&dbitmap);
+                                ObHnswBitmapFilter &iFilter,
+                                ObHnswBitmapFilter &dFilter);
 
   int vsag_query_vids(ObVectorQueryAdaptorResultContext *ctx,
                       ObVectorQueryConditions *query_cond,
@@ -551,6 +687,7 @@ private:
   int get_current_scn(share::SCN &current_scn);
 
 private:
+  const double_t VEC_INDEX_OPTIMIZE_RATIO = 0.2;
   ObAdapterCreateType create_type_;
   ObVectorIndexAlgorithmType type_;
   void *algo_data_;
@@ -585,6 +722,10 @@ private:
 
   // statistics for judging whether need sync follower
   ObVectorIndexFollowerSyncStatic follower_sync_statistics_;
+  bool is_in_opt_task_;
+  bool need_be_optimized_;
+  int64_t extra_info_column_count_;
+  ObString snapshot_key_prefix_; // name rule: TabletID_SCN
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;
@@ -592,6 +733,7 @@ private:
   constexpr static uint32_t VEC_INDEX_ADAPTER_MAX_IDLE_COUNT = 3;
   constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
   constexpr static uint32_t VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD = 10000;
+  constexpr static int64_t  VSAG_MAX_EF_SEARCH = 1000;
   constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
     "l2",
     "ip",
@@ -687,7 +829,10 @@ void free_memdata_resource(ObVectorIndexRecordType type,
                            ObVectorIndexMemData *&memdata,
                            ObIAllocator *allocator,
                            uint64_t tenant_id);
-
+int try_free_memdata_resource(ObVectorIndexRecordType type,
+                              ObVectorIndexMemData *&memdata,
+                              ObIAllocator *allocator,
+                              uint64_t tenant_id);
 };
 };
 #endif // OCEANBASE_SHARE_PLUGIN_VECTOR_INDEX_ADAPTOR_H_

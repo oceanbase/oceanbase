@@ -551,7 +551,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
             ObTraceIdGuard trace_id_guard(get_trace_id());
             ATOMIC_INC(&sub_task_trace_id_);
             ObDDLEventInfo ddl_event_info(sub_task_trace_id_);
-            // this create index arg is not valid, only has nls format
+            // this create index arg is not valid, only has nls format(but domain index need valid create index arg)
             create_index_arg.nls_date_format_ = alter_table_arg_.nls_formats_[0];
             create_index_arg.nls_timestamp_format_ = alter_table_arg_.nls_formats_[1];
             create_index_arg.nls_timestamp_tz_format_ = alter_table_arg_.nls_formats_[2];
@@ -564,6 +564,8 @@ int ObTableRedefinitionTask::copy_table_indexes()
               // index status is final
               need_rebuild_index = false;
               LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
+            } else if (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) {
+              need_rebuild_index = false;
             } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {
               ret = OB_EAGAIN;
             } else {
@@ -575,29 +577,34 @@ int ObTableRedefinitionTask::copy_table_indexes()
                 ddl_type = get_create_index_type(data_format_version_, *index_schema);
               }
               create_index_arg.index_type_ = index_schema->get_index_type();
-              ObCreateDDLTaskParam param(dst_tenant_id_,
-                                         ddl_type,
-                                         table_schema,
-                                         index_schema,
-                                         0/*object_id*/,
-                                         index_schema->get_schema_version(),
-                                         parallelism_,
-                                         consumer_group_id_,
-                                         &allocator_,
-                                         &create_index_arg,
-                                         task_id_);
-              param.sub_task_trace_id_ = sub_task_trace_id_;
-              param.tenant_data_version_ = data_format_version_;
-              if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
-                if (OB_ENTRY_EXIST == ret) {
-                  ret = OB_SUCCESS;
-                  active_task_cnt += 1;
-                } else {
-                  LOG_WARN("submit ddl task failed", K(ret));
+              if ((index_schema->is_vec_index() || index_schema->is_fts_index() || index_schema->is_multivalue_index())
+                  && OB_FAIL(ObDDLUtil::construct_domain_index_arg(table_schema, index_schema, *this, create_index_arg, ddl_type))) {
+                LOG_WARN("failed to construct domain index arg", K(ret));
+              } else {
+                ObCreateDDLTaskParam param(tenant_id_,
+                                           ddl_type,
+                                           table_schema,
+                                           index_schema,
+                                           0/*object_id*/,
+                                           index_schema->get_schema_version(),
+                                           parallelism_,
+                                           consumer_group_id_,
+                                           &allocator_,
+                                           &create_index_arg,
+                                           task_id_);
+                param.sub_task_trace_id_ = sub_task_trace_id_;
+                param.tenant_data_version_ = data_format_version_;
+                if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
+                  if (OB_ENTRY_EXIST == ret) {
+                    ret = OB_SUCCESS;
+                    active_task_cnt += 1;
+                  } else {
+                    LOG_WARN("submit ddl task failed", K(ret));
+                  }
+                } else if (FALSE_IT(active_task_cnt += 1)) {
+                } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
+                  LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
                 }
-              } else if (FALSE_IT(active_task_cnt += 1)) {
-              } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
-                LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
               }
             }
             if (OB_FAIL(ret)) {

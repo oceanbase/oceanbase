@@ -606,12 +606,15 @@ public:
 class ObVectorIndexSliceStore : public ObVectorIndexBaseSliceStore
 {
 public:
+  static const int64_t OB_VEC_IDX_SNAPSHOT_KEY_LENGTH = 256;
   ObVectorIndexSliceStore()
     : ObVectorIndexBaseSliceStore(), vec_allocator_("VecIdxSS", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tmp_allocator_("VecIdxSSAR", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       ctx_(), vector_vid_col_idx_(-1),
       vector_col_idx_(-1)
-  {}
+  {
+    extra_column_idx_types_.set_attr(ObMemAttr(MTL_ID(), "VecIdxExCol"));
+  }
   virtual ~ObVectorIndexSliceStore() { reset(); }
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const ObString vec_idx_param,
@@ -633,9 +636,8 @@ public:
     ObVectorIndexAlgorithmType index_type,
     blocksstable::ObDatumRow *&datum_row) override;
   INHERIT_TO_STRING_KV("ObVectorIndexBaseSliceStore", ObVectorIndexBaseSliceStore,
-      K(ctx_), K(vector_vid_col_idx_), K(vector_col_idx_), K(vector_key_col_idx_), K(vector_data_col_idx_));
+      K(ctx_), K(vector_vid_col_idx_), K(vector_col_idx_), K(vector_key_col_idx_), K(vector_data_col_idx_), K(extra_column_idx_types_));
 private:
-  static const int64_t OB_VEC_IDX_SNAPSHOT_KEY_LENGTH = 256;
   bool is_vec_idx_col_invalid(const int64_t column_cnt) const;
 public:
   ObArenaAllocator vec_allocator_;
@@ -645,6 +647,7 @@ public:
   int32_t vector_col_idx_;
   int32_t vector_key_col_idx_;
   int32_t vector_data_col_idx_;
+  ObSEArray<ObExtraInfoIdxType, 4> extra_column_idx_types_;
 };
 
 class ObIvfSliceStore : public ObVectorIndexBaseSliceStore

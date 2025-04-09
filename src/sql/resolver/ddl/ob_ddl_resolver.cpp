@@ -1990,7 +1990,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_param(tenant_id, option_node, *allocator_,
-              *tbl_schema, index_params_, vec_column_name_, vec_index_type_))) {
+              *tbl_schema, index_params_, vec_column_name_, vec_index_type_, session_info_))) {
             LOG_WARN("fail to check vec index params", K(ret));
           }
         }

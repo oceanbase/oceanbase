@@ -2009,6 +2009,171 @@ int ObFtsIndexBuilderUtil::check_supportability_for_loader_key(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_table_schema,
+    ObIArray<ObString> &col_names)
+{
+  INIT_SUCC(ret);
+  col_names.reset();
+  if (!index_table_schema.is_fts_index_aux() && !index_table_schema.is_multivalue_index_aux()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index_table_schema));
+  } else if (index_table_schema.is_multivalue_index_aux()) {
+    if (OB_FAIL(get_multivalue_index_column_name(data_table_schema, index_table_schema, col_names))) {
+      LOG_WARN("failed to get multivalue index column name", K(ret), K(index_table_schema));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_table_schema.get_column_count(); i++) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(col_schema = index_table_schema.get_column_schema_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), K(index_table_schema));
+      } else if (!col_schema->is_word_segment_column()) {
+         // only need word_segment column, here skip other column
+      } else {
+        // get generated column cascaded column id info
+        ObArray<uint64_t> cascaded_column_ids;
+        // get column_schema from data table using generate column id
+        const ObColumnSchemaV2 *ori_col_schema = data_table_schema.get_column_schema(col_schema->get_column_id());
+        if (OB_ISNULL(ori_col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ori column", K(ret), K(col_schema->get_column_id()), K(data_table_schema));
+        } else if (OB_FAIL(ori_col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
+          LOG_WARN("failed to get cascaded column ids", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < cascaded_column_ids.count(); ++j) {
+            const ObColumnSchemaV2 *cascaded_column = NULL;
+            ObString new_col_name;
+            if (OB_ISNULL(cascaded_column = data_table_schema.get_column_schema(cascaded_column_ids.at(j)))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cascaded column", K(ret));
+            } else if (OB_FALSE_IT(new_col_name = cascaded_column->get_column_name())) {
+            } else if (OB_FAIL(col_names.push_back(new_col_name))) {
+              LOG_WARN("fail to push back col names", K(ret), K(new_col_name));
+            } else {
+              LOG_DEBUG("success to get vector index col name", K(ret), K(new_col_name));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::generate_fts_mtv_index_aux_columns(
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &index_table_schema,
+    ObTableSchema &new_table_schema,
+    ObTableSchema &new_index_schema,
+    common::ObIAllocator &allocator,
+    oceanbase::rootserver::ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans,
+    ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
+    ObSEArray<ObString, 1> &domain_store_columns)
+{
+  int ret = OB_SUCCESS;
+  if (new_index_schema.is_fts_index_aux() || new_index_schema.is_multivalue_index_aux() || new_index_schema.is_rowkey_doc_id()) {
+    ObSEArray<ObString, 1> col_names;
+    if (!new_index_schema.is_rowkey_doc_id() && OB_FAIL(ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(orig_table_schema, index_table_schema, col_names))) {
+      LOG_WARN("failed to get fulltext/multivalue index column name", K(ret));
+    } else {
+      HEAP_VAR(obrpc::ObCreateIndexArg, index_arg) {
+        index_arg.index_type_ = new_index_schema.get_index_type();
+        FOREACH_X(it, col_names, OB_SUCC(ret)) {
+          obrpc::ObColumnSortItem sort_item;
+          sort_item.column_name_ = (*it);
+          if (new_index_schema.is_multivalue_index_aux()) {
+            sort_item.is_func_index_ = true;
+          }
+          if (OB_SUCC(ret) && OB_FAIL(index_arg.index_columns_.push_back(sort_item))) {
+            LOG_WARN("failed to push back sort columns", K(ret), K(sort_item));
+          }
+        }
+        ObArray<ObColumnSchemaV2 *> gen_columns;
+        HEAP_VAR(ObTableSchema, tmp_table_schema) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(tmp_table_schema.assign(new_table_schema))) {
+            LOG_WARN("fail to assign schema", K(ret));
+          } else if ((new_index_schema.is_fts_index_aux() || new_index_schema.is_rowkey_doc_id()) && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(index_arg, new_table_schema, allocator, gen_columns))) {
+            LOG_WARN("failed to adjust vector args");
+          } else if (new_index_schema.is_multivalue_index_aux() && OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(index_arg, new_table_schema, allocator, gen_columns, true))) {
+            LOG_WARN("failed to adjust vector args");
+          }
+          tmp_table_schema.set_in_offline_ddl_white_list(true);
+          FOREACH_X(it, gen_columns, OB_SUCC(ret)) {
+            if (OB_FAIL(ddl_operator.insert_single_column(trans, tmp_table_schema, *(*it)))) {
+              LOG_WARN("failed to insert vec column", K(ret), KP(*it));
+            }
+          }
+        }
+        FOREACH_X(it, index_arg.index_columns_, OB_SUCC(ret)) {
+          if (OB_FAIL(domain_index_columns.push_back(*it))) {
+            LOG_WARN("failed to push back index column", K(ret));
+          }
+        }
+        FOREACH_X(it, index_arg.store_columns_, OB_SUCC(ret)) {
+          if (OB_FAIL(domain_store_columns.push_back(*it))) {
+            LOG_WARN("failed to push back index column", K(ret));
+          }
+        }
+      } // end heap var index_arg
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index type", K(ret), K(new_index_schema));
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::get_multivalue_index_column_name(
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_table_schema,
+    ObIArray<ObString> &col_names)
+{
+  INIT_SUCC(ret);
+  ObArray<std::pair<int64_t, ObString>> index_columns;
+  col_names.reset();
+  if (!index_table_schema.is_multivalue_index_aux()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index_table_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_table_schema.get_column_count(); i++) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(col_schema = index_table_schema.get_column_schema_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), K(index_table_schema));
+      } else if (col_schema->is_multivalue_generated_column()) {
+        ObString str;
+        const ObColumnSchemaV2 *ori_col_schema = data_table_schema.get_column_schema(col_schema->get_column_id());
+         if (OB_ISNULL(ori_col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ori column", K(ret), K(col_schema->get_column_id()), K(data_table_schema));
+        } else if (OB_FAIL(ori_col_schema->get_orig_default_value().get_string(str))) {
+          LOG_WARN("fail to get string", K(ret));
+        } else if (OB_FAIL(index_columns.push_back(std::make_pair(col_schema->get_index_position(), str)))) {
+          LOG_WARN("fail to push back col names", K(ret), K(str));
+        }
+      } else if (!col_schema->is_user_specified_storing_column() && !col_schema->is_fulltext_column()
+            && !col_schema->is_multivalue_generated_column() && !col_schema->is_multivalue_generated_array_column()) {
+        if (OB_FAIL(index_columns.push_back(std::make_pair(col_schema->get_index_position(), col_schema->get_column_name_str())))) {
+          LOG_WARN("fail to add index columns", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    lib::ob_sort(index_columns.begin(), index_columns.end(), compare_index_column);
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_columns.count(); i++) {
+      if (OB_FAIL(col_names.push_back(index_columns[i].second))) {
+        LOG_WARN("failed to push back index column", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::get_index_column_ids(
     const ObTableSchema &data_schema,
     const obrpc::ObCreateIndexArg &arg,

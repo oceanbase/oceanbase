@@ -51,6 +51,7 @@
 #include "storage/tx/ob_trans_id_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "src/observer/table_load/resource/ob_table_load_resource_manager.h"
 #include "share/wr/ob_wr_service.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
@@ -1087,6 +1088,7 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+    REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
 
   if (ls_id.is_user_ls()) {
@@ -1238,6 +1240,7 @@ void ObLS::unregister_user_service_()
     UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+    UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());

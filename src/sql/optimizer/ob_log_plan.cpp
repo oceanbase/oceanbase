@@ -3164,6 +3164,9 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         } else {
           LOG_DEBUG("handle text ir expr in plan", K(ret), K(non_match_filters), K(match_filters));
         }
+      } else if (ap->domain_idx_info_.has_vec_index() &&
+                 OB_FAIL(prepare_vector_index_info(ap, scan))) {
+        LOG_WARN("failed to prepare multivalue doc_rowkey ", K(ret));
       } else if (scan->use_index_merge() && OB_FAIL(scan->set_index_merge_scan_filters(ap))) {
         LOG_WARN("failed to set index merge filters", K(ret));
       } else if (!scan->use_index_merge() && OB_FAIL(scan->set_table_scan_filters(ap->filter_))) {
@@ -3172,9 +3175,6 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         LOG_WARN("failed to append pushdown filters", K(ret));
       } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ &&
                  OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
-        LOG_WARN("failed to prepare multivalue doc_rowkey ", K(ret));
-      } else if (ap->domain_idx_info_.has_vec_index() &&
-                 OB_FAIL(prepare_vector_index_info(ap, scan))) {
         LOG_WARN("failed to prepare multivalue doc_rowkey ", K(ret));
       }
     }
@@ -12456,7 +12456,7 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         }
       }
 
-      if (OB_SUCC(ret) && (tsc_op.is_post_vec_idx_scan() || tsc_op.is_pre_vec_idx_scan())) {
+      if (OB_SUCC(ret) && tsc_op.is_vec_idx_scan()) {
         if (OB_FAIL(collect_vec_index_location_related_info(tsc_op, rel_info))) {
           LOG_WARN("fail to collect vec index location related info", K(ret));
         }
@@ -16011,7 +16011,7 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
-  } else if (table_scan->is_post_vec_idx_scan() || table_scan->is_hnsw_vec_scan()) {
+  } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_hnsw_vec_scan()) {
     if (OB_FAIL(try_push_topn_into_vector_index_scan(top,
                                                     topn_expr,
                                                     get_stmt()->get_limit_expr(),
@@ -16047,9 +16047,10 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
   } else if (log_op_def::LOG_TABLE_SCAN != top->get_type()) {
     // do nothing
   } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
-  } else if (table_scan->get_filter_exprs().count() != 0 ||
-             table_scan->get_pushdown_filter_exprs().count() != 0) {
-     // do nothing, topn pushdown requires that only match filter exists on the base table.
+  } else if ((table_scan->get_filter_exprs().count() != 0 ||
+             table_scan->get_pushdown_filter_exprs().count() != 0)
+             && !table_scan->get_vector_index_info().vec_index_with_filter()) {
+    // do nothing, topn pushdown requires that only match filter exists on the base table.
   } else {
     // get some topk, limit, sort expr and set to vector index op
     has_multi_sort_keys = sort_keys.count() == 1 ? false : true;
@@ -16071,7 +16072,8 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       need_further_sort = table_scan->get_table_partition_info()->get_table_location().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
-                        || vc_info.is_ivf_pq_scan();
+                        || vc_info.is_ivf_pq_scan()
+                        || vc_info.is_hnsw_bq_scan();
       if (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0) {
         vc_info.selectivity_ = 1;
       }

@@ -302,14 +302,28 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           } else if (index_type_ == VIAT_MAX) {
             ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
             ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
-            uint32_t idx = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
+            uint32_t idx_sq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
                                        "hnsw_sq", 7, 1);
+            uint32_t idx_bq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
+                                       "hnsw_bq", 7, 1);
+            uint32_t hgraph_idx = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
+                                       "hgraph", 6, 1);
             if (OB_ISNULL(adp)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get invalid adp", K(ret));
-            } else if (idx > 0) {
+            } else if (idx_sq > 0) {
               index_type_ = VIAT_HNSW_SQ;
               if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_SQ))) {
+                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
+              }
+            } else if (idx_bq > 0) {
+              index_type_ = VIAT_HNSW_BQ;
+              if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_BQ))) {
+                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
+              }
+            } else if (hgraph_idx > 0) {
+              index_type_ = VIAT_HGRAPH;
+              if (OB_FAIL(adp->try_init_snap_data(VIAT_HGRAPH))) {
                 LOG_WARN("failed to init snap data", K(ret), K(index_type_));
               }
             } else {

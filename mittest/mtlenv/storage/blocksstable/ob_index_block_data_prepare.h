@@ -686,11 +686,6 @@ void TestIndexBlockDataPrepare::prepare_discontinuous_data(const int64_t micro_b
   // index_desc.schema_version_ = 10;
   // ASSERT_TRUE(index_desc.is_valid());
 
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-    // ASSERT_EQ(OB_SUCCESS, index_desc.agg_meta_array_.assign(agg_col_metas_));
-  }
-
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(desc.get_desc()));
   if (micro_block_size > 0) {
     root_index_builder_->index_store_desc_.get_desc().micro_block_size_ = 500;

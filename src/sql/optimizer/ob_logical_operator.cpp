@@ -4366,7 +4366,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_PARTITION_WISE);
       }
       if (LOG_TABLE_SCAN == get_type()) {
-        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() || static_cast<ObLogTableScan*>(this)->is_post_vec_idx_scan()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() || static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter()) {
           gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
         }
         if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {

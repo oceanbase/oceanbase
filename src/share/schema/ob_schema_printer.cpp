@@ -1842,11 +1842,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     }
   }
   if (OB_SUCC(ret) && table_schema.is_vec_index()) {
-    const ObString &vector_index_param = table_schema.get_index_params();
-    if (vector_index_param.empty()) {
-      // skip
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH (%.*s) ", vector_index_param.length(), vector_index_param.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "print WITH vector index param failed", K(ret), K(vector_index_param));
+    if (OB_FAIL(ObVectorIndexUtil::print_index_param(table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print vec index param", K(ret), K(table_schema));
     }
   }
   if (OB_SUCCESS == ret && !is_index_tbl && !is_no_table_options(sql_mode) && !table_schema.is_external_table()) {

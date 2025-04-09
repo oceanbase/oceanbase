@@ -89,8 +89,8 @@ public:
       uint64_t is_refreshing_mview_: IS_REFRESHING_MVIEW_BIT;
       uint64_t is_retryable_ddl_: IS_RETRYABLE_DDL_BIT;
       /**
-      * If is_dummy_ddl_for_inner_visibility_ is enabled, DML operations on the index table will be allowed.
-      * Currently only available for vector-index fast refresh feature.
+      * If is_dummy_ddl_for_inner_visibility_ is enabled, DML/DQL operations on the index table will be allowed.
+      * Currently only available for vector-index fast refresh feature and vector-index offline ddl feature.
       * When is_ddl_ is also enabled, it will override is_dummy_ddl_for_inner_visibility_.
       */
       uint64_t is_dummy_ddl_for_inner_visibility_: IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT;

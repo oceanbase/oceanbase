@@ -7971,6 +7971,38 @@ DESCRIPTION	varchar(65535)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLUGINS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_VECTOR_INDEX_TASKS;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(20)	NO		NULL	
+TABLET_ID	bigint(20)	NO		NULL	
+TASK_ID	bigint(20)	NO		NULL	
+START_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TRIGGER_TYPE	varchar(7)	NO		NULL	
+STATUS	varchar(8)	NO		NULL	
+TASK_TYPE	bigint(20)	NO		NULL	
+TASK_SCN	bigint(20)	NO		NULL	
+RET_CODE	bigint(20)	NO		NULL	
+TRACE_ID	varchar(512)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_VECTOR_INDEX_TASKS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_VECTOR_INDEX_TASK_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(20)	NO		NULL	
+TABLET_ID	bigint(20)	NO		NULL	
+TASK_ID	bigint(20)	NO		NULL	
+START_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TRIGGER_TYPE	varchar(7)	NO		NULL	
+STATUS	varchar(8)	NO		NULL	
+TASK_TYPE	bigint(20)	NO		NULL	
+TASK_SCN	bigint(20)	NO		NULL	
+RET_CODE	bigint(20)	NO		NULL	
+TRACE_ID	varchar(512)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_VECTOR_INDEX_TASK_HISTORY limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_DYNAMIC_PARTITION_TABLES;
 Field	Type	Null	Key	Default	Extra
 DATABASE_NAME	varchar(128)	NO			

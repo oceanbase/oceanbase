@@ -330,6 +330,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 539	__all_catalog_privilege	0	201001	1
 540	__all_catalog_privilege_history	0	201001	1
 544	__all_pl_recompile_objinfo	0	201001	1
+545	__all_vector_index_task	0	201001	1
+546	__all_vector_index_task_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -827,6 +829,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12518	__all_virtual_catalog_privilege	2	201001	1
 12519	__all_virtual_catalog_privilege_history	2	201001	1
 12523	__all_virtual_pl_recompile_objinfo	2	201001	1
+12524	__all_virtual_vector_index_task	2	201001	1
+12525	__all_virtual_vector_index_task_history	2	201001	1
 12526	__tenant_virtual_show_create_catalog	2	201001	1
 12527	__tenant_virtual_show_catalog_databases	2	201001	1
 12536	__all_virtual_dynamic_partition_table	2	201001	1
@@ -1357,6 +1361,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21634	CDB_OB_CS_REPLICA_STATS	1	201001	1
 21635	GV$OB_PLUGINS	1	201001	1
 21636	V$OB_PLUGINS	1	201001	1
+21640	DBA_OB_VECTOR_INDEX_TASKS	1	201001	1
+21641	CDB_OB_VECTOR_INDEX_TASKS	1	201001	1
+21642	DBA_OB_VECTOR_INDEX_TASK_HISTORY	1	201001	1
+21643	CDB_OB_VECTOR_INDEX_TASK_HISTORY	1	201001	1
 21655	DBA_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21656	CDB_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21657	V$OB_DYNAMIC_PARTITION_TABLES	1	201001	1

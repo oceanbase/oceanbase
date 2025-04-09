@@ -1682,8 +1682,10 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
       } // check filter all rowkey col
     }
   } else {
+    ObVecIndexType post_vec_type = (helper.filters_.count() > 0 && index_schema->is_vec_hnsw_index()) ?
+    ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER : ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER;
     vec_index_schema = index_schema;
-    access_path.domain_idx_info_.vec_extra_info_.set_vec_idx_type(ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER);
+    access_path.domain_idx_info_.vec_extra_info_.set_vec_idx_type(post_vec_type);
     vector_index_match = true;
   }
 
@@ -1727,20 +1729,30 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
         LOG_WARN("failed to calculate selectivity", K(ret));
       } else {
         access_path.domain_idx_info_.vec_extra_info_.set_vec_algorithm_by_index_type(vec_index_schema->get_index_type());
-        access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
-        access_path.domain_idx_info_.vec_extra_info_.set_selectivity(selectivity);
-        // for optimize, distance expr just for order by needn't calculate
-        // using vsag calc result is ok
-        if (OB_NOT_NULL(vector_expr) &&
-            access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()
-            &&!stmt->is_contain_vector_origin_distance_calc()) {
-          FLOG_INFO("distance needn't calc", K(ret));
-          vector_expr->add_flag(IS_CUT_CALC_EXPR);
+        if (access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()) {
+          ObVectorIndexParam index_param;
+          if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
+            LOG_WARN("fail to parser params from string", K(ret), K(index_schema->get_index_params()));
+          } else  {
+            access_path.domain_idx_info_.vec_extra_info_.set_algorithm_type(index_param.type_);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
+          access_path.domain_idx_info_.vec_extra_info_.set_selectivity(selectivity);
+          // for optimize, distance expr just for order by needn't calculate
+          // using vsag calc result is ok
+          if (OB_NOT_NULL(vector_expr) &&
+              access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()
+              && ! access_path.domain_idx_info_.vec_extra_info_.is_hnsw_bq_scan()
+              &&!stmt->is_contain_vector_origin_distance_calc()) {
+            FLOG_INFO("distance needn't calc", K(ret));
+            vector_expr->add_flag(IS_CUT_CALC_EXPR);
+          }
         }
       }
     } // not weak read
   }
-
   return ret;
 }
 
@@ -6865,7 +6877,7 @@ int ObJoinOrder::compute_vec_idx_path_relationship(const AccessPath &first_path,
                                                       selectivity,
                                                       get_plan()->get_predicate_selectivities()))) {
     LOG_WARN("failed to calculate selectivity", K(ret));
-  } else if (selectivity > ObVecIdxExtraInfo::DEFAULT_SELECTIVITY_RATE) {
+  } else if (selectivity >= ObVecIdxExtraInfo::DEFAULT_SELECTIVITY_RATE) {
     relation = first_path.domain_idx_info_.vec_extra_info_.is_post_filter() ? DominateRelation::OBJ_LEFT_DOMINATE : DominateRelation::OBJ_RIGHT_DOMINATE;
   } else {
     relation = first_path.domain_idx_info_.vec_extra_info_.is_pre_filter() ? DominateRelation::OBJ_LEFT_DOMINATE : DominateRelation::OBJ_RIGHT_DOMINATE;

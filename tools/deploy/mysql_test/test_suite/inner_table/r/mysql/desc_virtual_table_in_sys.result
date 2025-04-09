@@ -11115,6 +11115,42 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_pl_recompile_objinfo limit 1;
+desc oceanbase.__all_virtual_vector_index_task;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+task_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+trigger_type	bigint(20)	NO		NULL	
+task_type	bigint(20)	NO		NULL	
+status	bigint(20)	NO		NULL	
+target_scn	bigint(20)	NO		NULL	
+ret_code	bigint(20)	NO		NULL	
+trace_id	varchar(512)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_task;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_vector_index_task limit 1;
+desc oceanbase.__all_virtual_vector_index_task_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+task_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+trigger_type	bigint(20)	NO		NULL	
+task_type	bigint(20)	NO		NULL	
+status	bigint(20)	NO		NULL	
+target_scn	bigint(20)	NO		NULL	
+ret_code	bigint(20)	NO		NULL	
+trace_id	varchar(512)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_task_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_vector_index_task_history limit 1;
 desc oceanbase.__tenant_virtual_show_create_catalog;
 Field	Type	Null	Key	Default	Extra
 catalog_id	bigint(20)	NO	PRI	NULL	

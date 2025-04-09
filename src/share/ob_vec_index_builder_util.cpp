@@ -806,6 +806,78 @@ int ObVecIndexBuilderUtil::check_ivf_store_column_count(const ObCreateIndexArg &
   return ret;
 }
 
+int ObVecIndexBuilderUtil::set_vec_aux_table_columns(const ObCreateIndexArg &arg, const ObTableSchema &data_schema,
+                                                     ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_vec_ivf_index(arg.index_type_)) {
+    if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_ivf_table_columns(arg, data_schema, index_schema))) {
+      LOG_WARN("fail to set ivf table columns", K(ret), K(arg.index_type_));
+    }
+  } else if (is_vec_hnsw_index(arg.index_type_)) {
+    if (is_vec_rowkey_vid_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_rowkey_vid_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec rowkey vid table column", K(ret));
+      }
+    } else if (is_vec_vid_rowkey_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_vid_rowkey_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+      }
+    } else {
+      ObVectorIndexParam index_param;
+      ObString index_param_str = arg.index_schema_.get_index_params().empty() ? index_schema.get_index_params()
+                                                                              : arg.index_schema_.get_index_params();
+      if (index_param_str.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid index param", K(ret), K(index_param_str));
+      } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(index_param_str,
+                                                               ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
+        LOG_WARN("failed to parser params from string", K(ret), K(index_param_str));
+      } else if (is_vec_delta_buffer_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(arg, data_schema, index_param,
+                                                                              index_schema))) {
+          LOG_WARN("fail to set vec delta buffer table column", K(ret));
+        } else if (OB_FAIL(index_schema.set_index_params(index_param_str))) {
+          // only delta_buffer_table set vector_index_param
+          LOG_WARN("failed to set index param", K(ret), K(index_param_str));
+        }
+      } else if (is_vec_index_id_type(arg.index_type_)) {
+        if (OB_FAIL(
+                ObVecIndexBuilderUtil::set_vec_index_id_table_columns(arg, data_schema, index_param, index_schema))) {
+          LOG_WARN("fail to set vec index id table column", K(ret));
+        }
+      } else if (is_vec_index_snapshot_data_type(arg.index_type_)) {
+        if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(arg, data_schema, index_param,
+                                                                                     index_schema))) {
+          LOG_WARN("fail to set vec snapshot data table column", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index type", K(ret), K(arg.index_type_));
+      }
+    }
+  } else if (is_vec_spiv_index(arg.index_type_)) {
+    if (is_doc_rowkey_aux(arg.index_type_)) {
+      if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_doc_rowkey_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("failed to set doc rowkey table", K(ret));
+      }
+    } else if (is_rowkey_doc_aux(arg.index_type_)) {
+      if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_rowkey_doc_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("failed to set rowkey doc table", K(ret));
+      }
+    } else if (is_vec_dim_docid_value_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_ivf_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set spiv table columns", K(ret), K(arg.index_type_));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index type", K(ret), K(arg.index_type_));
+  }
+  return ret;
+}
+
 int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
     const ObCreateIndexArg &arg,
     const ObTableSchema &data_schema,
@@ -1065,6 +1137,7 @@ int ObVecIndexBuilderUtil::set_vec_vid_rowkey_table_columns(
 int ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(
     const ObCreateIndexArg &arg,
     const ObTableSchema &data_schema,
+    ObVectorIndexParam& index_param,
     ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
@@ -1142,8 +1215,10 @@ int ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(set_part_key_columns(data_schema, index_schema))) {
       LOG_WARN("fail to generate part key columns", K(ret));
+    } else if (OB_FAIL(set_extra_info_columns(data_schema, index_param, index_schema))) { // 4. add extra info column
+      LOG_WARN("fail to set extra info columns", K(ret));
     }
-    //
+
     if (FAILEDx(index_schema.sort_column_array_by_column_id())) {
       LOG_WARN("failed to sort column", K(ret));
     } else {
@@ -1162,6 +1237,7 @@ int ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(
 int ObVecIndexBuilderUtil::set_vec_index_id_table_columns(
     const ObCreateIndexArg &arg,
     const ObTableSchema &data_schema,
+    ObVectorIndexParam& index_param,
     ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
@@ -1239,6 +1315,8 @@ int ObVecIndexBuilderUtil::set_vec_index_id_table_columns(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(set_part_key_columns(data_schema, index_schema))) {
       LOG_WARN("fail to generate part key columns", K(ret));
+    } else if (OB_FAIL(set_extra_info_columns(data_schema, index_param, index_schema))) { // 4. add extra info column
+      LOG_WARN("fail to set extra info columns", K(ret));
     }
     //
     if (FAILEDx(index_schema.sort_column_array_by_column_id())) {
@@ -1259,6 +1337,7 @@ int ObVecIndexBuilderUtil::set_vec_index_id_table_columns(
 int ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(
     const ObCreateIndexArg &arg,
     const ObTableSchema &data_schema,
+    ObVectorIndexParam& index_param,
     ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
@@ -1331,6 +1410,11 @@ int ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(
                                                         true/*is_specified_storing_col*/))) {
         LOG_WARN("add_column failed", K(store_column), K(row_desc), K(ret));
       }
+    }
+    // 3. add extra info columns
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_extra_info_columns(data_schema, index_param, index_schema))) {
+      LOG_WARN("fail to set extra info columns", K(ret));
     }
     if (FAILEDx(index_schema.sort_column_array_by_column_id())) {
       LOG_WARN("failed to sort column", K(ret));
@@ -1427,15 +1511,20 @@ int ObVecIndexBuilderUtil::adjust_vec_hnsw_args(
     LOG_WARN("check cols check failed", K(ret));
   } else if (OB_FAIL(get_vec_vid_col(data_schema, existing_vid_col))) {
     LOG_WARN("failed to get vid id col", K(ret));
-  } else if (OB_FAIL(get_vec_type_col(data_schema, &index_arg, existing_type_col))) {
+  } else if ((is_delta_buffer || is_index_id || is_index_snapshot_data)
+      && OB_FAIL(get_vec_type_col(data_schema, &index_arg, existing_type_col))) {
     LOG_WARN("failed to get vec type col", K(ret));
-  } else if (OB_FAIL(get_vec_vector_col(data_schema, &index_arg, existing_vector_col))) {
+  } else if ((is_delta_buffer || is_index_id || is_index_snapshot_data)
+      && OB_FAIL(get_vec_vector_col(data_schema, &index_arg, existing_vector_col))) {
     LOG_WARN("fail to get vec vector column", K(ret));
-  } else if (OB_FAIL(get_vec_scn_col(data_schema, &index_arg, existing_scn_col))) {
+  } else if ((is_delta_buffer || is_index_id || is_index_snapshot_data) &&
+      OB_FAIL(get_vec_scn_col(data_schema, &index_arg, existing_scn_col))) {
     LOG_WARN("failed to get vec scn col", K(ret));
-  } else if (OB_FAIL(get_vec_key_col(data_schema, &index_arg, existing_key_col))) {
+  } else if ((is_delta_buffer || is_index_id || is_index_snapshot_data)
+      && OB_FAIL(get_vec_key_col(data_schema, &index_arg, existing_key_col))) {
     LOG_WARN("failed to get vec key col", K(ret));
-  } else if (OB_FAIL(get_vec_data_col(data_schema, &index_arg, existing_data_col))) {
+  } else if ((is_delta_buffer || is_index_id || is_index_snapshot_data)
+      && OB_FAIL(get_vec_data_col(data_schema, &index_arg, existing_data_col))) {
     LOG_WARN("failed to get vec data col", K(ret));
   } else {
     ObColumnSchemaV2 *generated_vid_col = nullptr;
@@ -2827,7 +2916,8 @@ int ObVecIndexBuilderUtil::generate_vid_column(
         column_schema.add_column_flag(GENERATED_VEC_VID_COLUMN_FLAG);
         column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
         column_schema.set_is_hidden(true);
-        column_schema.set_nullable(false);
+        // vid column value in snapshot table is null, so vid column should be nullable.
+        column_schema.set_nullable(true);
         column_schema.set_data_type(ObIntType);
         column_schema.set_data_length(0);
         column_schema.set_collation_type(CS_TYPE_BINARY);
@@ -3555,18 +3645,23 @@ int ObVecIndexBuilderUtil::set_part_key_columns(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
     } else if (!col_schema->is_tbl_part_key_column()) {
-    } else if (is_part_key_column_exist(index_schema, *col_schema)) {
-    } else if (OB_FAIL(ObIndexBuilderUtil::add_column(col_schema,
-                                                      false/*is_index_column*/,
-                                                      false/*is_rowkey*/,
-                                                      ObOrderType::DESC,
-                                                      row_desc,
-                                                      index_schema,
-                                                      false/*is_hidden*/,
-                                                      true/*is_specified_storing_col*/))) {
-      LOG_WARN("add_column failed", K(ret), KPC(col_schema), K(index_schema));
+    } else if (is_column_exist(index_schema, *col_schema)) {
     } else {
-      LOG_INFO("success to add part key column", K(ret), KPC(col_schema));
+      ObColumnSchemaV2 column;
+      if (OB_FAIL(column.assign(*col_schema))) {
+        LOG_WARN("fail to assign column", KR(ret), KPC(col_schema));
+      } else {
+        // extra_info colum can null
+        column.set_nullable(true);
+        column.drop_not_null_cst();
+        if (OB_FAIL(ObIndexBuilderUtil::add_column(&column, false /*is_index_column*/, false /*is_rowkey*/,
+                                                   ObOrderType::DESC, row_desc, index_schema, false /*is_hidden*/,
+                                                   true /*is_specified_storing_col*/))) {
+          LOG_WARN("add_column failed", K(ret), K(column), K(index_schema));
+        } else {
+          LOG_INFO("success to add part key column", K(ret), KPC(col_schema), K(column));
+        }
+      }
     }
   }
   } // row_desc
@@ -3575,18 +3670,59 @@ int ObVecIndexBuilderUtil::set_part_key_columns(
 }
 
 
-bool ObVecIndexBuilderUtil::is_part_key_column_exist(
-    const ObTableSchema &index_schema, const ObColumnSchemaV2 &part_key_col)
+bool ObVecIndexBuilderUtil::is_column_exist(
+    const ObTableSchema &index_schema, const ObColumnSchemaV2 &col)
 {
   int ret = OB_SUCCESS;
   bool is_exists = false;
   const ObColumnSchemaV2 *vec_col = nullptr;
-  const uint64_t col_id = part_key_col.get_column_id();
+  const uint64_t col_id = col.get_column_id();
   if (OB_NOT_NULL(vec_col = index_schema.get_column_schema(col_id))) {
     is_exists = true;
-    LOG_WARN("adding column is exist", K(index_schema), K(part_key_col));
+    LOG_WARN("adding column is exist", K(index_schema), K(col));
   }
   return is_exists;
+}
+
+int ObVecIndexBuilderUtil::set_extra_info_columns(const ObTableSchema &data_schema,
+                                                  ObVectorIndexParam &index_param,
+                                                  ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+  } else if (index_param.extra_info_actual_size_ > 0) {
+    ObTableSchema::const_column_iterator tmp_begin = data_schema.column_begin();
+    ObTableSchema::const_column_iterator tmp_end = data_schema.column_end();
+    HEAP_VAR(ObRowDesc, row_desc) {
+      for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+        ObColumnSchemaV2 *col_schema = (*tmp_begin);
+        if (OB_ISNULL(col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
+        } else if (!col_schema->is_rowkey_column() && !col_schema->is_tbl_part_key_column()) {
+        } else if (is_column_exist(index_schema, *col_schema)) {
+        } else {
+          ObColumnSchemaV2 column;
+          if (OB_FAIL(column.assign(*col_schema))) {
+            LOG_WARN("fail to assign column", KR(ret), KPC(col_schema));
+          } else {
+            // extra_info colum can null
+            column.set_nullable(true);
+            column.drop_not_null_cst();
+            if (OB_FAIL(ObIndexBuilderUtil::add_column(&column, false /*is_index_column*/, false /*is_rowkey*/,
+                                                       ObOrderType::DESC, row_desc, index_schema, false /*is_hidden*/,
+                                                       true /*is_specified_storing_col*/))) {
+              LOG_WARN("add_column failed", K(ret), K(column), K(index_schema));
+            } else {
+              LOG_INFO("success to add extra_info column", K(ret), KPC(col_schema), K(column));
+            }
+          }
+        }
+      }
+    } // row_desc
+  }
+
+  return ret;
 }
 
 int ObVecIndexBuilderUtil::construct_ivf_col_name(
@@ -4575,6 +4711,69 @@ int ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
       K(ret), K(tenant_id), K(database_id), K(index_name), K(full_index_name), K(index_type));
   } else if (OB_ISNULL(index_schema)) {
     LOG_INFO("get vec table schema is null, maybe index has been drop", K(ret), K(full_index_name));
+  }
+  return ret;
+}
+
+
+int ObVecIndexBuilderUtil::generate_vec_index_aux_columns(
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &index_table_schema,
+    ObTableSchema &new_table_schema,
+    ObTableSchema &new_index_schema,
+    common::ObIAllocator &allocator,
+    oceanbase::rootserver::ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans,
+    ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
+    ObSEArray<ObString, 1> &domain_store_columns)
+{
+  int ret = OB_SUCCESS;
+  if (new_index_schema.is_vec_domain_index() || new_index_schema.is_vec_rowkey_vid_type()) {
+    // rowkey vid index cannot find col_names.
+    ObSEArray<ObString, 1> col_names;
+    if (!new_index_schema.is_vec_rowkey_vid_type() && OB_FAIL(ObVectorIndexUtil::get_vector_index_column_name(orig_table_schema, index_table_schema, col_names))) {
+      LOG_WARN("fail to get vector index column name", K(ret), K(index_table_schema));
+    } else {
+      HEAP_VAR(obrpc::ObCreateIndexArg, index_arg) {
+        index_arg.index_type_ = new_index_schema.get_index_type();
+
+        FOREACH_X(it, col_names, OB_SUCC(ret)) {
+          obrpc::ObColumnSortItem sort_item;
+          sort_item.column_name_ = (*it);
+          if (OB_SUCC(ret) && OB_FAIL(index_arg.index_columns_.push_back(sort_item))) {
+            LOG_WARN("failed to push back sort columns", K(ret), K(sort_item));
+          }
+        }
+        ObArray<ObColumnSchemaV2 *> gen_columns;
+        HEAP_VAR(ObTableSchema, tmp_table_schema) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(tmp_table_schema.assign(new_table_schema))) {
+            LOG_WARN("fail to assign schema", K(ret));
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(index_arg, new_table_schema, allocator, gen_columns))) {
+            LOG_WARN("failed to adjust vector args");
+          }
+          tmp_table_schema.set_in_offline_ddl_white_list(true);
+          FOREACH_X(it, gen_columns, OB_SUCC(ret)) {
+            if (OB_FAIL(ddl_operator.insert_single_column(trans, tmp_table_schema, *(*it)))) {
+              LOG_WARN("failed to insert vec column", K(ret), KP(*it));
+            }
+          }
+        }
+        FOREACH_X(it, index_arg.index_columns_, OB_SUCC(ret)) {
+          if (OB_FAIL(domain_index_columns.push_back(*it))) {
+            LOG_WARN("failed to push back index column", K(ret));
+          }
+        }
+        FOREACH_X(it, index_arg.store_columns_, OB_SUCC(ret)) {
+          if (OB_FAIL(domain_store_columns.push_back(*it))) {
+            LOG_WARN("failed to push back index column", K(ret));
+          }
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index type", K(ret), K(new_index_schema));
   }
   return ret;
 }

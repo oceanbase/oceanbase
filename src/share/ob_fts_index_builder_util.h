@@ -105,12 +105,31 @@ public:
   static int check_supportability_for_building_index(
         const ObTableSchema *data_schema,
         const obrpc::ObCreateIndexArg *index_arg);
+  static int get_fts_multivalue_index_column_name(
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      ObIArray<ObString> &col_names);
+  static int generate_fts_mtv_index_aux_columns(
+      const ObTableSchema &orig_table_schema,
+      const ObTableSchema &index_table_schema,
+      ObTableSchema &new_table_schema,
+      ObTableSchema &new_index_schema,
+      common::ObIAllocator &allocator,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
+      ObSEArray<ObString, 1> &domain_store_columns);
   static int generate_doc_id_column(
         const obrpc::ObCreateIndexArg *index_arg,
         const uint64_t col_id,
         ObTableSchema &data_schema, // not const since will add column to data schema
         ObColumnSchemaV2 *&doc_id_col);
 private:
+  static int get_multivalue_index_column_name(
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      ObIArray<ObString> &col_names);
+  static bool compare_index_column(const std::pair<int64_t, ObString> &lhs, const std::pair<int64_t, ObString> &rhs) { return lhs.first < rhs.first; }
   static int check_ft_cols(
       const obrpc::ObCreateIndexArg *index_arg,
       ObTableSchema &data_schema); // not const since will add cascade flag

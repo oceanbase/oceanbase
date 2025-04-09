@@ -1166,11 +1166,6 @@ private:
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       bool &domain_index_exist);
-  int check_has_vec_domain_index(
-      ObSchemaGetterGuard &schema_guard,
-      const uint64_t tenant_id,
-      const uint64_t data_table_id,
-      bool &domain_index_exist);
 int check_will_be_having_domain_index_operation(
     const obrpc::ObAlterTableArg &alter_table_arg,
     bool &will_be_having_domain_index_operation);
@@ -1460,6 +1455,9 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObTableSchema &orig_table_schema,
       const bool need_redistribute_column_id,
       share::schema::ObTableSchema &new_table_schema);
+  int delete_domain_index_columns_and_redistribute_schema(
+      const ObTableSchema &orig_table_schema,
+      ObTableSchema &new_table_schema);
   int prepare_hidden_table_schema(
       const share::schema::ObTableSchema &orig_table_schema,
       common::ObIAllocator &allocator,
@@ -1745,6 +1743,8 @@ int check_will_be_having_domain_index_operation(
       const share::ObColumnNameMap &col_name_map,
       const common::ObTimeZoneInfo &tz_info,
       common::ObIAllocator &allocator,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas,
       common::ObSArray<uint64_t> &index_ids);
   int gen_hidden_index_schema_columns(
@@ -1752,7 +1752,9 @@ int check_will_be_having_domain_index_operation(
       const common::ObIArray<uint64_t> &drop_cols_id_arr,
       const share::ObColumnNameMap &col_name_map,
       share::schema::ObTableSchema &new_table_schema,
-      share::schema::ObTableSchema &index_schema);
+      share::schema::ObTableSchema &index_schema,
+      const ObIArray<obrpc::ObColumnSortItem> &vec_index_columns,
+      const ObIArray<ObString> &vec_store_columns);
   int alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                             obrpc::ObAlterTableRes &res,
                                             const uint64_t tenant_data_version);

@@ -417,7 +417,7 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
-      const int64_t snapshot_version = 0,
+      int64_t snapshot_version = 0,
       const bool ddl_need_retry_at_executor = false);
   int create_build_vec_ivf_index_task(
       common::ObISQLClient &proxy,

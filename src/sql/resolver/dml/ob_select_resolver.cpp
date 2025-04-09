@@ -3939,7 +3939,7 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
       bool is_table_hidden = false;
       const ObSessionDDLInfo &ddl_info = session_info_->get_ddl_info();
       // add foreign key will use select xx from t1 minus select xx from t2, here t1 is source table, t2 is dest table
-      if (ddl_info.is_ddl()) {
+      if (ddl_info.is_ddl() || ddl_info.is_dummy_ddl_for_inner_visibility()) {
         if (in_set_query_) {
           is_table_hidden = is_left_child_ ? ddl_info.is_source_table_hidden() : ddl_info.is_dest_table_hidden();
         } else {

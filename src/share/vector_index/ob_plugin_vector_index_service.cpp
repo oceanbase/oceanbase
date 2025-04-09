@@ -37,6 +37,7 @@ void ObPluginVectorIndexMgr::destroy()
     complete_index_adpt_map_.destroy();
     ivf_index_helper_map_.destroy();
     mem_sync_info_.destroy();
+    async_task_opt_.destroy();
   }
 }
 
@@ -84,7 +85,9 @@ int ObPluginVectorIndexMgr::init(uint64_t tenant_id,
   } else if (OB_FAIL(ivf_index_helper_map_.create(hash_capacity, "IvfIdxHpMap", "IvfIdxHpMap", tenant_id))) {
     LOG_WARN("fail to create ivf index build helper map", KR(ret), K(ls_id));
   } else if (OB_FAIL(mem_sync_info_.init(hash_capacity, tenant_id, ls_id))) {
-    LOG_WARN("fail to create first mem sync set", KR(ret), K(ls_id));
+    LOG_WARN("fail to create first mem sync set", K(ls_id), KR(ret));
+  } else if (OB_FAIL(async_task_opt_.init(hash_capacity, tenant_id, ls_id))) {
+    LOG_WARN("fail to create async task option", KR(ret), K(ls_id));
   } else {
     ls_tablet_task_ctx_.task_id_ = 0;
     ls_tablet_task_ctx_.non_memdata_task_cycle_ = 0;
@@ -622,7 +625,7 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
       } else if (OB_FAIL(ls_index_mgr->get_adapter_inst_guard(tablet_id, adapter_guard))) {
         LOG_WARN("failed to get tmp vector index instance with ls", K(ls_id), K(tablet_id), K(type), KR(ret));
       } else {
-        LOG_INFO("create partial index adapter success", K(ret), K(ls_id), KPC(adapter_guard.get_adatper()));
+        LOG_INFO("create partial index adapter success", K(ret), K(ls_id), KP(adapter_guard.get_adatper()), KPC(adapter_guard.get_adatper()));
       }
     }
   } else {
@@ -956,6 +959,13 @@ void ObPluginVectorIndexService::destroy()
       memory_context_ = nullptr;
     }
     alloc_.reset();
+
+    // destroy vec async task
+    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+      tenant_vec_async_task_sched_->destroy();  // destroy tg_id_
+      ob_free(tenant_vec_async_task_sched_);
+      tenant_vec_async_task_sched_ = nullptr;
+    }
   }
 }
 
@@ -1002,6 +1012,93 @@ int ObPluginVectorIndexService::init(const uint64_t tenant_id,
   return ret;
 }
 
+int ObPluginVectorIndexService::switch_to_leader()
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time_us = ObTimeUtility::current_time();
+  FLOG_INFO("ObPluginVectorIndexService: start to switch_to_leader", K(tenant_id_), K(start_time_us));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPluginVectorIndexService is not inited", K(ret), K(tenant_id_));
+  } else if (!is_user_tenant(tenant_id_)) { // skip not user tenant
+  } else if (is_oracle_mode()) { // skip oracle mode
+  } else {
+    if (OB_ISNULL(tenant_vec_async_task_sched_)) {
+      if (OB_FAIL(alloc_tenant_vec_async_task_sched())) {
+        LOG_WARN("fail to alloc tenant_vec_async_task_sched_", K(ret), K(tenant_id_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!is_vec_async_task_started_) {
+        if (OB_FAIL(tenant_vec_async_task_sched_->start())) {
+          LOG_WARN("fail to start tenant_vec_async_task_sched_", K(ret), K(tenant_id_));
+        } else {
+          is_vec_async_task_started_ = true;
+        }
+      } else {
+        tenant_vec_async_task_sched_->resume();
+      }
+    }
+  }
+  const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
+  FLOG_INFO("ObPluginVectorIndexService: finish switch_to_leader", KR(ret), K(tenant_id_), K(cost_us), KP(tenant_vec_async_task_sched_));
+  return ret;
+}
+
+int ObPluginVectorIndexService::switch_to_follower_gracefully()
+{
+  int ret = OB_SUCCESS;
+  inner_switch_to_follower();
+  return ret;
+}
+
+void ObPluginVectorIndexService::switch_to_follower_forcedly()
+{
+  inner_switch_to_follower();
+}
+
+void ObPluginVectorIndexService::inner_switch_to_follower()
+{
+  FLOG_INFO("ObPluginVectorIndexService: switch_to_follower", K_(tenant_id));
+  const int64_t start_time_us = ObTimeUtility::current_time();
+  if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+    tenant_vec_async_task_sched_->pause();
+  }
+  const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
+  FLOG_INFO("ObPluginVectorIndexService: switch_to_follower", K(tenant_id_), K(cost_us), KP(tenant_vec_async_task_sched_));
+}
+
+int ObPluginVectorIndexService::alloc_tenant_vec_async_task_sched()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  int64_t len = sizeof(ObTenantVecAsyncTaskScheduler);
+  ObMemAttr attr(MTL_ID(), "VecIdxAsyncTask");
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPluginVectorIndexService is not inited", K(ret), K(tenant_id_));
+  } else if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_vec_async_task_sched_ is not null", K_(tenant_id), KR(ret), KP(tenant_vec_async_task_sched_));
+  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObTenantVecAsyncTaskScheduler), attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", KR(ret), K_(tenant_id), K(len));
+  } else if (FALSE_IT(tenant_vec_async_task_sched_ = new(buf) ObTenantVecAsyncTaskScheduler())) {
+  } else if (OB_FAIL(tenant_vec_async_task_sched_->init(tenant_id_, *GCTX.sql_proxy_))) {
+    LOG_WARN("fail to init tenant_vec_async_task_sched_", K(ret), K(tenant_id_));
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+      tenant_vec_async_task_sched_->destroy();  // destroy tg_id_
+      ob_free(tenant_vec_async_task_sched_);
+      tenant_vec_async_task_sched_ = nullptr;
+    }
+  }
+  LOG_DEBUG("finish alloc_tenant_vec_async_task_sched", K(ret), K(tenant_id_));
+  return ret;
+}
+
 int ObPluginVectorIndexService::mtl_init(ObPluginVectorIndexService *&service)
 {
   int ret = OB_SUCCESS;
@@ -1028,6 +1125,9 @@ void ObPluginVectorIndexService::stop()
 {
   if (IS_INIT) {
     LOG_INFO("stop vector index service", K_(tenant_id), K_(is_inited));
+    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+      tenant_vec_async_task_sched_->stop();
+    }
   }
 }
 
@@ -1035,6 +1135,9 @@ void ObPluginVectorIndexService::wait()
 {
   if (IS_INIT) {
     LOG_INFO("wait vector index service", K_(tenant_id));
+    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+      tenant_vec_async_task_sched_->wait();
+    }
   }
 }
 
@@ -1179,6 +1282,26 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
   return ret;
 }
 
+int ObPluginVectorIndexMgr::replace_old_adapter(ObPluginVectorIndexAdaptor *new_adapter)
+{
+  int ret = 0;
+  if (OB_ISNULL(new_adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null adapter", KR(ret));
+  } else {
+    int overwrite = 1;
+    // should not fail in following process
+    if (OB_FAIL(set_complete_adapter_(new_adapter->get_inc_tablet_id(), new_adapter, overwrite))) {
+      LOG_WARN("failed to set new complete partial adapter", K(new_adapter->get_inc_tablet_id()), KR(ret));
+    } else if (OB_FAIL(set_complete_adapter_(new_adapter->get_vbitmap_tablet_id(), new_adapter, overwrite))) {
+      LOG_WARN("failed to set new complete partial adapter", K(new_adapter->get_vbitmap_tablet_id()), KR(ret));
+    } else if (OB_FAIL(set_complete_adapter_(new_adapter->get_snap_tablet_id(), new_adapter, overwrite))) {
+      LOG_WARN("failed to set new complete partial adapter", K(new_adapter->get_snap_tablet_id()), KR(ret));
+    }
+  }
+  return ret;
+}
+
 // for full partial
 int ObPluginVectorIndexMgr::replace_with_full_partial_adapter(ObVectorIndexAcquireCtx &ctx,
                                                               ObIAllocator &allocator,
@@ -1271,17 +1394,20 @@ int ObPluginVectorIndexService::get_ivf_aux_info(
     ObIArray<float*> &aux_info)
 {
   int ret = OB_SUCCESS;
+  bool is_hidden_table = false;
   ObSqlString sql_string;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPluginVectorIndexService is not inited", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(generate_get_aux_info_sql(table_id, tablet_id, sql_string))) {
+  } else if (OB_FAIL(generate_get_aux_info_sql(table_id, tablet_id, is_hidden_table, sql_string))) {
     LOG_WARN("failed to generate sql", K(ret), K(table_id));
   } else {
     ObSessionParam session_param;
     session_param.sql_mode_ = nullptr;
     session_param.tz_info_wrap_ = nullptr;
     session_param.ddl_info_.set_is_dummy_ddl_for_inner_visibility(true);
+    session_param.ddl_info_.set_source_table_hidden(is_hidden_table);
+    session_param.ddl_info_.set_dest_table_hidden(false);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql_string.ptr(), &session_param))) {
@@ -1328,6 +1454,7 @@ int ObPluginVectorIndexService::get_ivf_aux_info(
 int ObPluginVectorIndexService::generate_get_aux_info_sql(
     const uint64_t table_id,
     const ObTabletID tablet_id,
+    bool &is_hidden_table,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -1362,6 +1489,7 @@ int ObPluginVectorIndexService::generate_get_aux_info_sql(
     } else {
       const uint64_t database_id = table_schema->get_database_id();
       const ObDatabaseSchema *db_schema = nullptr;
+      is_hidden_table = table_schema->is_user_hidden_table();
       if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, database_id, db_schema))) {
         LOG_WARN("fail to get database schema", K(ret), K_(tenant_id), K(database_id));
       } else if (OB_ISNULL(db_schema)) {

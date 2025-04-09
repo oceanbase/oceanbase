@@ -1447,7 +1447,7 @@ int ObTenantTabletTTLMgr::init(storage::ObLS *ls)
     LOG_WARN("fail to alloc and init tablet scheduler", K(ret), KPC(ls));
   } else if (OB_FAIL(alloc_and_init_tablet_scheduler<ObTabletHRowkeyTTLScheduler>(ls))) {
     LOG_WARN("fail to alloc and init hrowkey ttl scheduler", K(ret), KPC(ls));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantTabletTTLMgr, vec_tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantTabletTTLMgr, vec_tg_id_))) {  // vec mem index sync task
     LOG_WARN("fail to init timer", KR(ret));
   } else if (OB_FAIL(TG_START(vec_tg_id_))) {
     LOG_WARN("fail to create ObTenantTabletTTLMgr thread", K(ret), K_(vec_tg_id));
@@ -1568,6 +1568,7 @@ void ObTenantTabletTTLMgr::destroy()
   if (vec_tg_id_ != 0) {
     TG_WAIT(vec_tg_id_);
     TG_DESTROY(vec_tg_id_);
+    vector_idx_scheduler_.destroy();
   }
   DELEGATE_TTL_SCHEDULERS_NOT_RET(~ObTabletTTLScheduler);
 }

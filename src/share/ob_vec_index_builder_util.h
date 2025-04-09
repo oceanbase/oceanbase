@@ -18,6 +18,7 @@
 #include "sql/resolver/ob_schema_checker.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_table_stmt.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -95,14 +96,17 @@ public:
   static int set_vec_delta_buffer_table_columns(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
   static int set_vec_index_id_table_columns(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
   static int set_vec_index_snapshot_data_table_columns(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
   static int generate_vec_index_name(
       common::ObIAllocator *allocator,
@@ -120,6 +124,22 @@ public:
   static int get_vector_index_prefix(
       const ObTableSchema &index_schema,
       ObString &prefix);
+  static int generate_vec_index_aux_columns(
+      const ObTableSchema &orig_table_schema,
+      const ObTableSchema &index_table_schema,
+      ObTableSchema &new_table_schema,
+      ObTableSchema &new_index_schema,
+      common::ObIAllocator &allocator,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
+      ObSEArray<ObString, 1> &domain_store_columns);
+
+  static int set_vec_aux_table_columns(
+      const ObCreateIndexArg &arg,
+      const ObTableSchema &data_schema,
+      ObTableSchema &index_schema);
+
 private:
   static int append_vec_hnsw_args(
       const sql::ObPartitionResolveResult &resolve_result,
@@ -431,12 +451,21 @@ private:
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &arg,
       schema::ColumnReferenceSet &index_column_ids);
-  static bool is_part_key_column_exist(
+  static bool is_column_exist(
       const ObTableSchema &index_schema,
-      const ObColumnSchemaV2 &part_key_col);
+      const ObColumnSchemaV2 &col);
   static int set_part_key_columns(
       const ObTableSchema &data_schema,
       ObTableSchema &index_schema);
+
+  static int get_extra_info_actual_size(
+      const ObTableSchema &data_schema,
+      ObVectorIndexParam &index_param);
+
+  static int set_extra_info_columns(
+    const ObTableSchema &data_schema,
+    ObVectorIndexParam &index_param,
+    ObTableSchema &index_schema);
 };
 
 

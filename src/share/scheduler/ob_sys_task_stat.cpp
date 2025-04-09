@@ -45,7 +45,8 @@ const static char *ObSysTaskTypeStr[] = {
     "VECTOR_INDEX_TASK",
     "DDL_TABLET_SPLIT",
     "SSTABLE_MICRO_MINI_MERGE",
-    "REBUILD_TABLET_TASK"
+    "REBUILD_TABLET_TASK",
+    "VECTOR_INDEX_ASYNC_TASK"
 };
 
 const char *sys_task_type_to_str(const ObSysTaskType &type)

@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
@@ -1914,6 +1915,128 @@ int ObDDLUtil::calc_snapshot_with_gts(
       } else {
         const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
         snapshot = max(snapshot, frozen_scn_val);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    rootserver::ObDDLTask &task,
+    ObCreateIndexArg &create_index_arg,
+    ObDDLType &ddl_type)
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObRootService *root_service = GCTX.root_service_;
+  ObSchemaGetterGuard new_schema_guard;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, table schema must not be nullptr", K(ret));
+  } else if (index_schema->is_vec_hnsw_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_VEC_INDEX;
+  } else if (index_schema->is_vec_ivfflat_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_VEC_IVFFLAT_INDEX;
+  } else if (index_schema->is_vec_ivfsq8_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_VEC_IVFSQ8_INDEX;
+  } else if (index_schema->is_vec_ivfpq_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_VEC_IVFPQ_INDEX;
+  } else if (index_schema->is_fts_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_FTS_INDEX;
+  } else if (index_schema->is_multivalue_index()) {
+    ddl_type = ObDDLType::DDL_CREATE_MULTIVALUE_INDEX;
+  } else {
+    ddl_type = get_create_index_type(task.get_data_format_version(), *index_schema);
+  }
+
+  ObSEArray<ObString, 1> col_names;
+  create_index_arg.index_option_.reset();
+  create_index_arg.is_offline_rebuild_ = true;
+  create_index_arg.parallelism_ = task.get_parallelism();
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(task.get_tenant_id(), new_schema_guard))) {
+    LOG_WARN("failed to refresh schema guard", K(ret));
+  } else if (index_schema->is_vec_index() && OB_FAIL(share::ObVectorIndexUtil::get_vector_index_column_name(*table_schema, *index_schema, col_names))) {
+    LOG_WARN("fail to get vector index column name", K(ret), K(index_schema));
+  } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index()) && OB_FAIL(share::ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(*table_schema, *index_schema, col_names))) {
+    LOG_WARN("fail to get fulltext index column name", K(ret), K(index_schema));
+  } else {
+    FOREACH_X(it, col_names, OB_SUCC(ret)) {
+      obrpc::ObColumnSortItem sort_item;
+      sort_item.column_name_ = (*it);
+      if (OB_FAIL(create_index_arg.index_columns_.push_back(sort_item))) {
+        LOG_WARN("failed to push back sort columns", K(ret), K(sort_item));
+      }
+    }
+    if (OB_SUCC(ret) && index_schema->is_vec_delta_buffer_type()) {
+      if (OB_FAIL(create_index_arg.index_schema_.assign(*index_schema))) {
+        LOG_WARN("fail to assign index_schema", K(ret), KP(index_schema));
+      }
+    }
+  }
+  const ObSimpleDatabaseSchema *database_schema = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(index_schema->get_index_name(create_index_arg.index_name_))) {
+    LOG_WARN("failed to get index name", K(ret), KP(index_schema));
+  } else if (OB_FAIL(new_schema_guard.get_database_schema(task.get_tenant_id(), table_schema->get_database_id(), database_schema)) || OB_ISNULL(database_schema)) {
+    LOG_WARN("failed to get database schema", K(ret), KP(database_schema));
+  } else {
+    create_index_arg.table_name_ = ObString(table_schema->get_table_name_str());
+    create_index_arg.database_name_ = ObString(database_schema->get_database_name_str());
+    create_index_arg.tenant_id_ = task.get_tenant_id();
+    if (index_schema->is_fts_index()) {
+      create_index_arg.index_option_.parser_name_ = index_schema->get_parser_name_str();
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    uint64_t tenant_id,
+    int64_t &fts_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard new_schema_guard;
+  rootserver::ObRootService *root_service = GCTX.root_service_;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, table schema must not be nullptr", K(ret));
+  } else if (index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_hnsw_index()) {
+    ObMySQLTransaction trans;
+    const ObTableSchema *domain_index_share_schema = nullptr;
+    uint64_t  domain_index_share_tid = 0;
+    if ((index_schema->is_fts_index() || index_schema->is_multivalue_index()) && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) {
+      LOG_WARN("failed to get rowkey doc table id", K(ret));
+    } else if (index_schema->is_vec_hnsw_index() && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid))) {
+      LOG_WARN("failed to get rowkey vid table id", K(ret));
+    } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id, new_schema_guard))) {
+      LOG_WARN("failed to refresh schema guard", K(ret));
+    } else if (OB_FAIL(new_schema_guard.get_table_schema(tenant_id, domain_index_share_tid, domain_index_share_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(domain_index_share_tid));
+    } else if (OB_ISNULL(domain_index_share_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, rowkey doc/vid index schema must not be nullptr", K(ret));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(trans, *table_schema, *domain_index_share_schema, fts_snapshot_version))) {
+      if (OB_SNAPSHOT_DISCARDED == ret) {
+        LOG_INFO("snapshot discarded, need retry waiting trans", K(ret), K(fts_snapshot_version));
+      } else {
+        LOG_WARN("hold snapshot failed", K(ret), K(fts_snapshot_version));
+      }
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
     }
   }

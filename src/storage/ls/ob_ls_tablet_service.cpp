@@ -4819,7 +4819,23 @@ int ObLSTabletService::insert_vector_index_rows(
     int64_t vec_id_idx = OB_INVALID_INDEX;
     int64_t type_idx = OB_INVALID_INDEX;
     int64_t vector_idx = OB_INVALID_INDEX;
-    for (int64_t i = 0; i < run_ctx.dml_param_.table_param_->get_col_descs().count(); i++) {
+    int64_t extra_info_actual_size = 0;
+    // get extra info col idx
+    // delta_buffer table columns def is: <vid, type, vector, extra_infos>
+    ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+    ObPluginVectorIndexAdapterGuard adaptor_guard;
+    if (OB_FAIL(vec_index_service->acquire_adapter_guard(run_ctx.store_ctx_.ls_id_,
+                                                        run_ctx.relative_table_.get_tablet_id(),
+                                                        ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
+                                                        adaptor_guard,
+                                                        &vec_idx_param,
+                                                        vec_dim))) {
+      LOG_WARN("fail to get ObPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
+    } else if (OB_FAIL(adaptor_guard.get_adatper()->get_extra_info_actual_size(extra_info_actual_size))) {
+      LOG_WARN("fail to get extra info actual size", K(ret), K(extra_info_actual_size));
+    }
+    ObArray<share::ObExtraIdxType> extra_info_id_types;
+    for (int64_t i = 0; OB_SUCC(ret) && i < run_ctx.dml_param_.table_param_->get_col_descs().count(); i++) {
       uint64_t col_id = run_ctx.dml_param_.table_param_->get_col_descs().at(i).col_id_;
       if (col_id == vec_id_col_id) {
         vec_id_idx = i;
@@ -4827,23 +4843,23 @@ int ObLSTabletService::insert_vector_index_rows(
         type_idx = i;
       } else if (col_id == vec_vector_col_id) {
         vector_idx = i;
+      } else if (extra_info_actual_size > 0){
+        // has extra_info
+        ObExtraIdxType extra_idx_type;
+        extra_idx_type.idx_ = i;
+        extra_idx_type.type_= run_ctx.dml_param_.table_param_->get_col_descs().at(i).col_type_;
+        if (OB_FAIL(extra_info_id_types.push_back(extra_idx_type))) {
+          LOG_WARN("fail to push back extra info idx", K(ret), K(extra_info_id_types), K(col_id));
+        }
       }
     }
-    if (OB_UNLIKELY(vec_id_idx == OB_INVALID_INDEX || type_idx == OB_INVALID_INDEX || vector_idx == OB_INVALID_INDEX)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(vec_id_idx == OB_INVALID_INDEX || type_idx == OB_INVALID_INDEX || vector_idx == OB_INVALID_INDEX)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get vec index column idxs", K(ret), K(vec_id_col_id), K(vec_type_col_id), K(vec_vector_col_id),
           K(vec_id_idx), K(type_idx), K(vector_idx));
     } else {
-      ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
-      ObPluginVectorIndexAdapterGuard adaptor_guard;
-      if (OB_FAIL(vec_index_service->acquire_adapter_guard(run_ctx.store_ctx_.ls_id_,
-                                                          run_ctx.relative_table_.get_tablet_id(),
-                                                          ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
-                                                          adaptor_guard,
-                                                          &vec_idx_param,
-                                                          vec_dim))) {
-        LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
-      } else if (OB_FAIL(adaptor_guard.get_adatper()->insert_rows(rows, vec_id_idx, type_idx, vector_idx, row_count))) {
+      if (OB_FAIL(adaptor_guard.get_adatper()->insert_rows(rows, vec_id_idx, type_idx, vector_idx, extra_info_id_types, row_count))) {
         LOG_WARN("fail to insert vector to adaptor", K(ret), KP(rows), K(row_count));
       } else {
         for (int64_t k = 0; OB_SUCC(ret) && k < row_count; k++) {
@@ -4851,6 +4867,10 @@ int ObLSTabletService::insert_vector_index_rows(
           LOG_DEBUG("show all vector del buffer row for insert", K(rows[k].storage_datums_));
           // set vector null for not to storage
           rows[k].storage_datums_[vector_idx].set_null();
+          // set extra_info null for not to storage
+          for (int i = 0; OB_SUCC(ret) && i < extra_info_id_types.count(); i++) {
+            rows[k].storage_datums_[extra_info_id_types[i].idx_].set_null();
+          }
         }
       }
     }
@@ -4889,7 +4909,7 @@ int ObLSTabletService::insert_vector_index_rows(
                                                         ObIndexType::INDEX_TYPE_VEC_INDEX_ID_LOCAL,
                                                         adaptor_guard,
                                                         &vec_idx_param))) {
-      LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
+      LOG_WARN("fail to get ObPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
     } else {
       adaptor_guard.get_adatper()->update_index_id_dml_scn(run_ctx.store_ctx_.mvcc_acc_ctx_.snapshot_.version_);
     }

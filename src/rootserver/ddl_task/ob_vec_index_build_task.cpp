@@ -50,6 +50,7 @@ ObVecIndexBuildTask::ObVecIndexBuildTask()
     drop_index_task_submitted_(false),
     drop_index_task_id_(-1),
     is_rebuild_index_(false),
+    is_offline_rebuild_(false),
     root_service_(nullptr),
     create_index_arg_(),
     dependent_task_result_map_()
@@ -76,6 +77,7 @@ int ObVecIndexBuildTask::init(
 {
   int ret = OB_SUCCESS;
   const bool is_rebuild_index = create_index_arg.is_rebuild_index_;
+  const bool is_offline_rebuild = create_index_arg.is_offline_rebuild_;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -133,6 +135,7 @@ int ObVecIndexBuildTask::init(
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_version;
     is_rebuild_index_ = is_rebuild_index;
+    is_offline_rebuild_ = is_offline_rebuild;
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(task_status_ = static_cast<ObDDLTaskStatus>(task_status))) {
     } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
@@ -1144,6 +1147,7 @@ int ObVecIndexBuildTask::serialize_params_to_message(
   int8_t index_snapshot_data_task_submitted = static_cast<int8_t>(index_snapshot_data_task_submitted_);
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
+  int8_t is_offline_rebuild = static_cast<int8_t>(is_offline_rebuild_);
 
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1242,6 +1246,11 @@ int ObVecIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               is_rebuild_index))) {
     LOG_WARN("serialize drop index task id failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_len,
+                                              pos,
+                                              is_offline_rebuild))) {
+    LOG_WARN("serialize is_offline_rebuild failed", K(ret));
   }
   return ret;
 }
@@ -1260,6 +1269,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
   int8_t index_snapshot_data_task_submitted = 0;
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
+  int8_t is_offline_rebuild = 0;
   obrpc::ObCreateIndexArg tmp_arg;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
                   nullptr == buf ||
@@ -1365,6 +1375,11 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
                                               pos,
                                               &is_rebuild_index))) {
     LOG_WARN("fail to deserialize is_rebuild_index", K(ret));
+  } else if (OB_FAIL(serialization::decode_i8(buf,
+                                              data_len,
+                                              pos,
+                                              &is_offline_rebuild))) {
+    LOG_WARN("fail to deserialize is_offline_rebuild", K(ret));
   } else if (!dependent_task_result_map_.created() &&
              OB_FAIL(dependent_task_result_map_.create(OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
                                                        lib::ObLabel("DepTasMap")))) {
@@ -1377,6 +1392,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
     index_snapshot_data_task_submitted_ = index_snapshot_data_task_submitted;
     drop_index_task_submitted_ = drop_index_submitted;
     is_rebuild_index_ = is_rebuild_index;
+    is_offline_rebuild_ = is_offline_rebuild;
     if (rowkey_vid_task_id_ > 0) {
       share::ObDomainDependTaskStatus rowkey_vid_status;
       rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
@@ -1435,6 +1451,7 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
   int8_t index_snapshot_data_task_submitted = static_cast<int8_t>(index_snapshot_data_task_submitted_);
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
+  int8_t is_offline_rebuild = static_cast<int8_t>(is_offline_rebuild_);
   return create_index_arg_.get_serialize_size()
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length(rowkey_vid_aux_table_id_)
@@ -1454,7 +1471,8 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(index_snapshot_task_id_)
       + serialization::encoded_length_i8(drop_index_submitted)
       + serialization::encoded_length_i64(drop_index_task_id_)
-      + serialization::encoded_length_i8(is_rebuild_index);
+      + serialization::encoded_length_i8(is_rebuild_index)
+      + serialization::encoded_length_i8(is_offline_rebuild);
 }
 
 int ObVecIndexBuildTask::print_child_task_ids(char *buf, int64_t len)
@@ -1821,6 +1839,7 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
     drop_index_arg.is_vec_inner_drop_ = true;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
+    drop_index_arg.is_hidden_         = is_offline_rebuild_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {

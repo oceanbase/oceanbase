@@ -8088,8 +8088,51 @@ def_table_schema(
     ('fail_count', 'int'),
   ],
 )
-# 545: __all_vector_index_task
-# 546: __all_vector_index_task_history
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name = '__all_vector_index_task',
+  table_id = '545',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('table_id', 'int'),
+      ('tablet_id', 'int'),
+      ('task_id', 'int')
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('trigger_type', 'int'),
+    ('task_type', 'int'),
+    ('status', 'int'),
+    ('target_scn', 'int'),
+    ('ret_code', 'int'),
+    ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+)
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name = '__all_vector_index_task_history',
+  table_id = '546',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('table_id', 'int'),
+      ('tablet_id', 'int'),
+      ('task_id', 'int')
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('trigger_type', 'int'),
+    ('task_type', 'int'),
+    ('status', 'int'),
+    ('target_scn', 'int'),
+    ('ret_code', 'int'),
+    ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+)
 
 # 547: __all_ccl_rule
 # 548: __all_ccl_rule_history
@@ -16045,8 +16088,15 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_pl_recompile_objinfo',
   keywords = all_def_keywords['__all_pl_recompile_objinfo']))
 
-# 12524: __all_virtual_vector_index_task
-# 12525: __all_virtual_vector_index_task_history
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12524',
+  table_name = '__all_virtual_vector_index_task',
+  keywords = all_def_keywords['__all_vector_index_task']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12525',
+  table_name = '__all_virtual_vector_index_task_history',
+  keywords = all_def_keywords['__all_vector_index_task_history']))
 
 def_table_schema(
   owner = 'linyi.cl',
@@ -41380,11 +41430,142 @@ def_table_schema(
 # 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
 # 21639: DBA_OB_LICENSE
-# 21640: DBA_OB_VECTOR_INDEX_TASKS
-# 21641: CDB_OB_VECTOR_INDEX_TASKS
-# 21642: DBA_OB_VECTOR_INDEX_TASK_HISTORY
-# 21643: CDB_OB_VECTOR_INDEX_TASK_HISTORY
 
+def_table_schema(
+  owner           = 'yangjiali.yjl',
+  table_name      = 'DBA_OB_VECTOR_INDEX_TASKS',
+  table_id        = '21640',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      table_id as TABLE_ID,
+      tablet_id as TABLET_ID,
+      task_id as TASK_ID,
+      usec_to_time(gmt_create) as START_TIME,
+      usec_to_time(gmt_modified) as MODIFY_TIME,
+      case trigger_type
+        when 0 then "USER"
+        when 1 then "MANUAL"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "FINISHED"
+        else "INVALID" END AS STATUS,
+      task_type as TASK_TYPE,
+      target_scn as TASK_SCN,
+      ret_code as RET_CODE,
+      trace_id as TRACE_ID
+  FROM oceanbase.__all_vector_index_task
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name      = 'CDB_OB_VECTOR_INDEX_TASKS',
+  table_id        = '21641',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      tenant_id as TENANT_ID,
+      table_id as TABLE_ID,
+      tablet_id as TABLET_ID,
+      task_id as TASK_ID,
+      usec_to_time(gmt_create) as START_TIME,
+      usec_to_time(gmt_modified) as MODIFY_TIME,
+      case trigger_type
+        when 0 then "USER"
+        when 1 then "MANUAL"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "FINISHED"
+        else "INVALID" END AS STATUS,
+      task_type as TASK_TYPE,
+      target_scn as TASK_SCN,
+      ret_code as RET_CODE,
+      trace_id as TRACE_ID
+  FROM oceanbase.__all_virtual_vector_index_task
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangjiali.yjl',
+  table_name      = 'DBA_OB_VECTOR_INDEX_TASK_HISTORY',
+  table_id        = '21642',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      table_id as TABLE_ID,
+      tablet_id as TABLET_ID,
+      task_id as TASK_ID,
+      usec_to_time(gmt_create) as START_TIME,
+      usec_to_time(gmt_modified) as MODIFY_TIME,
+      case trigger_type
+        when 0 then "AUTO"
+        when 1 then "MANUAL"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "FINISHED"
+        else "INVALID" END AS STATUS,
+      task_type as TASK_TYPE,
+      target_scn as TASK_SCN,
+      ret_code as RET_CODE,
+      trace_id as TRACE_ID
+  FROM oceanbase.__all_vector_index_task_history
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name      = 'CDB_OB_VECTOR_INDEX_TASK_HISTORY',
+  table_id        = '21643',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      tenant_id as TENANT_ID,
+      table_id as TABLE_ID,
+      tablet_id as TABLET_ID,
+      task_id as TASK_ID,
+      usec_to_time(gmt_create) as START_TIME,
+      usec_to_time(gmt_modified) as MODIFY_TIME,
+      case trigger_type
+        when 0 then "AUTO"
+        when 1 then "MANUAL"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "FINISHED"
+        else "INVALID" END AS STATUS,
+      task_type as TASK_TYPE,
+      target_scn as TASK_SCN,
+      ret_code as RET_CODE,
+      trace_id as TRACE_ID
+  FROM oceanbase.__all_virtual_vector_index_task_history
+""".replace("\n", " ")
+)
 
 # 21644: GV$OB_STORAGE_CACHE_TASKS
 # 21645: V$OB_STORAGE_CACHE_TASKS

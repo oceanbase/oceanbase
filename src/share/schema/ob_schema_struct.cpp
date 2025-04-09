@@ -5697,8 +5697,21 @@ int ObBasePartition::set_high_bound_val_with_hex_str(
   return ret;
 }
 
+int ObBasePartition::get_part_column_schema(const ObTableSchema &table_schema, int64_t idx, const common::ObRowkeyInfo &info,  const ObColumnSchemaV2 *&part_column_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = 0;
+  if (OB_FAIL(info.get_column_id(idx, column_id))) {
+    LOG_WARN("failed to get part column id", K(ret), K(idx));
+  } else if (OB_ISNULL(part_column_schema = table_schema.get_column_schema(column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null column schema", K(ret));
+  }
+  return ret;
+}
+
 int ObBasePartition::convert_character_for_range_columns_part(
-    const ObCollationType &to_collation)
+    const ObCollationType &to_collation, const ObTableSchema &table_schema, const common::ObRowkeyInfo &info)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *allocator = get_allocator();
@@ -5710,12 +5723,18 @@ int ObBasePartition::convert_character_for_range_columns_part(
     LOG_WARN("defensive code, unexpected error", K(ret), K(low_bound_val_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < high_bound_val_.get_obj_cnt(); i++) {
+      const ObColumnSchemaV2 *part_column_schema = nullptr;
       ObObj &obj = high_bound_val_.get_obj_ptr()[i];
       const ObObjMeta &obj_meta = obj.get_meta();
       if (obj_meta.is_lob()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected err, lob column can not be part key", K(ret), K(obj_meta));
-      } else if (ObDDLUtil::check_can_convert_character(obj_meta)) {
+      } else if (OB_FAIL(get_part_column_schema(table_schema, i, info, part_column_schema))) {
+        LOG_WARN("failed to get part column schema", K(ret));
+      } else if (OB_ISNULL(part_column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column schema", K(ret));
+      } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column())) {
         ObString dst_string;
         if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
                                                to_collation, dst_string))) {
@@ -5731,7 +5750,7 @@ int ObBasePartition::convert_character_for_range_columns_part(
 }
 
 int ObBasePartition::convert_character_for_list_columns_part(
-    const ObCollationType &to_collation)
+    const ObCollationType &to_collation, const ObTableSchema &table_schema, const common::ObRowkeyInfo &info)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *allocator = get_allocator();
@@ -5742,12 +5761,18 @@ int ObBasePartition::convert_character_for_list_columns_part(
     for (int64_t i = 0; OB_SUCC(ret) && i < list_row_values_.count(); i++) {
       common::ObNewRow &row = list_row_values_.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < row.get_count(); j++) {
+        const ObColumnSchemaV2 *part_column_schema = nullptr;
         ObObj &obj = row.get_cell(j);
         const ObObjMeta &obj_meta = obj.get_meta();
         if (obj_meta.is_lob()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected err, lob column can not be part key", K(ret), K(obj_meta));
-        } else if (ObDDLUtil::check_can_convert_character(obj_meta)) {
+        } else if (OB_FAIL(get_part_column_schema(table_schema, j, info, part_column_schema))) {
+          LOG_WARN("failed to get part column schema", K(ret));
+        } else if (OB_ISNULL(part_column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null column schema", K(ret));
+        } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column())) {
           ObString dst_string;
           if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
                                                to_collation, dst_string))) {

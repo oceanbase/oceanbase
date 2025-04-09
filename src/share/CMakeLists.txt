@@ -704,6 +704,9 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_plugin_vector_index_utils.cpp
   vector_index/ob_vector_index_util.cpp
   vector_index/ob_vector_kmeans_ctx.cpp
+  vector_index/ob_tenant_vector_index_async_task.cpp
+  vector_index/ob_vector_index_async_task.cpp
+  vector_index/ob_vector_index_async_task_util.cpp
 )
 
 ob_set_subtarget(ob_share vector_type

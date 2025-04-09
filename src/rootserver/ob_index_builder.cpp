@@ -1825,8 +1825,8 @@ int ObIndexBuilder::generate_schema(
                  OB_FAIL(set_global_index_auto_partition_infos(data_schema, schema))) {
         LOG_WARN("fail to set auto partition infos", KR(ret), K(data_schema), K(schema));
       } else {
-        if (!share::schema::is_built_in_vec_index(arg.index_type_)) {
-          // only delta_buffer_table set vector_index_param
+        if (!share::schema::is_built_in_vec_index(arg.index_type_) && !share::schema::is_local_vec_hnsw_index(arg.index_type_)) {
+          // only ivf centroid_table set vector_index_param
           schema.set_index_params(arg.index_schema_.get_index_params());
         }
         schema.set_name_generated_type(arg.index_schema_.get_name_generated_type());

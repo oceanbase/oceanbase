@@ -1136,10 +1136,10 @@ public:
 
   static bool need_remote_write(const int ret_code);
 
-  static int check_can_convert_character(const ObObjMeta &obj_meta)
+  static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index)
   {
     return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
-              && CS_TYPE_BINARY != obj_meta.get_collation_type();
+              && CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index;
   }
 
   static int get_sys_ls_leader_addr(
@@ -1427,6 +1427,15 @@ public:
       const int64_t ddl_task_id = 0,
       const int64_t trans_end_snapshot = 0,
       const int64_t index_snapshot_version_diff = 0);
+  static int construct_domain_index_arg(const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    rootserver::ObDDLTask &task,
+    obrpc::ObCreateIndexArg &create_index_arg,
+    ObDDLType &ddl_type);
+  static int get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    uint64_t tenant_id,
+    int64_t &fts_snapshot_version);
   static int write_defensive_and_obtain_snapshot(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,

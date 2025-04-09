@@ -618,7 +618,8 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
 
 bool ObVecIndexOptDutyTimeChecker::check(const ObConfigItem& t) const
 {
-  return OB_SUCCESS;// TODO@xiajin: completed in 435bp2
+  common::ObTTLDutyDuration duty_duration;
+  return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
 bool ObMySQLVersionLengthChecker::check(const ObConfigItem& t) const

@@ -559,6 +559,8 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
   update_with_vector_index = false;
   ObIndexType index_type = INDEX_TYPE_MAX;
   ObArray<uint64_t> part_key_col_ids;
+  ObArray<uint64_t> row_key_col_ids;
+  bool has_extra_info = false;
   // get part keys
   if (!table_schema->is_partitioned_table()) {
     // do nothing
@@ -569,6 +571,15 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
             OB_FAIL(table_schema->get_subpartition_key_info().get_column_ids(part_key_col_ids))) {
     LOG_WARN("failed to get column ids", K(ret));
   }
+  if (OB_FAIL(ret)) {
+  } else if (table_schema->get_rowkey_info().get_size() > 0 &&
+             OB_FAIL(table_schema->get_rowkey_info().get_column_ids(row_key_col_ids))) {
+    LOG_WARN("failed to get column ids", K(ret));
+  } else if (OB_FAIL(ObVectorIndexUtil::check_has_extra_info(*table_schema, *schema_guard,
+                                                             has_extra_info))) {  // check if has extra_info
+    LOG_WARN("failed to check has extra info", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count() && !update_with_vector_index; ++i) {
     const ObAssignment &as = assigns.at(i);
     if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema,
@@ -580,6 +591,11 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
     } else if (!update_with_vector_index && !part_key_col_ids.empty()) {
       // check if update with part key, update with part key should also update vid
       if (has_exist_in_array(part_key_col_ids, as.column_expr_->get_column_id())) {
+        update_with_vector_index = true;
+      }
+    } else if (has_extra_info && !update_with_vector_index && !row_key_col_ids.empty()) {
+      // check if has extra_info, update with row key should also update vid
+      if (has_exist_in_array(row_key_col_ids, as.column_expr_->get_column_id())) {
         update_with_vector_index = true;
       }
     }

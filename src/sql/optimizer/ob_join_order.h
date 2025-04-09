@@ -297,7 +297,7 @@ enum ObVecIndexType : uint8_t //FARM COMPAT WHITELIST
 
 struct ObVecIdxExtraInfo
 {
-static constexpr double DEFAULT_SELECTIVITY_RATE = 0.7;
+static constexpr double DEFAULT_SELECTIVITY_RATE = 0.5;
   ObVecIdxExtraInfo()
     : algorithm_type_(VIAT_MAX),
       vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -306,23 +306,32 @@ static constexpr double DEFAULT_SELECTIVITY_RATE = 0.7;
       row_count_(0),
       can_use_vec_pri_opt_(false) {}
   inline void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
-  ObVecIndexType get_vec_idx_type() { return vec_idx_type_; }
-  inline double get_selectivity() { return selectivity_; }
+  ObVecIndexType get_vec_idx_type() const { return vec_idx_type_; }
+  inline double get_selectivity() const { return selectivity_; }
   inline void set_selectivity(double selectivity) { selectivity_ = selectivity;}
   inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
   inline void set_vec_algorithm_by_index_type(ObIndexType index_type);
+  inline void set_algorithm_type(const ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
   ObVectorIndexAlgorithmType get_algorithm_type() { return algorithm_type_; }
-  bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
+  inline bool is_hnsw_vec_scan() const
+  {
+    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
+  }
+  inline bool is_hnsw_bq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
+  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   bool is_specify_vec_plan() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_INVALID; }
   bool is_force_pre_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_force_post_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
+  bool is_force_post_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || force_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
+  ObVecIndexType get_force_filter_type() const {return force_index_type_;}
   void set_force_vec_index_type(ObVecIndexType force_index_type) { force_index_type_ = force_index_type; }
-  TO_STRING_KV(K_(vec_idx_type), K_(selectivity), K_(row_count));
+  TO_STRING_KV(K_(algorithm_type), K_(vec_idx_type),K_(force_index_type), K_(selectivity), K_(row_count), K_(can_use_vec_pri_opt));
 
   ObVectorIndexAlgorithmType algorithm_type_;  // hnsw or ivf type
   ObVecIndexType vec_idx_type_;                // pre & post，might add with/without join back

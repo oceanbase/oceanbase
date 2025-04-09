@@ -306,6 +306,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_spatial_cellid_column() const { return is_spatial_generated_column() && get_data_type() == common::ObUInt64Type; }
   inline bool is_multivalue_generated_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG; }
   inline bool is_multivalue_generated_array_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG; }
+  inline bool is_domain_index_column() const { return is_vec_index_column() || is_fulltext_column() || is_multivalue_generated_column() || is_multivalue_generated_array_column(); }
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   inline bool is_primary_vp_column() const { return column_flags_ & PRIMARY_VP_COLUMN_FLAG; }
   inline bool is_aux_vp_column() const { return column_flags_ & AUX_VP_COLUMN_FLAG; }

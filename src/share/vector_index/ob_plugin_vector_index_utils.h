@@ -24,6 +24,7 @@
 #include "src/share/schema/ob_tenant_schema_service.h"
 #include "lib/vector/ob_vector_util.h"
 #include "ob_vector_kmeans_ctx.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -84,24 +85,26 @@ public:
                                               schema::ObIndexType type,
                                               ObIAllocator &allocator,
                                               ObObj &output_obj,
+                                              int64_t extra_info_count,
+                                              ObVecExtraInfoObj *output_extra_objs,
                                               bool &get_data);
-  static int get_vec_column_id (ObSEArray<uint64_t, 4> &vector_column_ids,
-                                uint64_t incr_index_table_id,
-                                uint64_t data_table_id,
-                                uint64_t tenant_id);
+  static int get_extra_info_column_id(ObSEArray<uint64_t, 4> &extra_column_ids, uint64_t incr_index_table_id,
+                                      uint64_t data_table_id, uint64_t tenant_id);
+  static int get_data_table_out_column_id(ObSEArray<uint64_t, 4> &vector_column_ids,
+                                          uint64_t incr_index_table_id,
+                                          uint64_t data_table_id,
+                                          uint64_t tenant_id,
+                                          ObPluginVectorIndexAdaptor *adapter);
+  static int get_extra_info_objs(storage::ObTableScanParam &scan_param,
+                                 ObIAllocator &allocator,
+                                 int64_t extra_info_count,
+                                 blocksstable::ObDatumRow *datum_row,
+                                 ObVecExtraInfoObj *out_extra_info_objs);
   static int read_vector_info(ObPluginVectorIndexAdaptor *adapter,
                               ObIAllocator &allocator,
                               ObLSID &ls_id,
                               SCN target_scn,
                               ObVectorQueryAdaptorResultContext &ada_ctx);
-
-  static int test_read_local_data(ObLSID &ls_id,
-                                  ObPluginVectorIndexAdaptor *adapter,
-                                  ObIndexType index_type,
-                                  SCN target_scn,
-                                  ObIAllocator &allocator);
-
-private:
   static int read_local_tablet(ObLSID &ls_id,
                                ObPluginVectorIndexAdaptor* adapter,
                                SCN target_scn,
@@ -110,7 +113,17 @@ private:
                                ObIAllocator &scan_allocator,
                                ObTableScanParam &scan_param,
                                ObTableParam &table_param,
-                               common::ObNewRowIterator *&scan_iter);
+                               common::ObNewRowIterator *&scan_iter,
+                               ObIArray<uint64_t> *out_column_ids = nullptr,
+                               const bool need_all_columns = false);
+
+  static int test_read_local_data(ObLSID &ls_id,
+                                  ObPluginVectorIndexAdaptor *adapter,
+                                  ObIndexType index_type,
+                                  SCN target_scn,
+                                  ObIAllocator &allocator);
+
+private:
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,
                                     ObPluginVectorIndexAdaptor *adapter,
                                     SCN target_scn,
@@ -123,7 +136,9 @@ private:
                               uint64_t data_table_id,
                               uint64_t table_id,
                               schema::ObIndexType type,
-                              ObPluginVectorIndexAdaptor *adapter);
+                              ObPluginVectorIndexAdaptor *adapter,
+                              ObIArray<uint64_t> *out_column_ids = nullptr,
+                              const bool need_all_columns = false);
   static int get_non_shared_index_aux_table_colum_count(schema::ObIndexType type, uint32 &col_cnt);
   static int get_non_shared_index_aux_table_rowkey_colum_count(schema::ObIndexType type, uint32 &col_cnt);
   static int get_special_index_aux_table_column_count(schema::ObIndexType type,
@@ -138,8 +153,7 @@ private:
   static int try_sync_snapshot_memdata(ObLSID &ls_id,
                                        ObPluginVectorIndexAdaptor *adapter,
                                        SCN &target_scn,
-                                       ObIAllocator &allocator,
-                                       ObVectorQueryAdaptorResultContext &ada_ctx);
+                                       ObIAllocator &allocator);
   static int try_sync_vbitmap_memdata(ObLSID &ls_id,
                                       ObPluginVectorIndexAdaptor *adapter,
                                       SCN &target_scn,

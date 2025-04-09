@@ -3922,7 +3922,9 @@ int ObVectorIndexSliceStore::init(
     }
     // get vid col and vector col
     for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
-      if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_)) {
+      // col_array[1]\col_array[2] is version col
+      if (i == 1 || i == 2) {
+      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_)) {
         vector_vid_col_idx_ = i;
       } else if (ObSchemaUtils::is_vec_hnsw_vector_column(col_array.at(i).column_flags_)) {
         vector_col_idx_ = i;
@@ -3930,6 +3932,10 @@ int ObVectorIndexSliceStore::init(
         vector_key_col_idx_ = i;
       } else if (ObSchemaUtils::is_vec_hnsw_data_column(col_array.at(i).column_flags_)) {
         vector_data_col_idx_ = i;
+      } else {
+        if (OB_FAIL(extra_column_idx_types_.push_back(ObExtraInfoIdxType(i, col_array.at(i).col_type_)))) {
+          LOG_WARN("failed to push back extra info col idx", K(ret), K(i));
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -4077,6 +4083,8 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
       // get vid and vector
       ObString vec_str;
       int64_t vec_vid;
+      ObVecExtraInfoObj *extra_obj = nullptr;
+      int64_t extra_column_count = extra_column_idx_types_.count();
       if (datum_row.get_column_count() <= vector_vid_col_idx_ || datum_row.get_column_count() <= vector_col_idx_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_col_idx_), K(vector_vid_col_idx_), K(datum_row));
@@ -4092,10 +4100,35 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
         LOG_WARN("fail to get real data.", K(ret), K(vec_str));
       } else if (vec_str.length() == 0) {
         // do nothing
-      } else if (OB_FAIL(adaptor_guard.get_adatper()->add_snap_index(reinterpret_cast<float*>(vec_str.ptr()), &vec_vid, 1))) {
-        LOG_WARN("fail to build index to adaptor", K(ret), KPC(this));
       } else {
-        LOG_INFO("[vec index debug] add into snap index success", K(tablet_id_), K(vec_vid), K(vec_str));
+        if (extra_column_count > 0) {
+          char *buf = nullptr;
+          if (OB_ISNULL(buf = static_cast<char *>(tmp_allocator_.alloc(sizeof(ObVecExtraInfoObj) * extra_column_count)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret), K(extra_column_count));
+          } else if (OB_FALSE_IT(extra_obj = new (buf) ObVecExtraInfoObj[extra_column_count])) {
+          }
+          int64_t datum_row_count = datum_row.get_column_count();
+          for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_count; ++i) {
+            if (datum_row_count <= extra_column_idx_types_.at(i).idx_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to get valid extra_info idx", K(ret), K(extra_column_idx_types_.at(i).idx_), K(datum_row));
+            } else {
+              const ObDatum &extra_datum = datum_row.storage_datums_[extra_column_idx_types_.at(i).idx_];
+              if (OB_FAIL(extra_obj[i].from_datum(extra_datum, extra_column_idx_types_.at(i).type_))) {
+                LOG_WARN("failed to from obj.", K(ret), K(extra_datum), K(extra_column_idx_types_), K(i));
+              }
+            }
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(adaptor_guard.get_adatper()->add_snap_index(reinterpret_cast<float *>(vec_str.ptr()),
+                                                                       &vec_vid, extra_obj, extra_column_count, 1))) {
+          LOG_WARN("fail to build index to adaptor", K(ret), KPC(this));
+        } else {
+          LOG_INFO("[vec index debug] add into snap index success", K(tablet_id_), K(vec_vid), K(vec_str));
+        }
       }
     }
   }
@@ -4218,10 +4251,15 @@ int ObVectorIndexSliceStore::get_next_vector_data_row(
     if (OB_ISNULL(key_str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc vec key", K(ret));
-    } else if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_hnsw_data_part%05ld", tablet_id_.id(), cur_row_pos_))) {
+    } else if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build vec snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_hnsw_sq_data_part%05ld", tablet_id_.id(), cur_row_pos_))) {
+    } else if (index_type == VIAT_HGRAPH &&
+      OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_hgraph_data_part%05ld", tablet_id_.id(), cur_row_pos_))) {
+      LOG_WARN("fail to build vec hgraph snapshot key str", K(ret), K(index_type));
+    } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_sq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build sq vec snapshot key str", K(ret), K(index_type));
+    } else if (index_type == VIAT_HNSW_BQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_hnsw_bq_data_part%05ld", tablet_id_.id(), cur_row_pos_))) {
+      LOG_WARN("fail to build bq vec snapshot key str", K(ret), K(index_type));
     } else {
       current_row_.storage_datums_[vector_key_col_idx_].set_string(key_str, key_pos);
     }
@@ -4235,6 +4273,12 @@ int ObVectorIndexSliceStore::get_next_vector_data_row(
     if (OB_SUCC(ret)) {
       current_row_.storage_datums_[vector_vid_col_idx_].set_null();
       current_row_.storage_datums_[vector_col_idx_].set_null();
+      // set extra_info to null
+      if (extra_column_idx_types_.count() > 0) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_idx_types_.count(); i++) {
+          current_row_.storage_datums_[extra_column_idx_types_[i].idx_].set_null();
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       // add extra rowkey
