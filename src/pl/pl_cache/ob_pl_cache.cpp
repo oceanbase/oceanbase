@@ -572,7 +572,7 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
       if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
         // in same db, no need check for objects with the same name if synonym name is same as linked object name
         if (pc_ctx.session_info_->get_database_id() == synonym_info->get_object_database_id() &&
-            synonym_info->get_synonym_name() == synonym_info->get_object_name()) {
+            synonym_info->get_synonym_name_str() == synonym_info->get_object_name_str()) {
           new_version = synonym_info->get_schema_version();
         } else {
           bool exist = false;
