@@ -176,6 +176,10 @@ int ObTableDirectLoadCommitExecutor::process()
     ObTableLoadClientService::revert_task(client_task);
     client_task = nullptr;
   }
+  if (nullptr != client_task_brief) {
+    ObTableLoadClientService::revert_task_brief(client_task_brief);
+    client_task_brief = nullptr;
+  }
   return ret;
 }
 
