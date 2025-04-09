@@ -379,12 +379,15 @@ public:
                                common::ObIArray<ObString> &cols,
                                common::ObIArray<ObString> &record_cols);
 
+  static int parse_ignore_clause(const ParseNode *node, ObIArray<ObString> &ignore_cols);
+
   static int check_is_valid_col(const ObString &src_str,
                                 const ObIArray<ObColumnStatParam> &column_params,
                                 const common::ObIArray<ObString> &record_cols);
 
   static bool is_match_column_option(ObColumnStatParam &param,
-                                     const MethodOptColConf &for_all_opt);
+                                     const MethodOptColConf &for_all_opt,
+                                     const ObIArray<ObString> &ignore_cols);
 
   static bool is_match_column_option(ObColumnStatParam &param,
                                      const ObIArray<ObString> &for_col_list);
