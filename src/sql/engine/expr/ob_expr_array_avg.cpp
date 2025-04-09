@@ -243,23 +243,13 @@ int ObExprArrayAvg::eval_array_avg_vector(const ObExpr &expr, ObEvalCtx &ctx,
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("eval source array failed", K(ret));
   } else {
-    uint32_t attr_count = expr.args_[0]->attrs_cnt_;
     ObIVector *arr_vec = expr.args_[0]->get_vector(ctx);
-    ObIVector *len_vec = nullptr;
-    ObIVector *nullbitmap_vec = nullptr;
-    ObIVector *data_vec = nullptr;
-    if (attr_count == 3) {
-      len_vec = expr.args_[0]->attrs_[0]->get_vector(ctx);
-      nullbitmap_vec = expr.args_[0]->attrs_[1]->get_vector(ctx);
-      data_vec = expr.args_[0]->attrs_[2]->get_vector(ctx);
-    }
     ObIVector *res_vec = expr.get_vector(ctx);
     VectorFormat arr_format = arr_vec->get_format();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     uint32_t depth = 0;
 
     for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-      bool is_null_res = false;
       uint32_t len = 0, data_len = 0;
       uint8_t *null_bitmaps = nullptr;
       const char *data = nullptr;
@@ -268,41 +258,27 @@ int ObExprArrayAvg::eval_array_avg_vector(const ObExpr &expr, ObEvalCtx &ctx,
         continue;
       }
       eval_flags.set(j);
+      ObString data_str = arr_vec->get_string(j);
       if (arr_vec->is_null(j)) {
-        is_null_res = true;
+        res_vec->set_null(j);
       } else if (OB_FAIL(ObArrayExprUtils::get_array_type_by_subschema_id(ctx, subschema_id, arr_type))) {
         LOG_WARN("failed to get array type by subschema id", K(ret), K(subschema_id));
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
-        ObString data_str = arr_vec->get_string(j);
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+      } else if (!ObCollectionExprUtil::is_compact_fmt_cell(data_str.ptr())) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected data format", K(ret));
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                             ObLongTextType,
                                             CS_TYPE_BINARY,
                                             true,
                                             data_str))) {
-          LOG_WARN("fail to get real data.", K(ret), K(data_str));
-        } else if (OB_FAIL(ObArrayExprUtils::get_array_data(data_str,
-                                                arr_type,
-                                                len,
-                                                null_bitmaps,
-                                                data,
-                                                data_len))) {
-          LOG_WARN("failed to get array data", K(ret));
-        }
-      } else if (OB_FAIL(ObArrayExprUtils::get_array_data(len_vec,
-                                              nullbitmap_vec,
-                                              data_vec,
-                                              j,
+        LOG_WARN("fail to get real data.", K(ret), K(data_str));
+      } else if (OB_FAIL(ObArrayExprUtils::get_array_data(data_str,
                                               arr_type,
                                               len,
                                               null_bitmaps,
                                               data,
                                               data_len))) {
         LOG_WARN("failed to get array data", K(ret));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (is_null_res) {
-        res_vec->set_null(j);
       } else if (ob_is_integer_type(arr_type->get_basic_meta(depth).get_obj_type())) {
         depth = 0;
         if (ob_is_unsigned_type(arr_type->get_basic_meta(depth).get_obj_type())) {

@@ -151,14 +151,11 @@ int ObExprMapComponents::eval_map_components_vector(const ObExpr &expr,
       }
       if (map_vec->is_null(idx) || map_datum.at(idx)->is_null()) {
         is_null_res = true;
-      } else if (map_vec->get_format() == VEC_UNIFORM || map_vec->get_format() == VEC_UNIFORM_CONST) {
+      } else {
         ObString map_blob = map_vec->get_string(idx);
         if (OB_FAIL(get_map_components_arr(tmp_allocator, ctx, map_blob, res_arr, res_subschema_id, subschema_id, is_key))) {
           LOG_WARN("failed to get map key array", K(ret));
         }
-      } else if (OB_FAIL(get_map_components_arr_vector(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, res_arr, is_key))) {
-        LOG_WARN("construct map obj failed", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {

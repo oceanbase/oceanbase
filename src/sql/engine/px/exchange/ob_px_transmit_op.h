@@ -170,8 +170,6 @@ protected:
       if (OB_FAIL(ret) || brs_.size_ == 0) {
       } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
         LOG_WARN("failed to set rollup hybrid keys", K(ret));
-      } else if (OB_FAIL(prepare_for_nested_expr())) {
-        LOG_WARN("failed to prepare for nested expr", K(ret));
       } else if (!slice_calc.support_vectorized_calc()) {
         for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
           ObExpr *expr = spec_.output_.at(i);
@@ -433,7 +431,6 @@ private:
   int try_wait_channel();
   int init_data_msg_type(const common::ObIArray<ObExpr *> &output);
   void fill_batch_ptrs(const int64_t *indexes);
-  int prepare_for_nested_expr();
   void fill_batch_ptrs_fixed(const int64_t *indexes);
   void fill_batch_ptrs(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                        ObSliceIdxCalc::EndIdxArray &end_idx_array);
@@ -797,9 +794,6 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
       ObPxNewRow px_row(get_spec().output_, OB_INVALID_ID, data_msg_type_);
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
       batch_info_guard.set_batch_size(rows);
-      if (OB_FAIL(prepare_for_nested_expr())) {
-        LOG_WARN("failed to prepare for nested expr", K(ret));
-      }
       for (int64_t i = 0; OB_SUCC(ret) && i < rows; i++) {
         if (brs_.skip_->at(i)) {
           continue;

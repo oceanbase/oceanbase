@@ -98,8 +98,6 @@ int check_skip_by_monotonicity(sql::ObBlackFilterExecutor &filter,
 
 int cast_obj(const common::ObObjMeta &src_meta, common::ObIAllocator &cast_allocator, common::ObObj &obj);
 
-int distribute_attrs_on_rich_format_columns(const int64_t row_count, const int64_t vec_offset,
-                                            sql::ObExpr &expr, sql::ObEvalCtx &eval_ctx);
 
 OB_INLINE int init_expr_vector_header(
     sql::ObExpr &expr,
@@ -146,8 +144,7 @@ OB_INLINE int init_exprs_vector_header(
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null expr", K(ret), KPC(exprs));
-      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size,
-          expr->is_nested_expr() ? VEC_DISCRETE : expr->get_default_res_format()))) {
+      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size, expr->get_default_res_format()))) {
         STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(expr));
       }
     }
@@ -163,11 +160,7 @@ OB_INLINE int init_exprs_new_format_header(
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
     sql::ObExpr *expr = exprs.at(i);
-    if (expr->is_nested_expr()) {
-      if (OB_FAIL(expr->init_vector(eval_ctx, VEC_DISCRETE, eval_ctx.max_batch_size_))) {
-        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
-      }
-    } else if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
+    if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
       STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
     }
   }

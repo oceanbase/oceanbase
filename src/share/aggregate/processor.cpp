@@ -1103,6 +1103,9 @@ inline static int add_one_row(IAggregate *aggr, RuntimeContext &agg_ctx, const i
     reinterpret_cast<ColumnFmt *>(data_vec)->get_payload(batch_idx, data, data_len);
     is_null = reinterpret_cast<ColumnFmt *>(data_vec)->is_null(batch_idx);
   }
+  ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx.eval_ctx_);
+  guard.set_batch_size(batch_size);
+  guard.set_batch_idx(batch_idx);
   if (OB_FAIL(aggr->add_one_row(agg_ctx, batch_idx, batch_size, is_null, data, data_len, agg_col_id,
                                 agg_cell))) {
     SQL_LOG(WARN, "add one row failed", K(ret));

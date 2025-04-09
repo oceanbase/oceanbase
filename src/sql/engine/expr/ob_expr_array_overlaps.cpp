@@ -201,26 +201,20 @@ int ObExprArrayOverlaps::eval_array_relation_vector(const ObExpr &expr, ObEvalCt
         continue;
       } else if (left_vec->is_null(idx) || right_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (left_format == VEC_UNIFORM || left_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString left = left_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, left_meta_id, left, l_arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], left_meta_id, idx, l_arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         // do nothing, set result at last
-      } else if (right_format == VEC_UNIFORM || right_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString right = right_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, r_arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[1], right_meta_id, idx, r_arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       bool bret = false;
       if (OB_FAIL(ret)) {

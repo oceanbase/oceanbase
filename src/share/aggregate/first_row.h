@@ -128,10 +128,21 @@ public:
   {
     int ret = OB_SUCCESS;
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_idx);
     if (OB_LIKELY(not_nulls.at(agg_col_idx))) {
       // already copied
     } else if (!is_null) {
-      if (data_len > 0) {
+      if (aggr_info.expr_->is_nested_expr() && data_len > 0) {
+        const char *compact_ptr = nullptr;
+        int32_t compact_data_len = 0;
+        if (OB_FAIL(ObArrayExprUtils::get_collection_payload(agg_ctx.allocator_, agg_ctx.eval_ctx_,
+                                                             *aggr_info.expr_, batch_idx,
+                                                             compact_ptr, compact_data_len))) {
+          SQL_LOG(WARN, "get collection payload failed", K(ret));
+        } else {
+          agg_ctx.set_agg_cell(compact_ptr, compact_data_len, agg_col_idx, agg_cell);
+        }
+      } else if (data_len > 0) {
         if (OB_ISNULL(data)) {
           ret = OB_INVALID_ARGUMENT;
           SQL_LOG(WARN, "invalid null payload", K(ret));
@@ -170,12 +181,7 @@ public:
     if (OB_LIKELY(not_nulls.at(agg_col_id) && agg_cell_len != INT32_MAX)) {
       const char *payload = (const char *)(*reinterpret_cast<const int64_t *>(agg_cell));
       char *res_buf = nullptr;
-      if (agg_expr.is_nested_expr() && !is_uniform_format(res_vec->get_format())) {
-        ObString nested_data(agg_cell_len, payload);
-        if (OB_FAIL(ObArrayExprUtils::dispatch_array_attrs(ctx, const_cast<sql::ObExpr &>(agg_expr), nested_data, output_idx))) {
-          LOG_WARN("fail to do nested expr from rows", K(ret));
-        }
-      } else if (is_discrete_vec(vec_tc)) {
+      if (is_discrete_vec(vec_tc)) {
         // implicit aggr expr may be shared between operators and its
         // data is shallow copied for variable-length types while do backup/restore operations.
         // Hence child op's data is unexpected modified if deep copy happened here.
@@ -188,9 +194,6 @@ public:
       }
     } else {
       res_vec->set_null(output_idx);
-      if (agg_expr.is_nested_expr() && !is_uniform_format(res_vec->get_format())) {
-        ObArrayExprUtils::set_expr_attrs_null(agg_expr, ctx, output_idx);
-      }
     }
     return ret;
   }

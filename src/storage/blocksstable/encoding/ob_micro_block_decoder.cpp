@@ -2416,10 +2416,9 @@ int ObMicroBlockDecoder::get_rows(
       const int32_t col_id = cols.at(i);
       sql::ObExpr &expr = *(exprs.at(i));
       const bool is_need_padding = nullptr != col_params.at(i) && need_padding(is_padding_mode, col_params.at(i)->get_meta_type());
-      const bool need_dispatch_collection = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_collection_sql_type();
       if (0 == vec_offset) {
         if (need_init_vector) {
-          const VectorFormat format = (is_need_padding || need_dispatch_collection) ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
+          const VectorFormat format = (is_need_padding) ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
           if (OB_FAIL(storage::init_expr_vector_header(expr, eval_ctx, eval_ctx.max_batch_size_, format))) {
             LOG_WARN("Fail to init vector", K(ret));
           }
@@ -2444,9 +2443,6 @@ int ObMicroBlockDecoder::get_rows(
             expr,
             eval_ctx))) {
           LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
-        } else if (need_dispatch_collection && !has_lob_out_row()
-                   && OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vec_offset, expr, eval_ctx))) {
-          LOG_WARN("failed to dispatch collection cells", K(ret), K(i), K(row_cap), K(vec_offset));
         }
       }
     }

@@ -522,11 +522,7 @@ int ObReceiveRowReader::attach_vectors(const common::ObIArray<ObExpr*> &exprs,
       } else {
         ObExpr *e = exprs.at(col_idx);
         ObIVector *vec = e->get_vector(eval_ctx);
-        if (e->is_nested_expr() && !is_uniform_format(e->get_format(eval_ctx))) {
-          if (OB_FAIL(ObArrayExprUtils::nested_expr_from_rows(*e, eval_ctx, meta, srows, read_rows, col_idx))) {
-            LOG_WARN("fail to do nested expr from rows", K(ret));
-          }
-        } else if (OB_FAIL(vec->from_rows(meta, srows, read_rows, col_idx))) {
+        if (OB_FAIL(vec->from_rows(meta, srows, read_rows, col_idx))) {
           LOG_WARN("failed to fill vector", K(ret));
         }
         e->set_evaluated_projected(eval_ctx);

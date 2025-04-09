@@ -1031,11 +1031,7 @@ int ObRFInFilterVecMsg::ObRFInFilterRowStore::create_and_add_row(
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
     ObExpr *expr = exprs.at(i);
     ObIVector *vec = expr->get_vector(ctx);
-    if (expr->is_nested_expr() && !is_uniform_format(vec->get_format())) {
-      OZ(ObCompactRow::nested_vec_to_row(*expr, ctx, row_meta, row, batch_idx, i));
-    } else {
-      OZ(vec->to_row(row_meta, row, batch_idx, i));
-    }
+    OZ(vec->to_row(row_meta, row, batch_idx, i));
   }
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(row->extra_payload<uint64_t>(row_meta) = hash_val)) {

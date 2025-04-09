@@ -82,8 +82,9 @@ public:
   }
 
   template <typename T>
-  OB_INLINE int sum_diff(const sql::EvalBound &bound, int64_t &diff, const sql::ObBitVector &skip,
-                         T &cur_vec, bool not_has_skip, bool not_has_null)
+  OB_INLINE int sum_diff(const ObExpr &expr, ObEvalCtx &ctx, const sql::EvalBound &bound, int64_t &diff,
+                         const sql::ObBitVector &skip, T &cur_vec, bool not_has_skip,
+                         bool not_has_null)
   {
     int ret = OB_SUCCESS;
     if (!has_lob_header) {
@@ -96,7 +97,7 @@ public:
       } else {
         sum_diff_base<T, true, true>(bound, diff, skip, cur_vec);
       }
-    } else {
+    } else if (OB_LIKELY(!expr.is_nested_expr())) {
       for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
         if (skip.at(i)) {
         } else if (cur_vec.is_null(i)) {
@@ -108,14 +109,30 @@ public:
           ret = sum_lob_length(payload, len, diff);
         }
       }
+    } else {
+      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+        int64_t data_len = 0;
+        if (skip.at(i)) { continue; }
+        else if (cur_vec.is_null(i)) {
+          diff += sizeof(ObDatum);
+        } else if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(expr, ctx, i, data_len))) {
+          SQL_LOG(WARN, "calc collection cell size failed", K(ret));
+        } else {
+          diff += sizeof(ObDatum) + data_len;
+        }
+      }
     }
     return ret;
   }
 
   template <>
-  OB_INLINE int sum_diff<ObFixedLengthBase>(const sql::EvalBound &bound, int64_t &diff, const sql::ObBitVector &skip,
-                                            ObFixedLengthBase &cur_vec, bool not_has_skip, bool not_has_null)
+  OB_INLINE int sum_diff<ObFixedLengthBase>(const ObExpr &expr, ObEvalCtx &ctx,
+                                            const sql::EvalBound &bound, int64_t &diff,
+                                            const sql::ObBitVector &skip,
+                                            ObFixedLengthBase &cur_vec, bool not_has_skip,
+                                            bool not_has_null)
   {
+    UNUSEDx(expr, ctx);
     int ret = OB_SUCCESS;
     const sql::ObBitVector *null_vec = cur_vec.get_nulls();
     if (not_has_skip && not_has_null) {
@@ -135,7 +152,8 @@ public:
   }
 
   template <typename T>
-  OB_INLINE int sum_diff_row_sel(int64_t &diff, const RowSelector &row_sel, T &cur_vec)
+  OB_INLINE int sum_diff_row_sel(const ObExpr &expr, ObEvalCtx &ctx, int64_t &diff,
+                                 const RowSelector &row_sel, T &cur_vec)
   {
     int ret = OB_SUCCESS;
     if (!has_lob_header) {
@@ -146,7 +164,7 @@ public:
           diff += sizeof(ObDatum) + cur_vec.get_length(row_sel.index(i));
         }
       }
-    } else {
+    } else if (OB_LIKELY(!expr.is_nested_expr())) {
       for (int rs = 0; OB_SUCC(ret) && rs < row_sel.size(); rs++) {
         int index = row_sel.index(rs);
         if (cur_vec.is_null(index)) {
@@ -158,13 +176,29 @@ public:
           ret = sum_lob_length(payload, len, diff);
         }
       }
+    } else {
+      for (int rs = 0; OB_SUCC(ret) && rs < row_sel.size(); rs++) {
+        int idx = row_sel.index(rs);
+        int64_t data_len = 0;
+        if (cur_vec.is_null(idx)) {
+          diff += sizeof(ObDatum);
+        } else if (OB_FAIL(
+                     ObArrayExprUtils::calc_nested_expr_data_size(expr, ctx, idx, data_len))) {
+          SQL_LOG(WARN, "calc nested expr data size failed", K(ret));
+        } else {
+          diff += sizeof(ObDatum) + data_len;
+        }
+      }
     }
     return ret;
   }
 
   template <>
-  OB_INLINE int sum_diff_row_sel<ObFixedLengthBase>(int64_t &diff, const RowSelector &row_sel, ObFixedLengthBase &cur_vec)
+  OB_INLINE int sum_diff_row_sel<ObFixedLengthBase>(const ObExpr &expr, ObEvalCtx &ctx,
+                                                    int64_t &diff, const RowSelector &row_sel,
+                                                    ObFixedLengthBase &cur_vec)
   {
+    UNUSEDx(expr, ctx);
     int ret = OB_SUCCESS;
     for (int i = 0; i < row_sel.size(); i++) {
       if (cur_vec.is_null(row_sel.index(i))) {
@@ -181,19 +215,37 @@ public:
                           RowSelector &row_sel, AggrRowPtr *agg_rows, T &cur_vec)
   {
     int ret = OB_SUCCESS;
-    for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-      int batch_idx = row_sel.index(i);
-      char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
-      int64_t &sum = *reinterpret_cast<int64_t *>(agg_cell);
-      if (cur_vec.is_null(batch_idx)) {
-        sum += sizeof(ObDatum);
-      } else if (!has_lob_header) {
-        sum += sizeof(ObDatum) + cur_vec.get_length(batch_idx);
-      } else {
-        const char *payload = nullptr;
-        int32_t len = 0;
-        cur_vec.get_payload(batch_idx, payload, len);
-        ret = sum_lob_length(payload, len, sum);
+    ObExpr *param_expr = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.at(0);
+
+    if (OB_LIKELY(!param_expr->is_nested_expr())) {
+      for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+        int batch_idx = row_sel.index(i);
+        char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
+        int64_t &sum = *reinterpret_cast<int64_t *>(agg_cell);
+        if (cur_vec.is_null(batch_idx)) {
+          sum += sizeof(ObDatum);
+        } else if (!has_lob_header) {
+          sum += sizeof(ObDatum) + cur_vec.get_length(batch_idx);
+        } else {
+          const char *payload = nullptr;
+          int32_t len = 0;
+          cur_vec.get_payload(batch_idx, payload, len);
+          ret = sum_lob_length(payload, len, sum);
+        }
+      }
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+        int batch_idx = row_sel.index(i);
+        char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
+        int64_t &sum = *reinterpret_cast<int64_t *>(agg_cell);
+        int64_t data_len = 0;
+        if (cur_vec.is_null(batch_idx)) {
+          sum += sizeof(ObDatum);
+        } else if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(*param_expr, agg_ctx.eval_ctx_, batch_idx, data_len))) {
+          SQL_LOG(WARN, "calc nested expr data size failed", K(ret));
+        } else {
+          sum += data_len + sizeof(ObDatum);
+        }
       }
     }
     return ret;
@@ -215,7 +267,7 @@ public:
         sum += sizeof(ObDatum) + cur_vec.get_length();
       } else {
         int32_t len = cur_vec.get_length();
-        const char *payload = reinterpret_cast<const char *>(cur_vec.get_data() + len * batch_idx);
+        const char *payload = reinterpret_cast<const char *>(cur_vec.get_data() + len * batch_idx);;
         ret = sum_lob_length(payload, len, sum);
       }
     }
@@ -243,34 +295,43 @@ public:
       int64_t &sum = *reinterpret_cast<int64_t *>(agg_cell);
       int64_t diff = 0;
       if (row_sel.is_empty()) {
-
         if (fmt == VEC_FIXED) {
-          ret = sum_diff<ObFixedLengthBase>(bound, diff, skip, static_cast<ObFixedLengthBase&>(columns),
-                                      bound.get_all_rows_active(), all_not_null);
+          ret = sum_diff<ObFixedLengthBase>(*param_expr, ctx, bound, diff, skip,
+                                            static_cast<ObFixedLengthBase &>(columns),
+                                            bound.get_all_rows_active(), all_not_null);
         } else if (fmt == VEC_CONTINUOUS) {
-          ret = sum_diff<ObContinuousFormat>(bound, diff, skip, static_cast<ObContinuousFormat&>(columns),
-                                       bound.get_all_rows_active(), all_not_null);
+          ret = sum_diff<ObContinuousFormat>(*param_expr, ctx, bound, diff, skip,
+                                             static_cast<ObContinuousFormat &>(columns),
+                                             bound.get_all_rows_active(), all_not_null);
         } else if (fmt == VEC_DISCRETE) {
-          ret = sum_diff<ObDiscreteFormat>(bound, diff, skip, static_cast<ObDiscreteFormat&>(columns),
-                                     bound.get_all_rows_active(), all_not_null);
-        } else if (fmt == VEC_UNIFORM) {
-          ret = sum_diff<ObUniformFormat<false>>(bound, diff, skip, static_cast<ObUniformFormat<false>&>(columns),
+          ret = sum_diff<ObDiscreteFormat>(*param_expr, ctx, bound, diff, skip,
+                                           static_cast<ObDiscreteFormat &>(columns),
                                            bound.get_all_rows_active(), all_not_null);
+        } else if (fmt == VEC_UNIFORM) {
+          ret = sum_diff<ObUniformFormat<false>>(*param_expr, ctx, bound, diff, skip,
+                                                 static_cast<ObUniformFormat<false> &>(columns),
+                                                 bound.get_all_rows_active(), all_not_null);
         } else if (fmt == VEC_UNIFORM_CONST) {
-          ret = sum_diff<ObUniformFormat<true>>(bound, diff, skip, static_cast<ObUniformFormat<true>&>(columns),
-                                          bound.get_all_rows_active(), all_not_null);
+          ret = sum_diff<ObUniformFormat<true>>(*param_expr, ctx, bound, diff, skip,
+                                                static_cast<ObUniformFormat<true> &>(columns),
+                                                bound.get_all_rows_active(), all_not_null);
         }
       } else {
         if (fmt == VEC_FIXED) {
-          ret = sum_diff_row_sel<ObFixedLengthBase>(diff, row_sel, static_cast<ObFixedLengthBase&>(columns));
+          ret = sum_diff_row_sel<ObFixedLengthBase>(*param_expr, ctx, diff, row_sel,
+                                                    static_cast<ObFixedLengthBase &>(columns));
         } else if (fmt == VEC_CONTINUOUS) {
-          ret = sum_diff_row_sel<ObContinuousFormat>(diff, row_sel, static_cast<ObContinuousFormat&>(columns));
+          ret = sum_diff_row_sel<ObContinuousFormat>(*param_expr, ctx, diff, row_sel,
+                                                     static_cast<ObContinuousFormat &>(columns));
         } else if (fmt == VEC_DISCRETE) {
-          ret = sum_diff_row_sel<ObDiscreteFormat>(diff, row_sel, static_cast<ObDiscreteFormat&>(columns));
+          ret = sum_diff_row_sel<ObDiscreteFormat>(*param_expr, ctx, diff, row_sel,
+                                                   static_cast<ObDiscreteFormat &>(columns));
         } else if (fmt == VEC_UNIFORM) {
-          ret = sum_diff_row_sel<ObUniformFormat<false>>(diff, row_sel, static_cast<ObUniformFormat<false>&>(columns));
+          ret = sum_diff_row_sel<ObUniformFormat<false>>(
+            *param_expr, ctx, diff, row_sel, static_cast<ObUniformFormat<false> &>(columns));
         } else if (fmt == VEC_UNIFORM_CONST) {
-          ret = sum_diff_row_sel<ObUniformFormat<true>>(diff, row_sel, static_cast<ObUniformFormat<true>&>(columns));
+          ret = sum_diff_row_sel<ObUniformFormat<true>>(
+            *param_expr, ctx, diff, row_sel, static_cast<ObUniformFormat<true> &>(columns));
         }
       }
       if (OB_SUCC(ret)) {
@@ -356,18 +417,28 @@ public:
   {
     int ret = OB_SUCCESS;
     int64_t &sum = *reinterpret_cast<int64_t *>(agg_cell);
+    ObExpr *param_expr = agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_.at(0);
     if (is_null) {
       sum += sizeof(ObDatum);
     } else if (!has_lob_header) {
-      data += sizeof(ObDatum) + data_len;
-    } else {
+      sum += sizeof(ObDatum) + data_len;
+    } else if (OB_LIKELY(!param_expr->is_nested_expr())) {
       ObString lob_data(data_len, data);
       ObLobLocatorV2 locator(lob_data, true);
       int64_t lob_data_byte_len = 0;
       if (OB_FAIL(locator.get_lob_data_byte_len(lob_data_byte_len))) {
         SQL_LOG(WARN, "get lob data byte length failed", K(ret));
       } else {
-        data += sizeof(ObDatum) + static_cast<int64_t>(lob_data_byte_len);
+        sum += sizeof(ObDatum) + static_cast<int64_t>(lob_data_byte_len);
+      }
+    } else {
+      int64_t collection_cell_len = 0;
+      int32_t batch_idx = agg_ctx.eval_ctx_.get_batch_idx();
+      if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(*param_expr, agg_ctx.eval_ctx_,
+                                                               batch_idx, collection_cell_len))) {
+        SQL_LOG(WARN, "calc nested expr data size failed", K(ret));
+      } else {
+        sum += sizeof(ObDatum) + collection_cell_len;
       }
     }
     return ret;

@@ -64,6 +64,11 @@ ob_set_subtarget(ob_share_extra ALONE
   datum/ob_datum_funcs.cpp
 )
 
+ob_set_subtarget(ob_share vector
+  vector/ob_discrete_format.cpp
+  vector/ob_continuous_format.cpp
+)
+
 ob_set_subtarget(ob_share ALONE
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp

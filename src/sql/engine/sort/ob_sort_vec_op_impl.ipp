@@ -564,9 +564,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_row(
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
     ObExpr *expr = exprs.at(i);
     ObIVector *vec = expr->get_vector(ctx);
-    if (expr->is_nested_expr() && !is_uniform_format(vec->get_format())) {
-      OZ(ObCompactRow::nested_vec_to_row(*expr, ctx, row_meta, stored_row, batch_idx, i));
-    } else if (OB_FAIL(vec->to_row(row_meta, stored_row, batch_idx, i))) {
+    if (OB_FAIL(vec->to_row(row_meta, stored_row, batch_idx, i))) {
       SQL_ENG_LOG(WARN, "failed to to row", K(ret), K(expr));
     }
   }
@@ -858,11 +856,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::attach_rows(const ObExprPtrI
     } else {
       ObExpr *e = exprs.at(col_idx);
       ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-      if (e->is_nested_expr() && !is_uniform_format(vec->get_format())) {
-        if (OB_FAIL(ObArrayExprUtils::nested_expr_from_rows(*e, ctx, row_meta, srows, read_rows, col_idx))) {
-          LOG_WARN("fail to do nested expr from rows", K(ret));
-        }
-      } else if (VEC_UNIFORM_CONST != vec->get_format()) {
+      if (VEC_UNIFORM_CONST != vec->get_format()) {
         ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
         exprs.at(col_idx)->set_evaluated_projected(ctx);
       }

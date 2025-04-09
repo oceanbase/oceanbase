@@ -289,14 +289,11 @@ int ObExprArrayContains::eval_array_contains_array_batch(const ObExpr &expr, ObE
           continue;                                                                                       \
         } else if (left_vec->is_null(idx)) {                                                              \
           is_null_res = true;                                                                             \
-        } else if (left_format == VEC_UNIFORM || left_format == VEC_UNIFORM_CONST) {                      \
+        } else {                                                                                          \
           ObString left = left_vec->get_string(idx);                                                      \
           if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, meta_id, left, arr_obj))) { \
             LOG_WARN("construct array obj failed", K(ret));                                               \
           }                                                                                               \
-        } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(                                      \
-                       tmp_allocator, ctx, *expr.args_[p0], meta_id, idx, arr_obj))) {                    \
-          LOG_WARN("construct array obj failed", K(ret));                                                 \
         }                                                                                                 \
         bool bret = false;                                                                                \
         if (OB_FAIL(ret)) {                                                                               \
@@ -351,14 +348,11 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
         continue;
       } else if (left_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (left_format == VEC_UNIFORM || left_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString left = left_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, left_meta_id, left, arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[p0], left_meta_id, idx, arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
@@ -369,17 +363,10 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
         res_vec->set_bool(idx, contains_null);
         eval_flags.set(idx);
       } else {
-        if (right_format == VEC_UNIFORM || right_format == VEC_UNIFORM_CONST) {
-          ObString right = right_vec->get_string(idx);
-          if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, arr_val))) {
-            LOG_WARN("construct array obj failed", K(ret));
-          }
-        } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                      tmp_allocator, ctx, *expr.args_[p1], right_meta_id, idx, arr_val))) {
-          LOG_WARN("construct array obj failed", K(ret));
-        }
         bool bret = false;
-        if (OB_FAIL(ret)) {
+        ObString right = right_vec->get_string(idx);
+        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, arr_val))) {
+          LOG_WARN("construct array obj failed", K(ret));
         } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, *arr_val, bret))) {
           LOG_WARN("array contains failed", K(ret));
         } else {

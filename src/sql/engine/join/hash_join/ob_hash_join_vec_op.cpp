@@ -2464,9 +2464,6 @@ int ObHashJoinVecOp::calc_hash_value_and_skip_null(const ObIArray<ObExpr*> &join
       ObExpr *expr = join_keys.at(idx); // expr ptr check in cg, not check here
       if (OB_FAIL(expr->eval_vector(eval_ctx_, *brs))) {
         LOG_WARN("eval failed", K(ret));
-      } else if (OB_UNLIKELY(expr->is_nested_expr()) &&
-                 OB_FAIL(expr->cast_to_uniform(brs->size_, eval_ctx_, brs->skip_))) {
-        LOG_WARN("nested expr cast to uniform failed", K(ret));
       } else {
         const bool is_batch_seed = (idx > 0);
         ObIVector *vector = expr->get_vector(eval_ctx_);

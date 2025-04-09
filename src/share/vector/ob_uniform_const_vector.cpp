@@ -13,13 +13,14 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_uniform_const_vector.h"
-
+#include "sql/engine/expr/ob_array_expr_utils.h"
 // init uniform const vectors
 
 namespace oceanbase
 {
 namespace common
 {
+DEF_SET_COLLECTION_PAYLOAD(false);
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_NULL>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_INTEGER>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_UINTEGER>>;

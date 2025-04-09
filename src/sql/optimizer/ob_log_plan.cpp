@@ -14739,6 +14739,9 @@ int ObLogPlan::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_condi
     if (OB_ISNULL(lexpr) || OB_ISNULL(rexpr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_UNLIKELY(lexpr->is_nested_expr() || rexpr->is_nested_expr())) {
+      // disable join filter for collection types
+      // do nothing
     } else if (rexpr->get_relation_ids().is_subset(table_set)) {
       if (OB_FAIL(join_filter_info.lexprs_.push_back(lexpr))) {
         LOG_WARN("failed to push back expr", K(ret));

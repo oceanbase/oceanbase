@@ -377,14 +377,11 @@ int ObExprArrayRemove::eval_array_remove_array_batch(
           continue;                                                                                                   \
         } else if (left_vec->is_null(idx)) {                                                                          \
           is_null_res = true;                                                                                         \
-        } else if (left_format == VEC_UNIFORM || left_format == VEC_UNIFORM_CONST) {                                  \
+        } else {                                                                                                      \
           ObString left = left_vec->get_string(idx);                                                                  \
           if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, meta_id, left, arr_obj))) {             \
             LOG_WARN("construct array obj failed", K(ret));                                                           \
           }                                                                                                           \
-        } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(                                                  \
-                       tmp_allocator, ctx, *expr.args_[0], meta_id, idx, arr_obj))) {                                 \
-          LOG_WARN("construct array obj failed", K(ret));                                                             \
         }                                                                                                             \
         if (OB_FAIL(ret)) {                                                                                           \
         } else if (is_null_res) {                                                                                     \
@@ -471,13 +468,11 @@ int ObExprArrayRemove::eval_array_remove_array_vector(const ObExpr &expr, ObEval
         continue;
       } else if (left_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (left_format == VEC_UNIFORM || left_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString left = left_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, meta_id, left, arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(tmp_allocator, ctx, *expr.args_[0], meta_id, idx, arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
@@ -487,13 +482,11 @@ int ObExprArrayRemove::eval_array_remove_array_vector(const ObExpr &expr, ObEval
           changed = false;
           res_arr_obj = arr_obj;
         }
-      } else if (right_format == VEC_UNIFORM || right_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString right = right_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, r_meta_id, right, arr_val))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(tmp_allocator, ctx, *expr.args_[1], r_meta_id, idx, arr_val))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
 
       if (OB_FAIL(ret)) {

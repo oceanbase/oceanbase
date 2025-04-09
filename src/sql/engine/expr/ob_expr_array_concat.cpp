@@ -275,14 +275,11 @@ int ObExprArrayConcat::eval_array_concat_vector(const ObExpr &expr, ObEvalCtx &c
         bool is_null = false;
         if (arr_vec[i]->is_null(idx)) {
           is_null = true;
-        } else if (arr_vec[i]->get_format() == VEC_UNIFORM || arr_vec[i]->get_format() == VEC_UNIFORM_CONST) {
+        } else {
           ObString arr_str = arr_vec[i]->get_string(idx);
           if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
             LOG_WARN("construct array obj failed", K(ret));
           }
-        } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                      tmp_allocator, ctx, *expr.args_[i], subschema_id, idx, src_arr))) {
-          LOG_WARN("construct array obj failed", K(ret));
         }
         if (OB_FAIL(ret) || is_null) {
         } else if (OB_FAIL(res_arr->insert_from(*src_arr))) {

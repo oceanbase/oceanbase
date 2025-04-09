@@ -11,6 +11,7 @@
  */
 
 #include "vector_basic_op.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 namespace oceanbase
 {
 namespace common
@@ -325,6 +326,19 @@ NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc)
   }
   }
   return res_func;
+}
+
+int calc_collection_hash_val(const ObObjMeta &meta, const void *data, ObLength len, hash_algo hash_func, uint64_t seed, uint64_t &hash_val)
+{
+  return sql::ObArrayExprUtils::calc_collection_hash_val(meta, data, len, hash_func, seed, hash_val);
+}
+
+int collection_compare(const ObObjMeta &l_meta, const ObObjMeta &r_meta,
+                       const void *l_v, const ObLength l_len,
+                       const void *r_v, const ObLength r_len,
+                       int &cmp_ret)
+{
+  return sql::ObArrayExprUtils::collection_compare(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret);
 }
 
 } // end namespace common

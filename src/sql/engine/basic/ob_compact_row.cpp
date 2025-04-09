@@ -207,7 +207,7 @@ int ObCompactRow::calc_row_size(const RowMeta &row_meta, const common::ObIArray<
       SQL_ENG_LOG(WARN, "fail to evel vector", K(ret), K(expr));
     } else if (reordered && row_meta.project_idx(col_idx) < row_meta.fixed_cnt_) {
       // continue, the size is computed in `fixed_size`
-    } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(ctx))) {
+    } else if (expr->is_nested_expr()) {
       int64_t len = 0;
       if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(*expr, ctx, row_idx, len))) {
         SQL_ENG_LOG(WARN, "fail to calc nested expr data size", K(ret));
@@ -395,61 +395,6 @@ int64_t ToStrCompactRow::to_string(char *buf, const int64_t buf_len) const
   }
   J_ARRAY_END();
   return pos;
-}
-
-int ObCompactRow::nested_vec_to_row(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta,
-                                        sql::ObCompactRow *stored_row, const uint64_t row_idx, const int64_t col_idx)
-{
-  int ret = OB_SUCCESS;
-  ObIVector *root_vec = expr.get_vector(ctx);
-  if (root_vec->is_null(row_idx)) {
-    stored_row->set_null(row_meta, col_idx);
-  } else {
-    int64_t offset = stored_row->offset(row_meta, col_idx);
-    char *row_buf = stored_row->payload();
-    int64_t cell_len = 0;
-    if (OB_FAIL(ObArrayExprUtils::nested_expr_to_row(expr, ctx, row_buf, offset, row_idx, cell_len))) {
-      LOG_WARN("nested expr to row failed", K(ret));
-    } else {
-      stored_row->update_var_offset(row_meta, col_idx, cell_len);
-    }
-  }
-  return ret;
-}
-
-int ObCompactRow::nested_vec_to_row(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta,
-                                    sql::ObCompactRow *stored_row, const uint64_t row_idx, const int64_t col_idx,
-                                    const int64_t remain_size, int64_t &row_size)
-{
-  int ret = OB_SUCCESS;
-  ObIVector *root_vec = expr.get_vector(ctx);
-  if (root_vec->is_null(row_idx)) {
-    stored_row->set_null(row_meta, col_idx);
-  } else {
-    int64_t offset = stored_row->offset(row_meta, col_idx);
-    char *row_buf = stored_row->payload();
-    int64_t cell_len = 0;
-    if (OB_FAIL(ObArrayExprUtils::nested_expr_to_row(expr, ctx, row_buf, offset, row_idx, cell_len, &remain_size))) {
-      LOG_WARN("nested expr to row failed", K(ret));
-    } else {
-      stored_row->update_var_offset(row_meta, col_idx, cell_len);
-      row_size += cell_len;
-    }
-  }
-  return ret;
-}
-
-int ObCompactRow::nested_vec_to_rows(const ObExpr &expr, ObEvalCtx &ctx, const RowMeta &row_meta,
-                                     ObCompactRow **stored_rows, const uint16_t selector[], const int64_t size, const int64_t col_idx)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < size && OB_SUCC(ret); i++) {
-    int64_t row_idx = selector[i];
-    if (OB_FAIL(nested_vec_to_row(expr, ctx, row_meta, stored_rows[i], row_idx, col_idx))) {
-      LOG_WARN("nested expr to row failed", K(ret), K(row_idx), K(size), K(col_idx));
-    }
-  }
-  return ret;
 }
 
 } // end namespace sql

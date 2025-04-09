@@ -22,6 +22,7 @@
 namespace oceanbase {
 namespace common {
 
+class ObIArrayType;
 enum ObNestedType {
   OB_BASIC_TYPE = 0,
   OB_ARRAY_TYPE = 1,
@@ -103,7 +104,8 @@ public:
 
   ObSqlCollectionInfo(ObIAllocator &allocator)
     : allocator_(allocator), name_len_(0),
-      name_def_(nullptr), collection_meta_(nullptr) {}
+      name_def_(nullptr), collection_meta_(nullptr),
+      coll_obj_(nullptr) {}
   ObSqlCollectionInfo(common::ObIAllocator *allocator)
     : ObSqlCollectionInfo(*allocator) {}
    virtual ~ObSqlCollectionInfo() {}
@@ -132,6 +134,8 @@ public:
   bool has_same_super_type(const ObSqlCollectionInfo &other) const;
   const ObDataType &get_basic_meta(uint32_t &depth) const { depth = 0; return collection_meta_->get_basic_meta(depth); }
   int parse_type_info();
+  OB_INLINE ObIArrayType * get_collection_obj() { return coll_obj_; }
+  OB_INLINE void set_collection_obj(ObIArrayType *coll_obj) { coll_obj_ = coll_obj; }
   int parse_collection_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth);
   int parse_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, bool is_root = false);
   int parse_vec_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint32_t &dim);
@@ -158,6 +162,7 @@ public:
   size_t name_len_;
   const char *name_def_;
   ObCollectionTypeBase *collection_meta_;
+  ObIArrayType *coll_obj_; // for vector format transform, read only
 } ObSqlCollectionInfo;
 
 } // namespace common

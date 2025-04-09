@@ -329,12 +329,6 @@ int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
   return ret;
 }
 
-int distribute_attrs_on_rich_format_columns(const int64_t row_count, const int64_t vec_offset,
-                                            sql::ObExpr &expr, sql::ObEvalCtx &eval_ctx)
-{
-  return ObArrayExprUtils::batch_dispatch_array_attrs(eval_ctx, expr, vec_offset, row_count);
-}
-
 int cast_obj(const common::ObObjMeta &src_meta,
              common::ObIAllocator &cast_allocator,
              common::ObObj &obj)
@@ -471,10 +465,6 @@ int fill_exprs_lob_locator(
           }
         }
       }
-    }
-    if (OB_SUCC(ret) && col_param.get_meta_type().is_collection_sql_type() &&
-        OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vector_offset, expr, eval_ctx))) {
-      STORAGE_LOG(WARN, "failed to dispatch collection cells", K(ret), K(row_cap), K(vector_offset));
     }
   }
   return ret;

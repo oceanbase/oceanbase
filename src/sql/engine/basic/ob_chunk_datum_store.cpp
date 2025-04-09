@@ -14,6 +14,7 @@
 
 #include "ob_chunk_datum_store.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 // for ObChunkStoreUtil
 
 namespace oceanbase
@@ -185,11 +186,20 @@ int ObChunkDatumStore::StoredRow::do_build(StoredRow *&sr,
           ObIVector *vec = expr->get_vector(ctx);
           const char *payload = NULL;
           ObLength len = 0;
-          vec->get_payload(vector_row_idx, payload, len);
-          ObDatum in_datum(payload, len, vec->is_null(vector_row_idx));
-          ret = UNSWIZZLING
-              ? deep_copy_unswizzling(in_datum, &datums[i], buf, buf_len, pos)
-              : datums[i].deep_copy(in_datum, buf, buf_len, pos);
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+          if (OB_UNLIKELY(expr->is_nested_expr())) {
+            if (OB_FAIL(ObArrayExprUtils::get_collection_payload(
+                  tmp_alloc_g.get_allocator(), ctx, *expr, vector_row_idx, payload, len))) {
+              LOG_WARN("get collection payload failed", K(ret));
+            }
+          } else {
+            vec->get_payload(vector_row_idx, payload, len);
+          }
+          if (OB_SUCC(ret)) {
+            ObDatum in_datum(payload, len, vec->is_null(vector_row_idx));
+            ret = UNSWIZZLING ? deep_copy_unswizzling(in_datum, &datums[i], buf, buf_len, pos) :
+                                datums[i].deep_copy(in_datum, buf, buf_len, pos);
+          }
         }
       } else {
         ObDatum *in_datum = NULL;

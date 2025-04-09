@@ -426,14 +426,18 @@ struct VectorHeader {
                                 ObDatum *datum,
                                 ObEvalInfo *eval_info);
   ObIVector *get_vector() { return reinterpret_cast<ObIVector *>(vector_buf_); }
+
   int assign(const VectorHeader &other)
   {
     int ret = OB_SUCCESS;
+    ObVectorBase *vec_base = static_cast<ObVectorBase *>(get_vector());
     format_ = other.format_;
     MEMCPY(vector_buf_, other.vector_buf_, common::ObIVector::MAX_VECTOR_STRUCT_SIZE);
     return ret;
   }
 
+private:
+  DISALLOW_COPY_AND_ASSIGN(VectorHeader);
 public:
   VectorFormat format_;
   char vector_buf_[common::ObIVector::MAX_VECTOR_STRUCT_SIZE];
@@ -769,7 +773,6 @@ public:
 
   void reset_attrs_datums(ObEvalCtx &ctx) const;
   OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
-  int assign_nested_vector(const ObExpr &other, ObEvalCtx &ctx);
 
 
   OB_INLINE void set_all_not_null(ObEvalCtx &ctx, const int64_t size) {
@@ -1409,7 +1412,7 @@ OB_INLINE int ObExpr::eval_vector(ObEvalCtx &ctx,
 
 OB_INLINE VectorFormat ObExpr::get_default_res_format() const {
   return !batch_result_ ? VEC_UNIFORM_CONST
-         : ((datum_meta_.type_ == ObNullType || datum_meta_.type_ == ObCollectionSQLType) ? VEC_UNIFORM
+         : (datum_meta_.type_ == ObNullType ? VEC_UNIFORM
          : (is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
 }
 

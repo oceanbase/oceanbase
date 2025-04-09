@@ -62,7 +62,7 @@ int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql:
     ObLength len = 0;
     ObEvalCtx::TempAllocGuard alloc_guard(eval_ctx);
     ObDatum res;
-    if (src_->is_nested_expr() && !is_uniform_format(src_vec->get_format())) {
+    if (src_->is_nested_expr()) {
       ObIAllocator *allocator = (0 == dst_->res_buf_off_) ? &eval_ctx.get_expr_res_alloc() : &alloc_guard.get_allocator();
       if (OB_FAIL(ObArrayExprUtils::get_collection_payload(*allocator, eval_ctx, *src_, batch_idx, payload, len))) {
         LOG_WARN("get nested collection payload failed", K(ret));
@@ -751,10 +751,6 @@ int ObOperator::output_expr_sanity_check_batch()
     } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&
               OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
       LOG_WARN("fail to do diagnosis", K(ret));
-    } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
-      if (OB_FAIL(output_nested_expr_sanity_check_batch(*expr))) {
-        LOG_WARN("check nested expr sanity failed", K(ret));
-      }
     } else if (OB_FAIL(output_expr_sanity_check_batch_inner(*expr))) {
       LOG_WARN("expr sanity check batch failed", K(ret));
     }

@@ -250,14 +250,11 @@ int ObExprArrayAppendCommon::eval_append_vector(const ObExpr &expr, ObEvalCtx &c
       }
       if (arr_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (arr_vec->get_format() == VEC_UNIFORM || arr_vec->get_format() == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_NOT_NULL(res_arr)) {
@@ -340,12 +337,8 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
       }
     } else {
       ObArrayNested *nested_arr = dynamic_cast<ObArrayNested *>(res_arr);
-      if (val_vec->get_format() == VEC_UNIFORM || val_vec->get_format() == VEC_UNIFORM_CONST) {
-        ObString val_arr_str = val_vec->get_string(idx);
-        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, val_subschema_id, val_arr_str, val_arr))) {
-          LOG_WARN("construct array obj failed", K(ret));
-        }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(tmp_allocator, ctx, param_expr, val_subschema_id, idx, val_arr))) {
+      ObString val_arr_str = val_vec->get_string(idx);
+      if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, val_subschema_id, val_arr_str, val_arr))) {
         LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_SUCC(ret) && OB_FAIL(nested_arr->push_back(*val_arr))) {

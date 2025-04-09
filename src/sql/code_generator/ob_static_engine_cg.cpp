@@ -2207,6 +2207,13 @@ int ObStaticEngineCG::fill_sort_info(
       }
     }
   }
+  // move check here
+  // sum(a) over (order by colllection_expr) is also prohibited
+  // and merge sort receive, etc.
+  // TODO: move checking to resolver/optimizer
+  if (OB_SUCC(ret) && OB_FAIL(check_not_support_cmp_type(collations, sort_exprs))) {
+    LOG_WARN("not supported cmp type", K(ret));
+  }
   return ret;
 }
 
@@ -2657,10 +2664,6 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
         LOG_WARN("failed to sort info", K(ret));
       } else if (OB_FAIL(fill_sort_info(addon_keys, spec.addon_collations_, spec.addon_exprs_))) {
         LOG_WARN("failed to sort info", K(ret));
-      } else if (OB_FAIL(check_not_support_cmp_type(spec.sk_collations_, spec.sk_exprs_))) {
-        LOG_WARN("not support cmp type", K(ret));
-      } else if (OB_FAIL(check_not_support_cmp_type(spec.addon_collations_, spec.addon_exprs_))) {
-        LOG_WARN("not support cmp type", K(ret));
       } else if (OB_FAIL(append_child_output_no_dup(is_store_sortkey_separately,
                                                     spec.get_child()->output_, spec.sk_exprs_,
                                                     spec.addon_exprs_))) {

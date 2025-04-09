@@ -956,22 +956,6 @@ void ObPxTransmitOp::fill_broad_cast_ptrs_fixed(int64_t slice_idx)
   }
 }
 
-int ObPxTransmitOp::prepare_for_nested_expr()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
-    ObExpr *expr = get_spec().output_.at(i);
-    if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
-      if (OB_FAIL(expr->nested_cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
-        LOG_WARN("failed to cast nested expr to uniform", K(ret));
-      } else if (!params_.vectors_.empty()) { // params_.vectors_ might be not used
-        params_.vectors_.at(i) = expr->get_vector(eval_ctx_);
-      }
-    }
-  }
-  return ret;
-}
-
 void ObPxTransmitOp::fill_batch_ptrs(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                                      ObSliceIdxCalc::EndIdxArray &end_idx_array)
 {
@@ -1119,8 +1103,6 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(prepare_for_nested_expr())) {
-    LOG_WARN("failed to prepare for nested expr", K(ret));
   } else if (OB_FAIL(ObTempRowStore::DtlRowBlock::calc_rows_size(params_.vectors_, params_.meta_,
                                                     brs_, params_.row_size_array_))) {
     LOG_WARN("failed to calc size", K(ret));
@@ -1135,13 +1117,15 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
         for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
           params_.return_rows_[i]->set_row_size(params_.row_size_array_[params_.selector_array_[i]]);
         }
-        for (int64_t idx = 0; idx < get_spec().output_.count(); ++idx) {
-          params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
+        for (int64_t idx = 0; OB_SUCC(ret) && idx < get_spec().output_.count(); ++idx) {
+          ret = params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
                                 params_.selector_array_, params_.selector_cnt_, idx);
         }
-        for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
-          if (nullptr != params_.blocks_[idx]) {
-            params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
+        if (OB_SUCC(ret)) {
+          for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
+            if (nullptr != params_.blocks_[idx]) {
+              params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
+            }
           }
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < params_.fallback_cnt_; i++) {
@@ -1176,13 +1160,15 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
         for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
           params_.return_rows_[i]->set_row_size(params_.row_size_array_[params_.selector_array_[i]]);
         }
-        for (int64_t idx = 0; idx < get_spec().output_.count(); ++idx) {
-          params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
+        for (int64_t idx = 0; OB_SUCC(ret) && idx < get_spec().output_.count(); ++idx) {
+          ret = params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
                                 params_.selector_array_, params_.selector_cnt_, idx);
         }
-        for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
-          if (nullptr != params_.blocks_[idx]) {
-            params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
+        if (OB_SUCC(ret)) {
+          for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
+            if (nullptr != params_.blocks_[idx]) {
+              params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
+            }
           }
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_ && params_.fallback_cnt_ > 0; i++) {

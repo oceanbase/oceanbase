@@ -250,14 +250,11 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       }
       if (arr_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_FALSE_IT(arr_idx = idx_vec->get_int(idx) - 1)) {

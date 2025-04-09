@@ -1524,11 +1524,8 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
             MEMCPY(dst, src, read_count * sizeof(ObDatum));
           }
           OZ(to->init_vector(eval_ctx, VEC_UNIFORM, read_count));
-        } else {
-          to_vec_header = from_vec_header;
-          if (from->is_nested_expr()) {
-            OZ(to->assign_nested_vector(*from, eval_ctx));
-          }
+        } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
+          LOG_WARN("assign vector header failed", K(ret));
         }
         column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
       }

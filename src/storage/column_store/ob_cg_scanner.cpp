@@ -790,10 +790,6 @@ int ObCGRowScanner::deep_copy_projected_rows(const int64_t datum_offset, const u
             }
           }
         }
-        if (expr->is_nested_expr() && OB_SUCC(ret) &&
-            OB_FAIL(storage::distribute_attrs_on_rich_format_columns(count, datum_offset, *expr, eval_ctx))) {
-          LOG_WARN("failed to dispatch collection cells", K(ret), K(i), K(count), K(datum_offset));
-        }
       } else if (OB_UNLIKELY(format != VEC_FIXED && format != VEC_DISCRETE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected data format", K(ret), K(format), KPC(expr));

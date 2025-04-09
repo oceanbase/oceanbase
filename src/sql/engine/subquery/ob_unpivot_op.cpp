@@ -506,11 +506,8 @@ int ObUnpivotV2Op::project_vector()
           MEMCPY(dst, src, child_brs_->size_ * sizeof(ObDatum));
         }
         OZ(expr->init_vector(eval_ctx_, VEC_UNIFORM, child_brs_->size_));
-      } else {
-        vec_header = arg_vec_header;
-        if (arg_expr->is_nested_expr()) {
-          OZ(expr->assign_nested_vector(*arg_expr, eval_ctx_));
-        }
+      } else if (OB_FAIL(vec_header.assign(arg_vec_header))) {
+        LOG_WARN("assign vector header failed", K(ret));
       }
     }
     expr->set_evaluated_projected(eval_ctx_);

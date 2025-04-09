@@ -226,23 +226,6 @@ public:
     return ret;
   }
 
-  inline int get_nested_expr_vec(RuntimeContext &agg_ctx, const ObExpr *param_expr, ObIVector *&param_vec)
-  {
-    int ret = OB_SUCCESS;
-    ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
-    param_vec = param_expr->get_vector(eval_ctx);
-    VectorFormat fmt = param_expr->get_format(eval_ctx);
-    if (param_expr->is_nested_expr()) {
-      if (param_expr->attrs_cnt_ != 3) { // only vector type supported
-        ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "unexpected attrs_cnt_", K(param_expr->attrs_cnt_));
-      } else if (fmt == common::VEC_DISCRETE || fmt == common::VEC_CONTINUOUS) {
-        param_vec = param_expr->attrs_[2]->get_vector(eval_ctx);
-      }
-    }
-    return ret;
-  }
-
   inline int add_batch_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
                                         RowSelector &row_sel, const int64_t batch_size,
                                         const int32_t agg_col_id) override
@@ -273,8 +256,11 @@ public:
       fmt = param_expr->get_format(eval_ctx);
     }
     if (OB_ISNULL(param_expr)) { // count(*)
+      ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
+      guard.set_batch_size(batch_size);
       for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
         int batch_idx = row_sel.index(i);
+        guard.set_batch_idx(batch_idx);
         char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
         if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, false, nullptr, 0,
                                               agg_col_id, agg_cell))) {
@@ -461,18 +447,12 @@ protected:
     const char *payload = nullptr;
     int32_t len = 0;
     Derived *derived_this = static_cast<Derived *>(this);
+    ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx.eval_ctx_);
+    guard.set_batch_size(batch_size);
     for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
       int64_t batch_idx = row_sel.index(i);
-      if (param_expr->is_nested_expr() && !is_uniform_format(ivec->get_format())) {
-        payload = nullptr;
-        if (OB_FAIL(ObArrayExprUtils::get_collection_payload(tmp_allocator, agg_ctx.eval_ctx_, *param_expr, batch_idx, payload, len))) {
-          SQL_LOG(WARN, "get nested collection payload failed", K(ret));
-        } else {
-          is_null = (payload == nullptr);
-        }
-      } else {
-        param_vec->get_payload(batch_idx, is_null, payload, len);
-      }
+      guard.set_batch_idx(batch_idx);
+      param_vec->get_payload(batch_idx, is_null, payload, len);
       char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, is_null, payload, len,
@@ -496,17 +476,12 @@ protected:
   {
     int ret = OB_SUCCESS;
     ObEvalCtx &ctx = agg_ctx.eval_ctx_;
-    ColumnFmt *columns = nullptr;
-    ObIVector *ivec = nullptr;
-    bool all_not_null = false;
+    ColumnFmt *columns = static_cast<ColumnFmt *>(param_expr.get_vector(ctx));
+    bool all_not_null = !columns->has_null();
     Derived &derived = *static_cast<Derived *>(this);
     void *tmp_res = derived.get_tmp_res(agg_ctx, agg_col_id, agg_cell);
     int64_t calc_info = derived.get_batch_calc_info(agg_ctx, agg_col_id, agg_cell);
-    if (OB_FAIL(get_nested_expr_vec(agg_ctx, &param_expr, ivec))) {
-      SQL_LOG(WARN, "get nested expr vec failed", K(ret));
-    } else if (FALSE_IT(columns = static_cast<ColumnFmt *>(ivec))) {
-    } else if (FALSE_IT(all_not_null = !columns->has_null())) {
-    } else if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
+    if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
       if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {

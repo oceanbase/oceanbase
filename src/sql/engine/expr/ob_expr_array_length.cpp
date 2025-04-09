@@ -174,12 +174,7 @@ int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr,
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("eval source array failed", K(ret));
   } else {
-    uint32 attr_count = expr.args_[0]->attrs_cnt_;
     ObIVector *arr_vec = expr.args_[0]->get_vector(ctx);
-    ObIVector *len_vec = nullptr;
-    if (attr_count >= 1) {
-      len_vec = expr.args_[0]->attrs_[0]->get_vector(ctx);
-    }
     char *raw_str = nullptr;
     uint32_t len = 0;
     ObIVector *res_vec = expr.get_vector(ctx);
@@ -190,35 +185,30 @@ int ObExprArrayLength::eval_array_length_vector(const ObExpr &expr,
         continue;
       }
       eval_flags.set(idx);
+      ObString arr_str = arr_vec->get_string(idx);
       if (arr_vec->is_null(idx)) {
         res_vec->set_null(idx);
       } else if (OB_FAIL(ObArrayExprUtils::get_array_type_by_subschema_id(ctx, subschema_id, arr_type))) {
         LOG_WARN("failed to get array type by subschema id", K(ret), K(subschema_id));
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
-        ObString arr_str = arr_vec->get_string(idx);
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+      } else if (!ObCollectionExprUtil::is_compact_fmt_cell(arr_str.ptr())) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected data format", K(ret));
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                             ObLongTextType,
                                             CS_TYPE_BINARY,
                                             true,
                                             arr_str))) {
-          LOG_WARN("fail to get real data.", K(ret), K(arr_str));
-        } else if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
-          raw_str = arr_str.ptr();
-          len = *reinterpret_cast<uint32_t *>(raw_str);
-          res_vec->set_uint(idx, static_cast<uint64_t>(len));
-        } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-          len = arr_str.length() / sizeof(float);
-          res_vec->set_uint(idx, static_cast<uint64_t>(len));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected array type", K(ret));
-        }
-      } else {
-        const char *payload = nullptr;
-        ObLength payload_len = 0;
-        len_vec->get_payload(idx, payload, payload_len);
-        len = *(reinterpret_cast<const uint32_t *>(payload));
+        LOG_WARN("fail to get real data.", K(ret), K(arr_str));
+      } else if (arr_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+        raw_str = arr_str.ptr();
+        len = *reinterpret_cast<uint32_t *>(raw_str);
         res_vec->set_uint(idx, static_cast<uint64_t>(len));
+      } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+        len = arr_str.length() / sizeof(float);
+        res_vec->set_uint(idx, static_cast<uint64_t>(len));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected array type", K(ret));
       }
     }
   }

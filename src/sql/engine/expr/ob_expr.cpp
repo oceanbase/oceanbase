@@ -904,12 +904,6 @@ int ObExpr::cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObBitVecto
   LOG_DEBUG("cast to uniform", K(this), K(*this), K(vec_header.format_), K(size), K(ctx), K(lbt()));
   if (VEC_INVALID == vec_header.format_) {
     // do nothing
-  } else if (is_nested_expr()) {
-    if (is_uniform_format(vec_header.format_)) {
-      // do nothing
-    } else if (OB_FAIL(nested_cast_to_uniform(size, ctx, skip))) {
-      LOG_WARN("nested cast to uniform failed", K(vec_header.format_), K(size), K(ctx), K(lbt()));
-    }
   } else {
     ObIVector *vec = reinterpret_cast<ObIVector *>(vec_header.vector_buf_);
     ObDatum *datums = locate_batch_datums(ctx);
@@ -1067,7 +1061,8 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
     int32_t *lens = get_discrete_vector_lens(ctx);
     ObBitVector &nulls = get_nulls(ctx);
     nulls.reset(size);
-    if (use_reserve_buf) {
+    // for collection expr, we need reset ptr to frame, so that we can write collection cells
+    if (use_reserve_buf || is_nested_expr()) {
       reset_discretes_ptr(ctx.frames_[frame_idx_], size, get_discrete_vector_ptrs(ctx));
     }
     switch(value_tc) {
@@ -1161,21 +1156,23 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
   }
   if (OB_SUCC(ret)) {
     ObVectorBase *vector = reinterpret_cast<ObVectorBase *> (vector_buf);
+    OB_ASSERT(size <= INT32_MAX);
     vector->set_max_row_cnt(size);
+    if (is_nested_expr()) {
+      vector->is_collection_expr_ = true;
+      vector->set_expr_and_ctx(const_cast<ObExpr *>(this), &ctx);
+    }
     for (uint32_t i = 0; i < attrs_cnt_ && OB_SUCC(ret); ++i) {
       VectorFormat attr_format = format;
       if (OB_ISNULL(attrs_[i])) {
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "Unexpected null attr", K(ret), K(i));
-      } else if (format == VEC_UNIFORM_CONST ||  format == VEC_UNIFORM) {
-        // do nothing
       } else {
         attr_format = i == 0 ? attrs_[i]->get_default_res_format() : format;
         if (OB_FAIL(attrs_[i]->init_vector(ctx, attr_format, size, use_reserve_buf))) {
           SQL_LOG(WARN, "Failed to init vector", K(ret), K(i), K(format), K(size));
         }
       }
-
     }
   }
   return ret;
@@ -1195,30 +1192,6 @@ int ObExpr::nested_cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObB
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObArrayExprUtils::transform_coll_to_uniform(ctx, *this, size, skip))) {
     SQL_LOG(WARN, "failed to cast array to uniform", K(ret), K(size));
-  }
-  return ret;
-}
-
-int ObExpr::assign_nested_vector(const ObExpr &other, ObEvalCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  if (!is_nested_expr() || !other.is_nested_expr()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected expr type", K(ret));
-  } else if (attrs_cnt_ != other.attrs_cnt_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected expr type", K(ret), K(attrs_cnt_), K(other.attrs_cnt_ ));
-  }
-  for (uint32_t i = 0; OB_SUCC(ret) && i < attrs_cnt_; ++i) {
-    VectorHeader &to_attr_vec_header = attrs_[i]->get_vector_header(ctx);
-    VectorHeader &from_attr_vec_header = other.attrs_[i]->get_vector_header(ctx);
-    if (is_uniform_format(from_attr_vec_header.format_)
-        || is_uniform_format(to_attr_vec_header.format_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected format type", K(ret), K(from_attr_vec_header.format_), K(to_attr_vec_header.format_));
-    } else {
-      to_attr_vec_header = from_attr_vec_header;
-    }
   }
   return ret;
 }
@@ -1635,7 +1608,7 @@ int ToStringExprRowVec::meta_to_string(char *buf, const int64_t buf_len) const
         if (NULL != skip_ && OB_FAIL(expr->eval_vector(ctx_, *skip_, bound_))) {
           LOG_WARN("fail to eval_vector", K(ret));
         } else {
-          const VectorHeader header = expr->get_vector_header(ctx_);
+          const VectorHeader &header = expr->get_vector_header(ctx_);
           switch (header.format_) {
             case VEC_FIXED: {
               J_KV("format", "VEC_FIXED");
@@ -1711,7 +1684,7 @@ DEF_TO_STRING(ToStrVectorHeader)
   if (NULL != skip_ && OB_FAIL(expr_.eval_vector(ctx_, *skip_, bound_))) {
     LOG_WARN("fail to eval_vector", K(ret));
   } else {
-    const VectorHeader header = expr_.get_vector_header(ctx_);
+    const VectorHeader &header = expr_.get_vector_header(ctx_);
     J_OBJ_START();
     switch (header.format_) {
     case VEC_FIXED: {
@@ -1754,7 +1727,7 @@ DEF_TO_STRING(ToStringExprRowVec)
     const ObExpr *expr = exprs_.at(i);
     if (OB_LIKELY(expr != NULL)) {
       if (expr->enable_rich_format()) {
-        const VectorHeader header = expr->get_vector_header(ctx_);
+        const VectorHeader &header = expr->get_vector_header(ctx_);
         switch (header.format_) {
           case VEC_FIXED: {
             pos +=
@@ -1800,7 +1773,7 @@ DEF_TO_STRING(ToStringExprRowVec)
     const ObExpr *expr = exprs_.at(i);
     if (OB_LIKELY(expr != NULL)) {
       if (expr->enable_rich_format()) {
-        const VectorHeader header = expr->get_vector_header(ctx_);
+        const VectorHeader &header = expr->get_vector_header(ctx_);
         switch (header.format_) {
           case VEC_FIXED: {
             pos += value_to_string_helper<ObFixedLengthBase>(

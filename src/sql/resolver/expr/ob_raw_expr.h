@@ -2091,6 +2091,8 @@ public:
   int64_t get_local_session_var_id() { return local_session_var_id_; }
   int fast_check_status(uint64_t n = 0xFFFF) const;
   int64_t get_attr_count() const { return attr_exprs_.count(); }
+
+  bool is_nested_expr() const { return attr_exprs_.count() > 0; }
   const ObRawExpr *get_attr_expr(int64_t index) const;
   ObRawExpr *get_attr_expr(int64_t index);
   common::ObIArray<ObRawExpr *> &get_attr_exprs() { return attr_exprs_; }

@@ -117,32 +117,12 @@ struct ObNestedVectorCmpFunc
     ObIArrayType *right_obj = NULL;
     ObIArrayType *res_obj = NULL;
     ObString res_str;
-    if (l_vec->get_format() == VEC_UNIFORM || l_vec->get_format() == VEC_UNIFORM_CONST) {
-      ret = construct_param(tmp_allocator, ctx, left_meta_id, left, left_obj);
-    } else {
-      ret = construct_attr_param(tmp_allocator, ctx, *expr.args_[0], left_meta_id, idx, left_obj);
-    }
-    if (OB_FAIL(ret)) {
-    } else if (r_vec->get_format() == VEC_UNIFORM || r_vec->get_format() == VEC_UNIFORM_CONST) {
-      ret = construct_param(tmp_allocator, ctx, right_meta_id, right, right_obj);
-    } else {
-      ret = construct_attr_param(tmp_allocator, ctx, *expr.args_[1], right_meta_id, idx, right_obj);
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(construct_param(tmp_allocator, ctx, left_meta_id, left, left_obj))) {
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
+    } else if (OB_FAIL(construct_param(tmp_allocator, ctx, right_meta_id, right, right_obj))) {
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
     } else if (OB_FAIL(left_obj->compare(*right_obj, cmp_ret))) {
       SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
-    }
-    return ret;
-  }
-
-  static int construct_attr_param(ObIAllocator &alloc, ObEvalCtx &ctx, ObExpr &param_expr,
-                                  const uint16_t meta_id, int64_t row_idx, ObIArrayType *&param_obj)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, param_obj))) {
-      LOG_WARN("construct array obj failed", K(ret));
-    } else if (OB_FAIL(ObArrayExprUtils::assemble_array_attrs(ctx, param_expr, row_idx, param_obj))) {
-      LOG_WARN("assemble array attrs failed", K(ret));
     }
     return ret;
   }
@@ -150,7 +130,7 @@ struct ObNestedVectorCmpFunc
   static int construct_param(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id,
                               ObString &str_data, ObIArrayType *&param_obj)
   {
-    return ObArrayExprUtils::get_array_obj(alloc, ctx, meta_id, str_data, param_obj);
+    return ObNestedVectorFunc::construct_param(alloc, ctx, meta_id, str_data, param_obj);
   }
 
   static int construct_res_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id, ObIArrayType *&res_obj)

@@ -73,10 +73,7 @@ int ObSortKeyFetcher::init(const common::ObIArray<ObExpr *> &sk_exprs,
       const ObSortFieldCollation &sort_collation = sort_collations.at(i);
       const ObExpr *e = sk_exprs.at(sort_collation.field_idx_);
       ObIVector *vec = e->get_vector(eval_ctx);
-      if (e->is_nested_expr()) {
-        ret = OB_NOT_SUPPORTED;
-        SQL_ENG_LOG(WARN, "nested expr is not supported", K(ret));
-      } else if (OB_FAIL(sk_vec_ptrs_.push_back(vec))) {
+      if (OB_FAIL(sk_vec_ptrs_.push_back(vec))) {
         SQL_ENG_LOG(WARN, "failed to add expr vector", K(ret));
       }
     }

@@ -49,14 +49,15 @@ public:
   OB_INLINE void set_payload(const int64_t idx,
                           const void *payload,
                           const ObLength length) override final;
-  OB_INLINE void set_payload_shallow(const int64_t idx,
-                                  const void *payload,
-                                  const ObLength length) override final {
-    if (OB_UNLIKELY(nulls_->at(idx))) {
-      unset_null(idx);
-    }
+  OB_INLINE void set_payload_shallow(const int64_t idx, const void *payload,
+                                     const ObLength length) override final
+  {
+    if (OB_UNLIKELY(nulls_->at(idx))) { unset_null(idx); }
     ptrs_[idx] = const_cast<char *>(static_cast<const char *>(payload));
     lens_[idx] = length;
+    if (OB_UNLIKELY(is_collection_expr())) {
+      set_collection_payload_shallow(idx, payload, length);
+    }
   }
 
   void set_datum(const int64_t idx, const ObDatum &datum) {
@@ -83,6 +84,18 @@ public:
                        const bool is_fixed_length_data, int64_t &row_size) const override final;
   DEF_VEC_READ_INTERFACES(ObDiscreteFormat);
   DEF_VEC_WRITE_INTERFACES(ObDiscreteFormat);
+
+private:
+  void set_collection_payload_shallow(const int64_t idx, const void *payload, const ObLength length);
+
+
+  int write_collection_to_row(const sql::RowMeta &row_meta, sql::ObCompactRow *stored_row,
+                              const uint64_t row_idx, const int64_t col_idx) const;
+
+  int write_collection_to_row(const sql::RowMeta &row_meta, sql::ObCompactRow *stored_row,
+                              const uint64_t row_idx, const int64_t col_idx,
+                              const int64_t remain_size, const bool is_fixed_length_data,
+                              int64_t &row_size) const;
 };
 
 OB_INLINE void ObDiscreteFormat::get_payload(const int64_t idx,
@@ -127,7 +140,7 @@ OB_INLINE int ObDiscreteFormat::from_rows(const sql::RowMeta &row_meta,
 {
   int ret = OB_SUCCESS;
   const int64_t var_idx = row_meta.var_idx(col_idx);
-  if (!has_null()) {
+  if (!has_null() && !is_collection_expr()) {
     for (int64_t i = 0; i < size; i++) {
       if (nullptr == stored_rows[i]) {
         continue;
@@ -167,7 +180,7 @@ OB_INLINE int ObDiscreteFormat::from_rows(const sql::RowMeta &row_meta,
 {
   int ret = OB_SUCCESS;
   const int64_t var_idx = row_meta.var_idx(col_idx);
-  if (!has_null()) {
+  if (!has_null() && !is_collection_expr()) {
     for (int64_t i = 0; i < size; i++) {
       if (nullptr == stored_rows[i]) {
         continue;
@@ -223,13 +236,17 @@ OB_INLINE int ObDiscreteFormat::to_row(const sql::RowMeta &row_meta, sql::ObComp
                                        const uint64_t row_idx, const int64_t col_idx) const
 {
   int ret = OB_SUCCESS;
-  if (is_null(row_idx)) {
-    stored_row->set_null(row_meta, col_idx);
+  if (OB_LIKELY(!is_collection_expr())) {
+    if (is_null(row_idx)) {
+      stored_row->set_null(row_meta, col_idx);
+    } else {
+      const char *payload = NULL;
+      ObLength len = 0;
+      get_payload(row_idx, payload, len);
+      stored_row->set_cell_payload(row_meta, col_idx, payload, len);
+    }
   } else {
-    const char *payload = NULL;
-    ObLength len = 0;
-    get_payload(row_idx, payload, len);
-    stored_row->set_cell_payload(row_meta, col_idx, payload, len);
+    ret = write_collection_to_row(row_meta, stored_row, row_idx, col_idx);
   }
   return ret;
 }
@@ -243,18 +260,23 @@ OB_INLINE int ObDiscreteFormat::to_row(const sql::RowMeta &row_meta, sql::ObComp
   int ret = OB_SUCCESS;
   UNUSED(is_fixed_length_data);
   int64_t need_size = 0;
-  if (is_null(row_idx)) {
-    stored_row->set_null(row_meta, col_idx);
-  } else {
-    const char *payload = NULL;
-    ObLength len = 0;
-    get_payload(row_idx, payload, len);
-    row_size += len;
-    if (len > remain_size) {
-      ret = OB_BUF_NOT_ENOUGH;
+  if (OB_LIKELY(!is_collection_expr())) {
+    if (is_null(row_idx)) {
+      stored_row->set_null(row_meta, col_idx);
     } else {
-      stored_row->set_cell_payload(row_meta, col_idx, payload, len);
+      const char *payload = NULL;
+      ObLength len = 0;
+      get_payload(row_idx, payload, len);
+      row_size += len;
+      if (len > remain_size) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else {
+        stored_row->set_cell_payload(row_meta, col_idx, payload, len);
+      }
     }
+  } else {
+    ret = write_collection_to_row(row_meta, stored_row, row_idx, col_idx, remain_size,
+                                  is_fixed_length_data, row_size);
   }
   return ret;
 }
