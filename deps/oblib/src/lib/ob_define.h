@@ -184,6 +184,9 @@ const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
 const uint64_t OBCG_DEFAULT_GROUP_ID = 0;
 const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
 const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+const uint64_t OB_INTERNAL_CATALOG_ID = 0;
+const char *const OB_INTERNAL_CATALOG_NAME = "internal";
+const char *const OB_INTERNAL_CATALOG_NAME_UPPER = "INTERNAL";
 
 OB_INLINE bool is_valid_group(const uint64_t group_id)
 {
@@ -313,6 +316,8 @@ const int64_t OB_MAX_DATABASE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_DAT
                                                          // reserve some bytes thus OB_MAX_DATABASE_NAME_LENGTH changes will probably not influence it
                                                          // it is defined in primary key, and can not change randomly.
 const int64_t OB_MAX_DATABASE_NAME_BUF_LENGTH = OB_MAX_DATABASE_NAME_LENGTH + 1;
+const int64_t OB_MAX_CATALOG_NAME_LENGTH = 128;
+const int64_t OB_MAX_CATALOG_NAME_BINARY_LENGTH = 2048;
 const int64_t OB_MAX_TABLEGROUP_NAME_LENGTH = 128; // OB code logic is greater than or equal to an error, so modify it to 65
 const int64_t OB_MAX_ALIAS_NAME_LENGTH = 255;// Compatible with mysql, 255 visible characters. Plus 256 bytes at the end of 0
 const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE = 128;  // Compatible with Oracle, error is reported when the logic is greater than
@@ -2153,6 +2158,10 @@ OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
   return is_virtual_tenant_id(tenant_id);
 }
+
+OB_INLINE bool is_internal_catalog_id(const uint64_t catalog_id) { return catalog_id == OB_INTERNAL_CATALOG_ID; }
+
+OB_INLINE bool is_external_catalog_id(const uint64_t catalog_id) { return is_valid_id(catalog_id) && catalog_id >= OB_MIN_USER_OBJECT_ID; }
 
 enum ObNameCaseMode
 {

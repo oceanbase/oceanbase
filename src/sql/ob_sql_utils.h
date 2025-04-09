@@ -70,6 +70,7 @@ class ObColumnRefRawExpr;
 struct ObPCResourceMapRule;
 class ObResolverParams;
 class ObGlobalHint;
+class ObSqlSchemaGuard;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -348,6 +349,11 @@ public:
   static int cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_guard,
                                 const ObSQLSessionInfo *session,
                                 common::ObString &name,
+                                ObIAllocator *allocator);
+  static int cvt_db_name_to_org(sql::ObSqlSchemaGuard &sql_schema_guard,
+                                const ObSQLSessionInfo *session,
+                                const uint64_t catalog_id,
+                                common::ObString &db_name,
                                 ObIAllocator *allocator);
   static int check_and_convert_table_name(const common::ObCollationType cs_type,
                                           const bool preserve_lettercase,

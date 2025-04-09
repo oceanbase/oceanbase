@@ -13829,7 +13829,6 @@ int ObLogPlan::get_part_exprs(uint64_t table_id,
   part_expr = NULL;
   subpart_expr = NULL;
   const ObDMLStmt *stmt = NULL;
-  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
   ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObSQLSessionInfo *session = NULL;
@@ -13837,14 +13836,11 @@ int ObLogPlan::get_part_exprs(uint64_t table_id,
       || OB_INVALID_ID == ref_table_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid id", K(ref_table_id), K(ret));
-  } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard()) ||
-             OB_ISNULL(sql_schema_guard = get_optimizer_context().get_sql_schema_guard()) ||
+  } else if (OB_ISNULL(sql_schema_guard = get_optimizer_context().get_sql_schema_guard()) ||
              OB_ISNULL(session = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret));
-  } else if (OB_FAIL(ObSqlSchemaGuard::get_table_schema(sql_schema_guard,
-                                                        schema_guard,
-                                                        session->get_effective_tenant_id(),
+  } else if (OB_FAIL(sql_schema_guard->get_table_schema(session->get_effective_tenant_id(),
                                                         ref_table_id,
                                                         table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));

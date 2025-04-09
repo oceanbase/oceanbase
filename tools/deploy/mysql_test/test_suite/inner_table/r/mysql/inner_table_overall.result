@@ -324,6 +324,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 531	__ft_dict_ik_utf8	0	201001	1
 532	__ft_stopword_ik_utf8	0	201001	1
 533	__ft_quantifier_ik_utf8	0	201001	1
+537	__all_catalog	0	201001	1
+538	__all_catalog_history	0	201001	1
+539	__all_catalog_privilege	0	201001	1
+540	__all_catalog_privilege_history	0	201001	1
 544	__all_pl_recompile_objinfo	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -817,7 +821,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12513	__all_virtual_cs_replica_tablet_stats	2	201001	1
 12514	__all_virtual_ddl_diagnose_info	2	201001	1
 12515	__all_virtual_plugin_info	2	201001	1
+12516	__all_virtual_catalog	2	201001	1
+12517	__all_virtual_catalog_history	2	201001	1
+12518	__all_virtual_catalog_privilege	2	201001	1
+12519	__all_virtual_catalog_privilege_history	2	201001	1
 12523	__all_virtual_pl_recompile_objinfo	2	201001	1
+12526	__tenant_virtual_show_create_catalog	2	201001	1
+12527	__tenant_virtual_show_catalog_databases	2	201001	1
 12536	__all_virtual_dynamic_partition_table	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1

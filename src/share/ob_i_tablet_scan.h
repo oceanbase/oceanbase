@@ -31,6 +31,7 @@ namespace share
 {
 class ObLSID;
 class ObExternalTablePartInfoArray;
+class ObExternalObjectCtx;
 }
 namespace sql
 {
@@ -393,6 +394,7 @@ ObVTableScanParam() :
       ext_file_column_exprs_(NULL),
       ext_column_convert_exprs_(NULL),
       partition_infos_(NULL),
+      external_object_ctx_(NULL),
       schema_guard_(NULL),
       auto_split_filter_type_(OB_INVALID_ID),
       auto_split_filter_(NULL),
@@ -478,6 +480,7 @@ ObVTableScanParam() :
   ObString external_file_location_;
   ObString external_file_access_info_;
   const share::ObExternalTablePartInfoArray *partition_infos_;
+  const share::ObExternalObjectCtx *external_object_ctx_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

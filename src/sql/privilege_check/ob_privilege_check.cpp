@@ -351,11 +351,17 @@ int add_col_priv_to_need_priv(
   int ret = OB_SUCCESS;
   ObStmtExprGetter visitor;
   ObNeedPriv need_priv;
+  need_priv.catalog_ = table_item.catalog_name_;
   need_priv.db_ = table_item.database_name_;
   need_priv.table_ = table_item.table_name_;
   need_priv.is_sys_table_ = table_item.is_system_table_;
   need_priv.is_for_update_ = table_item.for_update_;
   need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+  if (need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME) {
+    need_priv.priv_level_ = OB_PRIV_CATALOG_LEVEL;
+    need_priv.priv_set_ = OB_PRIV_USE_CATALOG;
+    ADD_NEED_PRIV(need_priv);
+  }
   const uint64_t table_id = table_item.table_id_;
   visitor.set_relation_scope();
   visitor.remove_scope(SCOPE_DML_COLUMN);
@@ -1235,11 +1241,17 @@ int get_dml_stmt_need_privs(
           } else if (TableItem::BASE_TABLE == table_item->type_
             || TableItem::ALIAS_TABLE == table_item->type_
             || table_item->is_view_table_) {
+            need_priv.catalog_ = table_item->catalog_name_;
             need_priv.db_ = table_item->database_name_;
             need_priv.table_ = table_item->table_name_;
             need_priv.is_sys_table_ = table_item->is_system_table_;
             need_priv.is_for_update_ = table_item->for_update_;
             need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+            if ((is_mysql_mode() && need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME)
+                || (is_oracle_mode() && need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME_UPPER)) {
+              need_priv.priv_level_ = OB_PRIV_CATALOG_LEVEL;
+              priv_set |= OB_PRIV_USE_CATALOG;
+            }
             //no check for information_schema select
             if (stmt::T_SELECT != dml_stmt->get_stmt_type()) {
               if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_item->database_name_))) {
@@ -2049,6 +2061,7 @@ int get_grant_stmt_need_privs(
     } else if (is_root_user(session_priv.user_id_)) {
       //not neccessary
     } else {
+      need_priv.catalog_ = stmt->get_catalog_name();
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
       need_priv.priv_set_ = stmt->get_priv_set() | OB_PRIV_GRANT;
@@ -2144,6 +2157,7 @@ int get_revoke_stmt_need_privs(
       }
       if (OB_FAIL(ret)) {
       } else if (need_add) { //mysql8.0 if exists dynamic privs, then need SYSTEM_USER dynamic privilge to revoke all, now use SUPER to do so.
+        need_priv.catalog_ = stmt->get_catalog_name();
         need_priv.db_ = stmt->get_database_name();
         need_priv.table_ = stmt->get_table_name();
         need_priv.priv_set_ = OB_PRIV_SUPER;
@@ -2158,6 +2172,7 @@ int get_revoke_stmt_need_privs(
     } else if (lib::is_mysql_mode() && stmt->get_revoke_all()) {
       //check privs at resolver
     } else {
+      need_priv.catalog_ = stmt->get_catalog_name();
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
       need_priv.priv_set_ = stmt->get_priv_set() | OB_PRIV_GRANT;
@@ -2303,6 +2318,39 @@ int get_role_privs(
       }
       case stmt::T_REVOKE_ROLE: {
         need_priv.priv_set_ = OB_PRIV_SUPER;
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int get_catalog_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    switch (stmt_type) {
+      case stmt::T_CREATE_CATALOG:
+      case stmt::T_ALTER_CATALOG:
+      case stmt::T_DROP_CATALOG: {
+        need_priv.priv_set_ = OB_PRIV_CREATE_CATALOG;
         need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
         ADD_NEED_PRIV(need_priv);
         break;

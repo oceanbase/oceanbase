@@ -18,6 +18,7 @@
 #include "common/ob_common_types.h"
 #include "share/object/ob_obj_cast.h"
 #include "share/schema/ob_column_schema.h"
+#include "sql/ob_sql_context.h"
 
 namespace oceanbase
 {
@@ -99,11 +100,13 @@ private:
   void reset_convert_ctx();
   int convert_output_row(ObNewRow *&cur_row);
   int get_all_columns_schema();
+  int init_sql_schema_guard_();
 protected:
   common::ObIAllocator *allocator_;
   common::ObSEArray<uint64_t, VT_COLUMN_COUNT> output_column_ids_;
   int64_t reserved_column_cnt_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
+  sql::ObSqlSchemaGuard sql_schema_guard_;
   const share::schema::ObTableSchema *table_schema_;
   const share::schema::ObTableSchema *index_schema_;
   common::ObNewRow cur_row_;

@@ -199,7 +199,7 @@ struct TableItem
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition));
+               K_(external_table_partition), K_(catalog_name));
 
   enum TableType
   {
@@ -350,6 +350,7 @@ struct TableItem
   // values table
   ObValuesTableDef *values_table_def_;
   // external table
+  common::ObString catalog_name_;
   common::ObString external_table_partition_;
   // sample scan infos
   SampleInfo *sample_info_;

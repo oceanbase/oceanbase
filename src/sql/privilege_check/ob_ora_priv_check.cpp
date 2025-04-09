@@ -1987,15 +1987,18 @@ int ObOraSysChecker::check_ora_obj_privs_or(
             } 
           }
         } 
-      } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)) {
-        /* directory对象的owner是sys */
+      } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)
+                 || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)) {
+        /* directory, catalog对象的owner是sys */
         OZ (check_obj_plist_or(guard, tenant_id, user_id, obj_type, obj_id,
                                   col_id, raw_obj_priv_array, role_id_array),
             tenant_id, user_id, obj_type, obj_id, col_id, raw_obj_priv_array, NO_OPTION);
       
         /* 调整错误码 */
         if (!OB_SUCC(ret)) {
-          ret = OB_ERR_DIRECTORY_ACCESS_DENIED;
+          ret = (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY))
+                ? OB_ERR_DIRECTORY_ACCESS_DENIED
+                : OB_ERR_NO_CATALOG_PRIVILEGE;
         }
       } else {
         ret = OB_ERR_NO_PRIVILEGE;
@@ -2138,15 +2141,18 @@ int ObOraSysChecker::check_ora_obj_priv(
               }
             }
           }
-        } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)) {
-          /* directory对象的owner是sys */
+        } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)
+                   || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)) {
+          /* directory, catalog对象的owner是sys */
           OZ (check_obj_p1(guard, tenant_id, user_id, obj_type,
                           obj_id, col_id, raw_obj_priv, NO_OPTION, role_id_array),
               tenant_id, user_id, obj_type, obj_id, col_id, raw_obj_priv, NO_OPTION);
         
           /* 调整错误码 */
           if (!OB_SUCC(ret)) {
-            ret = OB_ERR_DIRECTORY_ACCESS_DENIED;
+            ret = (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY))
+                  ? OB_ERR_DIRECTORY_ACCESS_DENIED
+                  : OB_ERR_NO_CATALOG_PRIVILEGE;
           }
         } else {
           ret = OB_TABLE_NOT_EXIST;
@@ -2408,6 +2414,12 @@ int ObOraSysChecker::check_ora_ddl_priv(
       }
       case stmt::T_DROP_MLOG: {
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
+        break;
+      }
+      case stmt::T_CREATE_CATALOG:
+      case stmt::T_ALTER_CATALOG:
+      case stmt::T_DROP_CATALOG: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_CATALOG);
         break;
       }
       default: {

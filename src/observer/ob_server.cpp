@@ -42,6 +42,7 @@
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
+#include "share/catalog/ob_cached_catalog_meta_getter.h"
 #include "share/ob_server_blacklist.h"
 #include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
@@ -437,6 +438,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
+    } else if (OB_FAIL(ObCachedCatalogSchemaMgr::get_instance().init())) {
+      LOG_ERROR("init ObCachedCatalogSchemaMgr failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
     } else if (OB_FAIL(startup_accel_handler_.init(SERVER_ACCEL))) {

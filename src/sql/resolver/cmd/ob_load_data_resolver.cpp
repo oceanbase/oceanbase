@@ -18,6 +18,7 @@
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
 #include "share/schema/ob_part_mgr_util.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase
 {
@@ -163,6 +164,7 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     ObLoadArgument &load_args = load_stmt->get_load_arguments();
     uint64_t database_id = session_info_->get_database_id();
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    ObString catalog_name;
     ObString database_name;
     ObString table_name;
     const ObTableSchema *tschema = nullptr;
@@ -172,8 +174,12 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
     } else if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[ENUM_TABLE_NAME],
                                                    table_name,
-                                                   database_name))) {
-      SQL_RESV_LOG(WARN, "failed to resolve table name", K(table_name), K(database_name), K(ret));
+                                                   database_name,
+                                                   catalog_name))) {
+      SQL_RESV_LOG(WARN, "failed to resolve table name", K(table_name), K(database_name), K(catalog_name), K(ret));
+    } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data into external catalog is");
     } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
                                                            database_name,
                                                            table_name,
@@ -1437,6 +1443,7 @@ int ObLoadDataResolver::check_if_table_exists(uint64_t tenant_id,
                                               uint64_t& table_id)
 {
   int ret = OB_SUCCESS;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID; // not support in catalog now, using fixed value instead
   uint64_t database_id = OB_INVALID_ID;
   bool is_table_exist = false;
   bool is_index_table = false;
@@ -1449,6 +1456,7 @@ int ObLoadDataResolver::check_if_table_exists(uint64_t tenant_id,
   } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
     LOG_WARN("get database id failed", K(ret));
   } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
+                                                         catalog_id,
                                                          database_id,
                                                          table_name,
                                                          is_index_table,

@@ -4572,6 +4572,8 @@ PRIV_DROP_ROLE	varchar(3)	NO
 PRIV_TRIGGER	varchar(3)	NO			
 PRIV_ENCRYPT	varchar(3)	NO			
 PRIV_DECRYPT	varchar(3)	NO			
+PRIV_CREATE_CATALOG	varchar(3)	NO			
+PRIV_USE_CATALOG	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_USERS limit 1);
 cnt
 1

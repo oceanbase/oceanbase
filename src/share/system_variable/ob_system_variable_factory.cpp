@@ -563,6 +563,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
   "_clear_last_archive_timestamp",
   "_create_audit_purge_job",
+  "_current_default_catalog",
   "_drop_audit_purge_job",
   "_enable_mysql_pl_priv_check",
   "_enable_old_charset_aggregation",
@@ -1401,6 +1402,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
   SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP,
   SYS_VAR__CREATE_AUDIT_PURGE_JOB,
+  SYS_VAR__CURRENT_DEFAULT_CATALOG,
   SYS_VAR__DROP_AUDIT_PURGE_JOB,
   SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK,
   SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
@@ -3067,6 +3069,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "mview_refresh_dop",
   "enable_optimizer_rowgoal",
   "ob_ivf_nprobes",
+  "_current_default_catalog",
   "ob_enable_ps_parameter_anonymous_block",
   "ob_hnsw_extra_info_max_size",
   "_push_join_predicate"
@@ -4106,6 +4109,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarMviewRefreshDop)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
         + sizeof(ObSysVarObIvfNprobes)
+        + sizeof(ObSysVarCurrentDefaultCatalog)
         + sizeof(ObSysVarObEnablePsParameterAnonymousBlock)
         + sizeof(ObSysVarObHnswExtraInfoMaxSize)
         + sizeof(ObSysVarPushJoinPredicate)
@@ -11603,6 +11607,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObIvfNprobes));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCurrentDefaultCatalog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCurrentDefaultCatalog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__CURRENT_DEFAULT_CATALOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCurrentDefaultCatalog));
       }
     }
     if (OB_SUCC(ret)) {
@@ -20791,6 +20804,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCurrentDefaultCatalog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCurrentDefaultCatalog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCurrentDefaultCatalog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCurrentDefaultCatalog", K(ret));
       }
       break;
     }

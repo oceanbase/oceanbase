@@ -14,6 +14,7 @@
 #include "share/schema/ob_schema_printer.h"
 
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/ob_sql_context.h"
 #include "sql/parser/ob_parser.h"
 #include "pl/ob_pl_resolver.h"
 #include "share/schema/ob_mview_info.h"
@@ -65,14 +66,14 @@ int ObSchemaPrinter::print_table_definition(const uint64_t tenant_id,
   const char* prefix_arr[4] = {"", " TEMPORARY", " GLOBAL TEMPORARY", " EXTERNAL"};
   int prefix_idx = 0;
   bool is_oracle_mode = false;
-  if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_id, table_schema))) {
+  if (OB_FAIL(get_table_schema_(tenant_id, table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id));
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
     SHARE_SCHEMA_LOG(WARN, "Unknow table", K(ret), K(table_id));
   } else if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle compat mode", KR(ret), K(table_id));
-  } else if (OB_FAIL(schema_guard_.get_database_schema(tenant_id, table_schema->get_database_id(), db_schema))) {
+  } else if (OB_FAIL(get_database_schema_(tenant_id, table_schema->get_database_id(), db_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to get database schema", K(ret), K(tenant_id));
   } else if (NULL == db_schema) {
     ret = OB_ERR_UNEXPECTED;
@@ -1359,10 +1360,7 @@ int ObSchemaPrinter::print_table_definition_rowkeys(const ObTableSchema &table_s
         SHARE_SCHEMA_LOG(WARN, "fail to print PRIMARY KEY(", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(print_rowkey_info(rowkey_info,
-                                                  table_schema.get_tenant_id(),
-                                                  table_schema.get_table_id(),
-                                                  buf, buf_len, pos))) {
+    if (OB_SUCC(ret) && OB_FAIL(print_rowkey_info(table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print rowkey info", K(ret));
     }
     if (OB_FAIL(ret)) {
@@ -1383,14 +1381,15 @@ int ObSchemaPrinter::print_table_definition_rowkeys(const ObTableSchema &table_s
 }
 
 int ObSchemaPrinter::print_rowkey_info(
-    const ObRowkeyInfo& rowkey_info,
-    const uint64_t tenant_id,
-    const uint64_t table_id,
+    const ObTableSchema &table_schema,
     char* buf,
     const int64_t& buf_len,
     int64_t& pos) const
 {
   int ret = OB_SUCCESS;
+  const ObRowkeyInfo& rowkey_info = table_schema.get_rowkey_info();
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t table_id = table_schema.get_table_id();
   ObArenaAllocator allocator("PrintRowkeyInfo");
   bool is_first_col = true;
   bool is_oracle_mode = false;
@@ -1401,10 +1400,7 @@ int ObSchemaPrinter::print_rowkey_info(
   for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_info.get_size(); j++) {
     const ObColumnSchemaV2* col = NULL;
     ObString new_col_name;
-    if (NULL == (col = schema_guard_.get_column_schema(
-                tenant_id,
-                table_id,
-                rowkey_info.get_column(j)->column_id_))) {
+    if (NULL == (col = table_schema.get_column_schema(rowkey_info.get_column(j)->column_id_))) {
       ret = OB_ERR_BAD_FIELD_ERROR;
       SHARE_SCHEMA_LOG(WARN, "fail to get column", KR(ret), K(tenant_id),
                        "column_id", rowkey_info.get_column(j)->column_id_);
@@ -5668,10 +5664,7 @@ int ObSchemaPrinter::print_constraint_definition(const ObDatabaseSchema &db_sche
     switch (cst->get_constraint_type()) {
       case CONSTRAINT_TYPE_PRIMARY_KEY:
         OX (BUF_PRINTF("PRIMARY KEY ("));
-        OZ (print_rowkey_info(table_schema.get_rowkey_info(),
-                              table_schema.get_tenant_id(),
-                              table_schema.get_table_id(),
-                              buf, buf_len, pos));
+        OZ (print_rowkey_info(table_schema, buf, buf_len, pos));
         OX (BUF_PRINTF(")"));
         break;
       case CONSTRAINT_TYPE_CHECK:
@@ -6543,6 +6536,35 @@ int ObSchemaPrinter::print_dynamic_partition_policy(
     SHARE_SCHEMA_LOG(WARN, "fail to do databuff printf", KR(ret));
   }
 
+  return ret;
+}
+
+void ObSchemaPrinter::set_sql_schema_guard(ObSqlSchemaGuard *sql_schema_guard)
+{
+  sql_schema_guard_ = sql_schema_guard;
+}
+
+int ObSchemaPrinter::get_database_schema_(const uint64_t tenant_id,
+                                          const uint64_t database_id,
+                                          const ObDatabaseSchema *&database_schema) const
+{
+  int ret = OB_SUCCESS;
+  if (sql_schema_guard_ != NULL) {
+    ret = sql_schema_guard_->get_database_schema(tenant_id, database_id, database_schema);
+  } else {
+    ret = schema_guard_.get_database_schema(tenant_id, database_id, database_schema);
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::get_table_schema_(const uint64_t tenant_id, const uint64_t table_id, const ObTableSchema *&table_schema) const
+{
+  int ret = OB_SUCCESS;
+  if (sql_schema_guard_ != NULL) {
+    ret = sql_schema_guard_->get_table_schema(tenant_id, table_id, table_schema);
+  } else {
+    ret = schema_guard_.get_table_schema(tenant_id, table_id, table_schema);
+  }
   return ret;
 }
 

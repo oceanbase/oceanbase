@@ -76,6 +76,10 @@ public:
                                const share::schema::ObNeedPriv &need_priv,
                                const bool is_grant,
                                common::ObSqlString &sql_string);
+  static int gen_catalog_priv_sql(const obrpc::ObAccountArg &account,
+                                  const share::schema::ObNeedPriv &need_priv,
+                                  const bool is_grant,
+                                  common::ObSqlString &sql_string);
   static int gen_db_priv_sql(const obrpc::ObAccountArg &account,
                              const share::schema::ObNeedPriv &need_priv,
                              const bool is_grant,

@@ -2746,6 +2746,7 @@ typedef enum ObItemType
   // macro block bloom filter
   T_ENABLE_MACRO_BLOCK_BLOOM_FILTER = 4786,
   T_DISTRIBUTE_HASH_LOCAL = 4787,
+
   // external catalog
   T_CREATE_CATALOG = 4788,
   T_ALTER_CATALOG = 4789,
@@ -2953,7 +2954,9 @@ typedef enum ObOutlineType
 
 #define IS_DML_STMT(op)  \
   ((op) == T_SELECT || (op) == T_DELETE || (op) == T_INSERT || (op) == T_MERGE || (op) == T_UPDATE || (op) == T_MULTI_INSERT)
-#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS || (op) == T_SHOW_CREATE_USER)
+#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS \
+                           || (op) == T_SHOW_CREATE_USER || (op) == T_SHOW_CATALOGS \
+                           || (op) == T_SHOW_CREATE_CATALOG)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

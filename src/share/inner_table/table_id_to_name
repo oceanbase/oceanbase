@@ -381,6 +381,12 @@
 # 531: __ft_dict_ik_utf8
 # 532: __ft_stopword_ik_utf8
 # 533: __ft_quantifier_ik_utf8
+# 537: __all_catalog
+# 538: __all_catalog_history
+# 538: __all_catalog  # BASE_TABLE_NAME
+# 539: __all_catalog_privilege
+# 540: __all_catalog_privilege_history
+# 540: __all_catalog_privilege  # BASE_TABLE_NAME
 # 544: __all_pl_recompile_objinfo
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1210,8 +1216,20 @@
 # 12513: __all_virtual_cs_replica_tablet_stats
 # 12514: __all_virtual_ddl_diagnose_info
 # 12515: __all_virtual_plugin_info
+# 12516: __all_virtual_catalog
+# 12516: __all_catalog  # BASE_TABLE_NAME
+# 12517: __all_virtual_catalog_history
+# 12517: __all_catalog  # BASE_TABLE_NAME
+# 12517: __all_catalog_history  # BASE_TABLE_NAME1
+# 12518: __all_virtual_catalog_privilege
+# 12518: __all_catalog_privilege  # BASE_TABLE_NAME
+# 12519: __all_virtual_catalog_privilege_history
+# 12519: __all_catalog_privilege  # BASE_TABLE_NAME
+# 12519: __all_catalog_privilege_history  # BASE_TABLE_NAME1
 # 12523: __all_virtual_pl_recompile_objinfo
 # 12523: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
+# 12526: __tenant_virtual_show_create_catalog
+# 12527: __tenant_virtual_show_catalog_databases
 # 12536: __all_virtual_dynamic_partition_table
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -1893,8 +1911,14 @@
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME1
 # 15493: ALL_VIRTUAL_CS_REPLICA_TABLET_STATS
 # 15493: __all_virtual_cs_replica_tablet_stats  # BASE_TABLE_NAME
+# 15494: ALL_VIRTUAL_CATALOG_REAL_AGENT
+# 15494: __all_catalog  # BASE_TABLE_NAME
+# 15495: ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT
+# 15495: __all_catalog_privilege  # BASE_TABLE_NAME
 # 15503: ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT
 # 15503: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
+# 15504: TENANT_VIRTUAL_SHOW_CREATE_CATALOG
+# 15504: __tenant_virtual_show_create_catalog  # BASE_TABLE_NAME
 # 15509: ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE
 # 15509: __all_virtual_dynamic_partition_table  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
@@ -3375,6 +3399,12 @@
 # 101112: __idx_524_idx_pkg_coll_name_id
 # 101112: idx_pkg_coll_name_id  # INDEX_NAME
 # 101112: __all_pkg_coll_type  # DATA_BASE_TABLE_NAME
+# 101113: __idx_537_idx_catalog_name
+# 101113: idx_catalog_name  # INDEX_NAME
+# 101113: __all_catalog  # DATA_BASE_TABLE_NAME
+# 101114: __idx_539_idx_catalog_priv_catalog_name
+# 101114: idx_catalog_priv_catalog_name  # INDEX_NAME
+# 101114: __all_catalog_privilege  # DATA_BASE_TABLE_NAME
 # 101104: __idx_482_idx_tablet_his_table_id_dest
 # 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
 # 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME
@@ -3702,3 +3732,11 @@
 # 15479: idx_pkg_coll_name_id_real_agent  # INDEX_NAME
 # 15479: __all_pkg_coll_type  # DATA_BASE_TABLE_NAME
 # 15479: ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15500: __idx_15494_idx_catalog_name_real_agent
+# 15500: idx_catalog_name_real_agent  # INDEX_NAME
+# 15500: __all_catalog  # DATA_BASE_TABLE_NAME
+# 15500: ALL_VIRTUAL_CATALOG_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
+# 15501: idx_catalog_priv_catalog_name_real_agent  # INDEX_NAME
+# 15501: __all_catalog_privilege  # DATA_BASE_TABLE_NAME
+# 15501: ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT  # DATA_BASE_TABLE_NAME1

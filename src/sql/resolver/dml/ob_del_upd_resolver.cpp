@@ -1503,6 +1503,10 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
   int ret = OB_SUCCESS;
   ObString table_name;
   ObString database_name;
+  ObString catalog_name;
+  uint64_t catalog_id = OB_INVALID_ID;
+  UNUSED(catalog_name);
+  UNUSED(catalog_id);
   uint64_t database_id = OB_INVALID_ID;
   uint64_t dblink_id = OB_INVALID_ID;
   ObString synonym_name;
@@ -1524,10 +1528,12 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
     LOG_WARN("relation_factor_node type should be T_RELATION_FACTOR", K(relation_factor_node->type_));
   } else if (OB_FAIL(resolve_table_relation_factor_wrapper(relation_factor_node,
                                                            dblink_id,
+                                                           catalog_id,
                                                            database_id,
                                                            table_name,
                                                            synonym_name,
                                                            synonym_db_name,
+                                                           catalog_name,
                                                            database_name,
                                                            dblink_name,
                                                            is_db_explicit,

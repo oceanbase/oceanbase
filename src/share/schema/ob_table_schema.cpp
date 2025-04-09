@@ -1735,6 +1735,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       micro_index_clustered_ = src_schema.micro_index_clustered_;
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
       mlog_tid_ = src_schema.mlog_tid_;
+      catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
@@ -3845,6 +3846,7 @@ void ObTableSchema::reset()
   rls_group_ids_.reset();
   rls_context_ids_.reset();
 
+  catalog_id_ = OB_INTERNAL_CATALOG_ID;
   external_file_format_.reset();
   external_file_location_.reset();
   external_file_location_access_info_.reset();

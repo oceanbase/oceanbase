@@ -355,6 +355,10 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_rls_group_keys_.clear();
   new_rls_context_keys_.clear();
   del_rls_context_keys_.clear();
+  new_catalog_keys_.clear();
+  del_catalog_keys_.clear();
+  new_catalog_priv_keys_.clear();
+  del_catalog_priv_keys_.clear();
 }
 
 int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
@@ -509,6 +513,14 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_rls_context_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_rls_context_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_rls_context_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_catalog_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create add_catalog_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_catalog_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_catalog_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_catalog_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create add_catalog_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_catalog_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_catalog_priv_keys hashset", K(bucket_size), K(ret));
   }
   return ret;
 }
@@ -628,6 +640,12 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_rls_context_keys_ : schema_keys.del_rls_context_keys_))) {
     LOG_WARN("fail to del rls_context operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_catalog_keys_ : schema_keys.del_catalog_keys_))) {
+    LOG_WARN("fail to del catalog operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_catalog_priv_keys_ : schema_keys.del_catalog_priv_keys_))) {
+    LOG_WARN("fail to del catalog_priv operation", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -3890,6 +3908,180 @@ int ObServerSchemaService::get_increment_rls_context_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_catalog_keys(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_CATALOG_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_CATALOG_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t catalog_id = schema_operation.catalog_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.catalog_id_ = catalog_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_CATALOG) {
+      hash_ret = schema_keys.new_catalog_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped catalog id", K(hash_ret), KR(ret));
+      } else {
+        const ObCatalogSchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.catalog_mgr_.get_schema_by_id(catalog_id, schema))) {
+          LOG_WARN("failed to get label security catalog schema", K(catalog_id), KR(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_catalog_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del catalog id", K(hash_ret), KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_catalog_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new catalog id", K(hash_ret), KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_catalog_keys_reversely(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_CATALOG_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_CATALOG_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.catalog_id_ = schema_operation.catalog_id_;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_CATALOG == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObCatalogSchema *schema = NULL;
+    if (OB_FAIL(schema_mgr.catalog_mgr_.get_schema_by_id(schema_key.catalog_id_, schema))) {
+      LOG_WARN("failed to get schema", K(schema_key), KR(ret));
+    } else if (NULL != schema) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_catalog_keys_,
+          schema_keys.new_catalog_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_catalog_priv_keys(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_CATALOG_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &catalog_name = schema_operation.catalog_name_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.user_id_ = user_id;
+    schema_key.catalog_name_ = catalog_name;
+    schema_key.schema_version_ = schema_version;
+    if (OB_DDL_DEL_CATALOG_PRIV == schema_operation.op_type_) { //delete
+      hash_ret = schema_keys.new_catalog_priv_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to del catalog_priv_key from new_catalog_priv_keys", KR(ret));
+      } else {
+        const ObCatalogPriv *catalog_priv = NULL;
+        if (OB_FAIL(schema_mgr.priv_mgr_.get_catalog_priv(
+            ObCatalogPrivSortKey(tenant_id, user_id, catalog_name), catalog_priv))) {
+          LOG_WARN("get catalog priv set failed", KR(ret));
+        } else if (NULL != catalog_priv) {
+          hash_ret = schema_keys.del_catalog_priv_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Failed to add catalog_priv_key to del_catalog_priv_keys", K(hash_ret), KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_catalog_priv_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to add new catalog_priv_key", K(hash_ret), KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_catalog_priv_keys_reversely(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_CATALOG_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &catalog_name = schema_operation.catalog_name_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.user_id_ = user_id;
+    schema_key.catalog_name_ = catalog_name;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_GRANT_REVOKE_CATALOG == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObCatalogPriv *catalog_priv = NULL;
+    if (OB_FAIL(schema_mgr.priv_mgr_.get_catalog_priv(schema_key.get_catalog_priv_key(), catalog_priv))) {
+      LOG_WARN("get catalog_priv failed",
+               "catalog_priv_key", schema_key.get_catalog_priv_key(),
+               KR(ret));
+    } else if (NULL != catalog_priv) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_catalog_priv_keys_,
+          schema_keys.new_catalog_priv_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // Currently only the full tenant schema of the system tenant is cached
 int ObServerSchemaService::add_tenant_schemas_to_cache(const TenantKeys &tenant_keys,
                                                        ObISQLClient &sql_client)
@@ -4028,6 +4220,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(routine, ObSimpleRoutineSchema, RoutineKeys);
   GET_BATCH_SCHEMAS(package, ObSimplePackageSchema, PackageKeys);
   GET_BATCH_SCHEMAS(trigger, ObSimpleTriggerSchema, TriggerKeys);
+  GET_BATCH_SCHEMAS(catalog_priv, ObCatalogPriv, CatalogPrivKeys);
   GET_BATCH_SCHEMAS(db_priv, ObDBPriv, DBPrivKeys);
   GET_BATCH_SCHEMAS(table_priv, ObTablePriv, TablePrivKeys);
   GET_BATCH_SCHEMAS(routine_priv, ObRoutinePriv, RoutinePrivKeys);
@@ -4060,6 +4253,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(rls_policy, ObRlsPolicySchema, RlsPolicyKeys);
   GET_BATCH_SCHEMAS(rls_group, ObRlsGroupSchema, RlsGroupKeys);
   GET_BATCH_SCHEMAS(rls_context, ObRlsContextSchema, RlsContextKeys);
+  GET_BATCH_SCHEMAS(catalog, ObCatalogSchema, CatalogKeys);
 
   // After the schema is split, ordinary tenants do not refresh the tenant schema and system table schema
   const uint64_t tenant_id = schema_status.tenant_id_;
@@ -4133,6 +4327,9 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_trigger_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.trigger_mgr_))) {
     LOG_WARN("fail to apply trigger schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_catalog_priv_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
+    LOG_WARN("fail to apply catalog_priv schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_db_priv_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
     LOG_WARN("fail to apply db_priv schema to cache", KR(ret), K(tenant_id));
@@ -4208,6 +4405,9 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_rls_context_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.rls_context_mgr_))) {
     LOG_WARN("fail to apply rls_context schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_catalog_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
+    LOG_WARN("fail to apply catalog schema to cache", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -4337,6 +4537,7 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObOutlineMgr, outline, ObSimpleOutlineSchema, Outline
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRoutineMgr, routine, ObSimpleRoutineSchema, RoutineKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPackageMgr, package, ObSimplePackageSchema, PackageKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObTriggerMgr, trigger, ObSimpleTriggerSchema, TriggerKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, catalog_priv, ObCatalogPriv, CatalogPrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, db_priv, ObDBPriv, DBPrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, table_priv, ObTablePriv, TablePrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, routine_priv, ObRoutinePriv, RoutinePrivKeys);
@@ -4362,6 +4563,7 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObMockFKParentTableMgr, mock_fk_parent_table, ObSimpl
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsPolicyMgr, rls_policy, ObRlsPolicySchema, RlsPolicyKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsGroupMgr, rls_group, ObRlsGroupSchema, RlsGroupKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsContextMgr, rls_context, ObRlsContextSchema, RlsContextKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, catalog, ObCatalogSchema, CatalogKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
                                              const ObRefreshSchemaStatus &schema_status,
@@ -4757,7 +4959,7 @@ int ObServerSchemaService::replay_log(
         } else if (schema_operation.op_type_ > OB_DDL_PROFILE_OPERATION_BEGIN
                    && schema_operation.op_type_ < OB_DDL_PROFILE_OPERATION_END) {
           if (OB_FAIL(get_increment_profile_keys(schema_mgr, schema_operation, schema_keys))) {
-            LOG_WARN("fail to get increment procedure id", K(ret));
+            LOG_WARN("fail to get increment profile id", K(ret));
           }
         } else if (schema_operation.op_type_ > OB_DDL_AUDIT_OPERATION_BEGIN
                    && schema_operation.op_type_ < OB_DDL_AUDIT_OPERATION_END) {
@@ -4815,6 +5017,16 @@ int ObServerSchemaService::replay_log(
             schema_operation.op_type_ < OB_DDL_COLUMN_PRIV_OPERATION_END) {
           if (OB_FAIL(get_increment_column_priv_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment column priv id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_CATALOG_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_CATALOG_OPERATION_END) {
+          if (OB_FAIL(get_increment_catalog_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment catalog id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_CATALOG_PRIV_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END) {
+          if (OB_FAIL(get_increment_catalog_priv_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment catalog id", K(ret));
           }
         }
       }
@@ -5014,10 +5226,20 @@ int ObServerSchemaService::replay_log_reversely(
         if (OB_FAIL(get_increment_rls_context_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment rls_context keys reversely", KR(ret));
         }
-       } else if (schema_operation.op_type_ > OB_DDL_COLUMN_PRIV_OPERATION_BEGIN &&
+      } else if (schema_operation.op_type_ > OB_DDL_COLUMN_PRIV_OPERATION_BEGIN &&
                  schema_operation.op_type_ < OB_DDL_COLUMN_PRIV_OPERATION_END) {
         if (OB_FAIL(get_increment_column_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment column priv keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_CATALOG_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_CATALOG_OPERATION_END) {
+        if (OB_FAIL(get_increment_catalog_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment catalog keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_CATALOG_PRIV_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END) {
+        if (OB_FAIL(get_increment_catalog_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment catalog keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -6294,6 +6516,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObSimpleSynonymSchema, simple_synonyms);
       INIT_ARRAY(ObSimplePackageSchema, simple_packages);
       INIT_ARRAY(ObSimpleTriggerSchema, simple_triggers);
+      INIT_ARRAY(ObCatalogPriv, catalog_privs);
       INIT_ARRAY(ObDBPriv, db_privs);
       INIT_ARRAY(ObSysPriv, sys_privs);
       INIT_ARRAY(ObTablePriv, table_privs);
@@ -6318,6 +6541,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObRlsPolicySchema, simple_rls_policys);
       INIT_ARRAY(ObRlsGroupSchema, simple_rls_groups);
       INIT_ARRAY(ObRlsContextSchema, simple_rls_contexts);
+      INIT_ARRAY(ObCatalogSchema, simple_catalogs);
       #undef INIT_ARRAY
       ObSimpleSysVariableSchema simple_sys_variable;
 
@@ -6472,6 +6696,30 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_CATALOG_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_catalogs(
+          sql_client, schema_status, schema_version, tenant_id, simple_catalogs))) {
+          LOG_WARN("get all catalog schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_CATALOG_PRIVILEGE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_catalog_privs(
+          sql_client, schema_status, schema_version, tenant_id, catalog_privs))) {
+          LOG_WARN("get all catalog priv failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
       const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
@@ -6496,6 +6744,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add package failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->trigger_mgr_.add_triggers(simple_triggers))) {
         LOG_WARN("add trigger failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_catalog_privs(catalog_privs))) {
+        LOG_WARN("add catalog privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_db_privs(db_privs))) {
         LOG_WARN("add db privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_table_privs(table_privs))) {
@@ -6547,6 +6797,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add rls_contexts failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_column_privs(column_privs))) {
         LOG_WARN("add column privs failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->add_catalogs(simple_catalogs))) {
+        LOG_WARN("add catalogs failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",
@@ -6579,7 +6831,9 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
                "directories", simple_directories.count(),
                "rls_policys", simple_rls_policys.count(),
                "rls_groups", simple_rls_groups.count(),
-               "rls_contexts", simple_rls_contexts.count()
+               "rls_contexts", simple_rls_contexts.count(),
+               "catalogs", simple_catalogs.count(),
+               "catalog_privs", catalog_privs.count()
               );
     }
 

@@ -728,10 +728,19 @@ question_mask_size: 0
       "str_val":"",
       "children": [
          {
-          "type":"T_IDENT",
+          "type":"T_DATABASE_FACTOR",
           "int_val":9223372036854775807,
-          "str_len":8,
-          "str_val":"rongxuan"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             { },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":8,
+              "str_val":"rongxuan"
+            }
+          ]
         }
       ]
     }

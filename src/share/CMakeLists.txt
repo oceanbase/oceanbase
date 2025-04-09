@@ -557,6 +557,9 @@ ob_set_subtarget(ob_share schema
   schema/ob_mview_refresh_stats_params.cpp
   schema/ob_mview_refresh_stats.cpp
   schema/ob_list_row_values.cpp
+  schema/ob_catalog_schema_struct.cpp
+  schema/ob_catalog_mgr.cpp
+  schema/ob_catalog_sql_service.cpp
 )
 
 ob_set_subtarget(ob_share stat
@@ -605,6 +608,17 @@ ob_set_subtarget(ob_share external_table
   external_table/ob_external_table_part_info.cpp
   external_table/ob_external_object_ctx.cpp
 )
+
+ob_set_subtarget(ob_share catalog
+  catalog/ob_catalog_properties.cpp
+  catalog/ob_external_catalog.cpp
+  catalog/ob_catalog_meta_getter.cpp
+  catalog/ob_cached_catalog_meta_getter.cpp
+  catalog/ob_catalog_utils.cpp
+  catalog/odps/ob_odps_catalog_utils.cpp
+  catalog/odps/ob_odps_catalog.cpp
+)
+
 
 ob_set_subtarget(ob_share io
   io/ob_io_define.cpp

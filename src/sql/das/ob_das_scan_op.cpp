@@ -318,6 +318,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.is_mds_query_ = false;
   scan_param_.main_table_scan_stat_.tsc_monitor_info_ = scan_rtdef_->tsc_monitor_info_;
   scan_param_.in_row_cache_threshold_ = scan_rtdef_->in_row_cache_threshold_;
+  scan_param_.external_object_ctx_ = &scan_ctdef_->external_object_ctx_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }

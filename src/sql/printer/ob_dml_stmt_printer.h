@@ -17,6 +17,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/printer/ob_raw_expr_printer.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ namespace sql
 
 #define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
   do {                                                                		  \
+    ObString catalog_name = table_item->catalog_name_;                      \
     ObString database_name = table_item->synonym_name_.empty() ?         \
                             ( table_item->is_link_table() ?                 \
                               table_item->link_database_name_ :             \
@@ -41,6 +43,10 @@ namespace sql
                              table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
+      if (!catalog_name.empty() && !ObCatalogUtils::is_internal_catalog_name(catalog_name)) { \
+        PRINT_IDENT_WITH_QUOT(catalog_name);                               \
+        DATA_PRINTF(".");                                                   \
+      }                                                                     \
       if (!database_name.empty()) {                                         \
         PRINT_IDENT_WITH_QUOT(database_name);                               \
         DATA_PRINTF(".");                                                   \

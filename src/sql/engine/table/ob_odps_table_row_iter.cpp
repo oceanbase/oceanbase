@@ -108,6 +108,17 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
       LOG_WARN("caught exception when call external driver api", K(ret), K(ex.what()), KP(this));
       LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
     }
+  } catch (apsara::odps::sdk::OdpsException &ex) {
+    if (OB_SUCC(ret)) {
+      if (apsara::odps::sdk::NO_SUCH_OBJECT == ex.GetErrorCode() || apsara::odps::sdk::NO_SUCH_TABLE == ex.GetErrorCode()) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("odps table not found", K(ret), K(ex.what()), KP(this));
+      } else {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when call external driver api", K(ret), K(ex.what()), KP(this));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    }
   } catch (const std::exception &ex) {
     if (OB_SUCC(ret)) {
       ret = OB_ODPS_ERROR;

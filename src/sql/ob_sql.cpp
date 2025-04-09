@@ -1155,6 +1155,8 @@ int ObSql::check_contain_temporary_table(share::schema::ObSchemaGetterGuard &sch
     ObSchemaObjVersion &obj_version = result.get_ref_objects().at(i);
     if (DEPENDENCY_TABLE != obj_version.object_type_) {
       // do nothing
+    } else if (is_external_object_id(obj_version.object_id_)) {
+      // do nothing
     } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
                                               obj_version.object_id_,
                                               table_schema))) {

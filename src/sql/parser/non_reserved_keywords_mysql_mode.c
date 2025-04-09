@@ -123,6 +123,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"cascade", CASCADE},
   {"case", CASE},
   {"cast", CAST},
+  {"catalog", CATALOG},
+  {"catalogs", CATALOGS},
   {"catalog_name", CATALOG_NAME},
   {"chain", CHAIN},
   {"change", CHANGE},

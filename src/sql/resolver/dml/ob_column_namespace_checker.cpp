@@ -443,7 +443,16 @@ int ObColumnNamespaceChecker::find_column_in_single_table(const TableItem &table
   //we must check the uniqueness of column in the table with the same name
   bool is_match = true;
   LOG_TRACE("column info", K(q_name), K(table_item));
-  if (!q_name.database_name_.empty()) {
+  if (!q_name.catalog_name_.empty()) {
+    if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_,
+                                               q_name.catalog_name_,
+                                               table_item.catalog_name_,
+                                               OB_TABLE_NAME_CLASS,
+                                               is_match))) {
+      LOG_WARN("catalog name case compare failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && is_match && !q_name.database_name_.empty()) {
     if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_,
                                                q_name.database_name_,
                                                table_item.database_name_,

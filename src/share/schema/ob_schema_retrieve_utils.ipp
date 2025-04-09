@@ -1958,6 +1958,8 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ENCRYPT) != 0 ? OB_PRIV_ENCRYPT : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_DECRYPT) != 0 ? OB_PRIV_DECRYPT : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_CATALOG) != 0 ? OB_PRIV_CREATE_CATALOG : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_USE_CATALOG) != 0 ? OB_PRIV_USE_CATALOG : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -2222,6 +2224,26 @@ bool ObSchemaRetrieveUtils::compare_user_id(
   bool cmp = false;
   cmp = user_info.get_user_id() > user_id;
   return cmp;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_catalog_priv_schema(
+    const uint64_t tenant_id, T &result, ObCatalogPriv &catalog_priv, bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  catalog_priv.reset();
+  is_deleted = false;
+
+  catalog_priv.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, user_id, catalog_priv, tenant_id);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, catalog_name, catalog_priv);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, priv_set, catalog_priv, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, catalog_priv, int64_t);
+  }
+
+  return ret;
 }
 
 template<typename T>
@@ -3760,6 +3782,46 @@ int ObSchemaRetrieveUtils::retrieve_link_column_schema(
   if (common::OB_ITER_END == ret) {
     ret = common::OB_SUCCESS;
     SHARE_SCHEMA_LOG(INFO, "retrieve link column schema succeed", K(table_schema));
+  }
+  return ret;
+}
+
+template<typename T, typename S>
+int ObSchemaRetrieveUtils::retrieve_catalog_priv_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObIArray<S> &catalog_priv_array)
+{
+  int ret = common::OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  S catalog_priv(&allocator);
+  ObCatalogPrivSortKey pre_catalog_sort_key;
+  while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    bool is_deleted = false;
+    catalog_priv.reset();
+    allocator.reuse();
+    if (OB_FAIL(fill_catalog_priv_schema(tenant_id, result, catalog_priv, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to fill catalog privileges", K(ret));
+    } else if (catalog_priv.get_sort_key() == pre_catalog_sort_key) {
+      // ignore it
+      ret = common::OB_SUCCESS;
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(TRACE, "catalog_priv is is_deleted", K(catalog_priv));
+    } else if (OB_FAIL(catalog_priv_array.push_back(catalog_priv))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      tmp_allocator.reuse();
+      if (OB_FAIL(pre_catalog_sort_key.deep_copy(catalog_priv.get_sort_key(), tmp_allocator))) {
+        SHARE_SCHEMA_LOG(WARN, "deep copy failed", KR(ret));
+      }
+    }
+  }
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "failed to get catalog privileges. iter quit", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
   }
   return ret;
 }
@@ -5795,6 +5857,8 @@ RETRIEVE_SCHEMA_FUNC_DEFINE(rls_policy);
 RETRIEVE_SCHEMA_FUNC_DEFINE(rls_group);
 RETRIEVE_SCHEMA_FUNC_DEFINE(rls_context);
 
+RETRIEVE_SCHEMA_FUNC_DEFINE(catalog);
+
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_rls_column_schema(
     const uint64_t tenant_id,
@@ -5975,6 +6039,27 @@ int ObSchemaRetrieveUtils::fill_rls_column_schema(
   return ret;
 }
 
+template<typename T>
+int ObSchemaRetrieveUtils::fill_catalog_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObCatalogSchema &catalog_schema,
+    bool &is_deleted)
+{
+  catalog_schema.reset();
+  is_deleted = false;
+  int ret = common::OB_SUCCESS;
+  catalog_schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, catalog_id, catalog_schema, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, catalog_schema, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, catalog_name, catalog_schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, catalog_properties, catalog_schema, true/*skip null*/, false, "");
+  }
+  return ret;
+}
 
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_object_list(

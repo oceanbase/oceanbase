@@ -113,7 +113,8 @@ question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_USE_DATABASE], str_value_=[], value=[0]
-		|--[0],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
+		|--[0],[T_DATABASE_FACTOR], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 
 **************   Case 7   ***************
 start transaction read only;

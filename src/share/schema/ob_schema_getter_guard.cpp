@@ -20,6 +20,7 @@
 #include "share/ob_schema_status_proxy.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "share/catalog/ob_catalog_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1466,6 +1467,73 @@ int ObSchemaGetterGuard::get_rls_context_schema_by_id(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaGetterGuard::get_catalog_schema_by_name(const uint64_t tenant_id,
+                                                    const common::ObString &name,
+                                                    const ObCatalogSchema *&schema)
+{
+  int ret = OB_SUCCESS;
+  schema = nullptr;
+  const ObSchemaMgr *mgr = NULL;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (!is_valid_tenant_id(tenant_id) || name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(name), KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_name_case_mode(tenant_id, mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), K(tenant_id));
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  } else if (OB_FAIL(get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get compat mode", K(ret));
+  } else if (ObCatalogUtils::is_internal_catalog_name(name, mode)) {
+    schema = lib::Worker::CompatMode::MYSQL == compat_mode
+              ? ObCatalogSchema::get_internal_catalog_schema_mysql()
+              : ObCatalogSchema::get_internal_catalog_schema_oracle();
+  } else if (OB_FAIL(mgr->catalog_mgr_.get_schema_by_name(tenant_id, mode, name, schema))) {
+    LOG_WARN("get schema failed", K(name), KR(ret));
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_catalog_schema_by_id(const uint64_t tenant_id,
+                                                  const uint64_t catalog_id,
+                                                  const ObCatalogSchema *&schema)
+{
+  int ret = OB_SUCCESS;
+  schema = nullptr;
+  const ObSchemaMgr *mgr = NULL;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (!is_valid_tenant_id(tenant_id)
+             || !is_valid_id(catalog_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(catalog_id), KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get compat mode", K(ret));
+  } else if (catalog_id == OB_INTERNAL_CATALOG_ID) {
+    schema = lib::Worker::CompatMode::MYSQL == compat_mode
+              ? ObCatalogSchema::get_internal_catalog_schema_mysql()
+              : ObCatalogSchema::get_internal_catalog_schema_oracle();
+  } else if (OB_FAIL(mgr->catalog_mgr_.get_schema_by_id(catalog_id, schema))) {
+    LOG_WARN("get schema failed", K(catalog_id), KR(ret));
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::get_rls_context_schemas_in_table(const uint64_t tenant_id,
     const uint64_t table_id,
     ObIArray<const ObRlsContextSchema *> &schemas)
@@ -2475,6 +2543,9 @@ int ObSchemaGetterGuard::verify_read_only(const uint64_t tenant_id,
       switch (need_priv.priv_level_) {
         case OB_PRIV_USER_LEVEL: {
           //we do not check user priv level only check table and db
+          break;
+        }
+        case OB_PRIV_CATALOG_LEVEL: {
           break;
         }
         case OB_PRIV_DB_LEVEL: {
@@ -3528,6 +3599,48 @@ int ObSchemaGetterGuard::get_column_priv_in_table(const uint64_t tenant_id,
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->priv_mgr_.get_column_priv_in_table(tenant_id, user_id, db, table, column_privs))) {
     LOG_WARN("get db priv with tenant_id failed", KR(ret), K(tenant_id));
+  }
+
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_catalog_priv_set(const ObCatalogPrivSortKey &catalog_priv_key,
+                                              ObPrivSet &priv_set)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  uint64_t tenant_id = catalog_priv_key.tenant_id_;
+  if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->priv_mgr_.get_catalog_priv_set(catalog_priv_key, priv_set))) {
+    LOG_WARN("fail to get catalog priv set", KR(ret), K(catalog_priv_key));
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_catalog_priv_with_user_id(const uint64_t tenant_id,
+                                                       const uint64_t user_id,
+                                                       ObIArray<const ObCatalogPriv *> &catalog_privs)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  catalog_privs.reset();
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id
+             || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(user_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->priv_mgr_.get_catalog_privs_in_user(tenant_id, user_id, catalog_privs))) {
+    LOG_WARN("get catalog priv with user_id failed", KR(ret), K(tenant_id), K(user_id));
   }
 
   return ret;

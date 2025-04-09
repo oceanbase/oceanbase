@@ -146,6 +146,7 @@
 #include "sql/resolver/ddl/ob_audit_resolver.h"
 #include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
 #endif
+#include "sql/resolver/ddl/ob_catalog_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -600,6 +601,13 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(StopUpgradeJob);
         break;
       }
+      case T_CREATE_CATALOG:
+      case T_ALTER_CATALOG:
+      case T_DROP_CATALOG:
+      case T_SET_CATALOG: {
+        REGISTER_STMT_RESOLVER(Catalog);
+        break;
+      }
       case T_CREATE_DATABASE: {
         REGISTER_STMT_RESOLVER(CreateDatabase);
         break;
@@ -770,7 +778,9 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_OLAP_ASYNC_JOB_STATUS:
       case T_XA_RECOVER:
       case T_SHOW_CHECK_TABLE:
-      case T_SHOW_CREATE_USER: {
+      case T_SHOW_CREATE_USER:
+      case T_SHOW_CATALOGS:
+      case T_SHOW_CREATE_CATALOG: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }

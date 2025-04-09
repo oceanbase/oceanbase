@@ -42,6 +42,7 @@
 #include "share/schema/ob_directory_sql_service.h"
 #include "share/schema/ob_context_sql_service.h"
 #include "share/schema/ob_rls_sql_service.h"
+#include "share/schema/ob_catalog_sql_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -132,6 +133,7 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(Directory, directory)
   GET_DDL_SQL_SERVICE_FUNC(Context, context)
   GET_DDL_SQL_SERVICE_FUNC(Rls, rls)
+  GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog)
 
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
@@ -205,6 +207,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
   GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   GET_ALL_SCHEMA_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(catalog_priv, ObCatalogPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
@@ -234,6 +237,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -317,6 +321,7 @@ public:
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id);
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id);
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id);
+  virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id);
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
 
@@ -349,6 +354,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
   GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(catalog_priv, ObCatalogPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(routine_priv, ObRoutinePriv);
@@ -381,6 +387,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(catalog, ObCatalogSchema);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -441,6 +448,7 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
   FETCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   FETCH_SCHEMAS_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(catalog_priv, ObCatalogPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
   FETCH_SCHEMAS_FUNC_DECLARE(routine_priv, ObRoutinePriv);
@@ -471,6 +479,7 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
   FETCH_SCHEMAS_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(catalog, ObCatalogSchema);
 
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -1323,6 +1332,7 @@ private:
   ObDirectorySqlService directory_service_;
   ObContextSqlService context_service_;
   ObRlsSqlService rls_service_;
+  ObCatalogSqlService catalog_service_;
 
   ObClusterSchemaStatus cluster_schema_status_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> gen_schema_version_map_;

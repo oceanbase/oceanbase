@@ -85,7 +85,7 @@ struct ObODPSGeneralFormat {
   bool collect_statistics_on_create_;
   common::ObString region_;
   common::ObArenaAllocator arena_alloc_;
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
                K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
@@ -199,7 +199,7 @@ struct ObCSVGeneralFormat {
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
                   ObCollationType file_cs_type);
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos, bool into_outfile = false) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
@@ -234,7 +234,7 @@ struct ObParquetGeneralFormat {
   int64_t row_group_size_;
   int64_t compress_type_index_;
 
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(row_group_size), K_(compress_type_index));
   OB_UNIS_VERSION(1);
@@ -271,7 +271,7 @@ struct ObOrcGeneralFormat {
   int64_t row_index_stride_;
   common::ObArrayWrap<int64_t> column_use_bloom_filter_;
 
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K(stripe_size_), K(compress_type_index_), K(compression_block_size_), K(row_index_stride_), K(column_use_bloom_filter_));
   OB_UNIS_VERSION(1);
@@ -943,7 +943,7 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
 // user using to define create external table format
 struct ObOriginFileFormat
 {
-  int64_t to_json_kv_string(char *buf, const int64_t buf_len) const;
+  int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K(origin_line_term_str_), K(origin_field_term_str_), K(origin_field_escaped_str_),
                 K(origin_field_enclosed_str_), K(origin_null_if_str_));
@@ -1015,7 +1015,8 @@ struct ObExternalFileFormat
   };
 
   ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
-
+  int to_string_with_alloc(common::ObString &str, common::ObIAllocator &allocator, bool into_outfile = false) const;
+  int to_string(char* buf, const int64_t buf_len, int64_t &pos, bool into_outfile = false) const;
   int64_t to_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
   int mock_gen_column_def(const share::schema::ObColumnSchemaV2 &column, common::ObIAllocator &allocator, common::ObString &def);

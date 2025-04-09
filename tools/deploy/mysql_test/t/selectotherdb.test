@@ -5,5 +5,8 @@ set @@session.explicit_defaults_for_timestamp=off;
 # owner group: SQL2
 # description:
 #
---error 1064 
+--disable_warnings
+drop catalog if exists master;
+--enable_warnings
+--error 11080
 SELECT name FROM master.dbo.sysdatabases WHERE status <> 512;

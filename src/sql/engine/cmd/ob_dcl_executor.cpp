@@ -198,25 +198,31 @@ int ObRevokeExecutor::execute(ObExecContext &ctx, ObRevokeStmt &stmt)
       }
       case OB_PRIV_DB_LEVEL: {
         if (OB_FAIL(revoke_db(common_rpc_proxy, stmt))) {
-          LOG_WARN("grant_revoke_user error", K(ret));
+          LOG_WARN("grant_revoke_db error", K(ret));
         }
         break;
       }
       case OB_PRIV_TABLE_LEVEL: {
         if (OB_FAIL(revoke_table(common_rpc_proxy, stmt, ctx))) {
-          LOG_WARN("grant_revoke_user error", K(ret));
+          LOG_WARN("grant_revoke_table error", K(ret));
         }
         break;
       }
       case OB_PRIV_ROUTINE_LEVEL: {
         if (OB_FAIL(revoke_routine(common_rpc_proxy, stmt, ctx))) {
-          LOG_WARN("grant_revoke_user error", K(ret));
+          LOG_WARN("grant_revoke_routine error", K(ret));
         }
         break;
       }
       case OB_PRIV_SYS_ORACLE_LEVEL: { // Oracle revoke role and sys_priv
         if (OB_FAIL(revoke_sys_priv(common_rpc_proxy, stmt))) {
-          LOG_WARN("grant_revoke_user error", K(ret));
+          LOG_WARN("grant_revoke_sys error", K(ret));
+        }
+        break;
+      }
+      case OB_PRIV_CATALOG_LEVEL : {
+        if (OB_FAIL(revoke_catalog(common_rpc_proxy, stmt))) {
+          LOG_WARN("grant_revoke_catalog error", K(ret));
         }
         break;
       }
@@ -258,6 +264,33 @@ int ObRevokeExecutor::revoke_user(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeSt
       for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
         arg.user_id_ = user_ids.at(i);
         if (OB_FAIL(rpc_proxy->revoke_user(arg))) {
+          LOG_WARN("revoke user error", K(arg), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRevokeExecutor::revoke_catalog(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Input argument error", K(rpc_proxy), K(ret));
+  } else {
+    obrpc::ObRevokeCatalogArg &arg = static_cast<obrpc::ObRevokeCatalogArg &>(stmt.get_ddl_arg());
+    arg.tenant_id_ = stmt.get_tenant_id();
+    arg.priv_set_ = stmt.get_priv_set();
+    // arg.catalog_ has been set in resolve phase
+    const ObIArray<uint64_t> &user_ids = stmt.get_users();
+    if (0 == user_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("User ids is empty, resolver may be error", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
+        arg.user_id_ = user_ids.at(i);
+        if (OB_FAIL(rpc_proxy->revoke_catalog(arg))) {
           LOG_WARN("revoke user error", K(arg), K(ret));
         }
       }

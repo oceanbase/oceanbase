@@ -11396,44 +11396,59 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[832].default_value_ = "1" ;
-      ObSysVars[832].info_ = "wether use parameter anonymous_block in ps mode" ;
-      ObSysVars[832].name_ = "ob_enable_ps_parameter_anonymous_block" ;
-      ObSysVars[832].data_type_ = ObIntType ;
-      ObSysVars[832].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[832].id_ = SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK ;
+      ObSysVars[832].default_value_ = "0" ;
+      ObSysVars[832].info_ = "The default catalog for session." ;
+      ObSysVars[832].name_ = "_current_default_catalog" ;
+      ObSysVars[832].data_type_ = ObUInt64Type ;
+      ObSysVars[832].min_val_ = "0" ;
+      ObSysVars[832].max_val_ = "18446744073709551615" ;
+      ObSysVars[832].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::READONLY ;
+      ObSysVars[832].id_ = SYS_VAR__CURRENT_DEFAULT_CATALOG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__CURRENT_DEFAULT_CATALOG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__CURRENT_DEFAULT_CATALOG] = 832 ;
+      ObSysVars[832].base_value_ = "0" ;
+    ObSysVars[832].alias_ = "OB_SV__CURRENT_DEFAULT_CATALOG" ;
+    }();
+
+    [&] (){
+      ObSysVars[833].default_value_ = "1" ;
+      ObSysVars[833].info_ = "wether use parameter anonymous_block in ps mode" ;
+      ObSysVars[833].name_ = "ob_enable_ps_parameter_anonymous_block" ;
+      ObSysVars[833].data_type_ = ObIntType ;
+      ObSysVars[833].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[833].id_ = SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK] = 832 ;
-      ObSysVars[832].base_value_ = "1" ;
-    ObSysVars[832].alias_ = "OB_SV_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK] = 833 ;
+      ObSysVars[833].base_value_ = "1" ;
+    ObSysVars[833].alias_ = "OB_SV_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK" ;
     }();
 
     [&] (){
-      ObSysVars[833].default_value_ = "1024" ;
-      ObSysVars[833].info_ = "The extra info size threshold filled into the hnsw index param, when not specified during hnsw index creation." ;
-      ObSysVars[833].name_ = "ob_hnsw_extra_info_max_size" ;
-      ObSysVars[833].data_type_ = ObUInt64Type ;
-      ObSysVars[833].min_val_ = "0" ;
-      ObSysVars[833].max_val_ = "16384" ;
-      ObSysVars[833].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[833].id_ = SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE ;
+      ObSysVars[834].default_value_ = "1024" ;
+      ObSysVars[834].info_ = "The extra info size threshold filled into the hnsw index param, when not specified during hnsw index creation." ;
+      ObSysVars[834].name_ = "ob_hnsw_extra_info_max_size" ;
+      ObSysVars[834].data_type_ = ObUInt64Type ;
+      ObSysVars[834].min_val_ = "0" ;
+      ObSysVars[834].max_val_ = "16384" ;
+      ObSysVars[834].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[834].id_ = SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE] = 833 ;
-      ObSysVars[833].base_value_ = "1024" ;
-    ObSysVars[833].alias_ = "OB_SV_HNSW_EXTRA_INFO_MAX_SIZE" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE] = 834 ;
+      ObSysVars[834].base_value_ = "1024" ;
+    ObSysVars[834].alias_ = "OB_SV_HNSW_EXTRA_INFO_MAX_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[834].default_value_ = "1" ;
-      ObSysVars[834].info_ = "control whether the optimizer pushes down join predicates to view" ;
-      ObSysVars[834].name_ = "_push_join_predicate" ;
-      ObSysVars[834].data_type_ = ObIntType ;
-      ObSysVars[834].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[834].id_ = SYS_VAR__PUSH_JOIN_PREDICATE ;
+      ObSysVars[835].default_value_ = "1" ;
+      ObSysVars[835].info_ = "control whether the optimizer pushes down join predicates to view" ;
+      ObSysVars[835].name_ = "_push_join_predicate" ;
+      ObSysVars[835].data_type_ = ObIntType ;
+      ObSysVars[835].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[835].id_ = SYS_VAR__PUSH_JOIN_PREDICATE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PUSH_JOIN_PREDICATE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PUSH_JOIN_PREDICATE] = 834 ;
-      ObSysVars[834].base_value_ = "1" ;
-    ObSysVars[834].alias_ = "OB_SV__PUSH_JOIN_PREDICATE" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PUSH_JOIN_PREDICATE] = 835 ;
+      ObSysVars[835].base_value_ = "1" ;
+    ObSysVars[835].alias_ = "OB_SV__PUSH_JOIN_PREDICATE" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11442,7 +11457,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 835;
+static int64_t var_amount = 836;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -446,6 +446,8 @@
 #include "ob_expr_rb_to_array.h"
 #include "ob_expr_rb_contains.h"
 #include "ob_expr_map_keys.h"
+#include "ob_expr_current_catalog.h"
+#include "ob_expr_check_catalog_access.h"
 
 namespace oceanbase
 {
@@ -1388,8 +1390,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbAndCardinalityAggregate::eval_rb_and_cardinality_aggregate, /* 838 */
   ObExprRbToArray::eval_rb_to_array,                                   /* 839 */
   ObExprRbContains::eval_rb_contains,                                  /* 840 */
-  NULL, // ObExprCurrentCatalog::eval_current_catalog,                 /* 841 */
-  NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
+  ObExprCurrentCatalog::eval_current_catalog,                          /* 841 */
+  ObExprCheckCatalogAccess::eval_check_catalog_access,                 /* 842 */
   ObExprMap::eval_map,                                                 /* 843 */
   ObExprSpivValue::generate_spiv_value,                                /* 844 */
   ObExprMapKeys::eval_map_keys,                                        /* 845 */

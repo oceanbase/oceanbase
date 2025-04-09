@@ -93,6 +93,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
+#include "share/schema/ob_catalog_schema_struct.h"
 #include "ob_ddl_args.h"
 #include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
@@ -6329,6 +6330,26 @@ public:
   ObPrivSet priv_set_;
   bool revoke_all_;
   common::ObSArray<uint64_t> role_ids_;
+};
+
+struct ObRevokeCatalogArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRevokeCatalogArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID),
+                         user_id_(common::OB_INVALID_ID), priv_set_(0)
+  { }
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(user_id),
+               K_(catalog),
+               "priv_set", share::schema::ObPrintPrivSet(priv_set_));
+
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString catalog_;
+  ObPrivSet priv_set_;
 };
 
 struct ObRevokeDBArg : public ObDDLArg
@@ -12684,6 +12705,33 @@ public:
   TO_STRING_KV(K_(schema), K_(ddl_type));
   share::schema::ObRlsContextSchema schema_;
   share::schema::ObSchemaOperationType ddl_type_;
+};
+
+struct ObCatalogDDLArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObCatalogDDLArg():
+    ObDDLArg(),
+    schema_(),
+    ddl_type_(),
+    if_not_exist_(false),
+    if_exist_(false),
+    user_id_(common::OB_INVALID_ID)
+  {}
+  virtual bool is_allow_when_upgrade() const { return true; }
+  virtual bool contain_sensitive_data() const {
+    return share::schema::OB_DDL_CREATE_CATALOG == ddl_type_
+           || share::schema::OB_DDL_ALTER_CATALOG == ddl_type_;
+  }
+  int assign(const ObCatalogDDLArg &other);
+  TO_STRING_KV(K_(schema), K_(ddl_type), K_(if_not_exist), K_(if_exist), K_(user_id));
+  share::schema::ObCatalogSchema schema_;
+  share::schema::ObSchemaOperationType ddl_type_;
+  bool if_not_exist_;
+  bool if_exist_;
+  uint64_t user_id_; // grant privilege when create
 };
 
 struct ObRecompileAllViewsBatchArg: public ObDDLArg

@@ -299,6 +299,12 @@ int ObFlashBackDatabaseResolver::resolve(const ParseNode &parser_tree)
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
+  } else if (OB_UNLIKELY(is_external_catalog_id(session_info_->get_current_default_catalog()))) {
+    // 这里之所以需要额外拦截，是因为 flashback database 没有走 resolve ParseNode 逻辑，直接赋值了
+    // 所以在 resolve 处的拦截无效
+    // 如果将来需要支持 flashback database catalog.db 这种语法，那就需要走 resolve ParseNode 逻辑，那么此时这里的拦截可以删除
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "flashback database in catalog is");
   } else if (T_FLASHBACK_DATABASE != parser_tree.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree",  K(parser_tree.type_));

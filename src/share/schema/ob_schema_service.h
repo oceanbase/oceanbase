@@ -24,6 +24,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_column_schema.h"
 #include "share/schema/ob_routine_info.h"
+#include "share/schema/ob_catalog_schema_struct.h"
 
 namespace oceanbase
 {
@@ -372,6 +373,7 @@ IS_DDL_TYPE(TABLEGROUP, tablegroup)
 IS_DDL_TYPE(TENANT, tenant)
 IS_DDL_TYPE(DATABASE, database)
 IS_DDL_TYPE(USER, user)
+IS_DDL_TYPE(CATALOG_PRIV, catalog_priv)
 IS_DDL_TYPE(DB_PRIV, db_priv)
 IS_DDL_TYPE(TABLE_PRIV, table_priv)
 IS_DDL_TYPE(ROUTINE_PRIV, routine_priv)
@@ -404,6 +406,7 @@ IS_DDL_TYPE(MOCK_FK_PARENT_TABLE, mock_fk_parent_table)
 IS_DDL_TYPE(RLS_POLICY, rls_policy)
 IS_DDL_TYPE(RLS_GROUP, rls_group)
 IS_DDL_TYPE(RLS_CONTEXT, rls_context)
+IS_DDL_TYPE(CATALOG, catalog)
 
 struct ObSchemaOperation
 {
@@ -451,6 +454,7 @@ public:
     uint64_t rls_context_id_;
     uint64_t routine_type_;
     uint64_t column_priv_id_;
+    uint64_t catalog_id_;
   };
   union {
     common::ObString table_name_;
@@ -717,6 +721,7 @@ class ObSimpleMockFKParentTableSchema;
 class ObRlsPolicySchema;
 class ObRlsGroupSchema;
 class ObRlsContextSchema;
+class ObCatalogSchema;
 
 class ObTenantSqlService;
 class ObDatabaseSqlService;
@@ -747,6 +752,7 @@ class ObRlsSqlService;
 //table schema service interface layer
 class ObServerSchemaService;
 class ObContextSqlService;
+class ObCatalogSqlService;
 class ObSchemaService
 {
 public:
@@ -803,6 +809,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Directory, directory);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Context, context);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Rls, rls);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
 
 
@@ -916,6 +923,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(user, ObSimpleUserSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(database, ObSimpleDatabaseSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog_priv, ObCatalogPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
@@ -945,6 +953,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_policy, ObRlsPolicySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -1020,6 +1029,7 @@ public:
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id) = 0;
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id) = 0;
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
+  virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1043,6 +1053,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(database, ObSimpleDatabaseSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
   GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(table, ObSimpleTableSchemaV2);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog_priv, ObCatalogPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
@@ -1073,6 +1084,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_policy, ObRlsPolicySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
 
 
   //--------------For manaing recyclebin -----//

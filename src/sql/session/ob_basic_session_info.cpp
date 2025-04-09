@@ -921,7 +921,7 @@ int ObBasicSessionInfo::update_database_variables(ObSchemaGetterGuard *schema_gu
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid schema guard is NULL", K(ret));
   } else {
-    if ('\0' == thread_data_.database_name_[0]) {
+    if ('\0' == thread_data_.database_name_[0] || is_external_catalog_id(get_current_default_catalog())) {
       // no default database
       ObObj val;
       if (OB_FAIL(get_sys_variable(SYS_VAR_CHARACTER_SET_SERVER, val))) {
@@ -2961,6 +2961,11 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_ob_enable_ps_parameter_anonymous_block(int_val != 0));
       break;
     }
+    case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
+      uint64_t uint_val = 0;
+      OZ (val.get_uint64(uint_val), val);
+      OX (sys_vars_cache_.set_current_default_catalog(uint_val));
+    }
     default: {
       //do nothing
     }
@@ -3485,6 +3490,11 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_ob_enable_ps_parameter_anonymous_block(int_val != 0));
       break;
+    }
+    case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
+      uint64_t uint_val = 0;
+      OZ (val.get_uint64(uint_val), val);
+      OX (sys_vars_cache.set_current_default_catalog(uint_val));
     }
     default: {
       //do nothing
@@ -6401,6 +6411,8 @@ int ObBasicSessionInfo::get_compatibility_version(uint64_t &compat_version) cons
   compat_version = sys_vars_cache_.get_compat_version();
   return OB_SUCCESS;
 }
+
+uint64_t ObBasicSessionInfo::get_current_default_catalog() const { return sys_vars_cache_.get_current_default_catalog(); }
 
 int ObBasicSessionInfo::get_security_version(uint64_t &security_version) const
 {

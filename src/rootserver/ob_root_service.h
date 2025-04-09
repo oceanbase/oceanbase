@@ -60,6 +60,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "rootserver/ob_rs_master_key_manager.h"
 #endif
+#include "rootserver/ob_catalog_ddl_service.h"
 #include "rootserver/ob_root_rebuild_tablet.h"
 
 namespace oceanbase
@@ -594,6 +595,7 @@ public:
   int grant(const obrpc::ObGrantArg &arg);
   int revoke_user(const obrpc::ObRevokeUserArg &arg);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObSArray<int64_t> &failed_index);
+  int revoke_catalog(const obrpc::ObRevokeCatalogArg &arg);
   int revoke_database(const obrpc::ObRevokeDBArg &arg);
   int revoke_table(const obrpc::ObRevokeTableArg &arg);
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
@@ -716,6 +718,10 @@ public:
   int handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg);
   int handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg);
   //----End of functions for managing row level security----
+
+  //----Functions for managing catalog----
+  int handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg);
+  //----End of functions for managing catalog----
 
   // server related
   int load_server_manager();

@@ -277,7 +277,7 @@ END_P SET_VAR DELIMITER
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
         BADFILE BUFFER_SIZE BIGINT_PRECISION
 
-        CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
+        CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
         CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
@@ -391,8 +391,9 @@ END_P SET_VAR DELIMITER
 %type <node> opt_force
 %type <node> index_or_heap
 %type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num
+%type <node> create_catalog_stmt drop_catalog_stmt set_catalog_stmt
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
-%type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr opt_databases
+%type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr database_with_catalog_factor opt_databases
 %type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt create_standby_tenant_stmt log_restore_source_option
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
@@ -638,6 +639,9 @@ stmt:
   | drop_database_stmt      { $$ = $1; check_question_mark($$, result); }
   | alter_database_stmt     { $$ = $1; check_question_mark($$, result); }
   | use_database_stmt       { $$ = $1; check_question_mark($$, result); }
+  | create_catalog_stmt     { $$ = $1; check_question_mark($$, result); }
+  | drop_catalog_stmt       { $$ = $1; check_question_mark($$, result); }
+  | set_catalog_stmt        { $$ = $1; check_question_mark($$, result); }
   | update_stmt             { $$ = $1; question_mark_issue($$, result); }
   | delete_stmt             { $$ = $1; question_mark_issue($$, result); }
   | drop_table_stmt         { $$ = $1; check_question_mark($$, result); }
@@ -1045,7 +1049,26 @@ column_name
     yyerror(&@1, result, "cascade key work can be used to be name in PL\n");
     YYABORT_PARSE_SQL_ERROR;
   }
-}
+ }
+ | id_dot_id_dot_id '.' '*'
+ {
+   ParseNode* catalog_node = $1->children_[0];
+   ParseNode* db_node = $1->children_[1];
+   ParseNode* tbl_node = $1->children_[2];
+   ParseNode* col_node = NULL;
+   malloc_terminal_node(col_node, result->malloc_pool_, T_STAR);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 4, db_node, tbl_node, col_node, catalog_node);
+   $$->value_ = 0;
+ }
+ | id_dot_id_dot_id '.' column_name
+ {
+   ParseNode* catalog_node = $1->children_[0];
+   ParseNode* db_node = $1->children_[1];
+   ParseNode* tbl_node = $1->children_[2];
+   ParseNode* col_node = $3;
+   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 4, db_node, tbl_node, col_node, catalog_node);
+   dup_node_string(col_node, $$, result->malloc_pool_);
+ }
 ;
 
 /* literal string with  */
@@ -4823,6 +4846,49 @@ DROP RESTORE POINT relation_name
 
 /*****************************************************************************
  *
+ *	create catalog grammar
+ *
+ *****************************************************************************/
+
+create_catalog_stmt:
+create_with_opt_hint EXTERNAL CATALOG opt_if_not_exists relation_name
+PROPERTIES opt_equal_mark '(' external_properties_list ')'
+{
+  (void)($1);
+  (void)($7);
+  ParseNode *external_properties = NULL;
+  merge_nodes(external_properties, result, T_EXTERNAL_PROPERTIES, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_CATALOG, 3, $4, $5, external_properties);
+}
+;
+
+/*****************************************************************************
+ *
+ *	drop catalog grammar
+ *
+ *****************************************************************************/
+
+drop_catalog_stmt:
+DROP CATALOG opt_if_exists relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CATALOG, 2, $3, $4);
+}
+;
+
+/*****************************************************************************
+ *
+ *	set catalog grammar
+ *
+ *****************************************************************************/
+
+set_catalog_stmt:
+SET CATALOG relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_CATALOG, 1, $3);
+}
+
+/*****************************************************************************
+ *
  *	create database grammar
  *
  *****************************************************************************/
@@ -4876,6 +4942,18 @@ database_factor:
 relation_name
 {
   $$ = $1;
+}
+;
+
+database_with_catalog_factor:
+relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DATABASE_FACTOR, 2, NULL, $1);
+}
+|
+relation_name '.' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DATABASE_FACTOR, 2, $1, $3);
 }
 ;
 
@@ -5335,7 +5413,7 @@ LOGFILE opt_equal_mark STRING_VALUE
  *
  *****************************************************************************/
 use_database_stmt:
-USE database_factor
+USE database_with_catalog_factor
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_USE_DATABASE, 1, $2);
 }
@@ -14562,6 +14640,20 @@ relation_name opt_dblink
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, db_node, tb_node, $2);
   dup_node_string(tb_node, $$, result->malloc_pool_);
 }
+| id_dot_id_dot_id
+{
+  /* $1 is catalog name */
+  ParseNode* catalog_node = $1->children_[0];
+  ParseNode* db_node = $1->children_[1];
+  ParseNode* tbl_node = $1->children_[2];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 4, db_node, tbl_node, NULL, catalog_node);
+  dup_node_string(tbl_node, $$, result->malloc_pool_);
+}
+| relation_name '.' relation_name '.' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 4, $3, $5, NULL, $1);
+  dup_node_string($5, $$, result->malloc_pool_);
+}
 ;
 
 dot_relation_factor:
@@ -15748,6 +15840,11 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
   (void)$3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_CREATE_DATABASE, 2, $4, $5);
 }
+| SHOW create_with_opt_hint CATALOG relation_name
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_CREATE_CATALOG, 1, $4);
+}
 | SHOW create_with_opt_hint TABLE relation_factor
 {
   (void)($2);
@@ -15967,6 +16064,10 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 | CHECK TABLE table_list
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_CHECK_TABLE, 1, $3);
+}
+| SHOW CATALOGS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SHOW_CATALOGS);
 }
 ;
 
@@ -17854,6 +17955,16 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_DECRYPT;
 }
+| CREATE CATALOG
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_CREATE_CATALOG;
+}
+| USE CATALOG
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_USE_CATALOG;
+}
 ;
 
 opt_privilege:
@@ -17882,6 +17993,11 @@ TABLE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
   $$->value_ = 3;
+}
+| CATALOG
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 4;
 }
 ;
 
@@ -25067,6 +25183,8 @@ ACCESS_INFO
 |       CANCEL
 |       CASCADED
 |       CAST
+|       CATALOG
+|       CATALOGS
 |       CATALOG_NAME
 |       CHAIN
 |       CHANGED

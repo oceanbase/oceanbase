@@ -5238,19 +5238,9 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
         LOG_WARN("failed to resolve file format", K(ret), K(option_node->type_));
       }
     }
-    if (OB_SUCC(ret)) {
-      do {
-        buf_len *= 2;
-        if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc buf", K(ret), K(buf_len));
-        } else {
-          pos = external_format.to_string(buf, buf_len, true);
-        }
-      } while (OB_SUCC(ret) && pos >= buf_len);
-      if (OB_SUCC(ret)) {
-        into_item.external_properties_.assign_ptr(buf, pos);
-      }
+    if (OB_SUCC(ret)
+        && OB_FAIL(external_format.to_string_with_alloc(into_item.external_properties_, *allocator_, true))) {
+      LOG_WARN("failed to convert external format to string", K(ret));
     }
   }
   // file: single, max_file_size, buffer_size

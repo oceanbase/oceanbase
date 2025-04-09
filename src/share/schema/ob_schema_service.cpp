@@ -132,7 +132,7 @@ int64_t ObSchemaOperation::to_string(char *buf, const int64_t buf_len) const
        K_(outline_id), K_(udf_name), K_(sequence_id),
        K_(tablespace_id), K_(profile_id), K_(audit_id),
        K_(grantee_id), K_(grantor_id),
-       K_(ddl_stmt_str), K_(dblink_id), K_(directory_id));
+       K_(ddl_stmt_str), K_(dblink_id), K_(directory_id), K_(catalog_id), K_(catalog_name));
   return pos;
 }
 

@@ -1305,6 +1305,48 @@ int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_gu
   return ret;
 }
 
+/* 将用户输入的dbname换成数据库内部存放的大小写 */
+int ObSQLUtils::cvt_db_name_to_org(sql::ObSqlSchemaGuard &sql_schema_guard,
+                                   const ObSQLSessionInfo *session,
+                                   const uint64_t catalog_id,
+                                   common::ObString &db_name,
+                                   ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (is_internal_catalog_id(catalog_id)) {
+    // compatible with origin internal catalog's cvt_db_name_to_org() logic
+    if (OB_ISNULL(sql_schema_guard.get_schema_guard())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else {
+      ret = cvt_db_name_to_org(*sql_schema_guard.get_schema_guard(), session, db_name, allocator);
+    }
+  } else if (is_external_catalog_id(catalog_id)) {
+    const ObDatabaseSchema *database_schema = NULL;
+    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    // for external catalog, we must require allocator to hold db_name
+    if (OB_ISNULL(session)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FALSE_IT(tenant_id = session->get_effective_tenant_id())) {
+    } else if (OB_FAIL(sql_schema_guard.get_catalog_database_schema(tenant_id, catalog_id, db_name, database_schema))) {
+      LOG_WARN("fail to get catalog database schema", K(ret), K(tenant_id), K(catalog_id), K(db_name));
+    } else if (OB_ISNULL(database_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      db_name = database_schema->get_database_name();
+      if (allocator != NULL) {
+        OZ(ob_write_string(*allocator, db_name, db_name));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected", K(ret));
+  }
+  return ret;
+}
+
 int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
                                              const bool preserve_lettercase,
                                              ObString &name,
@@ -1956,7 +1998,10 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_XA_ROLLBACK == type
                || T_XA_RECOVER == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())
-               || T_SHOW_CREATE_USER == type) {
+               || T_SHOW_CREATE_USER == type
+               || T_SET_CATALOG == type
+               || T_SHOW_CATALOGS == type
+               || T_SHOW_CREATE_CATALOG == type) {
       ret = true;
     }
   }

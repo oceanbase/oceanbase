@@ -1003,7 +1003,7 @@ bool ObSysVariableSchema::is_valid() const
 void ObSysVariableSchema::reset()
 {
   tenant_id_ = OB_INVALID_ID;
-  schema_version_ = 1;
+  schema_version_ = OB_INVALID_VERSION;
   read_only_ = false;
   name_case_mode_ = OB_NAME_CASE_INVALID;
   memset(sysvar_array_, 0, sizeof(sysvar_array_));
@@ -1902,7 +1902,7 @@ bool ObTenantSchema::is_valid() const
 void ObTenantSchema::reset()
 {
   tenant_id_ = OB_INVALID_ID;
-  schema_version_ = 1;
+  schema_version_ = OB_INVALID_VERSION;
   reset_string(tenant_name_);
   locked_ = false;
   read_only_ = false;
@@ -2449,7 +2449,7 @@ void ObSysVarSchema::reset()
   value_.reset();
   min_val_.reset();
   max_val_.reset();
-  schema_version_ = 0;
+  schema_version_ = OB_INVALID_VERSION;
   info_.reset();
   zone_.reset();
   flags_ = 0;
@@ -2605,6 +2605,7 @@ ObDatabaseSchema &ObDatabaseSchema::operator =(const ObDatabaseSchema &src_schem
     int ret = OB_SUCCESS;
     error_ret_ = src_schema.error_ret_;
     set_tenant_id(src_schema.tenant_id_);
+    set_catalog_id(src_schema.catalog_id_);
     set_database_id(src_schema.database_id_);
     set_schema_version(src_schema.schema_version_);
     set_charset_type(src_schema.charset_type_);
@@ -2653,8 +2654,9 @@ bool ObDatabaseSchema::is_valid() const
 void ObDatabaseSchema::reset()
 {
   tenant_id_ = OB_INVALID_ID;
+  catalog_id_ = OB_INTERNAL_CATALOG_ID;
   database_id_ = OB_INVALID_ID;
-  schema_version_ = 1;
+  schema_version_ = OB_INVALID_VERSION;
   reset_string(database_name_);
   reset_string(comment_);
   charset_type_ = common::CHARSET_INVALID;
@@ -8540,6 +8542,12 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" DECRYPT,");
   }
+  if ((priv_set_ & OB_PRIV_CREATE_CATALOG) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE CATALOG,");
+  }
+  if ((priv_set_ & OB_PRIV_USE_CATALOG) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" USE CATALOG,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }
@@ -8599,7 +8607,7 @@ void ObPriv::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   user_id_ = OB_INVALID_ID;
-  schema_version_ = 1;
+  schema_version_ = OB_INVALID_VERSION;
   priv_set_ = 0;
   priv_array_.reset();
 }
@@ -9831,7 +9839,9 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   priv_check_type_ = other.priv_check_type_;
   obj_type_ = other.obj_type_;
   check_any_column_priv_ = other.check_any_column_priv_;
-  if (OB_FAIL(ob_write_string(allocator, other.db_, db_))) {
+  if (OB_FAIL(ob_write_string(allocator, other.catalog_, catalog_))) {
+    LOG_WARN("Fail to deep copy catalog", K_(catalog), K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.db_, db_))) {
     LOG_WARN("Fail to deep copy db", K_(db), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.table_, table_))) {
     LOG_WARN("Fail to deep copy table", K_(table), K(ret));
@@ -10117,6 +10127,9 @@ const char *ob_mysql_table_type_str(ObTableType type)
       break;
     case TMP_TABLE:
       type_ptr = "TMP TABLE";
+      break;
+    case EXTERNAL_TABLE:
+      type_ptr = "EXTERNAL TABLE";
       break;
     default:
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "unkonw table type", K(type));
@@ -11051,7 +11064,7 @@ void ObOutlineInfo::reset()
   database_id_ = OB_INVALID_ID;
   outline_id_ = OB_INVALID_ID;
   owner_id_ = OB_INVALID_ID;
-  schema_version_ = 0;
+  schema_version_ = OB_INVALID_VERSION;
   reset_string(name_);
   reset_string(signature_);
   reset_string(sql_id_);
@@ -11760,7 +11773,7 @@ void ObSynonymInfo::reset()
   tenant_id_ = OB_INVALID_ID;
   database_id_ = OB_INVALID_ID;
   synonym_id_ = OB_INVALID_ID;
-  schema_version_ = 0;
+  schema_version_ = OB_INVALID_VERSION;
   reset_string(name_);
   reset_string(version_);
   reset_string(object_name_);

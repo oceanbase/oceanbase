@@ -14,6 +14,7 @@
 
 #include "observer/mysql/obmp_init_db.h"
 
+#include "share/catalog/ob_catalog_utils.h"
 #include "src/sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 using namespace oceanbase::rpc;
@@ -35,6 +36,9 @@ int ObMPInitDB::deserialize()
   } else {
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     db_name_.assign_ptr(const_cast<char *>(pkt.get_cdata()), pkt.get_clen()-1);
+    // 'db' will not split
+    // 'catalog.db` will split as 'catalog' and 'db'
+    catalog_name_ = db_name_.split_on('.');
   }
   return ret;
 }
@@ -202,43 +206,77 @@ int ObMPInitDB::do_process(sql::ObSQLSessionInfo *session)
   int sret = OB_SUCCESS;
   share::schema::ObSessionPrivInfo session_priv;
   ObSchemaGetterGuard schema_guard;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID;
+  // used to get catalog database schema
+  ObSqlSchemaGuard sql_schema_guard;
 
   if (OB_ISNULL(session) || OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("session not init", K(ret), K(session), K(gctx_.schema_service_));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
-                                  session->get_effective_tenant_id(), schema_guard))) {
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else if (session->is_tenant_changed() && 0 != db_name_.case_compare(OB_SYS_DATABASE_NAME)) {
     ret = OB_ERR_NO_DB_PRIVILEGE;
     LOG_WARN("can only access oceanbase database when tenant changed", K(ret));
-  } else {
-    if (OB_FAIL(session->get_session_priv_info(session_priv))) {
-      LOG_WARN("fail to get session priv info", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, session, db_name_, NULL/*allocator*/))) {
-      LOG_WARN("fail to cvt db name to orignal", K(db_name_), K(ret));
-    } else if (OB_FAIL(schema_guard.check_db_access(session_priv, session->get_enable_role_array(), db_name_))) {
-      LOG_WARN("fail to check db access.", K_(db_name), K(ret));
-      if (OB_ERR_NO_DB_SELECTED == ret) {
-        sret = OB_ERR_BAD_DATABASE;// 将错误码抛出让外层重试
-      } else {
-        sret = ret; // 保险起见，也抛出
-      }
+  } else if (OB_FALSE_IT(sql_schema_guard.set_schema_guard(&schema_guard))) {
+  } else if (OB_FAIL(get_catalog_id_(*session, schema_guard, catalog_id))) {
+    LOG_WARN("failed to get catalog id", K(ret));
+  } else if (OB_FAIL(session->get_session_priv_info(session_priv))) {
+    LOG_WARN("fail to get session priv info", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(sql_schema_guard, session, catalog_id, db_name_, NULL /*allocator*/))) {
+    LOG_WARN("fail to cvt db name to original", K(catalog_id), K(db_name_), K(ret));
+  } else if (OB_FAIL(schema_guard.check_db_access(session_priv, session->get_enable_role_array(), catalog_id, db_name_))) {
+    LOG_WARN("fail to check db access.", K(catalog_id), K_(db_name), K(ret));
+    if (OB_ERR_NO_DB_SELECTED == ret) {
+      sret = OB_ERR_BAD_DATABASE; // 将错误码抛出让外层重试
     } else {
-      uint64_t db_id = OB_INVALID_ID;
-      session->set_db_priv_set(session_priv.db_priv_set_);
-      if (OB_FAIL(session->set_default_database(db_name_))) {
-        LOG_WARN("failed to set default database", K(ret), K(db_name_));
-      } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
-        LOG_WARN("failed to update database variables", K(ret));
-      } else if (OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
-                                                      session->get_database_name(),
-                                                      db_id))) {
-        LOG_WARN("failed to get database id", K(ret));
-      } else {
-        session->set_database_id(db_id);
-      }
+      sret = ret; // 保险起见，也抛出
+    }
+  } else {
+    // for external catalog, we will assign mocked db_id
+    uint64_t db_id = is_internal_catalog_id(catalog_id) ? OB_INVALID_ID : OB_MIN_EXTERNAL_OBJECT_ID + 1;
+    session->set_db_priv_set(session_priv.db_priv_set_);
+    ObObj catalog_id_obj;
+    catalog_id_obj.set_uint64(catalog_id);
+    if (OB_FAIL(session->update_sys_variable(ObSysVarClassType::SYS_VAR__CURRENT_DEFAULT_CATALOG, catalog_id_obj))) {
+      LOG_WARN("set catalog id session variable failed", K(ret));
+    } else if (OB_FAIL(session->set_default_database(db_name_))) {
+      LOG_WARN("failed to set default database", K(ret), K(catalog_id), K(db_name_));
+    } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
+      LOG_WARN("failed to update database variables", K(ret));
+    } else if (is_internal_catalog_id(catalog_id)
+               && OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(), session->get_database_name(), db_id))) {
+      LOG_WARN("failed to get database id", K(ret));
+    } else {
+      session->set_database_id(db_id);
     }
   }
   return (OB_SUCCESS != sret) ? sret : ret;
+}
+
+int ObMPInitDB::get_catalog_id_(sql::ObSQLSessionInfo &session, ObSchemaGetterGuard &schema_guard, uint64_t &catalog_id)
+{
+  int ret = OB_SUCCESS;
+  catalog_id = session.get_current_default_catalog();
+  ObNameCaseMode case_mode = ObNameCaseMode::OB_NAME_CASE_INVALID;
+  if (!catalog_name_.empty()) {
+    if (OB_FAIL(session.get_name_case_mode(case_mode))) {
+      LOG_WARN("fail to get name case", K(ret));
+    } else if (ObCatalogUtils::is_internal_catalog_name(catalog_name_, case_mode)) {
+      // is internal catalog
+      catalog_id = OB_INTERNAL_CATALOG_ID;
+    } else {
+      const ObCatalogSchema *catalog_schema = NULL;
+      if (OB_FAIL(schema_guard.get_catalog_schema_by_name(session.get_effective_tenant_id(), catalog_name_, catalog_schema))) {
+        LOG_WARN("fail to get catalog schema", K(ret));
+      } else if (OB_ISNULL(catalog_schema)) {
+        ret = OB_CATALOG_NOT_EXIST;
+        LOG_USER_ERROR(OB_CATALOG_NOT_EXIST, catalog_name_.length(), catalog_name_.ptr());
+        LOG_WARN("catalog not exist", K(ret), K(catalog_name_));
+      } else {
+        catalog_id = catalog_schema->get_catalog_id();
+      }
+    }
+  }
+  return ret;
 }

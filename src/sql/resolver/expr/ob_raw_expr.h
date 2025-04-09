@@ -1228,7 +1228,8 @@ struct ObQualifiedName
 {
 public:
   ObQualifiedName()
-      : database_name_(),
+      : catalog_name_(),
+        database_name_(),
         tbl_name_(),
         col_name_(),
         dblink_name_(),
@@ -1245,6 +1246,7 @@ public:
 
   int assign(const ObQualifiedName &other)
   {
+    catalog_name_ = other.catalog_name_;
     database_name_ = other.database_name_;
     tbl_name_ = other.tbl_name_;
     col_name_ = other.col_name_;
@@ -1349,8 +1351,10 @@ public:
                K_(parent_aggr_level),
                K_(access_idents),
                K_(current_resolve_level),
-               K_(is_access_root));
+               K_(is_access_root),
+               K_(catalog_name));
 public:
+  common::ObString catalog_name_;
   common::ObString database_name_;
   common::ObString tbl_name_; //当用于UDF的时候，表示package name
   common::ObString col_name_; //当用于UDF的时候，表示function name

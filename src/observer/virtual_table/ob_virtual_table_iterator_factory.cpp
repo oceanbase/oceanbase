@@ -15,6 +15,7 @@
 #include "ob_virtual_table_iterator_factory.h"
 #include "observer/ob_server.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
+#include "observer/virtual_table/ob_tenant_show_catalog_databases.h"
 #include "observer/virtual_table/ob_tenant_show_tables.h"
 #include "observer/virtual_table/ob_tenant_virtual_warning.h"
 #include "observer/virtual_table/ob_tenant_virtual_current_tenant.h"
@@ -22,6 +23,7 @@
 #include "observer/virtual_table/ob_global_variables.h"
 #include "observer/virtual_table/ob_table_columns.h"
 #include "observer/virtual_table/ob_table_index.h"
+#include "observer/virtual_table/ob_show_create_catalog.h"
 #include "observer/virtual_table/ob_show_create_database.h"
 #include "observer/virtual_table/ob_show_create_table.h"
 #include "observer/virtual_table/ob_show_create_tablegroup.h"
@@ -550,6 +552,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               tenant_show_tables->set_allocator(&allocator);
               tenant_show_tables->set_tenant_id(real_tenant_id);
               vt_iter = static_cast<ObVirtualTableIterator *>(tenant_show_tables);
+            }
+            break;
+          }
+          case OB_TENANT_VIRTUAL_SHOW_CATALOG_DATABASES_TID: {
+            ObTenantShowCatalogDatabases *show_catalog_databases = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObTenantShowCatalogDatabases, show_catalog_databases))) {
+              LOG_ERROR("fail to new", K(ret), K(pure_tid));
+            } else {
+              show_catalog_databases->set_allocator(&allocator);
+              show_catalog_databases->set_tenant_id(real_tenant_id);
+              vt_iter = static_cast<ObVirtualTableIterator *>(show_catalog_databases);
             }
             break;
           }
@@ -1181,6 +1194,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(table_index);
               }
+            }
+            break;
+          }
+          case OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_TID:
+          {
+            ObShowCreateCatalog *create_catalog = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowCreateCatalog, create_catalog))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(create_catalog);
             }
             break;
           }

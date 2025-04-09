@@ -1075,6 +1075,8 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_TRIGGER) != 0) { priv_others |= OB_PRIV_OTHERS_TRIGGER; }
     if ((user.get_priv_set() & OB_PRIV_ENCRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_ENCRYPT; }
     if ((user.get_priv_set() & OB_PRIV_DECRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_DECRYPT; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_CATALOG) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_CATALOG; }
+    if ((user.get_priv_set() & OB_PRIV_USE_CATALOG) != 0) { priv_others |= OB_PRIV_OTHERS_USE_CATALOG; }
   }
   if (OB_FAIL(ret)) {
   } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {

@@ -303,6 +303,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_tenant_snapshot_executor.cpp
   engine/cmd/ob_mock_executor.cpp
   engine/cmd/ob_olap_async_job_executor.cpp
+  engine/cmd/ob_catalog_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -371,6 +372,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_char.cpp
   engine/expr/ob_expr_char_length.cpp
   engine/expr/ob_expr_char_to_rowid.cpp
+  engine/expr/ob_expr_check_catalog_access.cpp
   engine/expr/ob_expr_chr.cpp
   engine/expr/ob_expr_cast.cpp
   engine/expr/ob_expr_coalesce.cpp
@@ -391,6 +393,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_cot.cpp
   engine/expr/ob_expr_crc32.cpp
   engine/expr/ob_expr_cur_time.cpp
+  engine/expr/ob_expr_current_catalog.cpp
   engine/expr/ob_expr_current_user.cpp
   engine/expr/ob_expr_current_user_priv.cpp
   engine/expr/ob_expr_database.cpp
@@ -1418,6 +1421,8 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_context_resolver.cpp
   resolver/ddl/ob_drop_context_resolver.cpp
   resolver/ddl/ob_fts_parser_resolver.cpp
+  resolver/ddl/ob_catalog_resolver.cpp
+  resolver/ddl/ob_catalog_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

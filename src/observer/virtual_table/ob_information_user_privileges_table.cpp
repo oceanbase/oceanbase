@@ -81,6 +81,10 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "ENCRYPT";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DECRYPT_SHIFT] =
                                                    "DECRYPT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_CATALOG_SHIFT] =
+                                                   "CREATE CATALOG";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_USE_CATALOG_SHIFT] =
+                                                   "USE CATALOG";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

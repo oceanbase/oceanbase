@@ -97,6 +97,9 @@ int ObExprUserCanAccessObj::build_raw_obj_priv(
       OZ (raw_obj_priv_array.push_back(OBJ_PRIV_ID_READ));
       OZ (raw_obj_priv_array.push_back(OBJ_PRIV_ID_WRITE));
       break;
+    case static_cast<uint64_t>(share::schema::ObObjectType::CATALOG):
+      OZ (raw_obj_priv_array.push_back(OBJ_PRIV_ID_USE_CATALOG));
+      break;
     default:
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(obj_type));

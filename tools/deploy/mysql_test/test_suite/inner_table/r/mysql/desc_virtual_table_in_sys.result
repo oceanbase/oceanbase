@@ -11050,6 +11050,58 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_plugin_info limit 1;
+desc oceanbase.__all_virtual_catalog;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+catalog_name	varchar(128)	NO			
+catalog_properties	varbinary(1048576)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_catalog limit 1;
+desc oceanbase.__all_virtual_catalog_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+catalog_name	varchar(128)	YES			
+catalog_properties	varbinary(1048576)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_catalog_history limit 1;
+desc oceanbase.__all_virtual_catalog_privilege;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+catalog_name	varbinary(2048)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+priv_set	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog_privilege;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_catalog_privilege limit 1;
+desc oceanbase.__all_virtual_catalog_privilege_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+catalog_name	varbinary(2048)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+priv_set	bigint(20)	YES		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog_privilege_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_catalog_privilege_history limit 1;
 desc oceanbase.__all_virtual_pl_recompile_objinfo;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -11063,6 +11115,15 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_pl_recompile_objinfo limit 1;
+desc oceanbase.__tenant_virtual_show_create_catalog;
+Field	Type	Null	Key	Default	Extra
+catalog_id	bigint(20)	NO	PRI	NULL	
+catalog_name	varchar(128)	NO		NULL	
+create_catalog	longtext	NO		NULL	
+desc oceanbase.__tenant_virtual_show_catalog_databases;
+Field	Type	Null	Key	Default	Extra
+catalog_id	bigint(20)	NO	PRI	NULL	
+database_name	varchar(256)	NO	PRI	NULL	
 desc oceanbase.__all_virtual_dynamic_partition_table;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	

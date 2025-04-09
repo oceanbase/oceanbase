@@ -226,6 +226,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_PROC_TID ||
          table_id == share::OB_TENANT_VIRTUAL_ALL_TABLE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_TABLE_COLUMN_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CATALOG_DATABASES_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_CURRENT_TENANT_TID ||
@@ -250,6 +252,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SQL_AUDIT_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLEGROUP_ORA_TID ||

@@ -6844,6 +6844,33 @@ int ObRootService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
   return ret;
 }
 
+int ObRootService::handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  ObCatalogDDLService catalog_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(catalog_ddl_service.handle_catalog_ddl(arg))) {
+    LOG_WARN("handle ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::revoke_catalog(const ObRevokeCatalogArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObCatalogDDLService catalog_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(catalog_ddl_service.revoke_catalog(arg))) {
+    LOG_WARN("Grant catalog error", K(ret), K(arg.tenant_id_), K(arg.user_id_));
+  }
+  return ret;
+}
+
 int ObRootService::revoke_database(const ObRevokeDBArg &arg)
 {
   int ret = OB_SUCCESS;

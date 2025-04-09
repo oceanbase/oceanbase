@@ -69,7 +69,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
       } else if (OB_UNLIKELY(OB_INVALID_ID == show_table_id)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
-      } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
+      } else if (OB_FAIL(sql_schema_guard_.get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
        LOG_WARN("fail to get table schema", K(ret), K(effective_tenant_id_));
       } else if (OB_UNLIKELY(NULL == table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
@@ -85,16 +85,14 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
         ObSessionPrivInfo session_priv;
         const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
         session_->get_session_priv_info(session_priv);
-        const ObSimpleDatabaseSchema *db_schema = NULL;
+        const ObDatabaseSchema *db_schema = NULL;
         if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
                     "user_id", session_priv.user_id_, K(ret));
         } else if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
           LOG_WARN("init failed", K(ret));
-        } else if (OB_FAIL(schema_guard_->get_database_schema(table_schema->get_tenant_id(),
-                                                              table_schema->get_database_id(),
-                                                              db_schema))) {
+        } else if (OB_FAIL(sql_schema_guard_.get_database_schema(table_schema->get_tenant_id(), table_schema->get_database_id(), db_schema))) {
           LOG_WARN("get database schema failed", K(ret));
         } else if (OB_ISNULL(db_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -362,8 +360,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
                 "user_id", session_priv.user_id_, K(ret));
-    } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id,
-               table_schema.get_database_id(), db_schema))) {
+    } else if (OB_FAIL(sql_schema_guard_.get_database_schema(tenant_id, table_schema.get_database_id(), db_schema))) {
       LOG_WARN("failed to get database_schema", K(ret),
          K(tenant_id), K(table_schema.get_database_id()));
     } else if (OB_UNLIKELY(NULL == db_schema)) {

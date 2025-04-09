@@ -490,6 +490,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_USER, ObRpcRevokeUserP, revoke_user
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_LOCK_USER, ObRpcLockUserP, lock_user(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_USER_PROFILE, ObRpcAlterUserProfileP, alter_user_profile(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_SECURITY_AUDIT, ObRpcSecurityAuditP, handle_security_audit(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_CATALOG, ObRpcRevokeCatalogP, revoke_catalog(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_DB, ObRpcRevokeDBP, revoke_database(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_TABLE, ObRpcRevokeTableP, revoke_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_ROUTINE, ObRpcRevokeRoutineP, revoke_routine(arg_));
@@ -711,6 +712,9 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RELOAD_MASTER_KEY, ObReloadMasterKeyP, reload_
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_USER_PROXY, ObRpcAlterUserProxyP, alter_user_proxy(arg_, result_));
 //rebuild tablet
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ROOT_REBUILD_TABLET, ObRpcRebuildTabletP, root_rebuild_tablet(arg_));
+
+// catalog ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_CATALOG_DDL, ObRpcHandleCatalogDDLP, handle_catalog_ddl(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

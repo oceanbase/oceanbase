@@ -1020,13 +1020,14 @@ public:
                         ObMySQLTransaction &trans);
   inline share::schema::ObMultiVersionSchemaService &get_multi_schema_service() { return schema_service_; }
   inline common::ObMySQLProxy &get_sql_proxy() { return sql_proxy_; }
-private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObObjPrivSortKey &obj_priv_key,          /* in: obj priv key*/
       const uint64_t option,                                        /* in: new option */
       const share::ObRawObjPrivArray &obj_priv_array,               /* in: new privs used want to add */
       share::ObRawObjPrivArray &new_obj_priv_array);
+
+private:
   virtual int init_tenant_tablegroup(const uint64_t tenant_id,
                                      common::ObMySQLTransaction &trans);
   virtual int init_tenant_database(const share::schema::ObTenantSchema &tenant_schema,

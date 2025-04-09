@@ -505,6 +505,7 @@ ObSchemaMgr::ObSchemaMgr()
       rls_policy_mgr_(allocator_),
       rls_group_mgr_(allocator_),
       rls_context_mgr_(allocator_),
+      catalog_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE))
@@ -561,6 +562,7 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       rls_policy_mgr_(allocator_),
       rls_group_mgr_(allocator_),
       rls_context_mgr_(allocator_),
+      catalog_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE))
@@ -634,6 +636,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init rls_group mgr failed", K(ret));
   } else if (OB_FAIL(rls_context_mgr_.init())) {
     LOG_WARN("init rls_context mgr failed", K(ret));
+  } else if (OB_FAIL(catalog_mgr_.init())) {
+    LOG_WARN("init catalog mgr failed", K(ret));
   } else if (OB_FAIL(hidden_table_name_map_.init())) {
     LOG_WARN("init hidden table name map failed", K(ret));
   } else if (OB_FAIL(built_in_index_name_map_.init())) {
@@ -703,6 +707,7 @@ void ObSchemaMgr::reset()
     rls_policy_mgr_.reset();
     rls_group_mgr_.reset();
     rls_context_mgr_.reset();
+    catalog_mgr_.reset();
     tenant_id_ = OB_INVALID_TENANT_ID;
     hidden_table_name_map_.clear();
     built_in_index_name_map_.clear();
@@ -822,6 +827,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign rls_group mgr failed", K(ret));
       } else if (OB_FAIL(rls_context_mgr_.assign(other.rls_context_mgr_))) {
         LOG_WARN("assign rls_context mgr failed", K(ret));
+      } else if (OB_FAIL(catalog_mgr_.assign(other.catalog_mgr_))) {
+        LOG_WARN("assign catalog mgr failed", K(ret));
       }
     }
   }
@@ -919,6 +926,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy rls_group mgr failed", K(ret));
       } else if (OB_FAIL(rls_context_mgr_.deep_copy(other.rls_context_mgr_))) {
         LOG_WARN("deep copy rls_context mgr failed", K(ret));
+      } else if (OB_FAIL(catalog_mgr_.deep_copy(other.catalog_mgr_))) {
+        LOG_WARN("deep copy catalog mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2124,6 +2133,42 @@ int ObSchemaMgr::get_database_schema(
     }
   }
 
+  return ret;
+}
+
+int ObSchemaMgr::add_catalogs(const common::ObIArray<ObCatalogSchema> &catalog_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < catalog_schemas.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(add_catalog(catalog_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_catalog(const ObCatalogSchema &catalog_schema)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id_)) {
+    mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(get_tenant_name_case_mode(catalog_schema.get_tenant_id(), mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), "tenant_id", catalog_schema.get_tenant_id());
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(catalog_mgr_.add_catalog(catalog_schema, mode))) {
+    LOG_WARN("failed to add catalog", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_catalog(const ObTenantCatalogId &id)
+{
+  int ret = OB_SUCCESS;
+  OZ(catalog_mgr_.del_catalog(id));
   return ret;
 }
 
@@ -4496,6 +4541,8 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del rls_group in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(rls_context_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del rls_context in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(catalog_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del catalog in tenant failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -4540,6 +4587,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t rls_policy_schema_count = 0;
     int64_t rls_group_schema_count = 0;
     int64_t rls_context_schema_count = 0;
+    int64_t catalog_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4590,6 +4638,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get rls_group schema count failed", K(ret));
     } else if (OB_FAIL(rls_context_mgr_.get_schema_count(rls_context_schema_count))) {
       LOG_WARN("get rls_context schema count failed", K(ret));
+    } else if (OB_FAIL(catalog_mgr_.get_schema_count(catalog_schema_count))) {
+      LOG_WARN("get catalog schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4606,6 +4656,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + rls_policy_schema_count
                        + rls_group_schema_count
                        + rls_context_schema_count
+                       + catalog_schema_count
                        + sys_variable_schema_count
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
@@ -5381,6 +5432,8 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to get rls_group statistics", K(ret));
   } else if (OB_FAIL(rls_context_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get rls_context statistics", K(ret));
+  } else if (OB_FAIL(catalog_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get catalog statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(context_mgr_.get_schema_statistics(schema_info))) {

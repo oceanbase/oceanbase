@@ -1502,6 +1502,7 @@ public:
   int get_compatibility_control(share::ObCompatType &compat_type) const;
   int get_compatibility_version(uint64_t &compat_version) const;
   int get_security_version(uint64_t &security_version) const;
+  uint64_t get_current_default_catalog() const;
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
   void trace_all_sys_vars() const;
   void reuse_labels() { labels_.reuse(); }
@@ -1855,6 +1856,7 @@ public:
       ob_enable_parameter_anonymous_block_ = false;
       security_version_ = 0;
       ob_enable_ps_parameter_anonymous_block_ = false;
+      current_default_catalog_ = 0;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1908,7 +1910,8 @@ public:
             compat_version_ == other.compat_version_ &&
             ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_ &&
             security_version_ == other.security_version_ &&
-            ob_enable_ps_parameter_anonymous_block_ == other.ob_enable_ps_parameter_anonymous_block_;
+            ob_enable_ps_parameter_anonymous_block_ == other.ob_enable_ps_parameter_anonymous_block_ &&
+            current_default_catalog_ == other.current_default_catalog_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2219,6 +2222,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
+    DEF_SYS_VAR_CACHE_FUNCS(uint64_t, current_default_catalog);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2297,6 +2301,7 @@ private:
         bool inc_ob_enable_parameter_anonymous_block_:1;
         bool inc_security_version_:1;
         bool inc_ob_enable_ps_parameter_anonymous_block_:1;
+        bool inc_current_default_catalog_:1;
       };
     };
   };

@@ -2224,19 +2224,27 @@ int ObResolverUtils::resolve_column_ref(const ParseNode *node, const ObNameCaseM
                                         ObQualifiedName& column_ref)
 {
   int ret = OB_SUCCESS;
+  ParseNode *catalog_node = NULL;
   ParseNode* db_node = NULL;
   ParseNode* relation_node = NULL;
   ParseNode* column_node = NULL;
   ObString column_name;
   ObString table_name;
   ObString database_name;
+  ObString catalog_name;
   if (OB_ISNULL(node) || node->num_child_ < 3) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse node is invalid", K(node));
   } else {
+    if (node->num_child_ >= 4 && OB_NOT_NULL(node->children_[3])) {
+      catalog_node = node->children_[3];
+    }
     db_node = node->children_[0];
     relation_node = node->children_[1];
     column_node = node->children_[2];
+    if (catalog_node != NULL) {
+      column_ref.catalog_name_.assign_ptr(const_cast<char *>(catalog_node->str_value_), static_cast<int32_t>(catalog_node->str_len_));
+    }
     if (db_node != NULL) {
       column_ref.database_name_.assign_ptr(const_cast<char*>(db_node->str_value_),
                                            static_cast<int32_t>(db_node->str_len_));
@@ -2260,6 +2268,7 @@ int ObResolverUtils::resolve_column_ref(const ParseNode *node, const ObNameCaseM
   }
 
   if (OB_SUCC(ret) && lib::is_mysql_mode() && OB_LOWERCASE_AND_INSENSITIVE == case_mode) {
+    ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, column_ref.catalog_name_);
     ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, column_ref.database_name_);
     ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, column_ref.tbl_name_);
   }
@@ -2412,6 +2421,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_VARIABLE_SET);
       // get diagnostics
       SET_STMT_TYPE(T_DIAGNOSTICS);
+      // catalog
+      SET_STMT_TYPE(T_CREATE_CATALOG);
+      SET_STMT_TYPE(T_ALTER_CATALOG);
+      SET_STMT_TYPE(T_DROP_CATALOG);
       // read only
       SET_STMT_TYPE(T_EXPLAIN);
       SET_STMT_TYPE(T_SHOW_COLUMNS);
@@ -2476,6 +2489,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_CACHE_INDEX);
       SET_STMT_TYPE(T_LOAD_INDEX_INTO_CACHE);
       SET_STMT_TYPE(T_SHOW_CREATE_USER);
+      SET_STMT_TYPE(T_SET_CATALOG);
+      SET_STMT_TYPE(T_SHOW_CATALOGS);
+      SET_STMT_TYPE(T_SHOW_CREATE_CATALOG);
 #undef SET_STMT_TYPE
       case T_ROLLBACK:
       case T_COMMIT: {
@@ -5324,7 +5340,15 @@ int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_fact
     file_column_expr->set_table_id(table_id);
     file_column_expr->set_explicited_reference();
     file_column_expr->set_extra(extra);
-    file_column_expr->set_meta_type(column_schema->get_meta_type());
+    if (column_schema->get_meta_type().is_json()) {
+      // if odps column type is json, we read it as string, then convert to json
+      common::ObObjMeta meta_type;
+      meta_type.set_type(ObObjType::ObVarcharType);
+      meta_type.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      file_column_expr->set_meta_type(meta_type);
+    } else {
+      file_column_expr->set_meta_type(column_schema->get_meta_type());
+    }
     file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
     file_column_expr->set_accuracy(column_schema->get_accuracy());
     if (OB_FAIL(file_column_expr->formalize(&session_info))) {

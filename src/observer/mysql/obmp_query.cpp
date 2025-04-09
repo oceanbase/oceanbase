@@ -1569,7 +1569,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_START_TRANS:
     case stmt::T_END_TRANS:
     case stmt::T_SHOW_CHECK_TABLE:
-    case stmt::T_SHOW_CREATE_USER: {
+    case stmt::T_SHOW_CREATE_USER:
+    case stmt::T_SET_CATALOG:
+    case stmt::T_SHOW_CATALOGS:
+    case stmt::T_SHOW_CREATE_CATALOG: {
       is_readonly = true;
       break;
     }

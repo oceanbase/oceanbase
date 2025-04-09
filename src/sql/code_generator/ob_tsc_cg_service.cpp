@@ -50,6 +50,40 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
   if (op.use_index_merge()) {
     tsc_ctdef.use_index_merge_ = true;
   }
+  if (OB_SUCC(ret) && (op.get_table_type() == share::schema::VIRTUAL_TABLE || op.get_table_type() == share::schema::EXTERNAL_TABLE)) {
+    ObSqlSchemaGuard *sql_schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
+    if (OB_ISNULL(sql_schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql schema guard is null", K(ret));
+    } else {
+      common::ObIArray<const share::schema::ObDatabaseSchema *> &db_schemas = sql_schema_guard->get_mocked_database_schemas();
+      common::ObIArray<const share::schema::ObTableSchema *> &tbl_schemas = sql_schema_guard->get_mocked_table_schemas();
+      OZ(scan_ctdef.external_object_ctx_.init(db_schemas.count() + tbl_schemas.count()));
+      for (int64_t i = 0; OB_SUCC(ret) && i < db_schemas.count(); ++i) {
+        const share::schema::ObDatabaseSchema *db_schema = db_schemas.at(i);
+        if (OB_ISNULL(db_schema)) {
+          // ignore ret
+        } else if (is_external_object_id(db_schema->get_database_id())) {
+          OZ(scan_ctdef.external_object_ctx_.add_database_schema(db_schema->get_tenant_id(),
+                                                                 db_schema->get_catalog_id(),
+                                                                 db_schema->get_database_id(),
+                                                                 db_schema->get_database_name_str()));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < tbl_schemas.count(); ++i) {
+        const share::schema::ObTableSchema *tbl_schema = tbl_schemas.at(i);
+        if (OB_ISNULL(tbl_schema)) {
+          // ignore ret
+        } else if (is_external_object_id(tbl_schema->get_table_id())) {
+          OZ(scan_ctdef.external_object_ctx_.add_table_schema(tbl_schema->get_tenant_id(),
+                                                              tbl_schema->get_catalog_id(),
+                                                              tbl_schema->get_database_id(),
+                                                              tbl_schema->get_table_id(),
+                                                              tbl_schema->get_table_name_str()));
+        }
+      }
+    }
+  }
   if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
     const ObTableSchema *table_schema = nullptr;
     ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
@@ -76,7 +110,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 
       int64_t partition_num = table_schema->get_partition_num();
       if (is_external_object_id(table_schema->get_table_id())
-          && table_schema->is_partitioned_table()) {
+          && table_schema->is_partitioned_table()
+          && partition_num > 0) {
         if (OB_FAIL(scan_ctdef.partition_infos_.reserve(partition_num))) {
           LOG_WARN("failed to reserve partition infos array", K(ret), K(partition_num));
         } else {

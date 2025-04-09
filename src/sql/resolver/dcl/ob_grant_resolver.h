@@ -85,7 +85,23 @@ public:
       common::ObString &db,
       common::ObString &table,
       share::schema::ObPrivLevel &grant_level,
-      ObIAllocator &allocator);
+      ObIAllocator &allocator,
+      common::ObString &catalog);
+
+  static int resolve_priv_level_with_object_type(const ObSQLSessionInfo *session_info,
+                                                 const ParseNode *priv_object_node,
+                                                 ObPrivLevel &grant_level);
+
+  template<class T>
+  static int resolve_priv_object(const ParseNode *priv_object_node,
+                                 T *grant_stmt,
+                                 ObSchemaChecker *schema_checker_,
+                                 common::ObString &db,
+                                 common::ObString &table,
+                                 common::ObString &catalog,
+                                 const uint64_t tenant_id,
+                                 ObIAllocator *allocator,
+                                 bool is_grant = true); // revoke on object which has been deleted
 
   template<class T>
   static int resolve_priv_set(
@@ -110,7 +126,8 @@ public:
       ObString &table,
       share::schema::ObPrivLevel &grant_level,
       bool &is_directory,
-      bool &explicit_db);
+      bool &explicit_db,
+      bool &is_catalog);
   int check_user_dup(
       share::schema::ObSchemaGetterGuard *guard,
       ObIArray<ObString> &user_name_array,
@@ -300,6 +317,16 @@ int ObGrantResolver::resolve_priv_set(
           } else {
             priv_set |= priv_type;
           }
+        } else if (OB_PRIV_CATALOG_LEVEL == grant_level) {
+          if (OB_PRIV_ALL == priv_type) {
+            priv_set |= OB_PRIV_CATALOG_ACC;
+          } else if (priv_type & (~(OB_PRIV_CATALOG_ACC | OB_PRIV_GRANT))) {
+            ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+            SQL_RESV_LOG(WARN, "Grant/Revoke privilege than can not be used",
+                      "priv_type", ObPrintPrivSet(priv_type), K(ret));
+          } else {
+            priv_set |= priv_type;
+          }
         } else {
           //do nothing
         }
@@ -309,6 +336,75 @@ int ObGrantResolver::resolve_priv_set(
       }
     }
   }
+  return ret;
+}
+
+template<class T>
+int ObGrantResolver::resolve_priv_object(const ParseNode *priv_object_node,
+                                         T *grant_stmt,
+                                         ObSchemaChecker *schema_checker,
+                                         common::ObString &db,
+                                         common::ObString &table,
+                                         common::ObString &catalog,
+                                         const uint64_t tenant_id,
+                                         ObIAllocator *allocator,
+                                         bool is_grant)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObObjectType object_type = share::schema::ObObjectType::INVALID;
+  uint64_t object_id = OB_INVALID_ID;
+  if (OB_ISNULL(grant_stmt) || OB_ISNULL(schema_checker) || OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (priv_object_node != NULL) {
+    if (priv_object_node->value_ == 1) {
+      const share::schema::ObTableSchema *table_schema = NULL;
+      if (OB_FAIL(schema_checker->get_table_schema(tenant_id, db, table, false, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+        if (OB_TABLE_NOT_EXIST == ret && !is_grant) {
+          ret = OB_SUCCESS;
+        }
+      } else if (table_schema != NULL) {
+        if (table_schema->is_index_table()) {
+          object_type = ObObjectType::INDEX;
+        } else {
+          object_type = ObObjectType::TABLE;
+        }
+        object_id = table_schema->get_table_id();
+      }
+    } else if (priv_object_node->value_ == 2 || priv_object_node->value_ == 3) {
+      object_type = (priv_object_node->value_ == 2) ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
+      uint64_t routine_id = 0;
+      bool is_proc = false;
+      if (OB_FAIL(schema_checker->get_routine_id(tenant_id, db, table, routine_id, is_proc))) {
+        LOG_WARN("get routine id failed", K(ret));
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret && !is_grant) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        object_id = routine_id;
+      }
+    } else if (priv_object_node->value_ == 4) {
+      object_type = ObObjectType::CATALOG;
+      if (OB_FAIL(schema_checker->get_catalog_id_name(tenant_id, catalog, object_id, allocator, !is_grant))) {
+        LOG_WARN("failed to get catalog id", K(ret));
+      } else {
+        grant_stmt->set_catalog_name(catalog);
+      }
+    }
+  } else {
+    ObString object_db_name;
+    if (db.empty() || table.empty()) {
+      object_type = share::schema::ObObjectType::MAX_TYPE;
+    } else {
+      ObSynonymChecker synonym_checker;
+      (void)schema_checker->get_object_type(tenant_id, db, table, object_type, object_id,
+                                            object_db_name, false, false, ObString(""),
+                                            synonym_checker);
+    }
+  }
+  grant_stmt->set_object_type(object_type);
+  grant_stmt->set_object_id(object_id);
   return ret;
 }
 

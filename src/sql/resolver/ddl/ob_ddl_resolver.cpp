@@ -1363,22 +1363,8 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
     } else if (!is_valid) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("file format is not valid", K(ret));
-    } else {
-      char *buf = NULL;
-      int64_t buf_len = DEFAULT_BUF_LENGTH / 2;
-      int64_t pos = 0;
-      do {
-        buf_len *= 2;
-        if (OB_ISNULL(buf = static_cast<char*>(params.allocator_->alloc(buf_len)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc buf", K(ret), K(buf_len));
-        } else {
-          pos = format.to_string(buf, buf_len);
-        }
-      } while (OB_SUCC(ret) && pos >= buf_len);
-      if (OB_SUCC(ret)) {
-        format_str = ObString(pos, buf);
-      }
+    } else if (OB_FAIL(format.to_string_with_alloc(format_str, *params.allocator_))) {
+      LOG_WARN("failed to convert format to string", K(ret));
     }
   }
   return ret;

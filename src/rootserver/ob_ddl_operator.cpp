@@ -6871,6 +6871,33 @@ int ObDDLOperator::drop_db_table_privs(
       ddl_count -= db_privs.count();
     }
   }
+  // delete catalog privileges of this user
+  if (OB_SUCC(ret)) {
+    ObArray<const ObCatalogPriv *> catalog_privs;
+    if (OB_FAIL(schema_guard.get_catalog_priv_with_user_id(tenant_id, user_id, catalog_privs))) {
+      LOG_WARN("Get catalog privileges of user to be deleted error",
+                K(tenant_id), K(user_id), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < catalog_privs.count(); ++i) {
+        const ObCatalogPriv *catalog_priv = catalog_privs.at(i);
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        ObPrivSet empty_priv = 0;
+        ObString ddl_stmt_str;
+        if (OB_ISNULL(catalog_priv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("db priv is NULL", K(ret), K(catalog_priv));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_catalog_sql_service().grant_revoke_catalog(
+                                                                  catalog_priv->get_sort_key(),
+                                                                  empty_priv,
+                                                                  new_schema_version,
+                                                                  ddl_stmt_str, trans))) {
+          LOG_WARN("apply catalog failed", K(ret));
+        }
+      }
+    }
+  }
   // delete table privileges of this user MYSQL
   if (OB_SUCC(ret)) {
     ObArray<const ObTablePriv *> table_privs;
@@ -7718,13 +7745,14 @@ int ObDDLOperator::grant_table(
       bool need_flush = true;
       new_priv |= table_priv_set;
       need_flush = (new_priv != table_priv_set);
-      bool is_directory = false;
+      bool is_directory_or_catalog = false;
       if (obj_priv_array.count() > 0
-          && static_cast<uint64_t>(ObObjectType::DIRECTORY) == obj_priv_key.obj_type_) {
-        is_directory = true;
+          && ((static_cast<uint64_t>(ObObjectType::DIRECTORY) == obj_priv_key.obj_type_)
+              || (static_cast<uint64_t>(ObObjectType::CATALOG) == obj_priv_key.obj_type_))) {
+        is_directory_or_catalog = true;
       }
 
-      if (need_flush && !is_directory) {
+      if (need_flush && !is_directory_or_catalog) {
         int64_t new_schema_version = OB_INVALID_VERSION;
         int64_t new_schema_version_ora = OB_INVALID_VERSION;
         if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {

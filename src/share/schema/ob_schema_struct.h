@@ -2268,6 +2268,7 @@ public:
   int assign(const ObDatabaseSchema &src_schema);
   //set methods
   inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_catalog_id(const uint64_t catalog_id) { catalog_id_ = catalog_id; }
   inline void set_database_id(const uint64_t database_id) { database_id_ = database_id; }
   inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
   int set_database_name(const char *database_name) { return deep_copy_str(database_name, database_name_); }
@@ -2289,6 +2290,7 @@ public:
 
   //get methods
   inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline uint64_t get_catalog_id() const { return catalog_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline int64_t get_schema_version() const { return schema_version_; }
   inline const char *get_database_name() const { return extract_str(database_name_); }
@@ -2331,6 +2333,7 @@ public:
 
 private:
   uint64_t tenant_id_;
+  uint64_t catalog_id_ = OB_INTERNAL_CATALOG_ID; // do not need to serialized
   uint64_t database_id_;
   int64_t schema_version_;
   common::ObString database_name_;
@@ -5915,11 +5918,12 @@ struct ObNeedPriv
              ObPrivSet priv_set,
              const bool is_sys_table,
              const bool is_for_update = false,
-             ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
+             ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL,
+             const common::ObString &catalog = ObString())
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
         is_sys_table_(is_sys_table), obj_type_(share::schema::ObObjectType::INVALID),
         is_for_update_(is_for_update), priv_check_type_(priv_check_type),
-        columns_(), check_any_column_priv_(false)
+        columns_(), check_any_column_priv_(false), catalog_(catalog)
   { }
 
   ObNeedPriv(const common::ObString &db,
@@ -5929,17 +5933,19 @@ struct ObNeedPriv
             const bool is_sys_table,
             const share::schema::ObObjectType obj_type,
             const bool is_for_update = false,
-            ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
+            ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL,
+            const common::ObString &catalog = ObString())
     : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
       is_sys_table_(is_sys_table), obj_type_(obj_type),
       is_for_update_(is_for_update), priv_check_type_(priv_check_type),
-      columns_(), check_any_column_priv_(false)
+      columns_(), check_any_column_priv_(false), catalog_(catalog)
   { }
 
   ObNeedPriv()
       : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
         obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
-        priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false)
+        priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false),
+        catalog_()
   { }
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
@@ -5955,8 +5961,9 @@ struct ObNeedPriv
   // Else column_ not empty, then table level has not the priv_set, then check if column_ has the priv_set.
   bool check_any_column_priv_; //used under table level.
   // If check_any_column_priv_ true, then check the table has any column with the priv_set.
+  common::ObString catalog_;
   TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
-               K_(priv_check_type));
+               K_(priv_check_type), K_(catalog));
 };
 
 struct ObStmtNeedPrivs

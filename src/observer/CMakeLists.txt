@@ -491,6 +491,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_mysql_user_table.cpp
   virtual_table/ob_plan_cache_plan_explain.cpp
   virtual_table/ob_session_variables.cpp
+  virtual_table/ob_show_create_catalog.cpp
   virtual_table/ob_show_create_database.cpp
   virtual_table/ob_show_create_procedure.cpp
   virtual_table/ob_show_create_table.cpp
@@ -560,6 +561,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_plugin_info.cpp
   virtual_table/ob_all_virtual_cs_replica_tablet_stats.cpp
   virtual_table/ob_all_virtual_dynamic_partition_table.cpp
+  virtual_table/ob_tenant_show_catalog_databases.cpp
 )
 
 ob_server_add_target(ob_server)

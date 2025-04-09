@@ -40,6 +40,7 @@
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #endif
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/catalog/ob_catalog_utils.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/ob_sql_mock_schema_utils.h"
@@ -3369,6 +3370,8 @@ int ObDMLResolver::inner_resolve_sys_view(const ParseNode *table_node,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObString tmp_catalog_name;
+  UNUSED(tmp_catalog_name);
   ObString tmp_db_name;
   ObString tmp_tbl_name;
   bool is_oracle_sys_view = false;
@@ -3376,6 +3379,7 @@ int ObDMLResolver::inner_resolve_sys_view(const ParseNode *table_node,
   if (OB_SUCCESS != (tmp_ret = resolve_table_relation_node_v2(table_node,
                                                               tmp_tbl_name,
                                                               tmp_db_name,
+                                                              tmp_catalog_name,
                                                               is_db_explicit))) {
     LOG_WARN("fail to resolve table relation node", K(tmp_ret));
     tmp_ret = OB_SUCCESS;
@@ -3388,6 +3392,7 @@ int ObDMLResolver::inner_resolve_sys_view(const ParseNode *table_node,
     if (OB_SUCCESS != (tmp_ret = resolve_table_relation_node_v2(table_node,
                                                                 tmp_tbl_name,
                                                                 tmp_db_name,
+                                                                tmp_catalog_name,
                                                                 is_db_explicit,
                                                                 false,
                                                                 is_oracle_sys_view))) {
@@ -3437,10 +3442,12 @@ int ObDMLResolver::inner_resolve_sys_view(const ParseNode *table_node,
 // 若在系统租户下找到的是用户表, 则忽略
 int ObDMLResolver::resolve_table_relation_factor_wrapper(const ParseNode *table_node,
                                                          uint64_t &dblink_id,
+                                                         uint64_t &catalog_id,
                                                          uint64_t &database_id,
                                                          ObString &tbl_name,
                                                          ObString &synonym_name,
                                                          ObString &synonym_db_name,
+                                                         ObString &catalog_name,
                                                          ObString &db_name,
                                                          ObString &dblink_name,
                                                          bool &is_db_explicit,
@@ -3458,10 +3465,12 @@ int ObDMLResolver::resolve_table_relation_factor_wrapper(const ParseNode *table_
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_table_relation_factor(table_node,
                                               dblink_id,
+                                              catalog_id,
                                               database_id,
                                               tbl_name,
                                               synonym_name,
                                               synonym_db_name,
+                                              catalog_name,
                                               db_name,
                                               dblink_name,
                                               is_db_explicit,
@@ -3516,6 +3525,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
   uint64_t tenant_id = OB_INVALID_ID;
   uint64_t dblink_id = OB_INVALID_ID;
   bool is_reverse_link = false;
+  ObString catalog_name;
   ObString database_name;
   ObString table_name;
   ObString alias_name;
@@ -3523,6 +3533,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
   ObString dblink_name;
   ObString synonym_db_name;
   bool use_sys_tenant = false;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID;
   uint64_t database_id = OB_INVALID_ID;
   const ObTableSchema *table_schema = NULL;
   ObArray<uint64_t> ref_obj_ids;
@@ -3554,10 +3565,12 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
 
   if (OB_FAIL(resolve_table_relation_factor_wrapper(table_node,
                                                     dblink_id,
+                                                    catalog_id,
                                                     database_id,
                                                     table_name,
                                                     synonym_name,
                                                     synonym_db_name,
+                                                    catalog_name,
                                                     database_name,
                                                     dblink_name,
                                                     is_db_explicit,
@@ -3614,7 +3627,9 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
     bool cte_table_fisrt = (table_node->children_[0] == NULL);
     uint64_t real_dep_obj_id = (ref_obj_ids.empty() ? view_ref_id_ : ref_obj_ids.at(ref_obj_ids.count() - 1));
     if (OB_FAIL(resolve_base_or_alias_table_item_normal(tenant_id,
+                                                        catalog_id,
                                                         database_id,
+                                                        catalog_name,
                                                         database_name,
                                                         is_db_explicit,
                                                         table_name,
@@ -4069,7 +4084,8 @@ int ObDMLResolver::set_basic_column_properties(ObColumnSchemaV2 &column_schema,
       LOG_WARN("set current default value failed", K(ret));
   } else {
       column_schema.add_column_flag(STORED_GENERATED_COLUMN_FLAG);
-      if (is_pad_char_to_full_length(session_info_->get_sql_mode())) {
+      if (OB_NOT_NULL(THIS_WORKER.get_session())
+          && is_pad_char_to_full_length(THIS_WORKER.get_session()->get_sql_mode())) {
         column_schema.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
       }
       column_schema.set_nullable(true);
@@ -4605,22 +4621,20 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
 }
 
 #ifdef OB_BUILD_CPP_ODPS
-int ObDMLResolver::build_column_schemas_for_odps(const ObSEArray<ObODPSTableRowIterator::OdpsColumn, 8> &column_list,
-                                                const common::ObIArray<ObString> &part_col_names,
+int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIterator::OdpsColumn> &column_list,
+                                                const ObIArray<ObString> &part_col_names,
                                                 ObTableSchema& table_schema)
 {
   int ret = OB_SUCCESS;
-
+  ObArenaAllocator allocator;
   int64_t idx = 0;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
     ObColumnSchemaV2 column_schema;
     const ObODPSTableRowIterator::OdpsColumn &odps_column = column_list.at(i);
-    ObString field_name;
+    ObString field_name = ObString(odps_column.name_.c_str());
 
-    if (OB_FAIL(ob_write_string(*allocator_, ObString(odps_column.name_.c_str()), field_name))) {
-      LOG_WARN("failed to write field name", K(ret));
-    } else {
+    if (OB_SUCC(ret)) {
       // 设置基本属性
       column_schema.set_table_id(table_schema.get_table_id());
       column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
@@ -4779,10 +4793,10 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObSEArray<ObODPSTableRowI
           ObSqlString temp_str;
           if (OB_FAIL(temp_str.assign_fmt("%s%ld", N_PARTITION_LIST_COL, ++idx))) {
             LOG_WARN("failed to assign fmt", K(ret));
-          } else if (OB_FAIL(ob_write_string(*allocator_, temp_str.string(), mock_gen_column_str))) {
+          } else if (OB_FAIL(ob_write_string(allocator, temp_str.string(), mock_gen_column_str))) {
             LOG_WARN("failed to write string", K(ret));
           }
-        } else if (OB_FAIL(format.mock_gen_column_def(column_schema, *allocator_, mock_gen_column_str))) {
+        } else if (OB_FAIL(format.mock_gen_column_def(column_schema, allocator, mock_gen_column_str))) {
           LOG_WARN("fail to mock gen column def", K(ret));
         }
 
@@ -4855,13 +4869,8 @@ int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
   oceanbase::sql::ObExprRegexpSessionVariables regexp_vars;
 
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(GCTX.location_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("location service is null", K(ret));
-    } else if (OB_FAIL(session_info_->get_regexp_session_vars(regexp_vars))) {
-      LOG_WARN("failed to get regexp session vars", K(ret));
-    } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
-              session_info_->get_effective_tenant_id(),
+    if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+              MTL_ID(),
               table_schema.get_table_id(),
               table_schema.get_external_file_location(),
               table_schema.get_external_file_location_access_info(),
@@ -7286,8 +7295,10 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   return ret;
 }
 
-int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
-                                                           uint64_t database_id,
+int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant_id,
+                                                           const uint64_t catalog_id,
+                                                           const uint64_t database_id,
+                                                           const ObString &catalog_name,
                                                            const ObString &db_name,
                                                            const bool &is_db_explicit,
                                                            const ObString &tbl_name,
@@ -7316,12 +7327,14 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
   if (OB_SUCC(ret)) {
     item->synonym_name_ = synonym_name;
     item->synonym_db_name_ = synonym_db_name;
+    item->catalog_name_ = catalog_name;
     item->database_name_ = db_name;
     bool select_index_enabled = false;
     const bool is_hidden = session_info_->is_table_name_hidden();
     if (OB_FAIL(session_info_->is_select_index_enabled(select_index_enabled))) {
       LOG_WARN("get select index status failed", K(ret));
     } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
+                                                         catalog_id,
                                                          database_id,
                                                          tbl_name,
                                                          false /*data table first*/,
@@ -7361,7 +7374,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         LOG_WARN("table or index get schema failed", K(ret));
       }
     }
-    
+
     // restrict accessible virtual table can not be use in sys tenant or sys view.
     if (OB_SUCC(ret)
         && tschema->is_vir_table()
@@ -10721,10 +10734,12 @@ int ObDMLResolver::add_synonym_obj_id(const ObSynonymChecker &synonym_checker, b
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  uint64_t &dblink_id,
+                                                 uint64_t &catalog_id,
                                                  uint64_t &database_id,
                                                  ObString &table_name,
                                                  ObString &synonym_name,
                                                  ObString &synonym_db_name,
+                                                 ObString &catalog_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_reverse_link,
@@ -10734,10 +10749,12 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
   UNUSED(is_db_explicit);
   return resolve_table_relation_factor(node,
                                        dblink_id,
+                                       catalog_id,
                                        database_id,
                                        table_name,
                                        synonym_name,
                                        synonym_db_name,
+                                       catalog_name,
                                        db_name,
                                        dblink_name,
                                        is_db_explicit,
@@ -10748,10 +10765,12 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  uint64_t tenant_id,
                                                  uint64_t &dblink_id,
+                                                 uint64_t &catalog_id,
                                                  uint64_t &database_id,
                                                  common::ObString &table_name,
                                                  common::ObString &synonym_name,
                                                  common::ObString &synonym_db_name,
+                                                 common::ObString &catalog_name,
                                                  common::ObString &db_name,
                                                  common::ObString &dblink_name,
                                                  ObSynonymChecker &synonym_checker,
@@ -10762,10 +10781,12 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
   return resolve_table_relation_factor(node,
                                        tenant_id,
                                        dblink_id,
+                                       catalog_id,
                                        database_id,
                                        table_name,
                                        synonym_name,
                                        synonym_db_name,
+                                       catalog_name,
                                        db_name,
                                        dblink_name,
                                        is_db_explicit,
@@ -10777,11 +10798,13 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  uint64_t tenant_id,
                                                  uint64_t &dblink_id,
+                                                 uint64_t &catalog_id,
                                                  uint64_t &database_id,
                                                  common::ObString &table_name,
                                                  common::ObString &synonym_name,
                                                  common::ObString &synonym_db_name,
                                                  common::ObString &dblink_name,
+                                                 common::ObString &catalog_name,
                                                  common::ObString &db_name,
                                                  bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
@@ -10791,10 +10814,12 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
   return resolve_table_relation_factor(node,
                                        tenant_id,
                                        dblink_id,
+                                       catalog_id,
                                        database_id,
                                        table_name,
                                        synonym_name,
                                        synonym_db_name,
+                                       catalog_name,
                                        db_name,
                                        dblink_name,
                                        is_db_explicit,
@@ -10804,19 +10829,32 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  uint64_t &dblink_id,
+                                                 uint64_t &catalog_id,
                                                  uint64_t &database_id,
                                                  ObString &table_name,
                                                  ObString &synonym_name,
                                                  ObString &synonym_db_name,
+                                                 ObString &catalog_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
                                                  bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
-  return resolve_table_relation_factor(node, session_info_->get_effective_tenant_id(), dblink_id,
-                                       database_id, table_name, synonym_name, synonym_db_name,
-                                       db_name, dblink_name, is_db_explicit, is_reverse_link, ref_obj_ids);
+  return resolve_table_relation_factor(node,
+                                       session_info_->get_effective_tenant_id(),
+                                       dblink_id,
+                                       catalog_id,
+                                       database_id,
+                                       table_name,
+                                       synonym_name,
+                                       synonym_db_name,
+                                       catalog_name,
+                                       db_name,
+                                       dblink_name,
+                                       is_db_explicit,
+                                       is_reverse_link,
+                                       ref_obj_ids);
 }
 
 
@@ -10892,10 +10930,12 @@ int ObDMLResolver::add_object_versions_to_dependency(ObDependencyTableType table
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  uint64_t tenant_id,
                                                  uint64_t &dblink_id,
+                                                 uint64_t &catalog_id,
                                                  uint64_t &database_id,
                                                  ObString &table_name,
                                                  ObString &synonym_name,
                                                  ObString &synonym_db_name,
+                                                 ObString &catalog_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
@@ -10903,18 +10943,32 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   ObSynonymChecker synonym_checker;
-  return resolve_table_relation_factor(node, tenant_id, dblink_id,
-                                       database_id, table_name, synonym_name, synonym_db_name,
-                                       db_name, dblink_name, is_db_explicit, synonym_checker, is_reverse_link, ref_obj_ids);
+  return resolve_table_relation_factor(node,
+                                       tenant_id,
+                                       dblink_id,
+                                       catalog_id,
+                                       database_id,
+                                       table_name,
+                                       synonym_name,
+                                       synonym_db_name,
+                                       catalog_name,
+                                       db_name,
+                                       dblink_name,
+                                       is_db_explicit,
+                                       synonym_checker,
+                                       is_reverse_link,
+                                       ref_obj_ids);
 }
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  uint64_t tenant_id,
                                                  uint64_t &dblink_id,
+                                                 uint64_t &catalog_id,
                                                  uint64_t &database_id,
                                                  ObString &table_name,
                                                  ObString &synonym_name,
                                                  ObString &synonym_db_name,
+                                                 ObString &catalog_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
@@ -10939,10 +10993,17 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
       query_ctx->set_has_dblink(true);
     }
     if (!is_reverse_link && dblink_name.empty()) {
-      if (OB_FAIL(resolve_table_relation_factor_normal(node, tenant_id, database_id,
-                                                       table_name, synonym_name,
-                                                       synonym_db_name, db_name,
-                                                       is_db_explicit, synonym_checker))) {
+      if (OB_FAIL(resolve_table_relation_factor_normal(node,
+                                                       tenant_id,
+                                                       catalog_id,
+                                                       database_id,
+                                                       table_name,
+                                                       synonym_name,
+                                                       synonym_db_name,
+                                                       catalog_name,
+                                                       db_name,
+                                                       is_db_explicit,
+                                                       synonym_checker))) {
         LOG_WARN("resolve table relation factor failed", K(ret), K(table_name));
         // table_name may be dblink table, here to test is,
         if (OB_ERR_SYNONYM_TRANSLATION_INVALID == ret ||
@@ -11039,45 +11100,62 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
 
 int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
                                                         uint64_t tenant_id,
+                                                        uint64_t &catalog_id,
                                                         uint64_t &database_id,
                                                         ObString &table_name,
                                                         ObString &synonym_name,
                                                         ObString &synonym_db_name,
+                                                        ObString &catalog_name,
                                                         ObString &db_name,
                                                         ObSynonymChecker &synonym_checker)
 {
   bool is_db_explicit = false;
   UNUSED(is_db_explicit);
-  return resolve_table_relation_factor_normal(node, tenant_id, database_id,
-                                              table_name, synonym_name, synonym_db_name, db_name,
-                                              is_db_explicit, synonym_checker);
+  return resolve_table_relation_factor_normal(node,
+                                              tenant_id,
+                                              catalog_id,
+                                              database_id,
+                                              table_name,
+                                              synonym_name,
+                                              synonym_db_name,
+                                              catalog_name,
+                                              db_name,
+                                              is_db_explicit,
+                                              synonym_checker);
 }
 
 int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
                                                         uint64_t tenant_id,
+                                                        uint64_t &catalog_id,
                                                         uint64_t &database_id,
                                                         ObString &table_name,
                                                         ObString &synonym_name,
                                                         ObString &synonym_db_name,
+                                                        ObString &catalog_name,
                                                         ObString &db_name,
                                                         bool &is_db_explicit,
                                                         ObSynonymChecker &synonym_checker)
 {
   int ret = OB_SUCCESS;
+  catalog_id = OB_INTERNAL_CATALOG_ID;
   database_id = OB_INVALID_ID;
   is_db_explicit = false;
   ObString orig_name;
+  ObString out_catalog_name;
   ObString out_db_name;
   ObString out_table_name;
   synonym_db_name.reset();
   bool is_public_synonym = false;
-  if (OB_FAIL(resolve_table_relation_node_v2(node, table_name, db_name, is_db_explicit))) {
+  if (OB_FAIL(resolve_table_relation_node_v2(node, table_name, db_name, catalog_name, is_db_explicit))) {
     LOG_WARN("failed to resolve table relation node!", K(ret));
   } else if (params_.is_resolve_fake_cte_table_) {
     database_id = OB_CTE_DATABASE_ID;
   } else if (FALSE_IT(orig_name.assign_ptr(table_name.ptr(), table_name.length()))) {
   } else if (FALSE_IT(synonym_db_name.assign_ptr(db_name.ptr(), db_name.length()))) {
-  } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
+  } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)
+             && OB_FAIL(schema_checker_->get_catalog_id_name(tenant_id, catalog_name, catalog_id, allocator_))) {
+    LOG_WARN("catalog not existed", K(ret), K(tenant_id), K(catalog_name));
+  } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, catalog_id, db_name, database_id))) {
     if (OB_SCHEMA_EAGAIN != ret) {
       ret = OB_ERR_BAD_DATABASE;
       LOG_WARN("Invalid database name, database not exist", K(db_name), K(tenant_id), K(ret));
@@ -11086,6 +11164,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     ret = OB_ERR_BAD_DATABASE;
     LOG_WARN("Invalid database name, cannot access oceanbase db on Oracle tenant", K(db_name), K(tenant_id), K(ret));
   } else if (OB_FAIL(resolve_table_relation_recursively(tenant_id,
+                                                        catalog_id,
                                                         database_id,
                                                         table_name,
                                                         db_name,
@@ -11140,16 +11219,19 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     }
   }
 
-  //table_name and db_name memory may from schema, so deep copy the content to SQL memory
+  // catalog_name, table_name and db_name memory may from schema, so deep copy the content to SQL memory
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, catalog_name, out_catalog_name))) {
+    LOG_WARN("fail to deep copy string", K(catalog_name), K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator_, table_name, out_table_name))) {
     LOG_WARN("fail to deep copy string", K(table_name), K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator_, db_name, out_db_name))) {
     LOG_WARN("fail to deep copy string", K(db_name), K(ret));
   } else {
+    catalog_name = out_catalog_name;
     table_name = out_table_name;
     db_name = out_db_name;
   }
@@ -11212,6 +11294,7 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
 }
 
 int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
+                                                      uint64_t catalog_id,
                                                       uint64_t &database_id,
                                                       ObString &table_name,
                                                       ObString &db_name,
@@ -11235,7 +11318,7 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
   }
   CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_table_exist_or_not(tenant_id, database_id, table_name, db_name))) {
+  } else if (OB_FAIL(check_table_exist_or_not(tenant_id, catalog_id, database_id, table_name, db_name))) {
     if (OB_TABLE_NOT_EXIST == ret) {      //try again, with synonym
       ret = OB_SUCCESS;
       if (OB_FAIL(schema_checker_->get_synonym_schema(tenant_id, database_id, table_name,
@@ -11257,6 +11340,7 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
           database_id = object_db_id;
           bool dummy = false;
           if (OB_FAIL(SMART_CALL(resolve_table_relation_recursively(tenant_id,
+                                                                    catalog_id,
                                                                     database_id,
                                                                     table_name,
                                                                     db_name,
@@ -11282,17 +11366,18 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
   return ret;
 }
 
-int ObDMLResolver::check_table_exist_or_not(uint64_t tenant_id,
-                                               uint64_t &database_id,
-                                               ObString &table_name,
-                                               ObString &db_name)
+int ObDMLResolver::check_table_exist_or_not(const int64_t tenant_id,
+                                            const uint64_t catalog_id,
+                                            uint64_t &database_id,
+                                            ObString &table_name,
+                                            ObString &db_name)
 {
   int ret = OB_SUCCESS;
   database_id = OB_INVALID_ID;
-  if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
+  if (OB_FAIL(schema_checker_->get_database_id(tenant_id, catalog_id, db_name, database_id))) {
     if (OB_SCHEMA_EAGAIN != ret) {
       ret = OB_ERR_BAD_DATABASE;
-      LOG_WARN("Invalid database name, database not exist", K(db_name), K(tenant_id));
+      LOG_WARN("Invalid database name, database not exist", K(catalog_id), K(db_name), K(tenant_id));
     }
   } else {
     bool is_exist = false;
@@ -11303,31 +11388,43 @@ int ObDMLResolver::check_table_exist_or_not(uint64_t tenant_id,
     } else if ((select_index_enabled && is_select_resolver()) ||
                session_info_->get_ddl_info().is_ddl() ||
                session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility()) {
-      if (OB_FAIL(schema_checker_->check_table_or_index_exists(
-                  tenant_id, database_id, table_name, is_hidden, false/*is_built_in_index*/, is_exist))) {
-        LOG_WARN("fail to check table or index exist", K(tenant_id), K(database_id),
-                     K(table_name), K(ret));
-      } else if (((select_index_enabled && is_select_resolver()) ||
-                  session_info_->get_ddl_info().is_ddl() ||
-                  session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility()) &&
-                  !is_exist) {
-        if (OB_FAIL(schema_checker_->check_table_or_index_exists(tenant_id, database_id, table_name,
-                is_hidden, true/*is_built_in_index*/, is_exist))) {
-          LOG_WARN("fail to check table or hidden index exist", K(ret), K(tenant_id), K(database_id), K(table_name));
+      if (OB_FAIL(schema_checker_->check_table_or_index_exists(tenant_id,
+                                                               catalog_id,
+                                                               database_id,
+                                                               table_name,
+                                                               is_hidden,
+                                                               false /*is_built_in_index*/,
+                                                               is_exist))) {
+        LOG_WARN("fail to check table or index exist", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret));
+      } else if (((select_index_enabled && is_select_resolver()) || session_info_->get_ddl_info().is_ddl()
+                  || session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility())
+                 && !is_exist) {
+        if (OB_FAIL(schema_checker_->check_table_or_index_exists(tenant_id,
+                                                                 catalog_id,
+                                                                 database_id,
+                                                                 table_name,
+                                                                 is_hidden,
+                                                                 true /*is_built_in_index*/,
+                                                                 is_exist))) {
+          LOG_WARN("fail to check table or hidden index exist", K(ret), K(tenant_id), K(catalog_id), K(database_id), K(table_name));
         }
       }
     } else {
       const bool is_index = false;
-      if (OB_FAIL(schema_checker_->check_table_exists(
-                  tenant_id, database_id, table_name, is_index, is_hidden, is_exist))) {
-        LOG_WARN("fail to check table or index exist", K(tenant_id), K(database_id),
-                     K(table_name), K(ret));
+      if (OB_FAIL(schema_checker_->check_table_exists(tenant_id, catalog_id, database_id, table_name, is_index, is_hidden, is_exist))) {
+        LOG_WARN("fail to check table or index exist", K(tenant_id), K(catalog_id), K(database_id), K(table_name), K(ret));
       }
     }
     if (OB_SUCC(ret)) {
       if (!is_exist) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_INFO("table not exist", K(tenant_id), K(database_id), K(table_name), KPHEX(table_name.ptr(), table_name.length()), K(ret));
+        LOG_INFO("table not exist",
+                 K(tenant_id),
+                 K(catalog_id),
+                 K(database_id),
+                 K(table_name),
+                 KPHEX(table_name.ptr(), table_name.length()),
+                 K(ret));
       }
     }
   }
@@ -17014,6 +17111,8 @@ int ObDMLResolver::resolve_table_relation_in_hint(const ParseNode &table_node,
   int ret = OB_SUCCESS;
   bool is_db_explicit = false;
   table_in_hint.reset();
+  ObString catalog_name;
+  UNUSED(catalog_name);
   if (OB_UNLIKELY(T_RELATION_FACTOR_IN_HINT != table_node.type_ || 2 != table_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table relation node.", K(ret), K(get_type_name(table_node.type_)), K(table_node.num_child_));
@@ -17022,6 +17121,7 @@ int ObDMLResolver::resolve_table_relation_in_hint(const ParseNode &table_node,
   } else if (OB_FAIL(resolve_table_relation_node_v2(table_node.children_[0],
                                                     table_in_hint.table_name_,
                                                     table_in_hint.db_name_,
+                                                    catalog_name,
                                                     is_db_explicit,
                                                     true,
                                                     false))) {

@@ -507,6 +507,10 @@
 #include "sql/engine/expr/ob_expr_rb_to_array.h"
 #include "sql/engine/expr/ob_expr_rb_contains.h"
 #include "sql/engine/expr/ob_expr_map_keys.h"
+#include "sql/engine/expr/ob_expr_current_catalog.h"
+#include "sql/engine/expr/ob_expr_check_catalog_access.h"
+
+
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1275,6 +1279,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerInfoColsExtraPrinter);
     REG_OP(ObExprInnerInfoColsDataTypePrinter);
     REG_OP(ObExprInnerInfoColsColumnTypePrinter);
+    REG_OP(ObExprCurrentCatalog);
+    REG_OP(ObExprCheckCatalogAccess);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1614,6 +1620,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerDoubleToInt);
   REG_OP_ORCL(ObExprCalcOdpsSize);
   REG_OP_ORCL(ObExprKeyValue);
+  REG_OP_ORCL(ObExprCurrentCatalog);
+  REG_OP_ORCL(ObExprCheckCatalogAccess);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

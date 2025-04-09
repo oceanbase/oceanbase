@@ -429,8 +429,10 @@ protected:
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
   int set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item);
   int resolve_table_drop_oracle_temp_table(TableItem *&table_item);
-  int resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
-                                              uint64_t database_id,
+  int resolve_base_or_alias_table_item_normal(const uint64_t tenant_id,
+                                              const uint64_t catalog_id,
+                                              const uint64_t database_id,
+                                              const common::ObString &catalog_name,
                                               const common::ObString &db_name,
                                               const bool &is_db_explicit,
                                               const common::ObString &tbl_name,
@@ -563,9 +565,11 @@ protected:
 public:
   int resolve_table_relation_factor_wrapper(const ParseNode *table_node,
                                             uint64_t &dblink_id,
+                                            uint64_t &catalog_id,
                                             uint64_t &database_id,
                                             common::ObString &table_name,
                                             common::ObString &synonym_name,
+                                            common::ObString &catalog_name,
                                             common::ObString &db_name,
                                             common::ObString &synonym_db_name,
                                             common::ObString &dblink_name,
@@ -573,6 +577,7 @@ public:
                                             bool &use_sys_tenant,
                                             bool &is_reverse_link,
                                             common::ObIArray<uint64_t> &ref_obj_ids);
+
 protected:
   int check_resolve_oracle_sys_view(const ParseNode *node, bool &is_oracle_sys_view);
   bool is_oracle_sys_view(const ObString &table_name);
@@ -590,10 +595,12 @@ protected:
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
                                     uint64_t &dblink_id,
+                                    uint64_t &catalog_id,
                                     uint64_t &database_id,
                                     common::ObString &table_name,
                                     common::ObString &synonym_name,
                                     common::ObString &synonym_db_name,
+                                    common::ObString &catalog_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_db_explicit,
@@ -601,10 +608,12 @@ protected:
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t &dblink_id,
+                                    uint64_t &catalog_id,
                                     uint64_t &database_id,
                                     common::ObString &table_name,
                                     common::ObString &synonym_name,
                                     common::ObString &synonym_db_name,
+                                    common::ObString &catalog_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_db_explicit,
@@ -613,20 +622,24 @@ protected:
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
                                     uint64_t &dblink_id,
+                                    uint64_t &catalog_id,
                                     uint64_t &database_id,
                                     common::ObString &table_name,
                                     common::ObString &synonym_name,
                                     common::ObString &synonym_db_name,
+                                    common::ObString &catalog_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t &dblink_id,
+                                    uint64_t &catalog_id,
                                     uint64_t &database_id,
                                     common::ObString &table_name,
                                     common::ObString &synonym_name,
                                     common::ObString &synonym_db_name,
+                                    common::ObString &catalog_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_reverse_link,
@@ -634,10 +647,12 @@ protected:
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
                                     uint64_t &dblink_id,
+                                    uint64_t &catalog_id,
                                     uint64_t &database_id,
                                     common::ObString &table_name,
                                     common::ObString &synonym_name,
                                     common::ObString &synonym_db_name,
+                                    common::ObString &catalog_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     ObSynonymChecker &synonym_checker,
@@ -646,10 +661,12 @@ protected:
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
                                     uint64_t &dblink_id,
+                                    uint64_t &catalog_id,
                                     uint64_t &database_id,
                                     common::ObString &table_name,
                                     common::ObString &synonym_name,
                                     common::ObString &synonym_db_name,
+                                    common::ObString &catalog_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_db_expilicit,
@@ -658,18 +675,22 @@ protected:
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor_normal(const ParseNode *node,
                                            uint64_t tenant_id,
+                                           uint64_t &catalog_id,
                                            uint64_t &database_id,
                                            common::ObString &table_name,
                                            common::ObString &synonym_name,
                                            common::ObString &synonym_db_name,
+                                           common::ObString &catalog_name,
                                            common::ObString &db_name,
                                            ObSynonymChecker &synonym_checker);
   int resolve_table_relation_factor_normal(const ParseNode *node,
                                            uint64_t tenant_id,
+                                           uint64_t &catalog_id,
                                            uint64_t &database_id,
                                            common::ObString &table_name,
                                            common::ObString &synonym_name,
                                            common::ObString &synonym_db_name,
+                                           common::ObString &catalog_name,
                                            common::ObString &db_name,
                                            bool &is_db_expilicit,
                                            ObSynonymChecker &synonym_checker);
@@ -896,9 +917,13 @@ private:
   int resolve_function_table_column_item_sys_func(const TableItem &table_item,
                                                   common::ObIArray<ColumnItem> &col_items);
   int add_column_ref_to_set(ObRawExpr *&expr, ObIArray<TableItem*> *table_list);
-  int check_table_exist_or_not(uint64_t tenant_id, uint64_t &database_id,
-                                 common::ObString &table_name, common::ObString &db_name);
+  int check_table_exist_or_not(int64_t tenant_id,
+                               uint64_t catalog_id,
+                               uint64_t &database_id,
+                               common::ObString &table_name,
+                               common::ObString &db_name);
   int resolve_table_relation_recursively(uint64_t tenant_id,
+                                         uint64_t catalog_id,
                                          uint64_t &database_id,
                                          common::ObString &table_name,
                                          common::ObString &db_name,
@@ -1010,6 +1035,14 @@ private:
 public:
   static int resolve_direct_load_hint(const ParseNode &hint_node, ObDirectLoadHint &hint);
   //////////end of functions for sql hint/////////////
+  static int set_upper_column_name(ObColumnSchemaV2 &column_schema);
+#ifdef OB_BUILD_CPP_ODPS
+  static int build_column_schemas_for_odps(const common::ObIArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn> &column_list,
+                                           const common::ObIArray<ObString> &part_col_names,
+                                           ObTableSchema& table_schema);
+  static int set_partition_info_for_odps(ObTableSchema &table_schema,
+                                         const common::ObIArray<ObString> &part_col_names);
+#endif
 
 private:
   int resolve_table_check_constraint_items(const TableItem *table_item,
@@ -1059,7 +1092,7 @@ private:
   int compute_values_table_row_count(ObValuesTableDef &table_def);
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
-  int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
+  static int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
   int build_column_schemas_for_orc(const orc::Type* type, ObTableSchema& table_schema);
   int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema, ObTableSchema& table_schema);
   int build_column_schemas_for_csv(const ObExternalFileFormat &format,
@@ -1067,14 +1100,6 @@ private:
                                   ObTableSchema &table_schema,
                                   common::ObIAllocator &allocator,
                                   uint64_t new_table_id);
-#ifdef OB_BUILD_CPP_ODPS
-  int build_column_schemas_for_odps(const ObSEArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn, 8> &column_list,
-                                const common::ObIArray<ObString> &part_col_names,
-                                ObTableSchema& table_schema);
-  int set_partition_info_for_odps(ObTableSchema &table_schema,
-                                  const common::ObIArray<ObString> &part_col_names);
-#endif
-  int set_upper_column_name(ObColumnSchemaV2 &column_schema);
   int build_column_schemas(ObTableSchema& table_schema,
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,

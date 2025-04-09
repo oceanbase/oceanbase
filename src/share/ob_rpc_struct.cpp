@@ -5646,6 +5646,18 @@ OB_SERIALIZE_MEMBER((ObRevokeUserArg, ObDDLArg),
                     revoke_all_,
                     role_ids_);
 
+bool ObRevokeCatalogArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
+      && !catalog_.empty();
+}
+
+OB_SERIALIZE_MEMBER((ObRevokeCatalogArg, ObDDLArg),
+                    tenant_id_,
+                    user_id_,
+                    catalog_,
+                    priv_set_);
+
 bool ObRevokeDBArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
@@ -12433,6 +12445,24 @@ int ObRlsContextDDLArg::assign(const ObRlsContextDDLArg &other)
     LOG_WARN("fail to assign rls context schema", KR(ret));
   } else {
     ddl_type_ = other.ddl_type_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObCatalogDDLArg, ObDDLArg), schema_, ddl_type_, if_not_exist_, if_exist_, user_id_);
+
+int ObCatalogDDLArg::assign(const ObCatalogDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(schema_.assign(other.schema_))) {
+    LOG_WARN("fail to assign rls policy schema", KR(ret));
+  } else {
+    ddl_type_ = other.ddl_type_;
+    if_not_exist_ = other.if_not_exist_;
+    if_exist_ = other.if_exist_;
+    user_id_ = other.user_id_;
   }
   return ret;
 }

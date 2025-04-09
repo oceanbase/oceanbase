@@ -149,6 +149,8 @@
 #include "sql/resolver/ddl/ob_audit_stmt.h"
 #include "sql/engine/cmd/ob_audit_executor.h"
 #endif
+#include "sql/resolver/ddl/ob_catalog_stmt.h"
+#include "sql/engine/cmd/ob_catalog_executor.h"
 
 namespace oceanbase
 {
@@ -360,6 +362,17 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_DROP_DATABASE: {
         DEFINE_EXECUTE_CMD(ObDropDatabaseStmt, ObDropDatabaseExecutor);
+        break;
+      }
+      case stmt::T_CREATE_CATALOG:
+      case stmt::T_ALTER_CATALOG:
+      case stmt::T_DROP_CATALOG: {
+        DEFINE_EXECUTE_CMD(ObCatalogStmt, ObCatalogExecutor);
+        break;
+      }
+      case stmt::T_SET_CATALOG: {
+        DEFINE_EXECUTE_CMD(ObCatalogStmt, ObSetCatalogExecutor);
+        sql_text = ObString::make_empty_string();  // do not record
         break;
       }
       case stmt::T_CREATE_TABLEGROUP: {

@@ -4021,7 +4021,6 @@ int ObSelectIntoOp::get_parquet_logical_type(std::shared_ptr<const parquet::Logi
                                              const int32_t scale)
 {
   int ret = OB_SUCCESS;
-  //todo@linyi oracle type
   if (ObTinyIntType == obj_type) {
     logical_type = parquet::LogicalType::Int(8, true);
   } else if (ObSmallIntType == obj_type) {

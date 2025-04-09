@@ -32514,7 +32514,8 @@ int ObDDLService::grant(const ObGrantArg &arg)
           }
 
           if (OB_SUCC(ret) && is_user_exist) {
-            ObNeedPriv need_priv(arg.db_, arg.table_, arg.priv_level_, arg.priv_set_, false, arg.object_type_);
+            ObNeedPriv need_priv(arg.db_, arg.table_, arg.priv_level_, arg.priv_set_, false,
+                                 arg.object_type_, false, OB_PRIV_CHECK_ALL, arg.catalog_);
             bool is_owner = false;
             // In oracle mode, if it is oracle syntax, it need to determine grantee is obj owner,
             // if yes, return success directly
@@ -32720,6 +32721,19 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
         } else if (OB_FAIL(grant_revoke_user(tenant_id, user_id, need_priv.priv_set_,
                                              true, is_from_inner_sql, &ddl_sql, schema_guard))) {
           LOG_WARN("Grant user error", KR(ret), K(tenant_id), K(user_id), K(ddl_sql), K(need_priv));
+        }
+        break;
+      }
+      case OB_PRIV_CATALOG_LEVEL: {
+        ObCatalogPrivSortKey catalog_priv_key(tenant_id, user_id, need_priv.catalog_);
+        ObCatalogDDLService catalog_ddl_service(this);
+        if (OB_FAIL(catalog_ddl_service.grant_revoke_catalog(catalog_priv_key,
+                                                             user_name,
+                                                             host_name,
+                                                             need_priv,
+                                                             true,
+                                                             schema_guard))) {
+          LOG_WARN("Grant catalog error", KR(ret), K(tenant_id), K(user_id), K(ddl_sql), K(need_priv));
         }
         break;
       }
@@ -33026,6 +33040,12 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_2_5_1 or DATA_VERSION_4_3_5_1", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke encrypt/decrypt privilege");
+    } else if (compat_version < DATA_VERSION_4_3_5_2 && !is_ora_mode
+               && (0 != (priv_set & OB_PRIV_CREATE_CATALOG) ||
+                   0 != (priv_set & OB_PRIV_USE_CATALOG))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_5_2", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke create/use catalog privilege");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {

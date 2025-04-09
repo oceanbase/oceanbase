@@ -885,6 +885,8 @@
 #define N_ENCRYPT "encrypt"
 #define N_ENHANCED_AES_ENCRYPT "enhanced_aes_encrypt"
 #define N_ENHANCED_AES_DECRYPT "enhanced_aes_decrypt"
+#define N_CURRENT_CATALOG "current_catalog"
+#define N_CHECK_CATALOG_ACCESS "check_catalog_access"
 
 //*********** for spm
 #define N_SPM_LOAD_PLANS_FROM_PLAN_CACHE "spm_load_plans_from_plan_cache"

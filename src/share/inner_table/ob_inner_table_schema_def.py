@@ -7995,6 +7995,57 @@ def_table_schema(
   normal_columns = [],
 )
 
+# 534: __ft_dict_ik_gbk
+# 535: __ft_stopword_ik_gbk
+# 536: __ft_quantifier_ik_gbk
+
+all_catalog_def = dict(
+    owner = 'linyi.cl',
+    table_name    = '__all_catalog',
+    table_id      = '537',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('catalog_id', 'int'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('catalog_name', 'varchar:OB_MAX_CATALOG_NAME_LENGTH', 'false', ''),
+      ('catalog_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+    ],
+)
+
+def_table_schema(**all_catalog_def)
+
+def_table_schema(**gen_history_table_def(538, all_catalog_def))
+
+all_catalog_privilege_def = dict(
+    owner = 'linyi.cl',
+    table_name    = '__all_catalog_privilege',
+    table_id      = '539',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('user_id', 'int'),
+        ('catalog_name', 'varbinary:OB_MAX_CATALOG_NAME_BINARY_LENGTH'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('priv_set', 'int', 'false', '0')
+    ],
+)
+
+def_table_schema(**all_catalog_privilege_def)
+
+def_table_schema(**gen_history_table_def(540, all_catalog_privilege_def))
+
+# 541: __all_tenant_flashback_log_scn
+# 542: __sslog_table
+# 543: __all_license
 def_table_schema(
   owner = 'jiabokai.jbk',
   table_name = '__all_pl_recompile_objinfo',
@@ -8011,18 +8062,6 @@ def_table_schema(
     ('fail_count', 'int'),
   ],
 )
-
-# 534: __ft_dict_ik_gbk
-# 535: __ft_stopword_ik_gbk
-# 536: __ft_quantifier_ik_gbk
-# 537: __all_catalog
-# 538: __all_catalog_history
-# 539: __all_catalog_privilege
-# 540: __all_catalog_privilege_history
-# 541: __all_tenant_flashback_log_scn
-# 542: __sslog_table
-# 543: __all_license
-# 544: __all_pl_recompile_objinfo
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
 
@@ -15952,10 +15991,26 @@ def_table_schema(
   vtable_route_policy = 'distributed'
 )
 
-# 12516: __all_virtual_catalog
-# 12517: __all_virtual_catalog_history
-# 12518: __all_virtual_catalog_privilege
-# 12519: __all_virtual_catalog_privilege_history
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12516',
+  table_name = '__all_virtual_catalog',
+  keywords = all_def_keywords['__all_catalog']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12517',
+  table_name = '__all_virtual_catalog_history',
+  keywords = all_def_keywords['__all_catalog_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12518',
+  table_name = '__all_virtual_catalog_privilege',
+  keywords = all_def_keywords['__all_catalog_privilege']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12519',
+  table_name = '__all_virtual_catalog_privilege_history',
+  keywords = all_def_keywords['__all_catalog_privilege_history']))
+
 # 12520: __all_virtual_sswriter_group_stat
 # 12521: __all_virtual_sswriter_lease_mgr
 
@@ -15968,8 +16023,37 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12524: __all_virtual_vector_index_task
 # 12525: __all_virtual_vector_index_task_history
-# 12526: __tenant_virtual_show_create_catalog
-# 12527: __tenant_virtual_show_catalog_databases
+
+def_table_schema(
+  owner = 'linyi.cl',
+  table_name     = '__tenant_virtual_show_create_catalog',
+  table_id       = '12526',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ('catalog_id', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('catalog_name', 'varchar:OB_MAX_CATALOG_NAME_LENGTH'),
+  ('create_catalog', 'longtext'),
+  ],
+)
+
+def_table_schema(
+    owner = 'chendingchao.cdc',
+    table_name    = '__tenant_virtual_show_catalog_databases',
+    table_id      = '12527',
+    table_type = 'VIRTUAL_TABLE',
+    in_tenant_space = True,
+    gm_columns = [],
+    rowkey_columns = [
+        ('catalog_id', 'int'),
+        ('database_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+    ],
+    normal_columns = [],
+)
 # 12528: __tenant_virtual_show_catalog_tables
 
 # 12529: __all_virtual_storage_cache_task
@@ -16537,8 +16621,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15491: __all_virtual_standby_log_transport_stat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15492', all_def_keywords['__all_virtual_wr_sql_plan_aux_key2snapshot'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keywords['__all_virtual_cs_replica_tablet_stats']))
-# 15494: __all_catalog
-# 15495: __all_catalog_privilege
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15494', all_def_keywords['__all_catalog']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15495', all_def_keywords['__all_catalog_privilege']))
 # 15496: __all_virtual_ss_tablet_upload_stat
 # 15497: __all_virtual_ss_tablet_compact_stat
 # 15498: __all_virtual_sswriter_group_stat
@@ -16546,9 +16630,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keyword
 # 15500: __idx_15494_idx_catalog_name_real_agent
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 # 15502: __all_virtual_tenant_flashback_log_scn
-def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15503', all_def_keywords['__all_pl_recompile_objinfo']))
 
-# 15504: __tenant_virtual_show_create_catalog
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15503', all_def_keywords['__all_pl_recompile_objinfo']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15504', all_def_keywords['__tenant_virtual_show_create_catalog']))
+
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status
 # 15507: __all_virtual_mview_running_job
@@ -22570,6 +22655,26 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201001 AS SIGNED) AS DATABASE_ID,
+        CATALOG_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        CATALOG_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'CATALOG' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM OCEANBASE.__ALL_VIRTUAL_CATALOG
     ) A
     JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE B
     ON A.TENANT_ID = B.TENANT_ID
@@ -24769,6 +24874,27 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_TABLEGROUP
+      WHERE TENANT_ID = 0
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201001 AS SIGNED) AS DATABASE_ID,
+        CATALOG_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        CAST(CATALOG_ID AS SIGNED) AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'CATALOG' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM OCEANBASE.__ALL_CATALOG
       WHERE TENANT_ID = 0
     ) A
     JOIN OCEANBASE.__ALL_DATABASE B
@@ -31269,7 +31395,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
           (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
-          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT
+          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
+          (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -31335,7 +31463,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
           (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
-          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT
+          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
+          (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -32015,6 +32145,10 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 11) != 0) THEN 'ENCRYPT'
                 WHEN V1.C1 = 47
                      AND (U.PRIV_OTHERS & (1 << 12) != 0) THEN 'DECRYPT'
+                WHEN V1.C1 = 50
+                     AND (U.PRIV_OTHERS & (1 << 14) != 0) THEN 'CREATE CATALOG'
+                WHEN V1.C1 = 51
+                     AND (U.PRIV_OTHERS & (1 << 15) != 0) THEN 'USE CATALOG'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -32108,7 +32242,9 @@ def_table_schema(
         UNION ALL SELECT 43 AS C1
         UNION ALL SELECT 44 AS C1
         UNION ALL SELECT 46 AS C1
-        UNION ALL SELECT 47 AS C1) V1,
+        UNION ALL SELECT 47 AS C1
+        UNION ALL SELECT 50 AS C1
+        UNION ALL SELECT 51 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -41948,6 +42084,27 @@ def_table_schema(
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLEGROUP_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201006 AS NUMBER) AS DATABASE_ID,
+        CATALOG_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        CATALOG_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'CATALOG' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
     ON A.TENANT_ID = B.TENANT_ID
@@ -42446,6 +42603,28 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201006 AS NUMBER) AS DATABASE_ID,
+        CATALOG_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        CATALOG_ID AS OBJECT_ID,
+        CAST(-1 AS NUMBER) AS PRIV_OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'CATALOG' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
@@ -42949,6 +43128,27 @@ def_table_schema(
         0 AS NAMESPACE,
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        CAST(201006 AS NUMBER) AS DATABASE_ID,
+        CATALOG_NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        CATALOG_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        'CATALOG' AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
@@ -54030,6 +54230,8 @@ def_table_schema(
                          15, 'FLASHBACK',
                          16, 'READ',
                          17, 'WRITE',
+                         18, 'DEBUG',
+                         19, 'USE CATALOG',
                          'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
        DECODE(A.PRIV_OPTION,0,'NO', 1,'YES','') AS GRANTABLE,
        CAST('NO' AS VARCHAR(10)) AS  HIERARCHY
@@ -54067,6 +54269,12 @@ def_table_schema(
                   (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
                   10 AS OBJ_TYPE
                   FROM SYS.ALL_VIRTUAL_TENANT_DIRECTORY_REAL_AGENT
+                  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+               UNION ALL
+               SELECT CATALOG_ID AS TABLE_ID, CATALOG_NAME AS TABLE_NAME,
+                  (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+                  17 AS OBJ_TYPE
+                  FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
                   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
               ) D,
               SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
@@ -54117,6 +54325,8 @@ def_table_schema(
                          15, 'FLASHBACK',
                          16, 'READ',
                          17, 'WRITE',
+                         18, 'DEBUG',
+                         19, 'USE CATALOG',
                          'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
        DECODE(A.PRIV_OPTION,0,'NO', 1,'YES','') AS GRANTABLE,
        CAST('NO' AS VARCHAR(10)) AS  HIERARCHY
@@ -54154,6 +54364,12 @@ def_table_schema(
                   (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
                   10 AS OBJ_TYPE
                   FROM SYS.ALL_VIRTUAL_TENANT_DIRECTORY_REAL_AGENT
+                  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+               UNION ALL
+               SELECT CATALOG_ID AS TABLE_ID, CATALOG_NAME AS TABLE_NAME,
+                  (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+                  17 AS OBJ_TYPE
+                  FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
                   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
               ) D,
               SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
@@ -54207,6 +54423,8 @@ def_table_schema(
                          15, 'FLASHBACK',
                          16, 'READ',
                          17, 'WRITE',
+                         18, 'DEBUG',
+                         19, 'USE CATALOG',
                          'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
        DECODE(A.PRIV_OPTION,0,'NO', 1,'YES','') AS GRANTABLE,
        CAST('NO' AS VARCHAR(10)) AS  HIERARCHY
@@ -54244,6 +54462,12 @@ def_table_schema(
                   (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
                   10 AS OBJ_TYPE
                   FROM SYS.ALL_VIRTUAL_TENANT_DIRECTORY_REAL_AGENT
+                  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+               UNION ALL
+               SELECT CATALOG_ID AS TABLE_ID, CATALOG_NAME AS TABLE_NAME,
+                  (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+                  17 AS OBJ_TYPE
+                  FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
                   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
               ) D,
               SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
@@ -54360,6 +54584,9 @@ def_table_schema(
                 82, 'DEBUG ANY PROCEDURE',
                 83, 'CREATE ANY CONTEXT',
                 84, 'DROP ANY CONTEXT',
+                85, 'EXEMPT ACCESS POLICY',
+                86, 'CREATE CATALOG',
+                87, 'USE ANY CATALOG',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -54470,6 +54697,9 @@ def_table_schema(
                 82, 'DEBUG ANY PROCEDURE',
                 83, 'CREATE ANY CONTEXT',
                 84, 'DROP ANY CONTEXT',
+                85, 'EXEMPT ACCESS POLICY',
+                86, 'CREATE CATALOG',
+                87, 'USE ANY CATALOG',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -55581,6 +55811,8 @@ def_table_schema(
                              15, 'FLASHBACK',
                              16, 'READ',
                              17, 'WRITE',
+                             18, 'DEBUG',
+                             19, 'USE CATALOG',
                              'OTHERS') AS VARCHAR(40)) AS PRIVILEGE,
         DECODE(AUTH.PRIV_OPTION, 0, 'NO', 1, 'YES', '') AS GRANTABLE
       FROM
@@ -55620,6 +55852,12 @@ def_table_schema(
           (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
           10 AS OBJ_TYPE
           FROM SYS.ALL_VIRTUAL_TENANT_DIRECTORY_REAL_AGENT
+          WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+        UNION ALL
+        SELECT CATALOG_ID AS TABLE_ID, CATALOG_NAME AS TABLE_NAME,
+          (SELECT DATABASE_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT WHERE DATABASE_NAME = 'SYS'),
+          17 AS OBJ_TYPE
+          FROM SYS.ALL_VIRTUAL_CATALOG_REAL_AGENT
           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
         ) T,
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB,
@@ -55734,6 +55972,9 @@ def_table_schema(
                 82, 'DEBUG ANY PROCEDURE',
                 83, 'CREATE ANY CONTEXT',
                 84, 'DROP ANY CONTEXT',
+                85, 'EXEMPT ACCESS POLICY',
+                86, 'CREATE CATALOG',
+                87, 'USE ANY CATALOG',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE ,
        	decode(auth.priv_option, 0, 'NO', 1, 'YES', '') as ADMIN_OPTION
       FROM
@@ -75453,8 +75694,21 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_pkg_coll_type'])
 
-# 101113: __idx_537_idx_catalog_name
-# 101114: __idx_539_idx_catalog_priv_catalog_name
+def_sys_index_table(
+  index_name = 'idx_catalog_name',
+  index_table_id = 101113,
+  index_columns = ['catalog_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_catalog'])
+
+def_sys_index_table(
+  index_name = 'idx_catalog_priv_catalog_name',
+  index_table_id = 101114,
+  index_columns = ['catalog_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_catalog_privilege'])
 
 # 101115: __all_ccl_rule
 # 余留位置（此行之前占位）
@@ -76321,6 +76575,26 @@ def_agent_index_table(
   real_table_name = '__all_pkg_coll_type' ,
   real_index_name = 'idx_pkg_coll_name_id',
   keywords = all_def_keywords['ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_catalog_name_real_agent',
+  index_table_id = 15500,
+  index_columns = ['catalog_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_catalog' ,
+  real_index_name = 'idx_catalog_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_CATALOG_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_catalog_priv_catalog_name_real_agent',
+  index_table_id = 15501,
+  index_columns = ['catalog_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_catalog_privilege' ,
+  real_index_name = 'idx_catalog_priv_catalog_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index
 ################################################################################

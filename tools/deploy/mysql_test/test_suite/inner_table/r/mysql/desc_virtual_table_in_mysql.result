@@ -5712,6 +5712,19 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_plugin_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__tenant_virtual_show_create_catalog;
+Field	Type	Null	Key	Default	Extra
+catalog_id	bigint(20)	NO	PRI	NULL	
+catalog_name	varchar(128)	NO		NULL	
+create_catalog	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_show_create_catalog;
+ERROR 0A000: select a table which is used for show clause not supported
+desc oceanbase.__tenant_virtual_show_catalog_databases;
+Field	Type	Null	Key	Default	Extra
+catalog_id	bigint(20)	NO	PRI	NULL	
+database_name	varchar(256)	NO	PRI	NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_show_catalog_databases;
+ERROR 0A000: show tables from non external catalog not supported
 desc oceanbase.__all_virtual_dynamic_partition_table;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	

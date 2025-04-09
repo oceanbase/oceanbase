@@ -1,2 +1,3 @@
+drop catalog if exists master;
 SELECT name FROM master.dbo.sysdatabases WHERE status <> 512;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'master.dbo.sysdatabases WHERE status <> 512' at line 1
+ERROR HY000: Catalog 'master' doesn't exist
