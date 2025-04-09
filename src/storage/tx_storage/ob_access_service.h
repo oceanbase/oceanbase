@@ -134,6 +134,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
       const int16_t branch_id,
+      concurrent_control::ObWriteFlag &write_flag,
       ObStoreCtxGuard &ctx_guard,
       const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
 

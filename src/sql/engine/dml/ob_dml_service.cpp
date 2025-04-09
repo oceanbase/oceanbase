@@ -1623,33 +1623,42 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   }
   dml_param.branch_id_ = write_branch_id;
   dml_param.store_ctx_guard_ = &store_ctx_gurad;
+  init_dml_write_flag(base_ctdef, base_rtdef, dml_param.write_flag_);
+  return ret;
+}
+
+void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
+                                       ObDASDMLBaseRtDef &base_rtdef,
+                                       concurrent_control::ObWriteFlag &write_flag)
+{
   if (base_ctdef.is_batch_stmt_) {
-    dml_param.write_flag_.set_is_dml_batch_opt();
+    write_flag.set_is_dml_batch_opt();
   }
   if (base_ctdef.is_insert_up_) {
-    dml_param.write_flag_.set_is_insert_up();
+    write_flag.set_is_insert_up();
   }
   if (base_ctdef.is_table_api_) {
-    dml_param.write_flag_.set_is_table_api();
+    write_flag.set_is_table_api();
   }
-  if (dml_param.table_param_->get_data_table().is_storage_index_table()
-      && !dml_param.table_param_->get_data_table().can_read_index()) {
-    dml_param.write_flag_.set_is_write_only_index();
+  if (base_ctdef.table_param_.get_data_table().is_storage_index_table()
+      && !base_ctdef.table_param_.get_data_table().can_read_index()) {
+    write_flag.set_is_write_only_index();
   }
   if (base_rtdef.is_for_foreign_key_check_) {
-    dml_param.write_flag_.set_check_row_locked();
+    write_flag.set_check_row_locked();
   }
   if (base_ctdef.is_update_uk_) {
-    dml_param.write_flag_.set_update_uk();
+    write_flag.set_update_uk();
   }
   if (base_ctdef.is_update_pk_with_dop_) {
-    dml_param.write_flag_.set_update_pk_dop();
+    write_flag.set_update_pk_dop();
   }
-
+  if (base_ctdef.table_param_.get_data_table().is_delete_insert()) {
+    write_flag.set_is_delete_insert();
+  }
   if (base_rtdef.is_immediate_row_conflict_check_ && base_ctdef.is_update_pk_) {
-    dml_param.write_flag_.set_immediate_row_check();
+    write_flag.set_immediate_row_check();
   }
-  return ret;
 }
 
 int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,

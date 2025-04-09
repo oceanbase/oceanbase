@@ -142,6 +142,7 @@ private:
   int resolve_single_column_primary_key_node(const ParseNode *column_list_node, ObTableSchema &tbl_schema, bool &process_heap_table_primary_key, ObString &first_column_name);
   int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index);  int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
   int check_building_domain_index_legal();
+  int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
 
 private:
   // data members

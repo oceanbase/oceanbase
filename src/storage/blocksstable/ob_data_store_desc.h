@@ -90,6 +90,7 @@ public:
       K_(enable_macro_block_bloom_filter),
       K_(progressive_merge_round),
       K_(need_submit_io),
+      K_(is_delete_insert_table),
       K_(encoding_granularity));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
@@ -125,6 +126,7 @@ public:
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
+  bool is_delete_insert_table_;
   uint64_t encoding_granularity_;
 };
 
@@ -263,6 +265,8 @@ public:
     return use_old_version_macro_header() ? col_desc_->row_column_count_ : col_desc_->rowkey_column_count_;
   }
   bool micro_index_clustered() const;
+  bool is_delete_insert_merge() const
+  { return get_is_delete_insert_table() && !is_major_merge_type(); }
   bool enable_macro_block_bloom_filter() const;
   int update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta);
   /* GET FUNC */
@@ -291,6 +295,7 @@ public:
   STATIC_DESC_FUNC(const char *, encrypt_key);
   STATIC_DESC_FUNC(compaction::ObExecMode, exec_mode);
   STATIC_DESC_FUNC(bool, need_submit_io);
+  STATIC_DESC_FUNC(bool, is_delete_insert_table);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
   COL_DESC_FUNC(int64_t, row_column_count);

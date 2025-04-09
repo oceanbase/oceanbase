@@ -250,6 +250,7 @@ public:
     return TabletMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn();
   }
   virtual bool can_be_minor_merged() override;
+  virtual void set_delete_insert_flag(const bool is_delete_insert) {}
   int inc_unsubmitted_cnt();
   int dec_unsubmitted_cnt();
   int set_freezer(ObFreezer *handler);

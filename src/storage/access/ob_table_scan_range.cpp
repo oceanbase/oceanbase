@@ -273,7 +273,7 @@ int ObTableScanRange::init_rowkeys(
       if (OB_SUCC(ret)) {
         if (rowkeys_.empty()) {
           status_ = EMPTY;
-        } else if (rowkeys_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
+        } else if (rowkeys_.count() > 1 && nullptr != datum_utils && scan_flag.is_support_sort_scan()) {
           ObDatumComparor<ObDatumRowkey> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
           lib::ob_sort(rowkeys_.begin(), rowkeys_.end(), comparor);
           if (OB_FAIL(ret)) {
@@ -340,7 +340,7 @@ int ObTableScanRange::init_ranges(
       if (OB_SUCC(ret)) {
         if (ranges_.empty()) {
           status_ = EMPTY;
-        } else if (ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
+        } else if (ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_support_sort_scan()) {
           ObDatumComparor<ObDatumRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
           lib::ob_sort(ranges_.begin(), ranges_.end(), comparor);
           if (OB_FAIL(ret)) {
@@ -403,7 +403,7 @@ int ObTableScanRange::init_ranges_in_skip_scan(const ObTabletID &tablet_id,
     if (OB_SUCC(ret)) {
       if (wrapped_ranges_.empty()) {
         status_ = EMPTY;
-      } else if (wrapped_ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
+      } else if (wrapped_ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_support_sort_scan()) {
         ObDatumComparor<ObSkipScanWrappedRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
         lib::ob_sort(wrapped_ranges_.begin(), wrapped_ranges_.end(), comparor);
         if (OB_FAIL(ret)) {

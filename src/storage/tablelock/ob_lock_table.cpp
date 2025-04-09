@@ -286,6 +286,7 @@ int ObLockTable::online()
     LOG_INFO("online lock table", K(parent_->get_ls_id()));
   }
 
+  CreateMemtableArg arg;
   if (OB_ISNULL(ls_tablet_svr = parent_->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("get ls tablet svr failed", K(ret));
@@ -293,8 +294,7 @@ int ObLockTable::online()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
-                 LS_LOCK_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_LOCK_TABLET, arg))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
@@ -378,6 +378,7 @@ int ObLockTable::load_lock()
   ObLSTabletService *ls_tablet_svr = nullptr;
   LOG_INFO("load_lock_table()", K(parent_->get_ls_id()));
 
+  CreateMemtableArg arg;
   if (OB_ISNULL(ls_tablet_svr = parent_->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("get ls tablet svr failed", K(ret));
@@ -385,8 +386,7 @@ int ObLockTable::load_lock()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
-                 LS_LOCK_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_LOCK_TABLET, arg))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));

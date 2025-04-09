@@ -635,6 +635,10 @@ const uint64_t OB_APP_MIN_COLUMN_ID = 16;
 
 const uint64_t OB_ACTION_FLAG_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 1; /* 65520 */
+
+// internal compaction trans seq
+const int64_t DELETE_INSERT_TRANS_SEQUENCE  = ((__INT64_C(1LL << 62)) + 1);
+
 // materialized view log
 const uint64_t OB_MLOG_SEQ_NO_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 2; /* 65521 */

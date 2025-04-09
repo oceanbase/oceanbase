@@ -1050,7 +1050,9 @@ TEST_F(TestLSTabletService, update_tablet_release_memtable_for_offline)
   ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));
   ASSERT_EQ(0, tablet_handle.get_obj()->memtable_count_);
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->create_memtable(data_tablet_id, 100, false, false));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 100;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->create_memtable(data_tablet_id, arg));
   ASSERT_EQ(1, tablet_handle.get_obj()->memtable_count_);
 
   LOG_WARN("FEIDU: release memtable 1");

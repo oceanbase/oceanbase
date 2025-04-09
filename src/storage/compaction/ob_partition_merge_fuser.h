@@ -48,6 +48,7 @@ class ObMergeFuser
 public:
   ObMergeFuser(common::ObIAllocator &allocator)
     : is_inited_(false),
+      enable_delete_insert_(false),
       allocator_(allocator),
       column_cnt_(0),
       result_row_(),
@@ -78,6 +79,7 @@ protected:
   virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row);
 protected:
   bool is_inited_;
+  bool enable_delete_insert_;
   common::ObIAllocator &allocator_;
   int64_t column_cnt_;
   bool is_fuse_row_flag_;

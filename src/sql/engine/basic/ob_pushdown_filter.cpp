@@ -2977,6 +2977,7 @@ void PushdownFilterInfo::reset()
     allocator_ = nullptr;
   }
   filter_ = nullptr;
+  di_bitmap_ = nullptr;
   param_ = nullptr;
   context_ = nullptr;
   is_inited_ = false;
@@ -2997,6 +2998,7 @@ void PushdownFilterInfo::reuse()
   is_pd_to_cg_ = false;
   orig_filter_is_null_ = false;
   filter_ = nullptr;
+  di_bitmap_ = nullptr;
   param_ = nullptr;
   context_ = nullptr;
   start_ = -1;

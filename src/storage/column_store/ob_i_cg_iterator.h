@@ -104,6 +104,7 @@ public:
   virtual ObCGIterType get_type() = 0;
   virtual int get_next_row(const blocksstable::ObDatumRow *&datum_row)
   { return OB_NOT_IMPLEMENT; }
+  virtual int get_current_row_id(ObCSRowId& current_row_id) const { return OB_ERR_UNSUPPORTED_TYPE; }
   OB_INLINE uint32_t get_cg_idx() const { return cg_idx_; }
   OB_INLINE void set_cg_idx(uint32_t cg_idx) { cg_idx_ = cg_idx; }
   OB_INLINE bool is_valid() const { return cg_idx_ != OB_CS_INVALID_CG_IDX; }

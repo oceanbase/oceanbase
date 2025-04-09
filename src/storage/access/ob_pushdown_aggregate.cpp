@@ -134,7 +134,7 @@ int ObAggCell::eval_micro_block(
 int ObAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
 {
   int ret = OB_SUCCESS;
-  if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
+  if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(index_info));
   } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
@@ -513,7 +513,7 @@ int ObCountAggCell::eval_micro_block(
 int ObCountAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
 {
   int ret = OB_SUCCESS;
-  if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
+  if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
@@ -1463,7 +1463,7 @@ int ObSumOpSizeAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &in
 {
   int ret = OB_SUCCESS;
   // consider the judge condition
-  if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
+  if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
@@ -1950,7 +1950,7 @@ int ObSumAggCell::eval_batch(const common::ObDatum *datums, const int64_t count)
 int ObSumAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
 {
   int ret = OB_SUCCESS;
-  if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
+  if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(index_info));
   } else if (OB_UNLIKELY(skip_index_datum_.is_null())){

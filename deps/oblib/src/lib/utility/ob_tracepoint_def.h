@@ -473,7 +473,6 @@ GLOBAL_ERRSIM_POINT_DEF(751, EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, "ss_m
 GLOBAL_ERRSIM_POINT_DEF(751, EN_SESSION_LEAK_COUNT_THRESHOLD, "used to control the threshold of report session leak ERROR");
 GLOBAL_ERRSIM_POINT_DEF(752, EN_PL_MEMORY_ALLOCA_SWITCH, "used to control the strage of obplallocator memory alloc");
 GLOBAL_ERRSIM_POINT_DEF(753, EN_PL_PACKAGE_ENCODE_SWITCH, "used to control the strage of package state encode");
-GLOBAL_ERRSIM_POINT_DEF(760, EN_DISABLE_TABLET_MINOR_MERGE, "used to stop scheduling minor merge");
 GLOBAL_ERRSIM_POINT_DEF(761, EN_FAST_RECLAIM_THREAD, "used to speed up reclaiming thread");
 GLOBAL_ERRSIM_POINT_DEF(762, EN_MV_LARGE_SSTABLE_THRESHOLD, "used to check mv sstable minor merge");
 GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");

@@ -149,7 +149,7 @@ public:
   {
     return DF_TYPE_INSERT_DELETE == flag_type_ && DF_DELETE == flag_;
   }
-  OB_INLINE bool is_delete_insert() const
+  OB_INLINE bool is_upsert() const
   {
     return DF_TYPE_INSERT_DELETE == flag_type_ && DF_INSERT == flag_;
   }
@@ -333,6 +333,17 @@ public:
   OB_INLINE int64_t get_column_count() const { return count_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
   OB_INLINE bool is_valid() const { return nullptr != storage_datums_ && get_capacity() > 0; }
+  OB_INLINE bool is_with_delete() const { return  delete_version_ > 0; }
+  OB_INLINE bool is_di_delete() const { return is_with_delete() || row_flag_.is_delete(); }
+  OB_INLINE bool check_has_nop_col() const
+  {
+    for (int64_t i = 0; i < get_column_count(); i++) {
+      if (storage_datums_[i].is_nop()) {
+        return true;
+      }
+    }
+    return false;
+  }
   /*
    *multi version row section
    */
@@ -369,6 +380,8 @@ public:
   int64_t scan_index_;
   int64_t group_idx_;
   int64_t snapshot_version_;
+  // add for delete_insert table, older delete version of updating row will be output by scanner
+  int64_t delete_version_;
   ObStorageDatum *storage_datums_;
   // do not need serialize
   ObStorageDatumBuffer datum_buffer_;

@@ -73,8 +73,14 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(0, pool->count_);
 
   // create memtable
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(1, scn1, false, false));
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(2, scn2, false, false));
+  CreateMemtableArg mt_arg;
+  mt_arg.schema_version_ = 1;
+  mt_arg.clog_checkpoint_scn_ = scn1;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(mt_arg));
+
+  mt_arg.schema_version_ = 2;
+  mt_arg.clog_checkpoint_scn_ = scn2;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(mt_arg));
 
   ObSEArray<ObTableHandleV2, 64> handles;
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables_from_memtable_mgr(handles));

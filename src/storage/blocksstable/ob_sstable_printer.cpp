@@ -212,10 +212,10 @@ void ObSSTablePrinter::print_cols_info_line(const int32_t &v1, const common::ObO
 
 void ObSSTablePrinter::print_row_title(const ObDatumRow *row, const int64_t row_index)
 {
-  char dml_flag[16];
+  char dml_flag[32];
   char mvcc_flag[16];
   row->mvcc_row_flag_.format_str(mvcc_flag, 16);
-  row->row_flag_.format_str(dml_flag, 16);
+  row->row_flag_.format_str(dml_flag, 32);
   if (isatty(fileno(stderr)) > 0) {
     P_COLOR(LIGHT_GREEN);
     P_BAR();

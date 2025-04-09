@@ -1253,7 +1253,8 @@ int ObTableParam::construct_columns_and_projector(
                                      &tmp_access_cols_extend,
                                      has_all_column_group,
                                      false/*is_cg_sstable*/,
-                                     need_truncate_filter))) {
+                                     need_truncate_filter,
+                                     table_schema.is_delete_insert_merge_engine()))) {
       LOG_WARN("fail to init main read info", K(ret));
     } else if (OB_FAIL(output_projector_.assign(tmp_output_projector))) {
       LOG_WARN("assign failed", K(ret));

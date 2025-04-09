@@ -585,7 +585,7 @@ int ObTableScanIterator::sort_sample_ranges()
   if (OB_UNLIKELY(!datum_utils.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected error for invalid datum utils", K(ret), KPC(scan_param_->table_param_));
-  } else if (sample_ranges_.count() > 1 && scan_param_->scan_flag_.is_ordered_scan()) {
+  } else if (sample_ranges_.count() > 1 && scan_param_->scan_flag_.is_support_sort_scan()) {
     ObDatumComparor<ObDatumRange> comparor(datum_utils, ret, scan_param_->scan_flag_.is_reverse_scan());
     lib::ob_sort(sample_ranges_.begin(), sample_ranges_.end(), comparor);
     if (OB_FAIL(ret)) {

@@ -786,6 +786,10 @@ int ObCreateTableHelper::generate_table_schema_()
     LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
              KR(ret), K(tenant_id_), K(compat_version), K(arg_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 && arg_.schema_.is_delete_insert_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K_(tenant_id), K(compat_version), K_(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support delete insert merge engine");
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg_.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",

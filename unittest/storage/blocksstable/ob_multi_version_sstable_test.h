@@ -164,7 +164,12 @@ public:
       const int64_t snapshot_version);
 public:
   ObITable::TableType get_merged_table_type() const;
-  void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObScnRange &scn_range, const int64_t snapshot_version);
+  void prepare_table_schema(
+      const char **micro_data,
+      const int64_t schema_rowkey_cnt,
+      const ObScnRange &scn_range,
+      const int64_t snapshot_version,
+      const ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   void init_tablet();
   void reset_writer(const int64_t snapshot_version, const ObMergeType &merge_type = MINOR_MERGE);
   void prepare_one_macro(
@@ -191,7 +196,7 @@ public:
     MIX_DELETE_WITH_UPDATE = 2,
   };
 
-  static const uint64_t tenant_id_ = 1;
+  static const uint64_t tenant_id_ = 1001;
   static const uint64_t tablet_id_ = 300000;
   static const uint64_t table_id_ = 300000;
   static const uint64_t ls_id_ = 1001;
@@ -308,7 +313,8 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
     const char **micro_data,
     const int64_t schema_rowkey_cnt,
     const ObScnRange &scn_range,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const ObMergeEngineType merge_engine_type)
 {
   full_read_info_.reset();
   data_iter_cursor_ = 0;
@@ -327,8 +333,10 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
       col_desc.col_id_ = common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID;
     } else if (i == schema_rowkey_cnt + 1) {
       col_desc.col_id_ = common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID;
-    } else {
+    } else if (i < schema_rowkey_cnt) {
       col_desc.col_id_ = common::OB_APP_MIN_COLUMN_ID + i;
+    } else {
+      col_desc.col_id_ = common::OB_APP_MIN_COLUMN_ID + i - 2;
     }
     OK(tmp_col_descs.push_back(col_desc));
   }
@@ -351,6 +359,7 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
   table_schema_.set_compress_func_name("none");
   table_schema_.set_row_store_type(FLAT_ROW_STORE);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_merge_engine_type(merge_engine_type);
 
   ObColumnSchemaV2 column;
   //init column
@@ -553,21 +562,12 @@ void ObMultiVersionSSTableTest::prepare_data_end(
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }
 
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ObLSID lsid(ls_id_);
-  OK(ls_svr->get_ls(lsid, ls_handle, ObLSGetMod::STORAGE_MOD));
   if (table_type == ObITable::COLUMN_ORIENTED_SSTABLE) {
     param.table_key_.column_group_idx_ = column_idx;
     OK(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, allocator_, handle));
   } else {
     OK(ObTabletCreateDeleteHelper::create_sstable(param, allocator_, handle));
   }
-  ObTableReadInfo read_info;
-  ObSEArray<share::schema::ObColDesc, 16> cols_desc;
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_multi_version_column_descs(cols_desc));
-  ASSERT_EQ(OB_SUCCESS, read_info.init(allocator_, table_schema_.get_rowkey_column_num() + 1,
-   table_schema_.get_rowkey_column_num(), false, cols_desc, nullptr/*storage_cols_index*/));
 }
 
 void ObMultiVersionSSTableTest::prepare_data(

@@ -116,6 +116,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     schema_version_ = schema->get_schema_version();
     table_type_ = schema->get_table_type();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
+    is_delete_insert_ = schema->is_delete_insert_merge_engine();
     if (OB_FAIL(schema->get_is_row_store(use_cs))) {
       LOG_WARN("fail to get is row store", K(ret));
     } else {
@@ -304,7 +305,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 nullptr/*cols_extend*/,
                 true/*has_all_column_group*/,
                 false/*is_cg_sstable*/,
-                need_truncate_filter))) {
+                need_truncate_filter,
+                is_delete_insert_))) {
       LOG_WARN("Fail to init read info", K(ret));
     } else if (!col_map_.is_inited()) {
       if (OB_FAIL(col_map_.init(tmp_cols))) {

@@ -41,13 +41,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     ++(cg_.phy_plan_->get_access_table_num());
     query_flag.is_need_feedback_ = true;
   }
-
-  ObOrderDirection scan_direction = op.get_scan_direction();
-  if (is_descending_direction(scan_direction)) {
-    query_flag.scan_order_ = ObQueryFlag::Reverse;
-  } else {
-    query_flag.scan_order_ = ObQueryFlag::Forward;
-  }
+  query_flag.scan_order_ = op.get_scan_order();
   if (op.is_new_query_range()) {
     query_flag.set_is_new_query_range();
   }

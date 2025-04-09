@@ -192,8 +192,8 @@ RecordType get_record_type(const ObDmlRowFlag &dml_flag)
 
   // Set record type
   // Note: The REPLACE type is not handled, it does not exist in Redo
-  // Note: must judge is_delete_insert first because PUT is also is_insert, but it's flag_type is DF_TYPE_INSERT_DELETE
-  if (OB_UNLIKELY(dml_flag.is_delete_insert())) {
+  // Note: must judge is_upsert first because PUT is also is_insert, but it's flag_type is DF_TYPE_INSERT_DELETE
+  if (OB_UNLIKELY(dml_flag.is_upsert())) {
     record_type = EPUT;
   } else if (dml_flag.is_insert()) {
     record_type = EINSERT;
@@ -212,7 +212,7 @@ const char *print_dml_flag(const blocksstable::ObDmlRowFlag &dml_flag)
 {
   const char *str = "UNKNOWN";
 
-  if (dml_flag.is_delete_insert()) {
+  if (dml_flag.is_upsert()) {
     str = "put";
   } else if (dml_flag.is_insert()) {
     str = "insert";

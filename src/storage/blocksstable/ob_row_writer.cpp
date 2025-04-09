@@ -160,14 +160,14 @@ int ObRowWriter::alloc_buf_and_init(const bool retry)
   return ret;
 }
 
-int ObRowWriter::write_rowkey(const common::ObStoreRowkey &rowkey, char *&buf, int64_t &len)
+int ObRowWriter::write_lock_rowkey(const common::ObStoreRowkey &rowkey, char *&buf, int64_t &len)
 {
   int ret = OB_SUCCESS;
   len = 0;
   do {
     if (OB_FAIL(alloc_buf_and_init(OB_BUF_NOT_ENOUGH == ret))) {
       LOG_WARN("row writer fail to alloc and init", K(ret));
-    } else if (OB_FAIL(append_row_header(0, 0, 0, rowkey.get_obj_cnt(), rowkey.get_obj_cnt()))) {
+    } else if (OB_FAIL(append_row_header(ObDmlFlag::DF_LOCK, 0, 0, rowkey.get_obj_cnt(), rowkey.get_obj_cnt()))) {
       LOG_WARN("row writer fail to append row header", K(ret));
     } else {
       update_idx_array_ = nullptr;

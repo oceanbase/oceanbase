@@ -3119,6 +3119,9 @@ int ObTableSqlService::gen_table_dml(
     } else if (data_version < DATA_VERSION_4_3_5_1 && table.get_enable_macro_block_bloom_filter()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can't set enable_macro_block_bloom_filter in current version", KR(ret), K(table));
+    } else if (data_version < DATA_VERSION_4_3_5_2 && table.is_delete_insert_merge_engine()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't set merge_engine_type in current version", KR(ret), K(table));
     } else if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
                && OB_FAIL(table.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
       LOG_WARN("fail to gen local session var str", K(ret));
@@ -3249,6 +3252,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
+        || (data_version >= DATA_VERSION_4_3_5_2
+            && OB_FAIL(dml.add_column("merge_engine_type", table.get_merge_engine_type())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3337,6 +3342,9 @@ int ObTableSqlService::gen_table_options_dml(
     } else if (data_version < DATA_VERSION_4_3_5_1 && table.get_enable_macro_block_bloom_filter()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can't set enable_macro_block_bloom_filter in current version", KR(ret), K(table));
+    } else if (data_version < DATA_VERSION_4_3_5_2 && table.is_delete_insert_merge_engine()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't set merge_engine_type in current version", KR(ret), K(table));
     } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
@@ -3428,9 +3436,11 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
+        || (data_version >= DATA_VERSION_4_3_5_2
+            && OB_FAIL(dml.add_column("merge_engine_type", table.get_merge_engine_type())))
         ) {
-      LOG_WARN("add column failed", K(ret));
-    }
+          LOG_WARN("add column failed", K(ret));
+        }
   }
   return ret;
 }

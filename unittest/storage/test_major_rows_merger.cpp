@@ -17,7 +17,7 @@
 #include "storage/compaction/ob_partition_rows_merger.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
 #include "storage/test_tablet_helper.h"
-#include "mtlenv/storage/test_merge_basic.h"
+#include "mtlenv/storage/access/test_merge_basic.h"
 
 namespace oceanbase
 {

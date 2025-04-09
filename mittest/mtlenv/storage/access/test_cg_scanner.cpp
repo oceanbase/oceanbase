@@ -14,7 +14,7 @@
 #define protected public
 
 #include "storage/column_store/ob_cg_scanner.h"
-#include "ob_index_block_data_prepare.h"
+#include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase
 {
@@ -324,7 +324,7 @@ void TestCGScanner::test_border(const bool is_reverse)
 
   start = row_cnt_;
   locate_count = 1;
-  ASSERT_EQ(OB_ITER_END, cg_scanner->locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, cg_scanner->locate(ObCSRange(start, locate_count)));
 
   start = row_cnt_ - 99;
   locate_count = 100;

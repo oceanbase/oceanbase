@@ -551,6 +551,16 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("version lower than 4.3.1.0 does not support incremental direct-load", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support incremental direct-load");
+      } else if (table_schema->is_delete_insert_merge_engine() &&
+                 ObDirectLoadInsertMode::INC_REPLACE == insert_mode) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "incremental direct-load does not support delete insert merge table with replace "
+          "mode",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(ret,
+                               "incremental direct-load does not support delete insert "
+                               "merge table  with replace mode");
       } else if (table_schema->get_simple_index_infos().count() > 0 &&
                  OB_FAIL(ObTableLoadSchema::check_has_non_local_index(
                    schema_guard, table_schema, has_non_normal_local_index))) {

@@ -2062,6 +2062,16 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
     }
   }
+  if (OB_SUCC(ret)
+      && !strict_compat_
+      && !is_index_tbl
+      && !is_no_table_options(sql_mode)
+      && table_schema.is_delete_insert_merge_engine()) { // TODO: zhanghuidong.zhd, print merge engine for all user tables
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = '%s' ",
+                                ObMergeEngineStoreFormat::get_merge_engine_type_name(table_schema.get_merge_engine_type())))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && table_schema.with_dynamic_partition_policy()) {
     if (OB_FAIL(print_dynamic_partition_policy(table_schema, buf, buf_len, pos))) {
@@ -2367,12 +2377,15 @@ int ObSchemaPrinter::print_table_definition_table_options(
   const bool is_index_tbl = table_schema.is_index_table();
   const uint64_t tenant_id = table_schema.get_tenant_id();
   bool is_oracle_mode = false;
+  uint64_t data_version = OB_INVALID_VERSION;
 
   if (OB_ISNULL(buf) || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "argument is invalid", K(ret));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
   }
 
   if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_for_table_status && is_agent_mode) {
@@ -2630,7 +2643,16 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
     }
   }
-
+  if (OB_SUCC(ret)
+      && !strict_compat_
+      && !is_index_tbl
+      && data_version >= DATA_VERSION_4_3_5_2
+      && table_schema.is_delete_insert_merge_engine()) { // TODO: zhanghuidong.zhd, print merge engine for all user tables
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = '%s' ",
+                                ObMergeEngineStoreFormat::get_merge_engine_type_name(table_schema.get_merge_engine_type())))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
+    }
+  }
   return ret;
 }
 

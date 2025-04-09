@@ -345,7 +345,9 @@ void TestTxDataTable::init_memtable_mgr_(ObTxDataMemtableMgr *memtable_mgr)
 {
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
-  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(CreateMemtableArg(1, SCN::min_scn(), SCN::min_scn(), false, false)));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 1;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(arg));
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 }
 
@@ -634,7 +636,9 @@ void TestTxDataTable::do_repeat_insert_test() {
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
-  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(CreateMemtableArg(1, SCN::min_scn(), SCN::min_scn(), false, false)));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 1;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(arg));
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 
   insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());

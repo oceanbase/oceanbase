@@ -194,7 +194,8 @@ int64_t TestTxCtxTable::ref_count_;
 TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
 {
   EXPECT_EQ(0, TestTxCtxTable::ref_count_);
-  EXPECT_EQ(OB_SUCCESS, mt_mgr_->create_memtable(CreateMemtableArg(0, SCN::min_scn(), SCN::min_scn(), false, false)));
+  CreateMemtableArg arg;
+  EXPECT_EQ(OB_SUCCESS, mt_mgr_->create_memtable(arg));
 
   EXPECT_EQ(1, TestTxCtxTable::ref_count_);
 

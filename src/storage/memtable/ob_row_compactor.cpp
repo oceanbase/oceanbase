@@ -69,9 +69,11 @@ int ObMemtableRowCompactor::compact(const SCN snapshot_version,
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-  } else if (!snapshot_version.is_valid() || SCN::max_scn() == snapshot_version) {
-    STORAGE_LOG(ERROR, "unexpected snapshot version", K(ret), K(snapshot_version));
+  } else if (OB_UNLIKELY(!snapshot_version.is_valid() || SCN::max_scn() == snapshot_version ||
+                         nullptr == memtable_ || memtable_->is_delete_insert_table())) {
     ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "unexpected compact info", K(ret), K(snapshot_version),
+                KPC_(memtable));
   } else if (NULL != row_->latest_compact_node_ &&
              snapshot_version <= row_->latest_compact_node_->trans_version_) {
     // concurrent do compact

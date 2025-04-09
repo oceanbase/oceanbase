@@ -259,6 +259,7 @@ int ObPersistentLobApator::prepare_lob_meta_dml(ObLobAccessParam& param)
                                                *param.tx_desc_,
                                                param.snapshot_,
                                                0,/*branch_id*/
+                                               param.dml_base_param_->write_flag_,
                                                *param.dml_base_param_->store_ctx_guard_,
                                                param.dml_base_param_->spec_seq_no_ ))) {
       LOG_WARN("fail to get write store tx ctx guard", K(ret), K(param));

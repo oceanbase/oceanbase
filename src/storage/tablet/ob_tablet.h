@@ -515,6 +515,7 @@ public:
   // column store replica
 public:
   bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
+  int check_is_delete_insert_table(bool &is_delete_insert_table) const;
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
@@ -743,10 +744,7 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet *tablet,
       const bool is_cs_replica_compat);
-  int create_memtable(const int64_t schema_version,
-                      const share::SCN clog_checkpoint_scn,
-                      const bool for_direct_load,
-                      const bool for_replay);
+  int create_memtable(CreateMemtableArg &arg);
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const bool with_major);
@@ -761,11 +759,7 @@ private:
       ObStoreCtx &store_ctx,
       memtable::ObMemtable *&write_memtable);
 
-  int inner_create_memtable(
-      const share::SCN clog_checkpoint_scn,
-      const int64_t schema_version,
-      const bool for_direct_load,
-      const bool for_replay);
+  int inner_create_memtable(CreateMemtableArg &arg);
 
   int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables) const;
 

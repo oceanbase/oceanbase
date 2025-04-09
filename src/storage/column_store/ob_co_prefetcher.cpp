@@ -486,11 +486,9 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::advance_to_border(
 }
 
 int ObCOPrefetcher::ObCOIndexTreeLevelHandle::forward(
-    ObIndexTreeMultiPassPrefetcher &prefetcher,
-    const bool has_lob_out)
+    ObIndexTreeMultiPassPrefetcher &prefetcher)
 {
   int ret = OB_SUCCESS;
-  UNUSED(has_lob_out);
   ObCOPrefetcher &co_prefetcher = static_cast<ObCOPrefetcher &>(prefetcher);
   if (fetch_idx_ >= prefetch_idx_) {
     ret = OB_ITER_END;

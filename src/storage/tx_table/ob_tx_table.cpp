@@ -461,6 +461,7 @@ int ObTxTable::load_tx_ctx_table_()
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
 
+  CreateMemtableArg arg;
   if (NULL == ls_tablet_svr) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get ls tablet svr failed", K(ret));
@@ -469,8 +470,7 @@ int ObTxTable::load_tx_ctx_table_()
   } else if (FALSE_IT(tablet = handle.get_obj())) {
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
-                 LS_TX_CTX_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_CTX_TABLET, arg/* use default arg */))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
     const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();

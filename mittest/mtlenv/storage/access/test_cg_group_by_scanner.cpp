@@ -15,7 +15,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "storage/access/ob_vector_store.h"
 #include "storage/column_store/ob_cg_group_by_scanner.h"
-#include "ob_index_block_data_prepare.h"
+#include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase
 {
@@ -24,11 +24,11 @@ using namespace common;
 namespace blocksstable
 {
 
-class TestCSCGGroupByScanner : public TestIndexBlockDataPrepare
+class TestCGGroupByScanner : public TestIndexBlockDataPrepare
 {
 public:
-  TestCSCGGroupByScanner();
-  virtual ~TestCSCGGroupByScanner();
+  TestCGGroupByScanner();
+  virtual ~TestCGGroupByScanner();
   void reset();
   static void SetUpTestCase();
   static void TearDownTestCase();
@@ -45,7 +45,7 @@ public:
   static const int64_t COLUMN_NUM = 2;
   static const int64_t DATUM_ARRAY_CNT = 1024;
   static const int64_t DATUM_RES_SIZE = 10;
-  static const int64_t SQL_BATCH_SIZE = 3;
+  static const int64_t SQL_BATCH_SIZE = 256;
   ObArenaAllocator allocator_;
   ObTableAccessParam access_param_;
   ObTableAccessParam cg_access_param_;
@@ -65,7 +65,7 @@ public:
   sql::ObBitVector *skip_bit_;
 };
 
-TestCSCGGroupByScanner::TestCSCGGroupByScanner()
+TestCGGroupByScanner::TestCGGroupByScanner()
   : TestIndexBlockDataPrepare("Test cg group by scanner", ObMergeType::MAJOR_MERGE),
     exec_ctx_(allocator_),
     eval_ctx_(exec_ctx_),
@@ -73,15 +73,14 @@ TestCSCGGroupByScanner::TestCSCGGroupByScanner()
     op_(eval_ctx_, expr_spec_)
 {
   reset();
-  row_store_type_ = CS_ENCODING_ROW_STORE;
   is_cg_data_ = true;
 }
 
-TestCSCGGroupByScanner::~TestCSCGGroupByScanner()
+TestCGGroupByScanner::~TestCGGroupByScanner()
 {
 }
 
-void TestCSCGGroupByScanner::reset()
+void TestCGGroupByScanner::reset()
 {
   access_param_.reset();
   cols_param_.reset();
@@ -97,17 +96,17 @@ void TestCSCGGroupByScanner::reset()
   allocator_.reset();
 }
 
-void TestCSCGGroupByScanner::SetUpTestCase()
+void TestCGGroupByScanner::SetUpTestCase()
 {
   TestIndexBlockDataPrepare::SetUpTestCase();
 }
 
-void TestCSCGGroupByScanner::TearDownTestCase()
+void TestCGGroupByScanner::TearDownTestCase()
 {
   TestIndexBlockDataPrepare::TearDownTestCase();
 }
 
-void TestCSCGGroupByScanner::SetUp()
+void TestCGGroupByScanner::SetUp()
 {
   reset();
   TestIndexBlockDataPrepare::SetUp();
@@ -121,14 +120,14 @@ void TestCSCGGroupByScanner::SetUp()
   sstable_.key_.table_type_ = ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE;
 }
 
-void TestCSCGGroupByScanner::TearDown()
+void TestCGGroupByScanner::TearDown()
 {
   reset();
   tablet_handle_.reset();
   TestIndexBlockDataPrepare::TearDown();
 }
 
-void TestCSCGGroupByScanner::insert_cg_data(ObMacroBlockWriter &data_writer)
+void TestCGGroupByScanner::insert_cg_data(ObMacroBlockWriter &data_writer)
 {
   row_cnt_ = 0;
   const int64_t test_row_cnt = 50000;
@@ -153,7 +152,7 @@ void TestCSCGGroupByScanner::insert_cg_data(ObMacroBlockWriter &data_writer)
   }
 }
 
-void TestCSCGGroupByScanner::prepare_access_param(const bool is_reverse_scan, ObIArray<share::schema::ObColumnParam*> &col_params)
+void TestCGGroupByScanner::prepare_access_param(const bool is_reverse_scan, ObIArray<share::schema::ObColumnParam*> &col_params)
 {
   schema_cols_.set_allocator(&allocator_);
   schema_cols_.init(table_schema_.get_column_count());
@@ -217,7 +216,7 @@ void TestCSCGGroupByScanner::prepare_access_param(const bool is_reverse_scan, Ob
   context_.is_inited_ = true;
 }
 
-void TestCSCGGroupByScanner::prepare_cg_access_param(const bool is_reverse_scan)
+void TestCGGroupByScanner::prepare_cg_access_param(const bool is_reverse_scan)
 {
   cg_access_param_.iter_param_.table_id_ = table_schema_.get_table_id();
   cg_access_param_.iter_param_.tablet_id_ = table_schema_.get_table_id();
@@ -247,7 +246,7 @@ void TestCSCGGroupByScanner::prepare_cg_access_param(const bool is_reverse_scan)
   }
 }
 
-void TestCSCGGroupByScanner::prepare_output_expr(const ObIArray<int32_t> &projector)
+void TestCGGroupByScanner::prepare_output_expr(const ObIArray<int32_t> &projector)
 {
   output_exprs_.set_allocator(&allocator_);
   output_exprs_.init(projector.count());
@@ -276,7 +275,7 @@ void TestCSCGGroupByScanner::prepare_output_expr(const ObIArray<int32_t> &projec
   }
 }
 
-void TestCSCGGroupByScanner::prepare_agg_expr(
+void TestCGGroupByScanner::prepare_agg_expr(
     const ObIArray<int32_t> &projector,
     const ObIArray<ObItemType> &iter_types)
 {
@@ -301,9 +300,9 @@ void TestCSCGGroupByScanner::prepare_agg_expr(
     }
     datum_buf_offset_ += expr->res_buf_len_ * DATUM_ARRAY_CNT;
     expr->type_ = iter_types.at(i);
-    expr->basic_funcs_ = ObDatumFuncs::get_basic_func(ObIntType, CS_TYPE_UTF8MB4_GENERAL_CI);
-    expr->obj_datum_map_ = OBJ_DATUM_8BYTE_DATA;
-    expr->datum_meta_.type_ = ObNumberType;
+    expr->basic_funcs_ = ObDatumFuncs::get_basic_func(ObDecimalIntType, CS_TYPE_UTF8MB4_GENERAL_CI);
+    expr->obj_datum_map_ = OBJ_DATUM_DECIMALINT;
+    expr->datum_meta_.type_ = ObDecimalIntType;
     expr->datum_meta_.precision_ = MAX_PRECISION_DECIMAL_INT_128;
     agg_exprs_.push_back(expr);
 
@@ -318,7 +317,7 @@ void TestCSCGGroupByScanner::prepare_agg_expr(
   }
 }
 
-void TestCSCGGroupByScanner::prepare_test_case(const bool is_reverse_scan)
+void TestCGGroupByScanner::prepare_test_case(const bool is_reverse_scan)
 {
   prepare_access_param(is_reverse_scan, cols_param_);
   prepare_cg_access_param(is_reverse_scan);
@@ -374,7 +373,7 @@ void TestCSCGGroupByScanner::prepare_test_case(const bool is_reverse_scan)
   cg_access_param_.iter_param_.op_ = &op_;
 }
 
-TEST_F(TestCSCGGroupByScanner, test_init)
+TEST_F(TestCGGroupByScanner, test_init)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -396,7 +395,7 @@ TEST_F(TestCSCGGroupByScanner, test_init)
   ASSERT_EQ(5, agg_idxs.count());
 }
 
-TEST_F(TestCSCGGroupByScanner, test_decide_group_size)
+TEST_F(TestCGGroupByScanner, test_decide_group_size)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -421,7 +420,7 @@ TEST_F(TestCSCGGroupByScanner, test_decide_group_size)
   ASSERT_EQ(500, group_size);
 }
 
-TEST_F(TestCSCGGroupByScanner, test_decide_can_group_by)
+TEST_F(TestCGGroupByScanner, test_decide_can_group_by)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -452,7 +451,7 @@ TEST_F(TestCSCGGroupByScanner, test_decide_can_group_by)
   ASSERT_TRUE(can_group_by);
 }
 
-TEST_F(TestCSCGGroupByScanner, test_read_distinct)
+TEST_F(TestCGGroupByScanner, test_read_distinct)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -493,7 +492,7 @@ TEST_F(TestCSCGGroupByScanner, test_read_distinct)
   }
 }
 
-TEST_F(TestCSCGGroupByScanner, test_read_reference)
+TEST_F(TestCGGroupByScanner, test_read_reference)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -525,21 +524,25 @@ TEST_F(TestCSCGGroupByScanner, test_read_reference)
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_can_group_by(0, can_group_by));
   ASSERT_TRUE(can_group_by);
 
-  int total_ref_cnt = 0;
-  while (total_ref_cnt < group_size) {
-    ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
-    uint32_t *ref_buf = group_by_cell.get_refs_buf();
-    ASSERT_TRUE(nullptr != ref_buf);
-    for (int64_t j = 0; j < group_by_cell.get_ref_cnt(); ++j) {
-      ASSERT_EQ(total_ref_cnt % 5, ref_buf[j]);
-      total_ref_cnt++;
-    }
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
+  ASSERT_EQ(group_by_cell.get_batch_size(), group_by_cell.get_ref_cnt());
+  uint32_t *ref_buf = group_by_cell.get_refs_buf();
+  ASSERT_TRUE(nullptr != ref_buf);
+  int64_t i = 0;
+  for (; i < group_by_cell.get_ref_cnt(); ++i) {
+    ASSERT_EQ(i % 5, ref_buf[i]);
   }
-  ASSERT_EQ(total_ref_cnt, group_size);
+
+  const int64_t remain_ref_cnt = group_size - TestCGGroupByScanner::SQL_BATCH_SIZE;
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
+  ASSERT_EQ(remain_ref_cnt, group_by_cell.get_ref_cnt());
+  for (int j = 0; i < group_size; ++i,++j) {
+    ASSERT_EQ(i % 5, ref_buf[j]);
+  }
   ASSERT_EQ(OB_ITER_END, group_by_scanner.read_reference(0));
 }
 
-TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by)
+TEST_F(TestCGGroupByScanner, test_calc_aggregate_group_by)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -569,15 +572,10 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by)
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_can_group_by(0, can_group_by));
   ASSERT_TRUE(can_group_by);
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_distinct(0));
-
-  int total_ref_cnt = 0;
-  while (total_ref_cnt < group_size) {
-    ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
-    ASSERT_EQ(OB_SUCCESS, group_by_scanner.calc_aggregate(true));
-    total_ref_cnt += group_by_cell.get_ref_cnt();
-  }
-  ASSERT_EQ(total_ref_cnt, group_size);
-  ASSERT_EQ(OB_ITER_END, group_by_scanner.read_reference(0));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.calc_aggregate(true));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.calc_aggregate(true));
 
   ObIArray<ObAggCell*> &agg_cell = group_by_cell.get_agg_cells();
   ASSERT_EQ(5, group_by_cell.get_agg_cells().count());
@@ -623,7 +621,7 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by)
   ASSERT_EQ(100, cell->get_group_by_result_datum(4).get_int());
 }
 
-TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
+TEST_F(TestCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
 {
   const bool is_reverse_scan = false;
   prepare_test_case(is_reverse_scan);
@@ -664,16 +662,12 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_distinct(0));
   ASSERT_TRUE(group_by_cell.need_extract_distinct());
   group_by_cell.set_distinct_cnt(0);
-
-  int total_ref_cnt = 0;
-  while (total_ref_cnt < 300) {
-    ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
-    ASSERT_EQ(OB_SUCCESS, group_by_cell.extract_distinct());
-    ASSERT_EQ(OB_SUCCESS, group_by_scanner.calc_aggregate(true));
-    total_ref_cnt += group_by_cell.get_ref_cnt();
-  }
-  ASSERT_EQ(total_ref_cnt, 300);
-  ASSERT_EQ(OB_ITER_END, group_by_scanner.read_reference(0));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.extract_distinct());
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.calc_aggregate(true));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.read_reference(0));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.extract_distinct());
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.calc_aggregate(true));
 
   ASSERT_EQ(3, group_by_cell.get_distinct_cnt());
   ObIArray<ObAggCell*> &agg_cell = group_by_cell.get_agg_cells();
@@ -715,8 +709,8 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
 
 int main(int argc, char **argv)
 {
-  system("rm -f test_cs_cg_group_by_scanner.log*");
-  OB_LOGGER.set_file_name("test_cs_cg_group_by_scanner.log", true, true);
+  system("rm -f test_cg_group_by_scanner.log*");
+  OB_LOGGER.set_file_name("test_cg_group_by_scanner.log", true, true);
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -1575,6 +1575,7 @@ class SqlKeywords:
          DEFINER
          DELAY
          DELAY_KEY_WRITE
+         DELETE_INSERT
          DES_KEY_FILE
          DESTINATION
          DIAGNOSTICS
@@ -1713,6 +1714,7 @@ class SqlKeywords:
          MEMORY
          MEMTABLE
          MERGE
+         MERGE_ENGINE
          MESSAGE_TEXT
          META
          MICROSECOND
@@ -1764,6 +1766,7 @@ class SqlKeywords:
          PARAMETERS
          PARSER
          PARTIAL
+         PARTIAL_UPDATE
          PARTITION_ID
          PARTITIONING
          PARTITIONS

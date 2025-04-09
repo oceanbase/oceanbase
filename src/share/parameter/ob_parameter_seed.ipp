@@ -2059,7 +2059,6 @@ DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(_storage_leak_check_mod, OB_CLUSTER_PARAMETER, "", "set leak check mod in storage",
      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_INT(_ha_tablet_info_batch_count, OB_TENANT_PARAMETER, "0", "[0,]",
         "the number of tablet replica info sent by on rpc for ha. Range: [0, +∞) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

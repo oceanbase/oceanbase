@@ -2710,12 +2710,7 @@ int ObLSTabletService::rollback_remove_tablet_without_lock(
   return ret;
 }
 
-int ObLSTabletService::create_memtable(
-    const common::ObTabletID &tablet_id,
-    const int64_t schema_version,
-    const bool for_direct_load,
-    const bool for_replay,
-    const share::SCN clog_checkpoint_scn)
+int ObLSTabletService::create_memtable(const common::ObTabletID &tablet_id, CreateMemtableArg &arg)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -2727,9 +2722,9 @@ int ObLSTabletService::create_memtable(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || schema_version < 0)) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || arg.schema_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_id), K(schema_version));
+    LOG_WARN("invalid args", K(ret), K(tablet_id), K(arg));
   } else {
     // we need bucket lock here to protect multi version tablet creation
     // during tablet creating new memtable and put it into table store.
@@ -2749,7 +2744,7 @@ int ObLSTabletService::create_memtable(
       ObTablet &old_tablet = *(old_tablet_handle.get_obj());
       bool is_committed = false;
       // forbid create new memtable when transfer
-      if (for_replay) {
+      if (arg.for_replay_) {
       } else if (OB_FAIL(old_tablet.ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
         LOG_WARN("fail to get latest tablet status", K(ret));
       } else if (FALSE_IT(is_committed = mds::TwoPhaseCommitState::ON_COMMIT == trans_stat)) {
@@ -2762,12 +2757,12 @@ int ObLSTabletService::create_memtable(
           LOG_WARN("tablet status not allow create new memtable", K(ret), K(is_committed), K(user_data));
         }
       }
-      if (FAILEDx(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_direct_load, for_replay))) {
+      if (FAILEDx(old_tablet.create_memtable(arg))) {
         if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
-          LOG_WARN("fail to create memtable", K(ret), K(new_tablet_handle), K(schema_version), K(tablet_id));
+          LOG_WARN("fail to create memtable", K(ret), K(new_tablet_handle), K(tablet_id), K(arg));
         }
       } else if (FALSE_IT(time_guard.click("create memtable"))) {
-      } else if (OB_FAIL(old_tablet.get_updating_tablet_pointer_param(param, false/*update tablet attr*/))) {
+      } else if (OB_FAIL(old_tablet.get_updating_tablet_pointer_param(param, false /*update tablet attr*/))) {
         LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(old_tablet));
       } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, old_tablet_handle, old_tablet_handle, param))) {
         LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(old_tablet_handle), K(param));
@@ -3405,7 +3400,8 @@ int ObLSTabletService::update_rows(
       const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
 
       // for major mv base table need update full column
-      if (dml_param.table_param_->get_data_table().get_mv_mode().table_referenced_by_fast_lsm_mv_flag_) {
+      if (dml_param.table_param_->get_data_table().get_mv_mode().table_referenced_by_fast_lsm_mv_flag_ ||
+          run_ctx.is_delete_insert_table_) {
         ctx.update_full_column_ =  true;
       }
 
@@ -3467,7 +3463,7 @@ int ObLSTabletService::update_rows(
             LOG_WARN("fail to assign old rows", K(ret), K(new_rows_count));
           }
           // the tmp_tbl_rows is used to delete the old row if the rowkey change
-          if (OB_SUCC(ret) && rowkey_change && (tmp_rows == nullptr || new_rows_count > max_tmp_row_cnt)) {
+          if (OB_SUCC(ret) && (rowkey_change || run_ctx.is_delete_insert_table_) && (tmp_rows == nullptr || new_rows_count > max_tmp_row_cnt)) {
             max_tmp_row_cnt = new_rows_count;
             if (tmp_rows != nullptr) {
               work_allocator.free(tmp_rows);
@@ -3757,6 +3753,11 @@ int ObLSTabletService::delete_rows(
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
       tablet_handle.reset();
+      // for delete_insert table need update full column
+      if (run_ctx.is_delete_insert_table_) {
+        ctx.update_full_column_ =  true;
+      }
+
       SMART_VAR(ObRowsInfo, rows_info) {
         ObRelativeTable &relative_table = run_ctx.relative_table_;
         const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
@@ -5328,6 +5329,11 @@ int ObLSTabletService::process_old_rows(
       || run_ctx.col_descs_->count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(store_ctx), KP(run_ctx.col_descs_), K(is_delete_total_quantity_log));
+  } else if (OB_UNLIKELY(!run_ctx.dml_param_.table_param_->get_data_table().is_index_table() &&
+                         run_ctx.is_delete_insert_table_ != store_ctx.mvcc_acc_ctx_.write_flag_.is_delete_insert())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Unexpected delete insert status", K(ret), K(store_ctx.mvcc_acc_ctx_.write_flag_),
+              KPC(tablet_handle.get_obj()), K(run_ctx.dml_param_.table_param_->get_data_table()));
   } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_,
       tablet_handle, run_ctx, row_count, old_rows, error_row_idx))) {
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
@@ -5354,7 +5360,7 @@ int ObLSTabletService::process_old_rows(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (rowkey_change) {
+    } else if (rowkey_change || run_ctx.is_delete_insert_table_) {
       if (OB_ISNULL(tmp_rows)) { // tmp_rows must be not null if rowkey changed
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid tmp rows", K(ret));
@@ -5420,6 +5426,11 @@ int ObLSTabletService::process_old_row(
       || !datum_row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(store_ctx), KP(run_ctx.col_descs_), K(datum_row), K(is_delete_total_quantity_log));
+  } else if (OB_UNLIKELY(!run_ctx.dml_param_.table_param_->get_data_table().is_index_table() &&
+                         run_ctx.is_delete_insert_table_ != store_ctx.mvcc_acc_ctx_.write_flag_.is_delete_insert())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Unexpected delete insert status", K(ret), K(store_ctx.mvcc_acc_ctx_.write_flag_),
+              KPC(tablet_handle.get_obj()), K(run_ctx.dml_param_.table_param_->get_data_table()));
   } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_, tablet_handle, run_ctx, 1, &datum_row, error_row_idx))) {
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
       dump_diag_info_for_old_row_loss(run_ctx, datum_row);
@@ -5445,7 +5456,7 @@ int ObLSTabletService::process_old_row(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (rowkey_change) {
+    } else if (rowkey_change || run_ctx.is_delete_insert_table_) {
       ObDatumRow del_row;
       ObDatumRow new_row;
 
@@ -5497,6 +5508,12 @@ int ObLSTabletService::process_new_rows(
   if (OB_UNLIKELY(update_idx.count() < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(update_idx));
+    LOG_WARN("fail to check is delete insert table", K(ret));
+  } else if (OB_UNLIKELY(!run_ctx.dml_param_.table_param_->get_data_table().is_index_table() &&
+                         run_ctx.is_delete_insert_table_ != run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_delete_insert())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Unexpected delete insert status", K(ret), K(run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_),
+              KPC(tablet_handle.get_obj()), K(run_ctx.dml_param_.table_param_->get_data_table()));
   } else if (GCONF.enable_defensive_check()
       && OB_FAIL(check_new_row_legitimacy(run_ctx, row_count, new_rows_info.rows_))) {
     LOG_WARN("check new row legitimacy failed", K(ret), K(new_rows_info));
@@ -5508,6 +5525,11 @@ int ObLSTabletService::process_new_rows(
     const int64_t row_count = new_rows_info.get_rowkey_cnt();
 
     if (!rowkey_change) {
+      if (run_ctx.is_delete_insert_table_) {
+        for (int64_t i = 0; i < row_count; i++) {
+          new_rows_info.rows_[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+        }
+      }
       if (!is_update_total_quantity_log) {
         // For minimal mode, set pk columns of old_row to nop value, because
         // they are already stored in new_row.
@@ -5593,9 +5615,18 @@ int ObLSTabletService::process_new_row(
     LOG_WARN("invalid args", K(ret), K(ctx),
         KP(run_ctx.col_descs_), K(update_idx), K(old_datum_row), K(new_datum_row),
         K(is_update_total_quantity_log), K(rowkey_change));
+  } else if (OB_UNLIKELY(!run_ctx.dml_param_.table_param_->get_data_table().is_index_table() &&
+                         run_ctx.is_delete_insert_table_ != ctx.mvcc_acc_ctx_.write_flag_.is_delete_insert())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Unexpected delete insert status", K(ret), K(ctx.mvcc_acc_ctx_.write_flag_),
+              KPC(tablet_handle.get_obj()), K(run_ctx.dml_param_.table_param_->get_data_table()));
   } else {
     const ObColDescIArray &col_descs = *run_ctx.col_descs_;
-    new_datum_row.row_flag_.set_flag(rowkey_change ? ObDmlFlag::DF_INSERT : ObDmlFlag::DF_UPDATE);
+    if (run_ctx.is_delete_insert_table_ && !rowkey_change) {
+      new_datum_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    } else {
+      new_datum_row.row_flag_.set_flag(rowkey_change ? ObDmlFlag::DF_INSERT : ObDmlFlag::DF_UPDATE);
+    }
     if (!rowkey_change) {
       ObDatumRow old_row;
       if (OB_FAIL(old_row.shallow_copy(old_datum_row))) {

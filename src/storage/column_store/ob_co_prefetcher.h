@@ -153,9 +153,7 @@ public:
 private:
   struct ObCOIndexTreeLevelHandle : public ObIndexTreeLevelHandle {
   public:
-    virtual int forward(
-        ObIndexTreeMultiPassPrefetcher &prefetcher,
-        const bool has_lob_out) override final;
+    virtual int forward(ObIndexTreeMultiPassPrefetcher &prefetcher) override final;
     int try_advancing_fetch_idx(
         ObCOPrefetcher &prefetcher,
         const ObDatumRowkey &border_rowkey,

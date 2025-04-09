@@ -957,6 +957,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t get_coord_epoch() const;
   int get_and_inc_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
+  int inc_and_get_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
   int clear_state_for_autocommit_retry();
@@ -1254,6 +1255,22 @@ inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
   } else {
     return ObTxSEQ::mk_v0(seq);
   }
+}
+
+inline int ObTxDesc::inc_and_get_tx_seq(const int16_t branch,
+                                        const int N,
+                                        ObTxSEQ &tx_seq) const
+{
+  int ret = OB_SUCCESS;
+  int64_t seq = 0;
+  if (OB_FAIL(ObSequence::inc_and_get_max_seq_no(N, seq))) {
+    TRANS_LOG(ERROR, "inc max seq no failed", K(ret), K(N));
+  } else if (OB_LIKELY(support_branch())) {
+    tx_seq = ObTxSEQ(seq - seq_base_, branch);
+  } else {
+    tx_seq = ObTxSEQ::mk_v0(seq);
+  }
+  return ret;
 }
 
 enum ObTxCleanPolicy {

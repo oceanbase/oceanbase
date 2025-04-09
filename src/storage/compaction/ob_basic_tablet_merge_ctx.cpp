@@ -690,6 +690,7 @@ int ObBasicTabletMergeCtx::get_storage_schema()
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
   } else {
     static_param_.schema_ = schema_on_tablet;
+    static_param_.is_delete_insert_merge_ = schema_on_tablet->is_delete_insert_merge_engine();
   }
   return ret;
 }

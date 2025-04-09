@@ -443,14 +443,12 @@ int ObAccessService::get_write_store_ctx_guard(
     transaction::ObTxDesc &tx_desc,
     const transaction::ObTxReadSnapshot &snapshot,
     const int16_t branch_id,
+    concurrent_control::ObWriteFlag &write_flag,
     ObStoreCtxGuard &ctx_guard,
     const transaction::ObTxSEQ &spec_seq_no)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  // the write_flag is for tablet and does not need to be set here, just use default value,
-  // it will be set by dml param in check_write_allowed_ when doing dml operations
-  concurrent_control::ObWriteFlag default_write_flag;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
@@ -458,7 +456,7 @@ int ObAccessService::get_write_store_ctx_guard(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tx_desc), K(snapshot));
   } else if (OB_FAIL(get_write_store_ctx_guard_(
-      ls_id, timeout, tx_desc, snapshot, branch_id, default_write_flag, ctx_guard, spec_seq_no))) {
+              ls_id, timeout, tx_desc, snapshot, branch_id, write_flag, ctx_guard, spec_seq_no))) {
     LOG_WARN("fail to get write store ctx gurad", K(ret), K(ls_id), K(tx_desc));
   }
   return ret;

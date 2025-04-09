@@ -34,6 +34,10 @@ public:
       prefetcher_(),
       macro_block_reader_(),
       micro_scanner_(nullptr),
+      micro_data_scanner_(nullptr),
+      mv_micro_data_scanner_(nullptr),
+      mv_di_micro_data_scanner_(nullptr),
+      is_di_base_iter_(false),
       cur_range_idx_(-1)
   {
     type_ = ObStoreRowIterator::IteratorScan;
@@ -44,7 +48,15 @@ public:
   virtual void reclaim() override;
   virtual bool can_blockscan() const override;
   virtual bool can_batch_scan() const override;
-  TO_STRING_KV(K_(is_opened), K_(cur_range_idx), K_(prefetcher), KPC_(sstable));
+  OB_INLINE bool is_di_base_iter() { return is_di_base_iter_; }
+  int get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
+                       int64_t &curr_scan_index,
+                       blocksstable::ObDatumRowkey &border_rowkey,
+                       common::ObIAllocator &allocator,
+                       bool need_set_border_rowkey);
+  TO_STRING_KV(K_(is_opened), K_(is_di_base_iter), K_(cur_range_idx),
+               KP_(micro_scanner), KP_(micro_data_scanner), KP_(mv_micro_data_scanner), KP_(mv_di_micro_data_scanner),
+               K_(prefetcher), KPC_(sstable), KPC_(iter_param), KPC_(access_ctx));
 protected:
   int inner_open(
       const ObTableIterParam &iter_param,
@@ -59,9 +71,10 @@ protected:
   // for column store
   int get_blockscan_start(ObCSRowId &start, int32_t &range_idx, BlockScanState &block_scan_state);
   int forward_blockscan(ObCSRowId &end, BlockScanState &block_scan_state, const ObCSRowId begin);
+  int try_skip_deleted_row(ObCSRowId &co_current);
 
 private:
-  OB_INLINE int init_micro_scanner();
+  int init_micro_scanner();
   int open_cur_data_block(ObSSTableReadHandle &read_handle);
   int fetch_rows(ObSSTableReadHandle &read_handle);
   // For columnar store
@@ -84,7 +97,11 @@ protected:
   PrefetchType prefetcher_;
   ObMacroBlockReader macro_block_reader_;
   ObIMicroBlockRowScanner *micro_scanner_;
+  ObMicroBlockRowScanner *micro_data_scanner_;
+  ObMultiVersionMicroBlockRowScanner *mv_micro_data_scanner_;
+  ObMultiVersionDIMicroBlockRowScanner *mv_di_micro_data_scanner_;
 private:
+  bool is_di_base_iter_;
   int64_t cur_range_idx_;
   friend class ObCOSSTableRowScanner;
 };

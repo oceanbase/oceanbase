@@ -207,6 +207,39 @@ private:
   ObLSStoreType store_type_;
 };
 
+static const char *MergeEngineTypeStr[] = { "PARTIAL_UPDATE",
+                                            "DELETE_INSERT",
+                                            "MAX" };
+class ObMergeEngineStoreFormat
+{
+public:
+  static inline bool is_merge_engine_valid(const ObMergeEngineType type)
+  {
+    return type >= ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE && type < ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  }
+  static inline const char *get_merge_engine_type_name(const ObMergeEngineType merge_engine_type)
+  {
+    const int64_t merge_engine_type_idx = static_cast<int64_t>(merge_engine_type);
+    const char *str = "INVALID";
+    switch (merge_engine_type) {
+      case ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE: {
+        str = "PARTIAL_UPDATE";
+        break;
+      }
+      case ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT: {
+        str = "DELETE_INSERT";
+        break;
+      }
+      case ObMergeEngineType::OB_MERGE_ENGINE_MAX:
+      default: {
+        str = "INVALID";
+        break;
+      }
+    }
+    return str;
+  }
+};
+
 }//end namespace common
 }//end namespace oceanbase
 

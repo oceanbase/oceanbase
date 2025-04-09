@@ -289,12 +289,7 @@ public:
       const ObTabletID &tablet_id,
       ObTabletTransferInfo &tablet_transfer_info);
 
-  int create_memtable(
-      const common::ObTabletID &tablet_id,
-      const int64_t schema_version,
-      const bool for_direct_load,
-      const bool for_replay,
-      const share::SCN clog_checkpoint_scn = share::SCN::min_scn());
+  int create_memtable(const common::ObTabletID &tablet_id, CreateMemtableArg &arg);
   int get_read_tables(
       const common::ObTabletID tablet_id,
       const int64_t timeout_us,

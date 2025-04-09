@@ -5233,11 +5233,7 @@ int ObTablet::get_active_memtable(ObTableHandleV2 &handle) const
   return ret;
 }
 
-int ObTablet::create_memtable(
-    const int64_t schema_version,
-    const SCN clog_checkpoint_scn,
-    const bool for_direct_load,
-    const bool for_replay)
+int ObTablet::create_memtable(CreateMemtableArg &arg)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
@@ -5248,25 +5244,24 @@ int ObTablet::create_memtable(
   // we use the parameter clog_checkpoint_scn to double check whether the
   // clog_checkpoint_scn has been changed during memtable replay check.
   // So we complement the input_clog_checkpoint_scn for other scenario.
-  const SCN input_clog_checkpoint_scn = clog_checkpoint_scn.is_min() ?
-    tablet_meta_.clog_checkpoint_scn_ : clog_checkpoint_scn;
+  if (arg.clog_checkpoint_scn_.is_min()){
+    arg.clog_checkpoint_scn_ = tablet_meta_.clog_checkpoint_scn_;
+  }
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(schema_version < 0)) {
+  } else if (OB_UNLIKELY(arg.schema_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid schema version", K(ret), K(schema_version));
+    LOG_WARN("invalid schema version", K(ret), K(arg));
+  } else if (OB_FAIL(check_is_delete_insert_table(arg.is_delete_insert_))) {
+    LOG_WARN("fail to check is delete insert table", K(ret));
   } else if (FALSE_IT(time_guard.click("prepare_memtables"))) {
-  } else if (OB_FAIL(inner_create_memtable(input_clog_checkpoint_scn,
-                                           schema_version,
-                                           for_direct_load,
-                                           for_replay))) {
+  } else if (OB_FAIL(inner_create_memtable(arg))) {
     if (OB_ENTRY_EXIST == ret) {
       ret = OB_SUCCESS;
     } else if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
-      LOG_WARN("failed to create memtable", K(ret), K(input_clog_checkpoint_scn),
-               K(schema_version), K(for_replay));
+      LOG_WARN("failed to create memtable", K(ret), K(arg));
     }
   } else {
     time_guard.click("inner_create_memtable");
@@ -5295,30 +5290,21 @@ int ObTablet::create_memtable(
     } while(OB_FAIL(ret));
   }
 
-  STORAGE_LOG(DEBUG,
-              "Tablet finish create memtable",
-              K(schema_version),
-              K(input_clog_checkpoint_scn),
-              K(for_replay),
-              K(lbt()));
+  STORAGE_LOG(DEBUG, "Tablet finish create memtable", K(arg), K(lbt()));
   return ret;
 }
 
-int ObTablet::inner_create_memtable(
-    const SCN input_clog_checkpoint_scn,
-    const int64_t schema_version,
-    const bool for_direct_load,
-    const bool for_replay)
+int ObTablet::inner_create_memtable(CreateMemtableArg &arg)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  const SCN latest_clog_checkpoint_scn = tablet_meta_.clog_checkpoint_scn_;
+  arg.new_clog_checkpoint_scn_ = tablet_meta_.clog_checkpoint_scn_;
   ObProtectedMemtableMgrHandle *protected_handle = NULL;
 
-  if (OB_UNLIKELY(!input_clog_checkpoint_scn.is_valid_and_not_min()) || OB_UNLIKELY(schema_version < 0)) {
+  if (OB_UNLIKELY(!arg.clog_checkpoint_scn_.is_valid_and_not_min()) || OB_UNLIKELY(arg.schema_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(input_clog_checkpoint_scn), K(schema_version));
+    LOG_WARN("invalid args", K(ret), K(arg));
   } else if (OB_UNLIKELY(MAX_MEMSTORE_CNT == memtable_count_)) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
     if (TC_REACH_TIME_INTERVAL(1_s)) {
@@ -5327,19 +5313,12 @@ int ObTablet::inner_create_memtable(
     }
   } else if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
-  } else if (OB_FAIL(protected_handle->create_memtable(tablet_meta_,
-                                                       CreateMemtableArg(schema_version,
-                                                                         input_clog_checkpoint_scn,
-                                                                         latest_clog_checkpoint_scn,
-                                                                         for_replay,
-                                                                         for_direct_load)))) {
+  } else if (OB_FAIL(protected_handle->create_memtable(tablet_meta_, arg))) {
     if (OB_ENTRY_EXIST != ret && OB_MINOR_FREEZE_NOT_ALLOW != ret) {
       LOG_WARN("failed to create memtable", K(ret), K(ls_id), K(tablet_id), KPC(this));
     }
   } else {
-    LOG_INFO("succeeded to create memtable for tablet", K(ret), K(tablet_id),
-             K(ls_id), K(schema_version), K(for_replay), K(for_direct_load),
-             K(input_clog_checkpoint_scn), K(latest_clog_checkpoint_scn));
+    LOG_INFO("succeeded to create memtable for tablet", K(ret), K(tablet_id), K(ls_id), K(arg));
   }
 
   return ret;
@@ -5600,7 +5579,8 @@ int ObTablet::build_read_info(
                                              cols_desc,
                                              false /*is_cg_sstable*/,
                                              false /*use_default_compat_version*/,
-                                             is_cs_replica_compat))) {
+                                             is_cs_replica_compat,
+                                             storage_schema->is_delete_insert_merge_engine()))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
@@ -6335,6 +6315,21 @@ int ObTablet::check_row_store_with_co_major(bool &is_row_store_with_co_major) co
   } else if (ObITable::is_column_store_major_sstable(major_sstable->get_key().table_type_)) {
     is_row_store_with_co_major = true;
     LOG_INFO("[CS-Replica] find store type mismatch last major sstable", K(ret), K(table_store_cache_), KPC(table_store), K(is_row_store_with_co_major));
+  }
+  return ret;
+}
+
+int ObTablet::check_is_delete_insert_table(bool &is_delete_insert_table) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTablet has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null rowkey readinfo", K(ret));
+  } else {
+    is_delete_insert_table = rowkey_read_info_->is_delete_insert_table();
   }
   return ret;
 }

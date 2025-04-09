@@ -72,6 +72,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   micro_index_clustered_ = desc.micro_index_clustered_;
   enable_macro_block_bloom_filter_ = desc.enable_macro_block_bloom_filter_;
   need_submit_io_ = desc.need_submit_io_;
+  is_delete_insert_table_ = desc.is_delete_insert_table_;
   encoding_granularity_ = desc.encoding_granularity_;
   return ret;
 }
@@ -165,6 +166,7 @@ int ObStaticDataStoreDesc::init(
       snapshot_version_ = snapshot_version;
       progressive_merge_round_ = merge_schema.get_progressive_merge_round();
       compressor_type_ = merge_schema.get_compressor_type();
+      is_delete_insert_table_ = merge_schema.is_delete_insert_merge_engine();
       (void) init_block_size(merge_schema);
       if (is_major) {
         uint64_t compat_version = 0;

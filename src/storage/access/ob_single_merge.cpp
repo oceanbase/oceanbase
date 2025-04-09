@@ -99,8 +99,9 @@ int ObSingleMerge::calc_scan_range()
   return ret;
 }
 
-int ObSingleMerge::construct_iters()
+int ObSingleMerge::construct_iters(const bool is_refresh)
 {
+  UNUSED(is_refresh);
   int ret = OB_SUCCESS;
   return ret;
 }
@@ -284,7 +285,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 
     if (OB_SUCC(ret)) {
       STORAGE_LOG(DEBUG, "row before project", K(iter_del_row_), K(full_row_));
-      if (!full_row_.row_flag_.is_exist_without_delete() && !(iter_del_row_  && full_row_.row_flag_.is_delete())) {
+      if (!full_row_.row_flag_.is_exist_without_delete() && !(need_iter_del_row() && full_row_.row_flag_.is_delete())) {
         ret = OB_ITER_END;
       } else {
         const ObColumnIndexArray &cols_index = read_info->get_columns_index();

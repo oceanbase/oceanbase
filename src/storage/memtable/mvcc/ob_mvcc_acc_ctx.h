@@ -60,8 +60,12 @@ class ObMvccAccessCtx
 public:
   ObMvccAccessCtx()
     : type_(T::INVL),
+      is_standby_read_(false),
+      has_create_tx_ctx_(false),
+      is_delete_insert_(false),
       abs_lock_timeout_ts_(-1),
       tx_lock_timeout_us_(-1),
+      major_snapshot_(0),
       snapshot_(),
       tx_table_guards_(),
       tx_id_(),
@@ -71,8 +75,6 @@ public:
       tx_scn_(),
       write_flag_(),
       handle_start_time_(OB_INVALID_TIMESTAMP),
-      has_create_tx_ctx_(false),
-      is_standby_read_(false),
       lock_wait_start_ts_(0),
       is_inited_(false)
   {}
@@ -88,9 +90,9 @@ public:
     tx_scn_.reset();
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
+    is_inited_ = false;
     is_standby_read_ = false;
     lock_wait_start_ts_ = 0;
-    is_inited_ = false;
   }
   // Note that the init_read and init_write functions no longer actively call the reset function.
   void reset() {
@@ -112,6 +114,8 @@ public:
       handle_start_time_ = OB_INVALID_TIMESTAMP;
       is_standby_read_ = false;
       has_create_tx_ctx_ = false;
+      is_delete_insert_ = false;
+      major_snapshot_ = 0;
       lock_wait_start_ts_ = 0;
       mds_filter_.reset();
       is_inited_ = false;
@@ -300,6 +304,7 @@ public:
   { return mds_filter_.init(mds_filter); }
   void clear_mds_filter() { mds_filter_.reset(); }
   TO_STRING_KV(K_(type),
+               K_(is_inited),
                K_(abs_lock_timeout_ts),
                K_(tx_lock_timeout_us),
                K_(snapshot),
@@ -312,9 +317,10 @@ public:
                K_(write_flag),
                K_(handle_start_time),
                K_(is_standby_read),
-               K_(lock_wait_start_ts),
+               K_(is_delete_insert),
+               K_(major_snapshot),
                K_(mds_filter),
-               K_(is_inited));
+               K_(lock_wait_start_ts));
 private:
   void warn_tx_ctx_leaky_();
 public: // NOTE: those field should only be accessed by txn relative routine
@@ -322,6 +328,9 @@ public: // NOTE: those field should only be accessed by txn relative routine
   // abs_lock_timeout_ts is the minimum value between the timeout timestamp of
   // the 'select for update' SQL statement and the timeout timestamp of the
   // dml_param / scan_param (which is calculated from ob_query_timeout).
+  bool is_standby_read_;
+  bool has_create_tx_ctx_;
+  bool is_delete_insert_;
   int64_t abs_lock_timeout_ts_;
   // tx_lock_timeout_us is defined as a system variable `ob_trx_lock_timeout`,
   // as the timeout of waiting on the WW conflict. it timeout reached
@@ -334,6 +343,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   //   minimum between ob_query_timeout and ob_trx_lock_timeout
   // - When ob_trx_lock_timeout is equal to 0, it means never wait
   int64_t tx_lock_timeout_us_;
+  int64_t major_snapshot_;
   transaction::ObTxSnapshot snapshot_;
   storage::ObTxTableGuards tx_table_guards_;  // for transfer query
   // specials for MvccWrite
@@ -346,9 +356,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
 
   // this was used for runtime metric
   int64_t handle_start_time_;
-  bool has_create_tx_ctx_;
   ObMvccMdsFilter mds_filter_; // to record filter info on ObTableAccessContext
-  bool is_standby_read_;
 protected:
   int64_t lock_wait_start_ts_;
 private:

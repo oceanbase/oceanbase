@@ -66,6 +66,7 @@ struct ObMergeParameter {
   {
     return nullptr != mview_merge_param_;
   }
+  bool is_delete_insert_merge() const;
 
   const ObStaticMergeParam &static_param_;
   /* rest variables are different for MergeTask */

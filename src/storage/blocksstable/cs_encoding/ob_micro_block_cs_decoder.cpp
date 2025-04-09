@@ -1322,7 +1322,9 @@ int ObMicroBlockCSDecoder::filter_pushdown_filter(
       transform_helper_.get_micro_block_header()))) {
     LOG_WARN("Failed to validate filter info", K(ret));
   } else {
-    int64_t col_count = filter.get_col_count();
+    const int64_t col_count = filter.get_col_count();
+    const int64_t trans_col_idx = transform_helper_.get_micro_block_header()->rowkey_column_count_ > 0 ?
+        read_info_->get_schema_rowkey_count() : INT32_MIN;
     const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
@@ -1340,7 +1342,7 @@ int ObMicroBlockCSDecoder::filter_pushdown_filter(
             datum.reuse();
             if (OB_FAIL(decoders_[col_offsets.at(i)].decode(row_idx, datum))) {
               LOG_WARN("decode cell failed", K(ret), K(row_idx), K(i), K(datum));
-            } else if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(cols_index.at(col_offsets.at(i))))) {
+            } else if (OB_UNLIKELY(trans_col_idx == cols_index.at(col_offsets.at(i)))) {
               if (OB_FAIL(storage::reverse_trans_version_val(datum))) {
                 LOG_WARN("Failed to reverse trans version val", K(ret));
               }

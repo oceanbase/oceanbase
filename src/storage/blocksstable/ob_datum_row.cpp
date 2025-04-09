@@ -73,6 +73,7 @@ ObDatumRow::ObDatumRow(const uint64_t tenant_id)
     scan_index_(0),
     group_idx_(0),
     snapshot_version_(0),
+    delete_version_(0),
     storage_datums_(nullptr),
     datum_buffer_(),
     trans_info_(nullptr)
@@ -171,6 +172,7 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
     scan_index_ = 0;
     group_idx_ = 0;
     snapshot_version_ = 0;
+    delete_version_ = 0;
     fast_filter_skipped_ = false;
     have_uncommited_row_ = false;
   }
@@ -185,6 +187,7 @@ void ObDatumRow::reset()
   datum_buffer_.reset();
   storage_datums_ = nullptr;
   snapshot_version_ = 0;
+  delete_version_ = 0;
   group_idx_ = 0;
   scan_index_ = 0;
   trans_id_.reset();
@@ -207,6 +210,7 @@ void ObDatumRow::reuse()
   scan_index_ = 0;
   group_idx_ = 0;
   snapshot_version_ = 0;
+  delete_version_ = 0;
   fast_filter_skipped_ = false;
   have_uncommited_row_ = false;
   if (OB_NOT_NULL(trans_info_)) {
@@ -223,7 +227,7 @@ int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)
     STORAGE_LOG(WARN, "Invalid argument to deep copy datum row", K(ret), K(src));
   } else if (OB_UNLIKELY(get_capacity() < src.count_ || nullptr == storage_datums_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected local datum row to deep copy", K(ret), KPC(this));
+    STORAGE_LOG(WARN, "Unexpected local datum row to deep copy", K(ret), KPC(this), K(src));
   } else if (OB_FAIL(copy_attributes_except_datums(src))) {
     STORAGE_LOG(WARN, "copy attribute from other failed", K(ret), K(src));
   } else {
@@ -255,6 +259,7 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
     snapshot_version_ = store_row.snapshot_version_;
     fast_filter_skipped_ = store_row.fast_filter_skipped_;
     have_uncommited_row_ = false;
+    delete_version_ = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
       if (OB_FAIL(storage_datums_[i].from_obj_enhance(store_row.row_val_.cells_[i]))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret), K(i), K(store_row.row_val_.cells_[i]));
@@ -304,6 +309,7 @@ int ObDatumRow::copy_attributes_except_datums(const ObDatumRow &other)
     scan_index_ = other.scan_index_;
     group_idx_ = other.group_idx_;
     snapshot_version_ = other.snapshot_version_;
+    delete_version_ = other.delete_version_;
     fast_filter_skipped_ = other.fast_filter_skipped_;
     have_uncommited_row_ = other.have_uncommited_row_;
   }
@@ -321,6 +327,7 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
     fast_filter_skipped_ = other.fast_filter_skipped_;
     storage_datums_ = other.storage_datums_;
     snapshot_version_ = other.snapshot_version_;
+    delete_version_ = other.delete_version_;
     group_idx_ = other.group_idx_;
     scan_index_ = other.scan_index_;
     trans_id_ = other.trans_id_;
@@ -342,6 +349,7 @@ OB_DEF_SERIALIZE(ObDatumRow)
               group_idx_,
               snapshot_version_);
   OB_UNIS_ENCODE_ARRAY(storage_datums_, count_);
+  LST_DO_CODE(OB_UNIS_ENCODE, delete_version_);
   return ret;
 }
 
@@ -368,6 +376,7 @@ OB_DEF_DESERIALIZE(ObDatumRow)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE_ARRAY(storage_datums_, count_);
+    LST_DO_CODE(OB_UNIS_DECODE, delete_version_);
     fast_filter_skipped_ = false;
     have_uncommited_row_ = false;
   }
@@ -385,6 +394,7 @@ OB_DEF_SERIALIZE_SIZE(ObDatumRow)
               group_idx_,
               snapshot_version_);
   OB_UNIS_ADD_LEN_ARRAY(storage_datums_, count_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, delete_version_);
   return len;
 }
 
@@ -392,8 +402,8 @@ DEF_TO_STRING(ObDatumRow)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(snapshot_version), K_(fast_filter_skipped),
-      K_(have_uncommited_row), K_(group_idx), K_(count), K_(datum_buffer));
+  J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(snapshot_version), K_(delete_version),
+       K_(fast_filter_skipped), K_(have_uncommited_row), K_(group_idx), K_(count), K_(datum_buffer));
   if (NULL != buf && buf_len >= 0) {
     if (NULL != storage_datums_) {
       J_COMMA();

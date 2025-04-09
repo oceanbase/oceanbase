@@ -810,11 +810,15 @@ ob_set_subtarget(ob_storage memtable
   memtable/ob_lock_wait_mgr.cpp
   memtable/ob_memtable.cpp
   memtable/ob_memtable_key.cpp
+  memtable/ob_memtable_block_reader.cpp
+  memtable/ob_memtable_block_row_scanner.cpp
   memtable/ob_memtable_compact_writer.cpp
   memtable/ob_memtable_context.cpp
   memtable/ob_memtable_interface.cpp
   memtable/ob_memtable_iterator.cpp
   memtable/ob_memtable_mutator.cpp
+  memtable/ob_memtable_read_row_util.cpp
+  memtable/ob_memtable_single_row_reader.cpp
   memtable/ob_redo_log_generator.cpp
   memtable/ob_row_compactor.cpp
   memtable/ob_row_conflict_handler.cpp

@@ -15,7 +15,7 @@
 #define protected public
 #define USING_LOG_PREFIX STORAGE
 #include "storage/access/ob_pushdown_aggregate.h"
-#include "ob_index_block_data_prepare.h"
+#include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase
 {

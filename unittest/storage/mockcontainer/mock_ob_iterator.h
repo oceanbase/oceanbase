@@ -91,7 +91,7 @@ public:
 
   static bool equals(const common::ObNewRow &r1, const common::ObNewRow &r2);
   static bool equals(const storage::ObStoreRow &r1, const storage::ObStoreRow &r2,
-      const bool cmp_multi_version_row_flag = false, const bool cmp_is_get_and_scan_index = false);
+      const bool cmp_multi_version_row_flag = false, const bool cmp_row_flag = false, const bool cmp_is_get_and_scan_index = false);
   static bool equals(uint16_t *col_id1, uint16_t *col_id2, const int64_t col_cnt);
   bool equals(int64_t idx, common::ObNewRow &row) const;
   bool equals(int64_t idx, storage::ObStoreRow &row) const;
@@ -124,7 +124,9 @@ public:
 
   template<typename T, typename T_ROW>
   bool equals(T &other_iter, const bool cmp_multi_version_row_flag = false,
-      const bool cmp_is_get_and_scan_index = false)
+      const bool cmp_row_flag = false,
+      const bool cmp_is_get_and_scan_index = false,
+      const bool skip_iter_end = false)
   {
     bool bool_ret = true;
     int ret1 = common::OB_SUCCESS;
@@ -134,16 +136,19 @@ public:
     int64_t idx = 0;
 
     while (bool_ret) {
-      ret1 = get_next_row(this_row);
       ret2 = other_iter.get_next_row(other_row);
-      STORAGE_LOG(DEBUG, "compare row", K(ret1), K(*this_row), K(ret2), K(*other_row));
+      if (skip_iter_end && OB_ITER_END == ret2) {
+        break;
+      }
+      ret1 = get_next_row(this_row);
+      STORAGE_LOG(DEBUG, "compare row", K(ret1), KPC(this_row), K(ret2), KPC(other_row));
       if (ret1 == ret2) {
         if (common::OB_SUCCESS == ret1 && this_row && other_row) {
           bool_ret = ObMockIterator::equals(*this_row, *other_row,
-              cmp_multi_version_row_flag, cmp_is_get_and_scan_index);
-          STORAGE_LOG(DEBUG, "compare row", K(bool_ret), K(ret1), K(*this_row), K(ret2), K(*other_row));
+              cmp_multi_version_row_flag, cmp_row_flag, cmp_is_get_and_scan_index);
+          STORAGE_LOG(DEBUG, "compare row", K(bool_ret), K(ret1), KPC(this_row), K(ret2), KPC(other_row));
           if (this_row->trans_id_ != other_row->trans_id_) {
-            STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not equal trans_id", K(*this_row), K(this_row->trans_id_),
+            STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not equal trans_id", KPC(this_row), K(this_row->trans_id_),
                 K(*other_row), K(other_row->trans_id_));
             bool_ret = false;
           }
@@ -283,6 +288,8 @@ public:
   static const int64_t EXT_END = 5;
   static const int64_t EXT_MIN_2_TRANS = 6; // for second_uncommitted_trans
   static const int64_t EXT_GHOST = 7;
+  static const int64_t EXT_INT32_MIN = 8;
+  static const int64_t EXT_DELETE_INSERT_VERSION = 9;
 
   static const char CHAR_ROW_END = '\n';
   static const char CHAR_QUOTE = '\'';
@@ -290,8 +297,10 @@ public:
   static const char *STR_NULL;
   static const char *STR_MAX;
   static const char *STR_MIN;
+  static const char *STR_INT32_MIN;
   static const char *STR_MIN_2_TRANS; // for second_uncommitted_trans
   static const char *STR_MAGIC;
+  static const char *STR_DELETE_INSERT_VERSION;
 
   static common::ObObjMeta INT_TYPE;
   static common::ObObjMeta BIGINT_TYPE;
@@ -425,7 +434,7 @@ private:
                              const common::ObString &word,
                              blocksstable::ObDatumRow &row,
                              int64_t &idx);
-  static int parse_first_dml(common::ObIAllocator *allocator,
+  static int parse_flag_type(common::ObIAllocator *allocator,
                              const common::ObString &word,
                              storage::ObStoreRow &row,
                              int64_t &idx);
@@ -529,6 +538,7 @@ private:
   static common::hash::ObHashMap<common::ObString, ObParseDatumFunc> str_to_datum_info_parse_func_;
   static common::hash::ObHashMap<common::ObString, common::ObObjMeta*> str_to_obj_type_;
   static common::hash::ObHashMap<common::ObString, int64_t> str_to_flag_;
+  static common::hash::ObHashMap<common::ObString, int64_t> str_to_flag_type_;
   static common::hash::ObHashMap<common::ObString, blocksstable::ObDmlFlag> str_to_dml_;
   static common::hash::ObHashMap<common::ObString, bool> str_to_base_;
   static common::hash::ObHashMap<common::ObString, bool> str_to_is_get_;

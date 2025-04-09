@@ -153,6 +153,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
                                                                   *tx_desc,
                                                                   read_snapshot,
                                                                   0,/*branch_id*/
+                                                                  dml_param.write_flag_,
                                                                   store_ctx_guard));
   int64_t affected_rows = 0;
   ASSERT_EQ(OB_SUCCESS, access_service->insert_rows(ls_id_, tablet_id_,

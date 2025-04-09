@@ -186,6 +186,10 @@ public:
                       const ObDASTabletLoc *tablet_loc,
                       ObDMLRtCtx &dml_rtctx);
 
+  static void init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
+                                  ObDASDMLBaseRtDef &base_rtdef,
+                                  concurrent_control::ObWriteFlag &write_flag);
+
   static int init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                             ObDASDMLBaseRtDef &base_rtdef,
                             transaction::ObTxReadSnapshot &snapshot,
@@ -388,11 +392,16 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
   } else {
     ObAccessService *as = MTL(ObAccessService *);
     storage::ObStoreCtxGuard store_ctx_guard;
+    concurrent_control::ObWriteFlag write_flag;
+
+    // write_flag should be inited before get store ctx, as it will be used in the call function
+    (void)ObDMLService::init_dml_write_flag(*ctdef_, *rtdef_, write_flag);
     if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
                                               rtdef_->timeout_ts_,
                                               *tx_desc_,
                                               *snapshot_,
                                               write_branch_id_,
+                                              write_flag,
                                               store_ctx_guard))) {
       LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
     } else if (OB_FAIL(ObDMLService::init_dml_param(
@@ -477,12 +486,15 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
                   K(ctdef_->table_id_), K(ctdef_->index_tid_));
       DMLIterator single_row_iter(ctdef_, single_row_buffer, *das_allocator_);
       storage::ObStoreCtxGuard store_ctx_guard;
+      concurrent_control::ObWriteFlag write_flag;
 
+      (void)ObDMLService::init_dml_write_flag(*ctdef_, *rtdef_, write_flag);
       if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
                                                 rtdef_->timeout_ts_,
                                                 *tx_desc_,
                                                 *snapshot_,
                                                 write_branch_id_,
+                                                write_flag,
                                                 store_ctx_guard))) {
         LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
       } else if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, write_branch_id_,

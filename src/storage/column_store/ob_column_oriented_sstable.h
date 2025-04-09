@@ -226,7 +226,8 @@ public:
       ObTableAccessContext &context,
       ObICGIterator *&cg_iter,
       const bool is_projector /* remove later, needed to be used in projector */,
-      const bool project_single_row);
+      const bool project_single_row,
+      ObIAllocator* iter_alloc = nullptr /* use this to alloc cg_iter if is not null */);
   virtual int get(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,

@@ -135,7 +135,7 @@ int ObMultipleGetMerge::is_range_valid() const
   return ret;
 }
 
-int ObMultipleGetMerge::construct_iters()
+int ObMultipleGetMerge::construct_iters(const bool is_refresh)
 {
   int ret = OB_SUCCESS;
   ObStoreRowIterator *iter = NULL;
@@ -214,7 +214,7 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
       }
       if (OB_SUCCESS == ret) {
         ++get_row_range_idx_;
-        if (fuse_row.row_flag_.is_exist_without_delete() || (iter_del_row_ && fuse_row.row_flag_.is_delete())) {
+        if (fuse_row.row_flag_.is_exist_without_delete() || (need_iter_del_row() && fuse_row.row_flag_.is_delete())) {
           if (get_row_range_idx_ > rowkeys_->count()) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "unexptected range idx", K(ret), K(get_row_range_idx_), K(rowkeys_->count()));

@@ -287,6 +287,7 @@ bool ObPartitionMergePolicy::is_sstable_count_not_safe(const int64_t minor_table
   return bret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DISABLE_MINI_MERGE);
 int ObPartitionMergePolicy::get_mini_merge_tables(
     const ObGetMergeTablesParam &param,
     ObLS &ls,
@@ -320,7 +321,11 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     }
   }
 
-  if (FAILEDx(find_mini_merge_tables(param, next_freeze_info.frozen_scn_.get_val_for_tx(), ls, tablet, memtable_handles, result))) {
+  if (OB_FAIL(ret)) {
+  } else if (ERRSIM_DISABLE_MINI_MERGE) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("Errsim: disable mini merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+  } else if (OB_FAIL(find_mini_merge_tables(param, next_freeze_info.frozen_scn_.get_val_for_tx(), ls, tablet, memtable_handles, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to find mini merge tables", K(ret), K(next_freeze_info));
     }
@@ -470,6 +475,7 @@ int ObPartitionMergePolicy::deal_with_minor_result(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DISABLE_MINOR_MERGE);
 int ObPartitionMergePolicy::get_minor_merge_tables(
     const ObGetMergeTablesParam &param,
     ObLS &ls,
@@ -494,15 +500,11 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
                  tablet, min_snapshot_version, max_snapshot_version,
                  true /*check_table_cnt*/, true /*is_multi_version_merge*/))) {
     LOG_WARN("fail to calculate boundary version", K(ret));
-  } else {
-#ifdef ERRSIM
-    ret = OB_E(EventTable::EN_DISABLE_TABLET_MINOR_MERGE) OB_SUCCESS;
-    if (OB_FAIL(ret)) {
-      FLOG_INFO("Errsim: disable data tablet minor merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
-    }
-#endif
   }
   if (OB_FAIL(ret)) {
+  } else if (ERRSIM_DISABLE_MINOR_MERGE) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("Errsim: disable minor merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
   } else if (OB_FAIL(find_minor_merge_tables(param,
                                              min_snapshot_version,
                                              max_snapshot_version,

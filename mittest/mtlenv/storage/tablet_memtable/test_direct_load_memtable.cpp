@@ -131,12 +131,9 @@ void TestDirectLoadPlusOffline::offline_ls_with_active_direct_load_memtable()
   create_ls(TEST_LS_ID, ls_);
   create_tablets(TEST_LS_ID);
 
-  ASSERT_EQ(OB_SUCCESS,
-            ls_->get_tablet_svr()->create_memtable(ObTabletID(TEST_TABLET_ID),
-                                                   0 /* schema version */,
-                                                   true /* for_direct_load */,
-                                                   false /*for_replay*/,
-                                                   SCN::min_scn() /*clog_checkpoint*/));
+  CreateMemtableArg arg;
+  arg.for_inc_direct_load_ = true;
+  ASSERT_EQ(OB_SUCCESS, ls_->get_tablet_svr()->create_memtable(ObTabletID(TEST_TABLET_ID), arg));
 
   ASSERT_EQ(OB_SUCCESS, ls_->offline());
 }

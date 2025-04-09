@@ -289,6 +289,7 @@ public:
         table_name_(),
         index_name_(),
         scan_direction_(default_asc_direction()),
+        scan_order_(common::ObQueryFlag::ScanOrder::Forward),
         for_update_(false),
         for_update_wait_us_(-1), /* default infinite */
         pre_query_range_(NULL),
@@ -655,6 +656,7 @@ public:
            (1 == ranges_.count() && ranges_.at(0).is_whole_range());
   }
   ObOrderDirection get_scan_direction() const { return scan_direction_; }
+  common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
   void set_index_back(bool index_back) { index_back_ = index_back; }
   bool get_index_back() const { return index_back_; }
   void set_is_multi_part_table_scan(bool multi_part_tsc)
@@ -965,6 +967,7 @@ public:
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
   int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
+  int set_scan_order();
   int check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true);
 private: // member functions
   //called when index_back_ set
@@ -1008,6 +1011,7 @@ private: // member functions
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
   int prepare_rowkey_vid_dep_exprs(const bool is_rowkey_docid = false);
+  int check_is_delete_insert_scan(bool &is_delete_insert_scan) const;
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -1027,6 +1031,7 @@ protected: // memeber variables
   common::ObString table_name_;
   common::ObString index_name_;
   ObOrderDirection scan_direction_;
+  common::ObQueryFlag::ScanOrder scan_order_;
   bool      for_update_;       // FOR UPDATE clause
   int64_t for_update_wait_us_; // 0 means nowait, -1 means infinite
   // query range after preliminary extract, which will be stored in physical plan

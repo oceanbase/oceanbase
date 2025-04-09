@@ -34,24 +34,33 @@ namespace storage
 ObMultipleMerge::ObMultipleMerge()
     : padding_allocator_("MULTI_MERGE_PAD"),
       iters_(),
+      di_base_iters_(),
       access_param_(NULL),
       access_ctx_(NULL),
       tables_(),
       cur_row_(),
       unprojected_row_(),
-      curr_scan_index_(0),
       curr_rowkey_(),
+      di_base_curr_rowkey_(),
+      di_base_border_rowkey_(),
       nop_pos_(),
       scan_cnt_(0),
+      range_idx_delta_(0),
+      curr_scan_index_(0),
+      di_base_curr_scan_index_(0),
+      major_table_version_(0),
       need_padding_(false),
       need_fill_default_(false),
       need_fill_virtual_columns_(false),
       need_output_row_with_nop_(false),
       inited_(false),
       iter_del_row_(false),
-      range_idx_delta_(0),
-      get_table_param_(nullptr),
       read_memtable_only_(false),
+      delta_iter_end_(false),
+      is_unprojected_row_valid_(false),
+      need_scan_di_base_(false),
+      use_di_merge_scan_(false),
+      get_table_param_(nullptr),
       block_row_store_(nullptr),
       group_by_cell_(nullptr),
       skip_bit_(nullptr),
@@ -59,9 +68,8 @@ ObMultipleMerge::ObMultipleMerge()
       stmt_iter_pool_(nullptr),
       out_project_cols_(),
       lob_reader_(),
-      scan_state_(ScanState::NONE),
-      major_table_version_(0)
-{
+      scan_state_(ScanState::NONE)
+  {
 }
 
 ObMultipleMerge::~ObMultipleMerge()
@@ -71,6 +79,12 @@ ObMultipleMerge::~ObMultipleMerge()
       if (OB_NOT_NULL(iters_.at(i))) {
         iters_.at(i)->~ObStoreRowIterator();
         long_life_allocator_->free(iters_.at(i));
+      }
+    }
+    for (int64_t i = 0; i < di_base_iters_.count(); ++i) {
+      if (OB_NOT_NULL(di_base_iters_.at(i))) {
+        di_base_iters_.at(i)->~ObStoreRowIterator();
+        long_life_allocator_->free(di_base_iters_.at(i));
       }
     }
   }
@@ -139,6 +153,7 @@ int ObMultipleMerge::init(
     need_output_row_with_nop_ = true;
     need_fill_virtual_columns_ = NULL != param.row2exprs_projector_ && param.row2exprs_projector_->has_virtual();
     iters_.reuse();
+    di_base_iters_.reuse();
     access_param_ = &param;
     access_ctx_ = &context;
     cur_row_.count_ = access_param_->iter_param_.out_cols_project_->count();
@@ -149,21 +164,17 @@ int ObMultipleMerge::init(
     }
     unprojected_row_.count_ = 0;
     get_table_param_ = &get_table_param;
+    if (access_ctx_->is_mview_query()) {
+      access_param_->iter_param_.is_delete_insert_ = false;
+    }
     access_param_->iter_param_.set_tablet_handle(get_table_param.tablet_iter_.get_tablet_handle_ptr());
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
     const int64_t batch_size = access_param_->iter_param_.vectorized_enabled_ ? access_param_->get_op()->get_batch_size() : 1;
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(read_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null read_info", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < param.iter_param_.out_cols_project_->count(); i++) {
-          if (OB_FAIL(out_project_cols_.push_back(read_info->get_columns_desc().at(param.iter_param_.out_cols_project_->at(i))))) {
-            STORAGE_LOG(WARN, "Failed to push back col desc", K(ret));
-          } else if (out_project_cols_.at(i).col_type_.is_lob_storage()) {
-            out_project_cols_.at(i).col_type_.set_has_lob_header();
-          }
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.iter_param_.out_cols_project_->count(); i++) {
+      if (OB_FAIL(out_project_cols_.push_back(read_info->get_columns_desc().at(param.iter_param_.out_cols_project_->at(i))))) {
+        STORAGE_LOG(WARN, "Failed to push back col desc", K(ret));
+      } else if (out_project_cols_.at(i).col_type_.is_lob_storage()) {
+        out_project_cols_.at(i).col_type_.set_has_lob_header();
       }
     }
     if (OB_FAIL(ret)) {
@@ -286,6 +297,8 @@ int ObMultipleMerge::reset_tables()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObMultipleMerge has not inited", K(ret));
+  } else if (all_iters_end()) {
+    // skip construct iters if all iters end
   } else if (OB_FAIL(prepare())) {
     STORAGE_LOG(WARN, "fail to prepare", K(ret));
   } else if (OB_FAIL(calc_scan_range())) {
@@ -298,11 +311,13 @@ int ObMultipleMerge::reset_tables()
       ret = OB_SUCCESS;
     }
   } else if (FALSE_IT(set_base_version())) {
-  } else if (OB_FAIL(construct_iters())) {
+  } else if (OB_FAIL(construct_iters(true))) {
     STORAGE_LOG(WARN, "fail to construct iters", K(ret));
   } else {
     curr_rowkey_.reset();
     curr_scan_index_ = 0;
+    di_base_curr_rowkey_.reset();
+    di_base_curr_scan_index_ = 0;
   }
 
   return ret;
@@ -319,29 +334,75 @@ int ObMultipleMerge::save_curr_rowkey()
     STORAGE_LOG(WARN, "The ObMultipleMerge has not been inited, ", K(ret));
   } else if (ScanState::BATCH == scan_state_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "can not do refresh in batch", K(ret), K(scan_state_),
-                K_(unprojected_row), KPC_(block_row_store));
-  } else if (unprojected_row_.is_valid() && ScanState::NONE != scan_state_) {
-    ObDatumRowkey tmp_rowkey;
-    if (OB_FAIL(tmp_rowkey.assign(unprojected_row_.storage_datums_,
-                                  access_param_->iter_param_.get_schema_rowkey_count()))) {
-      STORAGE_LOG(WARN, "Failed to assign tmp rowkey", K(ret), K_(unprojected_row));
-    } else if (OB_FAIL(tmp_rowkey.deep_copy(curr_rowkey_, *access_ctx_->allocator_))) {
-      STORAGE_LOG(WARN, "fail to deep copy rowkey", K(ret));
-    } else if (OB_ISNULL(rowkey_col_descs = access_param_->iter_param_.get_out_col_descs())) {
+    STORAGE_LOG(WARN, "can not do refresh in batch", K(ret), K(scan_state_), K_(unprojected_row), KPC_(block_row_store));
+  } else if (di_base_iters_.count() > 0) {
+    // save di base curr rowkey and di base border rowkey
+    ObStoreRowIterator *iter = get_di_base_iter();
+    if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
-    } else if (OB_FAIL(curr_rowkey_.prepare_memtable_readable(*rowkey_col_descs, *access_ctx_->allocator_))) {
-      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(curr_rowkey_));
-    } else {
-      curr_scan_index_ = unprojected_row_.scan_index_;
-      STORAGE_LOG(DEBUG, "save current rowkey", K(tmp_rowkey), K(curr_scan_index_));
+      LOG_WARN("di base iter is null", K(ret));
+    } else if (OB_FAIL(iter->get_next_rowkey(di_base_curr_rowkey_,
+                                             di_base_curr_scan_index_,
+                                             di_base_border_rowkey_,
+                                             *access_ctx_->allocator_,
+                                             ScanState::DI_BASE == scan_state_))) {
+      LOG_WARN("Failed to get di base rowkey", K(ret));
     }
   } else {
-    curr_rowkey_.reset();
-    curr_scan_index_ = 0;
+    di_base_curr_rowkey_.reset();
+    di_base_border_rowkey_.reset();
+    di_base_curr_scan_index_ = 0;
   }
 
+  if (OB_SUCC(ret)) {
+    // save curr rowkey
+    curr_rowkey_.reset();
+    curr_scan_index_ = 0;
+    ObDatumRowkey tmp_rowkey;
+    if (delta_iter_end_) {
+      if (access_ctx_->query_flag_.is_reverse_scan()) {
+        curr_rowkey_.set_min_rowkey();
+      } else {
+        curr_rowkey_.set_max_rowkey();
+      }
+    } else {
+      if (ScanState::SINGLE_ROW == scan_state_) {
+        if (OB_UNLIKELY(!is_unprojected_row_valid_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected projcted row status", K(ret), KPC(this));
+        } else if (OB_FAIL(tmp_rowkey.assign(unprojected_row_.storage_datums_,
+                                             access_param_->iter_param_.get_schema_rowkey_count()))) {
+          LOG_WARN("Failed to assign tmp rowkey", K(ret), K_(unprojected_row));
+        }
+      } else if (ScanState::DI_BASE == scan_state_) {
+        if (OB_UNLIKELY(!di_base_border_rowkey_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected di base border rowkey", K(ret), K_(di_base_curr_rowkey), K_(di_base_border_rowkey));
+        } else {
+          tmp_rowkey = di_base_border_rowkey_;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected scan state", K(ret), K_(scan_state));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tmp_rowkey.deep_copy(curr_rowkey_, *access_ctx_->allocator_))) {
+        LOG_WARN("fail to deep copy rowkey", K(ret));
+      } else if (OB_ISNULL(rowkey_col_descs = access_param_->iter_param_.get_out_col_descs())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null out cols", K(ret));
+      } else if (OB_FAIL(curr_rowkey_.prepare_memtable_readable(*rowkey_col_descs, *access_ctx_->allocator_))) {
+        LOG_WARN("Fail to transfer store rowkey", K(ret), K(curr_rowkey_));
+      } else {
+        curr_scan_index_ = unprojected_row_.scan_index_;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("save refresh table info", K(ret), K_(curr_rowkey), K_(di_base_curr_rowkey), K_(di_base_border_rowkey),
+             K_(curr_scan_index), K_(di_base_curr_scan_index), K_(delta_iter_end), K_(need_scan_di_base), K_(scan_state));
+  }
   return ret;
 }
 
@@ -413,6 +474,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       padding_allocator_.reuse();
     }
     reuse_lob_locator();
+    is_unprojected_row_valid_ = false;
     while (OB_SUCC(ret)) {
       if (access_ctx_->is_limit_end()) {
         ret = OB_ITER_END;
@@ -433,6 +495,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
           }
         }
         if (OB_SUCC(ret)) {
+          is_unprojected_row_valid_ = true;
           scan_state_ = ScanState::SINGLE_ROW;
         }
       }
@@ -533,15 +596,13 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                          || nullptr == block_row_store_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect pushdown operator in vectorized", K(ret), K(access_param_->iter_param_.pd_storage_flag_),
-             K(access_param_->get_op()), K(access_param_->get_op()->is_vectorized()), K(block_row_store_),
+             K(access_param_->get_op()), K(access_param_->get_op()->is_vectorized()), KP(block_row_store_),
              K(access_param_->iter_param_.vectorized_enabled_));
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(refresh_filter_params_on_demand(false/*is_open*/))) {
     LOG_WARN("failed to refresh split params on demand", K(ret));
   } else if (OB_FAIL(refresh_table_on_demand())) {
-    LOG_WARN("fail to refresh table on demand", K(ret));
+    LOG_WARN("fail to refresh table on demand", K(ret), K_(scan_state), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+             K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(block_row_store_), KPC_(access_param));
   } else {
     ObVectorStore *vector_store = reinterpret_cast<ObVectorStore *>(block_row_store_);
     int64_t batch_size = min(capacity, access_param_->get_op()->get_batch_size());
@@ -551,66 +612,132 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     }
     reuse_lob_locator();
     while (OB_SUCC(ret) && !vector_store->is_end()) {
-      bool can_batch = false;
-      if (access_ctx_->is_limit_end()) {
+      /* causes of vector_store->is_end()
+       * 1. batch full;
+       * 2. end of micro block with row returned;
+       * 3. pushdown changed with row returned;
+       * 4. limit/offset end
+       */
+      if (all_iters_end() || access_ctx_->is_limit_end()) {
         ret = OB_ITER_END;
-      } else if (OB_FAIL(can_batch_scan(can_batch))) {
-        LOG_WARN("fail to check can batch scan", K(ret));
-      } else if (can_batch) {
-        scan_state_ = ScanState::BATCH;
-        if (OB_FAIL(inner_get_next_rows())) {
-          if (OB_LIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret || OB_ITER_END == ret)) {
-            // OB_ITER_END should use fuse to make sure no greater key in dynamic data
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to get next rows fast", K(ret));
-          }
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (vector_store->is_end()) {
-        // 1. batch full; 2. end of micro block with row returned;
-        // 3. pushdown changed with row returned; 4. limit/offset end
       } else {
-        if (OB_FAIL(inner_get_next_row(unprojected_row_))) {
-          if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
-            ret = OB_SUCCESS;
-            vector_store->set_end();
-            scan_state_ = ScanState::BATCH;
-            continue;
-          } else if (OB_ITER_END != ret) {
-            LOG_WARN("Fail to inner get next row, ", K(ret), K(tables_), KP(this));
-          }
-        } else if (need_handle_lob_columns(unprojected_row_)) {
-          if (OB_FAIL(handle_lob_before_fuse_row())) {
-            LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          scan_state_ = ScanState::SINGLE_ROW;
-        }
-
-        if (OB_SUCC(ret)) {
-          // back to normal path
-          ObDatumRow *out_row = nullptr;
-          if (0 == vector_store->get_row_count() &&
-              access_param_->get_op()->enable_rich_format_ &&
-              OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), batch_size))) {
-            LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
-          } else if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
-            LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
-          } else if (OB_FAIL(process_fuse_row(nullptr == access_param_->output_exprs_, unprojected_row_, out_row))) {
-            LOG_WARN("get row from fuse failed", K(ret), K(unprojected_row_));
-          } else if (nullptr != out_row) {
-            if (OB_FAIL(access_param_->get_op()->deep_copy(access_param_->output_exprs_, vector_store->get_row_count()))) {
-              LOG_WARN("fail to deep copy row", K(ret));
-            } else if (OB_FAIL(access_param_->get_op()->write_trans_info_datum(unprojected_row_))) {
-              LOG_WARN("write trans_info to expr datum failed", K(ret), K(unprojected_row_));
-            } else if (OB_FAIL(vector_store->fill_row(unprojected_row_))) {
-              LOG_WARN("fail to aggregate row", K(ret));
+        is_unprojected_row_valid_ = false;
+        switch (scan_state_) {
+          case ScanState::BATCH: {
+            bool can_batch = false;
+            if (OB_FAIL(can_batch_scan(can_batch))) {
+              LOG_WARN("fail to check can batch scan", K(ret));
+            } else if (!can_batch) {
+              scan_state_ = ScanState::SINGLE_ROW;
+              break;
+            } else if (OB_FAIL(inner_get_next_rows())) {
+              if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
+                LOG_WARN("fail to get next rows fast", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(vector_store), KPC_(access_param));
+              } else {
+                ret = OB_SUCCESS;
+                scan_state_ = ScanState::SINGLE_ROW;
+              }
             }
+            break;
           }
+          case ScanState::DI_BASE: {
+            if (!need_scan_di_base_) {
+              scan_state_ = ScanState::SINGLE_ROW;
+            } else if (OB_FAIL(inner_get_next_rows())) {
+              if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
+                LOG_WARN("fail to get next di base rows", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(vector_store), KPC_(access_param));
+              } else {
+                if (OB_ITER_END == ret) {
+                  need_scan_di_base_ = false;
+                }
+                ret = OB_SUCCESS;
+                scan_state_ = ScanState::SINGLE_ROW;
+              }
+            }
+            break;
+          }
+          case ScanState::SINGLE_ROW: {
+            if (OB_FAIL(inner_get_next_row(unprojected_row_))) {
+              if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
+                LOG_WARN("fail to inner get next row", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(vector_store), KPC_(access_param));
+              } else if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
+                ret = OB_SUCCESS;
+                vector_store->set_end();
+                scan_state_ = ScanState::BATCH;
+                break;
+              } else {
+                delta_iter_end_ = true;
+                if (need_scan_di_base_) {
+                  vector_store->set_end();
+                  scan_state_ = ScanState::DI_BASE;
+                  if (OB_FAIL(prepare_di_base_blockscan(true))) {
+                    LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                             K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(vector_store), KPC_(access_param));
+                  } else {
+                    break;
+                  }
+                }
+              }
+            } else {
+              is_unprojected_row_valid_ = true;
+              if (unprojected_row_.is_di_delete()) {
+                if (need_scan_di_base_) {
+                  scan_state_ = ScanState::DI_BASE;
+                  if (OB_FAIL(prepare_di_base_blockscan(false, &unprojected_row_))) {
+                    LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                             K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(vector_store), KPC_(access_param));
+                  } else if (unprojected_row_.row_flag_.is_delete()) {
+                    vector_store->set_end();
+                    break;
+                  }
+                } else if (!iter_del_row_) {
+                  LOG_WARN("Unexpected di row itered in di case", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                           K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(vector_store), KPC_(access_param));
+                  if (unprojected_row_.row_flag_.is_delete()) {
+                    continue;
+                  }
+                }
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+            } else if (need_handle_lob_columns(unprojected_row_) && OB_FAIL(handle_lob_before_fuse_row())) {
+              LOG_WARN("Fail to handle lobs", K(ret), KP(this));
+            } else {
+              // back to normal path
+              ObDatumRow *out_row = nullptr;
+              if (0 == vector_store->get_row_count() &&
+                  access_param_->get_op()->enable_rich_format_ &&
+                  OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), batch_size))) {
+                LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
+              } else if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
+                LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
+              } else if (OB_FAIL(process_fuse_row(nullptr == access_param_->output_exprs_, unprojected_row_, out_row))) {
+                LOG_WARN("get row from fuse failed", K(ret), K(unprojected_row_));
+              } else if (nullptr != out_row) {
+                if (OB_FAIL(access_param_->get_op()->deep_copy(access_param_->output_exprs_, vector_store->get_row_count()))) {
+                  LOG_WARN("fail to deep copy row", K(ret));
+                } else if (OB_FAIL(access_param_->get_op()->write_trans_info_datum(unprojected_row_))) {
+                  LOG_WARN("write trans_info to expr datum failed", K(ret), K(unprojected_row_));
+                } else if (OB_FAIL(vector_store->fill_row(unprojected_row_))) {
+                  LOG_WARN("fail to aggregate row", K(ret));
+                }
+              }
+              if (OB_SUCC(ret) && scan_state_ == ScanState::DI_BASE) {
+                vector_store->set_end();
+              }
+            }
+            break;
+          }
+          case ScanState::NONE: {
+            scan_state_ = ScanState::SINGLE_ROW;
+            break;
+          }
+          default:
+            break;
         }
       }
     }
@@ -641,7 +768,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
   } else if (OB_UNLIKELY(nullptr == block_row_store_ || access_param_->iter_param_.need_fill_group_idx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected aggregate pushdown status", K(ret),
-             K(access_param_->get_op()), K(block_row_store_), K(access_param_->iter_param_.need_fill_group_idx()));
+             K(access_param_->get_op()), KP(block_row_store_), K(access_param_->iter_param_.need_fill_group_idx()));
   } else if (OB_UNLIKELY(nullptr != access_ctx_->range_array_pos_ &&
              access_ctx_->range_array_pos_->count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -664,82 +791,154 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     reuse_lob_locator();
     bool need_init_expr_header = true;
     while (OB_SUCC(ret) && !batch_row_store->is_end()) {
-      bool can_batch = false;
       // clear evaluated flag for every row
       // all rows will be touched in this loop
       if (NULL != access_param_->get_op()) {
         access_param_->get_op()->clear_datum_eval_flag();
       }
-      if (OB_FAIL(refresh_table_on_demand())) {
-        LOG_WARN("fail to refresh table on demand", K(ret));
-      } else if (OB_FAIL(can_batch_scan(can_batch))) {
-        LOG_WARN("fail to check can batch scan", K(ret));
-      } else if (can_batch) {
-        scan_state_ = ScanState::BATCH;
-        if (need_init_expr_header && access_param_->get_op()->enable_rich_format_) {
-          sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
-          if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {
-            LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx.max_batch_size));
-          } else {
-            need_init_expr_header = false;
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(inner_get_next_rows())) {
-          if (OB_LIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret || OB_ITER_END == ret)) {
-            // OB_ITER_END should use fuse to make sure no greater key in dynamic data
-            ret = OB_SUCCESS;
-            // pd_agg/pd_groupby not set in cg scanner, need reset expr format
-            need_init_expr_header = true;
-          } else {
-            LOG_WARN("fail to get next aggregate row fast", K(ret));
-          }
-        } else {
-          continue;
-        }
-      }
-
-      if (OB_FAIL(ret)) {
+      if (all_iters_end()) {
+        ret = OB_ITER_END;
+      } else if (OB_FAIL(refresh_table_on_demand())) {
+        LOG_WARN("fail to refresh table on demand", K(ret), K_(scan_state), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                 K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(block_row_store_), KPC_(access_param));
       } else {
-        if (OB_FAIL(inner_get_next_row(unprojected_row_))) {
-          if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
-            ret = OB_SUCCESS;
-            scan_state_ = ScanState::BATCH;
-            need_init_expr_header = true;
-            continue;
-          } else if (OB_ITER_END != ret) {
-            LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
-          }
-        } else if (need_handle_lob_columns(unprojected_row_)) {
-          if (OB_FAIL(handle_lob_before_fuse_row())) {
-            LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          scan_state_ = ScanState::SINGLE_ROW;
-        }
-
-        if (OB_SUCC(ret)) {
-          ObDatumRow *out_row = nullptr;
-          if (need_init_expr_header &&
-              access_param_->get_op()->enable_rich_format_ &&
-              OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), 1))) {
-            LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
-          } else if (FALSE_IT(need_init_expr_header = false)) {
-          } else if (OB_FAIL(process_fuse_row(
-                      false,
-                      unprojected_row_,
-                      out_row))) {
-            LOG_WARN("get row from fuse failed", K(ret));
-          } else if (nullptr != out_row) {
-            if (OB_FAIL(batch_row_store->fill_row(unprojected_row_))) {
-              LOG_WARN("fail to aggregate row", K(ret));
+        is_unprojected_row_valid_ = false;
+        switch(scan_state_) {
+          case ScanState::BATCH: {
+            bool can_batch = false;
+            if (OB_FAIL(can_batch_scan(can_batch))) {
+              LOG_WARN("fail to check can batch scan", K(ret));
+            } else if (!can_batch) {
+              scan_state_ = ScanState::SINGLE_ROW;
+              break;
+            } else if (need_init_expr_header && access_param_->get_op()->enable_rich_format_) {
+              sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
+              if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {
+                LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx.max_batch_size));
+              } else {
+                need_init_expr_header = false;
+              }
             }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(inner_get_next_rows())) {
+              if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
+                LOG_WARN("fail to get next aggregate rows fast", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(batch_row_store), KPC_(access_param));
+              } else {
+                // OB_ITER_END should use fuse to make sure no greater key in dynamic data
+                ret = OB_SUCCESS;
+                // pd_agg/pd_groupby not set in cg scanner, need reset expr format
+                need_init_expr_header = true;
+                scan_state_ = ScanState::SINGLE_ROW;
+              }
+            }
+            break;
           }
+          case ScanState::DI_BASE: {
+            if (!need_scan_di_base_) {
+              scan_state_ = ScanState::SINGLE_ROW;
+              break;
+            } else if (need_init_expr_header && access_param_->get_op()->enable_rich_format_) {
+              sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
+              if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {
+                LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx.max_batch_size));
+              } else {
+                need_init_expr_header = false;
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(inner_get_next_rows())) {
+              if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
+                LOG_WARN("fail to get next di base rows", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(batch_row_store), KPC_(access_param));
+              } else {
+                if (OB_ITER_END == ret) {
+                  need_scan_di_base_ = false;
+                }
+                ret = OB_SUCCESS;
+                need_init_expr_header = true;
+                scan_state_ = ScanState::SINGLE_ROW;
+              }
+            }
+            break;
+          }
+          case ScanState::SINGLE_ROW: {
+            if (OB_FAIL(inner_get_next_row(unprojected_row_))) {
+              if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
+                LOG_WARN("fail to get next row", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(batch_row_store), KPC_(access_param));
+              } else if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
+                ret = OB_SUCCESS;
+                scan_state_ = ScanState::BATCH;
+                need_init_expr_header = true;
+                break;
+              } else {
+                delta_iter_end_ = true;
+                if (need_scan_di_base_) {
+                  scan_state_ = ScanState::DI_BASE;
+                  need_init_expr_header = true;
+                  if (OB_FAIL(prepare_di_base_blockscan(true))) {
+                    LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                             K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(batch_row_store), KPC_(access_param));
+                  } else {
+                    break;
+                  }
+                }
+              }
+            } else {
+              is_unprojected_row_valid_ = true;
+              if (unprojected_row_.is_di_delete()) {
+                if (need_scan_di_base_) {
+                  need_init_expr_header = true;
+                  scan_state_ = ScanState::DI_BASE;
+                  if (OB_FAIL(prepare_di_base_blockscan(false, &unprojected_row_))) {
+                    LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                             K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(batch_row_store), KPC_(access_param));
+                  } else if (unprojected_row_.row_flag_.is_delete()) {
+                    break;
+                  }
+                } else if (!iter_del_row_) {
+                  LOG_WARN("Unexpected di row itered in di case", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
+                           K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC(batch_row_store), KPC_(access_param));
+                  if (unprojected_row_.row_flag_.is_delete()) {
+                    continue;
+                  }
+                }
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+            } else if (need_handle_lob_columns(unprojected_row_) && OB_FAIL(handle_lob_before_fuse_row())) {
+              LOG_WARN("Fail to handle lobs", K(ret), KP(this));
+            } else {
+              ObDatumRow *out_row = nullptr;
+              if (need_init_expr_header &&
+                  access_param_->get_op()->enable_rich_format_ &&
+                  OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), 1))) {
+                LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
+              } else if (ScanState::SINGLE_ROW == scan_state_ && FALSE_IT(need_init_expr_header = false)) {
+              } else if (OB_FAIL(process_fuse_row(
+                          false,
+                          unprojected_row_,
+                          out_row))) {
+                LOG_WARN("get row from fuse failed", K(ret));
+              } else if (nullptr != out_row) {
+                if (OB_FAIL(batch_row_store->fill_row(unprojected_row_))) {
+                  LOG_WARN("fail to aggregate row", K(ret));
+                }
+              }
+            }
+            break;
+          }
+          case ScanState::NONE: {
+            scan_state_ = ScanState::SINGLE_ROW;
+            break;
+          }
+          default:
+            break;
         }
       }
     }
-
     // second time: ret = OB_ITER_END
     if (batch_row_store->is_end()) {
       ret = OB_ITER_END;
@@ -909,6 +1108,16 @@ void ObMultipleMerge::reuse()
   }
   lob_reader_.reuse();
   scan_state_ = ScanState::NONE;
+  delta_iter_end_ = false;
+  is_unprojected_row_valid_ = false;
+  need_scan_di_base_ = false;
+  use_di_merge_scan_ = false;
+  curr_scan_index_ = 0;
+  di_base_curr_scan_index_ = 0;
+  major_table_version_ = 0;
+  curr_rowkey_.reset();
+  di_base_curr_rowkey_.reset();
+  di_base_border_rowkey_.reset();
 }
 
 void ObMultipleMerge::reclaim()
@@ -960,7 +1169,16 @@ void ObMultipleMerge::inner_reset()
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
   iter_del_row_ = false;
+  delta_iter_end_ = false;
+  is_unprojected_row_valid_ = false;
+  need_scan_di_base_ = false;
+  use_di_merge_scan_ = false;
+  curr_scan_index_ = 0;
+  di_base_curr_scan_index_ = 0;
   major_table_version_ = 0;
+  curr_rowkey_.reset();
+  di_base_curr_rowkey_.reset();
+  di_base_border_rowkey_.reset();
 }
 
 void ObMultipleMerge::reset_iter_array(const bool can_reuse)
@@ -979,39 +1197,61 @@ void ObMultipleMerge::reset_iter_array(const bool can_reuse)
       }
     }
     iters_.reset();
+    for (int64_t i = 0; i < di_base_iters_.count(); ++i) {
+      if (NULL != (iter = di_base_iters_.at(i))) {
+        iter->~ObStoreRowIterator();
+        if (OB_NOT_NULL(long_life_allocator_)) {
+          long_life_allocator_->free(iter);
+        }
+        iter = NULL;
+      }
+    }
+    di_base_iters_.reset();
   }
 }
 
 void ObMultipleMerge::reuse_iter_array()
 {
   ObStoreRowIterator *iter = NULL;
-  if (nullptr != stmt_iter_pool_) {
-    for (int64_t i = 0; i <  iters_.count(); ++i) {
-      if (nullptr != (iter = iters_.at(i))) {
-        iter->reuse();
+  for (int64_t i = 0; i < iters_.count(); ++i) {
+    if (NULL != (iter = iters_.at(i))) {
+      iter->reuse();
+      if (nullptr != stmt_iter_pool_) {
         stmt_iter_pool_->return_iter(iter);
       }
     }
-    iters_.reuse();
-  } else {
-    for (int64_t i = 0; i < iters_.count(); ++i) {
-      if (NULL != (iter = iters_.at(i))) {
-        iter->reuse();
+  }
+  for (int64_t i = 0; i < di_base_iters_.count(); ++i) {
+    if (NULL != (iter = di_base_iters_.at(i))) {
+      iter->reuse();
+      if (nullptr != stmt_iter_pool_) {
+        stmt_iter_pool_->return_iter(iter);
       }
     }
+  }
+  if (nullptr != stmt_iter_pool_) {
+    iters_.reuse();
+    di_base_iters_.reuse();
   }
 }
 
 void ObMultipleMerge::reclaim_iter_array()
 {
   ObStoreRowIterator *iter = NULL;
-  for (int64_t i = 0; i <  iters_.count(); ++i) {
+  for (int64_t i = 0; i < iters_.count(); ++i) {
     if (nullptr != (iter = iters_.at(i))) {
       iter->reclaim();
       stmt_iter_pool_->return_iter(iter);
     }
   }
   iters_.reuse();
+  for (int64_t i = 0; i < di_base_iters_.count(); ++i) {
+    if (nullptr != (iter = di_base_iters_.at(i))) {
+      iter->reclaim();
+      stmt_iter_pool_->return_iter(iter);
+    }
+  }
+  di_base_iters_.reuse();
 }
 
 int ObMultipleMerge::open()
@@ -1028,7 +1268,7 @@ int ObMultipleMerge::open()
   } else if (OB_FAIL(nop_pos_.init(*long_life_allocator_, access_param_->get_max_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Fail to init nop pos, ", K(ret));
   } else if (FALSE_IT(set_base_version())) {
-   } else if (access_param_->iter_param_.is_use_stmt_iter_pool()) {
+  } else if (access_param_->iter_param_.is_use_stmt_iter_pool()) {
     if (OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
       LOG_WARN("Failed to init iter pool", K(ret));
     } else {
@@ -1112,7 +1352,7 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
   }
   if (OB_SUCC(ret) && nullptr != block_row_store_) {
     if (OB_FAIL(block_row_store_->init(param))) {
-      LOG_WARN("fail to init block row store", K(ret), K(block_row_store_));
+      LOG_WARN("fail to init block row store", K(ret), KP(block_row_store_));
     }
   }
   if (OB_SUCC(ret) && param.iter_param_.enable_pd_group_by() && !param.iter_param_.vectorized_enabled_) {
@@ -1493,6 +1733,9 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(ERRSIM_SET_NEED_REFRESH);
+#endif
 int ObMultipleMerge::refresh_table_on_demand()
 {
   int ret = OB_SUCCESS;
@@ -1500,7 +1743,7 @@ int ObMultipleMerge::refresh_table_on_demand()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObMultipleMerge has not been inited", K(ret));
-  } else if (ScanState::NONE == scan_state_) {
+  } else if (ScanState::NONE == scan_state_ || all_iters_end()) {
     STORAGE_LOG(DEBUG, "skip refresh table");
   } else if (get_table_param_->sample_info_.is_block_sample() ||
              (nullptr != block_row_store_ && !block_row_store_->can_refresh())) {
@@ -1509,30 +1752,44 @@ int ObMultipleMerge::refresh_table_on_demand()
         K(get_table_param_->sample_info_.is_block_sample()), KPC(block_row_store_));
   } else if (OB_FAIL(check_need_refresh_table(need_refresh))) {
     STORAGE_LOG(WARN, "fail to check need refresh table", K(ret));
+#ifdef ERRSIM
+  } else if (need_refresh || ERRSIM_SET_NEED_REFRESH) {
+#else
   } else if (need_refresh) {
+#endif
     if (ScanState::BATCH == scan_state_) {
       STORAGE_LOG(INFO, "in vectorize batch scan, do refresh at next time");
       if (OB_NOT_NULL(block_row_store_)) {
         block_row_store_->disable();
       }
+    } else if (!is_unprojected_row_valid_ && ScanState::SINGLE_ROW == scan_state_) {
+      // do nothing
     } else if (OB_FAIL(save_curr_rowkey())) {
-      STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
+      if (OB_ERR_UNSUPPORTED_TYPE == ret) {
+        ret = OB_SUCCESS;
+        // do nothing
+      } else {
+        STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
+      }
     } else if (FALSE_IT(reset_iter_array(access_param_->is_use_global_iter_pool()))) {
     } else if (OB_FAIL(refresh_tablet_iter())) {
       STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
     } else if (OB_FAIL(prepare_read_tables(true/*refresh*/))) {
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
+    } else if (OB_FAIL(check_base_version())) {
+      STORAGE_LOG(WARN, "di base snapshot version changed", K(ret));
     } else if (OB_FAIL(reset_tables())) {
       STORAGE_LOG(WARN, "fail to reset tables", K(ret));
     } else if (OB_UNLIKELY(access_param_->iter_param_.need_truncate_filter()) &&
                OB_FAIL(prepare_truncate_filter())) {
       LOG_WARN("failed to prepare truncate filter", K(ret));
-    } else if (nullptr != block_row_store_) {
-      block_row_store_->reuse();
+    } else if (nullptr != block_row_store_ && FALSE_IT(block_row_store_->reuse())) {
     }
+
     if (OB_SUCC(ret)) {
       STORAGE_LOG(INFO, "table need to be refresh", "table_id", access_param_->iter_param_.table_id_,
-          K(*access_param_), K(curr_scan_index_), K(scan_state_), K_(major_table_version));
+                  K(curr_scan_index_), K(di_base_curr_scan_index_), K(scan_state_),
+                  K(need_scan_di_base_), K(delta_iter_end_), K(di_base_border_rowkey_), K_(major_table_version));
     }
   }
   return ret;
@@ -1789,6 +2046,26 @@ void ObMultipleMerge::dump_table_statistic_for_4377()
   LOG_ERROR("==================== End table info ====================");
 }
 
+int ObMultipleMerge::check_base_version() const {
+  int ret = OB_SUCCESS;
+  if (use_di_merge_scan_ && tables_.count() > 0) {
+    ObITable *table = nullptr;
+    if (OB_UNLIKELY(access_ctx_->trans_version_range_.base_version_ <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected trans version range for delete insert scan", K(ret), K(access_ctx_->trans_version_range_));
+    } else if (OB_FAIL(tables_.at(0, table))) {
+      STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
+    } else if (!table->is_major_sstable() ||
+               access_ctx_->trans_version_range_.base_version_ != table->get_snapshot_version()) { // retry query
+      ret = OB_SNAPSHOT_DISCARDED;
+      FLOG_INFO("di base snapshot version changed", K(ret), "tablet_id", access_param_->iter_param_.tablet_id_,
+                "base_version", access_ctx_->trans_version_range_.base_version_, "new_version", table->get_snapshot_version(),
+                K(table->get_key()));
+    }
+  }
+  return ret;
+}
+
 void ObMultipleMerge::set_base_version() const {
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
@@ -1808,6 +2085,33 @@ bool ObMultipleMerge::check_table_need_read(const ObITable &table, int64_t &majo
 {
   UNUSEDx(table, major_version);
   return true;
+}
+
+int ObMultipleMerge::prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row)
+{
+  int ret = OB_SUCCESS;
+  ObDatumRowkey rowkey;
+  const int64_t rowkey_col_cnt = access_param_->iter_param_.get_schema_rowkey_count();
+  if (di_base_only) {
+    if (access_ctx_->query_flag_.is_reverse_scan()) {
+      rowkey.set_min_rowkey();
+    } else {
+      rowkey.set_max_rowkey();
+    }
+  } else if (OB_ISNULL(row) || row->row_flag_.is_not_exist()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "row is null or row_flag is not exist", K(ret));
+  } else if (OB_FAIL(rowkey.assign(row->storage_datums_, rowkey_col_cnt))) {
+    STORAGE_LOG(WARN, "assign rowkey failed", K(ret), K(rowkey_col_cnt));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (nullptr == get_di_base_iter()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "di base iter is null", K(ret));
+  } else if (OB_FAIL(get_di_base_iter()->refresh_blockscan_checker(rowkey))) {
+    STORAGE_LOG(WARN, "Failed to check pushdown skip", K(ret), K(rowkey));
+  }
+  return ret;
 }
 
 int ObMultipleMerge::prepare_truncate_filter()

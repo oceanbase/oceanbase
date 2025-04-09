@@ -21,7 +21,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/memtable/ob_memtable_key.h"
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
+#include "storage/memtable/ob_memtable_single_row_reader.h"
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_crtp_util.h"
 #include "storage/memtable/mvcc/ob_multi_version_iterator.h"
@@ -39,33 +39,13 @@ struct ObTransNodeDMLStat;
 
 namespace memtable
 {
+class ObMemtableBlockRowScanner;
 
 class ObIMemtableIterator : public storage::ObStoreRowIterator
 {
 public:
   ObIMemtableIterator() {}
   virtual ~ObIMemtableIterator() {}
-  virtual int get_next_row(const blocksstable::ObDatumRow *&row) {
-    int ret = common::OB_SUCCESS;
-    if (OB_SUCC(inner_get_next_row(row))) {
-      EVENT_INC(ObStatEventIds::MEMSTORE_READ_ROW_COUNT);
-    }
-    return ret;
-  }
-protected:
-  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) = 0;
-};
-
-class ObIMemtableScanIterator : public ObIMemtableIterator
-{
-public:
-  ObIMemtableScanIterator() {}
-  virtual ~ObIMemtableScanIterator() {}
-  // virtual int init(
-  //     const storage::ObTableIterParam &param,
-  //     storage::ObTableAccessContext &context,
-  //     ObMvccEngine &mvcc_engine,
-  //     const common::ObStoreRange &range) = 0;
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) {
     int ret = common::OB_SUCCESS;
     if (OB_SUCC(inner_get_next_row(row))) {
@@ -100,14 +80,16 @@ public:
       storage::ObTableAccessContext &context,
       storage::ObITable *table,
       const void *query_range) override;
-  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void reset();
   virtual void reuse() override { reset(); }
+
+protected:
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
+
 private:
   // means GETITER
   static const uint64_t VALID_MAGIC_NUM = 0x5245544954454700;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableGetIterator);
-private:
   const uint64_t MAGIC_;
   bool is_inited_;
   int32_t rowkey_iter_;
@@ -118,41 +100,33 @@ private:
   blocksstable::ObDatumRow cur_row_;
 };
 
-class ObMemtableScanIterator : public ObIMemtableScanIterator
-{
+class ObMemtableScanIterator : public ObIMemtableIterator {
 public:
+  friend class ObMemtableBlockReader;
   ObMemtableScanIterator();
   virtual ~ObMemtableScanIterator();
-public:
-  int init(ObIMemtable* memtable, const storage::ObTableIterParam &param, storage::ObTableAccessContext &context);
   int set_range(const blocksstable::ObDatumRange &range);
-  virtual int init(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      storage::ObITable *table,
-      const void *query_range) override;
-public:
-  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
+  virtual int init(const storage::ObTableIterParam &param,
+                   storage::ObTableAccessContext &context,
+                   storage::ObITable *table,
+                   const void *query_range) override;
   virtual void reset();
   virtual void reuse() override { reset(); }
-  ObIMemtable* get_memtable() { return memtable_; }
-  int get_key_val(const ObMemtableKey*& key, ObMvccRow*& row) { return row_iter_.get_key_val(key, row); }
-  share::SCN get_read_snapshot() const
-  {
-    return (NULL == context_ || NULL == context_->store_ctx_ || !context_->store_ctx_->is_valid())
-      ? share::SCN::min_scn()
-      : context_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
-  }
+
 protected:
-  int get_real_range(const blocksstable::ObDatumRange &range, blocksstable::ObDatumRange &real_range);
-  int prepare_scan();
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
+  int base_init_(const storage::ObTableIterParam &param,
+                 storage::ObTableAccessContext &context,
+                 storage::ObITable *table,
+                 const void *query_range);
+
+private:
+  int enable_block_scan_(const storage::ObTableIterParam &param, storage::ObTableAccessContext &context);
+
 public:
   static const int64_t ROW_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t CELL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
-private:
-  // means SCANITER
-  static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableScanIterator);
+
 protected:
   const uint64_t MAGIC_;
   common::ActiveResource active_resource_;
@@ -160,39 +134,38 @@ protected:
   bool is_scan_start_;
   const storage::ObTableIterParam *param_;
   storage::ObTableAccessContext *context_;
-  const storage::ObITableReadInfo *read_info_;
-  ObIMemtable *memtable_;
+  ObMemtableBlockRowScanner *mt_blk_scanner_;
+  ObMemtableSingleRowReader single_row_reader_;
   blocksstable::ObDatumRange cur_range_;
-  ObMvccRowIterator row_iter_;
-  blocksstable::ObDatumRow row_;
-  ObNopBitMap bitmap_;
+private:
+  static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
+  DISALLOW_COPY_AND_ASSIGN(ObMemtableScanIterator);
 };
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ObMemtableMGetIterator : public ObIMemtableIterator
 {
 public:
   ObMemtableMGetIterator();
   virtual ~ObMemtableMGetIterator();
-public:
   virtual int init(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       storage::ObITable *table,
       const void *query_range) override;
-public:
-  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void reset();
   virtual void reuse() override { reset(); }
-public:
   static const int64_t ROW_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
+
+protected:
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
+
 private:
   // means MGETITER
   static const uint64_t VALID_MAGIC_NUM = 0x524554495445474d;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMGetIterator);
-private:
   const uint64_t MAGIC_;
   bool is_inited_;
   const storage::ObTableIterParam *param_;
@@ -212,22 +185,16 @@ public:
   static const int64_t CELL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   ObMemtableMScanIterator();
   virtual ~ObMemtableMScanIterator();
-public:
   int init(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       storage::ObITable *table,
       const void *query_range) override;
-  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void reset();
   virtual void reuse() override { reset(); }
-private:
-  int next_range();
-  int is_range_scan(bool &range_scan);
-  virtual int prepare_scan_range();
-  virtual int get_next_row_for_get(const blocksstable::ObDatumRow *&row);
-  virtual int get_next_row_for_scan(const blocksstable::ObDatumRow *&row);
-  virtual int inner_get_next_row_for_scan(const blocksstable::ObDatumRow *&row);
+
+protected:
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
 
 private:
   static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
@@ -239,7 +206,7 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator
+class ObMemtableMultiVersionScanIterator : public ObIMemtableIterator
 {
 public:
   ObMemtableMultiVersionScanIterator();
@@ -253,7 +220,6 @@ public:
   int get_tnode_stat(storage::ObTransNodeDMLStat &tnode_stat) const;
 
 public:
-  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void reset();
   virtual void reuse() override { reset(); }
   enum ScanState
@@ -264,8 +230,9 @@ public:
     SCAN_MULTI_VERSION_ROW,
     SCAN_END
   };
-  TO_STRING_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state));
+  TO_STRING_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state), K_(enable_delete_insert));
 protected:
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void row_reset();
   int get_compacted_multi_version_row(const blocksstable::ObDatumRow *&row);
   int get_multi_version_row(const blocksstable::ObDatumRow *&row);
@@ -279,12 +246,13 @@ protected:
   virtual int iterate_compacted_row(const common::ObStoreRowkey &key, blocksstable::ObDatumRow &row);
   virtual int iterate_uncommitted_row(const ObStoreRowkey &key, blocksstable::ObDatumRow &row);
   virtual int iterate_multi_version_row(const ObStoreRowkey &rowkey, blocksstable::ObDatumRow &row);
-  int set_compacted_row_state(const bool add_shadow_row);
+  int set_compacted_row_state(ObDatumRow &row, const bool add_shadow_row);
   void set_flag_and_version_for_compacted_row(const ObMvccTransNode *tnode, blocksstable::ObDatumRow &row);
 
   int iterate_compacted_row_value_(blocksstable::ObDatumRow &row);
   int iterate_uncommitted_row_value_(blocksstable::ObDatumRow &row);
   int iterate_multi_version_row_value_(blocksstable::ObDatumRow &row);
+  int iterate_delete_insert_compacted_row_value_(blocksstable::ObDatumRow &row);
 
 protected:
   struct ObOuputRowValidateChecker
@@ -303,6 +271,7 @@ protected:
 protected:
   const uint64_t MAGIC_;
   bool is_inited_;
+  bool enable_delete_insert_;
   const storage::ObITableReadInfo *read_info_;
   ObMemtableKey *start_key_;
   ObMemtableKey *end_key_;
@@ -320,35 +289,7 @@ protected:
   ObOuputRowValidateChecker row_checker_;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-class ObReadRow
-{
-  DEFINE_ALLOCATOR_WRAPPER
-public:
-  static int iterate_row(
-      const storage::ObITableReadInfo &read_info,
-      const common::ObStoreRowkey &key,
-      common::ObIAllocator &allocator,
-      ObMvccValueIterator &value_iter,
-      blocksstable::ObDatumRow &row,
-      ObNopBitMap &bitmap,
-      int64_t &row_scn);
-  static int iterate_row_key(
-      const common::ObStoreRowkey &rowkey,
-      blocksstable::ObDatumRow &row);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObReadRow);
-private:
-  static int iterate_row_value_(
-      const storage::ObITableReadInfo &read_info,
-      common::ObIAllocator &allocator,
-      ObMvccValueIterator &value_iter,
-      blocksstable::ObDatumRow &row,
-      ObNopBitMap &bitmap,
-      int64_t &row_scn);
-};
-
-}
-}
+}  // namespace memtable
+}  // namespace oceanbase
 
 #endif //OCEANBASE_MEMTABLE_OB_MEMTABLE_ITERATOR_

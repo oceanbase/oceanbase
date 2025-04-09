@@ -221,7 +221,7 @@ int ObAggCellVec::eval_index_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null compact row", K(ret), K(row));
   } else {
-    if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
+    if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(is_lob_col()), K(index_info));
     } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
@@ -568,7 +568,7 @@ int ObCountAggCellVec::eval_index_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCountAggCellVec not inited", K(ret));
-  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan(is_lob_col()) ||
+  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan() ||
                                                       index_info.is_left_border() || index_info.is_right_border()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border",
@@ -782,7 +782,7 @@ int ObSumAggCellVec::eval_index_info(
   } else if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid null compact row", K(ret));
-  } else if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
+  } else if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(is_lob_col()), K(index_info));
   } else {
@@ -979,11 +979,11 @@ int ObSumOpNSizeAggCellVec::eval_index_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCountAggCellVec not inited", K(ret));
-  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan(is_lob_col()) ||
+  } else if (OB_ISNULL(row) || OB_UNLIKELY(!is_cg && (!index_info.can_blockscan() ||
                                                       index_info.is_left_border() || index_info.is_right_border()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, row must not be null or the micro index info must can blockscan and not border",
-                K(ret), K(row), K(is_cg), K(index_info));
+             K(ret), K(row), K(is_cg), K(index_info));
   } else {
     char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);

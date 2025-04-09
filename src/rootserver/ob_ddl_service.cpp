@@ -1271,6 +1271,10 @@ int ObDDLService::generate_schema(
     LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
              KR(ret), K(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 && arg.schema_.is_delete_insert_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support delete insert merge engine");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {

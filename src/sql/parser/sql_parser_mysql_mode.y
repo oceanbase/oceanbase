@@ -287,7 +287,7 @@ END_P SET_VAR DELIMITER
         DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
         DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT_TABLE
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
-        DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DYNAMIC_PARTITION_POLICY
+        DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY
 
         EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENABLE_MACRO_BLOCK_BLOOM_FILTER ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
@@ -324,7 +324,7 @@ END_P SET_VAR DELIMITER
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND
         MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MIN_NGRAM_SIZE MIN_TOKEN_SIZE MINOR MIN_ROWS MINUS MINUTE MISMATCH MODE MODIFY MODULE MONTH MOVE
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MULTIVALUE MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
-        MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME
+        MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME MERGE_ENGINE
 
         NAME NAMES NAMESPACE NATIONAL NCHAR NDB NDBCLUSTER NESTED NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT NEVER NGRAM_TOKEN_SIZE
         NOMINVALUE NOMAXVALUE NOORDER NOCYCLE NOCACHE NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NET_BANDWIDTH_WEIGHT NOPARALLEL
@@ -338,7 +338,7 @@ END_P SET_VAR DELIMITER
         PERCENT_RANK PERCENTILE_CONT PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
-        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PRECREATE_TIME ON_ERROR
+        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
@@ -474,7 +474,7 @@ END_P SET_VAR DELIMITER
 %type <node> alter_column_behavior opt_set opt_position_column
 %type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info opt_shared_storage_info shared_storage_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
 %type <node> opt_comment opt_as
-%type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name
+%type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name merge_engine_types
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list opt_fulltext_index_option_list index_option fulltext_index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
@@ -7955,6 +7955,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORGANIZATION, 1, $3);
 }
+| MERGE_ENGINE opt_equal_mark merge_engine_types
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MERGE_ENGINE, 1, $3);
+}
 | DYNAMIC_PARTITION_POLICY opt_equal_mark '(' dynamic_partition_option_list ')'
 {
   (void)($2);
@@ -8017,6 +8022,22 @@ merge_insert_types:
 NO { $$ = NULL; }
 | FIRST { $$ = NULL; }
 | LAST { $$ = NULL; }
+;
+
+merge_engine_types:
+PARTIAL_UPDATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+  $$->is_hidden_const_ = 1;
+}
+|
+DELETE_INSERT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+  $$->is_hidden_const_ = 1;
+}
 ;
 
 parallel_option:
@@ -25124,6 +25145,7 @@ ACCESS_INFO
 |       DEFINER
 |       DELAY
 |       DELAY_KEY_WRITE
+|       DELETE_INSERT
 |       DENSE_RANK
 |       DEPTH
 |       DES_KEY_FILE
@@ -25354,6 +25376,7 @@ ACCESS_INFO
 |       MEMORY
 |       MEMTABLE
 |       MERGE
+|       MERGE_ENGINE
 |       MESSAGE_TEXT
 |       MEMSTORE_PERCENT
 |       META
@@ -25447,6 +25470,7 @@ ACCESS_INFO
 |       PARSER
 |       PARSER_PROPERTIES
 |       PARTIAL
+|       PARTIAL_UPDATE
 |       PARTITION_ID
 |       PATH
 |       LS

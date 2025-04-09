@@ -46,7 +46,7 @@ public:
   virtual void reclaim() override;
 protected:
   virtual int calc_scan_range() override;
-  virtual int construct_iters() override;
+  virtual int construct_iters(const bool is_refresh = false) override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int inner_get_next_rows() override;
   virtual int can_batch_scan(bool &can_batch) override;
@@ -69,6 +69,8 @@ private:
   int64_t filt_del_count_;
   const blocksstable::ObDatumRange *range_;
   blocksstable::ObDatumRange cow_range_;
+  const blocksstable::ObDatumRange *di_base_range_;
+  blocksstable::ObDatumRange di_base_cow_range_;
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleScanMerge);

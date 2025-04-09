@@ -8506,7 +8506,8 @@ inline int ObPartTransCtx::check_status_()
  */
 int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
                                  ObTxSEQ &data_scn,
-                                 const int16_t branch)
+                                 const int16_t branch,
+                                 const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   int pending_write = -1;
@@ -8525,17 +8526,26 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
         last_op_sn_ = tx_desc.op_sn_;
       }
       if (alloc) {
-        data_scn = tx_desc.inc_and_get_tx_seq(branch);
+        // in delete_insert table, delete and insert are in the same update trans
+        // need to distinguish them by seq no., each takes one seq no.
+        int64_t seq_cnt = write_flag.is_delete_insert() ? 2 : 1;
+        if (OB_FAIL(tx_desc.inc_and_get_tx_seq(branch,
+                                               seq_cnt,
+                                               data_scn))) {
+          TRANS_LOG(WARN, "get and inc tx seq failed", K(ret), K(seq_cnt));
+        }
       }
-      last_scn_ = MAX(data_scn, last_scn_);
-      if (!first_scn_.is_valid()) {
-        first_scn_ = last_scn_;
-      }
-      pending_write = ATOMIC_AAF(&pending_write_, 1);
-      // others must wait the first thread of parallel open the write epoch
-      // hence this must be done in lock
-      if (data_scn.support_branch() && pending_write == 1) {
-        callback_list_idx = mt_ctx_.acquire_callback_list(true);
+      if (OB_SUCC(ret)) {
+        last_scn_ = MAX(data_scn, last_scn_);
+        if (!first_scn_.is_valid()) {
+          first_scn_ = last_scn_;
+        }
+        pending_write = ATOMIC_AAF(&pending_write_, 1);
+        // others must wait the first thread of parallel open the write epoch
+        // hence this must be done in lock
+        if (data_scn.support_branch() && pending_write == 1) {
+          callback_list_idx = mt_ctx_.acquire_callback_list(true);
+        }
       }
     }
   }

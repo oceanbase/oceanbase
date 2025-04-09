@@ -129,7 +129,7 @@ struct ObQueryFlag
     uint64_t flag_;
     struct
     {
-      uint64_t scan_order_     : OBSF_BIT_SCAN_ORDER;        // 1: forward(default), 2: reverse
+      uint64_t scan_order_     : OBSF_BIT_SCAN_ORDER;        // 0: no order, 1: forward(default), 2: reverse
       uint64_t daily_merge_    : OBSF_BIT_DAILY_MERGE;       // 0: normal scan(default), 1: daily merge scan
       uint64_t rmmb_optimize_ : OBSF_BIT_RMMB_OPTIMIZE;     // 0: donot optimize(default), 1: optimize
       uint64_t whole_macro_scan_: OBSF_BIT_WHOLE_MACRO_SCAN;  // 0: normal scan 1:whole macro scan, like daily merge or build index, will read one macro block in single io request
@@ -209,6 +209,7 @@ struct ObQueryFlag
   void reset() { flag_ = 0; }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
   inline bool is_ordered_scan() const { return scan_order_ == ObQueryFlag::Forward || scan_order_ == ObQueryFlag::Reverse; }
+  inline bool is_support_sort_scan() const { return scan_order_ == Forward || scan_order_ == NoOrder || scan_order_ == Reverse; }
   inline bool is_daily_merge() const { return daily_merge_; }
   inline bool is_rmmb_optimized() const { return rmmb_optimize_; }
   inline bool is_whole_macro_scan() const { return whole_macro_scan_; }

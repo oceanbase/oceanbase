@@ -123,7 +123,6 @@ public:
   virtual int64_t get_rowkey_count() const = 0;
   virtual int64_t get_group_idx_col_index() const = 0;
   virtual int64_t get_mview_old_new_col_index() const = 0;
-  virtual int64_t get_max_col_index() const = 0;
   virtual int64_t get_trans_col_index() const = 0;
   virtual const common::ObIArray<ObColDesc> &get_columns_desc() const = 0;
   virtual const ObColumnIndexArray &get_columns_index() const = 0;
@@ -193,11 +192,6 @@ public:
   {
     return OB_INVALID_INDEX;
   }
-  OB_INLINE virtual int64_t get_max_col_index() const override
-  {
-    OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise max col index");
-    return OB_INVALID_INDEX;
-  }
   OB_INLINE virtual int64_t get_trans_col_index() const override
   {
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise trans col index");
@@ -248,7 +242,8 @@ public:
                        const int64_t schema_rowkey_cnt,
                        const bool is_oracle_mode,
                        const bool is_cg_sstable,
-                       const bool is_cs_replica_compat);
+                       const bool is_cs_replica_compat,
+                       const bool is_delete_insert_table);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
@@ -310,7 +305,8 @@ public:
       const common::ObIArray<ObColExtend> *cols_extend = nullptr,
       const bool has_all_column_group = true,
       const bool is_cg_sstable = false,
-      const bool need_truncate_filter = false);
+      const bool need_truncate_filter = false,
+      const bool is_delete_insert_table = false);
   int mock_for_sstable_query(
     common::ObIAllocator &allocator,
     const int64_t schema_column_count,
@@ -355,7 +351,6 @@ public:
   // this func only called in query
   OB_INLINE virtual int64_t get_request_count() const override
   { return cols_desc_.count(); }
-  OB_INLINE virtual int64_t get_max_col_index() const override { return max_col_index_; }
   virtual bool has_all_column_group() const override
   { return has_all_column_group_; }
   virtual bool need_truncate_filter() const override
@@ -418,7 +413,8 @@ public:
       const common::ObIArray<ObColDesc> &rowkey_col_descs,
       const bool is_cg_sstable = false,
       const bool use_default_compat_version = false,
-      const bool is_cs_replica_compat = false);
+      const bool is_cs_replica_compat = false,
+      const bool is_delete_insert_table = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
@@ -501,11 +497,6 @@ public:
   {
     return OB_INVALID_INDEX;
   }
-  virtual int64_t get_max_col_index() const
-  {
-    OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise max col index");
-    return OB_INVALID_INDEX;
-  }
   virtual int64_t get_trans_col_index() const
   {
     OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise trans col index");
@@ -567,11 +558,6 @@ public:
   }
   OB_INLINE virtual int64_t get_mview_old_new_col_index() const override
   {
-    return OB_INVALID_INDEX;
-  }
-  virtual int64_t get_max_col_index() const override
-  {
-    OB_ASSERT_MSG(false, "ObCGRowkeyReadInfo dose not promise max col index");
     return OB_INVALID_INDEX;
   }
   virtual int64_t get_trans_col_index() const override { return rowkey_read_info_.get_trans_col_index(); }

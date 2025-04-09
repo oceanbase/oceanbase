@@ -59,6 +59,7 @@ int ObDASLockOp::open_op()
                                             *trans_desc_,
                                             *snapshot_,
                                             write_branch_id_,
+                                            dml_param.write_flag_,
                                             store_ctx_guard))) {
     LOG_WARN("fail to get_write_access_tx_ctx_guard", K(ret), K(ls_id_));
   } else if (OB_FAIL(ObDMLService::init_dml_param(

@@ -77,11 +77,11 @@ public:
                            const ObCGBitmap *parent_bitmap,
                            ObCGBitmap &result_bitmap);
   int build_index_filter(sql::ObPushdownFilterExecutor &filter);
+  virtual int get_current_row_id(ObCSRowId& current_row_id) const override final { current_row_id = current_; return OB_SUCCESS; }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(is_new_range), K_(is_padding_mode), K_(current),
                K_(query_index_range), K_(prefetcher), K_(sstable_row_cnt));
 
 protected:
-  bool start_of_scan() const;
   bool end_of_scan() const;
   int open_cur_data_block();
   int init_micro_scanner();

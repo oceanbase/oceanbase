@@ -441,6 +441,23 @@ int ObCreateTableResolver::set_default_enable_macro_block_bloom_filter_(share::s
   return OB_SUCCESS;
 }
 
+int ObCreateTableResolver::set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    const char *delete_insert = ObMergeEngineStoreFormat::get_merge_engine_type_name(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+    if (0 == tenant_config->default_table_merge_engine.case_compare(delete_insert)) {
+      table_schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+    } else {
+      table_schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+    }
+  } else {
+    table_schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+  }
+  return ret;
+}
+
 int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -692,6 +709,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set table options (micro_index_clustered) failed", K(ret));
             } else if (OB_FAIL(set_default_enable_macro_block_bloom_filter_(table_schema))) {
               SQL_RESV_LOG(WARN, "set table options (enable_macro_block_bloom_filter) failed", K(ret));
+            } else if (OB_FAIL(set_default_merge_engine_type_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set default merge engine type failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {

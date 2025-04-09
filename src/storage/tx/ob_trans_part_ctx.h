@@ -960,8 +960,12 @@ public:
    * @data_seq: the sequence_no of current access will be alloced
    *            new created data will marked with this seq no
    * @branch: branch id of this access
+   * @is_delete_insert: tag for delete_insert table
    */
-  int start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_seq, const int16_t branch);
+  int start_access(const ObTxDesc &tx_desc,
+                   ObTxSEQ &data_seq,
+                   const int16_t branch,
+                   const concurrent_control::ObWriteFlag &write_flag);
   /*
    * end_access - end of txn protected resources access
    */

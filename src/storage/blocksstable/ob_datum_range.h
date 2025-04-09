@@ -51,7 +51,7 @@ public:
   OB_INLINE void set_whole_range();
   OB_INLINE bool is_whole_range() const { return start_key_.is_min_rowkey() && end_key_.is_max_rowkey(); }
   OB_INLINE int is_single_rowkey(const ObStorageDatumUtils &datum_utils, bool &is_single) const;
-  OB_INLINE void change_boundary(const ObDatumRowkey &rowkey, bool is_reverse);
+  OB_INLINE void change_boundary(const ObDatumRowkey &rowkey, bool is_reverse, bool is_closed = false);
   OB_INLINE int from_range(const common::ObStoreRange &range, ObIAllocator &allocator);
   OB_INLINE int from_range(const common::ObNewRange &range, ObIAllocator &allocator);
   OB_INLINE int to_store_range(const common::ObIArray<share::schema::ObColDesc> &col_descs,
@@ -60,6 +60,9 @@ public:
   OB_INLINE int to_multi_version_range(common::ObIAllocator &allocator, ObDatumRange &dest) const;
   OB_INLINE int prepare_memtable_readable(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                                           common::ObIAllocator &allocator);
+  OB_INLINE int is_memtable_single_rowkey(const int64_t schema_rowkey_cnt,
+                                          const ObStorageDatumUtils &datum_utils,
+                                          bool &is_single) const;
   // !!Attension only compare start key
   OB_INLINE int compare(const ObDatumRange &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const;
   // maybe we will need serialize
@@ -198,6 +201,38 @@ OB_INLINE int ObDatumRange::is_single_rowkey(const ObStorageDatumUtils &datum_ut
   return ret;
 }
 
+OB_INLINE int ObDatumRange::is_memtable_single_rowkey(const int64_t schema_rowkey_cnt,
+                                                      const ObStorageDatumUtils &datum_utils,
+                                                      bool &is_single) const
+{
+  int ret = OB_SUCCESS;
+  is_single = false;
+  if (OB_UNLIKELY(!is_memtable_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected invalid memtable range", K(ret), KPC(this));
+  } else if (!border_flag_.inclusive_start() || !border_flag_.inclusive_end()) {
+  } else if (start_key_.is_ext_rowkey() || start_key_.is_static_rowkey() ||
+             end_key_.is_ext_rowkey() || end_key_.is_static_rowkey()) {
+  } else if (OB_UNLIKELY(start_key_.store_rowkey_.get_obj_cnt() < schema_rowkey_cnt ||
+                         end_key_.store_rowkey_.get_obj_cnt() < schema_rowkey_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected rowkey cnt", K(ret), K(schema_rowkey_cnt),
+                K(start_key_.store_rowkey_), K(end_key_.store_rowkey_));
+  } else {
+    bool can_use_single_get = true;
+    for (int64_t i = 0; can_use_single_get && i < schema_rowkey_cnt; i++) {
+      if (ob_is_real_type(start_key_.store_rowkey_.get_obj_ptr()[i].get_type())) {
+        can_use_single_get = false;
+      }
+    }
+
+    if (can_use_single_get && OB_FAIL(start_key_.equal(end_key_, datum_utils, is_single))) {
+      STORAGE_LOG(WARN, "Failed to check datum rowkey equal", K(ret), K(*this));
+    }
+  }
+  return ret;
+}
+
 OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -259,14 +294,22 @@ OB_INLINE int ObDatumRange::compare(const ObDatumRange &rhs, const ObStorageDatu
   return ret;
 }
 
-OB_INLINE void ObDatumRange::change_boundary(const ObDatumRowkey &rowkey, bool is_reverse)
+OB_INLINE void ObDatumRange::change_boundary(const ObDatumRowkey &rowkey, bool is_reverse, bool is_closed)
 {
   if (is_reverse) {
     end_key_ = rowkey;
-    border_flag_.unset_inclusive_end();
+    if (is_closed) {
+      border_flag_.set_inclusive_end();
+    } else {
+      border_flag_.unset_inclusive_end();
+    }
   }  else {
     start_key_ = rowkey;
-    border_flag_.unset_inclusive_start();
+    if (is_closed) {
+      border_flag_.set_inclusive_start();
+    } else {
+      border_flag_.unset_inclusive_start();
+    }
   }
 }
 

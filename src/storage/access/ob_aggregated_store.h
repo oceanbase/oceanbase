@@ -125,7 +125,8 @@ public:
     //        !index_info.is_right_border();
     can_agg = filter_is_null() &&
               !agg_row_.check_need_access_data() &&
-              index_info.can_blockscan(agg_row_.has_lob_column_out()) &&
+              index_info.can_blockscan() &&
+              (!agg_row_.has_lob_column_out() || !index_info.has_lob_out_row()) &&
               !index_info.is_left_border() &&
               !index_info.is_right_border();
     return OB_SUCCESS;

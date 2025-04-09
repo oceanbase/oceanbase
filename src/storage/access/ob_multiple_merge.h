@@ -71,11 +71,12 @@ public:
   OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_out_project_cells() { return out_project_cols_; }
   OB_INLINE ObNopPos &get_nop_pos() { return nop_pos_; }
   OB_INLINE void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
+  OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || need_scan_di_base_; }
   OB_INLINE blocksstable::ObDatumRow &get_unprojected_row() { return unprojected_row_; }
 protected:
   int open();
   virtual int calc_scan_range() = 0;
-  virtual int construct_iters() = 0;
+  virtual int construct_iters(const bool is_refresh = false) = 0;
   virtual int is_range_valid() const = 0;
   virtual OB_INLINE int prepare() { return common::OB_SUCCESS; }
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row) = 0;
@@ -97,6 +98,8 @@ protected:
   void dump_tx_statistic_for_4377(ObStoreCtx *store_ctx);
   void dump_table_statistic_for_4377();
   void set_base_version() const;
+  ObStoreRowIterator *get_di_base_iter() { return di_base_iters_.count() > 0 ? di_base_iters_[0] : nullptr; }
+  bool all_iters_end() { return delta_iter_end_ && !need_scan_di_base_; }
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);
@@ -117,6 +120,7 @@ private:
   OB_INLINE int check_need_refresh_table(bool &need_refresh);
   int save_curr_rowkey();
   int reset_tables();
+  int check_base_version() const;
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
   int process_fuse_row(const bool not_using_static_engine,
                        blocksstable::ObDatumRow &in_row,
@@ -133,28 +137,38 @@ private:
   void inner_reset();
   int refresh_filter_params_on_demand(const bool is_open);
   int prepare_truncate_filter();
+  int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
 
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
+  MergeIterators di_base_iters_;
   ObTableAccessParam *access_param_;
   ObTableAccessContext *access_ctx_;
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
   blocksstable::ObDatumRow cur_row_;
   blocksstable::ObDatumRow unprojected_row_;
-  int64_t curr_scan_index_;
   blocksstable::ObDatumRowkey curr_rowkey_;
+  blocksstable::ObDatumRowkey di_base_curr_rowkey_;
+  blocksstable::ObDatumRowkey di_base_border_rowkey_;
   ObNopPos nop_pos_;
   int64_t scan_cnt_;
+  int64_t range_idx_delta_;
+  int64_t curr_scan_index_;
+  int64_t di_base_curr_scan_index_;
+  int64_t major_table_version_;
   bool need_padding_;
   bool need_fill_default_; // disabled by join mv scan
   bool need_fill_virtual_columns_; // disabled by join mv scan
   bool need_output_row_with_nop_; // for sampling increment data
   bool inited_;
   bool iter_del_row_;
-  int64_t range_idx_delta_;
-  ObGetTableParam *get_table_param_;
   bool read_memtable_only_;
+  bool delta_iter_end_; // whether minor, mini and memtable iter end
+  bool is_unprojected_row_valid_; // whether unprojected_row_ is ready for refresh_table_on_demand currently
+  bool need_scan_di_base_;  // whether need to scan di base iter
+  bool use_di_merge_scan_;  // whether use delete_insert merge scan
+  ObGetTableParam *get_table_param_;
   ObBlockRowStore *block_row_store_;
   ObGroupByCell *group_by_cell_;
   sql::ObBitVector *skip_bit_;
@@ -162,7 +176,6 @@ protected:
   ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
-private:
   enum ScanState
   {
     NONE,
@@ -171,7 +184,7 @@ private:
     DI_BASE,
   };
   ScanState scan_state_;
-  int64_t major_table_version_;
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleMerge);
 };
@@ -192,6 +205,10 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
     need_refresh = true;
   }
 #endif
+  // TODO: remove this
+  if (di_base_iters_.count() > 0) {
+    need_refresh = false;
+  }
   return ret;
 }
 

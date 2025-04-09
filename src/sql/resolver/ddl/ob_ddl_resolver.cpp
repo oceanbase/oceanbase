@@ -3165,6 +3165,41 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_MERGE_ENGINE: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("set merge engine type in data version less than 4.3.5.2 is not supported", K(ret), K(tenant_id), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "set merge engine type in data version less than 4.3.5.2");
+        } else if (OB_UNLIKELY(is_index_option)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "specify merge engine in index option", K(ret));
+        } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option_node child is null", K(ret), K(option_node->num_child_), K(option_node->children_[0]));
+        } else {
+          ObMergeEngineType merge_engine_type = static_cast<ObMergeEngineType>(option_node->children_[0]->value_);
+          if (OB_LIKELY(stmt::T_CREATE_TABLE == stmt_->get_stmt_type())) {
+            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+            if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(merge_engine_type))) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "unexpected invalid merge engine value", K(ret), K(merge_engine_type));
+            } else {
+              arg.schema_.set_merge_engine_type(merge_engine_type);
+            }
+          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "alter merge engine table option not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter merge engine table option");
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "get unexpected stmt type", K(ret), K(stmt_->get_stmt_type()));
+          }
+        }
+        break;
+      }
       case T_DYNAMIC_PARTITION_POLICY: {
         uint64_t compat_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {

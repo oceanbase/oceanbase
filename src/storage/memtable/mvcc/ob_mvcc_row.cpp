@@ -326,6 +326,7 @@ int ObMvccRowFilter::read_row_(
 {
   int ret = OB_SUCCESS;
   final_result = false;
+  const ObRowHeader *row_header = nullptr;
   const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(node.buf_);
   blocksstable::ObRowReader row_reader;
   if (OB_ISNULL(mtd)) {
@@ -333,7 +334,7 @@ int ObMvccRowFilter::read_row_(
     TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter), K(node), KP(mtd));
   } else {
     bool read_finished = false;
-    if (OB_FAIL(row_reader.read_memtable_row(mtd->buf_, mtd->buf_len_, *mds_filter_.read_info_, datum_row_, bitmap_, read_finished))) {
+    if (OB_FAIL(row_reader.read_memtable_row(mtd->buf_, mtd->buf_len_, *mds_filter_.read_info_, datum_row_, bitmap_, read_finished, row_header))) {
       TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
     } else if (!datum_row_empty_) {
       // no need to set trans version
@@ -529,8 +530,13 @@ int ObMvccRow::unlink_trans_node(const ObMvccTransNode &node)
   return ret;
 }
 
-bool ObMvccRow::need_compact(const bool for_read, const bool for_replay)
+bool ObMvccRow::need_compact(const bool for_read, const bool for_replay, const bool is_delete_insert)
 {
+  if (is_delete_insert) {
+    // return false directly when this is a delete-insert table
+    return false;
+  }
+
   bool bool_ret = false;
   const int32_t updates = ATOMIC_LOAD(&update_since_compact_);
   const int32_t compact_trigger = (for_read || for_replay)

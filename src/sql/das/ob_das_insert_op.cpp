@@ -206,7 +206,11 @@ int ObDASInsertOp::insert_row_with_fetch()
   ObDMLBaseParam dml_param;
   ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
   storage::ObStoreCtxGuard store_ctx_guard;
+  concurrent_control::ObWriteFlag write_flag;
   transaction::ObTxReadSnapshot *snapshot = snapshot_;
+
+  // write_flag should be inited before get store ctx, as it will be used in the call function
+  (void)ObDMLService::init_dml_write_flag(*ins_ctdef_, *ins_rtdef_, write_flag);
   if (das_gts_opt_info_.get_specify_snapshot()) {
     transaction::ObTransService *txs = nullptr;
     if (das_gts_opt_info_.isolation_level_ != transaction::ObTxIsolationLevel::RC) {
@@ -237,6 +241,7 @@ int ObDASInsertOp::insert_row_with_fetch()
                                                    *trans_desc_,
                                                    *snapshot,
                                                    write_branch_id_,
+                                                   write_flag,
                                                    store_ctx_guard))) {
     LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
   } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {

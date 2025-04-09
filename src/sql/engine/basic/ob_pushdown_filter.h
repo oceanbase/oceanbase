@@ -1389,6 +1389,7 @@ struct PushdownFilterInfo
       batch_size_(0),
       datum_buf_(nullptr),
       filter_(nullptr),
+      di_bitmap_(nullptr),
       cell_data_ptrs_(nullptr),
       row_ids_(nullptr),
       len_array_(nullptr),
@@ -1418,6 +1419,22 @@ struct PushdownFilterInfo
   }
   int init(const storage::ObTableIterParam &iter_param, common::ObIAllocator &alloc);
   int init_bitmap(const int64_t row_count, common::ObBitmap *&bitmap);
+  OB_INLINE void set_delete_insert_bitmap(common::ObBitmap *bitmap)
+  {
+    di_bitmap_ = bitmap;
+  }
+  OB_INLINE void reset_delete_insert_bitmap()
+  {
+    di_bitmap_ = nullptr;
+  }
+  OB_INLINE bool can_skip_filter_delete_insert(int64_t row) const
+  {
+    bool fast_skip = false;
+    if (nullptr != di_bitmap_) {
+      fast_skip = !di_bitmap_->test(row);
+    }
+    return fast_skip;
+  }
   int get_col_datum(ObDatum *&datums) const;
   struct TmpColDatumBuf
   {
@@ -1447,6 +1464,7 @@ struct PushdownFilterInfo
   int64_t batch_size_;
   blocksstable::ObStorageDatum *datum_buf_;
   sql::ObPushdownFilterExecutor *filter_;
+  common::ObBitmap *di_bitmap_;
   // for black filter vectorize
   const char **cell_data_ptrs_;
   int32_t *row_ids_;

@@ -1147,9 +1147,9 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "invalid macro block writer input argument.",
         K(row), "row_column_count", data_store_desc_->get_row_column_count(), K(ret));
-  } else if (OB_UNLIKELY(!row.mvcc_row_flag_.is_valid())) {
+  } else if (OB_UNLIKELY(!data_store_desc_->get_is_delete_insert_table() && !row.mvcc_row_flag_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "invalid mvcc_row_flag", K(ret), K(row.mvcc_row_flag_));
+    STORAGE_LOG(ERROR, "invalid mvcc_row_flag", K(ret), K(row));
   } else {
     cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
     cur_sql_sequence = row.storage_datums_[sql_sequence_col_idx].get_int();
@@ -1173,9 +1173,20 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
       if (data_store_desc_->is_major_merge_type() && not_compat_for_queuing_mode_42x(cluster_version) && cluster_version < DATA_VERSION_4_3_0_0) {
         micro_writer_->update_max_merged_trans_version(-cur_row_version);
       }
-      if (!row.mvcc_row_flag_.is_shadow_row()) {
+      // TODO: zhanghuidong.zhd, remove defensive code later
+      // check committed rows write right trans version
+      if (OB_UNLIKELY(!transaction::is_effective_trans_version(-cur_row_version))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Get unexpected trans version for committed transaction", K(ret), K(row));
+      } else if (!row.mvcc_row_flag_.is_shadow_row()) {
         const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].reuse(); // make sql sequence positive
-        const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(0); // make sql sequence positive
+        if (data_store_desc_->is_delete_insert_merge() && row.row_flag_.is_insert()) {
+          const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(-common::DELETE_INSERT_TRANS_SEQUENCE); // make sql sequence positive
+          cur_sql_sequence = -common::DELETE_INSERT_TRANS_SEQUENCE;
+        } else {
+          const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(0); // make sql sequence positive
+          cur_sql_sequence = 0;
+        }
       } else if (OB_UNLIKELY(row.storage_datums_[sql_sequence_col_idx].get_int() != -INT64_MAX)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected shadow row", K(ret), K(row));

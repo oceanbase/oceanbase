@@ -1143,7 +1143,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
     TRANS_LOG(WARN, "use ls snapshot access another ls", K(ret), K(snapshot), K(ls_id));
   } else if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special, snapshot.read_elr(), ctx_exist))) {
     TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
+  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch, write_flag))) {
     TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
     // when transfer move_tx phase we put src_ls tx_ctx into dest_ls ctx_mgr when transfer abort we need remove it
     // when access tx_ctx first get ctx from mgr, second increase pending_write
@@ -1154,7 +1154,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
       ob_usleep(10 * 1000);
       if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special, snapshot.read_elr(), ctx_exist))) {
         TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-      } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
+      } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch, write_flag))) {
         TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
       }
     }

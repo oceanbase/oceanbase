@@ -14,7 +14,7 @@
 #define protected public
 
 #include "src/storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_index_block_data_prepare.h"
+#include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase
 {

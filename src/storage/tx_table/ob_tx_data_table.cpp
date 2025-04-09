@@ -205,6 +205,7 @@ int ObTxDataTable::online()
   ObTablet *tablet;
   ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
 
+  CreateMemtableArg arg;
   if (OB_ISNULL(ls_tablet_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get ls tablet svr failed", K(ret));
@@ -212,8 +213,7 @@ int ObTxDataTable::online()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
-                 LS_TX_DATA_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_DATA_TABLET, arg/* use default arg */))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
     // load tx data table succeed

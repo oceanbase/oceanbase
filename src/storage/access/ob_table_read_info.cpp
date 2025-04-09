@@ -237,13 +237,15 @@ void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
                      const int64_t schema_rowkey_cnt,
                      const bool is_oracle_mode,
                      const bool is_cg_sstable,
-                     const bool is_cs_replica_compat) {
+                     const bool is_cs_replica_compat,
+                     const bool is_delete_insert_table) {
   const int64_t extra_rowkey_cnt = is_cg_sstable ? 0 : storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   schema_column_count_ = schema_column_count;
   schema_rowkey_cnt_ = schema_rowkey_cnt;
   rowkey_cnt_ = schema_rowkey_cnt + extra_rowkey_cnt;
   is_oracle_mode_ = is_oracle_mode;
   is_cs_replica_compat_ = is_cs_replica_compat;
+  is_delete_insert_table_ = is_delete_insert_table;
 }
 
 int ObReadInfoStruct::generate_for_column_store(ObIAllocator &allocator,
@@ -353,7 +355,7 @@ int ObTableReadInfo::mock_for_sstable_query(
     LOG_WARN("failed to pre check", K(ret));
   } else if (OB_FAIL(init_compat_version())) { // init compat verion
     LOG_WARN("failed to init compat version", KR(ret));
-  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, false /*is_cs_replica_compat*/))) { // init basic info
+  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, false /*is_cs_replica_compat*/, false /*is_delete_insert_table*/))) { // init basic info
   } else if (OB_FAIL(cols_desc_.init_and_assign(cols_desc, allocator))) {
     LOG_WARN("Fail to assign cols_desc", K(ret));
   } else if (OB_FAIL(cols_index_.init_and_assign(storage_cols_index, allocator))) {
@@ -418,7 +420,8 @@ int ObTableReadInfo::init(
     const common::ObIArray<ObColExtend> *cols_extend,
     const bool has_all_column_group,
     const bool is_cg_sstable,
-    const bool need_truncate_filter)
+    const bool need_truncate_filter,
+    const bool is_delete_insert_table)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_pre_check(schema_column_count, schema_rowkey_cnt, cols_desc,
@@ -426,7 +429,7 @@ int ObTableReadInfo::init(
     LOG_WARN("failed to pre check", K(ret));
   } else if (OB_FAIL(init_compat_version())) { // init compat verion
     LOG_WARN("failed to init compat version", KR(ret));
-  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, false /*is_cs_replica_compat*/))) { // init basic info
+  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, false /*is_cs_replica_compat*/, is_delete_insert_table))) { // init basic info
   } else if (OB_FAIL(ObReadInfoStruct::prepare_arrays(allocator, cols_desc, cols_desc.count()))) {
     LOG_WARN("failed to prepare arrays", K(ret), K(cols_desc.count()));
   } else if (nullptr != cols_param && OB_FAIL(cols_param_.init_and_assign(*cols_param, allocator))) {
@@ -813,7 +816,8 @@ int ObRowkeyReadInfo::init(
     const common::ObIArray<ObColDesc> &rowkey_col_descs,
     const bool is_cg_sstable,
     const bool use_default_compat_version,
-    const bool is_cs_replica_compat)
+    const bool is_cs_replica_compat,
+    const bool is_delete_insert_table)
 {
   int ret = OB_SUCCESS;
   const int64_t extra_rowkey_cnt = is_cg_sstable ? 0: storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
@@ -832,7 +836,7 @@ int ObRowkeyReadInfo::init(
     LOG_WARN("failed to init compat version", KR(ret));
   }
   if (OB_SUCC(ret)) {
-    init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, is_cs_replica_compat); // init basic info
+    init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, is_cs_replica_compat, is_delete_insert_table); // init basic info
     if (OB_FAIL(prepare_arrays(allocator, rowkey_col_descs, out_cols_cnt))) {
       LOG_WARN("failed to prepare arrays", K(ret), K(out_cols_cnt));
     } else if (OB_FAIL(datum_utils_.init(cols_desc_, schema_rowkey_cnt_, is_oracle_mode_, allocator, is_cg_sstable))) {
@@ -1200,7 +1204,8 @@ int ObTenantCGReadInfoMgr::construct_index_read_info(ObIAllocator &allocator, Ob
                                           idx_cols_desc,
                                           true, /* is_cg_sstable */
                                           true /* use_default_compat_version */,
-                                          false /* is_cs_replica_compat */))) {
+                                          false /* is_cs_replica_compat */,
+                                          false /* is_delete_insert_table */))) {
     STORAGE_LOG(WARN, "Fail to init mtl index read info", K(ret));
   }
 

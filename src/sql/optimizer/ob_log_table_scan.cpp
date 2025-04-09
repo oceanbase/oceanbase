@@ -121,6 +121,33 @@ bool ObLogTableScan::use_query_range() const
   return res;
 }
 
+int ObLogTableScan::check_is_delete_insert_scan(bool &is_delete_insert_scan) const
+{
+  int ret = OB_SUCCESS;
+  is_delete_insert_scan = false;
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  const int64_t table_id = is_index_scan() ? index_table_id_ : ref_table_id_;
+  if (OB_ISNULL(get_plan())
+      || OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info())
+      || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(), table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_UNLIKELY(NULL == table_schema)) {
+    // may be fake table, skip
+    LOG_DEBUG("get nullptr table schema", K(ret), K_(table_id), K_(ref_table_id), K(get_stmt()));
+  } else if (table_schema->is_delete_insert_merge_engine()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (OB_LIKELY(tenant_config.is_valid())) {
+      is_delete_insert_scan = tenant_config->_enable_delete_insert_scan;
+    }
+  }
+  return ret;
+}
+
 void ObLogTableScan::set_ref_table_id(uint64_t ref_table_id)
 { 
   ref_table_id_ = ref_table_id;
@@ -1852,6 +1879,24 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     } else if (OB_FAIL(BUF_PRINTF("keep_ordering=%s", das_keep_ordering_ ? "true" : "false"))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else { /* Do nothing */ }
+
+    bool is_delete_insert_scan = false;
+    if (FAILEDx(check_is_delete_insert_scan(is_delete_insert_scan))) {
+      LOG_WARN("check is delete insert table failed", K(ret));
+    } else if (is_delete_insert_scan) {
+      if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (common::ObQueryFlag::NoOrder == scan_order_
+                 && OB_FAIL(BUF_PRINTF("scan_order=%s", "noorder"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (common::ObQueryFlag::Forward == scan_order_
+                 && OB_FAIL(BUF_PRINTF("scan_order=%s", "forward"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (common::ObQueryFlag::Reverse == scan_order_
+                 && OB_FAIL(BUF_PRINTF("scan_order=%s", "reverse"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      }
+    }
 
     if (OB_SUCC(ret) && use_index_merge()) {
       if (OB_FAIL(BUF_PRINTF(", "))) {
@@ -5432,6 +5477,27 @@ int ObLogTableScan::try_adjust_scan_direction(const ObIArray<OrderItem> &sort_ke
     if (OB_SUCC(ret) && found) {
       set_scan_direction(first_sortkey.order_type_);
     }
+  }
+  return ret;
+}
+
+int ObLogTableScan::set_scan_order()
+{
+  int ret = OB_SUCCESS;
+  bool is_delete_insert_scan = false;
+  if (OB_FAIL(check_is_delete_insert_scan(is_delete_insert_scan))) {
+    LOG_WARN("failed to check is delete insert table", K(ret));
+  } else if (is_delete_insert_scan) {
+    bool order_used = false;
+    if (OB_FAIL(check_op_orderding_used_by_parent(order_used))) {
+      LOG_WARN("fail to check op ordering", K(ret));
+    } else if (order_used || das_keep_ordering_ || is_tsc_with_domain_id()) {
+      scan_order_ = is_descending_direction(scan_direction_) ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
+    } else {
+      scan_order_ = common::ObQueryFlag::NoOrder;
+    }
+  } else {
+    scan_order_ = is_descending_direction(scan_direction_) ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
   }
   return ret;
 }

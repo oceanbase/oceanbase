@@ -11738,6 +11738,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("build location related tablet ids failed", K(ret));
   } else if (OB_FAIL(check_das_need_keep_ordering(root))) {
     LOG_WARN("failed to check das need keep ordering", K(ret));
+  } else if (OB_FAIL(set_scan_order(root))) {
+    LOG_WARN("failed to set scan order", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -12658,6 +12660,26 @@ int ObLogPlan::check_das_need_keep_ordering(ObLogicalOperator *op)
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
     if (OB_FAIL(SMART_CALL(check_das_need_keep_ordering(op->get_child(i))))) {
       LOG_WARN("failed to check das need keep ordering", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::set_scan_order(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
+    ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
+    if (OB_FAIL(scan->set_scan_order())) {
+      LOG_WARN("failed to check das need keep ordering", K(ret));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
+    if (OB_FAIL(SMART_CALL(set_scan_order(op->get_child(i))))) {
+      LOG_WARN("failed to set tsc scan order", K(ret));
     }
   }
   return ret;

@@ -196,7 +196,10 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
                         ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!former.is_valid() || !result.is_valid() || !nop_pos.is_valid())) {
+  if (OB_UNLIKELY(!former.is_valid() || !result.is_valid() || !nop_pos.is_valid() ||
+                  (result.delete_version_ > 0 &&
+                   ((result.delete_version_ < former.delete_version_) ||
+                    (former.row_flag_.is_delete() && former.delete_version_ <= 0))))) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid arguments, ", K(former), K(result), K(nop_pos.count()), K(nop_pos.capacity()), K(ret));
   } else if (result.row_flag_.is_delete() || former.row_flag_.is_not_exist()) {
@@ -267,6 +270,9 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
       ret = common::OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "wrong row flag", K(ret), K(former));
     }
+  }
+  if (OB_SUCC(ret) && !former.row_flag_.is_not_exist()) {
+    result.delete_version_ = former.delete_version_;
   }
   return ret;
 }

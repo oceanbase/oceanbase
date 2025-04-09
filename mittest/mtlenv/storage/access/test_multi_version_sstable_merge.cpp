@@ -18,12 +18,9 @@
 #define protected public
 #define UNITTEST
 #include "storage/memtable/ob_memtable_interface.h"
-
-
 #include "storage/compaction/ob_partition_merger.h"
-
 #include "storage/test_tablet_helper.h"
-#include "mtlenv/storage/test_merge_basic.h"
+#include "test_merge_basic.h"
 
 namespace oceanbase
 {
@@ -210,6 +207,7 @@ void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
                                                   ObTabletMergeCtx &merge_context)
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  merge_context.static_param_.is_delete_insert_merge_ = false;
   merge_context.static_param_.data_version_ = DATA_VERSION_4_2_0_0;
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());

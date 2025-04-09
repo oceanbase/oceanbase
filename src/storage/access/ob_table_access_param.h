@@ -233,6 +233,7 @@ public:
   sql::ExprFixedArray *auto_split_params_;
   bool is_tablet_spliting_;
   bool is_column_replica_table_;
+  bool is_delete_insert_;
   const bool *need_update_tablet_param_;
 };
 
@@ -252,13 +253,13 @@ public:
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,
-                       const bool is_multi_version_merge = false);
+                       const bool is_multi_version_merge = false,
+                       const bool is_delete_insert = false);
   // used for get unique index conflict row
   int init_dml_access_param(const ObRelativeTable &table,
                             const ObITableReadInfo &rowkey_read_info,
                             const share::schema::ObTableSchemaParam &schema_param,
                             const common::ObIArray<int32_t> *out_cols_project);
-  int get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
   // used for index back when query
   OB_INLINE int64_t get_out_col_cnt() const
   {
@@ -276,6 +277,7 @@ public:
   OB_INLINE bool is_use_global_iter_pool() const { return iter_param_.is_use_global_iter_pool(); }
 private:
   int check_valid_before_query_init(const ObTableParam &table_param, const ObTabletHandle &tablet_handle);
+  int get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
 public:
   DECLARE_TO_STRING;
 public:

@@ -370,7 +370,8 @@ int ObAggregatedStoreVec::can_use_index_info(const blocksstable::ObMicroIndexInf
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregateStoreVec is not inited", K(ret));
   } else {
-    can_agg = filter_is_null() && index_info.can_blockscan(iter_param_->has_lob_column_out()) &&
+    // pre agg info will not be generated for lob out row
+    can_agg = filter_is_null() && index_info.can_blockscan() &&
               !index_info.is_left_border() && !index_info.is_right_border();
     for (int64_t i = 0; OB_SUCC(ret) && can_agg && i < agg_groups_.count(); ++i) {
       ObAggGroupVec *agg_group = agg_groups_.at(i);

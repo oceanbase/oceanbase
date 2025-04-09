@@ -99,6 +99,7 @@ public:
   bool is_need_check_old_row_;
   bool is_udf_;
   bool has_lob_rowkey_;
+  bool is_delete_insert_table_;
   ObLobTabletDmlCtx lob_dml_ctx_;
   common::ObFixedArray<bool, common::ObIAllocator> main_table_rowkey_col_flag_;
 

@@ -267,6 +267,9 @@ public:
                   const ObCSRange &data_range,
                   const int64_t batch_size,
                   const bool is_reverse);
+  int get_next_valid_idx_directly(const int64_t row_id,
+                                  int64_t &offset) const;
+  int bit_and(const ObBitmap &right);
   TO_STRING_KV(K_(is_reverse_scan), K_(start_row_id), K_(max_filter_constant_id),
                K_(filter_constant_type), K_(bitmap));
 private:

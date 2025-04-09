@@ -312,8 +312,9 @@ void TestNewRowReader::check_read_datum_row(
   reader_row2.count_ = writer_row.count_;
 
   bool read_finished = false;
+  const ObRowHeader *row_header = nullptr;
   update_array_idx = 0;
-  row_reader.read_memtable_row(buf, buf_len, read_info_, reader_row2, nop_bitmap, read_finished);
+  row_reader.read_memtable_row(buf, buf_len, read_info_, reader_row2, nop_bitmap, read_finished, row_header);
   ASSERT_EQ(OB_SUCCESS, ret);
   for (int j = 0; j < reader_row2.count_; ++j) {
     bool check_obj_flag = false;
@@ -1240,7 +1241,7 @@ TEST_F(TestNewRowReader, test_only_rowkey)
   }
 }
 
-TEST_F(TestNewRowReader, test_write_rowkey)
+TEST_F(TestNewRowReader, test_write_lock_rowkey)
 {
   // write a rowkey and read
   int ret = OB_SUCCESS;
@@ -1259,7 +1260,7 @@ TEST_F(TestNewRowReader, test_write_rowkey)
   const int64_t rowkey_cnt = 30;
   ObStoreRowkey rowkey;
   rowkey.assign(writer_row.row_val_.cells_, rowkey_cnt);
-  ret = row_writer.write_rowkey(rowkey, buf, pos);
+  ret = row_writer.write_lock_rowkey(rowkey, buf, pos);
   STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
 
   ObDatumRow reader_row;
@@ -1283,7 +1284,7 @@ TEST_F(TestNewRowReader, test_write_rowkey)
   ret = row_reader.read_row_header(buf, pos, row_header);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(row_header->get_column_count(), rowkey_cnt);
-  ASSERT_EQ(row_header->get_row_flag().get_serialize_flag(), 0);
+  ASSERT_EQ(row_header->get_row_flag().get_serialize_flag(), 1);
   ASSERT_EQ(row_header->get_mvcc_row_flag(), 0);
   ASSERT_EQ(row_header->get_trans_id(), 0);
 }
@@ -1342,7 +1343,8 @@ TEST_F(TestNewRowReader, test_write_update_row)
     }
 
     ObRowReader row_reader;
-    ret = row_reader.read_memtable_row(buf, len, read_info_, reader_row, nop_bitmap, read_finished);
+    const ObRowHeader *row_header = nullptr;
+    ret = row_reader.read_memtable_row(buf, len, read_info_, reader_row, nop_bitmap, read_finished, row_header);
     STORAGE_LOG(INFO, "chaser check read_row row", K(reader_row));
     ASSERT_EQ(ret, OB_SUCCESS);
 

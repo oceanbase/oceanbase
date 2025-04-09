@@ -62,7 +62,7 @@ public:
 protected:
   virtual int prepare() override;
   virtual int calc_scan_range() override;
-  virtual int construct_iters() override;
+  virtual int construct_iters(const bool is_refresh = false) override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
 private:
   const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;

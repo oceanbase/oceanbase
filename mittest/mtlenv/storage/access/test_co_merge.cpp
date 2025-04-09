@@ -16,7 +16,7 @@
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/column_store/ob_column_oriented_merger.h"
-#include "mtlenv/storage/test_merge_basic.h"
+#include "test_merge_basic.h"
 #include "unittest/storage/test_schema_prepare.h"
 
 namespace oceanbase

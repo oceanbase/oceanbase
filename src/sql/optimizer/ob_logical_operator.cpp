@@ -6746,13 +6746,16 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
         LOG_WARN("unexpect null param", K(ret));
       } else if (0 == stmt->get_order_item_size()) {
         //do nothing
+        if (NULL == parent) {
+          used = false;
+        }
       } else {
         used = true;
         break;
       }
-      if (NULL == parent) {
-        break;
-      }
+    }
+    if (NULL == parent) {
+      break;
     }
     if (OB_SUCC(ret) && NULL != parent) {
       if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {

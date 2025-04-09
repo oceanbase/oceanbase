@@ -119,9 +119,7 @@ private:
   struct ObCSIndexTreeLevelHandle : public ObIndexTreeLevelHandle {
   public:
     int prefetch(const int64_t level, ObCGPrefetcher &prefetcher);
-    virtual int forward(
-        ObIndexTreeMultiPassPrefetcher &prefetcher,
-        const bool has_lob_out) override final;
+    virtual int forward(ObIndexTreeMultiPassPrefetcher &prefetcher) override final;
     int locate_row_index(ObCGPrefetcher &prefetcher, const bool is_root, const ObCSRowId row_idx, bool &found);
 
   };

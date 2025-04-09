@@ -133,12 +133,6 @@ void ObCGScanner::reuse()
   sstable_row_cnt_ = OB_INVALID_CS_ROW_ID;
 }
 
-bool ObCGScanner::start_of_scan() const
-{
-  return (is_reverse_scan_ && current_ == query_index_range_.end_row_id_) ||
-      (!is_reverse_scan_ && current_ == query_index_range_.start_row_id_);
-}
-
 bool ObCGScanner::end_of_scan() const
 {
   return current_ < query_index_range_.start_row_id_
@@ -183,7 +177,7 @@ int ObCGScanner::locate(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(range));
   } else if (range.start_row_id_ >= sstable_row_cnt_) {
-    ret = OB_ITER_END;
+    current_ = OB_INVALID_CS_ROW_ID;
   } else {
     is_new_range_ = true;
     query_index_range_.start_row_id_ = range.start_row_id_;
@@ -700,11 +694,18 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
                                                   batch_size - count,
                                                   is_reverse_scan_))) {
       LOG_WARN("Fail to get row ids", K(ret), K_(current), K_(query_index_range));
-    } else if (0 == row_cap) {
-    } else if (OB_FAIL(inner_fetch_rows(row_cap, datum_offset + count))) {
+    } else if (0 != row_cap && OB_FAIL(inner_fetch_rows(row_cap, datum_offset + count))) {
       LOG_WARN("Fail to get next rows", K(ret));
     } else {
       count += row_cap;
+      if (OB_INVALID_CS_ROW_ID == current_) {
+        const ObCSRange &cs_range = prefetcher_.current_micro_info().get_row_range();
+        if (is_reverse_scan_) {
+          current_ = MAX(cs_range.start_row_id_, query_index_range_.start_row_id_) - 1;
+        } else {
+          current_ = MIN(cs_range.end_row_id_, query_index_range_.end_row_id_) + 1;
+        }
+      }
     }
   }
   return ret;

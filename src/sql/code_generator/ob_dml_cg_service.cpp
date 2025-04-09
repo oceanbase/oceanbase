@@ -1704,6 +1704,9 @@ int ObDmlCgService::check_upd_need_all_columns(ObLogDelUpd &op,
   } else if (table_schema->is_mlog_table()) {
     need_all_columns = true;
     LOG_TRACE("update materialized view log, need all columns", K(table_schema->is_mlog_table()));
+  } else if (table_schema->is_delete_insert_merge_engine()) {
+    need_all_columns = true;
+    LOG_TRACE("update delete insert table log, need all columns", K(table_schema->get_merge_engine_type()));
   } else if (!is_primary_index) {
     // index_table if update PK, also need record all_columns
     if (OB_FAIL(check_has_upd_rowkey(op, table_schema, upd_cids, is_update_pk))) {
@@ -1861,6 +1864,9 @@ int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
   } else if (table_schema->is_mlog_table()) {
     need_all_columns = true;
     LOG_TRACE("delete from materialized view log, need all columns", K(table_schema->is_mlog_table()));
+  } else if (table_schema->is_delete_insert_merge_engine()) {
+    need_all_columns = true;
+    LOG_TRACE("delete from delete insert table log, need all columns", K(table_schema->get_merge_engine_type()));
   } else if (table_schema->is_multivalue_index_aux()) {
     // as multivalue need calc is need save rowkey, the save-rowkey policy is dynamic made, need project all columns
     need_all_columns = true;

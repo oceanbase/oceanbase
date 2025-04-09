@@ -49,6 +49,7 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     is_need_row_datum_utils_(is_need_row_datum_utils),
     is_inited_(false)
 {
+  is_delete_insert_table_ = false;
 }
 
 ObDMLRunningCtx::~ObDMLRunningCtx()
@@ -141,11 +142,14 @@ int ObDMLRunningCtx::prepare_relative_table(
 {
   int ret = OB_SUCCESS;
   bool need_get_src_split_tables = false;
+  is_delete_insert_table_ = false;
   if (OB_FAIL(relative_table_.init(&schema, tablet_handle.get_obj()->get_tablet_meta().tablet_id_,
       schema.is_storage_index_table() && !schema.can_read_index()))) {
     LOG_WARN("fail to init relative_table_", K(ret), K(tablet_handle), K(schema.get_index_status()));
   } else if (OB_FAIL(relative_table_.tablet_iter_.set_tablet_handle(tablet_handle))) {
     LOG_WARN("fail to set tablet handle to iter", K(ret), K(relative_table_.tablet_iter_));
+  } else if (OB_FAIL(tablet_handle.get_obj()->check_is_delete_insert_table(is_delete_insert_table_))) {
+    LOG_WARN("fail to check is delete insert table", K(ret));
   } else if (OB_FAIL(relative_table_.tablet_iter_.refresh_read_tables_from_tablet(
       read_snapshot.get_val_for_tx(),
       relative_table_.allow_not_ready(),

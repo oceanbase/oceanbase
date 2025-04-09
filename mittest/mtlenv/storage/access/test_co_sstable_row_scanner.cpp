@@ -14,8 +14,7 @@
 #define protected public
 
 #include "storage/access/ob_sstable_row_multi_scanner.h"
-#include "ob_index_block_data_prepare.h"
-
+#include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase
 {
@@ -60,11 +59,18 @@ public:
   void prepare_test_case(int level_cnt);
   void prepare_one_block_test_case();
   void clear_test_case();
+  void get_blockscan_start(
+      ObSSTableRowScanner<ObCOPrefetcher> *scanner,
+      ObCSRowId &start,
+      int32_t &range_idx,
+      BlockScanState &block_scan_state,
+      const bool is_reverse);
   void forward_blockscan_to_end(
       ObSSTableRowScanner<ObCOPrefetcher> *scanner,
       ObCSRowId &end,
       BlockScanState &block_scan_state,
-      const bool is_reverse);
+      const bool is_reverse,
+      const ObCSRowId start = 0);
   void consume_rows_by_row_store(
       ObSSTableRowScanner<ObCOPrefetcher> *scanner,
       int64_t start,
@@ -158,7 +164,7 @@ void TestCOSSTableRowScanner::prepare_schema()
   table_schema_.set_row_store_type(row_store_type_);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
   table_schema_.set_micro_index_clustered(false);
-
+  table_schema_.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
   index_schema_.reset();
 
   // Init column
@@ -298,6 +304,19 @@ void TestCOSSTableRowScanner::clear_test_case()
   TestIndexBlockDataPrepare::TearDown();
 }
 
+void TestCOSSTableRowScanner::get_blockscan_start(
+    ObSSTableRowScanner<ObCOPrefetcher> *scanner,
+    ObCSRowId &start,
+    int32_t &range_idx,
+    BlockScanState &block_scan_state,
+    const bool is_reverse)
+{
+  OK(scanner->get_blockscan_start(start, range_idx, block_scan_state));
+  if (OB_INVALID_CS_ROW_ID != start) {
+    start = get_index(start, is_reverse);
+  }
+}
+
 // ROW_STORE_SCAN --> PENDING_BLOCK_SCAN / IN_END_OF_RANGE / PENDING_SWITCH
 // PENDING_BLOCK_SCAN --> IN_END_OF_RANGE --> ROW_STORE_SCAN / PENDING_SWITCH
 // IN_END_OF_RANGE --> ROW_STORE_SCAN / PENDING_SWITCH
@@ -306,12 +325,13 @@ void TestCOSSTableRowScanner::forward_blockscan_to_end(
     ObSSTableRowScanner<ObCOPrefetcher> *scanner,
     ObCSRowId &end,
     BlockScanState &block_scan_state,
-    const bool is_reverse)
+    const bool is_reverse,
+    const ObCSRowId start)
 {
   ObCSRowId prev_end = is_reverse ? INT64_MAX : 0;
   int cnt = 0;
   while (true) {
-    OK(scanner->forward_blockscan(end, block_scan_state, 0));
+    OK(scanner->forward_blockscan(end, block_scan_state, start));
     if (!is_reverse) {
       ASSERT_TRUE(prev_end <= end);
     } else {
@@ -322,7 +342,6 @@ void TestCOSSTableRowScanner::forward_blockscan_to_end(
       ASSERT_TRUE(false);
       break;
     }
-
     ASSERT_TRUE(BlockScanState::BLOCKSCAN_RANGE == block_scan_state
                  || BlockScanState::SWITCH_RANGE == block_scan_state
                  || BlockScanState::BLOCKSCAN_FINISH == block_scan_state);
@@ -420,8 +439,8 @@ void TestCOSSTableRowScanner::test_row_scan_and_column_scan(const bool is_revers
 
   pushdown_status_changed(&scanner_);
 
-  ObCSRowId start_row_id;
-  int32_t range_idx;
+  ObCSRowId start_row_id = OB_INVALID_CS_ROW_ID;
+  int32_t range_idx = -1;
   BlockScanState block_scan_state = BlockScanState::BLOCKSCAN_RANGE;
   OK(scanner_.get_blockscan_start(start_row_id, range_idx, block_scan_state));
   start_row_id = get_index(start_row_id, is_reverse);
@@ -429,7 +448,7 @@ void TestCOSSTableRowScanner::test_row_scan_and_column_scan(const bool is_revers
   ASSERT_EQ(0, range_idx);
   ASSERT_EQ(BLOCKSCAN_RANGE, block_scan_state);
 
-  ObCSRowId end_row_id;
+  ObCSRowId end_row_id = OB_INVALID_CS_ROW_ID;
   forward_blockscan_to_end(&scanner_, end_row_id, block_scan_state, is_reverse);
   end_row_id = get_index(end_row_id, is_reverse);
   ASSERT_EQ(border_id1 - 1, end_row_id);
@@ -729,7 +748,6 @@ TEST_F(TestCOSSTableRowScanner, test_reverse_row_scan_and_column_scan_with_multi
 {
   test_reverse_row_scan_and_column_scan_with_multi_range2();
 }
-
 }
 }
 

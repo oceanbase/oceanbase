@@ -431,7 +431,7 @@ int ObCGBitmap::bit_and(const ObCGBitmap &right)
   int ret = OB_SUCCESS;
   const sql::ObBoolMask right_constant_type = right.get_filter_constant_type();
   const ObCSRowId right_constant_id = right.get_filter_constant_id();
-  if (start_row_id_ != right.start_row_id_) {
+  if (OB_UNLIKELY(start_row_id_ != right.start_row_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(start_row_id_), K(right.start_row_id_));
   } else if (filter_constant_type_.is_always_true()) {
@@ -502,6 +502,52 @@ int ObCGBitmap::bit_or(const ObCGBitmap &right)
       if (OB_FAIL(bitmap_.bit_or(right.bitmap_))) {
         LOG_WARN("Fail to bit_or bitmap", K(ret), KPC(this), K(right));
       }
+    }
+  }
+  return ret;
+}
+
+int ObCGBitmap::get_next_valid_idx_directly(
+    const int64_t row_id,
+    int64_t &offset) const
+{
+  int ret = OB_SUCCESS;
+  OB_ASSERT(row_id >= start_row_id_);
+  const int64_t start_offset = row_id - start_row_id_;
+  if (OB_FAIL(bitmap_.next_valid_idx(start_offset, bitmap_.size() - start_offset, is_reverse_scan_, offset))) {
+    STORAGE_LOG(WARN, "fail to get next valid idx", K(ret), K_(start_row_id), K_(bitmap));
+  } else if (OB_UNLIKELY(-1 == offset)) {
+    ret = OB_ITER_END;
+  } else {
+    offset = start_row_id_ + offset;
+  }
+  return ret;
+}
+
+int ObCGBitmap::bit_and(const ObBitmap &right)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(bitmap_.size() != right.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected bitmap size", K(ret), K(bitmap_.size()), K(right.size()));
+  } else if (filter_constant_type_.is_always_true()) {
+    if (right.is_all_true()) {
+    } else if (right.is_all_false()) {
+      reuse(start_row_id_, false);
+    } else {
+      filter_constant_type_.set_uncertain();
+      if (OB_FAIL(bitmap_.copy_from(right, 0, right.size()))) {
+        STORAGE_LOG(WARN, "Fail to copy bitmap", K(ret), K(right.size()));
+      }
+    }
+  } else if (filter_constant_type_.is_always_false()) {
+  } else {
+    // uncertain
+    if (right.is_all_true()) {
+    } else if (right.is_all_false()) {
+      reuse(start_row_id_, false);
+    } else if (OB_FAIL(bitmap_.bit_and(right))) {
+      STORAGE_LOG(WARN, "fail to do bit and", K_(bitmap), K(right));
     }
   }
   return ret;

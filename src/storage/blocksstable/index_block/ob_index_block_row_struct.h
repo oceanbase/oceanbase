@@ -669,9 +669,9 @@ public:
     OB_ASSERT(nullptr != range_);
     return *range_;
   }
-  OB_INLINE bool can_blockscan(const bool has_lob_out) const
+  OB_INLINE bool can_blockscan() const
   {
-    return can_blockscan_ && !has_string_out_row() && (!has_lob_out || !has_lob_out_row());
+    return can_blockscan_;
   }
   OB_INLINE void set_blockscan()
   {

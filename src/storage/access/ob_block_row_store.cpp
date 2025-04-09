@@ -29,8 +29,6 @@ ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
       pd_filter_info_(),
       context_(context),
       iter_param_(nullptr),
-      can_blockscan_(false),
-      filter_applied_(false),
       disabled_(false),
       is_aggregated_in_prefetch_(false),
       where_optimizer_(nullptr)
@@ -43,8 +41,6 @@ ObBlockRowStore::~ObBlockRowStore()
 void ObBlockRowStore::reset()
 {
   is_inited_ = false;
-  can_blockscan_ = false;
-  filter_applied_ = false;
   pd_filter_info_.reset();
   disabled_ = false;
   is_aggregated_in_prefetch_ = false;
@@ -58,8 +54,6 @@ void ObBlockRowStore::reset()
 
 void ObBlockRowStore::reuse()
 {
-  can_blockscan_ = false;
-  filter_applied_ = false;
   disabled_ = false;
   is_aggregated_in_prefetch_ = false;
 }
@@ -95,66 +89,6 @@ int ObBlockRowStore::init(const ObTableAccessParam &param, common::hash::ObHashS
     iter_param_ = &param.iter_param_;
   } else {
     reset();
-  }
-  return ret;
-}
-
-int ObBlockRowStore::apply_blockscan(
-    blocksstable::ObIMicroBlockRowScanner &micro_scanner,
-    const bool can_pushdown,
-    ObTableScanStoreStat &table_store_stat)
-{
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
-  int ret = OB_SUCCESS;
-  int64_t access_count = micro_scanner.get_access_cnt();
-  if (iter_param_->has_lob_column_out()) {
-    context_.reuse_lob_locator_helper();
-  }
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObBlockRowStore is not inited", K(ret), K(*this));
-  } else if (!pd_filter_info_.is_pd_filter_ || !can_pushdown) {
-    filter_applied_ = false;
-  } else if (nullptr == pd_filter_info_.filter_) {
-    // nothing to do
-    filter_applied_ = true;
-  } else if (nullptr != where_optimizer_ && OB_FAIL(where_optimizer_->reorder_row_filter())){
-    LOG_WARN("Fail to reorder filter", K(ret), KPC(pd_filter_info_.filter_));
-  } else if (OB_FAIL(micro_scanner.filter_micro_block_in_blockscan(pd_filter_info_))) {
-    LOG_WARN("Failed to apply pushdown filter in block reader", K(ret), K(*this));
-  } else {
-    filter_applied_ = true;
-  }
-
-  if (OB_SUCC(ret)) {
-    // Check pushdown filter successed
-    can_blockscan_ = true;
-    ++table_store_stat.pushdown_micro_access_cnt_;
-    if (!filter_applied_ || nullptr == pd_filter_info_.filter_) {
-    } else {
-      int64_t select_cnt = pd_filter_info_.filter_->get_result()->popcnt();
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
-    }
-    if (iter_param_->has_lob_column_out()) {
-      context_.reuse_lob_locator_helper();
-    }
-    EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, access_count);
-    LOG_DEBUG("[PUSHDOWN] apply blockscan succ", K(access_count), KPC(pd_filter_info_.filter_), K(*this));
-  }
-  return ret;
-}
-
-int ObBlockRowStore::get_filter_result(ObFilterResult &res)
-{
-  int ret = OB_SUCCESS;
-  res.bitmap_ = nullptr;
-  res.filter_start_ = pd_filter_info_.start_;
-  if (nullptr == pd_filter_info_.filter_ || !filter_applied_) {
-  } else if (OB_ISNULL(res.bitmap_ = pd_filter_info_.filter_->get_result())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null filter bitmap", K(ret));
-  } else if (res.bitmap_->is_all_true()) {
-    res.bitmap_ = nullptr;
   }
   return ret;
 }

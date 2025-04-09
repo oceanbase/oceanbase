@@ -435,12 +435,12 @@ int ObMvccRowIterator::get_next_row(
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
-    TRANS_LOG(WARN, "not init", KP(this));
     ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), KP(this));
   }
   while (OB_SUCC(ret)) {
-    const ObMemtableKey *tmp_key = NULL;
-    ObMvccRow *value = NULL;
+    const ObMemtableKey *tmp_key = nullptr;
+    ObMvccRow *value = nullptr;
     if (OB_FAIL(query_engine_iter_->next())) {
       if (OB_ITER_END != ret) {
         TRANS_LOG(WARN, "query engine iter next fail", K(ret), "ctx", *ctx_);
@@ -459,20 +459,15 @@ int ObMvccRowIterator::get_next_row(
       }
     }
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(value_iter_.init(*ctx_,
-                                   tmp_key,
-                                   value,
-                                   memtable_ls_id_,
-                                   query_flag_))) {
-        TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
-      } else if (!value_iter_.is_exist()) {
-        // mvcc row is empty(no tnode), so we continue
-      } else {
-        key = tmp_key;
-        value_iter = &value_iter_;
-        break;
-      }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_iter_.init(*ctx_, tmp_key, value, memtable_ls_id_, query_flag_))) {
+      TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
+    } else if (!value_iter_.is_exist()) {
+      // mvcc row is empty(no tnode), so we continue
+    } else {
+      key = tmp_key;
+      value_iter = &value_iter_;
+      break;
     }
   }
   return ret;
