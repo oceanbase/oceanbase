@@ -659,7 +659,8 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   uint64_t node_sequence_id;
   bool has_reg_dm = false;
   if (OB_FAIL(ret)) {
-  } else if (session->get_exec_min_cluster_version() <= CLUSTER_VERSION_4_3_5_1) {
+  } else if (session->get_exec_min_cluster_version() < CLUSTER_VERSION_4_3_5_2
+             || !GCONF._enable_px_fast_reclaim) {
   } else if (OB_FAIL(RemoteExecutionDMUtils::register_check_item(
                  detectable_id, control_addr, session, node_sequence_id))) {
     LOG_WARN("failed to register check item into dm");
@@ -788,8 +789,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   //执行相关的错误信息记录在exec_errcode_中，通过scanner向控制端返回，所以这里给RPC框架返回成功
 
   if (has_reg_dm) {
-    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id,
-                                                                          node_sequence_id);
+    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id, node_sequence_id);
   }
 
   return ret;
@@ -992,7 +992,8 @@ int ObRpcRemoteExecuteP::process()
   uint64_t node_sequence_id;
   bool has_reg_dm = false;
   if (OB_FAIL(ret)) {
-  } else if (phy_plan_.get_min_cluster_version() <= CLUSTER_VERSION_4_3_5_1) {
+  } else if (phy_plan_.get_min_cluster_version() < CLUSTER_VERSION_4_3_5_2
+             || !GCONF._enable_px_fast_reclaim) {
   } else if (OB_FAIL(RemoteExecutionDMUtils::register_check_item(
                  detectable_id, control_addr, session, node_sequence_id))) {
     LOG_WARN("failed to register check item into dm");
@@ -1104,8 +1105,7 @@ int ObRpcRemoteExecuteP::process()
   NG_TRACE(exec_remote_plan_end);
   //执行相关的错误信息记录在exec_errcode_中，通过scanner向控制端返回，所以这里给RPC框架返回成功
   if (has_reg_dm) {
-    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id,
-                                                                          node_sequence_id);
+    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id, node_sequence_id);
   }
   return OB_SUCCESS;
 }

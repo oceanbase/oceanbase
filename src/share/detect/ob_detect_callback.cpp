@@ -327,7 +327,7 @@ int ObRemoteSqlDetectCB::do_callback()
   int ret = OB_SUCCESS;
   sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
   if (OB_NOT_NULL(session_mgr)) {
-    ret = session_mgr->kill_session(*session_);
+    ret = session_mgr->kill_query(*session_);
   }
   LIB_LOG(WARN, "[DM] Remote Sql kill session", K(ret), K(session_->get_server_sid()), K_(trace_id));
   return ret;
