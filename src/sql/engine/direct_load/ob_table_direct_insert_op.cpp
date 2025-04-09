@@ -357,7 +357,7 @@ int ObTableDirectInsertOp::init_px_writer()
 {
   int ret = OB_SUCCESS;
   const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  const ObIArray<uint64_t> &column_ids = MY_SPEC.ins_ctdef_.das_ctdef_.column_ids_;
+  const ObIArray<uint64_t> &column_ids = MY_SPEC.ins_ctdef_.column_ids_;
   px_task_id_ = ctx_.get_px_task_id() + 1;
   ddl_task_id_ = plan->get_ddl_task_id();
   is_partitioned_table_ = !(NO_PARTITION_ID_FLAG == MY_SPEC.row_desc_.get_part_id_index());

@@ -2603,3 +2603,6 @@ DEF_INT(_restore_io_max_retry_count, OB_CLUSTER_PARAMETER, "3", "[0, 64]",
         "max retry times for restore when encounting io error"
         "Range: [0,64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_drop_column_instant, OB_TENANT_PARAMETER, "True", "Whether to enable the capability for fast column deletion."
+         "Value:  True: drop column instant;  False: drop column inplace",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

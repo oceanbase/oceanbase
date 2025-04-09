@@ -9811,6 +9811,10 @@ struct GetIndexNameKey<ObIndexSchemaHashWrapper, ObIndexNameInfo*>
 
 typedef common::hash::ObPointerHashMap<ObIndexSchemaHashWrapper, ObIndexNameInfo*, GetIndexNameKey, 1024> ObIndexNameMap;
 
+bool check_can_drop_column_instant(const uint64_t tenant_id,
+                                   const bool is_oracle_mode,
+                                   const uint64_t tenant_data_version);
+
 }//namespace schema
 }//namespace share
 }//namespace oceanbase

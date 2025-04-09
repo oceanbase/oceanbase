@@ -27,6 +27,10 @@ class ObDatum;
 } // namespace common
 namespace share
 {
+namespace schema
+{
+class ObColDesc;
+} // namespace schema
 class ObTabletCacheInterval;
 } // namespace share
 namespace blocksstable
@@ -43,6 +47,9 @@ class ObDirectLoadVectorUtils
 {
 public:
   static int new_vector(VectorFormat format, VecValueTypeClass value_tc, ObIAllocator &allocator,
+                        common::ObIVector *&vector);
+  // 定长类型:VEC_FIXED, 变长类型:VEC_DISCRETE
+  static int new_vector(const share::schema::ObColDesc &col_desc, ObIAllocator &allocator,
                         common::ObIVector *&vector);
   static int prepare_vector(ObIVector *vector, const int64_t max_batch_size,
                             ObIAllocator &allocator);
@@ -62,6 +69,9 @@ public:
   // * const_datum -> VEC_DISCRETE
   // * const_datum -> VEC_UNIFORM
   static int expand_const_datum(const common::ObDatum &const_datum, ObIVector *dest_vec, const int64_t batch_size);
+
+  // 按需实现, 目前只支持VEC_FIXED, VEC_CONTINUOUS, VEC_DISCRETE
+  static int set_vector_all_null(ObIVector *vector, const int64_t batch_size);
 
   static int get_payload(ObIVector *vector, const int64_t idx, bool &is_null, const char *&payload,
                          ObLength &len);

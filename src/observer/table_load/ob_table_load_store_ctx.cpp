@@ -35,6 +35,7 @@
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_table_store.h"
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 
 namespace oceanbase
 {
@@ -591,6 +592,76 @@ int ObTableLoadStoreCtx::init_write_ctx()
           LOG_WARN("fail to init pre sorter", KR(ret));
         } else if (OB_FAIL(write_ctx_.pre_sorter_->start())) {
           LOG_WARN("fail to start pre_sorter", KR(ret));
+        }
+      }
+    }
+    // px mode
+    if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
+      ObSchemaGetterGuard schema_guard;
+      const ObTableSchema *table_schema = nullptr;
+      ObArray<ObColDesc> col_descs;
+      if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
+                                                      ctx_->param_.table_id_,
+                                                      schema_guard,
+                                                      table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_));
+      }
+      // mysql模式下SQL执行计划会包含虚拟生成列
+      else if (OB_FAIL(table_schema->get_column_ids(col_descs, lib::is_oracle_mode()/*no_virtual*/))) {
+        LOG_WARN("fail to get column ids", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::prepare_col_descs(table_schema, col_descs))) {
+        LOG_WARN("fail to prepare col descs", KR(ret), KPC(table_schema), K(col_descs));
+      } else {
+        const bool is_table_without_pk = data_store_table_ctx_->schema_->is_table_without_pk_;
+        const ObColumnSchemaV2 *col_schema = nullptr;
+        write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_null_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_null_vector_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
+        int64_t project_idx = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+          const ObColDesc &col_desc = col_descs.at(i);
+          if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
+          }
+          // SQL执行计划不包含xmltype列, 存储层要写这一列, 需要补null
+          else if (col_schema->is_xmltype()) {
+            ObIVector *vector = nullptr;
+            if (OB_UNLIKELY(!col_schema->is_unused())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected xmltype column is not unused", KR(ret));
+            } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(col_desc, allocator_, vector))) {
+              LOG_WARN("fail to new vector", KR(ret), K(col_desc));
+            } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(
+                         vector, ctx_->param_.batch_size_, allocator_))) {
+              LOG_WARN("fail to prepare vector", KR(ret), KPC(vector));
+            } else if (OB_FAIL(ObDirectLoadVectorUtils::set_vector_all_null(
+                         vector, ctx_->param_.batch_size_))) {
+              LOG_WARN("fail to set vector all null", KR(ret), KPC(vector));
+            } else if (OB_FAIL(write_ctx_.px_null_vectors_.push_back(vector))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else if (OB_FAIL(write_ctx_.px_null_vector_project_idxs_.push_back(project_idx++))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else {
+              write_ctx_.px_need_project_ = true;
+            }
+          }
+          // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
+          else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
+          // 旁路不接收隐藏主键列, 存储层不写虚拟生成列, 都需要过滤
+          else if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) ||
+                   col_schema->is_virtual_generated_column()) {
+            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else {
+              write_ctx_.px_need_project_ = true;
+            }
+          } else if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx++))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
         }
       }
     }

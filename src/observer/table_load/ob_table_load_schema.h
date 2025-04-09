@@ -72,6 +72,8 @@ public:
   static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
                                         const ObIArray<ObObjectID> &part_ids,
                                         ObIArray<ObTabletID> &tablet_ids);
+  static int prepare_col_descs(const ObTableSchema *table_schema,
+                               common::ObIArray<share::schema::ObColDesc> &col_descs);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
@@ -86,12 +88,7 @@ private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
   int init_cmp_funcs(const common::ObIArray<share::schema::ObColDesc> &column_descs,
                      const bool is_oracle_mode);
-  int init_lob_storage(common::ObIArray<share::schema::ObColDesc> &column_descs);
-  int init_column_store(const share::schema::ObTableSchema *table_schema);
-  int update_decimal_int_precision(const share::schema::ObTableSchema *table_schema,
-                                   common::ObIArray<share::schema::ObColDesc> &cols_desc);
-
-  int prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs);
+  int init_lob_storage(const common::ObIArray<share::schema::ObColDesc> &column_descs);
   int gen_lob_meta_datum_utils();
 public:
   common::ObArenaAllocator allocator_;
@@ -120,7 +117,6 @@ public:
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns
   common::ObArray<share::schema::ObColDesc> column_descs_;
-  common::ObArray<share::schema::ObColDesc> multi_version_column_descs_;
   blocksstable::ObStorageDatumUtils datum_utils_;
   common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;

@@ -637,16 +637,6 @@ int ObTableLoadService::check_support_direct_load_for_columns(
         LOG_WARN("invalid column schema", KR(ret), KP(column_schema));
       } else if (column_schema->is_unused()) {
         // 快速删除列, 仍然需要写宏块, 直接填null
-        // TODO : udt类型SQL写入的列数与存储层列数不匹配, 暂时先不做支持
-        if (column_schema->is_xmltype()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("direct-load does not support table has drop xmltype column instant", KR(ret), KPC(column_schema));
-          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop xmltype column instant", tmp_prefix);
-        } else if (column_schema->get_udt_set_id() > 0) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("direct-load does not support table has drop udt column instant", KR(ret), KPC(column_schema));
-          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop udt column instant", tmp_prefix);
-        }
       } else if (column_schema->is_generated_column()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support table has generated column", KR(ret), KPC(column_schema));

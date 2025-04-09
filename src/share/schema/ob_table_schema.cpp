@@ -6089,6 +6089,25 @@ int ObTableSchema::get_unused_column_ids(common::ObIArray<uint64_t> &column_ids)
   return ret;
 }
 
+int ObTableSchema::get_user_visible_column_ids(common::ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  column_ids.reset();
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+      OB_SUCC(ret) && iter != column_end(); iter++) {
+    if (OB_ISNULL(column_schema = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Column schema is NULL", KR(ret));
+    } else if (!column_schema->is_user_visible_column()) {
+      // ignore
+    } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+      LOG_WARN("push back failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::has_unused_column(bool &has_unused_column) const
 {
   int ret = OB_SUCCESS;

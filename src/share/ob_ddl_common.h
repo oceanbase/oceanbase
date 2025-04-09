@@ -500,6 +500,13 @@ static inline bool is_supported_pre_split_ddl_type(const ObDDLType type)
       || DDL_ALTER_PARTITION_BY == type;
 }
 
+static inline bool is_column_redifinition_like_ddl_type(const ObDDLType type)
+{
+  return ObDDLType::DDL_DROP_COLUMN == type
+          || ObDDLType::DDL_ADD_COLUMN_OFFLINE == type
+          || ObDDLType::DDL_COLUMN_REDEFINITION == type;
+}
+
 static inline bool is_replica_build_ddl_task_status(const ObDDLTaskStatus &task_status)
 {
   return ObDDLTaskStatus::REPENDING == task_status || ObDDLTaskStatus::REDEFINITION == task_status;

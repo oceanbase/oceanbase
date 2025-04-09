@@ -1354,6 +1354,7 @@ public:
     CHECK_MODE_OFFLINE = 1,
   };
 
+  static const int64_t MIN_COLUMN_COUNT = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_PK_TABLE = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_HEAP_TABLE = 2;
   static const int64_t DEFAULT_COLUMN_GROUP_ARRAY_CAPACITY = 8;
@@ -2075,6 +2076,7 @@ public:
   // ObColumnIterByPrevNextID's column id is not in order, it means table has add column instant and return true
   int has_add_column_instant(bool &add_column_instant) const;
   int get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int get_user_visible_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int has_unused_column(bool &has_unused_column) const;
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }

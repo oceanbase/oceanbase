@@ -19422,6 +19422,10 @@ ADD COLUMN column_definition
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DROP, 1, $3);
   $$->value_ = $4[0];
 }
+| FORCE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE_FORCE);
+}
 | alter_with_opt_hint COLUMN column_definition_ref alter_column_behavior
 {
   (void)($1);
