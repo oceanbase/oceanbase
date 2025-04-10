@@ -75,6 +75,7 @@ int ObLSRecoveryGuard::init(const uint64_t tenant_id, const share::ObLSID &ls_id
         } else {
           ls_recovery_stat_ = ls_recovery_stat;
           tenant_id_ = tenant_id;
+          LOG_TRACE("inc ref success", K(tenant_id), K(ls_id), K(lbt()));
         }
       }
     }
@@ -204,19 +205,21 @@ int ObLSRecoveryStatHandler::inc_ref(const int64_t timeout)
     LOG_WARN("check inner stat error", KR(ret));
   } else {
     int64_t curr_timeout = timeout;
-    const int64_t TIME_WAIT = 100 * 1000;
+    const int64_t TIME_WAIT = 50 * 1000;
     int tmp_ret = OB_SUCCESS;
     ret = OB_EAGAIN;
     do {
       if (0 == ATOMIC_CAS(&ref_cnt_, 0, 1)) {
         ret = OB_SUCCESS;
-      } else if (curr_timeout > 0) {
-        LOG_INFO("wait for inc ref", K(curr_timeout), K(timeout));
-        if (OB_TMP_FAIL(ref_cond_.timedwait(TIME_WAIT))) {
-          LOG_WARN("failed to timedwait", KR(ret), KR(tmp_ret));
+      } else {
+        const int64_t wait_time = std::min(TIME_WAIT, curr_timeout);
+        LOG_INFO("wait for inc ref", K(curr_timeout), K(timeout), K(wait_time));
+        if (OB_TMP_FAIL(ref_cond_.timedwait(wait_time))) {
+          LOG_WARN("failed to timedwait", KR(ret), KR(tmp_ret), K(wait_time));
         }
-        curr_timeout -= TIME_WAIT;
+        curr_timeout -= wait_time;
       }
+      //不能等于0，会出现死循环
     } while (curr_timeout > 0 && OB_EAGAIN == ret);
   }
   return ret;
