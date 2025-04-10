@@ -1028,8 +1028,11 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
               LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
             } else if (!tenant_schema->is_normal()) {
               //tenant not normal, maybe tenant not ready, cannot add tenant config
-            } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-                || OB_FAIL(dml.add_pk_column("zone", item->zone_.ptr()))
+            } else if (0 == ObString(table_name).case_compare(OB_TENANT_PARAMETER_TNAME) &&
+                OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))) {
+              // __all_seed_parameter does not have column 'tenant_id'
+              LOG_WARN("add column failed", KR(ret));
+            } else if (OB_FAIL(dml.add_pk_column("zone", item->zone_.ptr()))
                 || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
                 || OB_FAIL(dml.add_pk_column(K(svr_ip)))
                 || OB_FAIL(dml.add_pk_column(K(svr_port)))
