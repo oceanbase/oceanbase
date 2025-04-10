@@ -1574,6 +1574,7 @@ int ObRecordType::deserialize(
   OX (record->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
     OZ (serialization::decode(src, src_len, src_pos, count));
+    CK (record_members_.count() == count);
     OX (record->set_count(count));
 
     dst = reinterpret_cast<char*>(record->get_element());
@@ -3569,36 +3570,39 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
                           bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
-  if (get_id() == src.get_id()) {
-    MEMCPY(this, &src, ObRecordType::get_data_offset(src.get_count()));
-  }
-
-  const ObUserDefinedType *user_type = NULL;
-  const ObRecordType *record_type = NULL;
-  if (NULL != ns) {
-    OZ (ns->get_user_type(get_id(), user_type, NULL));
-    OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(get_id()), K(src.get_id()));
-    CK (user_type->is_record_type());
-    OX (record_type = static_cast<const ObRecordType*>(user_type));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
-    ObObj src_element;
-    ObObj *dest_element = NULL;
-    const ObPLDataType *elem_type = NULL;
-    OZ (src.get_element(i, src_element));
-    OZ (get_element(i, dest_element));
-    if (NULL != record_type) {
-      CK (OB_NOT_NULL(elem_type = record_type->get_record_member_type(i)));
+  OV (get_count() == src.get_count(), OB_ERR_WRONG_TYPE_FOR_VAR, K(get_count()), K(src.get_count()));
+  if (OB_SUCC(ret)) {
+    if (get_id() == src.get_id()) {
+      MEMCPY(this, &src, ObRecordType::get_data_offset(src.get_count()));
     }
-    OZ (ObPLComposite::copy_element(src_element,
-                                    *dest_element,
-                                    allocator,
-                                    ns,
-                                    session,
-                                    NULL == elem_type ? NULL : elem_type->get_data_type(),
-                                    true, /*need_new_allocator*/
-                                    ignore_del_element));
+
+    const ObUserDefinedType *user_type = NULL;
+    const ObRecordType *record_type = NULL;
+    if (NULL != ns) {
+      OZ (ns->get_user_type(get_id(), user_type, NULL));
+      OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(get_id()), K(src.get_id()));
+      CK (user_type->is_record_type());
+      OX (record_type = static_cast<const ObRecordType*>(user_type));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      ObObj src_element;
+      ObObj *dest_element = NULL;
+      const ObPLDataType *elem_type = NULL;
+      OZ (src.get_element(i, src_element));
+      OZ (get_element(i, dest_element));
+      if (NULL != record_type) {
+        CK (OB_NOT_NULL(elem_type = record_type->get_record_member_type(i)));
+      }
+      OZ (ObPLComposite::copy_element(src_element,
+                                      *dest_element,
+                                      allocator,
+                                      ns,
+                                      session,
+                                      NULL == elem_type ? NULL : elem_type->get_data_type(),
+                                      true, /*need_new_allocator*/
+                                      ignore_del_element));
+    }
   }
   return ret;
 }
