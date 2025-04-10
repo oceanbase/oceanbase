@@ -6776,6 +6776,11 @@ int ObTransformPreProcess::try_transform_common_rownum_as_limit_or_false(ObDMLSt
         }
       }
     }
+    if (OB_FAIL(ret) || !is_valid || limit_expr == NULL) {
+    } else if (0 == stmt->get_from_item_size()) {
+      // limit expr (if not limit 0, and no offset) is useless for dual table
+      limit_expr = NULL;
+    }
   }
   return ret;
 }
