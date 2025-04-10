@@ -104,6 +104,8 @@ int ObDBMSSchedJobExecutor::init_session(
   OZ (schema_guard.get_db_priv_set(tenant_id, user_info->get_user_id(), database_name, db_priv_set));
   OX (session.set_db_priv_set(db_priv_set));
   OX (session.set_shadow(true));
+  OX (session.gen_gtt_session_scope_unique_id());
+  OX (session.gen_gtt_trans_scope_unique_id());
   return ret;
 }
 
