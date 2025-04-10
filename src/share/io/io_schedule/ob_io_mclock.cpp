@@ -220,6 +220,7 @@ ObTenantIOClock::~ObTenantIOClock()
 int ObTenantIOClock::init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage)
 {
   int ret = OB_SUCCESS;
+  DRWLock::WRLockGuard guard(group_clocks_lock_);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -278,6 +279,7 @@ int ObTenantIOClock::init(const ObTenantIOConfig &io_config, const ObIOUsage *io
 void ObTenantIOClock::destroy()
 {
   is_inited_ = false;
+  DRWLock::WRLockGuard guard(group_clocks_lock_);
   for (int64_t i = 0; i < group_clocks_.count(); ++i) {
     group_clocks_.at(i).destroy();
   }
@@ -304,6 +306,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
     is_unlimited = true;
   } else {
     uint64_t cur_queue_index = phy_queue->queue_index_;
+    DRWLock::RDLockGuard guard(group_clocks_lock_);
     if (cur_queue_index < 0 || (cur_queue_index >= group_clocks_.count() && cur_queue_index != INT64_MAX)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("index out of boundary", K(ret), K(cur_queue_index), K(group_clocks_.count()));
@@ -379,6 +382,7 @@ int ObTenantIOClock::sync_tenant_clock(ObTenantIOClock *io_clock)
   } else {
     max_proportion_ts = io_clock->get_max_proportion_ts();
     if (INT64_MAX != max_proportion_ts && max_proportion_ts > 0) {
+      DRWLock::RDLockGuard guard(group_clocks_lock_);
       for (int64_t i = 0; OB_SUCC(ret) && i < group_clocks_.count(); ++i) {
         if (group_clocks_.at(i).is_valid() && !group_clocks_.at(i).is_stop()) {
           group_clocks_.at(i).sync_proportion_clock(max_proportion_ts);
@@ -411,6 +415,7 @@ int ObTenantIOClock::adjust_reservation_clock(ObPhyQueue *phy_queue, const ObIOR
 {
   int ret = OB_SUCCESS;
   uint64_t cur_queue_index = phy_queue->queue_index_;
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
   if(cur_queue_index < 0 || (cur_queue_index >= group_clocks_.count() && cur_queue_index != INT64_MAX)) {
     LOG_WARN("index out of boundary", K(ret), K(cur_queue_index));
   } else {
@@ -432,6 +437,7 @@ int ObTenantIOClock::adjust_reservation_clock(ObPhyQueue *phy_queue, const ObIOR
 int ObTenantIOClock::adjust_proportion_clock(const int64_t delta_us)
 {
   int ret = OB_SUCCESS;
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
   for (int64_t i = 0; OB_SUCC(ret) && i < group_clocks_.count(); ++i) {
     if (group_clocks_.at(i).is_valid() && !group_clocks_.at(i).is_stop()) {
       group_clocks_.at(i).dial_back_proportion_clock(delta_us);
@@ -450,6 +456,7 @@ int ObTenantIOClock::update_io_clocks(const ObTenantIOConfig &io_config)
     LOG_WARN("get io config failed", K(ret), K(io_config));
   } else {
     if (group_clocks_.count() < io_config.group_num_) {
+      DRWLock::WRLockGuard guard(group_clocks_lock_);
       if (OB_FAIL(group_clocks_.reserve(io_config.group_num_))) {
         LOG_WARN("reserve group config failed", K(ret), K(group_clocks_), K(io_config.group_num_));
       }
@@ -503,6 +510,7 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
       LOG_INFO("update other group clock success", K(index), K(unit_config), K(cur_config), K(min_proportion_ts));
     }
   } else if (index < group_clocks_.count()) {
+    DRWLock::RDLockGuard guard(group_clocks_lock_);
     // 2. update exist clocks
     const ObTenantIOConfig::GroupConfig &cur_config = io_config.group_configs_.at(index);
     if (!group_clocks_.at(index).is_inited()) {
@@ -527,6 +535,7 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
       LOG_INFO("update group clock success", K(index), K(unit_config), K(cur_config), K(min_proportion_ts));
     }
   } else {
+    DRWLock::WRLockGuard guard(group_clocks_lock_);
     // 3. add new clocks
     const ObTenantIOConfig::GroupConfig &cur_config = io_config.group_configs_.at(index);
     ObMClock cur_clock;
@@ -549,6 +558,7 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
 int64_t ObTenantIOClock::get_min_proportion_ts()
 {
   int64_t min_proportion_ts = INT64_MAX;
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
   for (int64_t i = 0; i < group_clocks_.count(); ++i) {
     if (group_clocks_.at(i).is_valid()) {
       min_proportion_ts = min(min_proportion_ts, group_clocks_.at(i).get_proportion_ts());
@@ -563,6 +573,7 @@ int64_t ObTenantIOClock::get_min_proportion_ts()
 int64_t ObTenantIOClock::get_max_proportion_ts()
 {
   int64_t max_proportion_ts = 0;
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
   for (int64_t i = 0; i < group_clocks_.count(); ++i) {
     if (group_clocks_.at(i).is_valid()) {
       max_proportion_ts = max(max_proportion_ts, group_clocks_.at(i).get_proportion_ts());
@@ -619,6 +630,7 @@ int64_t ObTenantIOClock::calc_weight(const int64_t weight, const int64_t percent
 
 void ObTenantIOClock::stop_clock(const uint64_t index)
 {
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
   if (index < group_clocks_.count() && index >= 0) {
     group_clocks_.at(index).stop();
   }

@@ -17,6 +17,7 @@
 #include "lib/container/ob_heap.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
+#include "lib/lock/ob_drw_lock.h"
 
 namespace oceanbase
 {
@@ -86,6 +87,7 @@ private:
   static const int64_t MAX_IDLE_TIME_US = 100 * 1000;
 private:
   bool is_inited_;
+  DRWLock group_clocks_lock_;
   ObSEArray<ObMClock, GROUP_START_NUM> group_clocks_;
   ObMClock other_group_clock_;
   ObAtomIOClock unit_clock_;

@@ -646,6 +646,9 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init group map failed", K(ret));
   } else if (OB_FAIL(io_config_.deep_copy(io_config))) {
     LOG_WARN("copy io config failed", K(ret), K(io_config_));
+  } else if(OB_FAIL(io_config_.group_configs_.reserve(16L))) {
+    //rerserve space for 16 groups to avoid concurrency problem
+    LOG_WARN("reserve group configs failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
     io_scheduler_ = io_scheduler;
