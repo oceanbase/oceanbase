@@ -57,7 +57,8 @@ int ObTableLoadBackupUtil::get_column_ids_from_create_table_sql(const ObString &
   if (OB_SUCC(ret)) {
     for (int64_t i = 1; i < lines.count(); i ++) {
       char *pos = strcasestr(lines[i], "primary key");
-      if (pos != nullptr) {
+      char *comment = strcasestr(lines[i], "comment ");
+      if (pos != nullptr && comment == nullptr) {
         pk = lines[i];
         break;
       } else {
