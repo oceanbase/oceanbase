@@ -279,28 +279,31 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       }
       if (OB_FAIL(ret)) {
       } else if (call_proc_info->get_output_count() > 0) {
-        ctx.get_output_row()->count_ = call_proc_info->get_output_count();
-        if (OB_ISNULL(ctx.get_output_row()->cells_ = static_cast<ObObj *>(
-                      ctx.get_allocator().alloc(sizeof(ObObj) * call_proc_info->get_output_count())))) {
+        int64_t client_output_cnt = call_proc_info->get_client_output_count();
+        ctx.get_output_row()->count_ = client_output_cnt;
+        if (client_output_cnt > 0
+            && OB_ISNULL(ctx.get_output_row()->cells_ = static_cast<ObObj *>(
+                             ctx.get_allocator().alloc(sizeof(ObObj) * client_output_cnt)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc obj array", K(call_proc_info->get_output_count()), K(ret));
+          LOG_WARN("fail to alloc obj array", K(client_output_cnt), K(ret));
         } else {
-          int64_t idx = 0;
+          int64_t out_idx = -1;    // index for out params
+          int64_t c_out_idx = -1;  // index for out params which would be returned to client
           for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
             if (call_proc_info->is_out_param(i)) {
+              ObObj out_value;
+              OX (out_idx++);
               if (ob_is_enum_or_set_type(params.at(i).get_type())) {
-                common::ObIArray<common::ObString>* type_info = NULL;
-                OZ (call_proc_info->get_out_type().at(idx).get_type_info(type_info));
+                common::ObIArray<common::ObString> *type_info = nullptr;
+                OZ (call_proc_info->get_out_type().at(out_idx).get_type_info(type_info));
                 CK (OB_NOT_NULL(type_info));
-                OZ (ObSPIService::cast_enum_set_to_string(
-                  ctx,
-                  *type_info,
-                  params.at(i),
-                  ctx.get_output_row()->cells_[idx]));
-                OX (idx++);
+                OZ (ObSPIService::cast_enum_set_to_string(ctx, *type_info, params.at(i), out_value));
               } else {
-                ctx.get_output_row()->cells_[idx] = params.at(i);
-                idx++;
+                OX (out_value = params.at(i));
+              }
+
+              if (call_proc_info->is_client_out_param_by_param_id(i)) {
+                OX (ctx.get_output_row()->cells_[++c_out_idx] = out_value);
               }
 
               if (OB_FAIL(ret)) {
@@ -311,8 +314,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                   const ObObj &value = expr->get_expr_items().at(0).get_obj();
                   if (T_QUESTIONMARK == expr_type) {
                     int64_t param_idx = value.get_unknown();
-                    ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
-                    ctx.get_physical_plan_ctx()->get_param_store_for_update().at(param_idx) = value;
+                    OX (ctx.get_physical_plan_ctx()->get_param_store_for_update().at(param_idx) = out_value);
                   } else {
                     /* do nothing */
                   }
@@ -325,8 +327,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                     LOG_WARN("Failed to wrap expr ctx", K(ret));
                   } else {
                     const ObString var_name = expr->get_expr_items().at(1).get_obj().get_string();
-                    ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
-                    if (OB_FAIL(ObVariableSetExecutor::set_user_variable(value, var_name, expr_ctx))) {
+                    if (FAILEDx(ObVariableSetExecutor::set_user_variable(out_value, var_name, expr_ctx))) {
                       LOG_WARN("set user variable failed", K(ret));
                     }
                   }
@@ -335,11 +336,10 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                   LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
                 }
               } else {
-                ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
-                ctx.get_physical_plan_ctx()->get_param_store_for_update().at(i) = value;
+                OX (ctx.get_physical_plan_ctx()->get_param_store_for_update().at(i) = out_value);
               }
             }
-          } // for end
+          }  // for end
         }
       } else { /*do nothing*/ }
       if (OB_FAIL(ret) && call_proc_info->get_output_count() > 0) {

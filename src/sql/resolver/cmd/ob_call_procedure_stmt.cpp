@@ -21,18 +21,19 @@ namespace oceanbase
 namespace sql
 {
 
-
-int ObCallProcedureInfo::add_out_param(
-  int64_t i, int64_t mode, const ObString &name,
-  const pl::ObPLDataType &type,
-  const ObString &out_type_name, const ObString &out_type_owner)
-{
+int ObCallProcedureInfo::add_out_param(int64_t i,
+                                       int64_t mode,
+                                       const ObString &name,
+                                       const pl::ObPLDataType &type,
+                                       const ObString &out_type_name,
+                                       const ObString &out_type_owner,
+                                       const bool is_client_out_param) {
   int ret = OB_SUCCESS;
   ObString store_name;
   ObString store_out_type_name;
   ObString store_out_type_owner;
   pl::ObPLDataType pl_data_type;
-  if (OB_FAIL(out_idx_.add_member(i))) {
+  if (OB_FAIL(out_bitmap_.add_member(i))) {
     LOG_WARN("failed to add out index", K(i), K(name), K(type), K(ret));
   } else if (OB_FAIL(out_mode_.push_back(mode))) {
     LOG_WARN("failed to push mode", K(ret));
@@ -51,7 +52,11 @@ int ObCallProcedureInfo::add_out_param(
   } else if (OB_FAIL(ob_write_string(allocator_, out_type_owner, store_out_type_owner))) {
     LOG_WARN("failed to deep copy name", K(ret), K(name));
   } else if (OB_FAIL(out_type_owner_.push_back(store_out_type_owner))) {
-    LOG_WARN("push back error", K(i), K(name), K(ret), K(out_type_name), K(out_type_owner), K(ret));
+    LOG_WARN("push back error", K(i), K(name), K(out_type_name), K(out_type_owner), K(ret));
+  } else if (is_client_out_param && OB_FAIL(out_client_params_.add_member(i))) {
+    LOG_WARN("push back error", K(i), K(name), K(is_client_out_param), K(ret));
+  } else if (OB_FAIL(out_param_id_.push_back(i))) {
+    LOG_WARN("push back error", K(i), K(name), K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
