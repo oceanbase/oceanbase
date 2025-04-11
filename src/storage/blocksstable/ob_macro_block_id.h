@@ -288,7 +288,7 @@ private:
       uint64_t reserved_ : 56;
     };
   };
-  union {
+  union { // FARM COMPAT WHITELIST
     int64_t fourth_id_;
     // for PRIVATE_DATA_MACRO and PRIVATE_META_MACRO
     struct {
