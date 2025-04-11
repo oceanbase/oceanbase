@@ -853,7 +853,7 @@ private:
   int resolve_win_magic_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_place_group_by_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_coalesce_aggr_hint(const ParseNode &hint_node, ObTransHint *&hint);
-  int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list);
+  int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObHint::TablesInHint> &tb_name_list);
   int resolve_monitor_ids(const ParseNode &tracing_node, ObIArray<ObMonitorHint> &monitoring_ids);
   int resolve_tables_in_leading_hint(const ParseNode *tables_node, ObLeadingTable &leading_table);
   int resolve_simple_table_list_in_hint(const ParseNode *table_list,
