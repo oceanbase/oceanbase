@@ -1607,6 +1607,65 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
 #define DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)                       \
   DEF_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
 
+
+// Notice: Keep same as DEF_STRING_CS_FUNCS except ObjHashCalculator
+#define DEF_TEXT_CS_FUNCS(OBJTYPE)                                      \
+  template <>                                                           \
+  inline int64_t obj_crc64<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &type, sizeof(type));        \
+    ret = ob_crc64_sse42(ret, &cs, sizeof(cs));                         \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline int64_t obj_crc64_v2<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));        \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline void obj_batch_checksum<OBJTYPE>(const ObObj &obj, ObBatchChecksum &bc) \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    bc.fill(&type, sizeof(type));                                       \
+    bc.fill(&cs, sizeof(cs));                                           \
+    bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
+  }                                                                     \
+  template <>                                                           \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
+  {                                                                     \
+    res = varchar_murmurhash(obj, obj.get_collation_type(), hash);      \
+    return OB_SUCCESS;                                                  \
+  }                                                                     \
+  template <typename T>                                                 \
+  struct ObjHashCalculator<OBJTYPE, T, ObObj>                           \
+  {                                                                                                 \
+    static int calc_hash_value(const ObObj &obj, const uint64_t hash, uint64_t &res) {              \
+      int ret = OB_SUCCESS;                                                                         \
+      ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE);  \
+      ObString data;                                                                                \
+      if (OB_FAIL(obj.read_lob_data(tmp_allocator, data))) {                                        \
+        COMMON_LOG(ERROR, "read_lob_data fail", K(ret), K(obj));                                            \
+      } else {                                                                                      \
+        res = ObCharset::hash(obj.get_collation_type(), data.ptr(), data.length(),                  \
+                              hash, obj.is_varying_len_char_type() && lib::is_oracle_mode(),        \
+                              T::is_varchar_hash ? T::hash : NULL);                                 \
+      }                                                                                             \
+      return ret;                                                                                   \
+    }                                                                                               \
+  };                                                                                                \
+  template <>                                                               \
+  inline uint64_t obj_crc64_v3<OBJTYPE>(const ObObj &obj, const uint64_t current)  \
+  {                                                                         \
+    int cs = obj.get_collation_type();                                      \
+    uint64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));               \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }
+
 // ToDo: @gehao
 // 1. SERIALIZE/DESERIALIZE will drop has_lob_header flag. However, only table api use these functions,
 //    and lob locators are removed in table apis. Error may occur if used in other scenes.
@@ -1614,7 +1673,7 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
 //    but error occur in farm, not used?
 #define DEF_TEXT_FUNCS(OBJTYPE, TYPE, VTYPE) \
   DEF_TEXT_PRINT_FUNCS(OBJTYPE);             \
-  DEF_STRING_CS_FUNCS(OBJTYPE);                 \
+  DEF_TEXT_CS_FUNCS(OBJTYPE);                \
   DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
 
 DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
