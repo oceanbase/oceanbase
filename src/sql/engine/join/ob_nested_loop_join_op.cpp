@@ -36,7 +36,8 @@ ObNestedLoopJoinOp::ObNestedLoopJoinOp(ObExecContext &exec_ctx,
     last_store_row_(), save_last_row_(false), defered_right_rescan_(false),
     batch_rescan_ctl_(),
     batch_state_(JS_FILL_LEFT), save_last_batch_(false),
-    batch_mem_ctx_(NULL), stored_rows_(NULL), right_store_("NljRStore"), left_brs_(NULL), left_matched_(NULL),
+    batch_mem_ctx_(NULL), stored_rows_(NULL), right_store_("NljRStore"), left_brs_(NULL),
+    group_left_brs_(), left_matched_(NULL),
     need_switch_iter_(false), iter_end_(false), op_max_batch_size_(0),
     max_group_size_(OB_MAX_BULK_JOIN_ROWS),
     group_join_buffer_(),
@@ -108,6 +109,17 @@ int ObNestedLoopJoinOp::inner_open()
       } else {
         MEMSET(buf, 0, ObBitVector::memory_size(MY_SPEC.max_batch_size_));
         left_matched_ = to_bit_vector(buf);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      char *buf = (char *)batch_mem_ctx_->get_arena_allocator()
+                          .alloc(ObBitVector::memory_size(MY_SPEC.max_batch_size_));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc", K(ret));
+      } else {
+        MEMSET(buf, 0, ObBitVector::memory_size(MY_SPEC.max_batch_size_));
+        group_left_brs_.skip_ = to_bit_vector(buf);
       }
     }
     if (OB_SUCC(ret)) {
@@ -655,11 +667,11 @@ int ObNestedLoopJoinOp::get_left_batch()
   return ret;
 }
 
-int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
+int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&group_left_brs)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.enable_px_batch_rescan_) {
-    left_brs = &left_->get_brs();
+    const ObBatchRows *left_brs = &left_->get_brs();
     if (left_store_iter_.is_valid() && left_store_iter_.has_next()) {
       // do nothing
     } else {
@@ -702,15 +714,15 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
               save_last_batch_ = false;
             }
             set_param_null();
-            if (OB_FAIL(left_->get_next_batch(op_max_batch_size_, left_brs_))) {
+            if (OB_FAIL(left_->get_next_batch(op_max_batch_size_, left_brs))) {
               LOG_WARN("failed to get next left row", K(ret));
-            } else if (left_brs_->end_) {
+            } else if (left_brs->end_) {
               is_left_end_ = true;
             }
-            for (int64_t l_idx = 0;  OB_SUCC(ret) && l_idx < left_brs_->size_; l_idx++) {
-              if (left_brs_->skip_->exist(l_idx)) { continue; }
+            for (int64_t l_idx = 0;  OB_SUCC(ret) && l_idx < left_brs->size_; l_idx++) {
+              if (left_brs->skip_->exist(l_idx)) { continue; }
               batch_info_guard.set_batch_idx(l_idx);
-              batch_info_guard.set_batch_size(left_brs_->size_);
+              batch_info_guard.set_batch_size(left_brs->size_);
               if (OB_FAIL(left_store_.add_row(left_->get_spec().output_, &eval_ctx_))) {
                 LOG_WARN("failed to store left row", K(ret));
                 // do nothing
@@ -725,10 +737,10 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
           }
           if (OB_SUCC(ret)) {
             set_param_null();
-            if (left_brs_->size_ == 0 && left_brs_->end_) {
+            if (left_brs->size_ == 0 && left_brs->end_) {
               // do nothing
             } else {
-              last_save_batch_.from_exprs(eval_ctx_, left_brs_->skip_, left_brs_->size_);
+              last_save_batch_.from_exprs(eval_ctx_, left_brs->skip_, left_brs->size_);
               save_last_batch_ = true;
             }
           }
@@ -768,16 +780,17 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
         //   left_brs.size_ > read_size: group size is small and lots of left rows were skipped;
         //   left_brs.size_ < read_size: left_brs reaches iter end with no enough rows;
         // Thus, we need to reset skip_ with max size of left_brs.size_ and read_size.
-        const_cast<ObBatchRows *>(left_brs)->skip_->reset(std::max(left_brs->size_, read_size));
-        const_cast<ObBatchRows *>(left_brs)->size_ = read_size;
-        const_cast<ObBatchRows *>(left_brs)->end_ = false;
+        group_left_brs_.skip_->reset(std::max(left_brs->size_, read_size));
+        group_left_brs_.size_ = read_size;
+        group_left_brs_.end_ = false;
         left_row_joined_ = false;
       }
     }
   } else {
     // das group rescan
     bool has_next = false;
-    if (OB_FAIL(group_join_buffer_.batch_fill_group_buffer(op_max_batch_size_, left_brs_))) {
+    const ObBatchRows *left_brs = nullptr;
+    if (OB_FAIL(group_join_buffer_.batch_fill_group_buffer(op_max_batch_size_, left_brs))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("batch fill group buffer failed", KR(ret));
       }
@@ -798,13 +811,14 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
         //   left_brs.size_ > read_size: group size is small and lots of left rows were skipped;
         //   left_brs.size_ < read_size: left_brs reaches iter end with no enough rows;
         // Thus, we need to reset skip_ with max size of left_brs.size_ and read_size.
-        const_cast<ObBatchRows *>(left_brs)->skip_->reset(std::max(left_brs->size_, read_size));
-        const_cast<ObBatchRows *>(left_brs)->size_ = read_size;
-        const_cast<ObBatchRows *>(left_brs)->end_ = false;
+        group_left_brs_.skip_->reset(std::max(left_brs->size_, read_size));
+        group_left_brs_.size_ = read_size;
+        group_left_brs_.end_ = false;
         left_row_joined_ = false;
       }
     }
   }
+  group_left_brs = &group_left_brs_;
   return ret;
 }
 

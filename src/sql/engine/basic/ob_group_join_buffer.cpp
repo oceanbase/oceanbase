@@ -581,6 +581,7 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
   int ret = OB_SUCCESS;
   common::ObSEArray<ObObjParam, 1> left_params_backup;
   common::ObSEArray<ObObjParam, 1> right_params_backup;
+  batch_rows = &left_->get_brs();
   if (!is_left_end_ && need_fill_group_buffer()) {
     if (OB_FAIL(init_group_params())) {
       LOG_WARN("init group params failed", KR(ret));
@@ -593,7 +594,6 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
         last_batch_.to_exprs(*eval_ctx_);
         save_last_batch_ = false;
       }
-      batch_rows = &left_->get_brs();
       reset_buffer_state();
       group_rescan_cnt_++;
       while (OB_SUCC(ret) && !is_full() && !batch_rows->end_) {

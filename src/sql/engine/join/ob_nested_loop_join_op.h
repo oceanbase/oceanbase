@@ -155,7 +155,7 @@ private:
   // for vectorized
   int rescan_params_batch_one(int64_t batch_idx);
   int get_left_batch();
-  int group_get_left_batch(const ObBatchRows *&left_brs);
+  int group_get_left_batch(const ObBatchRows *&group_left_brs);
   int inner_get_next_batch(const int64_t max_row_cnt);
   // for vectorized end
 
@@ -169,7 +169,7 @@ private:
   void skip_l_idx();
   // for refactor vectorized end
 
-  bool continue_fetching() { return !(left_brs_->end_ || is_full());}
+  bool continue_fetching() { return !(is_left_end_ || is_full());}
 public:
   ObJoinState state_;
   // for bnl join
@@ -193,6 +193,7 @@ public:
   ObChunkDatumStore right_store_;
   ObChunkDatumStore::Iterator right_store_iter_;
   const ObBatchRows *left_brs_;
+  ObBatchRows group_left_brs_; //describes the probe data originating from the left child in group rescan scenario.
   ObBitVector *left_matched_;
   bool need_switch_iter_;
   bool iter_end_;
