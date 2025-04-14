@@ -2857,7 +2857,7 @@ int ObHashGroupByOp::load_one_row()
       } else if (llc_est_.enabled_ &&
                  OB_FAIL(bypass_add_llc_map(hash_val,
                                             ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
-                                            by_pass_nth_group_ == MY_SPEC.dist_col_group_idxs_.count() : true))) {
+                                            by_pass_nth_group_ > MY_SPEC.dist_col_group_idxs_.count() : true))) {
         LOG_WARN("failed to add llc map", K(ret));
       }
     }
@@ -2930,7 +2930,7 @@ int ObHashGroupByOp::by_pass_prepare_one_batch(const int64_t batch_size)
         LOG_WARN("failed to process popular value", K(ret), K(llc_est_.enabled_), K(MY_SPEC.skew_detection_enabled_), K(popular_map_.size()));
       } else if (llc_est_.enabled_ &&
                  OB_FAIL(bypass_add_llc_map_batch(ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
-                                                  by_pass_nth_group_ == MY_SPEC.dist_col_group_idxs_.count() : true))) {
+                                                  by_pass_nth_group_ > MY_SPEC.dist_col_group_idxs_.count() : true))) {
         LOG_WARN("failed to add llc map batch", K(ret));
       }
     }
