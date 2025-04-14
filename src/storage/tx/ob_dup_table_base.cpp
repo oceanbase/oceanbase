@@ -312,13 +312,16 @@ int ObDupTableLSCheckpoint::set_dup_ls_meta(const ObLSDupTableMeta &dup_ls_meta_
 share::SCN ObDupTableLSCheckpoint::get_lease_log_rec_scn() const
 {
   share::SCN rec_scn;
+  rec_scn.set_max();
 
   SpinRLockGuard r_guard(ckpt_rw_lock_);
 
   if (lease_log_rec_scn_.is_valid()) {
-    rec_scn = lease_log_rec_scn_;
-  } else {
-    rec_scn.set_max();
+    rec_scn = share::SCN::min(lease_log_rec_scn_, rec_scn);
+  }
+
+  if (tablet_log_rec_scn_.is_valid()) {
+    rec_scn = share::SCN::min(tablet_log_rec_scn_, rec_scn);
   }
 
   return rec_scn;
@@ -378,6 +381,11 @@ int ObDupTableLSCheckpoint::update_ckpt_after_lease_log_synced(
       dup_ls_meta_.readable_tablets_min_base_applied_scn_.reset();
     } else if (!dup_ls_meta_.readable_tablets_min_base_applied_scn_.is_valid()) {
       dup_ls_meta_.readable_tablets_min_base_applied_scn_ = scn;
+    }
+    if (!tablet_log_rec_scn_.is_valid()) {
+      DUP_TABLE_LOG(INFO, "[CKPT] set rec log scn for readable tablet", K(ret), KPC(this), K(scn),
+                    K(for_replay), K(modify_readable_sets), K(contain_all_readable));
+      tablet_log_rec_scn_ = scn;
     }
     DUP_TABLE_LOG(INFO, "[CKPT] modify ckpt scn for readable tablets", K(ret), KPC(this), K(scn),
                   K(for_replay), K(modify_readable_sets), K(contain_all_readable));
@@ -478,6 +486,7 @@ int ObDupTableLSCheckpoint::flush()
 
   if (OB_SUCC(ret)) {
     lease_log_rec_scn_.reset();
+    tablet_log_rec_scn_.reset();
   }
 
   return ret;
@@ -500,6 +509,7 @@ int ObDupTableLSCheckpoint::online()
   SpinWLockGuard w_guard(ckpt_rw_lock_);
 
   lease_log_rec_scn_.reset();
+  tablet_log_rec_scn_.reset();
   start_replay_scn_.reset();
   readable_ckpt_base_scn_is_accurate_ = true;
 
