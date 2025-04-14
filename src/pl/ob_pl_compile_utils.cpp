@@ -143,7 +143,7 @@ int ObPLCompilerUtils::compile_routine(ObExecContext &ctx,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
       LOG_TRACE("get pl function from ol cache failed", K(ret), K(pc_ctx.key_));
-      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+      HANDLE_PL_CACHE_RET_VALUE(ret);
     } else {
       routine = static_cast<pl::ObPLFunction*>(cacheobj_guard.get_cache_obj());
     }
@@ -153,8 +153,11 @@ int ObPLCompilerUtils::compile_routine(ObExecContext &ctx,
       CK (OB_NOT_NULL(routine));
       OZ (ctx.get_my_session()->get_database_id(db_id));
       if (OB_SUCC(ret) && routine->get_can_cached()) {
-        routine->get_stat_for_update().name_ = routine->get_function_name();
-        routine->get_stat_for_update().type_ = pl::ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
+        ObString sql;
+        OZ (ObPLCacheCtx::assemble_format_routine_name(sql, routine));
+        OZ (ObSQLUtils::md5(sql, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_)));
+        OX (routine->get_stat_for_update().name_ = sql);
+        OX (routine->get_stat_for_update().type_ = pl::ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE);
         OZ (ctx.get_pl_engine()->add_pl_lib_cache(routine, pc_ctx));
       }
     }

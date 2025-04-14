@@ -1300,6 +1300,17 @@ private:
   ObPLContext *parent_stack_;
 };
 
+class ObPLConcurrentGuard
+{
+public:
+  ObPLConcurrentGuard(): inner_obj_(NULL) {}
+  ~ObPLConcurrentGuard();
+  int set_concurrent_num(ObPLFunction &routine, ObExecContext &ctx, ObPLPackageGuard &package_guard);
+
+private:
+  ObPLCacheObject* inner_obj_;
+};
+
 class ObPLASHGuard
 {
 public:

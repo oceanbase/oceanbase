@@ -30,6 +30,12 @@ namespace sql
 
 namespace pl
 {
+  #define HANDLE_PL_CACHE_RET_VALUE(ret) \
+  do { \
+    if ((ret) != OB_ERR_UNEXPECTED && (ret) != OB_REACH_MAX_CONCURRENT_NUM) { \
+      (ret) = OB_SUCCESS; \
+    } \
+  } while (0)
 
 struct ObGetPLKVEntryOp : public sql::ObKVEntryTraverseOp
 {

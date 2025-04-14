@@ -95,6 +95,7 @@ struct PLCacheObjStat
   common::ObString sys_vars_str_;
   common::ObString param_infos_;
   ObSchemaObjVersion out_of_date_dependcy_version_; // out_of_date dependcy version
+  ObSchemaObjVersion outline_version_;
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
@@ -117,7 +118,8 @@ struct PLCacheObjStat
       pl_cg_mem_hold_(0),
       sys_vars_str_(),
       param_infos_(),
-      out_of_date_dependcy_version_()
+      out_of_date_dependcy_version_(),
+      outline_version_()
   {
     sql_id_[0] = '\0';
   }
@@ -150,6 +152,7 @@ struct PLCacheObjStat
     sys_vars_str_.reset();
     param_infos_.reset();
     out_of_date_dependcy_version_.reset();
+    outline_version_.reset();
   }
 
   TO_STRING_KV(K_(pl_schema_id),
@@ -166,7 +169,8 @@ struct PLCacheObjStat
                K_(pl_cg_mem_hold),
                K_(sys_vars_str),
                K_(param_infos),
-               K_(out_of_date_dependcy_version));
+               K_(out_of_date_dependcy_version),
+               K_(outline_version));
 };
 
 class ObPLCacheObject : public sql::ObILibCacheObject
@@ -184,7 +188,9 @@ public:
     expressions_(allocator_),
     expr_op_size_(0),
     frame_info_(allocator_),
-    stat_()
+    stat_(),
+    concurrent_num_(0),
+    max_concurrent_num_(ObMaxConcurrentParam::UNLIMITED)
     {}
 
   virtual ~ObPLCacheObject() {}
@@ -222,12 +228,20 @@ public:
   int init_params_info_str();
   int update_execute_time(int64_t exec_time);
   static int get_times(const ObPLCacheObject *pl_object, int64_t& execute_times, int64_t& elapsed_time);
+  inline bool is_limited_concurrent_num() const { return max_concurrent_num_ != share::schema::ObMaxConcurrentParam::UNLIMITED; }
+  inline int64_t get_max_concurrent_num() const { return ATOMIC_LOAD(&max_concurrent_num_); }
+  inline int64_t get_concurrent_num() const { return ATOMIC_LOAD(&concurrent_num_); }
+  inline void set_max_concurrent_num(int64_t max_concurrent_num) { ATOMIC_STORE(&max_concurrent_num_, max_concurrent_num); }
+  int inc_concurrent_num();
+  inline void dec_concurrent_num() { ATOMIC_DEC(&concurrent_num_); }
 
   TO_STRING_KV(K_(expr_op_size),
                K_(tenant_schema_version),
                K_(sys_schema_version),
                K_(dependency_tables),
-               K_(stat));
+               K_(stat),
+               K_(concurrent_num),
+               K_(max_concurrent_num));
 
 protected:
   int64_t tenant_schema_version_;
@@ -245,6 +259,8 @@ protected:
   sql::ObExprFrameInfo frame_info_;
   // stat info
   PLCacheObjStat stat_;
+  int64_t concurrent_num_;
+  int64_t max_concurrent_num_;
 };
 
 } // namespace pl end

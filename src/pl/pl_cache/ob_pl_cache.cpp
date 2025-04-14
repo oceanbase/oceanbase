@@ -16,6 +16,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "src/sql/resolver/ob_resolver_utils.h"
+#include "src/pl/ob_pl_package.h"
 namespace oceanbase
 {
 namespace pl
@@ -346,6 +347,73 @@ int ObPLObjectValue::init(const ObILibCacheObject &cache_obj, ObPLCacheCtx &pc_c
       }
     }
   }
+  return ret;
+}
+
+int ObPLObjectValue::set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObString sql_id(pc_ctx.sql_id_);
+  const uint64_t database_id = pc_ctx.session_info_->get_database_id();
+  const ObOutlineInfo *outline_info = NULL;
+  OZ (pc_ctx.schema_guard_->get_outline_info_with_sql_id(
+                        pc_ctx.session_info_->get_effective_tenant_id(),
+                        database_id,
+                        sql_id,
+                        false,
+                        outline_info));
+  if (NULL != outline_info && outline_info->has_outline_params()) {
+    OZ (inner_set_max_concurrent_num(outline_info));
+  }
+  return ret;
+}
+
+int ObPLObjectValue::set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObString sql_id(pl_routine_obj_->get_stat().sql_id_);
+  const uint64_t database_id = pc_ctx.session_info_->get_database_id();
+  const ObOutlineInfo *outline_info = NULL;
+  ObOutlineState state;
+  OZ (pc_ctx.schema_guard_->get_outline_info_with_sql_id(
+                        pc_ctx.session_info_->get_effective_tenant_id(),
+                        database_id,
+                        sql_id,
+                        false,
+                        outline_info));
+  if (OB_SUCCESS != ret) {
+  } else if (NULL != outline_info) {
+    if (outline_info->get_outline_id() == pl_routine_obj_->get_stat().outline_version_.object_id_
+        && pl_routine_obj_->get_stat().outline_version_.version_ == outline_info->get_schema_version()) {
+      // do nothing
+    } else if (outline_info->has_outline_params()) {
+      // reset concurrent num
+      OZ (inner_set_max_concurrent_num(outline_info));
+    }
+  } else {
+    OX (pl_routine_obj_->get_stat_for_update().outline_version_.reset());
+    OX (pl_routine_obj_->set_max_concurrent_num(ObMaxConcurrentParam::UNLIMITED));
+  }
+  return ret;
+}
+
+int ObPLObjectValue::inner_set_max_concurrent_num(const ObOutlineInfo *outline_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t concurrent_num = INT64_MAX;
+  int64_t param_count = outline_info->get_outline_params_wrapper().get_outline_params().count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
+    const ObMaxConcurrentParam *param = outline_info->get_outline_params_wrapper().get_outline_params().at(i);
+    if (OB_ISNULL(param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param is NULl", K(ret));
+    } else if (param->concurrent_num_ < concurrent_num) {
+      concurrent_num = param->concurrent_num_;
+    } else {/*do nothing*/}
+  }
+  OX (pl_routine_obj_->set_max_concurrent_num(concurrent_num));
+  OX (pl_routine_obj_->get_stat_for_update().outline_version_.object_id_ = outline_info->get_outline_id());
+  OX (pl_routine_obj_->get_stat_for_update().outline_version_.version_ = outline_info->get_schema_version());
   return ret;
 }
 
@@ -1251,6 +1319,8 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     } else if (true == is_old_version) {
       ret = OB_OLD_SCHEMA_VERSION;
       has_old_version_err = true;
+    } else if (OB_FAIL(pl_object_value->set_max_concurrent_num_for_get(pc_ctx))) {
+      LOG_WARN("Failed to adjust concurrent num!", K(ret));
     } else {
       cache_obj = pl_object_value->pl_routine_obj_;
       cache_obj->set_dynamic_ref_handle(pc_ctx.handle_id_);
@@ -1362,8 +1432,9 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
       } else {
         pl_object_value->pl_routine_obj_ = cache_object;
         pl_object_value->pl_routine_obj_->set_dynamic_ref_handle(PC_REF_PL_HANDLE);
-
-        if (!object_value_sets_.add_last(pl_object_value)) {
+        if (OB_FAIL(pl_object_value->set_max_concurrent_num_for_add(pc_ctx))) {
+          LOG_WARN("set concurrent num for add failed!", K(ret), K(pc_ctx));
+        } else if (!object_value_sets_.add_last(pl_object_value)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to add pcv to object_value_sets_", K(ret));
           free_pl_object_value(pl_object_value);
@@ -1391,6 +1462,43 @@ int64_t ObPLObjectSet::get_mem_size()
     }
   } // end for
   return value_mem_size;
+}
+
+int ObPLCacheCtx::assemble_format_routine_name(ObString& out_name, ObPLCacheObject *routine)
+{
+  int ret = OB_SUCCESS;
+  ObString db_name;
+  ObString rt_name;
+  char *new_buffer = NULL;
+  CK (OB_NOT_NULL(routine));
+  if (NS_PKG == routine->get_ns()) {
+    ObPLPackage *package = NULL;
+    CK (OB_NOT_NULL(package = static_cast<ObPLPackage *>(routine)));
+    OX (db_name.assign_ptr(package->get_db_name().ptr(), package->get_db_name().length()));
+    OX (rt_name.assign_ptr(package->get_name().ptr(), package->get_name().length()));
+  } else if (NS_PRCR == routine->get_ns() || NS_SFC == routine->get_ns()) {
+    ObPLFunction* func = NULL;
+    CK (OB_NOT_NULL(func = static_cast<ObPLFunction *>(routine)));
+    OX (db_name.assign_ptr(func->get_database_name().ptr(), func->get_database_name().length()));
+    OX (rt_name.assign_ptr(func->get_function_name().ptr(), func->get_function_name().length()));
+  }
+
+  if (OB_SUCCESS != ret) {
+  } else if (OB_ISNULL(new_buffer =
+      static_cast<char*>(routine->get_allocator().alloc(db_name.length() + rt_name.length() + 2)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc format name buf", K(ret), K(db_name), K(rt_name));
+  } else {
+    if (db_name.ptr() != NULL && db_name.length() > 0) {
+      MEMCPY(new_buffer, db_name.ptr(), db_name.length());
+      MEMCPY(new_buffer + db_name.length() , "." , 1);
+    }
+    if (rt_name.ptr() != NULL && rt_name.length() > 0) {
+      MEMCPY(new_buffer + db_name.length() + 1 , rt_name.ptr(), rt_name.length());
+    }
+  }
+  OX (out_name.assign_ptr(new_buffer, db_name.length() + rt_name.length() + 1));
+  return ret;
 }
 
 int ObPLCacheCtx::adjust_definer_database_id()

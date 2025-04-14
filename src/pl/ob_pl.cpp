@@ -1615,9 +1615,11 @@ int ObPL::execute(ObExecContext &ctx,
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
   ObPLASHGuard guard(routine.get_package_id(), routine.get_routine_id(), routine.get_function_name());
+  ObPLConcurrentGuard concurrent_guard;
   ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObPLAllocator1 pl_sym_allocator(PL_MOD_IDX::OB_PL_SYMBOL_TABLE, &tmp_alloc);
   OZ (pl_sym_allocator.init(nullptr));
+  OZ (concurrent_guard.set_concurrent_num(routine, ctx, package_guard));
   if (OB_SUCC(ret)) {
     ObPLExecState pl(tmp_alloc,
                     pl_sym_allocator,
@@ -1755,7 +1757,6 @@ int ObPL::execute(ObExecContext &ctx,
     //当前层 pl 执行时间
     int64_t execute_end = ObTimeUtility::current_time();
     pl.add_pl_exec_time(execute_end - execute_start - pl.get_pure_sql_exec_time(), is_called_from_sql);
-
   #ifndef NDEBUG
       LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
         K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
@@ -2560,7 +2561,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
           LOG_INFO("get pl function by stmt id from plan cache failed",
                     K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
-          ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+          HANDLE_PL_CACHE_RET_VALUE(ret);
         } else if (FALSE_IT(routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()))) {
           // do nothing
         } else if (OB_NOT_NULL(routine)) {
@@ -2578,7 +2579,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
         LOG_INFO("get pl function by sql failed, will ignore this error",
                  K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
-        ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+        HANDLE_PL_CACHE_RET_VALUE(ret);
       } else if (FALSE_IT(routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()))) {
         // do nothing
       } else if (OB_NOT_NULL(routine) && stmt_id != OB_INVALID_ID) {
@@ -2615,7 +2616,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
         LOG_INFO("get pl function by sql failed, will ignore this error",
                  K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
-        ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+        HANDLE_PL_CACHE_RET_VALUE(ret);
       }
       OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
       if (OB_SUCC(ret) && OB_ISNULL(routine)) {
@@ -2702,7 +2703,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.session_info_ = ctx.get_my_session();
     pc_ctx.schema_guard_ = ctx.get_sql_ctx()->schema_guard_;
     pc_ctx.raw_sql_ = PLSQL;
-    MEMCPY(pc_ctx.sql_id_, ctx.get_sql_ctx()->sql_id_, (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_));
 
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PRCR;
     pc_ctx.key_.db_id_ = database_id;
@@ -2710,12 +2710,11 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
     pc_ctx.key_.mode_ =  ctx.get_my_session()->get_pl_profiler() != nullptr
                            ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
-
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
       LOG_INFO("get pl function from plan cache failed",
                K(ret), K(pc_ctx.key_), K(package_id), K(routine_id));
-      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+      HANDLE_PL_CACHE_RET_VALUE(ret);
     } else if (FALSE_IT(routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()))) {
       // do nothing
     } else if (OB_NOT_NULL(routine)) {
@@ -2733,7 +2732,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
           LOG_INFO("get pl function from plan cache failed",
                    K(ret), K(pc_ctx.key_), K(package_id), K(routine_id));
-          ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+          HANDLE_PL_CACHE_RET_VALUE(ret);
         }
         OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
         if (OB_SUCC(ret) && OB_ISNULL(routine)) {
@@ -2742,8 +2741,11 @@ int ObPL::get_pl_function(ObExecContext &ctx,
           CK (OB_NOT_NULL(routine));
           if (OB_SUCC(ret)
               && routine->get_can_cached()) {
-            routine->get_stat_for_update().name_ = routine->get_function_name();
-            routine->get_stat_for_update().type_ = ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
+            ObString sql;
+            OZ (ObPLCacheCtx::assemble_format_routine_name(sql, routine));
+            OZ (ObSQLUtils::md5(sql, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_)));
+            OX (routine->get_stat_for_update().name_ = sql);
+            OX (routine->get_stat_for_update().type_ = ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE);
             OZ (add_pl_lib_cache(routine, pc_ctx));
           }
           OX (need_update_schema = true);
@@ -5290,6 +5292,44 @@ int ObPLFunction::gen_action_from_precompiled(const ObString &name, size_t lengt
   OX (set_action(addr));
 
   return ret;
+}
+
+int ObPLConcurrentGuard::set_concurrent_num(ObPLFunction &routine, ObExecContext &ctx, ObPLPackageGuard &package_guard)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
+  const uint64_t database_id = ctx.get_my_session()->get_database_id();
+  ObSchemaGetterGuard *schema_guard = ctx.get_sql_ctx()->schema_guard_;
+  CK (OB_NOT_NULL(schema_guard));
+
+  if (OB_INVALID_ID != routine.get_package_id()) {
+    ObPLCacheObject* pl_object = NULL;
+    uint64_t pkg_id = routine.get_package_id();
+    sql::ObCacheObjGuard *package = NULL;
+    if (routine.is_udt_routine()) {
+      // TODO: jiabokai.jbk
+      //Adjust the use of udt body id when adding package guard
+    } else {
+      OZ (package_guard.get(pkg_id, package));
+      CK (OB_NOT_NULL(package));
+      CK (OB_NOT_NULL(pl_object = static_cast<ObPLCacheObject*>(package->get_cache_obj())));
+    }
+    OX (inner_obj_ = pl_object);
+  } else {
+    OX (inner_obj_ = &routine);
+  }
+  if (NULL != inner_obj_ && inner_obj_->is_limited_concurrent_num()) {
+    OZ (inner_obj_->inc_concurrent_num());
+  }
+  return ret;
+}
+
+
+ObPLConcurrentGuard::~ObPLConcurrentGuard()
+{
+  if (inner_obj_ != NULL && inner_obj_->is_limited_concurrent_num()) {
+    inner_obj_->dec_concurrent_num();
+  }
 }
 
 ObPLASHGuard::ObPLASHGuard(ObPLASHStatus status)

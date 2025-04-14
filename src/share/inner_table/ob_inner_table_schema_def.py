@@ -32940,7 +32940,11 @@ def_table_schema(
            DB_ID,
            PL_CG_MEM_HOLD,
            SYS_VARS,
-           PARAM_INFOS
+           PARAM_INFOS,
+           SQL_ID,
+           OUTLINE_VERSION,
+           OUTLINE_ID,
+           OUTLINE_DATA AS CONCURRENT_DATA
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -32980,7 +32984,11 @@ def_table_schema(
            DB_ID,
            PL_CG_MEM_HOLD,
            SYS_VARS,
-           PARAM_INFOS
+           PARAM_INFOS,
+           SQL_ID,
+           OUTLINE_VERSION,
+           OUTLINE_ID,
+           CONCURRENT_DATA
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -64490,7 +64498,11 @@ def_table_schema(
            DB_ID AS DB_ID,
            PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD,
            SYS_VARS AS SYS_VARS,
-           PARAM_INFOS AS PARAM_INFOS
+           PARAM_INFOS AS PARAM_INFOS,
+           SQL_ID AS SQL_ID,
+           OUTLINE_VERSION AS OUTLINE_VERSION,
+           OUTLINE_ID AS OUTLINE_ID,
+           OUTLINE_DATA AS CONCURRENT_DATA
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -64532,7 +64544,11 @@ def_table_schema(
            DB_ID AS DB_ID,
            PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD,
            SYS_VARS AS SYS_VARS,
-           PARAM_INFOS AS PARAM_INFOS
+           PARAM_INFOS AS PARAM_INFOS,
+           SQL_ID AS SQL_ID,
+           OUTLINE_VERSION AS OUTLINE_VERSION,
+           OUTLINE_ID AS OUTLINE_ID,
+           CONCURRENT_DATA AS CONCURRENT_DATA
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 

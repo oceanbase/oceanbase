@@ -1022,6 +1022,8 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   }
 
   int64_t compile_end = ObTimeUtility::current_time();
+  ObString format_name;
+  OZ (ObPLCacheCtx::assemble_format_routine_name(format_name, &package));
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
   OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
   OZ (package.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
@@ -1031,7 +1033,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   } else {
     OX (package.get_stat_for_update().schema_version_ = package_info.get_schema_version());
   }
-  OX (package.get_stat_for_update().name_ = package.get_name());
+  OX (package.get_stat_for_update().name_ = format_name);
   if (PL_PACKAGE_BODY == package_ast.get_package_type()) {
     OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_BODY_TYPE);
   } else {
@@ -1060,6 +1062,7 @@ int ObPLCompiler::init_function(const share::schema::ObRoutineInfo *routine, ObP
                                     routine->get_package_id(),
                                     udt_info));
       CK (OB_NOT_NULL(udt_info));
+      OX(func.set_is_udt_routine());
       // if type body is droped, the routine is exist in __all_routine, but we can't use it;
       if (OB_SUCC(ret) && !udt_info->has_type_body()) {
         ret = OB_ERR_TYPE_BODY_NOT_EXIST;
@@ -1148,6 +1151,9 @@ int ObPLCompiler::init_function(share::schema::ObSchemaGetterGuard &schema_guard
   routine.set_package_id(routine_info.get_pkg_id());
   routine.set_routine_id(routine_info.get_id());
   routine.set_priv_user(routine_info.get_priv_user());
+  if (routine_info.is_udt_routine()) {
+    routine.set_is_udt_routine();
+  }
   if (routine_info.is_invoker_right()) {
     routine.set_invoker_right();
   }
