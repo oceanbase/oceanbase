@@ -52,7 +52,6 @@ GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
 'root'@'%'	def	SHOW DB	YES
 'root'@'%'	def	SUPER	YES
 'root'@'%'	def	PROCESS	YES
-'root'@'%'	def	CREATE SYNONYM	YES
 'root'@'%'	def	REFERENCES	YES
 'root'@'%'	def	EXECUTE	YES
 'root'@'%'	def	FILE	YES
@@ -90,7 +89,6 @@ GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
 'admin'@'%'	def	SHOW DB	YES
 'admin'@'%'	def	SUPER	YES
 'admin'@'%'	def	PROCESS	YES
-'admin'@'%'	def	CREATE SYNONYM	YES
 'admin'@'%'	def	REFERENCES	YES
 'admin'@'%'	def	EXECUTE	YES
 'admin'@'%'	def	FILE	YES
