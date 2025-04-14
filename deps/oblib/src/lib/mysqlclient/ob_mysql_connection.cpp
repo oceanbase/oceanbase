@@ -115,6 +115,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     int64_t ssl_enforce = 1;
 #endif
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
+    mysql_options(&mysql_, MYSQL_OPT_NONBLOCK, 0);
     if (read_write_no_timeout) {
       int64_t zero_second = 0;
       mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &zero_second);
@@ -196,6 +197,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     }
 #endif
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
+    mysql_options(&mysql_, MYSQL_OPT_NONBLOCK, 0);
     if (read_write_no_timeout) {
       int64_t zero_second = 0;
       mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &zero_second);

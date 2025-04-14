@@ -58,7 +58,7 @@ public:
    * reference ObMySQLPrepareStatement
    */
   ObMySQLResult *execute_query(bool enable_use_result = false);
-
+  int wait_for_mysql(int &status);
 private:
   ObMySQLConnection *conn_;
   ObMySQLResultImpl result_;

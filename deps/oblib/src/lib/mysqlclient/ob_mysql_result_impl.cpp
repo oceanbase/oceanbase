@@ -124,6 +124,21 @@ int ObMySQLResultImpl::close()
   return ret;
 }
 
+int ObMySQLResultImpl::inner_fetch_row_nonblock(MYSQL_RES *result, MYSQL_ROW &row)
+{
+  int ret = OB_SUCCESS;
+  row = NULL;
+  int status = mysql_fetch_row_start(&row, result);
+  while (status && OB_SUCC(ret)) {
+    if (OB_FAIL(stmt_.wait_for_mysql(status))) {
+      LOG_WARN("wait for mysql failed", K(ret));
+    } else {
+      status = mysql_fetch_row_cont(&row, result, status);
+    }
+  }
+  return ret;
+}
+
 int ObMySQLResultImpl::next()
 {
   int ret = OB_SUCCESS;
@@ -134,7 +149,9 @@ int ObMySQLResultImpl::next()
   if (OB_ISNULL(result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("result must not be null", K(ret));
-  } else if (OB_ISNULL(cur_row_ = mysql_fetch_row(result_))) {
+  } else if (OB_FAIL(inner_fetch_row_nonblock(result_, cur_row_))) {
+    LOG_WARN("fetch row nonblock failed", K(ret));
+  } else if (OB_ISNULL(cur_row_)) {
     MYSQL *stmt_handler = stmt_.get_stmt_handler();
     if (OB_ISNULL(stmt_handler)) {
       ret = OB_ERR_UNEXPECTED;

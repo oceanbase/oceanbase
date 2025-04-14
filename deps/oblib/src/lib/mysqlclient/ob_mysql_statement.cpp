@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
+#include <poll.h>
 #include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
@@ -132,6 +133,34 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
   return ret;
 }
 
+int ObMySQLStatement::wait_for_mysql(int &status)
+{
+  int ret = OB_SUCCESS;
+  struct pollfd pfd;
+  int input_status = status;
+  status = 0;
+  // check status every 10ms.
+  int timeout = 10;
+  pfd.fd = mysql_get_socket(stmt_);
+  pfd.events =
+    (input_status & MYSQL_WAIT_READ ? POLLIN : 0) |
+    (input_status & MYSQL_WAIT_WRITE ? POLLOUT : 0) |
+    (input_status & MYSQL_WAIT_EXCEPT ? POLLPRI : 0);
+  int res = 0;
+  while (res <= 0 && OB_SUCC(ret)) {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else {
+      res = poll(&pfd, 1, timeout);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    status |= pfd.revents & POLLIN ? MYSQL_WAIT_READ : 0;
+    status |= pfd.revents & POLLOUT ? MYSQL_WAIT_WRITE : 0;
+    status |= pfd.revents & POLLPRI ? MYSQL_WAIT_EXCEPT : 0;
+  }
+  return ret;
+}
 
 ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
 {
@@ -147,7 +176,18 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
     LOG_WARN("conn already failed, should not execute query again", K(conn_));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
-    if (0 != mysql_real_query(stmt_, sql_str_.ptr(), sql_str_.length())) {
+    int err = 0;
+    int status = mysql_real_query_start(&err, stmt_, sql_str_.ptr(), sql_str_.length());
+    LOG_TRACE("status after mysql_real_query_start", K(status), K(err), K(sql_str_));
+    while (status && OB_SUCC(ret)) {
+      if (OB_FAIL(wait_for_mysql(status))) {
+        LOG_WARN("wait for mysql failed", K(ret));
+      } else {
+        status = mysql_real_query_cont(&err, stmt_, status);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (0 != err) {
       ret = -mysql_errno(stmt_);
       char errmsg[256] = {0};
       const char *srcmsg = mysql_error(stmt_);

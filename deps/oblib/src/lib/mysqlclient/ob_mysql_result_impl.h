@@ -46,6 +46,7 @@ public:
    * move result cursor to next row
    */
   int next();
+  int mysql_fetch_row_nonblock(MYSQL_RES *result);
   /*
    * read int/str/TODO from result set
    * col_idx: indicate which column to read, [0, max_read_col)
@@ -145,6 +146,7 @@ private:
                        common::ObIAllocator &allocator) const;
   int inner_get_lob_locator(const char *col_name, common::ObLobLocator *&lob_locator,
                        common::ObIAllocator &allocator) const;
+  int inner_fetch_row_nonblock(MYSQL_RES *result, MYSQL_ROW &row);
 private:
   ObMySQLStatement &stmt_;
   MYSQL_RES *result_;
