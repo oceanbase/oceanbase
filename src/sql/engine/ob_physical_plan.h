@@ -143,6 +143,7 @@ public:
   bool get_evolution() const { return stat_.is_evolution_; }
   inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
                                         const int64_t current_row_count) const;
+  bool check_if_is_expired_by_error(const int error_code) const;
   void update_plan_expired_info(const ObAuditRecordData &record,
                                 const bool is_first,
                                 const ObIArray<ObTableRowCount> *table_row_count_list);
