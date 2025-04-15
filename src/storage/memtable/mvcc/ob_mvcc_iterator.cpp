@@ -451,7 +451,7 @@ int ObMvccRowIterator::get_next_row(
     } else if (NULL == (value = query_engine_iter_->get_value())) {
       TRANS_LOG(ERROR, "unexpected value null pointer", "ctx", *ctx_);
       ret = OB_ERR_UNEXPECTED;
-    } else if (query_flag_.is_for_foreign_key_check()) {
+    } else if (query_flag_.is_for_foreign_key_check() || query_flag_.is_plain_insert_gts_opt()) {
       if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(*ctx_, value, lock_state))) {
         // we will throw error code if it's failed here, but we need to
         // post lock with key outside, so we have to set it here.

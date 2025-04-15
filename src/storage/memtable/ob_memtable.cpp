@@ -720,7 +720,7 @@ int ObMemtable::exist(
                                       lock_state))) {
     TRANS_LOG(WARN, "get value iter fail, ", K(ret));
     if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
-      if (!query_flag.is_for_foreign_key_check()) {
+      if (!query_flag.is_for_foreign_key_check() || !query_flag.is_plain_insert_gts_opt()) {
         ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
         TRANS_LOG(WARN, "should not meet row conflict if it's not for foreign key check",
                   K(ret), K(query_flag));
@@ -842,6 +842,7 @@ int ObMemtable::get(
   } else {
     const ObColDescIArray &out_cols = read_info->get_columns_desc();
     ObStoreRowLockState lock_state;
+    bool is_plain_insert_gts_opt = context.query_flag_.is_plain_insert_gts_opt();
     if (OB_FAIL(parameter_mtk.encode(out_cols, &rowkey.get_store_rowkey()))) {
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
     } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
@@ -852,7 +853,7 @@ int ObMemtable::get(
                                         value_iter,
                                         lock_state))) {
       if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
-        if (!context.query_flag_.is_for_foreign_key_check()) {
+        if (!context.query_flag_.is_for_foreign_key_check() || !is_plain_insert_gts_opt) {
           ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
           TRANS_LOG(WARN, "should not meet lock conflict if it's not for foreign key check",
                     K(ret), K(context.query_flag_));

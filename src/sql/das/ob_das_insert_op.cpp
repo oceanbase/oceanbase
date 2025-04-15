@@ -116,6 +116,7 @@ int ObDASInsertOp::insert_rows()
   ins_adaptor.tablet_id_ = tablet_id_;
   ins_adaptor.ls_id_ = ls_id_;
   ins_adaptor.related_tablet_ids_ = &related_tablet_ids_;
+  ins_adaptor.is_do_gts_opt_ = das_gts_opt_info_.use_specify_snapshot_;
   ins_adaptor.das_allocator_ = &op_alloc_;
   if (OB_FAIL(ins_adaptor.write_tablet(dml_iter, affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -145,7 +146,8 @@ int ObDASInsertOp::insert_index_with_fetch(ObAccessService *as,
                                            *snapshot,
                                            op_alloc_,
                                            store_ctx_guard,
-                                           dml_param))) {
+                                           dml_param,
+                                           das_gts_opt_info_.use_specify_snapshot_))) {
     LOG_WARN("init index dml param failed", K(ret), KPC(ins_ctdef), KPC(ins_rtdef));
   } else if (OB_FAIL(as->insert_rows_with_fetch_dup(ls_id_,
                                                     tablet_id,

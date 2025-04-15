@@ -354,7 +354,8 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, lock_state))
       || NULL == key || NULL == value_iter) {
     if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
-      if (!context_->query_flag_.is_for_foreign_key_check()) {
+      bool is_plain_insert_gts_opt = context_->query_flag_.is_plain_insert_gts_opt();
+      if (!context_->query_flag_.is_for_foreign_key_check() || !is_plain_insert_gts_opt) {
         ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
         TRANS_LOG(WARN, "should not meet row conflict if it's not for foreign key check",
                   K(ret), K(context_->query_flag_));

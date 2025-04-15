@@ -88,6 +88,7 @@ int ObDASDeleteOp::open_op()
   del_adaptor.tablet_id_ = tablet_id_;
   del_adaptor.ls_id_ = ls_id_;
   del_adaptor.related_tablet_ids_ = &related_tablet_ids_;
+  del_adaptor.is_do_gts_opt_ = das_gts_opt_info_.use_specify_snapshot_;
   del_adaptor.das_allocator_ = &op_alloc_;
   if (OB_FAIL(del_adaptor.write_tablet(dml_iter, affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {

@@ -1280,7 +1280,8 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                                  transaction::ObTxReadSnapshot &snapshot,
                                  ObIAllocator &das_alloc,
                                  storage::ObStoreCtxGuard &store_ctx_gurad,
-                                 storage::ObDMLBaseParam &dml_param)
+                                 storage::ObDMLBaseParam &dml_param,
+                                 bool is_insert_up_gts_opt)
 {
   int ret = OB_SUCCESS;
   dml_param.timeout_ = base_rtdef.timeout_ts_;
@@ -1318,10 +1319,13 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_ctdef.is_update_pk_with_dop()) {
     dml_param.write_flag_.set_update_pk_dop();
   }
-
   if (base_rtdef.is_immediate_row_conflict_check_ && base_ctdef.is_update_pk_) {
     dml_param.write_flag_.set_immediate_row_check();
   }
+  if (is_insert_up_gts_opt) {
+    dml_param.write_flag_.set_plain_insert_gts_opt();
+  }
+
   return ret;
 }
 

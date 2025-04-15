@@ -1135,7 +1135,9 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
 
     if (OB_SUCC(ret)) {
       ObStoreRowLockState lock_state;
-      if (context_->query_flag_.is_for_foreign_key_check() &&
+      bool is_plain_insert_gts_opt = context_->query_flag_.is_plain_insert_gts_opt();
+      bool is_for_fk_check = context_->query_flag_.is_for_foreign_key_check();
+      if ((is_plain_insert_gts_opt || is_for_fk_check) &&
           OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_sstable(
                   acc_ctx.get_tx_table_guards(),
                   acc_ctx.get_tx_id(),

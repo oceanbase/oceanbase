@@ -169,6 +169,9 @@ int ObSingleRowGetter::init_dml_access_ctx(
   common::ObQueryFlag query_flag;
   common::ObVersionRange trans_version_range;
   query_flag.read_latest_ = ObQueryFlag::OBSF_MASK_READ_LATEST;
+  if (store_ctx.mvcc_acc_ctx_.write_flag_.is_plain_insert_gts_opt()) {
+    query_flag.set_plain_insert_gts_opt();
+  }
   if (skip_read_lob) {
     query_flag.skip_read_lob_ = ObQueryFlag::OBSF_MASK_SKIP_READ_LOB;
   }
