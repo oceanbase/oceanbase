@@ -186,6 +186,8 @@ int ObCallProcedureResolver::resolve_cparam_with_assign(const ParseNode *param_n
     } else {
       ret = OB_ERR_CALL_WRONG_ARG;
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, routine_info->get_routine_name().length(),
+                    routine_info->get_routine_name().ptr());
     }
 
     if (OB_SUCC(ret)) {

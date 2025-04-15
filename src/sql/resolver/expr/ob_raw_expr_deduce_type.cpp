@@ -545,6 +545,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         if (is_oracle_mode && ObTinyIntType == to
             && !ALLOW_BOOL_INPUT(expr.get_expr_type())) {
           ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, static_cast<int>(strlen(op->get_name())), op->get_name());
           LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
         } else if (ObExtendType == from && ob_is_character_type(to, to_cs_type) && !op->is_called_in_sql()) {
           ret = OB_ERR_CALL_WRONG_ARG;
