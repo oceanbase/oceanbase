@@ -389,7 +389,7 @@ int ObGroupJoinBufffer::drain_left()
       }
       if (OB_SUCC(ret)) {
         if (!(batch_rows->size_ == 0 && batch_rows->end_)) {
-          last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, spec_->max_batch_size_);
+          last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, batch_rows->size_);
           save_last_batch_ = true;
         }
         const_cast<ObBatchRows *&>(batch_rows)->end_ = false;
@@ -640,7 +640,7 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
       if (batch_rows->size_ == 0 && batch_rows->end_) {
         // do nothing
       } else {
-        last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, spec_->max_batch_size_);
+        last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, batch_rows->size_);
         save_last_batch_ = true;
       }
       op_->clear_evaluated_flag();
