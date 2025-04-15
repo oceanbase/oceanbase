@@ -78,6 +78,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     if (OB_LS_FETCH_LOG2 == pcode_ || OB_CDC_FETCH_RAW_LOG == pcode_) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
+    proxy_.set_timeout(abs_timeout_ts_ - start_ts);
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
@@ -230,6 +231,7 @@ int SSHandle<pcodeStruct>::abort()
     if (OB_LS_FETCH_LOG2 == pcode_ || OB_CDC_FETCH_RAW_LOG == pcode_) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
+    proxy_.set_timeout(abs_timeout_ts_ - start_ts);
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {

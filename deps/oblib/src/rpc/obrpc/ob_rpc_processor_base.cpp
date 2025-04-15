@@ -53,6 +53,13 @@ int64_t __attribute__((weak)) get_stream_rpc_max_wait_timeout(int64_t tenant_id)
   UNUSED(tenant_id);
   return ObRpcProcessorBase::DEFAULT_WAIT_NEXT_PACKET_TIMEOUT;
 }
+
+bool __attribute__((weak)) stream_rpc_update_timeout()
+{
+  //do nothing
+  return false;
+}
+
 void ObRpcProcessorBase::reuse()
 {
   rpc_pkt_ = NULL;
@@ -617,7 +624,9 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout, const ObAddr *src_addr)
     } else if (rpc_pkt_->is_stream_last()) {
       ret = OB_ITER_END;
     } else {
-      //do nothing
+      if (stream_rpc_update_timeout()) { // not to reset timeout_is if rpc is from the old version observer
+        THIS_WORKER.set_timeout_ts(rpc_pkt_->get_timestamp() + rpc_pkt_->get_timeout());
+      }
     }
   }
 

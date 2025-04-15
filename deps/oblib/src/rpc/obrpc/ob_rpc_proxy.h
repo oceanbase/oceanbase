@@ -289,6 +289,7 @@ class Handle {
 public:
   Handle();
   const common::ObAddr &get_dst_addr() const { return dst_; }
+  void reset_timeout();
 
 protected:
   bool has_more_;
@@ -301,6 +302,7 @@ protected:
   bool do_ratelimit_;
   int8_t is_bg_flow_;
   int64_t first_pkt_id_;
+  int64_t abs_timeout_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Handle);
 };

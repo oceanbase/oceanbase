@@ -60,6 +60,7 @@ int do_fetch_next_buffer_if_need(
     rpc_buffer.get_position() = 0;
     rpc_buffer_parse_pos = 0;
     if (handle.has_more()) {
+      handle.reset_timeout();
       if (OB_FAIL(handle.get_more(rpc_buffer))) {
         STORAGE_LOG(WARN, "get_more(send request) failed", K(ret));
       } else if (rpc_buffer.get_position() < 0) {

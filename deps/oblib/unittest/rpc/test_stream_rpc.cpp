@@ -14,6 +14,17 @@
 
 #include <gtest/gtest.h>
 #include "rpc/obrpc/ob_rpc_proxy.h"
+#include "rpc/obrpc/ob_rpc_session_handler.h"
+#include "rpc/frame/ob_req_qhandler.h"
+#include "rpc/obrpc/ob_rpc_req_context.h"
+#include "rpc/frame/ob_net_easy.h"
+#include "rpc/ob_request.h"
+#include "rpc/frame/ob_req_deliver.h"
+#include "rpc/obrpc/ob_rpc_handler.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
+#include "rpc/obrpc/ob_rpc_processor.h"
+#include "lib/net/ob_net_util.h"
+#include "test_obrpc_util.h"
 
 using namespace oceanbase;
 using namespace oceanbase::rpc::frame;
@@ -26,9 +37,23 @@ using namespace std;
 #define IO_CNT 1
 #define SEND_CNT 1
 #define ERROR_MSG "abbcced"
+#define AFTER_RPCESS_TIME_US 100
 #define MAX_NUM 1000
+namespace oceanbase {
+namespace obrpc {
+bool __attribute__((weak)) stream_rpc_update_timeout()
+{
+  return true;
+}
+bool enable_pkt_nio(bool start_as_client) {
+  return true;
+}
+int pnio_server_ref;
+int global_rpc_port;
+extern void __attribute__((weak)) response_rpc_error_packet(ObRequest* req, int ret);
+} // end of namespace obrpc
+} // end of namespace oceanbase
 
-#if 0
 class TestProxy
     : public ObRpcProxy
 {
@@ -45,19 +70,30 @@ protected:
   int process()
   {
     int ret = OB_SUCCESS;
-    const int64_t cnt = arg_;
+    const int32_t cnt = arg_ & 0xffffffff;
+    int32_t process_time_us = arg_ >> 32;
+    LOG_INFO("process", K(cnt), K(process_time_us), K(THIS_WORKER.get_timeout_remain()));
     result_ = 0;
-    while (++result_ < cnt) {
-      if (OB_FAIL(flush())) {
+    while (++result_ < cnt && OB_SUCCESS == ret) {
+      if(process_time_us > 0) {
+        ob_usleep(process_time_us); // Simulate that the server is processing
+      }
+      if (THIS_WORKER.is_timeout()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("check timeout fail", K(ret));
+      } else if (OB_FAIL(flush(THIS_WORKER.get_timeout_remain()))) {
         LOG_INFO("flush fail", K(ret));
         break;
+      } else {
+        int64_t remain = THIS_WORKER.get_timeout_remain();
+        LOG_INFO("process after flush", K(ret), K(remain), K(result_));
       }
     }
-    return OB_SUCCESS;
+    return ret;
   }
   int after_process()
   {
-    ::usleep(100);
+    ::usleep(AFTER_RPCESS_TIME_US);
     return OB_SUCCESS;
   }
 };
@@ -85,10 +121,12 @@ public:
     if (!pkt.is_stream()) {
       LOG_INFO("not stream");
       mp_.set_ob_request(*req);
+      THIS_WORKER.set_timeout_ts(req->get_receive_timestamp() + pkt.get_timeout());
       mp_.run();
     } else {
       if (!shandler_.wakeup_next_thread(*req)) {
-        easy_request_wakeup(req->get_request());
+        RPC_REQ_OP.response_result(req, NULL);
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "wakeup failed");
       }
     }
     return true;
@@ -144,29 +182,32 @@ public:
     ObNetOptions opts;
     opts.rpc_io_cnt_ = IO_CNT;
     net_.init(opts);
-    port_ = static_cast<int32_t>(rand.get(3000, 5000));
-    while (OB_SUCCESS != net_.add_rpc_listen(port_, handler_, transport_)) {
-      port_ = static_cast<int32_t>(rand.get(3000, 5000));
+    if (global_rpc_port == 0) {
+      global_rpc_port = static_cast<int32_t>(rand.get(3000, 5000));
     }
-    net_.start();
+    port_ = global_rpc_port;
+    if (ATOMIC_FAA(&pnio_server_ref, 1) == 0) {
+      global_poc_server.start(port_, 4, &server_);
+    }
+    uint32_t ip_value = 0;
+    if (0 == (ip_value = obsys::ObNetUtil::get_local_addr_ipv4("eth0"))
+      && 0 == (ip_value = obsys::ObNetUtil::get_local_addr_ipv4("bond0"))) {
+      local_addr_.set_ip_addr("127.0.0.1", port_);
+    } else {
+      ip_value = ntohl(ip_value);
+      local_addr_.set_ipv4_addr(ip_value, port_);
+      LOG_INFO("get local ip", K(local_addr_));
+    }
+    ObReqTransport dummy_transport(NULL, NULL);
+    transport_ = &dummy_transport;
   }
 
   virtual void TearDown()
   {
-    net_.stop();
-    net_.wait();
     server_.stop();
-  }
-
-  int send(const char *buf, int len)
-  {
-    ObReqTransport::Request<ObRpcPacket> req;
-    ObReqTransport::Result<ObRpcPacket> res;
-    ObAddr dst(ObAddr::IPV4, "127.0.0.1", port_);
-    int64_t payload = len;
-    transport_->create_request(req, dst, payload, 3000000);
-    memcpy(req.buf(), buf, len);
-    return transport_->send(req, res);
+    if (ATOMIC_AAF(&pnio_server_ref, -1) == 0) {
+      global_poc_server.destroy();
+    }
   }
 
 protected:
@@ -176,6 +217,7 @@ protected:
   ObTestDeliver server_;
   rpc::frame::ObReqTransport *transport_;
   ObRandom rand;
+  ObAddr local_addr_;
 };
 
 class MySSHandle
@@ -198,16 +240,16 @@ public:
 
 TEST_F(TestRpcServer, StreamRPCChaos)
 {
-  ObAddr dst(ObAddr::IPV4, "127.0.0.1", port_);
   TestProxy proxy;
-  proxy.init(transport_, dst);
+  proxy.init(transport_, local_addr_);
 
   MySSHandle handle;
   int64_t num = 0;
-  proxy.test(MAX_NUM, num, handle);
-  handle.set_timeout(1000*1000);
+  proxy.timeout(1000*1000).test(MAX_NUM, num, handle);
   while (handle.has_more()) {
     int64_t oldnum = num;
+    int rt = 0;
+    LOG_INFO("StreamRPCChaos", K(num));
     ASSERT_EQ(OB_SUCCESS, handle.get_more(num));
     EXPECT_EQ(num, oldnum + 1);
     if (num >= MAX_NUM / 2 && num <= MAX_NUM / 2 + 1) {
@@ -220,9 +262,8 @@ TEST_F(TestRpcServer, StreamRPCChaos)
 
 TEST_F(TestRpcServer, StreamRPCAbort)
 {
-  ObAddr dst(ObAddr::IPV4, "127.0.0.1", port_);
   TestProxy proxy;
-  proxy.init(transport_, dst);
+  proxy.init(transport_, local_addr_);
 
   MySSHandle handle;
   int64_t num = 0;
@@ -233,7 +274,7 @@ TEST_F(TestRpcServer, StreamRPCAbort)
     EXPECT_EQ(num, oldnum + 1);
     if (num >= MAX_NUM / 2) {
       int ret = handle.abort();
-      ASSERT_EQ(OB_SUCCESS, ret);
+      ASSERT_EQ(OB_ITER_END, ret);
     }
   }
   EXPECT_EQ(MAX_NUM / 2, num);
@@ -241,9 +282,8 @@ TEST_F(TestRpcServer, StreamRPCAbort)
 
 TEST_F(TestRpcServer, StreamRPC)
 {
-  ObAddr dst(ObAddr::IPV4, "127.0.0.1", port_);
   TestProxy proxy;
-  proxy.init(transport_, dst);
+  proxy.init(transport_, local_addr_);
 
   TestProxy::SSHandle<OB_TEST_PCODE> handle;
   int64_t num = 0;
@@ -259,10 +299,68 @@ TEST_F(TestRpcServer, StreamRPC)
   }
   EXPECT_EQ(MAX_NUM, num);
 }
-#endif
+
+TEST_F(TestRpcServer, StreamRPCTimeout)
+{
+  // test send stream rpc without reset_timeout
+  TestProxy proxy;
+  proxy.init(transport_, local_addr_);
+  TestProxy::SSHandle<OB_TEST_PCODE> handle;
+  int64_t num = 0;
+  int64_t process_time = 200 * 1000; // 200ms
+  int wait_time = 3000 * 1000; // 3s
+  int32_t expect_succ_num = wait_time / (process_time + AFTER_RPCESS_TIME_US);
+  int32_t actual_succ_num = 0;
+  int64_t arg = (process_time << 32) | MAX_NUM;
+  EXPECT_EQ(OB_SUCCESS, proxy.timeout(wait_time).test(arg, num, handle));
+  actual_succ_num ++;
+  int ret = OB_SUCCESS;
+  while (handle.has_more() && OB_SUCCESS == ret) {
+    int64_t oldnum = num;
+    ret = handle.get_more(num);
+    LOG_INFO("StreamRPCTimeout", K(num), K(ret));
+    if (OB_SUCCESS == ret) {
+      actual_succ_num ++;
+    }
+  }
+  EXPECT_EQ(OB_TIMEOUT, ret);
+  EXPECT_EQ(actual_succ_num, expect_succ_num);
+  if (handle.has_more()) {
+    handle.abort();
+  }
+}
+
+TEST_F(TestRpcServer, StreamRPCResetTimeout)
+{
+  // test send stream rpc with reset_timeout
+  TestProxy proxy;
+  proxy.init(transport_, local_addr_);
+
+  TestProxy::SSHandle<OB_TEST_PCODE> handle;
+  int64_t num = 0;
+  int64_t process_time = 1000 * 1000; // 1s
+  int send_num = 4;
+  int64_t arg = (process_time << 32) | send_num;
+  EXPECT_EQ(OB_SUCCESS, proxy.timeout(2000000).test(arg, num, handle));
+  int ret = OB_SUCCESS;
+  while (handle.has_more() && OB_SUCCESS == ret) {
+    int64_t oldnum = num;
+    LOG_INFO("StreamRPCResetTimeout", K(num));
+    handle.reset_timeout();
+    ret = handle.get_more(num);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    EXPECT_EQ(num, oldnum + 1);
+  }
+  EXPECT_EQ(send_num, num);
+  if (handle.has_more()) {
+    handle.abort();
+  }
+}
 
 int main(int argc, char *argv[])
 {
+  OB_LOGGER.set_log_level("TRACE");
+  OB_LOGGER.set_file_name("test_stream_rpc.log", true);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
