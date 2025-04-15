@@ -12586,7 +12586,9 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
         ret = check_undeclared_var_type(q_name);
       }
       if (OB_ERR_SP_UNDECLARED_VAR == ret) {
-        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, q_name.col_name_.length(), q_name.col_name_.ptr());
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
+                      q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.length(),
+                      q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.ptr());
       }
     }
   }
@@ -14349,6 +14351,8 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
       ret = OB_ERR_SP_UNDECLARED_VAR;
       LOG_WARN("failed to resolve access ident",
                K(ret), K(access_ident), K(access_idxs));
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
+                    access_ident.access_name_.length(), access_ident.access_name_.ptr());
     } else {
       new(&access_idx)ObObjAccessIdx(pl_data_type,
                                      static_cast<ObObjAccessIdx::AccessType>(type),
