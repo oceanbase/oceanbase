@@ -144,6 +144,7 @@ TEST_F(TestRpcReverseKeepAliveService, reverse_keepalive_service)
   ASSERT_EQ(ret, OB_HASH_NOT_EXIST);
 
   rpc_reverse_keepalive_instance.destroy();
+  global_poc_server.destroy();
 }
 
 } // end namespace obrpc
