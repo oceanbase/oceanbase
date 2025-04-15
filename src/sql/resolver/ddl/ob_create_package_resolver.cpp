@@ -290,7 +290,8 @@ int ObCreatePackageResolver::resolve_invoke_accessible(const ParseNode *package_
         if (T_SP_INVOKE == node->type_) {
           if (has_sp_invoker_clause) {
             ret = OB_ERR_DECL_MORE_THAN_ONCE;
-            LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("AUTHID")), "AUTHID");
+            LOG_WARN("PLS-00371: at most one declaration for 'AUTHID' is permitted",
                       K(ret), K(node->type_), K(has_sp_invoker_clause));
           } else {
             has_sp_invoker_clause = true;
@@ -301,7 +302,8 @@ int ObCreatePackageResolver::resolve_invoke_accessible(const ParseNode *package_
         } else if (T_SP_ACCESSIBLE_BY == node->type_) {
           if (has_accessible_by_clause) {
             ret = OB_ERR_DECL_MORE_THAN_ONCE;
-            LOG_WARN("PLS-00371: at most one declaration for 'string' is permitted",
+            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, static_cast<int>(strlen("ACCESSIBLE BY")), "ACCESSIBLE BY");
+            LOG_WARN("PLS-00371: at most one declaration for 'ACCESSIBLE BY' is permitted",
                       K(ret), K(node->type_), K(has_accessible_by_clause));
           } else {
             has_accessible_by_clause = true;
