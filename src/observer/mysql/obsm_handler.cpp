@@ -218,6 +218,7 @@ int ObSMHandler::on_close(easy_connection_t *c)
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else if (OB_UNLIKELY(NULL == conn->tenant_)) {
           ret = OB_TENANT_NOT_EXIST;
+        } else if (FALSE_IT(task->set_diagnostic_info(conn->get_diagnostic_info()))) {
         } else if (OB_FAIL(conn->tenant_->recv_request(*task))) {
           LOG_WARN("push disconnect task fail", K(conn->sessid_),
                   "proxy_sessid", conn->proxy_sessid_, K(ret));
@@ -225,6 +226,7 @@ int ObSMHandler::on_close(easy_connection_t *c)
         }
         // free session locally
         if (OB_FAIL(ret)) {
+          ObDiagnosticInfoSwitchGuard g(conn->get_diagnostic_info());
           ObMPDisconnect disconnect_processor(ctx);
           rpc::frame::ObReqProcessor *processor = static_cast<rpc::frame::ObReqProcessor *>(&disconnect_processor);
           if (OB_FAIL(processor->run())) {
