@@ -932,6 +932,83 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+TEST_F(ObTableLockServiceTest, retry_out_trans_with_4038)
+{
+  LOG_INFO("ObTableLockServiceTest::retry_out_trans_with_4038");
+
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  ObTxParam tx_param;
+  share::ObTenantSwitchGuard tenant_guard;
+  ObTxDesc *tx_desc1 = nullptr;
+  ObTransService *txs = nullptr;
+  ObLockID lock_id1;
+  ObLockID lock_id2;
+  int64_t obj_id1 = 1001;
+  int64_t obj_id2 = 1002;
+
+  lock_id1.set(ObLockOBJType::OBJ_TYPE_COMMON_OBJ, obj_id1);
+  lock_id2.set(ObLockOBJType::OBJ_TYPE_COMMON_OBJ, obj_id2);
+
+  ObTableLockOwnerID OWNER_ONE;
+  ObTableLockMode lock_mode = EXCLUSIVE;
+
+  ObLockObjsRequest lock_arg1;
+  ObLockObjsRequest lock_arg2;
+  int64_t stmt_timeout_ts = -1;
+
+  tx_param.access_mode_ = ObTxAccessMode::RW;
+  tx_param.isolation_ = ObTxIsolationLevel::RC;
+  tx_param.timeout_us_ = 6000 * 1000L;
+  tx_param.lock_timeout_us_ = -1;
+  tx_param.cluster_id_ = GCONF.cluster_id;
+
+  ret = tenant_guard.switch_to(OB_SYS_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(nullptr, MTL(ObTableLockService*));
+
+  txs = MTL(ObTransService*);
+  ASSERT_NE(nullptr, txs);
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc1));
+
+  // 1. lock out_trans
+  LOG_INFO("ObTableLockServiceTest::retry_out_trans_with_4038 1");
+
+  lock_arg1.objs_.push_back(lock_id1);
+  lock_arg1.owner_id_ = OWNER_ONE;
+  lock_arg1.lock_mode_ = lock_mode;
+  lock_arg1.op_type_ = OUT_TRANS_LOCK;
+  lock_arg1.timeout_us_ = 0;
+
+  ret = MTL(ObTableLockService *)->lock_obj(*tx_desc1, tx_param, lock_arg1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 2. eanble errsim
+  LOG_INFO("ObTableLockServiceTest::retry_out_trans_with_4038 2");
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter system set_tp tp_name = 'EN_OB_NOT_MASTER_IN_TABLELOCK', error_code = 4038, frequency = 1;"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  // 3. lock out_trans with error -4038
+  LOG_INFO("ObTableLockServiceTest::retry_out_trans_with_4038 3");
+  lock_arg2.objs_.push_back(lock_id2);
+  lock_arg2.owner_id_ = OWNER_ONE;
+  lock_arg2.lock_mode_ = lock_mode;
+  lock_arg2.op_type_ = OUT_TRANS_LOCK;
+  lock_arg2.timeout_us_ = 0;
+
+  ret = MTL(ObTableLockService *)->lock_obj(*tx_desc1, tx_param, lock_arg2);
+  ASSERT_EQ(OB_TRANS_TIMEOUT, ret);
+
+  // 4. try to commit trans
+  LOG_INFO("ObTableLockServiceTest::retry_out_trans_with_4038 4");
+  ret = txs->commit_tx(*tx_desc1, stmt_timeout_ts);
+  ASSERT_EQ(OB_TRANS_ROLLBACKED, ret);
+
+  ret = txs->release_tx(*tx_desc1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
 }// end unittest
 } // end oceanbase
 
