@@ -3042,8 +3042,8 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                    OB_ISNULL(right = expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcept null param expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(left, left)) ||
-                   OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(right, right))) {
+        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left, true, true)) ||
+                   OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right, true, true))) {
           LOG_WARN("failed to get expr without lossless cast", K(ret));
         } else if (IS_BASIC_CMP_OP(expr->get_expr_type()) &&
                    (OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
@@ -8563,6 +8563,7 @@ int ObTransformUtils::check_error_free_expr(ObRawExpr *expr, bool &is_error_free
   int ret = OB_SUCCESS;
   is_error_free = true;
   bool temp_flag = true;
+  bool need_check_child = true;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret));
@@ -8578,10 +8579,15 @@ int ObTransformUtils::check_error_free_expr(ObRawExpr *expr, bool &is_error_free
     is_error_free = false;
   } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
     // case-by-case determination
-    if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, temp_flag))) {
-      LOG_WARN("failed to check lossless cast", K(ret));
+    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(expr, expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
+      is_error_free = false;
+    } else if (OB_FAIL(check_error_free_expr(expr, temp_flag))) {
+      LOG_WARN("failed to check error free expr", K(ret));
     } else {
       is_error_free &= temp_flag;
+      need_check_child = false; // all child exprs have been checked
     }
   } else if (expr->is_column_ref_expr()) {
     ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(expr);
@@ -8590,11 +8596,13 @@ int ObTransformUtils::check_error_free_expr(ObRawExpr *expr, bool &is_error_free
     }
   }
   // check child exprs recursively
-  for (int64_t i = 0; OB_SUCC(ret) && is_error_free && i < expr->get_param_count(); i++) {
-    if (OB_FAIL(SMART_CALL(check_error_free_expr(expr->get_param_expr(i), temp_flag)))) {
-      LOG_WARN("failed to check error free expr", K(ret));
-    } else {
-      is_error_free &= temp_flag;
+  if (need_check_child) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_error_free && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(check_error_free_expr(expr->get_param_expr(i), temp_flag)))) {
+        LOG_WARN("failed to check error free expr", K(ret));
+      } else {
+        is_error_free &= temp_flag;
+      }
     }
   }
   return ret;

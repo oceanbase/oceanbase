@@ -16848,12 +16848,8 @@ int ObJoinOrder::extract_real_join_keys(ObIArray<ObRawExpr *> &join_keys)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < join_keys.count(); ++i) {
-    ObRawExpr *&expr = join_keys.at(i);
-    bool is_lossless = false;
-    if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
-      LOG_WARN("failed to check lossless column cast", K(ret));
-    } else if (is_lossless) {
-      expr = expr->get_param_expr(0);
+    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(join_keys.at(i), join_keys.at(i)))) {
+      LOG_WARN("failed to get expr without lossless column cast", K(ret));
     }
   }
   return ret;
@@ -17808,10 +17804,8 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
     depend_expr = depend_expr->get_param_expr(4);
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(depend_expr, is_lossless))) {
-    LOG_WARN("check depend epxr lossless failed", K(ret));
-  } else if(is_lossless) {
-    depend_expr = depend_expr->get_param_expr(0);
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(depend_expr, depend_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
   }
   // compare each param expr with depend_expr
   for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); i++) {
