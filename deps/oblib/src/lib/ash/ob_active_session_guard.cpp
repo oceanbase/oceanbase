@@ -386,7 +386,7 @@ void ObAshBuffer::fixup_stat(int64_t index, const ObWaitEventDesc &desc)
       last_stat.p1_ = desc.p1_;
       last_stat.p2_ = desc.p2_;
       last_stat.p3_ = desc.p3_;
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
       const char *bt = lbt();
       int64_t size = std::min(sizeof(last_stat.bt_) - 1, STRLEN(bt));
       MEMCPY(last_stat.bt_, bt, size);
