@@ -68,7 +68,8 @@ int ObSyncRespCallback::wait(const int64_t wait_timeout_us, const int64_t pcode,
   const struct timespec ts = {1, 0};
   bool has_terminated = false;
   while(ATOMIC_LOAD(&cond_) == 0) {
-    if (OB_UNLIKELY((obrpc::OB_REMOTE_SYNC_EXECUTE == pcode || obrpc::OB_REMOTE_EXECUTE == pcode)
+    if (OB_UNLIKELY((obrpc::OB_REMOTE_SYNC_EXECUTE == pcode || obrpc::OB_REMOTE_EXECUTE == pcode
+                      || proxy_.is_detect_session_killed())
                     && !has_terminated
                     && OB_ERR_SESSION_INTERRUPTED == THIS_WORKER.check_status())) {
       RPC_LOG(INFO, "check session killed, will execute pn_terminate_pkt", K(gtid_), K(pkt_id_));

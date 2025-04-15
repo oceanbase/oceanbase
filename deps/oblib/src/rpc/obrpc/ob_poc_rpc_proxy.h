@@ -28,8 +28,8 @@ namespace obrpc
 class ObSyncRespCallback
 {
 public:
-  ObSyncRespCallback(ObRpcMemPool& pool)
-    : pkt_nio_cb_(NULL), pool_(pool), resp_(NULL), sz_(0), cond_(0), send_ret_(common::OB_SUCCESS), gtid_(0), pkt_id_(0){}
+  ObSyncRespCallback(ObRpcMemPool& pool, ObRpcProxy& proxy)
+    : pkt_nio_cb_(NULL), pool_(pool), proxy_(proxy), resp_(NULL), sz_(0), cond_(0), send_ret_(common::OB_SUCCESS){}
   ~ObSyncRespCallback() {}
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
   int handle_resp(int io_err, const char* buf, int64_t sz);
@@ -45,6 +45,7 @@ public:
 private:
   void* pkt_nio_cb_;
   ObRpcMemPool& pool_;
+  const ObRpcProxy& proxy_;
   char* resp_;
   int64_t sz_;
   int cond_;
@@ -122,7 +123,7 @@ public:
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
-    ObSyncRespCallback cb(pool);
+    ObSyncRespCallback cb(pool, proxy);
     char* req = NULL;
     int64_t req_sz = 0;
     const char* resp = NULL;
@@ -240,9 +241,9 @@ public:
         if (newcb) {
           set_ucb_args(newcb, args);
           init_ucb(proxy, cb->get_ucb(), addr, start_ts, req_sz);
-          newcb->gtid_ = (pnio_group_id<<32) + thread_id;
-          pkt_id_ptr = &newcb->pkt_id_;
         }
+        ucb->gtid_ = (pnio_group_id<<32) + thread_id;
+        pkt_id_ptr = &ucb->pkt_id_;
       }
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", req_sz, pcode, src_tenant_id);
       timeguard.click(rpc_timeguard_str);
