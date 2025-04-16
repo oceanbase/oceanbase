@@ -2354,6 +2354,11 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
           LOG_WARN("failed to check text length", K(ret), K(scalar_data_type));
         } else {
           scalar_data_type.set_length(length);
+          if (scalar_data_type.get_meta_type().is_clob()
+              && scalar_data_type.get_length_semantics() == LS_INVALIED
+              && lib::is_oracle_mode()) {
+            scalar_data_type.set_length_semantics(LS_CHAR);
+          }
           if (lib::is_mysql_mode()) {
             scalar_data_type.set_obj_type(type);
           }
