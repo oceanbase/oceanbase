@@ -994,6 +994,9 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       // We remember each predicate's selectivity in the plan so that we can reorder them
       // in the vector of filters according to their selectivity.
       LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", *qual, K(single_sel));
+      ENABLE_OPT_TRACE_COST_MODEL;
+      OPT_TRACE("succeed to calculate qual [", qual,"] selectivity :", single_sel);
+      DISABLE_OPT_TRACE_COST_MODEL;
     }
   }
   if (FAILEDx(calculate_selectivity(table_metas, ctx, sel_estimators, selectivity, all_predicate_sel, true))) {
@@ -4964,6 +4967,7 @@ int ObHistSelHelper::init(const OptTableMetas &table_metas,
   handlers_.reuse();
   part_rows_.reuse();
   ObObj dummy1, dummy2;
+  bool is_frequency = true;
   if (OB_ISNULL(table_meta) || OB_INVALID_ID == table_meta->get_ref_table_id()) {
     // do nothing
   } else if (NULL == ctx.get_opt_stat_manager() ||
@@ -5004,6 +5008,7 @@ int ObHistSelHelper::init(const OptTableMetas &table_metas,
         LOG_WARN("failed to push back", K(ret));
       } else {
         is_valid_ = true;
+        is_frequency &= column_stat.stat_->get_histogram().is_frequency();
       }
     }
   }
@@ -5013,11 +5018,15 @@ int ObHistSelHelper::init(const OptTableMetas &table_metas,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column meta not find", K(ret), KPC(table_meta), K(column_id));
     } else {
-      hist_scale_ = column_meta->get_hist_scale();
       double distinct_sel = 1.0 / std::max(1.0, column_meta->get_base_ndv());
       if (handlers_.count() == 1) {
         density_ = std::min(handlers_.at(0).stat_->get_histogram().get_density(),
                             distinct_sel);
+      } else if (is_frequency) {
+        density_ = 0.0;
+        for (int64_t i = 0; i < handlers_.count(); i ++) {
+          density_ = std::max(density_, handlers_.at(i).stat_->get_histogram().get_density());
+        }
       } else {
         density_ = distinct_sel;
       }
@@ -5089,7 +5098,8 @@ int ObHistEqualSelHelper::inner_get_sel(const OptSelectivityCtx &ctx,
   } else if (idx < 0 || idx >= histogram.get_bucket_size() || !is_equal) {
     sel = 0.0;
     is_rare_value = true;
-    if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3) &&
+    if (!is_neq_ &&
+        ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3) &&
         OB_FAIL(refine_out_of_bounds_sel(ctx, *new_value, sel, is_rare_value))) {
       LOG_WARN("failed to refine out of bounds sel", K(ret));
     }

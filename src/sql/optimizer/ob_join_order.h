@@ -1956,7 +1956,8 @@ struct NullAwareAntiJoinInfo {
     // generate physical property for each subquery path, including ordering, sharding
     int compute_subquery_path_property(const uint64_t table_id,
                                        ObLogicalOperator *root,
-                                       Path *path);
+                                       Path *path,
+                                       bool is_temp_table_path = false);
 
     // generate logical property for each subquery, including const exprs, fd item sets
     int compute_subquery_property(const uint64_t table_id,

@@ -8716,7 +8716,8 @@ int ObJoinOrder::generate_temp_table_paths()
       LOG_WARN("failed to generate subquery property", K(ret));
     } else if (OB_FAIL(compute_subquery_path_property(table_id_,
                                                       temp_table_root,
-                                                      temp_table_path))) {
+                                                      temp_table_path,
+                                                      /*is_temp_table_path = */true))) {
       LOG_WARN("failed to generate subquery paths", K(ret));
     } else if (OB_FAIL(temp_table_path->compute_sharding_info())) {
       LOG_WARN("failed to reset temp table partition keys", K(ret));
@@ -8940,7 +8941,8 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
 // generate physical property for each subquery path, including ordering, sharding
 int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
                                                  ObLogicalOperator *root,
-                                                 Path *path)
+                                                 Path *path,
+                                                 bool is_temp_table_path)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
@@ -8974,7 +8976,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->set_interesting_order_info(interesting_order_info);
       path->is_local_order_ = root->get_is_local_order();
       path->is_range_order_ = root->get_is_range_order();
-      path->exchange_allocated_ = root->is_exchange_allocated();
+      path->exchange_allocated_ = is_temp_table_path ? false : root->is_exchange_allocated();
       path->phy_plan_type_ = root->get_phy_plan_type();
       path->location_type_ = root->get_location_type();
       path->contain_fake_cte_ = root->get_contains_fake_cte();
@@ -10313,12 +10315,17 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                       dist_algo == DIST_NONE_BROADCAST ||
                                       dist_algo == DIST_NONE_PARTITION ||
                                       dist_algo == DIST_NONE_HASH);
+          bool tmp_need_mat = need_mat;
+          bool tmp_need_no_mat = need_no_mat;
           if (!ObOptimizerUtil::is_right_need_exchange(*right_path->get_sharding(), dist_algo) &&
               right_path->exchange_allocated_ &&
               right_path->get_sharding()->is_distributed()) {
-            //如果右边不需要分配exchange，但是right path已经分配过exchange，
-            //生成nl path会导致right path里的exchange打上px表，无法执行
-          } else if ((need_mat || right_need_exchange) &&
+            tmp_need_mat = true;
+            tmp_need_no_mat = false;
+            OPT_TRACE("distributed method", ob_dist_algo_str(dist_algo), "force need materialize");
+            LOG_TRACE("distributed method force need materialize", K(dist_algo), KPC(right_path));
+          }
+          if ((tmp_need_mat || right_need_exchange) &&
                OB_FAIL(create_and_add_nl_path(left_paths.at(i),
                                               right_path,
                                               path_info.join_type_,
@@ -10330,7 +10337,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                               !left_is_at_most_one_row,
                                               true))) {
             LOG_WARN("failed to create and  add nl path with materialization", K(ret));
-          } else if (need_no_mat && !right_need_exchange &&
+          } else if (tmp_need_no_mat && !right_need_exchange &&
                      OB_FAIL(create_and_add_nl_path(left_paths.at(i),
                                                     right_path,
                                                     path_info.join_type_,
@@ -10780,6 +10787,16 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       !need_pull_to_local) {
     distributed_methods &= ~DIST_PULL_TO_LOCAL;
     OPT_TRACE("plan will not use pull to local method");
+  }
+  if (OB_SUCC(ret)) {
+    OPT_TRACE("succeed to get valid distributed method:");
+    OPT_TRACE_BEGIN_SECTION;
+    for (int64_t j = DistAlgo::DIST_BASIC_METHOD; j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
+      if (distributed_methods & j) {
+        OPT_TRACE(ob_dist_algo_str(get_dist_algo(j)));
+      }
+    }
+    OPT_TRACE_END_SECTION;
   }
   return ret;
 }
