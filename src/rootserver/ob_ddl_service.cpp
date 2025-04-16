@@ -17978,7 +17978,8 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
       } else if (original_fk_info.parent_table_id_ == orig_table_schema.get_table_id()) {
         // update referenced constraint id
         if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_ ||
-            (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_ && !orig_table_schema.is_index_table())) {
+            (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_ &&
+             foreign_key_info.ref_cst_id_ == orig_table_schema.get_table_id())) {
           if (is_oracle_mode) {
             const ObConstraint *pk_cst = hidden_table_schema.get_pk_constraint();
             if (OB_ISNULL(pk_cst)) {
