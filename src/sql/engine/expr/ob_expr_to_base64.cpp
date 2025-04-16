@@ -123,6 +123,10 @@ int ObExprToBase64::eval_to_base64(const ObExpr &expr,
       int64_t buf_len = base64_needed_encoded_length(in_raw_len);
       if (OB_UNLIKELY(buf_len == 0)) {
         res.set_string(nullptr, 0);
+        if (ob_is_text_tc(expr.datum_meta_.type_) && OB_FAIL(ObExprUtil::set_expr_ascii_result(
+            expr, ctx, res, ObString()))) {
+          LOG_WARN("set ASCII result for text failed", K(ret));
+        }
       } else {
         int64_t pos = 0;
         ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -177,6 +181,10 @@ int ObExprToBase64::eval_to_base64_batch(const ObExpr &expr,
         res[j].set_null();
       } else if (OB_UNLIKELY((buf_len = base64_needed_encoded_length(in_raw_len)) == 0)) {
         res[j].set_string(nullptr, 0);
+        if (ob_is_text_tc(expr.datum_meta_.type_) && OB_FAIL(ObExprUtil::set_expr_ascii_result(
+            expr, ctx, res[j], ObString()))) {
+          LOG_WARN("set ASCII result for text failed", K(ret), K(j));
+        }
       } else {
         int64_t pos = 0;
         output_buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len));
