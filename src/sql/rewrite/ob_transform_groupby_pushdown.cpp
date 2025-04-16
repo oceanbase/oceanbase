@@ -1094,6 +1094,26 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    // some of the filter_conds may not be distributed to any param
+    // those conditions should be pushed back to join-on conditions, otherwise they will be ditched
+    ObSqlBitSet<> table_bit_indexes;
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+      if (OB_FAIL(table_bit_indexes.add_member(i + 1))) {
+        LOG_WARN("failed to add table bit index", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+      if (OB_FAIL(table_bit_indexes.del_members2(params.at(i).table_bit_index_))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(add_exprs(filter_conds,
+                                          table_bit_indexes,
+                                          joined_table->join_conditions_))) {
+      LOG_WARN("failed to add exprs to join on condition", K(ret));
+    }
+  }
   if (OB_SUCC(ret) && joined_table->left_table_->is_joined_table()) {
     if (OB_FAIL(SMART_CALL(distribute_joined_on_conds(
                          stmt, params, static_cast<JoinedTable*>(joined_table->left_table_))))) {
