@@ -626,6 +626,11 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       case T_SP_PRAGMA_SERIALLY_REUSABLE: {
         ret = OB_ERR_PARAM_IN_PACKAGE_SPEC;
         LOG_WARN("PLS-00708: Pragma string must be declared in a package specification", K(ret));
+        if(T_SP_PRAGMA_RESTRICT_REFERENCE == parse_tree->type_) {
+          LOG_USER_ERROR(OB_ERR_PARAM_IN_PACKAGE_SPEC, static_cast<int>(strlen("RESTRICT_REFERENCES")), "RESTRICT_REFERENCES");
+        } else {
+          LOG_USER_ERROR(OB_ERR_PARAM_IN_PACKAGE_SPEC, static_cast<int>(strlen("SERIALLY_REUSABLE")), "SERIALLY_REUSABLE");
+        }
       }
         break;
       case T_SP_PRAGMA_AUTONOMOUS_TRANSACTION: {
@@ -1912,6 +1917,8 @@ int ObPLResolver::resolve_sp_subtype_precision(ObSQLSessionInfo &sesion_info,
   if (OB_FAIL(ret)) {
   } else if (!user_type->is_subtype()) {
     ret = OB_ERR_TYPE_CANT_CONSTRAINED;
+    LOG_USER_ERROR(OB_ERR_TYPE_CANT_CONSTRAINED, user_type->get_name().length(),
+                  user_type->get_name().ptr());
     LOG_WARN("PLS-00566: type name \"string\" cannot be constrained", K(ret));
   } else if (params.count() > 2) {
     ret = OB_ERR_IMPROPER_CONSTRAINT_FORM;
@@ -1927,6 +1934,8 @@ int ObPLResolver::resolve_sp_subtype_precision(ObSQLSessionInfo &sesion_info,
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(pl_type.get_data_type())) {
       ret = OB_ERR_TYPE_CANT_CONSTRAINED;
+      LOG_USER_ERROR(OB_ERR_TYPE_CANT_CONSTRAINED, user_type->get_name().length(),
+                    user_type->get_name().ptr());
       LOG_WARN("PLS-00566: type name \"string\" cannot be constrained", K(ret), K(pl_type));
     } else if (2 == params.count()
               && pl_type.get_data_type()->get_type_class() != ObNumberTC) {
@@ -3148,6 +3157,8 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
             }
           } else {
             ret = OB_ERR_TYPE_DECL_ILLEGAL;
+            LOG_USER_ERROR(OB_ERR_TYPE_DECL_ILLEGAL,
+                          access_idxs.at(idx_cnt - 1).var_name_.length(), access_idxs.at(idx_cnt - 1).var_name_.ptr());
             LOG_WARN("PLS-00206: %TYPE must be applied to a variable, column, field or attribute",
                     K(ret), K(access_idxs));
           }
@@ -4887,7 +4898,7 @@ int ObPLResolver::resolve_cursor_for_loop(
             if (OB_NOT_NULL(var) && var->get_pl_data_type().is_ref_cursor_type()) {
               ret = OB_ERR_UNDEFINED;
               LOG_WARN("ref cursor not defined", KPC(var), K(ret));
-              LOG_USER_ERROR(OB_ERR_UNDEFINED, var->get_name().ptr());
+              LOG_USER_ERROR(OB_ERR_UNDEFINED, var->get_name().length(), var->get_name().ptr());
             } else {
               ret = OB_ERR_TYPE_DECL_MALFORMED;
               LOG_WARN("cursor not defined", KPC(var), K(ret));
@@ -6452,12 +6463,16 @@ int ObPLResolver::resolve_udf_pragma(const ObStmtNodeTree *parse_tree,
     if (unit_ast.is_routine()) {
       if (unit_ast.get_compile_flag().compile_with_udf()) {
         ret = OB_ERR_PRAGMA_DECL_TWICE;
+        LOG_USER_ERROR(OB_ERR_PRAGMA_DECL_TWICE,
+                         ObString("UDF").length(),
+                         ObString("UDF").ptr());
         LOG_WARN("PLS-00711: PRAGMA string cannot be declared twice", K(ret));
       } else {
         unit_ast.get_compile_flag().add_udf();
       }
     } else {
       ret = OB_ERR_PRAGMA_ILLEGAL;
+      LOG_USER_ERROR(OB_ERR_PRAGMA_ILLEGAL, "UDF");
       LOG_WARN("PLS-00710: Pragma string cannot be specified here", K(ret));
     }
   }
@@ -6475,6 +6490,7 @@ int ObPLResolver::resolve_serially_reusable_pragma(const ObStmtNodeTree *parse_t
       OX (unit_ast.set_serially_reusable());
     } else {
       ret = OB_ERR_PARAM_IN_PACKAGE_SPEC;
+      LOG_USER_ERROR(OB_ERR_PARAM_IN_PACKAGE_SPEC, static_cast<int>(strlen("SERIALLY_REUSABLE")), "SERIALLY_REUSABLE");
       LOG_WARN("PLS-00708: Pragma string must be declared in a package specification", K(ret));
     }
   }
@@ -6496,6 +6512,7 @@ int ObPLResolver::resolve_restrict_references_pragma(const ObStmtNodeTree *parse
   CK (OB_NOT_NULL(assert_list_node = parse_tree->children_[1]));
   if (OB_SUCC(ret) && ast.get_package_type() != ObPackageType::PL_PACKAGE_SPEC) {
     ret = OB_ERR_PARAM_IN_PACKAGE_SPEC;
+    LOG_USER_ERROR(OB_ERR_PARAM_IN_PACKAGE_SPEC, static_cast<int>(strlen("RESTRICT_REFERENCES")), "RESTRICT_REFERENCES");
     LOG_WARN("PLS-00708: Pragma string must be declared in a package specification",
              K(ret), K(ast.get_package_type()));
   }
@@ -7307,6 +7324,8 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
       }
     } else {
       ret = OB_ERR_EXP_NOT_ASSIGNABLE;
+      LOG_USER_ERROR(OB_ERR_EXP_NOT_ASSIGNABLE,
+                     access_idxs.at(access_idxs.count() - 1).var_name_.length(), access_idxs.at(access_idxs.count() - 1).var_name_.ptr());
       LOG_WARN("expression cannot be used as an assignment", K(ret), K(access_idxs));
     }
     OZ (obj_expr->formalize(&get_resolve_ctx().session_info_));
@@ -8530,6 +8549,8 @@ int ObPLResolver::resolve_open(
           end;
          */
         ret = OB_ERR_IN_CURSOR_OPEND;
+        LOG_USER_ERROR(OB_ERR_IN_CURSOR_OPEND,
+                       var->get_name().length(), var->get_name().ptr());
         LOG_WARN("PLS-00361: IN cursor cannot be OPEN'ed", K(ret), KPC(var));
       } else {
         // 判断是否对外部cursor进行open，这儿会决定这个cursor的内存是否在session内存上
@@ -11381,6 +11402,7 @@ int ObPLResolver::resolve_inner_call(
         }
       } else {
         ret = OB_ERR_UNDEFINED;
+        LOG_USER_ERROR(OB_ERR_UNDEFINED, access_idxs.at(idx_cnt - 1).var_name_.length(), access_idxs.at(idx_cnt - 1).var_name_.ptr());
         LOG_WARN("object is not a procedure or is undefined", K(ret), K(access_idxs));
       }
     }
@@ -12674,6 +12696,8 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
   OZ (add_udt_self_argument(routine_info, local_expr_params, access_idxs, NULL, func));
   if (OB_ERR_VARIABLE_IS_READONLY == ret) {
     ret = OB_ERR_EXP_NOT_ASSIGNABLE;
+    LOG_USER_ERROR(OB_ERR_EXP_NOT_ASSIGNABLE,
+                   access_idxs.at(0).var_name_.length(), access_idxs.at(0).var_name_.ptr());
     LOG_WARN("expression cannot be used as an assignment", K(ret));
   }
   OZ (access_idxs.push_back(last_idx));
@@ -13650,6 +13674,8 @@ int ObPLResolver::resolve_sf_clause(
         } else if (ObProcType::NESTED_FUNCTION == routine_type
                    || ObProcType::NESTED_PROCEDURE == routine_type) {
           ret = OB_ERR_ILLEGAL_OPTION;
+          LOG_USER_ERROR(OB_ERR_ILLEGAL_OPTION, static_cast<ObPLRoutineInfo*>(routine_info)->get_name().length(),
+                                                static_cast<ObPLRoutineInfo*>(routine_info)->get_name().ptr());
           LOG_WARN("PLS-00712: illegal option for subprogram string", K(ret));
         } else {
           routine_info->set_parallel_enable();
@@ -13871,6 +13897,8 @@ int ObPLResolver::check_variable_accessible(
     if ((for_write && ns.get_compile_flag().compile_with_wnps())
         || (!for_write && ns.get_compile_flag().compile_with_rnps())) {
       ret = OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA;
+      LOG_USER_ERROR(OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA,
+                     access_idxs.at(access_idxs.count() - 1).var_name_.length(), access_idxs.at(access_idxs.count() - 1).var_name_.ptr());
       LOG_WARN("PLS-00452: Subprogram 'string' violates its associated pragma",
                K(ret), K(ns.get_compile_flag()));
     } else {
@@ -14828,6 +14856,7 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   ObObjAccessIdx access_idx;
   if ((!access_ident.is_pl_udf() && !access_ident.has_brackets_) || OB_ISNULL(access_ident.udf_info_.ref_expr_)) {
     ret = OB_ERR_UNDEFINED;
+    LOG_USER_ERROR(OB_ERR_UNDEFINED, access_ident.access_name_.length(), access_ident.access_name_.ptr());
     LOG_WARN("object is not a procedure or is undefined", K(ret), K(access_ident));
   }
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
@@ -14957,6 +14986,8 @@ int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
       OZ (build_collection_access(access_ident, access_idxs, func));
     } else if (elem_access_idx.elem_type_.is_obj_type() && !access_ident.params_.empty()) {
       ret = OB_ERR_NO_FUNCTION_EXIST;
+      LOG_USER_ERROR(OB_ERR_NO_FUNCTION_EXIST,
+                     access_ident.access_name_.length(), access_ident.access_name_.ptr());
       LOG_WARN("PLS-00222: no function with name 'string' exists in this scope", K(ret), K(access_ident));
     }
   } else {
@@ -15030,6 +15061,8 @@ int ObPLResolver::build_current_access_idx(uint64_t parent_id,
     OZ (build_collection_access(access_ident, access_idxs, func));
   } else if (access_idx.elem_type_.is_obj_type() && !access_ident.params_.empty()) {
     ret = OB_ERR_NO_FUNCTION_EXIST;
+    LOG_USER_ERROR(OB_ERR_NO_FUNCTION_EXIST,
+                   access_ident.access_name_.length(), access_ident.access_name_.ptr());
     LOG_WARN("PLS-00222: no function with name 'string' exists in this scope",
                K(ret), K(access_idx.access_type_), K(access_ident));
   }
@@ -15373,6 +15406,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
         OZ (build_collection_access(access_ident, access_idxs, func));
       } else if (access_idx.elem_type_.is_obj_type() && !access_ident.params_.empty()) {
         ret = OB_ERR_NO_FUNCTION_EXIST;
+        LOG_USER_ERROR(OB_ERR_NO_FUNCTION_EXIST,
+                       access_ident.access_name_.length(), access_ident.access_name_.ptr());
         LOG_WARN("PLS-00222: no function with name 'string' exists in this scope",
                    K(ret), K(access_idx.access_type_), K(access_ident));
       }
@@ -16027,7 +16062,8 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
       if (lib::is_oracle_mode()) {
         if (value.error_code_ >= 0) {
           ret = OB_ERR_ILLEGAL_ERROR_NUM;
-          LOG_WARN("PLS-00701: PRAGMA EXCEPTION_INIT 的非法 ORACLE 错误号", K(ret));
+          LOG_USER_ERROR(OB_ERR_ILLEGAL_ERROR_NUM, value.error_code_);
+          LOG_WARN("PLS-00701: illegal ORACLE error number string for PRAGMA EXCEPTION_INIT", K(ret), K(value.error_code_));
         }
       }
       OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.error_code_)));
@@ -16048,6 +16084,7 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
       }
       if (OB_SUCC(ret) && value.error_code_ >= 0) {
         ret = OB_ERR_ILLEGAL_ERROR_NUM;
+        LOG_USER_ERROR(OB_ERR_ILLEGAL_ERROR_NUM, value.error_code_);
         LOG_WARN("illega error number for PRAGMA EXCEPTION_INIT", K(ret));
       }
       OX (value.type_ = ERROR_CODE);
@@ -17438,6 +17475,7 @@ int ObPLResolver::check_params_legal_in_body_routine(ObPLFunctionAST &routine_as
                 LOG_WARN("default expr is null.", K(ret), K(parent_default), K(body_default));
               } else if (!body_default->same_as(*parent_default, &check_ctx)) {
                 ret = OB_ERR_DEFAULT_NOT_MATCH;
+                LOG_USER_ERROR(OB_ERR_DEFAULT_NOT_MATCH, body_param->get_name().length(), body_param->get_name().ptr());
                 LOG_WARN("PLS-00593:"
                         " default value of parameter 'string' in body must match that of spec",
                         K(ret));
@@ -17445,6 +17483,7 @@ int ObPLResolver::check_params_legal_in_body_routine(ObPLFunctionAST &routine_as
             }
           } else if (!body_param->get_default_value().empty()) {
             ret = OB_ERR_DEFAULT_NOT_MATCH;
+            LOG_USER_ERROR(OB_ERR_DEFAULT_NOT_MATCH, body_param->get_name().length(), body_param->get_name().ptr());
             LOG_WARN("PLS-00593:"
                     "default value of parameter 'string' in body must match that of spec",
                     K(ret));
@@ -17656,6 +17695,8 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
         OZ (routine_table->get_routine_ast(idx, routine_ast));
         if (OB_SUCC(ret) && OB_NOT_NULL(routine_ast)) { // 已经定义过函数体,不可以重复定义
           ret = OB_ERR_ATTR_FUNC_CONFLICT;
+          LOG_USER_ERROR(OB_ERR_ATTR_FUNC_CONFLICT,
+                         exist->get_name().length(), exist->get_name().ptr());
           LOG_WARN("already has same routine in package", K(ret));
         }
       } else { // 已经声明过函数,不可以重复声明
@@ -17687,6 +17728,8 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
             || (routine_info->is_parallel_enable() && !parent_routine_info->is_parallel_enable())
             || (routine_info->is_result_cache() && !parent_routine_info->is_result_cache())) {
           ret = OB_ERR_ITEM_NOT_IN_BODY;
+          LOG_USER_ERROR(OB_ERR_ITEM_NOT_IN_BODY,
+                     routine_info->get_name().length(), routine_info->get_name().ptr());
           LOG_WARN("PLS-00323: subprogram or cursor is declared"
                    "in a package specification and must be defined in the package body",
                    K(ret), KPC(routine_info), KPC(exist));
@@ -18472,13 +18515,13 @@ int ObPLResolver::check_undeclared_var_type(ObQualifiedName &q_name)
   const char *dot = ".";
 #define LOG_USER_ERROR_WRONG_SCHEMA_REF_1(name1) \
         ret = OB_ERR_WRONG_SCHEMA_REF; \
-        LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.ptr(), empty, empty, empty, empty)
+        LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.length(), name1.ptr(), 0, empty, 0, empty, 0, empty, 0, empty)
 #define LOG_USER_ERROR_WRONG_SCHEMA_REF_2(name1, name2) \
         ret = OB_ERR_WRONG_SCHEMA_REF; \
-        LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.ptr(), dot, name2.ptr(), empty, empty)
+        LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.length(), name1.ptr(), 1, dot, name2.length(), name2.ptr(), 0, empty, 0, empty)
 #define LOG_USER_ERROR_WRONG_SCHEMA_REF_3(name1, name2, name3) \
         ret = OB_ERR_WRONG_SCHEMA_REF; \
-        LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.ptr(), dot, name2.ptr(), dot, name3.ptr())
+        LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.length(), name1.ptr(), 1, dot, name2.length(), name2.ptr(), 1, dot, name3.length(), name3.ptr())
   uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
   uint64_t db_id = resolve_ctx_.session_info_.get_database_id();
   ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
@@ -18616,6 +18659,8 @@ int ObPLResolver::check_var_type(ObString &name1, ObString &name2, uint64_t db_i
       if (OB_SUCC(ret)) {
         if (has) {
           ret = OB_ERR_WRONG_SCHEMA_REF;
+          LOG_USER_ERROR(OB_ERR_WRONG_SCHEMA_REF, name1.length(), name1.ptr(), 1, ".",
+                         name2.length(), name2.ptr(), 0, "", 0, "");
           LOG_WARN("Table,View Or Sequence reference not allowed in this context", K(ret));
         } else {
           ret = OB_ERR_COMPONENT_UNDECLARED;

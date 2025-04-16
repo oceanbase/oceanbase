@@ -510,6 +510,8 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
               OZ (set_routine_param(access_idxs, routine_param));
             } else {
               ret = OB_ERR_TYPE_DECL_ILLEGAL;
+              LOG_USER_ERROR(OB_ERR_TYPE_DECL_ILLEGAL,
+                            access_idxs.at(access_idxs.count() - 1).var_name_.length(), access_idxs.at(access_idxs.count() - 1).var_name_.ptr());
               LOG_WARN("PLS-00206: %TYPE must be applied to a variable, column, field or attribute",
                       K(ret), K(access_idxs));
             }
@@ -518,6 +520,8 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
             OZ (set_routine_param(access_idxs, routine_param));
           } else {
             ret = OB_ERR_WRONG_ROWTYPE;
+            LOG_USER_ERROR(OB_ERR_WRONG_ROWTYPE,
+                           access_idxs.at(access_idxs.count() - 1).var_name_.length(), access_idxs.at(access_idxs.count() - 1).var_name_.ptr());
             LOG_WARN("PLS-00310: with %ROWTYPE attribute, ident must name a table, cursor or cursor-variable",
                      K(ret), K(access_idxs));
           }

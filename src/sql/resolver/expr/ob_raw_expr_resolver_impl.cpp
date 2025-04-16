@@ -2567,6 +2567,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
         case PL_VAR: {
           if (func_node.num_child_ != 2 || OB_ISNULL(func_node.children_[1])) {
             ret = OB_ERR_NO_FUNCTION_EXIST;
+            LOG_USER_ERROR(OB_ERR_NO_FUNCTION_EXIST,
+                           ident_name.length(), ident_name.ptr());
             LOG_WARN("PLS-00222: no function with name 'string' exists in this scope",
                      K(ret), K(func_node.num_child_), K(access_ident));
           } else if (T_EXPR_LIST != func_node.children_[1]->type_) {

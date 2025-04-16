@@ -675,7 +675,7 @@ int ObUDTTypeInfo::check_dependency_valid(ObSchemaGetterGuard &schema_guard) con
         ret = OB_ERR_OBJECT_INVALID;                                                                                   \
         LOG_WARN("original element type is replaced by another type",                                                  \
                  K(ret), K(*this), K(elem_id), KPC(type_info), K((type_info)->get_typecode()), KPC(elem_info));        \
-        LOG_USER_WARN(OB_ERR_OBJECT_INVALID, get_type_name().length(), get_type_name().ptr());                         \
+        LOG_USER_ERROR(OB_ERR_OBJECT_INVALID, get_type_name().length(), get_type_name().ptr());                         \
     }                                                                                                                  \
   } while (0)
 
