@@ -5302,17 +5302,23 @@ int ObPLConcurrentGuard::set_concurrent_num(ObPLFunction &routine, ObExecContext
   ObSchemaGetterGuard *schema_guard = ctx.get_sql_ctx()->schema_guard_;
   CK (OB_NOT_NULL(schema_guard));
 
-  if (OB_INVALID_ID != routine.get_package_id()) {
+  if (OB_SUCC(ret) && OB_INVALID_ID != routine.get_package_id()) {
     ObPLCacheObject* pl_object = NULL;
     uint64_t pkg_id = routine.get_package_id();
     sql::ObCacheObjGuard *package = NULL;
-    if (routine.is_udt_routine()) {
+    if (routine.is_udt_routine()
+      || NESTED_PROCEDURE == routine.get_proc_type()
+      || NESTED_FUNCTION == routine.get_proc_type()) {
       // TODO: jiabokai.jbk
       //Adjust the use of udt body id when adding package guard
     } else {
-      OZ (package_guard.get(pkg_id, package));
-      CK (OB_NOT_NULL(package));
-      CK (OB_NOT_NULL(pl_object = static_cast<ObPLCacheObject*>(package->get_cache_obj())));
+      int tmp_ret = package_guard.get(pkg_id, package);
+      if (OB_SUCCESS == tmp_ret && package != NULL) {
+        pl_object = static_cast<ObPLCacheObject*>(package->get_cache_obj());
+      } else {
+        // do not set pl_object and ignore error
+        LOG_TRACE("Can not get cached package obj!", K(tmp_ret), K(package));
+      }
     }
     OX (inner_obj_ = pl_object);
   } else {
