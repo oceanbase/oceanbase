@@ -282,19 +282,24 @@ int ObAllVirtualSessionWaitI1::get_all_diag_info()
       index_id = get_index_ids().at(i);
       key = index_id;
       pair.first = key;
-      if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_the_diag_info(key, pair.second))) {
+      if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(key, pair.second))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
           SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
         }
       } else {
-        if (OB_SUCCESS != (ret = session_status_.push_back(pair))) {
+        if (OB_FAIL(session_status_.push_back(pair))) {
           SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
+        } else {
+          SERVER_LOG(DEBUG, "found target di info", K(pair.first), K(pair.second.session_id_),
+              K(pair.second.base_value_.get_tenant_id()),
+              K(pair.second.base_value_.get_curr_wait()));
         }
       }
     }
   }
+  SERVER_LOG(DEBUG, "index scan di", K(session_status_.count()));
   return ret;
 }
 
