@@ -455,6 +455,7 @@ _parallel_min_message_pool
 _parallel_redo_logging_trigger
 _parallel_server_sleep_time
 _pipelined_table_function_memory_limit
+_preserve_order_for_groupby
 _preserve_order_for_pagination
 _print_sample_ppm
 _private_buffer_size

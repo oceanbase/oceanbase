@@ -1094,6 +1094,7 @@ public:
                          ObStmtExprGetter &visitor);
   int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs) const;
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs);
+  int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs, DmlStmtScope scope) const;
   //this func is used for enum_set_wrapper to get exprs which need to be handled
   int get_relation_exprs_for_enum_set_wrapper(common::ObIArray<ObRawExpr*> &rel_array);
   ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;

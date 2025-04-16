@@ -653,6 +653,10 @@ private:
                                   ObIArray<ObRawExpr*> &unique_keys,
                                   bool &is_valid);
 
+  int preserve_order_for_gby(ObDMLStmt *stmt,
+                             bool &trans_happened);
+
+
   int flatten_conditions(ObDMLStmt *stmt, bool &trans_happened);
   int recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
   int do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
