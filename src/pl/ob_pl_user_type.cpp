@@ -1530,6 +1530,7 @@ int ObRecordType::get_serialize_size(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
+  CK (record_members_.count() == record->get_count());
   OX (size += record->get_serialize_size());
   OX (size += serialization::encoded_length(record->get_count()));
 
@@ -1549,6 +1550,7 @@ int ObRecordType::serialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
+  CK (record_members_.count() == record->get_count());
   OX (record->serialize(dst, dst_len, dst_pos));
   OZ (serialization::encode(dst, dst_len, dst_pos, record->get_count()));
 
