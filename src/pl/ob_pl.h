@@ -789,7 +789,7 @@ public:
 
   inline bool is_called_from_sql() const { return is_called_from_sql_; }
   inline void set_is_called_from_sql(bool flag) { is_called_from_sql_ = flag; }
-
+  inline bool is_for_trigger() const { return ObTriggerInfo::is_trigger_package_id(func_.get_package_id());}
   inline void set_dwarf_helper(jit::ObDWARFHelper *dwarf_helper)
   {
     dwarf_helper_ = dwarf_helper;
