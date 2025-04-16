@@ -1367,7 +1367,7 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
   int ret = OB_SUCCESS;
   routine_info = NULL;
   CK (match_infos.count() > 1);
-
+  CK (OB_NOT_NULL(match_infos.at(0).routine_info_));
   // TODO: 处理Prepare协议下的选择, 因为Prepare时没有参数类型, 如果存在多个匹配, 随机选择一个
   for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
     if (match_infos.at(i).has_unknow_type()) {
@@ -1384,6 +1384,8 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
         if (match_infos.at(i).match_same_type()) {
           if (OB_NOT_NULL(routine_info)) {
             ret = OB_ERR_FUNC_DUP;
+            LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
+                           match_infos.at(0).routine_info_->get_routine_name().ptr());
             LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
                      K(ret), K(match_infos));
           } else {
@@ -1429,6 +1431,8 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
         } else if (!(IS_NUMRIC_TYPE(tmp_match_infos.at(0).get_type(i)))
                   || !(IS_NUMRIC_TYPE(tmp_match_infos.at(j).get_type(i)))) {
           ret = OB_ERR_FUNC_DUP;
+          LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
+                         match_infos.at(0).routine_info_->get_routine_name().ptr());
           LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
                    K(ret), K(tmp_match_infos));
         } else {
@@ -1451,6 +1455,8 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
         pos = tmp_pos;
       } else if (pos != tmp_pos) {
         ret = OB_ERR_FUNC_DUP;
+        LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
+                       match_infos.at(0).routine_info_->get_routine_name().ptr());
         LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
                   K(ret), K(tmp_match_infos), K(numric_args));
       }
@@ -1465,6 +1471,8 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
 
   if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
     ret = OB_ERR_FUNC_DUP;
+    LOG_USER_ERROR(OB_ERR_FUNC_DUP, match_infos.at(0).routine_info_->get_routine_name().length(),
+                  match_infos.at(0).routine_info_->get_routine_name().ptr());
     LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
               K(ret), K(match_infos));
   }
