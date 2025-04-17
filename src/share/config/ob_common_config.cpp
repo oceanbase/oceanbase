@@ -298,7 +298,8 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
   char *buf = NULL;
   char *saveptr = NULL;
   char *token = NULL;
-  bool split_by_comma = false;
+  const char *delimiters[] = {"\n", "|\n", ",\n"};
+  const char *delimiter = "\n";
 
   if (OB_ISNULL(config_str)) {
     ret = OB_ERR_UNEXPECTED;
@@ -312,10 +313,12 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    token = STRTOK_R(buf, "\n", &saveptr);
-    if (0 == STRLEN(saveptr)) {
-      token = STRTOK_R(buf, ",\n", &saveptr);
-      split_by_comma = true;
+    for (int i = 0; i < sizeof(delimiters)/sizeof(delimiters[0]); i++) {
+      token = STRTOK_R(buf, delimiters[i], &saveptr);
+      if (0 != STRLEN(saveptr)) {
+        delimiter = delimiters[i];
+        break;
+      }
     }
     const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
     const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
@@ -390,22 +393,25 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
         func();
         break;
       }
-      token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
+      token = STRTOK_R(NULL, delimiter, &saveptr);
     }
     // reset
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
     saveptr = nullptr;
-    token = STRTOK_R(buf, "\n", &saveptr);
-    if (0 == STRLEN(saveptr)) {
-      token = STRTOK_R(buf, ",\n", &saveptr);
-      split_by_comma = true;
+    delimiter = "\n";
+    for (int i = 0; i < sizeof(delimiters)/sizeof(delimiters[0]); i++) {
+      token = STRTOK_R(buf, delimiters[i], &saveptr);
+      if (0 != STRLEN(saveptr)) {
+        delimiter = delimiters[i];
+        break;
+      }
     }
     while (OB_SUCC(ret) && OB_NOT_NULL(token)) {
       if (strncmp(token, "enable_production_mode:", 23) != 0) {
         func();
       }
-      token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
+      token = STRTOK_R(NULL, delimiter, &saveptr);
     }
   }
 
