@@ -161,9 +161,16 @@ int ObDirectLoadMultipleSSTableIndexBlockMetaTabletWholeScanner::locate_left_bor
   IndexBlockReader &index_block_reader, DataBlockReader &data_block_reader)
 {
   int ret = OB_SUCCESS;
-  if (tablet_id_.compare(sstable_->get_start_key().tablet_id_) < 0) { // tablet_id < sstable
+  ObDirectLoadMultipleDatumRowkey start_key;
+  ObDirectLoadMultipleDatumRowkey end_key;
+  ObArenaAllocator allocator("TLD_getkey");
+  if (OB_FAIL(sstable_->get_start_key(start_key, allocator))) {
+    LOG_WARN("fail to get start rowkey", KR(ret));
+  } else if (OB_FAIL(sstable_->get_end_key(end_key, allocator))) {
+    LOG_WARN("fail to get end rowkey", KR(ret));
+  } else if (tablet_id_.compare(start_key.tablet_id_) < 0) { // tablet_id < sstable
     current_index_block_iter_ = sstable_->index_block_end();
-  } else if (tablet_id_.compare(sstable_->get_end_key().tablet_id_) > 0) { // tablet_id > sstable
+  } else if (tablet_id_.compare(end_key.tablet_id_) > 0) { // tablet_id > sstable
     current_index_block_iter_ = sstable_->index_block_end();
   } else {
     ObDirectLoadMultipleDatumRowkey tablet_min_rowkey;

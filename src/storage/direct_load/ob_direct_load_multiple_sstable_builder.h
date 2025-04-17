@@ -73,10 +73,8 @@ private:
     bool is_inited_;
   };
 private:
-  common::ObArenaAllocator allocator_;
   ObDirectLoadMultipleSSTableBuildParam param_;
   RowType row_;
-  RowkeyType first_rowkey_;
   RowkeyType last_rowkey_;
   common::ObArenaAllocator last_rowkey_allocator_;
   ObDirectLoadTmpFileHandle index_file_handle_;

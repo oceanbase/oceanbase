@@ -46,6 +46,12 @@ static int get_backup_version(const ObLoadDataFormat::Type &type, ObTableLoadBac
   case ObLoadDataFormat::OB_BACKUP_3_X:
     backup_version = ObTableLoadBackupVersion::V_3_X;
     break;
+  case ObLoadDataFormat::OB_BACKUP_2_X_LOG:
+    backup_version = ObTableLoadBackupVersion::V_2_X_LOG;
+    break;
+  case ObLoadDataFormat::OB_BACKUP_2_X_PHY:
+    backup_version = ObTableLoadBackupVersion::V_2_X_PHY;
+    break;
   default:
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected type", KR(ret), K(type));
@@ -1863,7 +1869,7 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::init(const LoadExecuteParam &execu
       LOG_WARN("fail to get backup version", KR(ret));
     } else if (OB_FAIL(ObTableLoadBackupTable::get_table(backup_version, backup_table_, allocator_))) {
       LOG_WARN("fail to get backup table", KR(ret));
-    } else if (OB_FAIL(backup_table_->init(&data_access_param.access_info_, path, table_schema))) {
+    } else if (OB_FAIL(backup_table_->init(backup_version, &data_access_param.access_info_, path, table_schema))) {
       LOG_WARN("fail to init backup table", KR(ret));
     } else {
       const int64_t max_partition_count = ObTableLoadSequenceNo::MAX_BACKUP_PARTITION_IDX + 1;

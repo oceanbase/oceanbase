@@ -70,7 +70,8 @@ ObDirectLoadMultipleSSTableCreateParam::ObDirectLoadMultipleSSTableCreateParam()
     index_block_count_(0),
     data_block_count_(0),
     row_count_(0),
-    max_data_block_size_(0)
+    max_data_block_size_(0),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
 {
   fragments_.set_tenant_id(MTL_ID());
 }
@@ -84,8 +85,7 @@ bool ObDirectLoadMultipleSSTableCreateParam::is_valid() const
   return column_count_ > 0 && index_block_size_ > 0 && index_block_size_ % DIO_ALIGN_SIZE == 0 &&
          data_block_size_ > 0 && data_block_size_ % DIO_ALIGN_SIZE == 0 &&
          max_data_block_size_ > 0 && max_data_block_size_ % DIO_ALIGN_SIZE == 0 && row_count_ > 0 &&
-         !start_key_.is_min_rowkey() && start_key_.is_valid() && !end_key_.is_min_rowkey() &&
-         end_key_.is_valid();
+         compressor_type_ > ObCompressorType::INVALID_COMPRESSOR;
 }
 
 /**
@@ -100,7 +100,8 @@ ObDirectLoadMultipleSSTableMeta::ObDirectLoadMultipleSSTableMeta()
     index_block_count_(0),
     data_block_count_(0),
     row_count_(0),
-    max_data_block_size_(0)
+    max_data_block_size_(0),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
 {
 }
 
@@ -118,6 +119,7 @@ void ObDirectLoadMultipleSSTableMeta::reset()
   data_block_count_ = 0;
   row_count_ = 0;
   max_data_block_size_ = 0;
+  compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
 }
 
 /**
@@ -125,10 +127,9 @@ void ObDirectLoadMultipleSSTableMeta::reset()
  */
 
 ObDirectLoadMultipleSSTable::ObDirectLoadMultipleSSTable()
-  : allocator_("TLD_MSSTable"), is_inited_(false)
+  : is_inited_(false)
 {
-  allocator_.set_tenant_id(MTL_ID());
-  fragments_.set_tenant_id(MTL_ID());
+  fragments_.set_attr(ObMemAttr(MTL_ID(), "TLD_MSSTable"));
 }
 
 ObDirectLoadMultipleSSTable::~ObDirectLoadMultipleSSTable()
@@ -139,8 +140,6 @@ void ObDirectLoadMultipleSSTable::reset()
 {
   tablet_id_.reset();
   meta_.reset();
-  start_key_.reset();
-  end_key_.reset();
   fragments_.reset();
   is_inited_ = false;
 }
@@ -164,11 +163,8 @@ int ObDirectLoadMultipleSSTable::init(const ObDirectLoadMultipleSSTableCreatePar
     meta_.data_block_count_ = param.data_block_count_;
     meta_.row_count_ = param.row_count_;
     meta_.max_data_block_size_ = param.max_data_block_size_;
-    if (OB_FAIL(start_key_.deep_copy(param.start_key_, allocator_))) {
-      LOG_WARN("fail to deep copy rowkey", KR(ret));
-    } else if (OB_FAIL(end_key_.deep_copy(param.end_key_, allocator_))) {
-      LOG_WARN("fail to deep copy rowkey", KR(ret));
-    } else if (OB_FAIL(fragments_.assign(param.fragments_))) {
+    meta_.compressor_type_ = param.compressor_type_;
+    if (OB_FAIL(fragments_.assign(param.fragments_))) {
       LOG_WARN("fail to assign fragments", KR(ret));
     } else {
       is_inited_ = true;
@@ -187,11 +183,7 @@ int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)
     reset();
     tablet_id_ = other.tablet_id_;
     meta_ = other.meta_;
-    if (OB_FAIL(start_key_.deep_copy(other.start_key_, allocator_))) {
-      LOG_WARN("fail to deep copy rowkey", KR(ret));
-    } else if (OB_FAIL(end_key_.deep_copy(other.end_key_, allocator_))) {
-      LOG_WARN("fail to deep copy rowkey", KR(ret));
-    } else if (OB_FAIL(fragments_.assign(other.fragments_))) {
+    if (OB_FAIL(fragments_.assign(other.fragments_))) {
       LOG_WARN("fail to assign fragments", KR(ret));
     } else {
       is_inited_ = true;
@@ -337,6 +329,70 @@ int ObDirectLoadMultipleSSTable::scan_tablet_whole_index_block_meta(
         allocator.free(tablet_whole_scanner);
         tablet_whole_scanner = nullptr;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadMultipleSSTable::get_start_key(ObDirectLoadMultipleDatumRowkey &start_key, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadSSTableIndexBlockReader index_block_reader;
+    ObDirectLoadSSTableDataBlockReader<ObDirectLoadMultipleDatumRow> data_block_reader;
+    int64_t fragment_idx = 0;
+    int64_t index_block_offset = 0;
+    const ObDirectLoadSSTableIndexEntry *index_entry = nullptr;
+    const ObDirectLoadMultipleDatumRow *row = nullptr;
+    if (OB_FAIL(index_block_reader.init(meta_.index_block_size_, meta_.compressor_type_))) {
+      LOG_WARN("fail to index block reader", KR(ret));
+    } else if (OB_FAIL(data_block_reader.init(meta_.data_block_size_, meta_.compressor_type_))) {
+      LOG_WARN("fail to data block reader", KR(ret));
+    } else if (OB_FAIL(index_block_reader.open(fragments_[fragment_idx].index_file_handle_, index_block_offset, meta_.index_block_size_))) {
+      LOG_WARN("fail to open index file", KR(ret), K(index_block_offset), K(meta_), K(fragments_.count()), K(fragments_));
+    } else if (OB_FAIL(index_block_reader.get_next_entry(index_entry))) {
+      LOG_WARN("fail to get next entry", KR(ret));
+    } else if (OB_FAIL(data_block_reader.open(fragments_[fragment_idx].data_file_handle_, index_entry->offset_, index_entry->size_))) {
+      LOG_WARN("fail to open data file", KR(ret), K(fragments_[fragment_idx]), KPC(index_entry));
+    } else if (OB_FAIL(data_block_reader.get_next_row(row))) {
+      LOG_WARN("fail to get next row", KR(ret));
+    } else if (OB_FAIL(start_key.deep_copy(row->rowkey_, allocator))) {
+      LOG_WARN("fail to deep copy rowkey", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadMultipleSSTable::get_end_key(ObDirectLoadMultipleDatumRowkey &end_key, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this));
+  } else {
+    ObDirectLoadSSTableIndexBlockReader index_block_reader;
+    ObDirectLoadSSTableDataBlockReader<ObDirectLoadMultipleDatumRow> data_block_reader;
+    int64_t fragment_idx = fragments_.count() - 1;
+    int64_t index_block_offset = meta_.index_block_size_ * (fragments_[fragment_idx].index_block_count_ - 1);
+    const ObDirectLoadSSTableIndexEntry *index_entry = nullptr;
+    const ObDirectLoadMultipleDatumRow *row = nullptr;
+    if (OB_FAIL(index_block_reader.init(meta_.index_block_size_, meta_.compressor_type_))) {
+      LOG_WARN("fail to index block reader", KR(ret));
+    } else if (OB_FAIL(data_block_reader.init(meta_.data_block_size_, meta_.compressor_type_))) {
+      LOG_WARN("fail to data block reader", KR(ret));
+    } else if (OB_FAIL(index_block_reader.open(fragments_[fragment_idx].index_file_handle_, index_block_offset, meta_.index_block_size_))) {
+      LOG_WARN("fail to open index file", KR(ret), K(index_block_offset), K(meta_), K(fragments_.count()), K(fragments_));
+    } else if (OB_FAIL(index_block_reader.get_last_entry(index_entry))) {
+      LOG_WARN("fail to get last entry", KR(ret));
+    } else if (OB_FAIL(data_block_reader.open(fragments_[fragment_idx].data_file_handle_, index_entry->offset_, index_entry->size_))) {
+      LOG_WARN("fail to open data file", KR(ret), K(fragments_[fragment_idx]), KPC(index_entry));
+    } else if (OB_FAIL(data_block_reader.get_last_row(row))) {
+      LOG_WARN("fail to get last row", KR(ret));
+    } else if (OB_FAIL(end_key.deep_copy(row->rowkey_, allocator))) {
+      LOG_WARN("fail to deep copy rowkey", KR(ret));
     }
   }
   return ret;

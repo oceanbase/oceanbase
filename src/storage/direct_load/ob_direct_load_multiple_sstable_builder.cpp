@@ -93,13 +93,11 @@ int ObDirectLoadMultipleSSTableBuilder::DataBlockFlushCallback::write(char *buf,
  */
 
 ObDirectLoadMultipleSSTableBuilder::ObDirectLoadMultipleSSTableBuilder()
-  : allocator_("TLD_MSST_Build"),
-    last_rowkey_allocator_("TLD_LastPK"),
+  : last_rowkey_allocator_("TLD_LastPK"),
     row_count_(0),
     is_closed_(false),
     is_inited_(false)
 {
-  allocator_.set_tenant_id(MTL_ID());
   last_rowkey_allocator_.set_tenant_id(MTL_ID());
 }
 
@@ -140,7 +138,6 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     } else if (OB_FAIL(data_block_writer_.open(data_file_handle_))) {
       LOG_WARN("fail to open file", KR(ret));
     } else {
-      first_rowkey_.set_min_rowkey();
       last_rowkey_.set_min_rowkey();
       is_inited_ = true;
     }
@@ -194,9 +191,6 @@ int ObDirectLoadMultipleSSTableBuilder::append_row(const RowType &row)
       LOG_WARN("fail to append row", KR(ret));
     } else if (OB_FAIL(save_last_rowkey(row.rowkey_))) {
       LOG_WARN("fail to save rowkey", KR(ret), K(row.rowkey_));
-    } else if (first_rowkey_.is_min_rowkey() &&
-               OB_FAIL(first_rowkey_.deep_copy(row.rowkey_, allocator_))) {
-      LOG_WARN("fail to deep copy rowkey", KR(ret));
     } else {
       ++row_count_;
     }
@@ -279,8 +273,7 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(
     create_param.data_block_count_ = data_block_writer_.get_block_count();
     create_param.row_count_ = row_count_;
     create_param.max_data_block_size_ = data_block_writer_.get_max_block_size();
-    create_param.start_key_ = first_rowkey_;
-    create_param.end_key_ = last_rowkey_;
+    create_param.compressor_type_ = param_.table_data_desc_.compressor_type_;
     if (OB_FAIL(fragment.index_file_handle_.assign(index_file_handle_))) {
       LOG_WARN("fail to assign index file handle", KR(ret));
     } else if (OB_FAIL(fragment.data_file_handle_.assign(data_file_handle_))) {
