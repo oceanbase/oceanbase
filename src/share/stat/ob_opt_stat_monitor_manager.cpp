@@ -1090,6 +1090,7 @@ int ObOptStatMonitorManager::mark_the_opt_stat_expired(const OptStatExpiredTable
     obrpc::ObUpdateStatCacheArg stat_arg;
     stat_arg.tenant_id_ = expired_table_info.tenant_id_;
     stat_arg.table_id_ = expired_table_info.table_id_;
+    stat_arg.no_invalidate_ = true;
     if (OB_FAIL(append(stat_arg.partition_ids_, expired_partition_ids))) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(expired_table_info.tenant_id_, stat_arg))) {
