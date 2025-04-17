@@ -251,6 +251,14 @@ int ObTenantMetaObjPool<T>::acquire(T *&t)
 template <class T>
 void ObTenantMetaObjPool<T>::release(T *t)
 {
+#ifndef OB_BUILD_PACKAGE
+    /// dump if @c used_obj_cnt is 0.
+    if (ATOMIC_LOAD(&used_obj_cnt_) == 0) {
+      STORAGE_LOG(INFO, "[issue/2025011300106982149]: release obj", K(this), KP(t));
+      ob_usleep(1000); // waiting for server log sync finished...
+      ob_abort();
+    }
+#endif
   BasePool::free(t);
   (void)ATOMIC_AAF(&used_obj_cnt_, -1);
 }
