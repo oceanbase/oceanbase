@@ -490,12 +490,13 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     //LOG_DEBUG("resolve_sql_expr:5", "usec", ObSQLUtils::get_usec());
     // refresh info again
     if (OB_SUCC(ret)) {
+      bool skip_check = false;
       if (OB_FAIL(expr->extract_info())) {
         LOG_WARN("failed to extract info", K(ret));
       } else if (OB_FAIL(check_expr_param(*expr))) {
         //一个表达式的根表达式不能是一个向量表达式或者向量结果的子查询表达式
         LOG_WARN("check expr param failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::check_composite_cast(expr, *schema_checker_))) {
+      } else if (OB_FAIL(ObRawExprUtils::check_composite_cast(expr, *schema_checker_, session_info_->is_varparams_sql_prepare(), skip_check))) {
         LOG_WARN("check composite cast failed", K(ret));
       } else if (OB_FAIL(check_cast_multiset(expr))) {
         LOG_WARN("check cast multiset failed", K(ret));
