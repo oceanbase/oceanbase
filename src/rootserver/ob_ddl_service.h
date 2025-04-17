@@ -1230,6 +1230,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       share::schema::ObTableSchema &schema);
 
   int reset_parallel_cache(const uint64_t tenant_id);
+  template <typename Func, typename... Args>
+  int schema_retry_to_die(const int64_t tenant_id, Func retry_func, Args&&... args);
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -1279,6 +1281,9 @@ private:
     ALTER_LOCALITY_INVALID,
   };
 
+
+  int retry_to_refresh_schema_(ObArray<uint64_t> &tenant_ids);
+  int retry_to_get_schema_version_(const ObRefreshSchemaStatus &schema_status, int64_t &broadcast_schema_version);
   int get_lock_argument_for_rename_(
       const uint32_t client_session_id,
       const int64_t client_session_create_ts,

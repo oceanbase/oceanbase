@@ -28497,60 +28497,76 @@ int ObDDLService::alter_tablegroup(const ObAlterTablegroupArg &arg)
   return ret;
 }
 
-#define SCHEMA_RETRY_TO_DIE(retry_action, get_version_action, set_info_action) \
-  if (FAILEDx(check_inner_stat())) { \
-    LOG_WARN("fail to check inner stat", KR(ret)); \
-  } else { \
-    int64_t refresh_count = 0; \
-    int64_t original_timeout_us = THIS_WORKER.get_timeout_ts(); \
-    THIS_WORKER.set_timeout_ts(INT64_MAX); \
-    while (!stopped_) { \
-      common::ObTimeoutCtx ctx; \
-      ctx.reset_timeout_us(); \
-      retry_action; \
-      if (OB_SUCC(ret)) { \
-        break; \
-      } else { \
-        int tmp_ret = OB_SUCCESS; \
-        bool is_dropped = false; \
-        if (OB_TMP_FAIL(check_tenant_has_been_dropped_(tenant_id, is_dropped))) { \
-          LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tmp_ret), K(tenant_id)); \
-        } else if (is_dropped) { \
-          LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id)); \
-          break; \
-        } \
-        ++refresh_count; \
-        LOG_WARN("refresh schema failed", KR(ret), K(tenant_id), K(refresh_count), \
-                                          "refresh_schema_interval", static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US)); \
-        if (refresh_count > 2 && REACH_TIME_INTERVAL_NO_INSTANT(10 * 60 * 1000 * 1000L)) { /*10 min*/ \
-          LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG, \
-                        "msg", "refresh schema failed", KR(ret), K(refresh_count)); \
-        } \
-        ob_usleep<ObWaitEventIds::WAIT_REFRESH_SCHEMA>(REFRESH_SCHEMA_INTERVAL_US); \
-      } \
-    } \
-    if (OB_SUCC(ret) && !stopped_) { \
-      int64_t schema_version = OB_INVALID_VERSION; \
-      get_version_action; \
-      if (OB_SUCC(ret)) { \
-        ObSchemaService *schema_service = schema_service_->get_schema_service(); \
-        schema_info.set_tenant_id(tenant_id); \
-        schema_info.set_schema_version(schema_version); \
-        if (OB_ISNULL(schema_service)) { \
-          ret = OB_ERR_UNEXPECTED; \
-          LOG_WARN("schema_service is null", K(ret)); \
-        } else if (inc_sequence_id && OB_FAIL(schema_service->inc_sequence_id())) { \
-          LOG_WARN("increase sequence_id failed", K(ret)); \
-        } \
-        set_info_action \
-      } \
-    } \
-    if (OB_FAIL(ret) && stopped_) { \
-      ret = OB_CANCELED; \
-      LOG_WARN("rs is stopped", KR(ret), K(tenant_id)); \
-    } \
-    THIS_WORKER.set_timeout_ts(original_timeout_us); \
+template <typename Func, typename... Args>
+int ObDDLService::schema_retry_to_die(const int64_t tenant_id, Func retry_func, Args&&... args)
+{
+  int ret = OB_SUCCESS;
+  if (FAILEDx(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    int64_t refresh_count = 0;
+    int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
+    THIS_WORKER.set_timeout_ts(INT64_MAX);
+    while (!stopped_) {
+      common::ObTimeoutCtx ctx;
+      ctx.reset_timeout_us();
+      if (OB_FAIL((this->*retry_func)(std::forward<Args>(args)...))) {
+        LOG_WARN("fail to retry func", KR(ret));
+      }
+      if (OB_SUCC(ret)) {
+        break;
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        bool is_dropped = false;
+        if (OB_TMP_FAIL(check_tenant_has_been_dropped_(tenant_id, is_dropped))) {
+          LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tmp_ret), K(tenant_id));
+        } else if (is_dropped) {
+          LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id));
+          break;
+        }
+        ++refresh_count;
+        LOG_WARN("refresh schema failed", KR(ret), K(tenant_id), K(refresh_count),
+                                          "refresh_schema_interval", static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
+        if (refresh_count > 2 && REACH_TIME_INTERVAL_NO_INSTANT(10 * 60 * 1000 * 1000L)) { /*10 min*/
+          LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
+                        "msg", "refresh schema failed", KR(ret), K(refresh_count));
+        }
+        ob_usleep<ObWaitEventIds::WAIT_REFRESH_SCHEMA>(REFRESH_SCHEMA_INTERVAL_US);
+      }
+    }
+    THIS_WORKER.set_timeout_ts(original_timeout_us);
   }
+  if (stopped_) {
+    ret = OB_CANCELED;
+    LOG_WARN("rs is stopped", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+
+int ObDDLService::retry_to_refresh_schema_(ObArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(schema_service_->refresh_and_add_schema(tenant_ids))) {
+    LOG_WARN("fail to refresh and add schema", KR(ret), K(tenant_ids));
+  }
+  return ret;
+}
+
+int ObDDLService::retry_to_get_schema_version_(const ObRefreshSchemaStatus &schema_status, int64_t &broadcast_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_schema_version_in_inner_table(
+                     *sql_proxy_, schema_status, broadcast_schema_version))) {
+    LOG_WARN("fail to gen new schema version", KR(ret), K(schema_status));
+  }
+  return ret;
+}
+
 
 int ObDDLService::refresh_schema(uint64_t tenant_id, const bool inc_sequence_id, int64_t *refreshed_schema_version)
 {
@@ -28563,21 +28579,31 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, const bool inc_sequence_id,
     LOG_WARN("invalid tenant_id", K(ret));
   } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
     LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_retry_to_die(tenant_id, &ObDDLService::retry_to_refresh_schema_, tenant_ids))) {
+    LOG_WARN("fail to retry refresh schema", KR(ret), K(tenant_id));
   }
-  SCHEMA_RETRY_TO_DIE(
-    if (OB_FAIL(schema_service_->refresh_and_add_schema(tenant_ids))) {
-      LOG_WARN("fail to refresh and add schema", KR(ret), K(tenant_id));
-    },
+  if (OB_SUCC(ret) && !stopped_) {
+    int64_t schema_version = OB_INVALID_VERSION;
     if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
                                  tenant_id, schema_version))) {
       LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K(tenant_id));
-    },
-    if (FAILEDx(schema_service->set_refresh_schema_info(schema_info))) {
-      LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
-    } else if (OB_NOT_NULL(refreshed_schema_version)) {
-      *refreshed_schema_version = schema_version;
-    })
-
+    } else {
+      ObSchemaService *schema_service = schema_service_->get_schema_service();
+      ObRefreshSchemaInfo schema_info;
+      schema_info.set_tenant_id(tenant_id);
+      schema_info.set_schema_version(schema_version);
+      if (OB_ISNULL(schema_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema_service is null", KR(ret));
+      } else if (OB_FAIL(inc_sequence_id && schema_service->inc_sequence_id())) {
+        LOG_WARN("increase sequence_id failed", KR(ret));
+      } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
+        LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
+      } else if (OB_NOT_NULL(refreshed_schema_version)) {
+        *refreshed_schema_version = schema_version;
+      }
+    }
+  }
   return ret;
 }
 
@@ -28587,16 +28613,23 @@ int ObDDLService::construct_tenant_broadcast_info(const uint64_t tenant_id, ObRe
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id;
   int64_t broadcast_schema_version = OB_INVALID_VERSION;
-  bool inc_sequence_id = true;
-  SCHEMA_RETRY_TO_DIE(
-    if (OB_FAIL(schema_service_->get_schema_version_in_inner_table(
-                *sql_proxy_, schema_status, broadcast_schema_version))) {
-      LOG_WARN("fail to gen new schema version", KR(ret), K(schema_status));
-    },
-    schema_version = broadcast_schema_version,
-    if (OB_SUCC(ret)) {
+  if (OB_FAIL(schema_retry_to_die(tenant_id, &ObDDLService::retry_to_get_schema_version_,
+                                  schema_status, broadcast_schema_version))) {
+    LOG_WARN("fail to retry get schema version", KR(ret), K(schema_status), K(broadcast_schema_version));
+  }
+  if (OB_SUCC(ret) && !stopped_) {
+    ObSchemaService *schema_service = schema_service_->get_schema_service();
+    schema_info.set_tenant_id(tenant_id);
+    schema_info.set_schema_version(broadcast_schema_version);
+    if (OB_ISNULL(schema_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_service is null", K(ret));
+    } else if (OB_FAIL(schema_service->inc_sequence_id())) {
+      LOG_WARN("increase sequence_id failed", K(ret));
+    } else {
       schema_info.set_sequence_id(schema_service->get_sequence_id());
-    })
+    }
+  }
   return ret;
 }
 
@@ -28669,7 +28702,7 @@ int ObDDLService::notify_refresh_schema(const uint64_t tenant_id,
   } else if (OB_FAIL(SVR_TRACER.get_alive_and_not_stopped_servers(zone, server_list))) {
     LOG_WARN("get alive server failed", KR(ret), K(zone));
   } else if (OB_FAIL(construct_tenant_broadcast_info(tenant_id, schema_info))) {
-    LOG_WARN("fail to construct tenant broadccast info", KR(ret));
+    LOG_WARN("fail to construct tenant broadccast info", KR(ret), K(tenant_id));
   } else {
     bool is_async = false;
     if (OB_INVALID_TENANT_ID != schema_info.get_tenant_id()) {
