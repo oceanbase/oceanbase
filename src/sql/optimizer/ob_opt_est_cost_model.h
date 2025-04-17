@@ -205,7 +205,8 @@ struct ObCostTableScanInfo
      at_most_one_range_(false),
      rescan_left_server_list_(NULL),
      rescan_server_list_(NULL),
-     limit_rows_(-1.0)
+     limit_rows_(-1.0),
+     unique_range_rowcnt_(-1)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -220,7 +221,7 @@ struct ObCostTableScanInfo
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
-               K_(limit_rows),  K_(total_range_cnt));
+               K_(limit_rows),  K_(total_range_cnt), K_(unique_range_rowcnt));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -265,6 +266,7 @@ struct ObCostTableScanInfo
   const common::ObIArray<common::ObAddr> *rescan_left_server_list_;
   const common::ObIArray<common::ObAddr> *rescan_server_list_;
   double limit_rows_;
+  int64_t unique_range_rowcnt_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };

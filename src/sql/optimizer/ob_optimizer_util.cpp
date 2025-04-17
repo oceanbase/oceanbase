@@ -2822,7 +2822,6 @@ int ObOptimizerUtil::check_equal_query_ranges(const ObIArray<ObNewRange*> &range
   } else {
     int64_t rowkey_count = -1;
     int64_t equal_prefix_count = -1;
-    int64_t equal_prefix_null_count = 0;
     int64_t range_prefix_count = -1;
     bool contain_always_false = false;
     if (OB_ISNULL(ranges.at(0)) ||
@@ -2831,7 +2830,6 @@ int ObOptimizerUtil::check_equal_query_ranges(const ObIArray<ObNewRange*> &range
       LOG_WARN("unexpected error", K(rowkey_count), K(ranges.at(0)), K(ret));
     } else if (OB_FAIL(check_prefix_ranges_count(ranges,
                                                  equal_prefix_count,
-                                                 equal_prefix_null_count,
                                                  range_prefix_count,
                                                  contain_always_false))) {
       LOG_WARN("failed to check ranges prefix count", K(ret));
@@ -2849,13 +2847,11 @@ int ObOptimizerUtil::check_equal_query_ranges(const ObIArray<ObNewRange*> &range
 
 int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange*> &ranges,
                                                int64_t &equal_prefix_count,
-                                               int64_t &equal_prefix_null_count,
                                                int64_t &range_prefix_count,
                                                bool &contain_always_false)
 {
   int ret = OB_SUCCESS;
   equal_prefix_count = 0;
-  equal_prefix_null_count = 0;
   range_prefix_count = 0;
   contain_always_false = false;
   if (ranges.count() > 0) {
@@ -2885,58 +2881,24 @@ int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange
         range_prefix_count = std::min(range_prefix_count, temp_range_prefix_count);
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-      const ObNewRange *range = ranges.at(i);
-      int64_t temp_equal_prefix_null_count = 0;
-      if (OB_FAIL(check_equal_prefix_null_count(range, equal_prefix_count,
-                                                temp_equal_prefix_null_count))) {
-        LOG_WARN("failed to check range prefix", K(ret));
-      } else {
-        equal_prefix_null_count = std::max(equal_prefix_null_count, temp_equal_prefix_null_count);
-      }
-    }
   }
   return ret;
 }
 
-int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange> &ranges,
-                                               int64_t &equal_prefix_count,
-                                               int64_t &equal_prefix_null_count,
-                                               int64_t &range_prefix_count)
+int ObOptimizerUtil::check_equal_prefix_null_count(const ObIArray<common::ObNewRange*> &ranges,
+                                                   const int64_t equal_prefix_count,
+                                                   int64_t &equal_prefix_null_count)
 {
   int ret = OB_SUCCESS;
-  equal_prefix_count = 0;
   equal_prefix_null_count = 0;
-  range_prefix_count = 0;
-  if (ranges.count() > 0) {
-    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-      const ObNewRange &range = ranges.at(i);
-      int64_t temp_equal_prefix_count = 0;
-      int64_t temp_range_prefix_count = 0;
-      if (range.start_key_.length() != range.end_key_.length()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid start and end range key", K(range.start_key_.length()),
-                    K(range.end_key_.length()), K(ret));
-      } else if (OB_FAIL(check_prefix_range_count(&range,
-                                                  temp_equal_prefix_count,
-                                                  temp_range_prefix_count))) {
-        LOG_WARN("failed to check range prefix", K(ret));
-      } else {
-        equal_prefix_count = std::min(equal_prefix_count, temp_equal_prefix_count);
-        range_prefix_count = std::min(range_prefix_count, temp_range_prefix_count);
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-      const ObNewRange &range = ranges.at(i);
-      int64_t temp_equal_prefix_null_count = 0;
-      if (OB_FAIL(check_equal_prefix_null_count(&range, equal_prefix_count,
-                                                temp_equal_prefix_null_count))) {
-        LOG_WARN("failed to check range prefix", K(ret));
-      } else {
-        equal_prefix_null_count = std::max(equal_prefix_null_count, temp_equal_prefix_null_count);
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
+    const ObNewRange *range = ranges.at(i);
+    int64_t temp_equal_prefix_null_count = 0;
+    if (OB_FAIL(check_equal_prefix_null_count(range, equal_prefix_count,
+                                              temp_equal_prefix_null_count))) {
+      LOG_WARN("failed to check range prefix", K(ret));
+    } else {
+      equal_prefix_null_count = std::max(equal_prefix_null_count, temp_equal_prefix_null_count);
     }
   }
   return ret;

@@ -38,7 +38,9 @@ public:
       index_column_count_(0),
       range_columns_(),
       expr_constraints_(),
-      index_prefix_(-1) {}
+      index_prefix_(-1),
+      range_count_(-1),
+      unique_range_rowcnt_(-1) {}
   const ObQueryRange* get_query_range() const { return query_range_; }
   const ObPreRangeGraph* get_pre_range_graph() const { return pre_range_graph_; }
   const ObQueryRangeProvider *get_query_range_provider() const
@@ -85,7 +87,7 @@ public:
   }
   bool equal_prefix_all_null() const
   {
-    return is_valid_ && equal_prefix_null_count_ == equal_prefix_count_;
+    return is_valid_ && equal_prefix_null_count_ == index_column_count_;
   }
   void set_equal_prefix_count(const int64_t equal_prefix_count)
   { equal_prefix_count_ = equal_prefix_count; }
@@ -100,10 +102,15 @@ public:
   void set_index_prefix(int64_t index_prefix)
   { index_prefix_  = index_prefix; }
   int64_t get_index_prefix() const { return index_prefix_; }
+  void set_range_count(int64_t cnt) { range_count_ = cnt; }
+  int64_t get_range_count() const { return range_count_; }
+  void set_unique_range_rowcnt(int64_t rows) { unique_range_rowcnt_ = rows; }
+  int64_t get_unique_range_rowcnt() const { return unique_range_rowcnt_; }
 
   TO_STRING_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),
                K_(equal_prefix_null_count), K_(range_prefix_count),
-               K_(index_column_count), K_(expr_constraints), K_(index_prefix));
+               K_(index_column_count), K_(expr_constraints), K_(index_prefix),
+               K_(range_count), K_(unique_range_rowcnt));
 private:
   bool is_valid_;
   bool contain_always_false_;
@@ -118,6 +125,8 @@ private:
   common::ObArray<ColumnItem> range_columns_;
   common::ObArray<ObExprConstraint> expr_constraints_;
   int64_t index_prefix_;
+  int64_t range_count_;
+  int64_t unique_range_rowcnt_;
   DISALLOW_COPY_AND_ASSIGN(QueryRangeInfo);
 };
 
@@ -175,10 +184,9 @@ public:
   bool is_unique_index() const { return is_unique_index_; }
   bool is_valid_unique_index() const //唯一索引在query range中能否保持唯一
   {
-    return is_unique_index_
+    return is_unique_index_ && range_info_.is_index_column_get()
            && !((lib::is_oracle_mode() && range_info_.equal_prefix_all_null())
-                || (lib::is_mysql_mode() && (range_info_.equal_prefix_has_null()
-                                             || !range_info_.is_index_column_get())));
+                || (lib::is_mysql_mode() && range_info_.equal_prefix_has_null()));
   }
   void set_is_unique_index(const bool is_unique_index) { is_unique_index_ = is_unique_index; }
   bool is_index_back() const { return is_index_back_; }

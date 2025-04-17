@@ -576,18 +576,16 @@ public:
 
   static int check_prefix_ranges_count(const common::ObIArray<common::ObNewRange*> &ranges,
                                        int64_t &equal_prefix_count,
-                                       int64_t &equal_prefix_null_count,
                                        int64_t &range_prefix_count,
                                        bool &contain_always_false);
 
-  static int check_prefix_ranges_count(const common::ObIArray<common::ObNewRange> &ranges,
-                                       int64_t &equal_prefix_count,
-                                       int64_t &equal_prefix_null_count,
-                                       int64_t &range_prefix_count);
 
   static int check_prefix_range_count(const common::ObNewRange* range,
                                       int64_t &equal_prefix_count,
                                       int64_t &range_prefix_count);
+  static int check_equal_prefix_null_count(const ObIArray<common::ObNewRange*> &ranges,
+                                           const int64_t equal_prefix_count,
+                                           int64_t &equal_prefix_null_count);
   static int check_equal_prefix_null_count(const common::ObNewRange *range,
                                            const int64_t equal_prefix_count,
                                            int64_t &equal_prefix_null_count);

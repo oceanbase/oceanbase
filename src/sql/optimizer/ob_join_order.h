@@ -1473,7 +1473,6 @@ struct NullAwareAntiJoinInfo {
     int skyline_prunning_index(const uint64_t table_id,
                                const uint64_t base_table_id,
                                const ObDMLStmt *stmt,
-                               const bool do_prunning,
                                const ObIndexInfoCache &index_info_cache,
                                const common::ObIArray<uint64_t> &valid_index_ids,
                                common::ObIArray<uint64_t> &skyline_index_ids,
@@ -1500,6 +1499,8 @@ struct NullAwareAntiJoinInfo {
                            ObIndexSkylineDim &index_dim,
                            const ObIndexInfoCache &index_info_cache,
                            ObIArray<ObRawExpr *> &restrict_infos,
+                           bool use_unique_index,
+                           bool ignore_order_dim,
                            bool ignore_index_back_dim = false);
 
     int fill_index_info_entry(const uint64_t table_id,
@@ -1512,6 +1513,9 @@ struct NullAwareAntiJoinInfo {
                               const common::ObIArray<uint64_t> &valid_index_ids,
                               ObIndexInfoCache &index_info_cache,
                               PathHelper &helper);
+    int refine_unique_range_rowcnt(const uint64_t table_id,
+                                   const common::ObIArray<uint64_t> &valid_index_ids,
+                                   ObIndexInfoCache &index_info_cache);
 
     int fill_opt_info_index_name(const uint64_t table_id,
                                  const uint64_t base_table_id,
@@ -2473,6 +2477,9 @@ struct NullAwareAntiJoinInfo {
                               ObCostTableScanInfo &est_cost_info,
                               bool use_skip_scan);
 
+    int get_query_range_count(const QueryRangeInfo &range_info,
+                              int64_t &range_cnt);
+
     int compute_table_location(const uint64_t table_id,
                                const uint64_t ref_id,
                                const bool is_global_index,
@@ -2521,20 +2528,11 @@ struct NullAwareAntiJoinInfo {
                                  const ObIArray<uint64_t> &valid_index_ids,
                                  uint64_t &index_to_use);
 
-    // table heuristics for non-virtual table
-    int user_table_heuristics(const uint64_t table_id,
-                              const uint64_t ref_table_id,
-                              const ObIndexInfoCache &index_info_cache,
-                              const ObIArray<uint64_t> &valid_index_ids,
-                              uint64_t &index_to_use,
-                              PathHelper &helper);
-
-    int refine_table_heuristics_result(const uint64_t table_id,
-                                       const uint64_t ref_table_id,
-                                       const common::ObIArray<uint64_t> &candidate_refine_idx,
-                                       const common::ObIArray<uint64_t> &match_unique_idx,
-                                       const ObIndexInfoCache &index_info_cache,
-                                       uint64_t &index_to_use);
+    int try_prune_non_unique_index(const uint64_t table_id,
+                                   const ObIndexInfoCache &index_info_cache,
+                                   const common::ObIArray<uint64_t> &valid_index_ids,
+                                   common::ObIArray<uint64_t> &candidate_index_ids,
+                                   bool &use_unique_index);
 
     int check_index_subset(const OrderingInfo *first_ordering_info,
                            const int64_t first_index_key_count,

@@ -64,26 +64,12 @@ int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
   est_cost_info.ranges_.reset();
   est_cost_info.ss_ranges_.reset();
   est_cost_info.at_most_one_range_ = false;
+  est_cost_info.total_range_cnt_ = range_info.get_range_count();
+  est_cost_info.unique_range_rowcnt_ = range_info.get_unique_range_rowcnt();
   bool has_exec_param = false;
   if (OB_ISNULL(provider)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(provider));
-  } else if (OB_FAIL(check_has_exec_param(*provider, has_exec_param))) {
-    LOG_WARN("failed to check has exec param", K(ret));
-  } else if (!has_exec_param) {
-    est_cost_info.total_range_cnt_ = ranges.count();
-  } else if (OB_FAIL(provider->get_total_range_sizes(total_range_sizes))) {
-    LOG_WARN("failed to get range size", K(ret));
-  } else {
-    int64_t index_prefix = range_info.get_index_prefix();
-    if (-1 == index_prefix || index_prefix >= total_range_sizes.count()) {
-      index_prefix = total_range_sizes.count() - 1;
-    }
-    if (total_range_sizes.empty() || index_prefix < 0 ) {
-      est_cost_info.total_range_cnt_ = ranges.count();
-    } else {
-      est_cost_info.total_range_cnt_ = total_range_sizes.at(index_prefix);
-    }
   }
   // maintain query range info
   for(int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
@@ -125,6 +111,37 @@ int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
                                                              get_output_equal_sets());
       }
       est_cost_info.at_most_one_range_ = at_most_one_range;
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_query_range_count(const QueryRangeInfo &range_info,
+                                       int64_t &range_cnt)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryRangeArray &ranges = range_info.get_ranges();
+  const ObQueryRangeProvider *provider = range_info.get_query_range_provider();
+  ObSEArray<uint64_t, 4> total_range_sizes;
+  bool has_exec_param = false;
+  if (OB_ISNULL(provider)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(provider));
+  } else if (OB_FAIL(check_has_exec_param(*provider, has_exec_param))) {
+    LOG_WARN("failed to check has exec param", K(ret));
+  } else if (!has_exec_param) {
+    range_cnt = ranges.count();
+  } else if (OB_FAIL(provider->get_total_range_sizes(total_range_sizes))) {
+    LOG_WARN("failed to get range size", K(ret));
+  } else {
+    int64_t index_prefix = range_info.get_index_prefix();
+    if (-1 == index_prefix || index_prefix >= total_range_sizes.count()) {
+      index_prefix = total_range_sizes.count() - 1;
+    }
+    if (total_range_sizes.empty() || index_prefix < 0 ) {
+      range_cnt = ranges.count();
+    } else {
+      range_cnt = total_range_sizes.at(index_prefix);
     }
   }
   return ret;
@@ -1029,6 +1046,8 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     bool contain_always_false = false;
     bool has_exec_param = false;
     int64_t out_index_prefix = -1;
+    int64_t range_cnt = 0;
+
     common::ObSEArray<ObRawExpr *, 4> agent_table_filter;
     bool is_oracle_inner_index_table = share::is_oracle_mapping_real_virtual_table(index_schema->get_table_id());
     if (is_oracle_inner_index_table
@@ -1069,7 +1088,6 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       LOG_WARN("failed to final extract index skip query range", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::check_prefix_ranges_count(range_info.get_ranges(),
                                                                   equal_prefix_count,
-                                                                  equal_prefix_null_count,
                                                                   range_prefix_count,
                                                                   contain_always_false))) {
       LOG_WARN("failed to compute query range prefix count", K(ret));
@@ -1091,11 +1109,21 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       } else {
         range_info.set_query_range(static_cast<ObQueryRange*>(query_range_provider));
       }
-      range_info.set_equal_prefix_null_count(equal_prefix_null_count);
       range_info.set_index_column_count(index_schema->is_index_table() ?
                                         index_schema->get_index_column_num() :
                                         index_schema->get_rowkey_column_num());
       range_info.set_index_prefix(out_index_prefix);
+      int64_t index_equal_prefix_cnt = MIN(range_info.get_index_column_count(), equal_prefix_count);
+      if (OB_FAIL(ObOptimizerUtil::check_equal_prefix_null_count(range_info.get_ranges(),
+                                                                 index_equal_prefix_cnt,
+                                                                 equal_prefix_null_count))) {
+
+      } else if (OB_FAIL(get_query_range_count(range_info, range_cnt))) {
+        LOG_WARN("failed to get query range count", K(ret));
+      } else {
+        range_info.set_range_count(range_cnt);
+        range_info.set_equal_prefix_null_count(equal_prefix_null_count);
+      }
       LOG_TRACE("succeed to get query range", K(ranges), K(ss_ranges), K(helper.filters_),
                   KPC(query_range_provider), K(range_columns),
                   K(query_range_provider->get_range_exprs()), K(table_id), K(index_id));
@@ -1180,18 +1208,6 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
                   K(table_id),
                   K(ref_table_id),
                   K(index_to_use));
-      }
-    } else {
-      //check whether we can use single table heuristics:
-      if (OB_FAIL(user_table_heuristics(table_id, ref_table_id,
-                                        index_info_cache,
-                                        valid_index_ids,
-                                        index_to_use,
-                                        helper))) {
-        LOG_WARN("Failed to check user_table_heuristics", K(ret));
-      } else if (OB_INVALID_ID != index_to_use) {
-        OPT_TRACE("choose primary/index using heuristics", index_to_use);
-        LOG_TRACE("OPT:[RBO] choose primary/index using heuristics", K(table_id), K(index_to_use));
       }
     }
     if (OB_SUCC(ret)) {
@@ -1304,220 +1320,36 @@ int ObJoinOrder::virtual_table_heuristics(const uint64_t table_id,
   return ret;
 }
 
-/*
- * Different with cost-based approach, this function tries to use heuristics to generate access path
- * The heuristics used to generate access path is as follows:
- * 1 if search condition cover an unique index key (primary key is treated as unique key), and no need index_back, use that key,
- *   if there is multiple such key, choose the one with the minimum index key count
- * 2 if search condition cover an unique index key, need index_back, use that key
- *   and follows a refine process to find a better index
- * 3 otherwise generate all the access path and choose access path using cost model
- */
-int ObJoinOrder::user_table_heuristics(const uint64_t table_id,
-                                       const uint64_t ref_table_id,
-                                       const ObIndexInfoCache &index_info_cache,
-                                       const ObIArray<uint64_t> &valid_index_ids,
-                                       uint64_t &index_to_use,
-                                       PathHelper &helper)
+int ObJoinOrder::try_prune_non_unique_index(const uint64_t table_id,
+                                            const ObIndexInfoCache &index_info_cache,
+                                            const common::ObIArray<uint64_t> &valid_index_ids,
+                                            common::ObIArray<uint64_t> &candidate_index_ids,
+                                            bool &use_unique_index)
 {
   int ret = OB_SUCCESS;
-  index_to_use = OB_INVALID_ID;
-  const ObDMLStmt *stmt = NULL;
-  const ObTableSchema *table_schema = NULL;
-  ObSqlSchemaGuard *schema_guard = NULL;
-  QueryRangeInfo *range_info = NULL;
-  IndexInfoEntry *index_info_entry = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
-      OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(helper.table_opt_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard), K(stmt), K(ret));
-  } else if (OB_UNLIKELY(get_plan()->get_optimizer_context().generate_random_plan())) {
-    // disable user table heuristics if need to generate random plan
-  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)
-             || OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid table id", K(table_id), K(ref_table_id), K(ret));
-  } else {
-    uint64_t ukey_idx_without_indexback = OB_INVALID_ID;
-    int64_t minimal_ukey_size_without_indexback = 0;
-    ObSEArray<uint64_t, 4> ukey_idx_with_indexback;
-    ObSEArray<uint64_t, 4> candidate_refine_index;
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
-      int64_t index_col_num = 0;
-      uint64_t index_id = valid_index_ids.at(i);
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
-        LOG_WARN("fail to get table schema", K(index_id), K(ret));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index schema should not be null", K(ret), K(index_id));
-      } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
-                                                               index_info_entry))) {
-        LOG_WARN("failed to get index info entry", K(ret));
-      } else if (OB_ISNULL(index_info_entry)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index info entry should not be null", K(ret));
+  use_unique_index = false;
+  for(int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
+    uint64_t index_id = valid_index_ids.at(i);
+    IndexInfoEntry *index_info_entry = nullptr;
+    const OrderingInfo *temp_ordering_info = nullptr;
+    if (OB_FAIL(index_info_cache.get_index_info_entry(table_id,
+                                                      index_id,
+                                                      index_info_entry))) {
+      LOG_WARN("failed to get query range info", K(table_id), K(index_id), K(ret));
+    } else if (OB_ISNULL(index_info_entry)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index info is NULL", K(ret));
+    } else if (index_info_entry->get_range_info().get_unique_range_rowcnt() > 0) {
+      if (OB_FAIL(candidate_index_ids.push_back(index_id))) {
+        LOG_WARN("failed to push back", K(ret));
       } else {
-        range_info = &index_info_entry->get_range_info();
-        index_col_num = range_info->get_index_column_count();
-        LOG_TRACE("index info", K(index_info_entry->is_index_back()),
-            K(index_info_entry->get_index_id()),
-            K(index_info_entry->is_unique_index()), K(range_info->get_equal_prefix_count()),
-            K(index_col_num), K(table_schema->get_column_count()));
-        if (range_info->get_equal_prefix_count() >= index_col_num) {
-          // all key covers
-          if (!index_info_entry->is_index_back()) {
-            if (index_info_entry->is_valid_unique_index()) {
-              if (ukey_idx_without_indexback == OB_INVALID_ID ||
-                  table_schema->get_column_count() < minimal_ukey_size_without_indexback) {
-                ukey_idx_without_indexback = index_id;
-                minimal_ukey_size_without_indexback = table_schema->get_column_count();
-              }
-            } else { /*do nothing*/ }
-          } else if (index_info_entry->is_valid_unique_index()) {
-            if (OB_FAIL(ukey_idx_with_indexback.push_back(index_id))) {
-              LOG_WARN("failed to push back unique index with indexback", K(index_id), K(ret));
-            } else { /* do nothing */ }
-          } else { /* do nothing*/ }
-        } else if (!index_info_entry->is_index_back()) {
-          if (OB_FAIL(candidate_refine_index.push_back(index_id))) {
-            LOG_WARN("failed to push back refine index id", K(ret));
-          } else { /* do nothing*/ }
-        } else { /* do nothing*/ }
+        use_unique_index = true;
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (ukey_idx_without_indexback != OB_INVALID_ID) {
-        helper.table_opt_info_->optimization_method_ = OptimizationMethod::RULE_BASED;
-        helper.table_opt_info_->heuristic_rule_ = HeuristicRule::UNIQUE_INDEX_WITHOUT_INDEXBACK;
-        index_to_use = ukey_idx_without_indexback;
-      } else if (ukey_idx_with_indexback.count() > 0) {
-        helper.table_opt_info_->optimization_method_ = OptimizationMethod::RULE_BASED;
-        helper.table_opt_info_->heuristic_rule_ = HeuristicRule::UNIQUE_INDEX_WITH_INDEXBACK;
-        LOG_TRACE("start to refine table heuristics", K(index_to_use));
-        if (OB_FAIL(refine_table_heuristics_result(table_id,
-                                                   ref_table_id,
-                                                   candidate_refine_index,
-                                                   ukey_idx_with_indexback,
-                                                   index_info_cache,
-                                                   index_to_use))) {
-          LOG_WARN("failed to refine heuristic index choosing",
-              K(ukey_idx_with_indexback), K(ret));
-        } else if (index_to_use == OB_INVALID_ID) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid index id", K(ret));
-        } else {
-          LOG_TRACE("finish to refine table heuristics", K(index_to_use));
-        };
-      } else { /* do nothing */ }
     }
   }
-  return ret;
-}
-
-/*
- * this function try to refine rule 2
- * our heuristics sometimes may choose sub-optimal index
- * for example: create table t1(a int, b int, c int, unique key t1_b(b), unique key t1_b_c(b,c))
- * for query, select b, c from t1 where b = 5 and c > 10,
- * our heuristics will choose index t1_b, however, t1_b_c will be a much better choice since it does not need index back
- * this, if we meet rule 2, we will search again all other index to find a better one
- * candidate_refine_idx: all the candidate index we consider to refine
- * match_unique_idx: all the matched unique index
- */
-int ObJoinOrder::refine_table_heuristics_result(const uint64_t table_id,
-                                                const uint64_t ref_table_id,
-                                                const ObIArray<uint64_t> &candidate_refine_idx,
-                                                const ObIArray<uint64_t> &match_unique_idx,
-                                                const ObIndexInfoCache &index_info_cache,
-                                                uint64_t &index_to_use)
-{
-  int ret = OB_SUCCESS;
-  index_to_use = OB_INVALID_ID;
-  if (OB_UNLIKELY(OB_INVALID_ID == table_id) ||
-      OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid table id", K(table_id), K(ref_table_id), K(ret));
-  } else {
-    uint64_t refined_idx = OB_INVALID_ID;
-    int64_t minimal_range_count = 0;
-    ObSEArray<const QueryRangeInfo*, 4> match_range_info;
-    ObSEArray<const OrderingInfo*, 4> match_ordering_info;
-    const QueryRangeInfo *temp_range_info = NULL;
-    const OrderingInfo *temp_ordering_info = NULL;
-    DominateRelation status = DominateRelation::OBJ_UNCOMPARABLE;
-    for(int64_t i = 0; OB_SUCC(ret) && i < match_unique_idx.count(); ++i) {
-      uint64_t index_id = match_unique_idx.at(i);
-      if (OB_FAIL(index_info_cache.get_query_range(table_id,
-                                                   index_id,
-                                                   temp_range_info))) {
-        LOG_WARN("failed to get query range info", K(table_id), K(index_id), K(ret));
-      } else if (OB_ISNULL(temp_range_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("range info is NULL", K(ret));
-      } else if (OB_FAIL(match_range_info.push_back(temp_range_info))) {
-        LOG_WARN("failed to push back range info", K(ret));
-      } else if (OB_FAIL(index_info_cache.get_access_path_ordering(table_id,
-                                                                   index_id,
-                                                                   temp_ordering_info))) {
-        LOG_WARN("failed to get ordering info", K(table_id), K(index_id), K(ret));
-      } else if (OB_ISNULL(temp_ordering_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ordering info is null", K(ret));
-      } else if (OB_FAIL(match_ordering_info.push_back(temp_ordering_info))) {
-        LOG_WARN("failed to push back ordering info", K(ret));
-      } else {
-        if (index_to_use == OB_INVALID_ID ||
-            temp_range_info->get_ranges().count() < minimal_range_count) {
-          index_to_use = index_id;
-          minimal_range_count = temp_range_info->get_ranges().count();
-        }
-      }
-    }
-    // search all the candidate index to find a better one
-    for(int64_t i = 0; OB_SUCC(ret) && i < candidate_refine_idx.count(); i++) {
-      uint64_t index_id = candidate_refine_idx.at(i);
-      if (OB_FAIL(index_info_cache.get_query_range(table_id,
-                                                   index_id,
-                                                   temp_range_info))) {
-        LOG_WARN("failed to get range info", K(table_id), K(index_id), K(ret));
-      } else if (OB_ISNULL(temp_range_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("range info is null", K(ret));
-      } else if (OB_FAIL(index_info_cache.get_access_path_ordering(table_id,
-                                                                   index_id,
-                                                                   temp_ordering_info))) {
-        LOG_WARN("failed to get ordering info", K(table_id), K(index_id), K(ret));
-      } else if (OB_ISNULL(temp_ordering_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ordering info is null", K(ret));
-      } else { /* do nothing*/ }
-      // examine all matched unique index
-      for (int64_t j = 0; OB_SUCC(ret) && j < match_unique_idx.count(); j++) {
-        if (temp_range_info->get_range_prefix_count()
-            >= match_range_info.at(j)->get_range_prefix_count()) {
-          if (OB_FAIL(check_index_subset(match_ordering_info.at(j),
-                                         match_range_info.at(j)->get_range_prefix_count(),
-                                         temp_ordering_info,
-                                         temp_range_info->get_range_prefix_count(),
-                                         status))) {
-            LOG_WARN("failed to compare two index", K(ret));
-          } else if (status == DominateRelation::OBJ_LEFT_DOMINATE ||
-                     status == DominateRelation::OBJ_EQUAL) {
-            if (refined_idx == OB_INVALID_ID ||
-                temp_range_info->get_ranges().count() < minimal_range_count) {
-              refined_idx = index_id;
-              minimal_range_count = temp_range_info->get_ranges().count();
-            }
-            break;
-          } else { /* do nothing*/ }
-        }
-      }
-    }
-    // finally refine the index if we get one
-    if(OB_SUCC(ret)) {
-      if (refined_idx != OB_INVALID_ID) {
-        index_to_use = refined_idx;
-      } else { /* do nothing*/ }
+  if (OB_SUCC(ret) && candidate_index_ids.empty()) {
+    if (OB_FAIL(candidate_index_ids.assign(valid_index_ids))) {
+      LOG_WARN("failed to assign", K(ret));
     }
   }
   return ret;
@@ -2198,6 +2030,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                     ObIndexSkylineDim &index_dim,
                                     const ObIndexInfoCache &index_info_cache,
                                     ObIArray<ObRawExpr *> &restrict_infos,
+                                    bool use_unique_index,
+                                    bool ignore_order_dim,
                                     bool ignore_index_back_dim)
 {
   int ret = OB_SUCCESS;
@@ -2221,6 +2055,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
     ObSEArray<bool, 8> const_column_info;
     ObSEArray<uint64_t, 8> prefix_range_ids;  //for query range compare
     bool contain_always_false = false;
+    int64_t range_cnt = index_info_entry->get_range_info().get_range_count();
     if (OB_FAIL(extract_interesting_column_ids(ordering_info->get_index_keys(),
                                                index_info_entry->get_interesting_order_prefix_count(),
                                                interest_column_ids,
@@ -2250,36 +2085,50 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
       }
       if (OB_SUCC(ret)) {
         /*
-         * 添加三种维度的信息
+         * 添加四种维度的信息
          * (1) 是否回表
          * (2) interesting_order
          * (3) query range
+         *     a. for unique index, we compare the range rows
+         *     b. for non unique index, we compare the range prefix column
+         * (4) sharding
          * */
         bool can_extract_range = prefix_range_ids.count() > 0 || contain_always_false;
-        if (OB_FAIL(index_dim.add_index_back_dim(is_index_back,
+        bool is_get = index_info_entry->get_range_info().is_get();
+        if (!ignore_index_back_dim &&
+            OB_FAIL(index_dim.add_index_back_dim(is_index_back,
                                                  *allocator_))) {
           LOG_WARN("add index back dim failed", K(is_index_back), K(ret));
-        } else if (OB_FAIL(index_dim.add_interesting_order_dim(is_index_back,
+        } else if (!ignore_order_dim &&
+                   OB_FAIL(index_dim.add_interesting_order_dim(is_index_back,
                                                                can_extract_range,
                                                                filter_column_ids,
                                                                interest_column_ids,
                                                                const_column_info,
                                                                *allocator_))) {
           LOG_WARN("add interesting order dim failed", K(interest_column_ids), K(ret));
-        } else if (OB_FAIL(index_dim.add_query_range_dim(prefix_range_ids,
+        } else if (!use_unique_index &&
+                   OB_FAIL(index_dim.add_query_range_dim(prefix_range_ids,
                                                          *allocator_,
                                                          contain_always_false))) {
           LOG_WARN("add query range dimension failed", K(ret));
+        } else if (use_unique_index &&
+                   OB_FAIL(index_dim.add_unique_range_dim(range_cnt,
+                                                          *allocator_))) {
+          LOG_WARN("add query range dimension failed", K(ret));
         } else if (OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3
-                  && OB_FAIL(index_dim.add_sharding_info_dim(index_info_entry->get_sharding_info(), *allocator_))) {
+                  && OB_FAIL(index_dim.add_sharding_info_dim(index_info_entry->get_sharding_info(),
+                                                             is_get && 1 == range_cnt,
+                                                             *allocator_))) {
           LOG_WARN("add partition num dimension failed");
+        } else {
+          index_dim.set_is_get(is_get);
         }
       }
     }
   }
   return ret;
 }
-
 
 /*
  * 裁剪索引
@@ -2294,7 +2143,6 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
 int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                         const uint64_t base_table_id,
                                         const ObDMLStmt *stmt,
-                                        const bool do_prunning,
                                         const ObIndexInfoCache &index_info_cache,
                                         const ObIArray<uint64_t> &valid_index_ids,
                                         ObIArray<uint64_t> &skyline_index_ids,
@@ -2302,20 +2150,25 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                         bool ignore_index_back_dim)
 {
   int ret = OB_SUCCESS;
-  if (!do_prunning) {
-    skyline_index_ids.reset();
-    LOG_TRACE("do not do index prunning", K(table_id), K(base_table_id));
-    OPT_TRACE("do not do index prunning");
-    if (OB_FAIL(append(skyline_index_ids, valid_index_ids))) {
-      LOG_WARN("failed to append id", K(ret));
-    } else { /*do nothing*/ }
+  ObSEArray<uint64_t, 4> valid_unique_index_ids;
+  ObSEArray<uint64_t, 4> candidate_index_ids;
+  bool use_unique_index = false;
+  OPT_TRACE_TITLE("BEGIN SKYLINE INDEX PRUNNING");
+  if (OB_FAIL(try_prune_non_unique_index(table_id,
+                                         index_info_cache,
+                                         valid_index_ids,
+                                         candidate_index_ids,
+                                         use_unique_index))) {
+    LOG_WARN("failed to prune non unique index", K(ret));
   } else {
+    OPT_TRACE("candidate valid index ids", candidate_index_ids);
+    LOG_TRACE("succeed to get valid index ids",
+        K(candidate_index_ids), K(use_unique_index));
     //维度统计信息
-    OPT_TRACE_TITLE("BEGIN SKYLINE INDEX PRUNNING");
     ObSkylineDimRecorder recorder;
     bool has_add = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
-      const uint64_t tid = valid_index_ids.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidate_index_ids.count(); ++i) {
+      const uint64_t tid = candidate_index_ids.at(i);
       LOG_TRACE("cal dimension info of index", K(tid));
       ObIndexSkylineDim *index_dim = NULL;
       if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(*allocator_, index_dim))) {
@@ -2330,8 +2183,10 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                             tid, stmt,
                                             *index_dim, index_info_cache,
                                             restrict_infos,
+                                            use_unique_index,
+                                            use_unique_index, /*ignore intersting order*/
                                             ignore_index_back_dim))) {
-        LOG_WARN("Failed to cal dimension info", K(ret), "index_id", valid_index_ids, K(i));
+        LOG_WARN("Failed to cal dimension info", K(ret), "index_id", candidate_index_ids, K(i));
       } else if (OB_FAIL(recorder.add_index_dim(*index_dim, has_add))) {
         LOG_WARN("failed to add index dimension", K(ret));
       }
@@ -2483,6 +2338,105 @@ int ObJoinOrder::fill_index_info_cache(const uint64_t table_id,
       LOG_TRACE("succeed to fill index index entry", K(*index_info_entry));
     }
   }
+  if (FAILEDx(refine_unique_range_rowcnt(table_id, valid_index_ids, index_info_cache))) {
+    LOG_WARN("failed to adjust range rows", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::refine_unique_range_rowcnt(const uint64_t table_id,
+                                            const common::ObIArray<uint64_t> &valid_index_ids,
+                                            ObIndexInfoCache &index_info_cache)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const QueryRangeInfo*, 4> unique_range_info;
+  ObSEArray<const OrderingInfo*, 4> unique_ordering_info;
+  for(int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
+    uint64_t index_id = valid_index_ids.at(i);
+    IndexInfoEntry *index_info_entry = nullptr;
+    const OrderingInfo *temp_ordering_info = nullptr;
+    int64_t range_cnt = INT64_MAX;
+    if (OB_FAIL(index_info_cache.get_index_info_entry(table_id,
+                                                      index_id,
+                                                      index_info_entry))) {
+      LOG_WARN("failed to get query range info", K(table_id), K(index_id), K(ret));
+    } else if (OB_ISNULL(index_info_entry)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index info is NULL", K(ret));
+    } else if (!index_info_entry->is_valid_unique_index()) {
+      // do nothing
+    } else if (OB_FAIL(unique_range_info.push_back(&index_info_entry->get_range_info()))) {
+      LOG_WARN("failed to push back range info", K(ret));
+    } else if (OB_FAIL(index_info_cache.get_access_path_ordering(table_id,
+                                                                 index_id,
+                                                                 temp_ordering_info))) {
+      LOG_WARN("failed to get ordering info", K(table_id), K(index_id), K(ret));
+    } else if (OB_ISNULL(temp_ordering_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ordering info is null", K(ret));
+    } else if (OB_FAIL(unique_ordering_info.push_back(temp_ordering_info))) {
+      LOG_WARN("failed to push back ordering info", K(ret));
+    }
+    if (OB_SUCC(ret) && (index_info_entry->get_range_info().is_get() ||
+                         index_info_entry->is_valid_unique_index())){
+      index_info_entry->get_range_info().
+          set_unique_range_rowcnt(index_info_entry->get_range_info().get_range_count());
+    }
+  }
+  if (OB_SUCC(ret) && !unique_range_info.empty()) {
+    for(int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); i++) {
+      uint64_t index_id = valid_index_ids.at(i);
+      IndexInfoEntry *index_info_entry = nullptr;
+      const OrderingInfo *temp_ordering_info = nullptr;
+      if (OB_FAIL(index_info_cache.get_index_info_entry(table_id,
+                                                        index_id,
+                                                        index_info_entry))) {
+        LOG_WARN("failed to get query range info", K(table_id), K(index_id), K(ret));
+      } else if (OB_ISNULL(index_info_entry)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index info is NULL", K(ret));
+      } else if (OB_FAIL(index_info_cache.get_access_path_ordering(table_id,
+                                                                  index_id,
+                                                                  temp_ordering_info))) {
+        LOG_WARN("failed to get ordering info", K(table_id), K(index_id), K(ret));
+      } else if (OB_ISNULL(temp_ordering_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ordering info is null", K(ret));
+      } else {
+        QueryRangeInfo &temp_range_info = index_info_entry->get_range_info();
+        for (int64_t j = 0; OB_SUCC(ret) && j < unique_range_info.count(); j++) {
+          DominateRelation status = DominateRelation::OBJ_UNCOMPARABLE;
+          if (&temp_range_info == unique_range_info.at(j)) {
+            // do nothing
+          } else if (temp_range_info.get_range_prefix_count()
+              >= unique_range_info.at(j)->get_index_column_count()) {
+            if (OB_FAIL(check_index_subset(unique_ordering_info.at(j),
+                                           unique_range_info.at(j)->get_index_column_count(),
+                                           temp_ordering_info,
+                                           temp_range_info.get_range_prefix_count(),
+                                           status))) {
+              LOG_WARN("failed to compare two index", K(ret));
+            } else if (status == DominateRelation::OBJ_LEFT_DOMINATE ||
+                       status == DominateRelation::OBJ_EQUAL) {
+              int64_t unique_rows = unique_range_info.at(j)->get_range_count();
+              if (temp_range_info.get_unique_range_rowcnt() < 0) {
+                temp_range_info.set_unique_range_rowcnt(unique_rows);
+              } else {
+                temp_range_info.set_unique_range_rowcnt(
+                    std::min(unique_rows, temp_range_info.get_unique_range_rowcnt()));
+              }
+            }
+          }
+        }
+        LOG_TRACE("succeed to refine index range prefix rowcount",
+            K(index_id), K(temp_range_info.get_unique_range_rowcnt()));
+        if (temp_range_info.get_unique_range_rowcnt() > 0 ) {
+          OPT_TRACE("The max logical range rowcount of index", index_id,
+              "is", temp_range_info.get_unique_range_rowcnt());
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -2545,7 +2499,6 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
   } else if (OB_FAIL(skyline_prunning_index(table_id,
                                             ref_table_id,
                                             stmt,
-                                            !opt_ctx->generate_random_plan(),
                                             index_info_cache,
                                             valid_index_ids,
                                             skyline_index_ids,
@@ -8661,7 +8614,6 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
     } else if (OB_FAIL(skyline_prunning_index(table_id,
                                               ref_table_id,
                                               stmt,
-                                              true,
                                               index_info_cache,
                                               valid_index_ids,
                                               skyline_index_ids,
@@ -10207,6 +10159,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   int64_t dist_method = 0;
+  OPT_TRACE_TITLE("GENERATE INNER NL PATHS");
   if (OB_UNLIKELY(left_paths.empty()) || OB_ISNULL(left_paths.at(0)) || OB_ISNULL(right_path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(left_paths.count()), K(right_path), K(ret));

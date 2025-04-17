@@ -1600,34 +1600,34 @@ Outputs & filters:
       range_key([t4.a1], [t4.a2], [t4.b], [t4.c], [t4.__pk_increment]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, pk from t5 where pk = 100 and v1 = 100 order by v1 desc;
 Query Plan
-=========================================
-|ID|OPERATOR |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------
-|0 |TABLE GET|t5  |1       |3           |
-=========================================
+===============================================
+|ID|OPERATOR |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE GET|t5(idx_v1)|1       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 100]), rowset=16
+  0 - output([t5.v1], [t5.pk]), filter(nil), rowset=16
       access([t5.pk], [t5.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t5.pk]), range[100 ; 100], 
-      range_cond([t5.pk = 100])
+      is_index_back=false, is_global_index=false, 
+      range_key([t5.v1], [t5.pk]), range[100,100 ; 100,100], 
+      range_cond([t5.pk = 100], [t5.v1 = 100])
   Expr Constraints:
       cast(100, INT(11, 0)) = 100 result is TRUE
 explain select v1, pk from t5 where pk = 100 and v1 = 200 order by v1 desc;
 Query Plan
-=========================================
-|ID|OPERATOR |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------
-|0 |TABLE GET|t5  |1       |3           |
-=========================================
+===============================================
+|ID|OPERATOR |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE GET|t5(idx_v1)|1       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 200]), rowset=16
+  0 - output([t5.v1], [t5.pk]), filter(nil), rowset=16
       access([t5.pk], [t5.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t5.pk]), range[100 ; 100], 
-      range_cond([t5.pk = 100])
+      is_index_back=false, is_global_index=false, 
+      range_key([t5.v1], [t5.pk]), range[200,100 ; 200,100], 
+      range_cond([t5.pk = 100], [t5.v1 = 200])
   Expr Constraints:
       cast(200, INT(11, 0)) = 200 result is TRUE
 explain select a from t6 where b = 1 order by c desc limit 9;
