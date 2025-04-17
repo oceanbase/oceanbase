@@ -98,7 +98,7 @@ int ObPLParser::fast_parse(const ObString &query,
           err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
           global_errmsg = parse_ctx.global_errmsg_;
         }
-        ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
+        ObString stmt(MIN(MAX_PRINT_LEN, parse_ctx.stmt_len_), parse_ctx.stmt_str_);
         LOG_WARN("failed to parse pl stmt",
                 K(ret), K(err_line), K(global_errmsg), K(stmt));
         LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
@@ -139,7 +139,12 @@ int ObPLParser::parse(const ObString &stmt_block,
                               parse_result.is_dynamic_sql_,
                               is_inner_parse,
                               is_include_old_new_in_trigger))) {
-    LOG_WARN("parse stmt block failed", K(ret), K(stmt_block), K(orig_stmt_block));
+    if (OB_SIZE_OVERFLOW != ret) {
+      LOG_WARN("parse stmt block failed", K(ret), K(ObString(MIN(MAX_PRINT_LEN, stmt_block.length()) ,stmt_block.ptr())),
+                                                  K(ObString(MIN(MAX_PRINT_LEN, orig_stmt_block.length()) ,orig_stmt_block.ptr())));
+    } else {
+      LOG_WARN("parse stmt block failed", K(ret));
+    }
   } else if (OB_ISNULL(parse_result.result_tree_)) {
     ret = OB_ERR_PARSE_SQL;
     LOG_WARN("result tree is NULL", K(stmt_block), K(ret));
@@ -196,14 +201,14 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
       err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
       global_errmsg = parse_ctx.global_errmsg_;
     }
-    ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
+    ObString stmt(MIN(MAX_PRINT_LEN, parse_ctx.stmt_len_), parse_ctx.stmt_str_);
     LOG_WARN("failed to parser pl stmt",
              K(ret), K(err_line), K(global_errmsg), K(stmt));
     LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
                    err_len, err_str, err_line);
   } else if (parse_ctx.mysql_compatible_comment_) {
     ret = OB_ERR_PARSE_SQL;
-    LOG_WARN("the sql is invalid", K(ret), K(stmt_block));
+    LOG_WARN("the sql is invalid", K(ret), K(ObString(MIN(MAX_PRINT_LEN, stmt_block.length()) ,stmt_block.ptr())));
   } else {
     question_mark_ctx = parse_ctx.question_mark_ctx_;
     is_include_old_new_in_trigger = parse_ctx.is_include_old_new_in_trigger_;
@@ -331,15 +336,18 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       }
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to parse the statement",
-               "orig_stmt_str", ObString(parse_ctx.orig_stmt_len_, parse_ctx.orig_stmt_str_),
-               "stmt_str", ObString(parse_ctx.stmt_len_, parse_ctx.stmt_str_),
+      if (OB_SIZE_OVERFLOW != ret) {
+        LOG_WARN("failed to parse the statement",
                K_(parse_ctx.global_errmsg),
                K_(parse_ctx.global_errno),
                K_(parse_ctx.is_for_trigger),
                K_(parse_ctx.is_dynamic),
                K_(parse_ctx.is_for_preprocess),
-               K(ret));
+               "orig_stmt_str", ObString(MIN(MAX_PRINT_LEN, parse_ctx.orig_stmt_len_), parse_ctx.orig_stmt_str_),
+               "stmt_str", ObString(MIN(MAX_PRINT_LEN, parse_ctx.stmt_len_), parse_ctx.stmt_str_));
+      } else {
+        LOG_WARN("failed to parse the statement", K_(parse_ctx.global_errno));
+      }
       if (OB_NOT_SUPPORTED == ret) {
         LOG_USER_ERROR(OB_NOT_SUPPORTED, parse_ctx.global_errmsg_);
       }
