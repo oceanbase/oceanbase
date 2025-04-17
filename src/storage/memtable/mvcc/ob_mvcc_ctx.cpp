@@ -91,21 +91,30 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
               is_non_unique_local_index);
       cb->set_is_link();
 
-      if (OB_FAIL(append_callback(cb))) {
-        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
+        ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
+        MTL(ObLockWaitMgr*)->insert_hash_holder(
+          LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+          cb->get_hash_holder_linker(),
+          false);
+        if (OB_FAIL(append_callback(cb))) {
+          TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+          MTL(ObLockWaitMgr*)->erase_hash_holder_record(
+            LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+            cb->get_hash_holder_linker(),
+            false);
+        }
+      } else {
+        if (OB_FAIL(append_callback(cb))) {
+          TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+        }
       }
 
       if (OB_FAIL(ret)) {
         free_mvcc_row_callback(cb);
         TRANS_LOG(WARN, "append callback failed", K(ret));
       } else {
-        if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
-          ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
-          MTL(ObLockWaitMgr*)->insert_hash_holder(
-            LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
-            cb->get_hash_holder_linker(),
-            false);
-        }
+
       }
     }
   }
@@ -180,25 +189,6 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(append_callback(head, tail, length))) {
-      TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
-    } else {
-      TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
-                KPC(head), KPC(tail), K(length), K(mvcc_results));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    ObITransCallback *remove_cb = head;
-    while (nullptr != remove_cb) {
-      ObITransCallback *next = remove_cb->get_next();
-      free_mvcc_row_callback(remove_cb);
-      remove_cb = next;
-      TRANS_LOG(WARN, "free failed mvcc row callback succeed", K(ret), KPC(remove_cb));
-    }
-    head = nullptr;
-    tail = nullptr;
-  } else {
     if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
       ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
       for (int64_t i = 0; i < mvcc_results.count(); ++i) {
@@ -212,7 +202,43 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
             false);
         }
       }
+      if (OB_FAIL(append_callback(head, tail, length))) {
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+        for (int64_t i = 0; i < mvcc_results.count(); ++i) {
+          ObMvccWriteResult &res = mvcc_results[i];
+          if (res.has_insert()) {
+            const ObMemtableKey *stored_key = &res.mtk_;
+            ObMvccTransNode *node = res.tx_node_;
+            MTL(ObLockWaitMgr*)->erase_hash_holder_record(
+              LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
+              res.tx_callback_->get_hash_holder_linker(),
+              false);
+          }
+        }
+      } else {
+        TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
+                  KPC(head), KPC(tail), K(length), K(mvcc_results));
+      }
+    } else {
+      if (OB_FAIL(append_callback(head, tail, length))) {
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+      } else {
+        TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
+                  KPC(head), KPC(tail), K(length), K(mvcc_results));
+      }
     }
+  }
+
+  if (OB_FAIL(ret)) {
+    ObITransCallback *remove_cb = head;
+    while (nullptr != remove_cb) {
+      ObITransCallback *next = remove_cb->get_next();
+      free_mvcc_row_callback(remove_cb);
+      remove_cb = next;
+      TRANS_LOG(WARN, "free failed mvcc row callback succeed", K(ret), KPC(remove_cb));
+    }
+    head = nullptr;
+    tail = nullptr;
   }
 
   return ret;
@@ -254,24 +280,33 @@ int ObIMvccCtx::register_row_replay_cb(
     }
 
     cb->set_scn(scn);
-    if (OB_FAIL(append_callback(cb))) {
-      {
-        ObRowLatchGuard guard(value->latch_);
-        cb->unlink_trans_node();
+    if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && OB_NOT_NULL(MTL(ObLockWaitMgr*))) {
+      MTL(ObLockWaitMgr*)->insert_hash_holder(LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
+                                              cb->get_hash_holder_linker(),
+                                              false);
+      if (OB_FAIL(append_callback(cb))) {
+        {
+          ObRowLatchGuard guard(value->latch_);
+          cb->unlink_trans_node();
+        }
+        TRANS_LOG(WARN, "append callback failed", K(ret));
+        MTL(ObLockWaitMgr*)->erase_hash_holder_record(LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
+                                                      cb->get_hash_holder_linker(),
+                                                      false);
       }
-      TRANS_LOG(WARN, "append callback failed", K(ret));
+    } else {
+      if (OB_FAIL(append_callback(cb))) {
+        {
+          ObRowLatchGuard guard(value->latch_);
+          cb->unlink_trans_node();
+        }
+        TRANS_LOG(WARN, "append callback failed", K(ret));
+      }
     }
 
     if (OB_FAIL(ret)) {
       free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
-    } else {
-      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && OB_NOT_NULL(MTL(ObLockWaitMgr*))) {
-        MTL(ObLockWaitMgr*)->insert_hash_holder(
-          LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
-          cb->get_hash_holder_linker(),
-          false);
-      }
     }
   }
   return ret;
