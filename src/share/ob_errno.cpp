@@ -26296,10 +26296,10 @@ static const _error _error_OB_ERR_OBJECT_NOT_EXIST = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "object does not exist",
-      .str_user_error        = "object does not exist",
+      .str_user_error        = "object %.*s does not exist",
       .oracle_errno          = 6564,
       .oracle_str_error      = "ORA-06564: object does not exist",
-      .oracle_str_user_error = "ORA-06564: object does not exist"
+      .oracle_str_user_error = "ORA-06564: object %.*s does not exist"
 };
 static const _error _error_OB_ERR_TABLE_OUT_OF_RANGE = {
       .error_name            = "OB_ERR_TABLE_OUT_OF_RANGE",

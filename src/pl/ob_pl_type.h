@@ -771,32 +771,35 @@ class ObObjAccessIdx
 public:
   enum AccessType //必须与enum ExternalType的定义保持一致
   {
-    IS_INVALID = -1,
-    IS_LOCAL = 0,      //本地变量：PL内部定义的变量
-    IS_DB_NS = 1,          //外部变量：包变量所属的DB
-    IS_PKG_NS = 2,         //外部变量：包变量所属的PKG
-    IS_PKG = 3,            //外部变量：包变量
-    IS_USER = 4,           //外部变量：用户变量
-    IS_SESSION = 5,        //外部变量：SESSION系统变量
-    IS_GLOBAL = 6,         //外部变量：GLOBAL系统变量
-    IS_TABLE_NS = 7,       //外部变量: 用户表,用于实现 %TYPE, %ROWTYPE
-    IS_TABLE_COL = 8,      //外部变量: 用户列,用于实现 %TYPE
-    IS_LABEL_NS = 9,       //Label
-    IS_SUBPROGRAM_VAR = 10, //Subprogram Var
-    IS_EXPR = 11,           //for table type access index
-    IS_CONST = 12,          //常量 special case for is_expr
-    IS_PROPERTY = 13,       //固有属性，如count
-    IS_INTERNAL_PROC = 14,  //Package中的Procedure
-    IS_EXTERNAL_PROC = 15, //Standalone的Procedure
-    IS_NESTED_PROC = 16,
-    IS_TYPE_METHOD = 17,    //自定义类型的方法
-    IS_SYSTEM_PROC = 18,    //系统中已经预定义的Procedure(如: RAISE_APPLICATION_ERROR)
-    IS_UDT_NS = 19,
-    IS_UDF_NS = 20,
-    IS_LOCAL_TYPE = 21,     // 本地的自定义类型
-    IS_PKG_TYPE = 22,       // 包中的自定义类型
-    IS_SELF_ATTRIBUTE = 23, // self attribute for udt
-    IS_DBLINK_PKG_NS = 24,  // dblink package
+    IS_INVALID            = -1,
+    IS_LOCAL              = 0,//本地变量：PL内部定义的变量
+    IS_DB_NS              = 1,//外部变量：包变量所属的DB
+    IS_PKG_NS             = 2,//外部变量：包变量所属的PKG
+    IS_PKG                = 3,//外部变量：包变量
+    IS_USER               = 4,//外部变量：用户变量
+    IS_SESSION            = 5,//外部变量：SESSION系统变量
+    IS_GLOBAL             = 6,//外部变量：GLOBAL系统变量
+    IS_TABLE_NS           = 7,//外部变量: 用户表,用于实现 %TYPE, %ROWTYPE
+    IS_TABLE_COL          = 8,//外部变量: 用户列,用于实现 %TYPE
+    IS_LABEL_NS           = 9,//Label
+    IS_SUBPROGRAM_VAR     = 10,//Subprogram Var
+    IS_EXPR               = 11,//for table type access index
+    IS_CONST              = 12,//常量 special case for is_expr
+    IS_PROPERTY           = 13,//固有属性，如count
+    IS_INTERNAL_PROC      = 14,//Package中的Procedure
+    IS_EXTERNAL_PROC      = 15,//Standalone的Procedure
+    IS_NESTED_PROC        = 16,//
+    IS_TYPE_METHOD        = 17,//自定义类型的方法
+    IS_SYSTEM_PROC        = 18,//系统中已经预定义的Procedure(如: RAISE_APPLICATION_ERROR)
+    IS_UDT_NS             = 19,
+    IS_UDF_NS             = 20,
+    IS_LOCAL_TYPE         = 21,// 本地的自定义类型
+    IS_PKG_TYPE           = 22,// 包中的自定义类型
+    IS_SELF_ATTRIBUTE     = 23,// self attribute for udt
+    IS_DBLINK_PKG_NS      = 24,// dblink package
+    IS_UDT_MEMBER_ROUTINE = 25,// UDT member routine
+    IS_TRIGGER            = 26,// Trigger
+    IS_SEQUENCE           = 27,// Sequence
   };
 
   ObObjAccessIdx()
@@ -859,6 +862,10 @@ public:
   bool is_pkg_type() const { return IS_PKG_TYPE == access_type_; }
   bool is_udt_type() const { return IS_UDT_NS == access_type_; }
   bool is_udf_type() const { return IS_UDF_NS == access_type_; }
+  bool is_pkg_ns() const { return IS_PKG_NS == access_type_; }
+  bool is_database() const { return IS_DB_NS == access_type_; }
+  bool is_trigger() const { return IS_TRIGGER == access_type_; }
+  bool is_sequence() const { return IS_SEQUENCE == access_type_; }
 
   static bool is_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);

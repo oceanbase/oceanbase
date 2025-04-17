@@ -1172,6 +1172,8 @@ public:
     SELF_ATTRIBUTE,
     DBLINK_PKG_NS,      // dblink package
     UDT_MEMBER_ROUTINE, //
+    TRIGGER,            // Trigger
+    SEQUENCE            // Sequence
   };
 
   ObPLExternalNS(const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS *parent_ns)
@@ -1186,14 +1188,19 @@ public:
                       int64_t &var_idx,
                       const ObString &synonym_name,
                       const uint64_t cur_db_id,
-                      const pl::ObPLDependencyTable *&dep_table) const;
+                      const pl::ObPLDependencyTable *&dep_table,
+                      bool full_schema) const;
   int add_dependency_obj(const ObSchemaType schema_type,
                         const uint64_t schema_id,
                         const ObDependencyTableType table_type,
                         bool is_db_expilicit,
                         const pl::ObPLDependencyTable *&dep_table) const;
-  int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
-                              uint64_t &parent_id, int64_t &var_idx) const;
+  int resolve_external_symbol(const common::ObString &name,
+                              ExternalType &type,
+                              ObPLDataType &data_type,
+                              uint64_t &parent_id,
+                              int64_t &var_idx,
+                              bool full_schema = false) const;
   int resolve_external_type_by_name(const ObString &db_name,
                                     const ObString &package_name,
                                     const ObString &type_name,

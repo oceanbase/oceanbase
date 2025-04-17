@@ -405,8 +405,10 @@ public:
   static
   int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col);
   static
-  int resolve_access_ident(const ObObjAccessIdent &access_ident, ObPLExternalNS &external_ns,
-                           common::ObIArray<ObObjAccessIdx> &access_idexs);
+  int resolve_access_ident(const ObObjAccessIdent &access_ident,
+                           ObPLExternalNS &external_ns,
+                           common::ObIArray<ObObjAccessIdx> &access_idexs,
+                           bool full_schema = false);
 
   static
   int get_view_select_stmt(

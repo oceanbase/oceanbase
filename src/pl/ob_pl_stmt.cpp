@@ -1462,7 +1462,8 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                     int64_t &var_idx,
                                     const ObString &synonym_name,
                                     const uint64_t cur_db_id,
-                                    const pl::ObPLDependencyTable *&dep_table) const
+                                    const pl::ObPLDependencyTable *&dep_table,
+                                    bool full_schema) const
 {
   int ret = OB_SUCCESS;
   uint64_t object_id = OB_INVALID_ID;
@@ -1472,7 +1473,24 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
   ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
-  if (OB_FAIL(schema_guard.get_table_id(
+  const ObSequenceSchema *sequence = NULL;
+  const ObTriggerInfo *trigger_info = NULL;
+  if (!full_schema) {
+  } else if (OB_FAIL(schema_guard.get_sequence_schema_with_name(tenant_id, object_db_id, object_name, sequence))
+             || OB_ISNULL(sequence)) {
+    if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, object_db_id, object_name, trigger_info))
+        || OB_ISNULL(trigger_info)) {
+    } else {
+      object_id = trigger_info->get_trigger_id();
+      type = ObPLExternalNS::TRIGGER;
+    }
+  } else {
+    object_id = sequence->get_sequence_id();
+    type = ObPLExternalNS::SEQUENCE;
+  }
+
+  if (OB_SUCC(ret) && object_id != OB_INVALID_ID) {
+  } else if (OB_FAIL(schema_guard.get_table_id(
                   tenant_id, object_db_id, object_name, false /*is_index*/,
                   schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, object_id))
       || object_id == OB_INVALID_ID) {
@@ -1561,7 +1579,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
                                             ExternalType &type,
                                             ObPLDataType &data_type,
                                             uint64_t &parent_id,
-                                            int64_t &var_idx) const
+                                            int64_t &var_idx,
+                                            bool full_schema) const
 {
   int ret = OB_SUCCESS;
   SET_LOG_CHECK_MODE();
@@ -1685,6 +1704,14 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           OZ (schema_guard.get_table_id(tenant_id, db_id, name, false,
                                         schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
           if (OB_FAIL(ret)) {
+          } else if (full_schema && OB_INVALID_ID == table_id) { // try index schema
+            const ObTableSchema *table_schema = NULL;
+            OZ (schema_guard.get_idx_schema_by_origin_idx_name(tenant_id, db_id, name, table_schema));
+            if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
+              table_id = table_schema->get_table_id();
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (OB_INVALID_ID == table_id
                     && ObSQLUtils::is_oracle_sys_view(name)
                     && lib::is_oracle_mode()) {
@@ -1751,14 +1778,11 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
       // then routine
       if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx) {
         uint64_t tenant_id = session_info.get_effective_tenant_id();
-        uint64_t db_id = OB_INVALID_ID;
-        uint64_t udt_id = OB_INVALID_ID;
-        if (parent_id != OB_INVALID_INDEX) {
-          db_id = parent_id;
-        } else {
+        uint64_t db_id = parent_id;
+        const ObRoutineInfo *routine_info = NULL;
+        if (OB_INVALID_INDEX == db_id) {
           OZ (session_info.get_database_id(db_id));
         }
-        const ObRoutineInfo *routine_info = NULL;
         OZ (schema_guard.get_standalone_procedure_info(tenant_id, db_id, name, routine_info));
         if (NULL == routine_info && !ObPLResolver::is_unrecoverable_error(ret)) {
           ret = OB_SUCCESS;
@@ -1771,11 +1795,47 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           type = ObPLExternalNS::INVALID_VAR;
         } else {
           // udf/procedure will resolve later, here only avoid to resolve synonym
-          type = ObPLExternalNS::INVALID_VAR;
+          type = full_schema ? (routine_info->is_procedure() ? ObPLExternalNS::EXTERNAL_PROC
+                                                             : ObPLExternalNS::UDF_NS)
+                             : ObPLExternalNS::INVALID_VAR;
           var_idx = routine_info->get_routine_id();
         }
       }
-      //then synonym
+      // then trigger
+      if (OB_SUCC(ret) && full_schema && OB_INVALID_INDEX == var_idx) {
+        uint64_t tenant_id = session_info.get_effective_tenant_id();
+        uint64_t db_id = parent_id;
+        const ObTriggerInfo *trigger_info = NULL;
+        if (OB_INVALID_ID == db_id) {
+          OZ (session_info.get_database_id(db_id));
+        }
+        OZ (schema_guard.get_trigger_info(tenant_id, db_id, name, trigger_info));
+        if (NULL == trigger_info) {
+          ret = OB_SUCCESS;
+          type = ObPLExternalNS::INVALID_VAR;
+        } else {
+          type = ObPLExternalNS::TRIGGER;
+          var_idx = trigger_info->get_trigger_id();
+        }
+      }
+      // then sequence
+      if (OB_SUCC(ret) && full_schema && OB_INVALID_INDEX == var_idx) {
+        uint64_t tenant_id = session_info.get_effective_tenant_id();
+        uint64_t db_id = parent_id;
+        const ObSequenceSchema *sequence_schema = NULL;
+        if (OB_INVALID_ID == db_id) {
+          OZ (session_info.get_database_id(db_id));
+        }
+        OZ (schema_guard.get_sequence_schema_with_name(tenant_id, db_id, name, sequence_schema));
+        if (NULL == sequence_schema) {
+          ret = OB_SUCCESS;
+          type = ObPLExternalNS::INVALID_VAR;
+        } else {
+          type = ObPLExternalNS::SEQUENCE;
+          var_idx = sequence_schema->get_sequence_id();
+        }
+      }
+      // then synonym
       if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx) {
         bool exist = false;
         uint64_t tenant_id = session_info.get_effective_tenant_id();
@@ -1797,7 +1857,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
           if (exist) {
             const ObPLDependencyTable *dep_table = get_dependency_table();
-            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id, dep_table));
+            OZ (resolve_synonym(
+              object_db_id, object_name, type, parent_id, var_idx, name, db_id, dep_table, full_schema));
             if (synonym_checker.has_synonym() && OB_NOT_NULL(get_dependency_table())) {
               OZ (ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
                                                                 &resolve_ctx_.session_info_,
@@ -1891,6 +1952,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           ObPLPackageManager &package_manager = session_info.get_pl_engine()->get_package_manager();
           const ObPLVar *var = NULL;
           const ObUserDefinedType *user_type = NULL;
+          ObSEArray<const ObIRoutineInfo *, 1> routine_infos;
           if (OB_FAIL(package_manager.get_package_var(resolve_ctx_, parent_id, name, var, var_idx))) {
             LOG_WARN("get package var failed", K(ret), K(parent_id), K(name));
           } else if (OB_ISNULL(var)) { // 不是PackageVar尝试下是不是PackageType

@@ -14363,7 +14363,8 @@ int ObPLResolver::resolve_name(ObQualifiedName &q_name,
 // resolve external symbol direct
 int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
                                        ObPLExternalNS &external_ns,
-                                       ObIArray<ObObjAccessIdx> &access_idxs)
+                                       ObIArray<ObObjAccessIdx> &access_idxs,
+                                       bool full_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -14393,7 +14394,8 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
                                             type,
                                             pl_data_type,
                                             parent_id,
-                                            var_index), K(access_ident));
+                                            var_index,
+                                            full_schema), K(access_ident));
     if (ObPLExternalNS::INVALID_VAR == type) {
       ret = OB_ERR_SP_UNDECLARED_VAR;
       LOG_WARN("failed to resolve access ident",
@@ -14406,6 +14408,7 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
                                      access_ident.access_name_,
                                      pl_data_type,
                                      var_index);
+      access_idx.var_index_ = var_index;
     }
     OZ (access_idxs.push_back(access_idx));
   } else {
