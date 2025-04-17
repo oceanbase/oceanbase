@@ -6218,6 +6218,11 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
       LOG_WARN("failed to check collation", K(ret), K(collation_type), K(tmp_dest_obj));
     } else if (OB_FAIL(obj_accuracy_check(cast_ctx, accuracy, collation_type, *tmp_res_obj, tmp_dest_obj, tmp_res_obj))) {
       LOG_WARN("failed to check accuracy", K(ret), K(accuracy), K(collation_type), KPC(tmp_res_obj));
+    } else if (!column.is_nullable() && tmp_res_obj->is_null()) {
+      ret = OB_INVALID_DEFAULT;
+      LOG_USER_ERROR(OB_INVALID_DEFAULT, column.get_column_name_str().length(),
+                      column.get_column_name_str().ptr());
+      SQL_RESV_LOG(WARN, "Invalid default value", K(column), K(ret));
     } else if (0 == input_default_value.get_string().compare("''")) {
       //if default is '', we should store '' instead of NULL.
       //FIXME::when observer differentiate '' and null, we can delete this code @yanhua
