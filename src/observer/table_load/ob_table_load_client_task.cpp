@@ -167,6 +167,7 @@ public:
         LOG_WARN("fail to set session state", KR(tmp_ret));
       }
     }
+    LOG_INFO("LOAD DATA client task start");
     // resolve
     if (OB_FAIL(
           resolve(client_task_->client_exec_ctx_, client_task_->param_, load_param, column_ids))) {
@@ -195,6 +196,9 @@ public:
         ob_usleep(100_ms);
       } else if (ObTableLoadClientStatus::COMMITTING == status) {
         break;
+      } else if (ObTableLoadClientStatus::ERROR == status) {
+        ret = client_task_->get_error_code();
+        LOG_WARN("client task is error", KR(ret));
       } else if (ObTableLoadClientStatus::ABORT == status) {
         ret = client_task_->get_error_code();
         LOG_WARN("client task is abort", KR(ret));
@@ -216,6 +220,7 @@ public:
     if (session_info != nullptr && OB_TMP_FAIL(session_info->set_session_state(SESSION_SLEEP))) {
       LOG_WARN("fail to set session state", KR(tmp_ret));
     }
+    LOG_INFO("LOAD DATA client task finish", KR(ret));
     return ret;
   }
 
@@ -630,9 +635,6 @@ void ObTableLoadClientTask::abort(int error_code)
     }
   }
 }
-void ObTableLoadClientTask::heart_beat() { client_exec_ctx_.heart_beat(); }
-
-int ObTableLoadClientTask::check_status() { return client_exec_ctx_.check_status(); }
 
 int ObTableLoadClientTask::advance_status_nolock(const ObTableLoadClientStatus expected,
                                                  const ObTableLoadClientStatus updated)
@@ -680,27 +682,29 @@ int ObTableLoadClientTask::set_status_commit()
   return advance_status(ObTableLoadClientStatus::COMMITTING, ObTableLoadClientStatus::COMMIT);
 }
 
-int ObTableLoadClientTask::set_status_error(int error_code)
+void ObTableLoadClientTask::set_status_error(int error_code)
 {
-  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_SUCCESS == error_code)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(error_code));
-  } else {
-    obsys::ObWLockGuard guard(rw_lock_);
-    if (ObTableLoadClientStatus::ERROR == client_status_ ||
-        ObTableLoadClientStatus::ABORT == client_status_) {
-      // ignore
-    } else {
-      client_status_ = ObTableLoadClientStatus::ERROR;
-      error_code_ = error_code;
-    }
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected error code", K(error_code));
+    error_code = OB_ERR_UNEXPECTED;
   }
-  return ret;
+  obsys::ObWLockGuard guard(rw_lock_);
+  if (ObTableLoadClientStatus::ERROR == client_status_ ||
+      ObTableLoadClientStatus::ABORT == client_status_) {
+    // ignore
+  } else {
+    client_status_ = ObTableLoadClientStatus::ERROR;
+    error_code_ = error_code;
+    FLOG_INFO("LOAD DATA client task error", K(error_code_), K(lbt()));
+  }
 }
 
 void ObTableLoadClientTask::set_status_abort(int error_code)
 {
+  if (OB_UNLIKELY(OB_SUCCESS == error_code)) {
+    error_code_ = OB_ERR_UNEXPECTED;
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected error code", K(error_code));
+  }
   obsys::ObWLockGuard guard(rw_lock_);
   if (ObTableLoadClientStatus::ABORT == client_status_) {
     // ignore
@@ -709,6 +713,7 @@ void ObTableLoadClientTask::set_status_abort(int error_code)
     if (OB_SUCCESS == error_code_) {
       error_code_ = error_code;
     }
+    FLOG_INFO("LOAD DATA client task abort", K(error_code_), K(lbt()));
   }
 }
 

@@ -28,6 +28,7 @@ class ObTableDirectLoadAbortExecutor;
 class ObTableDirectLoadGetStatusExecutor;
 class ObTableDirectLoadInsertExecutor;
 class ObTableDirectLoadHeartBeatExecutor;
+class ObTableDirectLoadDetachExecutor;
 
 class ObTableDirectLoadRpcProxy
 {
@@ -166,6 +167,10 @@ public:
                                   table::ObTableDirectLoadOperationType::HEART_BEAT,
                                   ObTableDirectLoadHeartBeatExecutor, ObTableDirectLoadHeartBeatArg,
                                   ObTableDirectLoadHeartBeatRes);
+
+  // detach
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(HIGH_PRIO, detach, table::ObTableDirectLoadOperationType::DETACH,
+                                  ObTableDirectLoadDetachExecutor, ObTableDirectLoadDetachArg);
 
 private:
   obrpc::ObTableRpcProxy &rpc_proxy_;
