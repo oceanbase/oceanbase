@@ -839,8 +839,7 @@ void ObSSTablePrinter::print_spare_column_info(const ObIArray<ObSemiStructSubCol
     print_sub_column_path(sub_col.get_path());
     print_line("sub column obj type", static_cast<int>(sub_col.get_obj_type()));
     print_line("sub column json type", static_cast<int>(sub_col.get_json_type()));
-    print_line("sub column is spare", static_cast<int>(sub_col.is_spare()));
-    print_line("sub column has different type", static_cast<int>(sub_col.has_different_type()));
+    print_line("sub column is spare storage", static_cast<int>(sub_col.is_spare_storage()));
     print_end_line();
   }
   print_end_line();

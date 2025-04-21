@@ -338,7 +338,7 @@ int ObJsonDataFlatter::add(const ObFlatJson &flat_json)
     } else {
       LOG_WARN("get column fail", K(ret), K(col_cnt_), KPC(sub_schema_));
     }
-  } else if (sub_column->is_spare() || sub_column->has_different_type()) {
+  } else if (sub_column->is_spare_storage()) {
     if (OB_FAIL(add_spare_col(flat_json, *sub_column))) {
       LOG_WARN("add_spare_col fail", K(ret), K(flat_json), K(col_cnt_));
     }
@@ -1019,10 +1019,10 @@ int ObSimpleSubSchema::build_freq_and_spare_cols(ObIAllocator &allocator, ObIArr
       } else if (sub_column.cnt_ > row_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub_column cnt is incorrect", K(ret), K(sub_column), K(row_cnt), K(columns_));
-      } else if (need_as_spare || sub_column.col_->is_spare() || sub_column.col_->has_different_type()) {
+      } else if (need_as_spare || sub_column.col_->is_spare_storage()) {
         // spare column
         LOG_DEBUG("spare sub column", K(sub_column), K(row_cnt), K(need_as_spare), K(freq_col_threshold_));
-        if (need_as_spare) sub_column.col_->set_is_spare();
+        if (need_as_spare) sub_column.col_->set_is_spare_storage();
         if (OB_FAIL(spare_cols.push_back(ObSemiStructSubColumn()))) {
           LOG_WARN("push back fail", K(ret), "size", spare_cols.count(), K(*iter));
         } else if (OB_FAIL(spare_cols.at(spare_cols.count()-1).deep_copy(allocator, *sub_column.col_))) {
@@ -1063,7 +1063,7 @@ int ObSimpleSubSchema::build_key_dict(ObSemiStructSubSchema& sub_schema, const i
   while(OB_SUCC(ret) && iter != columns_.end()) {
     const ObSimpleSubColumn& sub_column = *iter;
     const share::ObSubColumnPath &path = sub_column.col_->get_path();
-    has_spare_column = has_spare_column || sub_column.col_->has_different_type() || need_store_as_spare_column(sub_column.cnt_, row_cnt, freq_col_threshold_);
+    has_spare_column = has_spare_column || need_store_as_spare_column(sub_column.cnt_, row_cnt, freq_col_threshold_);
     for (int j = 0; OB_SUCC(ret) && j < path.get_path_item_count(); ++j) {
       const share::ObSubColumnPathItem &path_item = path.get_path_item(j);
       if (path_item.is_object()) {
@@ -1204,22 +1204,13 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
       }
     } else if (cmp < 0) {
       ++left_iter;
-    } else if (left_sub_column.col_->has_different_type()) {
-      if (left_sub_column.get_obj_type() != ObJsonType) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("heterogeneous column type is not json", K(left_sub_column));
-      } else {
-        left_sub_column.cnt_++;
-        ++left_iter;
-        ++right_iter;
-      }
     } else if (left_sub_column.get_obj_type() != ObNullType
         && right_sub_column.get_obj_type()!= ObNullType
         && (left_sub_column.get_obj_type() != right_sub_column.get_obj_type()
             || (left_sub_column.get_obj_type() == ObNumberType && is_different_number_type(*left_sub_column.col_, *right_sub_column.col_)))) {
       LOG_DEBUG("same sub column path, but type is not same", K(left_sub_column), K(right_sub_column));
       left_sub_column.col_->set_obj_type(ObJsonType);
-      left_sub_column.col_->set_has_different_type();
+      left_sub_column.col_->set_is_spare_storage();
       left_sub_column.cnt_++;
       left_sub_column.min_len_ = 0;
       left_sub_column.max_len_ = 0;
@@ -1232,7 +1223,7 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
         left_sub_column.col_->set_obj_type(right_sub_column.get_obj_type());
       }
       if (left_sub_column.col_->get_obj_type() == ObJsonType) {
-        left_sub_column.col_->set_is_spare();
+        left_sub_column.col_->set_is_spare_storage();
       }
       left_sub_column.cnt_++;
       left_sub_column.min_len_ = OB_MIN(left_sub_column.min_len_, right_sub_column.min_len_);
@@ -1845,7 +1836,7 @@ int ObJsonReassembler::reassemble(const int start, const int end, const int dept
     } else if (depth + 1 == sub_cloumn_path.get_path_item_count()) {
       if (OB_FAIL(alloc_scalar_json_node(sub_column, child))) {
         LOG_WARN("alloc node fail", K(ret), K(path_item));
-      } else if (sub_column.is_spare() || sub_column.has_different_type()) {
+      } else if (sub_column.is_spare_storage()) {
         if (OB_FAIL(spare_leaves_.push_back((ObSemiStructScalar*)child))) {
           LOG_WARN("push back spare leaf fail", K(ret));
         }

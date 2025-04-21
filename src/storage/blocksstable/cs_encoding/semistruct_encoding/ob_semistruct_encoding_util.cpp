@@ -808,7 +808,7 @@ int ObSemiStructDecodeHandler::check_can_pushdown(
     }
   } else if (OB_ISNULL(sub_col)) {
     LOG_INFO("pushdown not support for not found json sub column", K(col_path), KPC(sub_col), KPC(sub_schema_));
-  } else if (sub_col->is_spare() || sub_col->has_different_type()) {
+  } else if (sub_col->is_spare_storage()) {
     LOG_INFO("pushdown not support for spare json sub column", K(col_path), KPC(sub_col), KPC(sub_schema_));
   } else if (sub_col->get_col_id() < 0 || sub_col->get_col_id() >= sub_schema_->get_store_column_count()) {
     ret = OB_ERR_UNEXPECTED;

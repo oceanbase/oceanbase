@@ -116,21 +116,18 @@ public:
   int32_t get_col_id() const { return sub_col_id_; }
   void set_col_id(const int32_t col_id) { sub_col_id_ = col_id; }
   int deep_copy(ObIAllocator& allocator, const ObSemiStructSubColumn &other);
-  void set_has_different_type() { has_different_type_ = true; }
-  bool has_different_type() const { return has_different_type_; }
-  void set_is_spare() { is_spare_ = true; }
-  bool is_spare() const { return is_spare_; }
+  void set_is_spare_storage() { is_spare_storage_ = true; }
+  bool is_spare_storage() const { return is_spare_storage_; }
   int encode(char *buf, const int64_t buf_len, int64_t &pos) const;
   int decode(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_encode_size() const;
-  TO_STRING_KV(KP(this), K_(sub_col_id), K_(json_type), K_(obj_type), K_(path), K_(is_spare), K_(has_different_type), K_(reserved), K_(prec), K_(scale));
+  TO_STRING_KV(KP(this), K_(sub_col_id), K_(json_type), K_(obj_type), K_(path), K_(is_spare_storage), K_(reserved), K_(prec), K_(scale));
 
 private:
   union {
     struct {
-      int8_t is_spare_ : 1;
-      int8_t has_different_type_ : 1;
-      int8_t reserved_ : 5;
+      int8_t is_spare_storage_ : 1;
+      int8_t reserved_ : 7;
     };
     uint8_t flags_;
   };
