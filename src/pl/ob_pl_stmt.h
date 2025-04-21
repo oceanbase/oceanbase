@@ -2257,6 +2257,7 @@ public:
       pl_integer_ranges_(allocator),
       data_type_(allocator),
       into_data_type_(allocator),
+      into_name_(allocator),
       bulk_(false),
       is_type_record_(false) {}
   virtual ~ObPLInto() {}
@@ -2277,6 +2278,9 @@ public:
   inline const common::ObIArray<ObPLDataType> &get_into_data_type() const { return into_data_type_; }
   inline common::ObIArray<ObPLDataType> &get_into_data_type() { return into_data_type_; }
   inline const ObPLDataType &get_into_data_type(int64_t i) const { return into_data_type_.at(i); }
+  inline int add_into_name(common::ObString& name) { return into_name_.push_back(name); }
+  inline const common::ObString&  get_into_name(int64_t i) const { return into_name_.at(i); }
+  inline common::ObIArray<common::ObString> &get_into_name() { return into_name_; }
   inline bool is_type_record() const { return is_type_record_; }
   inline bool is_bulk() const { return bulk_; }
   inline void set_bulk() { bulk_ = true; }
@@ -2307,6 +2311,7 @@ protected:
   ObPLSEArray<int64_t> pl_integer_ranges_;
   ObPLSEArray<ObDataType> data_type_;
   ObPLSEArray<ObPLDataType> into_data_type_;
+  ObPLSEArray<common::ObString> into_name_;
   bool bulk_;
   bool is_type_record_; // 表示into后面是否只有一个type定义的record类型(非object定义)
 };

@@ -2537,6 +2537,7 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       }
     } else {
       ret = OB_ERR_SP_UNDECLARED_VAR;
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, attr_name.length(), attr_name.ptr());
       LOG_WARN("PLS-00302: component 'A' must be declared", K(ret), K(access_ident), K(user_type));
     }
 #ifdef OB_BUILD_ORACLE_PL

@@ -7375,6 +7375,9 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
     OZ (check_variable_accessible(param_expr, true));
   } else {
     ret = OB_ERR_EXP_NOT_ASSIGNABLE;
+    if (param_expr->is_udf_expr() || param_expr->is_sys_func_expr()) {
+      LOG_USER_ERROR(OB_ERR_EXP_NOT_ASSIGNABLE, static_cast<ObSysFunRawExpr *>(param_expr)->get_func_name().length(), static_cast<ObSysFunRawExpr *>(param_expr)->get_func_name().ptr());
+    }
     LOG_WARN("wrong param type with output routine param",
              K(ret), K(param_expr->get_expr_type()), KPC(param_expr));
   }
@@ -7541,6 +7544,7 @@ int ObPLResolver::resolve_cparam_with_assign(ObRawExpr* expr,
     }
     if (OB_SUCC(ret) && -1 == position) {
       ret = OB_ERR_SP_UNDECLARED_VAR;
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, name.length(), name.ptr());
       LOG_WARN("can not find param in param list", K(ret), K(position), K(name));
     }
     OZ (resolve_cparam_without_assign(call_expr->get_expr(), position, func, params, expr_idx));
@@ -8915,7 +8919,8 @@ int ObPLResolver::resolve_fetch(
                 ret = OB_ERR_WRONG_FETCH_INTO_NUM;
                 LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
               }
-              for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < into_data_type_count; ++i) {
+              int64_t i = 0;
+              for (; OB_SUCC(ret) && is_compatible && i < into_data_type_count; ++i) {
                 left = return_type->get_record_member_type(i);
                 if (has_type_record_type) {
                   right = into_record_type->get_record_member_type(i);
@@ -8968,12 +8973,23 @@ int ObPLResolver::resolve_fetch(
 
               if (OB_SUCC(ret) && !is_compatible) {
                 ret = OB_ERR_TYPE_MISMATCH_IN_FETCH;
+                if (0 < stmt->get_into_name().count()) {
+                  if(has_type_record_type) {
+                    LOG_USER_ERROR(OB_ERR_TYPE_MISMATCH_IN_FETCH, stmt->get_into_name(0).length(), stmt->get_into_name(0).ptr());
+                  } else {
+                    LOG_USER_ERROR(OB_ERR_TYPE_MISMATCH_IN_FETCH, stmt->get_into_name(i - 1).length(), stmt->get_into_name(i - 1).ptr());
+                  }
+                }
                 LOG_WARN("type not compatible", K(ret), KPC(left), KPC(right));
               }
             }
           }
 
           if (OB_SUCC(ret) && !is_compatible) {
+            if (0 < stmt->get_into_name().count()) {
+              LOG_USER_ERROR(OB_ERR_TYPE_MISMATCH_IN_FETCH, stmt->get_into_name(stmt->get_into_name().count() - 1).length(),
+                             stmt->get_into_name(stmt->get_into_name().count() - 1).ptr());
+            }
             ret = OB_ERR_TYPE_MISMATCH_IN_FETCH;
             LOG_WARN("type not compatible",
                      K(*return_type),
@@ -12070,6 +12086,10 @@ int ObPLResolver::resolve_sqlcode_or_sqlerrm(ObQualifiedName &q_name,
     OX (expr = c_expr);
   } else {
     ret = OB_ERR_SP_UNDECLARED_VAR;
+    if (0 < q_name.access_idents_.count()) {
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, q_name.access_idents_.at(q_name.access_idents_.count() -1 ).access_name_.length(),
+                     q_name.access_idents_.at(q_name.access_idents_.count() -1 ).access_name_.ptr());
+    }
     LOG_WARN("failed to resolve sqlcode or sqlerrm", K(ret), K(q_name));
   }
   return ret;
@@ -12431,6 +12451,7 @@ int ObPLResolver::resolve_associative_array_construct(const ObQualifiedName &q_n
   if (OB_SUCC(ret) &&
       (udf_info.param_names_.count() > 0 || udf_info.ref_expr_->get_param_exprs().count() > 0)) { // only support empty constructor for associative array
     ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
     LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
   }
   OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
@@ -12472,6 +12493,7 @@ int ObPLResolver::resolve_udf_without_brackets(
       || (OB_NOT_NULL(expr) && T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type())
       || (OB_NOT_NULL(expr) && T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type())) {
     ret = OB_ERR_SP_UNDECLARED_VAR;
+    LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, access_ident.access_name_.length(), access_ident.access_name_.ptr());
     LOG_WARN("failed to resolve udt without brackets", K(ret), KPC(expr));
   }
   return ret;
@@ -15783,6 +15805,8 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
       } else if (T_QUESTIONMARK == into_list->children_[i]->type_ /*Oracle mode*/) {
         OZ (resolve_question_mark_node(into_list->children_[i], expr));
         CK (OB_NOT_NULL(expr));
+        ObObjAccessIdent access_ident(ObString(into_list->children_[i]->raw_text_), into_list->children_[i]->value_);
+        OZ (q_name.access_idents_.push_back(access_ident));
       } else { /*Mysql mode*/
         OZ (ObResolverUtils::resolve_obj_access_ref_node(expr_factory_,
                                 into_list->children_[i], q_name, resolve_ctx_.session_info_));
@@ -15799,6 +15823,8 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
       CK (OB_NOT_NULL(expr));
       OZ (func.add_expr(expr));
       OZ (into.add_into(func.get_expr_count() - 1, current_block_->get_namespace(), *expr));
+      CK (0 < q_name.access_idents_.count());
+      OZ (into.add_into_name(q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_));
       if (OB_FAIL(ret)) {
       } else if (expr->is_obj_access_expr()) {
         OZ (func.add_obj_access_expr(expr));
@@ -16299,6 +16325,11 @@ int ObPLResolver::resolve_sequence_object(const ObQualifiedName &q_name,
     }
   } else {
     ret = OB_ERR_SP_UNDECLARED_VAR;
+    if (0 < q_name.access_idents_.count()) {
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
+                     q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.length(),
+                     q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.ptr());
+    }
     LOG_WARN("sequence access bad field.", K(ret));
   }
   return ret;

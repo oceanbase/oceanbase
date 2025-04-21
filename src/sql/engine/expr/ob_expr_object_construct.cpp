@@ -46,7 +46,15 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
           && types[i].get_type() != ObNullType
           && !types[i].is_xml_sql_type())
         ||((ObExtendType == types[i].get_type() || types[i].is_xml_sql_type()) && elem_types_.at(i).get_type() != ObExtendType)) {
-      ret = OB_ERR_CALL_WRONG_ARG;
+      ObSchemaGetterGuard schema_guard;
+      int64_t tenant_id = type_ctx.get_session()->get_effective_tenant_id();
+      const ObUDTTypeInfo *udt_info = NULL;
+      OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+      OZ (schema_guard.get_udt_info(tenant_id, udt_id_, udt_info));
+      if (OB_SUCC(ret)) {
+        ret = OB_ERR_CALL_WRONG_ARG;
+        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+      }
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret), K(types[i]), K(elem_types_.at(i)), K(i));
     } else {
       types[i].set_calc_accuracy(elem_types_.at(i).get_accuracy());
@@ -60,7 +68,7 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-int ObExprObjectConstruct::check_types(const ObObj *objs_stack,
+int ObExprObjectConstruct::check_types(ObEvalCtx &ctx, const ObObj *objs_stack,
                                        const common::ObIArray<ObExprResType> &elem_types,
                                        int64_t param_num)
 {
@@ -77,7 +85,15 @@ int ObExprObjectConstruct::check_types(const ObObj *objs_stack,
         pl::ObPLComposite *composite = reinterpret_cast<pl::ObPLComposite*>(objs_stack[i].get_ext());
         CK (OB_NOT_NULL(composite));
         if (OB_SUCC(ret) && composite->get_id() != elem_types.at(i).get_udt_id()) {
-          ret = OB_ERR_CALL_WRONG_ARG;
+          ObSchemaGetterGuard schema_guard;
+          int64_t tenant_id = ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
+          const ObUDTTypeInfo *udt_info = NULL;
+          OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+          OZ (schema_guard.get_udt_info(tenant_id, elem_types.at(i).get_udt_id(), udt_info));
+          if (OB_SUCC(ret)) {
+            ret = OB_ERR_CALL_WRONG_ARG;
+            LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+          }
           LOG_WARN("invalid argument. unexpected obj type", K(ret), KPC(composite), K(elem_types), K(i));
         }
       }
@@ -176,7 +192,7 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("failed to alloc mem for objs", K(ret));
   } else if (OB_FAIL(fill_obj_stack(expr, ctx, objs))) {
     LOG_WARN("failed to convert obj", K(ret));
-  } else if (expr.arg_cnt_ > 0 && OB_FAIL(check_types(objs, info->elem_types_, expr.arg_cnt_))) {
+  } else if (expr.arg_cnt_ > 0 && OB_FAIL(check_types(ctx, objs, info->elem_types_, expr.arg_cnt_))) {
     LOG_WARN("failed to check types", K(ret));
   } else if (info->rowsize_ != pl::ObRecordType::get_init_size(expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;

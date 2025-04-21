@@ -63,7 +63,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int eval_object_construct(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
-  static int check_types(const common::ObObj *objs_stack,
+  static int check_types(ObEvalCtx &ctx, const common::ObObj *objs_stack,
                          const common::ObIArray<ObExprResType> &elem_types,
                          int64_t param_num);
   static int fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs);

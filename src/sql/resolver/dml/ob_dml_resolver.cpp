@@ -837,6 +837,7 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
              * 直接在sql端执行select 1 into a；mysql会报“ERROR 1327 (42000): Undeclared variable: a”
              * */
             ret = OB_ERR_SP_UNDECLARED_VAR;
+            LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, static_cast<int>(ch_node->str_len_), ch_node->str_value_);
             LOG_WARN("PL Variable used in SQL", K(params_.secondary_namespace_), K(ret));
           }
         }
@@ -1788,6 +1789,10 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr) && T_FUN_PL_SQLCODE_SQLERRM == real_ref_expr->get_expr_type()) {
       ret = OB_ERR_SP_UNDECLARED_VAR;
+      if (0 < q_name.access_idents_.count()) {
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,  q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.length(),
+                    q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.ptr());
+      }
       LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
     }
   }
