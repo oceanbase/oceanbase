@@ -2,7 +2,7 @@
 
 Thank you for considering contributing to OceanBase.
 
-We welcome any type of contribution to the OceanBase community. You can contribute code, help our new users in the DingTalk group (Group No.: 33254054), [Slack group](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw) or in [StackOverflow](https://stackoverflow.com/search?q=oceanbase&s=4b3eddc8-73a2-4d90-8039-95fcc24e6450), test releases, or improve our documentation.
+We welcome any type of contribution to the OceanBase community. You can contribute code, help our new users in the DingTalk group (Group No.: 33254054), [Discord Community](https://discord.gg/74cF8vbNEs) or in [StackOverflow](https://stackoverflow.com/search?q=oceanbase&s=4b3eddc8-73a2-4d90-8039-95fcc24e6450), test releases, or improve our documentation.
 
 If you are interested in contributing code to OceanBase, please read the following guidelines and follow the steps.
 

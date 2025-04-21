@@ -70,7 +70,7 @@
 
 # クイック スタート
 
-詳細については、[クイック エクスペリエンス](https://en.oceanbase.com/docs/community-observer-en-100000000000829647)
+詳細については、[クイック エクスペリエンス](https://en.oceanbase.com/docs/community-observer-en-10000000000829647)
 
 ## 🔥 オールインワンな環境から始める
 
