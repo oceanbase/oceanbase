@@ -276,7 +276,11 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             const share::schema::ObTableSchema *table_schema = NULL;
             ObArray<ColumnItem> column_items;
             CK (OB_NOT_NULL(table_item));
-            OZ (resolve_all_basic_table_columns(*table_item, false, &column_items));
+            if (table_item->is_basic_table() || table_item->is_link_table()) {
+              OZ (resolve_all_basic_table_columns(*table_item, false, &column_items));
+            } else if (table_item->is_generated_table() || table_item->is_temp_table()) {
+              OZ (resolve_all_generated_table_columns(*table_item, column_items));
+            }
             for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
               OZ (target_list.push_back(column_items.at(i).get_expr()));
             }
