@@ -1114,7 +1114,7 @@ int ObAdminSetConfig::update_tenant_config_(
     } // end for each tenant
     // try to broadcast config is changed to all server
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(construct_arg_and_broadcast_tenant_config_map_())) {
+    } else if (OB_FAIL(construct_arg_and_broadcast_tenant_config_map())) {
       LOG_WARN("fail to construct arg and broadcast tenant config map", KR(ret));
     }
   }
@@ -1425,7 +1425,7 @@ int ObAdminSetConfig::check_with_lock_before_update_(
   return ret;
 }
 
-int ObAdminSetConfig::construct_arg_and_broadcast_tenant_config_map_()
+int ObAdminSetConfig::construct_arg_and_broadcast_tenant_config_map()
 {
   int ret = OB_SUCCESS;
   share::ObLeaseResponse tmp_lease_response;

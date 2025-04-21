@@ -1443,9 +1443,19 @@ int ObTenantDDLService::broadcast_tenant_init_config_(const uint64_t tenant_id)
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
     if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, config_version))) {
       LOG_WARN("failed to set tenant config version", KR(ret), K(tenant_id));
-    } else if (is_meta_tenant(tenant_id) && OB_FAIL(OTC_MGR.set_tenant_config_version(user_tenant_id,
+    } else if (OB_FAIL(OTC_MGR.got_version(tenant_id, config_version))) {
+      LOG_WARN("failed to got_version", KR(ret), K(tenant_id), K(config_version));
+    } else if (is_meta_tenant(tenant_id)) {
+      if (OB_FAIL(OTC_MGR.set_tenant_config_version(user_tenant_id,
             config_version))) {
       LOG_WARN("failed to set tenant config version", KR(ret), K(user_tenant_id));
+      } else if (OB_FAIL(OTC_MGR.got_version(user_tenant_id, config_version))) {
+        LOG_WARN("failed to got_version", KR(ret), K(user_tenant_id), K(config_version));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObAdminSetConfig::construct_arg_and_broadcast_tenant_config_map())) {
+      LOG_WARN("failed to broadcast tenant config", KR(ret));
     }
   }
   return ret;

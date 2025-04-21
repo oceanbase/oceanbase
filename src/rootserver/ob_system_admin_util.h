@@ -338,6 +338,8 @@ public:
 
   int execute(obrpc::ObAdminSetConfigArg &arg);
 
+  static int construct_arg_and_broadcast_tenant_config_map();
+
 private:
   class ObServerConfigChecker : public common::ObServerConfig
   {
@@ -399,9 +401,8 @@ private:
       const obrpc::ObAdminSetConfigItem &item,
       const char *table_name,
       const int64_t new_version);
-  int construct_arg_and_broadcast_tenant_config_map_();
+  static int broadcast_config_version_(const obrpc::ObBroadcastConfigVersionArg &broadcast_arg);
   int construct_arg_and_broadcast_global_config_version_(const int64_t new_version);
-  int broadcast_config_version_(const obrpc::ObBroadcastConfigVersionArg &broadcast_arg);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetConfig);
