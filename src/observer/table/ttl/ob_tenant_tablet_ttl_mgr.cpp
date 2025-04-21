@@ -396,6 +396,9 @@ int ObTabletTTLScheduler::generate_one_tablet_task(ObTTLTaskInfo& task_info, con
 
   if (OB_NOT_NULL(ctx = get_one_tablet_ctx(task_info.tablet_id_))) {
     LOG_INFO("ttl ctx exist", KR(ret), K(task_info.tablet_id_));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ls", K(ret));
   } else {
     char *ctx_buf = static_cast<char *>(local_tenant_task_.allocator_.alloc(sizeof(ObTTLTaskCtx)));
     if (OB_ISNULL(ctx_buf)) {
@@ -463,6 +466,9 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
     LOG_WARN("fail to reserve", KR(ret));
   } else if (!table_id_array.empty() && OB_FAIL(param_map.create(DEFAULT_PARAM_BUCKET_SIZE, bucket_attr, node_attr))) {
     LOG_WARN("fail to create param map", KR(ret));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ls", K(ret));
   }
 
   int64_t start_idx = 0;
@@ -1674,13 +1680,18 @@ int ObTabletHRowkeyTTLScheduler::init(storage::ObLS *ls)
 int ObTabletHRowkeyTTLScheduler::do_after_leader_switch()
 {
   int ret = OB_SUCCESS;
-  if (true == ATOMIC_LOAD(&is_leader_)) {
-    if (OB_FAIL(MTL(ObHTableRowkeyMgr*)->register_rowkey_queue(ls_->get_ls_id(), hrowkey_queue_))) {
-      LOG_WARN("fail to register rowkey queue", K(ret), KPC_(ls));
-    }
+  if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ls", K(ret));
   } else {
-    if (OB_FAIL(MTL(ObHTableRowkeyMgr*)->unregister_rowkey_queue(ls_->get_ls_id(), hrowkey_queue_))) {
-      LOG_WARN("fail to register rowkey queue", K(ret), KPC_(ls));
+    if (true == ATOMIC_LOAD(&is_leader_)) {
+      if (OB_FAIL(MTL(ObHTableRowkeyMgr*)->register_rowkey_queue(ls_->get_ls_id(), hrowkey_queue_))) {
+        LOG_WARN("fail to register rowkey queue", K(ret), KPC_(ls));
+      }
+    } else {
+      if (OB_FAIL(MTL(ObHTableRowkeyMgr*)->unregister_rowkey_queue(ls_->get_ls_id(), hrowkey_queue_))) {
+        LOG_WARN("fail to register rowkey queue", K(ret), KPC_(ls));
+      }
     }
   }
   return ret;
@@ -1782,6 +1793,21 @@ HRowkeyNode *ObTabletHRowkeyTTLScheduler::traverse_rowkey_set(HRowkeyDedupMap::H
 int ObTabletHRowkeyTTLScheduler::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
 {
   return ObTTLUtil::check_is_htable_ttl(table_schema, is_ttl_table);
+}
+
+int ObTabletHRowkeyTTLScheduler::safe_to_destroy(bool &is_safe)
+{
+  int ret = OB_SUCCESS;
+  is_safe = false;
+  if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ls", K(ret));
+  } else if (OB_FAIL(ObTabletTTLScheduler::safe_to_destroy(is_safe))) {
+    LOG_WARN("ObTabletTTLScheduler cannot safe to destroy", K(ret));
+  } else if (is_safe && OB_FAIL(MTL(ObHTableRowkeyMgr*)->unregister_rowkey_queue(ls_->get_ls_id(), hrowkey_queue_))) {
+    LOG_WARN("fail to unregister rowkey queue", K(ret), KPC_(ls));
+  }
+  return ret;
 }
 
 } // table

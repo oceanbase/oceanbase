@@ -1008,7 +1008,7 @@ int ObTableLSExecuteP::get_ls_id(ObLSID &ls_id, const ObSimpleTableSchemaV2 *sim
     const uint64_t &first_table_id = ls_op.get_table_id();
     ObTabletID real_tablet_id;
     if (OB_FAIL(get_tablet_id(simple_table_schema, first_tablet_id, first_table_id, real_tablet_id))) {
-      LOG_WARN("fail to get tablet id", K(ret), K(first_table_id), K(first_table_id));
+      LOG_WARN("fail to get tablet id", K(ret), K(first_tablet_id), K(first_table_id));
     } else if (OB_FAIL(ParentType::get_ls_id(real_tablet_id, ls_id))) {
       LOG_WARN("fail to get ls id", K(ret), K(real_tablet_id));
     }
