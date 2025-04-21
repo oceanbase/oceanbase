@@ -19,6 +19,7 @@
 #include "share/ob_ddl_sim_point.h"
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "storage/ob_partition_pre_split.h"
+#include "storage/mview/ob_mview_mds.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -197,14 +198,43 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else {
-        if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
-          LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-        } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-                oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-        }
-        if (OB_SUCC(ret) && !is_mview_complete_refresh_) {
-          if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+        ObCompatibilityMode compat_mode = oracle_mode ?
+                                          ObCompatibilityMode::ORACLE_MODE :
+                                          ObCompatibilityMode::MYSQL_MODE;
+        ObMySQLTransaction trans;
+        if (is_mview_complete_refresh_) {
+          ObMViewOpArg arg;
+          arg.table_id_ = mview_table_id_;
+          arg.parallel_ = parallelism_;
+          arg.session_id_ = 100; // fixed session id
+          arg.start_ts_ = ObTimeUtil::current_time();
+          arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
+          arg.read_snapshot_ = snapshot_version_;
+          if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
+            LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
+          } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
+            LOG_WARN("register mview mds failed", K(ret), K(tenant_id_), K(arg));
+          }
+          DEBUG_SYNC(BEFORE_MV_LOAD_DATA);
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
+            LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+          } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                                                   compat_mode, &session_param, sql_exec_addr))) {
+            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+          }
+          tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+            LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+            ret = OB_SUCC(ret) ? tmp_ret : ret;
+          }
+        } else {
+          if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
+            LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+          } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                                                   compat_mode, &session_param, sql_exec_addr))) {
+            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+          } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
             LOG_WARN("fail to check sstable checksum_report_finish",
               K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
           }

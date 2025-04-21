@@ -91,22 +91,17 @@ int ObMViewRefresher::refresh()
     }
     if (OB_SUCC(ret)) {
       const ObMVRefreshType refresh_type = refresh_ctx_->refresh_type_;
-      ObMViewOpArg arg;
-      arg.table_id_ =  mview_id;
-      arg.parallel_ = refresh_ctx_->refresh_parallelism_;
-      arg.session_id_ = refresh_ctx_->trans_->get_session_info()->get_server_sid();
-      arg.start_ts_ = ObTimeUtil::current_time();
       if (ObMVRefreshType::FAST == refresh_type) {
+        ObMViewOpArg arg;
+        arg.table_id_ =  mview_id;
+        arg.parallel_ = refresh_ctx_->refresh_parallelism_;
+        arg.session_id_ = refresh_ctx_->trans_->get_session_info()->get_server_sid();
+        arg.start_ts_ = ObTimeUtil::current_time();
         arg.mview_op_type_ = MVIEW_OP_TYPE::FAST_REFRESH;
         arg.read_snapshot_ = refresh_ctx_->refresh_scn_range_.end_scn_.get_val_for_tx();
-      } else if (ObMVRefreshType::COMPLETE == refresh_type) {
-        // COMPLETE REFRESH is ddl task keep snapshot by ddl frame
-        arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
-      }
-      if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id, arg, *refresh_ctx_->trans_))) {
-        LOG_WARN("register mview mds failed", KR(ret), K(tenant_id), K(arg));
-      } else if (ObMVRefreshType::FAST == refresh_type) {
-        if (OB_FAIL(fast_refresh())) {
+        if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id, arg, *refresh_ctx_->trans_))) {
+          LOG_WARN("register mview mds failed", KR(ret), K(tenant_id), K(arg));
+        } else if (OB_FAIL(fast_refresh())) {
           LOG_WARN("fail to fast refresh", KR(ret));
         }
       } else if (ObMVRefreshType::COMPLETE == refresh_type) {
