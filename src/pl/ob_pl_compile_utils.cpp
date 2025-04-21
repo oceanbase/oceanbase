@@ -48,7 +48,7 @@ int ObPLCompilerUtils::compile(ObExecContext &ctx,
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to compile object",
               K(ret), K(tenant_id), K(object_type), K(database_name), K(object_name), K(schema_version));
-    // ret = OB_SUCCESS;
+    ret = OB_SUCCESS;
     common::ob_reset_tsi_warning_buffer();
     if (NULL != ctx.get_my_session()) {
       ctx.get_my_session()->reset_warnings_buf();
