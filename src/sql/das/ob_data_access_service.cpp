@@ -733,7 +733,6 @@ int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTa
     LOG_WARN("alloc memory failed", K(ret));
   } else if (OB_FAIL(task->init(&agg_task, timeout_ts, group_id))) {
     LOG_WARN("init parallel task failed", K(ret), K(agg_task));
-  } else if (FALSE_IT(task->set_diagnostic_info(ObLocalDiagnosticInfo::get()))) {
   } else if (OB_FAIL(omt->recv_request(MTL_ID(), *task))) {
     LOG_WARN("fail to push parallel_das_task", K(ret), KPC(task));
   } else {
