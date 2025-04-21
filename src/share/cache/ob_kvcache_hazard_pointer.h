@@ -53,6 +53,7 @@ public:
   SharedHazptr(const SharedHazptr& other);
   ~SharedHazptr();
   SharedHazptr& operator=(const SharedHazptr& other);
+  void move_from(SharedHazptr& other);
   void reset();
   ObKVMemBlockHandle* get_mb_handle() const;
 private:

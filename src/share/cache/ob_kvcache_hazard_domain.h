@@ -70,10 +70,12 @@ private:
   void hazptr_reset();
   ObKVMemBlockHandle* hazptr_get_mb_handle() const;
   int hazptr_assign(const HazptrHolder& other);
+  void hazptr_move_from(HazptrHolder& other);
   int refcnt_protect(bool& success, ObKVMemBlockHandle* mb_handle, int32_t seq_num);
   int refcnt_protect(bool& success, ObKVMemBlockHandle* mb_handle);
   void refcnt_release();
   void refcnt_reset();
+  void refcnt_move_from(HazptrHolder& other);
   ObKVMemBlockHandle* refcnt_get_mb_handle() const;
   int refcnt_assign(const HazptrHolder& other);
 

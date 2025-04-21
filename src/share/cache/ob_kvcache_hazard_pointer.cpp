@@ -128,6 +128,13 @@ SharedHazptr& SharedHazptr::operator=(const SharedHazptr& other)
   return *this;
 }
 
+void SharedHazptr::move_from(SharedHazptr& other)
+{
+  reset();
+  ctrl_ptr_ = other.ctrl_ptr_;
+  other.ctrl_ptr_ = nullptr;
+}
+
 void SharedHazptr::reset()
 {
   if (nullptr != ctrl_ptr_) {

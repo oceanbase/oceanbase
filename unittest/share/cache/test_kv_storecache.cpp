@@ -1284,9 +1284,10 @@ TEST_F(TestKVCache, cache_handle_pin) {
           key.v_ = val;
           key.tenant_id_ = tenant_id_;
           value.v_ = val;
-          ObKVCacheHandle handle;
+          ObKVCacheHandle handle, another_handle;
           ASSERT_EQ(OB_SUCCESS, cache.put_and_fetch(key, value, values[j], handle));
-          ASSERT_EQ(OB_SUCCESS, handles[j].assign(handle));
+          ASSERT_EQ(OB_SUCCESS, another_handle.assign(handle));
+          handles[j].move_from(another_handle);
         }
         for (uint16_t j = 0; j < handle_size; ++j) {
           auto val = (thread_idx << 32) + (repeat << 16) + j;

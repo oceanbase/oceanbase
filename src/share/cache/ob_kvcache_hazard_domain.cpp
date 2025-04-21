@@ -187,9 +187,7 @@ void HazptrHolder::reset()
 
 void HazptrHolder::move_from(HazptrHolder& other)
 {
-  reset();
-  this->hazptr_ = other.hazptr_;
-  other.hazptr_ = nullptr;
+  DISPATCH_HAZPTR_REFCNT(move_from, other);
 }
 
 int HazptrHolder::assign(const HazptrHolder& other)
@@ -300,6 +298,19 @@ int HazptrHolder::hazptr_assign(const HazptrHolder& other)
   return ret;
 }
 
+void HazptrHolder::hazptr_move_from(HazptrHolder& other)
+{
+  hazptr_reset();
+  if (OB_UNLIKELY(other.is_shared_)) {
+    shared_hazptr_.move_from(other.shared_hazptr_) ;
+    is_shared_ = true;
+    other.is_shared_ = false;
+  } else {
+    hazptr_ = other.hazptr_;
+    other.hazptr_ = nullptr;
+  }
+}
+
 int HazptrHolder::refcnt_protect(bool& success, ObKVMemBlockHandle* mb_handle, int32_t seq_num)
 {
   int ret = OB_SUCCESS;
@@ -363,6 +374,13 @@ int HazptrHolder::refcnt_assign(const HazptrHolder& other)
     mb_handle_ = other.mb_handle_;
   }
   return OB_SUCCESS;
+}
+
+void HazptrHolder::refcnt_move_from(HazptrHolder& other)
+{
+  refcnt_reset();
+  mb_handle_ = other.mb_handle_;
+  other.mb_handle_ = nullptr;
 }
 
 };  // namespace common
