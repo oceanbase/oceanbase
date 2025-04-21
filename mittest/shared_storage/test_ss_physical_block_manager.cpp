@@ -947,6 +947,108 @@ TEST_F(TestSSPhysicalBlockManager, test_scan_reorgan_blk)
   ASSERT_EQ(10, phy_blk_mgr.get_sparse_block_cnt());
 }
 
+TEST_F(TestSSPhysicalBlockManager, alloc_all_phy_block)
+{
+  LOG_INFO("TEST_CASE: start alloc_all_phy_block");
+  int ret = OB_SUCCESS;
+
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
+  ObSSMicroCacheSuperBlock &super_blk = phy_blk_mgr.super_block_;
+  SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  LOG_INFO("TEST: check blk_cnt_info", K(blk_cnt_info));
+
+  ObArray<ObSSPhysicalBlockHandle> alloc_blk_handles;
+  // 1. alloc all micro_data_blk
+  bool finish_alloc = false;
+  while (OB_SUCC(ret) && !finish_alloc) {
+    int64_t blk_idx = -1;
+    ObSSPhysicalBlockHandle phy_blk_handle;
+    ret = phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK);
+    if (OB_FAIL(ret)) {
+      ASSERT_EQ(OB_EAGAIN, ret);
+      ret = OB_SUCCESS;
+      finish_alloc = true;
+    } else {
+      ASSERT_EQ(true, phy_blk_handle.is_valid());
+      ASSERT_EQ(OB_SUCCESS, alloc_blk_handles.push_back(phy_blk_handle));
+      phy_blk_handle.get_ptr()->valid_len_ = 100;
+    }
+  }
+  ASSERT_EQ(false, blk_cnt_info.has_free_blk(ObSSPhyBlockType::SS_CACHE_DATA_BLK));
+
+  // 2. alloc all reorgan_blk
+  finish_alloc = false;
+  int64_t reorgan_blk_start_idx = alloc_blk_handles.count();
+  while (OB_SUCC(ret) && !finish_alloc) {
+    int64_t blk_idx = -1;
+    ObSSPhysicalBlockHandle phy_blk_handle;
+    ret = phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_REORGAN_BLK);
+    if (OB_FAIL(ret)) {
+      ASSERT_EQ(OB_EAGAIN, ret);
+      ret = OB_SUCCESS;
+      finish_alloc = true;
+    } else {
+      ASSERT_EQ(true, phy_blk_handle.is_valid());
+      ASSERT_EQ(OB_SUCCESS, alloc_blk_handles.push_back(phy_blk_handle));
+      phy_blk_handle.get_ptr()->valid_len_ = 100;
+    }
+  }
+  ASSERT_EQ(false, blk_cnt_info.has_free_blk(ObSSPhyBlockType::SS_REORGAN_BLK));
+  int64_t reorgan_blk_end_idx = alloc_blk_handles.count();
+
+  // 3. alloc all micro_meta_blk
+  const int64_t meta_blk_cnt = blk_cnt_info.meta_blk_.free_blk_cnt() / 2;
+  for (int64_t i = 0; i < meta_blk_cnt; ++i) {
+    int64_t blk_idx = -1;
+    ObSSPhysicalBlockHandle phy_blk_handle;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
+    ASSERT_NE(-1, blk_idx);
+    ASSERT_EQ(true, phy_blk_handle.is_valid());
+    ASSERT_EQ(OB_SUCCESS, alloc_blk_handles.push_back(phy_blk_handle));
+    ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_entry_list_.push_back(blk_idx));
+    phy_blk_handle.get_ptr()->valid_len_ = 0;
+  }
+  ASSERT_EQ(meta_blk_cnt, blk_cnt_info.meta_blk_.used_cnt_);
+
+  // 4. alloc all info_ckpt_blk
+  const int64_t info_blk_cnt = blk_cnt_info.phy_ckpt_blk_cnt_ / 2;
+  for (int64_t i = 0; i < info_blk_cnt; ++i) {
+    int64_t blk_idx = -1;
+    ObSSPhysicalBlockHandle phy_blk_handle;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
+    ASSERT_NE(-1, blk_idx);
+    ASSERT_EQ(true, phy_blk_handle.is_valid());
+    ASSERT_EQ(OB_SUCCESS, alloc_blk_handles.push_back(phy_blk_handle));
+    ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_entry_list_.push_back(blk_idx));
+    phy_blk_handle.get_ptr()->valid_len_ = 0;
+  }
+  ASSERT_EQ(info_blk_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+
+  // 5. mock after read checkpoint, we need to update blk_state
+  for (int64_t i = 0; i < alloc_blk_handles.count(); ++i) {
+    alloc_blk_handles.at(i).get_ptr()->is_free_ = 1;
+  }
+  for (int64_t i = SS_CACHE_SUPER_BLOCK_CNT; i < blk_cnt_info.total_blk_cnt_; ++i) {
+    phy_blk_mgr.free_bitmap_->set(i, true);
+  }
+  blk_cnt_info.reuse();
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_block_state());
+  for (int64_t i = 0; i < alloc_blk_handles.count(); ++i) {
+    ASSERT_EQ(0, alloc_blk_handles.at(i).get_ptr()->is_free_);
+    ASSERT_EQ(1, alloc_blk_handles.at(i).get_ptr()->is_sealed_);
+  }
+
+  {
+    int64_t blk_idx = -1;
+    ObSSPhysicalBlockHandle phy_blk_handle;
+    ASSERT_NE(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
+    ASSERT_NE(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_REORGAN_BLK));
+    // Cuz there still exists free ckpt phy_block
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
+  }
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 

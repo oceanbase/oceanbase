@@ -297,7 +297,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
     ASSERT_EQ((total_ckpt_micro_cnt + micro_cnt3 - 1) * micro_size, cache_stat.micro_stat().total_micro_size_);
   }
 
-  bool succ_update_version = false;
+  bool mark_invalid = false;
   {
     for (int64_t i = 4; i < micro_arr3.count(); ++i) {
       TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr3.at(i);
@@ -305,8 +305,8 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
       ObSSMicroBlockMetaHandle micro_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, micro_handle));
       if (micro_handle()->is_persisted()) {
-        micro_handle.get_ptr()->reuse_version_ += 1;
-        succ_update_version = true;
+        micro_handle.get_ptr()->mark_invalid();
+        mark_invalid = true;
         break;
       }
     }
@@ -329,7 +329,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_LT(0, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
   total_ckpt_micro_cnt = cache_stat.task_stat().cur_micro_ckpt_item_cnt_; // include 2 ghost micro_block
 
-  if (succ_update_version) {
+  if (mark_invalid) {
     ASSERT_EQ(total_ckpt_micro_cnt, persisted_micro_cnt - 1);
   } else {
     ASSERT_EQ(total_ckpt_micro_cnt, persisted_micro_cnt);

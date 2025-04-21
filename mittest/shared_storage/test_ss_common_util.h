@@ -83,6 +83,8 @@ public:
   static int wait_for_persist_task();
   static int alloc_micro_block_meta(ObSSMicroBlockMeta *&micro_meta);
   static ObCompressorType get_random_compress_type();
+  static void stop_all_bg_task(ObSSMicroCache *micro_cache);
+  static void resume_all_bg_task(ObSSMicroCache *micro_cache);
 };
 
 MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)
@@ -310,6 +312,28 @@ ObCompressorType TestSSCommonUtil::get_random_compress_type()
   const int64_t random_val = ObRandom::rand(1, 2);
   const ObCompressorType compress_type = (random_val % 2 == 0) ? ObCompressorType::SNAPPY_COMPRESSOR : ObCompressorType::NONE_COMPRESSOR;
   return compress_type;
+}
+
+void TestSSCommonUtil::stop_all_bg_task(ObSSMicroCache *micro_cache)
+{
+  if (nullptr != micro_cache) {
+    ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
+    task_runner.persist_task_.is_inited_ = false;
+    task_runner.micro_ckpt_task_.is_inited_ = false;
+    task_runner.release_cache_task_.is_inited_ = false;
+    task_runner.blk_ckpt_task_.is_inited_ = false;
+  }
+}
+
+void TestSSCommonUtil::resume_all_bg_task(ObSSMicroCache *micro_cache)
+{
+  if (nullptr != micro_cache) {
+    ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
+    task_runner.persist_task_.is_inited_ = true;
+    task_runner.micro_ckpt_task_.is_inited_ = true;
+    task_runner.release_cache_task_.is_inited_ = true;
+    task_runner.blk_ckpt_task_.is_inited_ = true;
+  }
 }
 
 }  // namespace storage
